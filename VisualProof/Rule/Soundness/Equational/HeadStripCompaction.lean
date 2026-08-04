@@ -1,0 +1,1 @@
+import VisualProof.Rule.Soundness.Equational.HeadStripCompaction.Context

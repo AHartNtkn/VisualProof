@@ -4,3 +4,11 @@ defaultTargets = ["VisualProof"]
 
 [[lean_lib]]
 name = "VisualProof"
+
+[[lean_exe]]
+name = "visualproof_step_tags"
+root = "VisualProof.Correspondence.StepTagsMain"
+
+[[lean_exe]]
+name = "visualproof_match_fixtures"
+root = "VisualProof.Correspondence.MatchFixturesMain"

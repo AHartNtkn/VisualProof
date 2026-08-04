@@ -1,194 +1,97 @@
-import VisualProof.Model
+import VisualProof.Lambda.Syntax
+import VisualProof.Theory.Signature
 
-namespace VisualProof
+namespace VisualProof.Diagram
 
-/-- An intrinsically signature-correct reference into an ordered definition list. -/
-inductive DefVar : List (List Sig) → List Sig → Type
-  | here : DefVar (args :: rest) args
-  | there : DefVar rest args → DefVar (head :: rest) args
-
-/-- A typed map between heterogeneous wire contexts. -/
-def WireRenaming (source target : List Sig) : Type :=
-  {sig : Sig} → Var source sig → Var target sig
-
-namespace WireRenaming
-
-/-- Keep a newly bound variable fixed while renaming the outer context. -/
-def lift (rho : WireRenaming source target) (bound : Sig) :
-    WireRenaming (bound :: source) (bound :: target) :=
-  fun {_} var =>
-    match var with
-    | .here => .here
-    | .there outer => .there (rho outer)
-
-end WireRenaming
-
-/-- A typed map between ordered definition contexts. -/
-def DefinitionRenaming (source target : List (List Sig)) : Type :=
-  {args : List Sig} → DefVar source args → DefVar target args
-
-namespace Vars
-
-/-- Rename every variable in an ordered typed variable tuple. -/
-def rename (rho : WireRenaming source target) :
-    Vars source args → Vars target args
-  | .nil => .nil
-  | .cons head tail => .cons (rho head) (rename rho tail)
-
-end Vars
+open VisualProof
+open Theory
 
 mutual
-  /-- A region contains an intrinsically scoped sequence of logical items. -/
-  inductive Region (defs : List (List Sig)) : List Sig → Type
-    | mk {ctx : List Sig} (items : ItemSeq defs ctx) : Region defs ctx
+  inductive Region (signature : List Nat) : Nat -> RelCtx -> Type
+    | mk {wires : Nat} {rels : RelCtx} (localWires : Nat)
+        (items : ItemSeq signature (wires + localWires) rels) :
+        Region signature wires rels
 
-  /-- The complete intrinsic zero-signature diagram vocabulary. -/
-  inductive Item (defs : List (List Sig)) : List Sig → Type
-    | atom {ctx args} (head : Var ctx (.rel args))
-        (arguments : Vars ctx args) : Item defs ctx
-    | named {ctx args} (definition : DefVar defs args)
-        (arguments : Vars ctx args) : Item defs ctx
-    | identity (sig : Sig) (ports : List (Var ctx sig))
-        (atLeastTwo : 2 ≤ ports.length) : Item defs ctx
-    | cut (body : Region defs ctx) : Item defs ctx
-    | bind (sig : Sig) (body : Region defs (sig :: ctx)) : Item defs ctx
+  inductive Item (signature : List Nat) : Nat -> RelCtx -> Type
+    | equation : Fin wires -> Lambda.Term 0 (Fin wires) ->
+        Item signature wires rels
+    | atom : RelVar rels arity -> (Fin arity -> Fin wires) ->
+        Item signature wires rels
+    | named : NamedRel signature arity -> (Fin arity -> Fin wires) ->
+        Item signature wires rels
+    | cut : Region signature wires rels -> Item signature wires rels
+    | bubble : (arity : Nat) -> Region signature wires (arity :: rels) ->
+        Item signature wires rels
 
-  /-- Ordered conjunction of intrinsic items. -/
-  inductive ItemSeq (defs : List (List Sig)) : List Sig → Type
-    | nil : ItemSeq defs ctx
-    | cons (head : Item defs ctx) (tail : ItemSeq defs ctx) :
-        ItemSeq defs ctx
+  inductive ItemSeq (signature : List Nat) : Nat -> RelCtx -> Type
+    | nil : ItemSeq signature wires rels
+    | cons : Item signature wires rels -> ItemSeq signature wires rels ->
+        ItemSeq signature wires rels
 end
-
-/-- The empty diagram in any typed wire and definition context. -/
-def blank : Region defs ctx := .mk .nil
 
 namespace ItemSeq
 
-/-- Concatenate two intrinsic conjunctions. -/
-def append : ItemSeq defs ctx → ItemSeq defs ctx → ItemSeq defs ctx
-  | .nil, suffix => suffix
-  | .cons head tail, suffix => .cons head (append tail suffix)
+def length : ItemSeq signature wires rels -> Nat
+  | .nil => 0
+  | .cons _ tail => Nat.succ tail.length
 
-@[simp] theorem nil_append (items : ItemSeq defs ctx) :
+def get : (items : ItemSeq signature wires rels) ->
+    Fin items.length -> Item signature wires rels
+  | .nil, index => Fin.elim0 index
+  | .cons head tail, index => Fin.cases head tail.get index
+
+def append : ItemSeq signature wires rels -> ItemSeq signature wires rels ->
+    ItemSeq signature wires rels
+  | .nil, suffix => suffix
+  | .cons item initial, suffix => .cons item (append initial suffix)
+
+@[simp] theorem nil_append (items : ItemSeq signature wires rels) :
     append .nil items = items := rfl
 
-@[simp] theorem append_nil :
-    (items : ItemSeq defs ctx) → append items .nil = items
+@[simp] theorem append_nil : (items : ItemSeq signature wires rels) ->
+    append items .nil = items
   | .nil => rfl
-  | .cons head tail => congrArg (ItemSeq.cons head) (append_nil tail)
+  | .cons item tail => congrArg (ItemSeq.cons item) (append_nil tail)
 
 @[simp] theorem append_assoc :
-    (first second third : ItemSeq defs ctx) →
-      append (append first second) third = append first (append second third)
+    (first second third : ItemSeq signature wires rels) ->
+    append (append first second) third = append first (append second third)
   | .nil, _, _ => rfl
-  | .cons head tail, second, third =>
-      congrArg (ItemSeq.cons head) (append_assoc tail second third)
+  | .cons item tail, second, third =>
+      congrArg (ItemSeq.cons item) (append_assoc tail second third)
 
 end ItemSeq
 
-namespace Region
+def cutExample : Item [] 0 [] :=
+  .cut (.mk 0 .nil)
 
-/-- Conjoin two same-scope regions by appending their intrinsic item sequences. -/
-def conjoin (left right : Region defs ctx) : Region defs ctx :=
-  match left, right with
-  | .mk leftItems, .mk rightItems =>
-      .mk (leftItems.append rightItems)
+theorem cutExample_constructible :
+    cutExample = Item.cut (Region.mk 0 .nil) := rfl
 
-end Region
+private def binaryHead : RelVar [2] 2 where
+  index := 0
+  hasArity := rfl
 
-mutual
-  /-- Rename every wire occurrence, lifting safely through binders. -/
-  def Region.renameWires (rho : WireRenaming source target) :
-      Region defs source → Region defs target
-    | .mk items => .mk (items.renameWires rho)
+def binaryBubbleAtomExample : Item [] 2 [] :=
+  .bubble 2 (.mk 0 (.cons (.atom binaryHead id) .nil))
 
-  /-- Rename every wire occurrence in one item. -/
-  def Item.renameWires (rho : WireRenaming source target) :
-      Item defs source → Item defs target
-    | .atom head arguments =>
-        .atom (rho head) (arguments.rename rho)
-    | .named definition arguments =>
-        .named definition (arguments.rename rho)
-    | .identity sig ports atLeastTwo =>
-        .identity sig (ports.map (rho (sig := sig))) (by
-          simpa using atLeastTwo)
-    | .cut body => .cut (body.renameWires rho)
-    | .bind sig body =>
-        .bind sig (body.renameWires (WireRenaming.lift rho sig))
+theorem binaryBubbleAtomExample_constructible :
+    binaryBubbleAtomExample =
+      Item.bubble 2
+        (Region.mk 0 (ItemSeq.cons (Item.atom binaryHead id) .nil)) := rfl
 
-  /-- Rename every wire occurrence in an item sequence. -/
-  def ItemSeq.renameWires (rho : WireRenaming source target) :
-      ItemSeq defs source → ItemSeq defs target
-    | .nil => .nil
-    | .cons head tail =>
-        .cons (head.renameWires rho) (tail.renameWires rho)
-end
+def ancestorWireUnderCutExample : Item [] 1 [] :=
+  .cut (.mk 0 (.cons (.equation 0 (.port 0)) .nil))
 
-mutual
-  /-- Rename every named-definition reference in a region. -/
-  def Region.renameDefinitions (rho : DefinitionRenaming source target) :
-      Region source ctx → Region target ctx
-    | .mk items => .mk (items.renameDefinitions rho)
+theorem ancestorWireUnderCutExample_scoped :
+    ancestorWireUnderCutExample =
+      Item.cut
+        (Region.mk 0 (ItemSeq.cons (Item.equation 0 (.port 0)) .nil)) := rfl
 
-  /-- Rename every named-definition reference in one item. -/
-  def Item.renameDefinitions (rho : DefinitionRenaming source target) :
-      Item source ctx → Item target ctx
-    | .atom head arguments => .atom head arguments
-    | .named definition arguments => .named (rho definition) arguments
-    | .identity sig ports atLeastTwo =>
-        .identity sig ports atLeastTwo
-    | .cut body => .cut (body.renameDefinitions rho)
-    | .bind sig body => .bind sig (body.renameDefinitions rho)
+def bareLocalWireExample : Region [] 0 [] :=
+  .mk 1 .nil
 
-  /-- Rename every named-definition reference in an item sequence. -/
-  def ItemSeq.renameDefinitions (rho : DefinitionRenaming source target) :
-      ItemSeq source ctx → ItemSeq target ctx
-    | .nil => .nil
-    | .cons head tail =>
-        .cons (head.renameDefinitions rho) (tail.renameDefinitions rho)
-end
+theorem bareLocalWireExample_constructible :
+    bareLocalWireExample = Region.mk 1 .nil := rfl
 
-/--
-A binder-safe typed substitution. In the variable-only intrinsic language,
-substitution maps each source variable to a target variable of the same
-signature; binder lifting prevents capture.
--/
-abbrev WireSubstitution := WireRenaming
-
-/-- Apply a typed, capture-avoiding substitution to a region. -/
-def Region.substitute (substitution : WireSubstitution source target)
-    (region : Region defs source) : Region defs target :=
-  region.renameWires substitution
-
-/-- Apply a typed, capture-avoiding substitution to one item. -/
-def Item.substitute (substitution : WireSubstitution source target)
-    (item : Item defs source) : Item defs target :=
-  item.renameWires substitution
-
-/-- Apply a typed, capture-avoiding substitution to an item sequence. -/
-def ItemSeq.substitute (substitution : WireSubstitution source target)
-    (items : ItemSeq defs source) : ItemSeq defs target :=
-  items.renameWires substitution
-
-namespace Item
-
-/-- Binary identity with its intrinsic arity witness discharged definitionally. -/
-def binaryIdentity (sig : Sig) (left right : Var ctx sig) : Item defs ctx :=
-  .identity sig [left, right] (Nat.le_refl 2)
-
-theorem identity_ports_nonempty (atLeastTwo : 2 ≤ ports.length) :
-    ports ≠ [] := by
-  intro empty
-  subst ports
-  simp at atLeastTwo
-
-theorem identity_ports_not_singleton (atLeastTwo : 2 ≤ ports.length) :
-    ports ≠ [port] := by
-  intro singleton
-  subst ports
-  simp at atLeastTwo
-
-end Item
-
-end VisualProof
+end VisualProof.Diagram

@@ -2,39 +2,39 @@
 version: 2
 
 goal:
-  title: "Higher-Order Diagram Calculus Lean Completion"
+  title: "Second-Order to Higher-Order Lean Conversion"
   slug: "primitive-wire-quantifier-lean-completion"
   kind: existing_plan
-  tranche: "Execute the provenance-audited eight-task Lean completion plan."
+  tranche: "Execute the eight-task conversion plan from the restored completed second-order baseline."
   status: active
   oracle:
-    signal: "All four requested outcomes and the preserved generic soundness chain are proved by the final production theorem surface and Task 8 gates pass."
-    cadence: "after each plan task and at final conformance"
-    final_proof: "Kernel-checked rule-owned and applyStep soundness, replay/checked-theorem/verified-theory soundness, formula semantic preservation/expressiveness, primitive direct-operation adequacy, displaced-model absence, and clean full gates."
+    signal: "R1-R5 are proved by the final production theorem surface and Task 8 gates pass."
+    cadence: "after each task and at final conformance"
+    final_proof: "Kernel-checked all-model rule/dispatcher/proof-chain soundness, formula semantic expressiveness, primitive direct-operation adequacy, displaced-model absence, and clean full gates."
   intake:
-    original_request: "Convert the completed second-order Lean formalization to the higher-order wire calculus, prove its rules sound, prove formula expressiveness, and prove direct substitution/comprehension primitive-derivable—nothing more."
-    interpreted_outcome: "A scope-correct higher-order Lean formalization preserving the completed generic rule/replay/theorem/theory soundness architecture while replacing second-order content, plus the two requested semantic completeness results."
+    original_request: "Back up the in-flight Lean code, restore the last completed second-order Lean state, and plan a coherent conversion of that state to the requested higher-order calculus."
+    interpreted_outcome: "A clean second-order-to-higher-order Lean conversion based only on commit 6693b04, preserving generic soundness architecture and adding formula expressiveness plus primitive derivability."
     input_shape: existing_plan
     audience: "VisualProofAssistant maintainers and users relying on checked higher-order proofs"
     authority: requested
     proof_type: theorem
-    completion_proof: "Every required production declaration is GREEN and maps to R1-R4/A1 in the governing plan."
-    likely_misfire: "Deleting the established generic proof chain because it was not a newly requested theorem, replacing it with receipt/transport machinery, treating individual rule theorems as exhaustive without applyStep_sound, or stopping before formula expressiveness."
+    completion_proof: "Every required production declaration is GREEN and maps to R1-R5 in the governing plan."
+    likely_misfire: "Using the discarded in-flight Lean tree as a design source, proving before the complete RED skeleton exists, porting second-order-specific theorems, weakening statements, or inventing extra completion requirements."
     blind_spots_considered:
-      - "Reuse architecture, not second-order theorem content"
-      - "Honest complete RED skeleton before proof work"
-      - "All actual higher-order rules need soundness"
-      - "applyStep_sound must exhaustively close soundness over the exact production rule sum"
-      - "The completed replay, checked-theorem, and verified-theory proof shapes must be preserved"
+      - "The exact source baseline is commit 6693b04"
+      - "Lambda/terms and quantifier bubbles are both removed"
+      - "The generic replay/theorem/theory architecture is preserved"
+      - "All actual higher-order rules and exhaustive applyStep_sound are required"
       - "Formula completeness means semantic expressiveness only"
+      - "Primitive adequacy covers direct substitution/comprehension only"
       - "Primitive adequacy is independent of identity normalization"
-      - "Exact ordered boundary correspondence"
-      - "Plan-only infrastructure must be deleted when unreferenced"
+      - "Lean RED/GREEN never uses fixtures or test theorems"
     existing_plan_facts:
       - "Plan path: docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-      - "The plan has eight provenance-tagged tasks."
-      - "Task 1 establishes the entire honest production theorem skeleton."
-      - "Task 8 and the four-outcome completion oracle define completion."
+      - "The plan has eight tasks derived from the restored second-order owners."
+      - "Task 1 creates the complete target RED skeleton before proof work."
+      - "Task 8 and the five-outcome completion oracle define completion."
+      - "Discarded source backup: /tmp/vpa-current-lean-code-20260804-XO7NPu"
 
 rules:
   pm_owns_state: true
@@ -77,127 +77,110 @@ tasks:
     assignee: Worker
     status: active
     reasoning_hint: high
-    objective: "Execute plan Task 1: establish the complete honest RED skeleton and delete false, obsolete, or plan-only production declarations."
+    objective: "Execute plan Task 1: replace the restored second-order declaration surface with the complete honest higher-order RED skeleton before proving target theorems."
     inputs:
-      - "Governing plan Task 1 and required final production theorem surface"
-      - "Current Lean declarations and TypeScript production rule/formula authorities"
-      - "/tmp/vpa-original-scope-provenance-audit-20260804.md"
+      - "Commit 6693b04 restored VisualProof source and build inputs"
+      - "Governing plan Task 1 and complete Target Production Theorem Surface"
+      - "docs/superpowers/specs/2026-07-22-signature-indexed-wires-design.md"
+      - "docs/superpowers/specs/2026-07-25-zero-signature-hol-redesign-design.md"
+      - "docs/superpowers/specs/2026-07-29-primitive-wire-quantifier-rules-design.md"
+      - "Production TypeScript Sig, Formula, and rule inventory"
     constraints:
-      - "Do not prove beyond the minimum needed to elaborate the skeleton."
-      - "Use sorry only in owning production declarations."
-      - "No fixtures, examples, #check declarations, aliases, or weakened statements."
-      - "Preserve unrelated work."
+      - "Do not use /tmp/vpa-current-lean-code-20260804-XO7NPu as an implementation or design source."
+      - "Do not prove beyond the minimum needed to elaborate the complete target skeleton."
+      - "Use sorry only in owning production declarations with strongest correct statements."
+      - "Delete invalid old statements/proofs and all fixture/example/test-theorem RED artifacts."
+      - "Preserve unrelated non-Lean work."
     allowed_files:
       - "VisualProof.lean"
-      - "VisualProof/Diagram/**"
-      - "VisualProof/Rule/**"
-      - "VisualProof/Proof/**"
-      - "VisualProof/Formula/**"
+      - "VisualProof/**"
+      - "lakefile.toml"
       - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
       - "docs/goals/primitive-wire-quantifier-lean-completion/**"
+      - ".superpowers/sdd/2026-07-30-primitive-wire-quantifier-lean-completion/**"
     verify:
       - "Focused lake env lean checks for every changed production owner"
       - "lake build"
       - "npm run formal:size"
+      - "Complete sorry-to-final-owner declaration ledger"
       - "GoalBuddy state checker"
       - "git diff --check"
     stop_if:
-      - "A missing product or semantic decision would change a final theorem statement."
-      - "A required edit overlaps unrelated uncommitted user work and cannot be isolated."
-      - "Evidence shows the governing provenance table omitted a requested outcome."
+      - "A missing semantic decision would change a final theorem statement."
+      - "A required edit overlaps unrelated non-Lean user work and cannot be isolated."
+      - "Evidence shows R1-R5 omitted a requested outcome."
     expected_output:
-      - "Complete production declaration ledger"
-      - "All missing final declarations elaborating with sorry"
-      - "Honest applyStep_sound declaration over the exact production rule sum"
-      - "Honest replay, checked-theorem, and verified-theory declarations in the former proof shape"
-      - "Obsolete/artificial declarations deleted"
-      - "Focused and full build evidence"
+      - "Recursive-signature/all-model target declaration surface"
+      - "Exact production higher-order Step sum"
+      - "All R1-R5 owners elaborating, incomplete ones honestly RED with sorry"
+      - "Invalid second-order theorem statements and fixtures removed"
       - "Task-scoped commit"
   - id: T002
     type: worker
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 2: conform the higher-order semantic and checked-diagram core, reusing only substantively equivalent results."
+    objective: "Execute plan Task 2: prove the higher-order semantic and checked-diagram core GREEN."
     inputs:
-      - "T001 declaration ledger and commit"
-      - "Governing plan Task 2"
+      - "T001 target declarations and commit"
+      - "Restored generic diagram proof patterns from 6693b04"
     constraints:
-      - "No Lambda/bubble or second-order theorem authority."
-      - "Retain helpers only through direct final-owner dependencies."
+      - "No Lambda, equation, bubble, RelCtx, or RelVar authority."
+      - "Port only helpers directly required by R2-R5."
     expected_output:
-      - "GREEN semantic core"
-      - "Actual rule inventory correspondence"
-      - "Deleted displaced helpers"
+      - "GREEN recursive full Model semantics"
+      - "GREEN checked diagram/elaboration/occurrence/splice/isomorphism core"
+      - "Deleted displaced semantic helpers"
       - "Task-scoped commit"
   - id: T003
     type: worker
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 3: prove every actual higher-order rule sound and close exhaustive system coverage with applyStep_sound."
+    objective: "Execute plan Task 3: prove every actual higher-order rule and exhaustive applyStep_sound GREEN."
     inputs:
       - "T002 semantic core"
-      - "T001 rule theorem skeleton"
+      - "T001 production Step sum and rule theorem skeleton"
     constraints:
-      - "One owning production theorem per actual obligation."
-      - "applyStep_sound must dispatch exhaustively over the exact production rule sum."
+      - "One owning theorem per actual production obligation."
+      - "applyStep_sound exhaustively covers the exact Step sum."
+      - "No caller-supplied semantic truth, landing, inverse, or desired entailment."
       - "Identity normalization remains separate from primitive compiler adequacy."
-      - "No caller-supplied semantic or landing evidence."
     expected_output:
-      - "GREEN rule-owned soundness theorems"
+      - "GREEN rule-owned all-model soundness theorems"
       - "GREEN exhaustive applyStep_sound"
+      - "Exact rule-constructor coverage audit"
       - "Task-scoped commit"
   - id: T004
     type: worker
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 4: prove direct relation substitution/comprehension constructively derivable from primitive relation-wire programs."
+    objective: "Execute plan Task 4: port the completed replay, checked-theorem, and verified-theory proofs over the new calculus."
     inputs:
-      - "T003 primitive soundness"
-      - "Accepted direct join/sever specification operations"
-      - "Governing primitive design completeness cases"
+      - "T003 applyStep_sound"
+      - "T002 ordered checked-open and concrete-isomorphism interfaces"
+      - "Commit 6693b04 Proof/Replay.lean, Proof/Theorem.lean, and Proof/Theory.lean"
     constraints:
-      - "Universal accepted-input compiler success."
-      - "Raw checked concrete isomorphism and exact ordered boundary."
-      - "No normalization, search, atlas, assumed compilation, or assumed inverse landing."
+      - "Preserve former theorem meanings and proof decomposition; replace only displaced types."
+      - "No new receipt, allocation, provenance, or general transport architecture."
+      - "Exact registered sides, ordered endpoints, and prior-prefix citations remain authoritative."
     expected_output:
-      - "GREEN compiled_join_redundant"
-      - "GREEN compiled_sever_redundant"
-      - "GREEN semantic corollaries"
+      - "GREEN replay_sound and directional corollaries"
+      - "GREEN checkedTheorem_sound and registration validity"
+      - "GREEN verifiedTheory_sound"
       - "Task-scoped commit"
   - id: T005
     type: worker
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 5: restore the established replay, checked-theorem, and verified-theory soundness chain over the new calculus."
+    objective: "Execute plan Task 5: formalize formula compilation and prove semantic preservation/expressiveness."
     inputs:
-      - "T003 applyStep_sound"
-      - "Commit 6693b04 production Proof/Replay.lean, Proof/Theorem.lean, and Proof/Theory.lean"
-      - "T001 generic proof theorem skeleton"
-    constraints:
-      - "Preserve former theorem meanings and proof decomposition; substitute only types forced by the higher-order refactor."
-      - "Exact registered theorem sides and the established ordered endpoint interface remain authoritative."
-      - "No replacement receipt, allocation, provenance, inverse-transport, or general transport architecture."
-      - "No Lambda-era or second-order rule content."
-    expected_output:
-      - "GREEN replay_sound and directional replay corollaries"
-      - "GREEN checkedTheorem_sound"
-      - "GREEN verifiedTheory_sound"
-      - "Task-scoped commit"
-  - id: T006
-    type: worker
-    assignee: Worker
-    status: queued
-    reasoning_hint: high
-    objective: "Execute plan Task 6: formalize the production Formula AST compiler and prove semantic preservation/expressiveness."
-    inputs:
+      - "T002 Sig, Model, diagram, and denotation core"
       - "src/formula/syntax.ts"
       - "src/formula/diagram.ts"
-      - "T002 semantic core"
-      - "T001 formula theorem skeleton"
+      - "T001 R4 theorem skeleton"
     constraints:
       - "AST/compiler semantics only; parser and UI are out of scope."
       - "Use the same Model and diagram denotation."
@@ -207,39 +190,61 @@ tasks:
       - "GREEN semantic preservation theorem"
       - "GREEN expressiveness corollary"
       - "Task-scoped commit"
+  - id: T006
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Execute plan Task 6: prove direct relation substitution/comprehension constructively derivable from primitive relation-wire programs."
+    inputs:
+      - "T002 checked diagram/splice/isomorphism core"
+      - "T003 primitive rule and program soundness"
+      - "T001 R5 compiler and adequacy skeleton"
+      - "July 29 residual compiler cases"
+    constraints:
+      - "Universal accepted-input compiler success."
+      - "Raw checked concrete isomorphism and exact ordered boundary."
+      - "No identity normalization, search, atlas, assumed compilation, or assumed inverse landing."
+      - "Direct monolithic operations are specifications, not durable Step constructors."
+    expected_output:
+      - "GREEN compiled_join_redundant"
+      - "GREEN compiled_sever_redundant"
+      - "GREEN semantic corollaries"
+      - "Task-scoped commit"
   - id: T007
     type: worker
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 7: delete every displaced or plan-only module/declaration outside the final theorem dependency closure."
+    objective: "Execute plan Task 7: delete all displaced second-order and non-authoritative infrastructure outside the R1-R5 dependency closure."
     inputs:
-      - "Final owners from T003-T006"
-      - "Governing plan explicit non-requirements"
+      - "Final production owners from T002-T006"
+      - "Governing plan Explicit Non-Requirements"
     constraints:
-      - "Preserve the restored generic proof owners; delete parallel or replacement proof architectures."
-      - "No aliases, adapters, fixture modules, or compatibility authorities."
-      - "Preserve unrelated user work."
+      - "Delete obsolete paths; no aliases, adapters, fixture modules, or compatibility authorities."
+      - "Preserve the generic proof chain and ordered theorem interface."
+      - "Preserve unrelated non-Lean work."
     expected_output:
       - "Dependency closure report"
-      - "Plan-only infrastructure deleted"
-      - "Minimal production umbrella"
+      - "Lambda/bubble/second-order/fixture authority deleted"
+      - "Minimal production umbrella and Lake targets"
       - "Task-scoped commit"
   - id: T008
     type: pm
     assignee: PM
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 8: audit all four outcomes and the preserved soundness chain, run clean full gates, record conformance, and close the goal only on direct proof."
+    objective: "Execute plan Task 8: audit R1-R5, run clean full gates, record conformance, and close only on direct kernel evidence."
     inputs:
-      - "T001-T007 receipts and commits"
-      - "Governing plan completion oracle"
+      - "T001-T007 reports and commits"
+      - "Governing plan Completion Oracle"
+      - "Restored baseline commit 6693b04"
     constraints:
-      - "No completion from prior receipts, passing narrow tests, or missing sorry alone."
-      - "Repair fixable in-repository failures before reporting."
+      - "No completion from historical receipts, source scans, fixtures, passing narrow tests, or missing sorry alone."
+      - "Repair every fixable in-repository failure before reporting."
     expected_output:
-      - "Provenance-to-source conformance matrix"
-      - "Axiom, placeholder, exhaustive rule-constructor, and proof-chain coverage audit"
+      - "R1-R5 provenance-to-source conformance matrix"
+      - "Axiom, placeholder, rule-constructor, proof-chain, and import-closure audits"
       - "Clean formal/unit/type/E2E gates"
       - "Foundation conformance appendix"
       - "full_outcome_complete: true"

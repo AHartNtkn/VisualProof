@@ -1,436 +1,257 @@
-import VisualProof.Diagram.Core
+import VisualProof.Diagram.Rename
+import VisualProof.Lambda.Quotient
 
-namespace VisualProof
+namespace VisualProof.Diagram
 
-universe u
+open VisualProof
+open Theory
 
-/-- Every member of a list denotes the same value. -/
-def AllEqual (values : List α) : Prop :=
-  ∀ left ∈ values, ∀ right ∈ values, left = right
+def Relation (D : Type u) (arity : Nat) := (Fin arity -> D) -> Prop
 
-namespace AllEqual
+def RelEnv (D : Type u) : RelCtx -> Type u
+  | [] => PUnit
+  | arity :: rest => Relation D arity × RelEnv D rest
 
-/-- Equality is reflexive for a repeated occurrence. -/
-@[simp] theorem refl (value : α) : AllEqual [value] := by
-  simp [AllEqual]
+def NamedEnv (D : Type u) (signature : List Nat) :=
+  forall arity, NamedRel signature arity -> Relation D arity
 
-/-- Combine two all-equal lists when every cross-pair is equal. -/
-theorem append (leftEqual : AllEqual left) (rightEqual : AllEqual right)
-    (cross : ∀ leftValue ∈ left, ∀ rightValue ∈ right,
-      leftValue = rightValue) :
-    AllEqual (left ++ right) := by
-  intro first firstMember second secondMember
-  simp only [List.mem_append] at firstMember secondMember
-  rcases firstMember with firstMember | firstMember <;>
-    rcases secondMember with secondMember | secondMember
-  · exact leftEqual first firstMember second secondMember
-  · exact cross first firstMember second secondMember
-  · exact (cross second secondMember first firstMember).symm
-  · exact rightEqual first firstMember second secondMember
+def RelEnv.lookup {ctx : RelCtx} (env : RelEnv D ctx)
+    (relation : RelVar ctx arity) : Relation D arity :=
+  match ctx, env, relation with
+  | head :: tail, (headRelation, tailEnv), ⟨index, hasArity⟩ =>
+      Fin.cases
+        (motive := fun i => (head :: tail).get i = arity -> Relation D arity)
+        (fun h => h ▸ headRelation)
+        (fun i h => tailEnv.lookup ⟨i, h⟩)
+        index hasArity
 
-/-- Two all-equal lists sharing a value form one all-equal union. -/
-theorem union (leftEqual : AllEqual left) (rightEqual : AllEqual right)
-    (leftContains : pivot ∈ left) (rightContains : pivot ∈ right) :
-    AllEqual (left ++ right) :=
-  append leftEqual rightEqual fun leftValue leftMember rightValue rightMember =>
-    (leftEqual leftValue leftMember pivot leftContains).trans
-      (rightEqual pivot rightContains rightValue rightMember)
+def extendWireEnv (outerEnv : Fin outer -> D) (localEnv : Fin localWires -> D) :
+    Fin (outer + localWires) -> D :=
+  Fin.addCases outerEnv localEnv
 
-/-- Storage order cannot affect n-ary identity denotation. -/
-theorem perm (permutation : left.Perm right) :
-    AllEqual left ↔ AllEqual right := by
-  constructor
-  · intro equalLeft first firstMember second secondMember
-    exact equalLeft first (permutation.mem_iff.mpr firstMember)
-      second (permutation.mem_iff.mpr secondMember)
-  · intro equalRight first firstMember second secondMember
-    exact equalRight first (permutation.mem_iff.mp firstMember)
-      second (permutation.mem_iff.mp secondMember)
-
-@[simp] theorem pair (left right : α) :
-    AllEqual [left, right] ↔ left = right := by
-  constructor
-  · intro equal
-    exact equal left (by simp) right (by simp)
-  · intro equality
-    subst right
-    simp [AllEqual]
-
-end AllEqual
-
-/-- Typed interpretations of the ordered named-definition context. -/
-def DefinitionEnv (pre : PreModel) (defs : List (List Sig)) : Type u :=
-  {args : List Sig} →
-    DefVar defs args → PreModel.Args pre.Domain args → Prop
-
-namespace DefinitionEnv
-
-/-- Look up a definition at exactly its intrinsic boundary signature. -/
-def lookup (definitions : DefinitionEnv pre defs)
-    (definition : DefVar defs args) :
-    PreModel.Args pre.Domain args → Prop :=
-  definitions definition
-
-/-- Pull an interpretation back along a typed definition renaming. -/
-def comp (definitions : DefinitionEnv pre target)
-    (rho : DefinitionRenaming source target) :
-    DefinitionEnv pre source :=
-  fun definition => definitions.lookup (rho definition)
-
-end DefinitionEnv
-
-namespace Env
-
-/-- The unique environment for an empty heterogeneous context. -/
-def empty : Env pre [] :=
-  fun _ var => nomatch var
-
-/-- Pull an environment back along a typed wire renaming. -/
-def comp (env : Env pre target) (rho : WireRenaming source target) :
-    Env pre source :=
-  fun sig var => env sig (rho var)
-
-@[simp] theorem comp_extend (env : Env pre target)
-    (rho : WireRenaming source target) (value : pre.Domain bound) :
-    comp (env.extend value) (WireRenaming.lift rho bound) =
-      (comp env rho).extend value := by
-  funext sig var
-  cases var <;> rfl
-
-end Env
-
-namespace Vars
-
-@[simp] theorem denote_rename (env : Env pre target)
-    (rho : WireRenaming source target) (variables : Vars source args) :
-    denote env (variables.rename rho) = denote (Env.comp env rho) variables := by
-  induction variables with
-  | nil => rfl
-  | cons head tail ih =>
-      simp only [Vars.rename, denote_cons, Env.comp]
-      exact congrArg (fun value => (env _ (rho head), value)) ih
-
-end Vars
+@[simp] theorem extendWireEnv_zero (outerEnv : Fin outer -> D)
+    (localEnv : Fin 0 -> D) :
+    extendWireEnv outerEnv localEnv = outerEnv := by
+  funext i
+  let j : Fin outer := Fin.cast (Nat.add_zero outer) i
+  have hi : i = Fin.castAdd 0 j := by
+    apply Fin.ext
+    rfl
+  rw [hi]
+  exact Fin.addCases_left j
 
 mutual
-  /-- Denotation of a region delegates to its conjunction of items. -/
-  def denoteRegion (pre : PreModel) (definitions : DefinitionEnv pre defs)
-      (env : Env pre ctx) : Region defs ctx → Prop
-    | .mk items => denoteItemSeq pre definitions env items
+  def denoteRegion (model : Lambda.LambdaModel)
+      (named : NamedEnv model.Carrier signature)
+      (env : Fin outer -> model.Carrier)
+      (rels : RelEnv model.Carrier relCtx) :
+      Region signature outer relCtx -> Prop
+    | .mk localWires items =>
+        exists localEnv : Fin localWires -> model.Carrier,
+          denoteItemSeq model named (extendWireEnv env localEnv) rels items
 
-  /-- Generic premodel denotation of every intrinsic item constructor. -/
-  def denoteItem (pre : PreModel) (definitions : DefinitionEnv pre defs)
-      (env : Env pre ctx) : Item defs ctx → Prop
-    | .atom head arguments =>
-        pre.apply (env _ head) (Vars.denote env arguments)
-    | .named definition arguments =>
-        definitions.lookup definition (Vars.denote env arguments)
-    | .identity sig ports _ =>
-        AllEqual (ports.map (env sig))
-    | .cut body =>
-        ¬ denoteRegion pre definitions env body
-    | .bind sig body =>
-        ∃ value : pre.Domain sig,
-          denoteRegion pre definitions (env.extend value) body
+  def denoteItem (model : Lambda.LambdaModel)
+      (named : NamedEnv model.Carrier signature)
+      (env : Fin wires -> model.Carrier)
+      (rels : RelEnv model.Carrier relCtx) :
+      Item signature wires relCtx -> Prop
+    | .equation output term => env output = model.eval term env
+    | .atom relation arguments => rels.lookup relation (env ∘ arguments)
+    | .named relation arguments => named _ relation (env ∘ arguments)
+    | .cut body => Not (denoteRegion model named env rels body)
+    | .bubble arity body =>
+        exists relation : Relation model.Carrier arity,
+          denoteRegion (relCtx := arity :: relCtx) model named env
+            (relation, rels) body
 
-  /-- An intrinsic item sequence denotes conjunction. -/
-  def denoteItemSeq (pre : PreModel) (definitions : DefinitionEnv pre defs)
-      (env : Env pre ctx) : ItemSeq defs ctx → Prop
+  def denoteItemSeq (model : Lambda.LambdaModel)
+      (named : NamedEnv model.Carrier signature)
+      (env : Fin wires -> model.Carrier)
+      (rels : RelEnv model.Carrier relCtx) :
+      ItemSeq signature wires relCtx -> Prop
     | .nil => True
-    | .cons head tail =>
-        denoteItem pre definitions env head ∧
-          denoteItemSeq pre definitions env tail
+    | .cons item tail =>
+        denoteItem model named env rels item /\
+          denoteItemSeq model named env rels tail
 end
 
-/-- Truth of a closed diagram in every full higher-order model. -/
-def Valid (diagram : Region defs []) : Prop :=
-  ∀ (model : Model.{u})
-    (definitions : DefinitionEnv model.toPreModel defs),
-      denoteRegion model.toPreModel definitions Env.empty diagram
+def denoteOpen (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (diagram : OpenDiagram signature arity)
+    (args : Fin arity -> model.Carrier) : Prop :=
+  exists assignment : BoundaryAssignment diagram model.Carrier,
+    assignment.args = args /\
+      denoteRegion (relCtx := []) model named assignment.classes PUnit.unit
+        diagram.body
 
-/-- Semantic consequence between closed diagrams in every full model. -/
-def Entails (left right : Region defs []) : Prop :=
-  ∀ (model : Model.{u})
-    (definitions : DefinitionEnv model.toPreModel defs),
-      denoteRegion model.toPreModel definitions Env.empty left →
-        denoteRegion model.toPreModel definitions Env.empty right
-
-@[simp] theorem denoteRegion_blank
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) :
-    denoteRegion pre definitions env (blank : Region defs ctx) := by
-  trivial
-
-@[simp] theorem denoteItemSeq_nil
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) :
-    denoteItemSeq pre definitions env (.nil : ItemSeq defs ctx) ↔ True :=
-  Iff.rfl
-
-@[simp] theorem denoteItemSeq_cons
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) (head : Item defs ctx) (tail : ItemSeq defs ctx) :
-    denoteItemSeq pre definitions env (.cons head tail) ↔
-      denoteItem pre definitions env head ∧
-        denoteItemSeq pre definitions env tail :=
-  Iff.rfl
-
-@[simp] theorem denoteItemSeq_append
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) (left right : ItemSeq defs ctx) :
-    denoteItemSeq pre definitions env (left.append right) ↔
-      denoteItemSeq pre definitions env left ∧
-        denoteItemSeq pre definitions env right := by
-  cases left with
-  | nil => simp
-  | cons head tail =>
-      rw [ItemSeq.append, denoteItemSeq_cons,
-        denoteItemSeq_append pre definitions env tail right]
-      constructor
-      · rintro ⟨headDenotes, tailDenotes, rightDenotes⟩
-        exact ⟨⟨headDenotes, tailDenotes⟩, rightDenotes⟩
-      · rintro ⟨⟨headDenotes, tailDenotes⟩, rightDenotes⟩
-        exact ⟨headDenotes, tailDenotes, rightDenotes⟩
-
-namespace Region
-
-@[simp] theorem denote_conjoin
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) (left right : Region defs ctx) :
-    denoteRegion pre definitions env (left.conjoin right) ↔
-      denoteRegion pre definitions env left ∧
-        denoteRegion pre definitions env right := by
-  cases left
-  cases right
-  exact denoteItemSeq_append pre definitions env _ _
-
-end Region
-
-@[simp] theorem denoteItem_atom
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) (head : Var ctx (.rel args))
-    (arguments : Vars ctx args) :
-    denoteItem pre definitions env (.atom head arguments) ↔
-      pre.apply (env _ head) (Vars.denote env arguments) :=
-  Iff.rfl
-
-@[simp] theorem denoteItem_named
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) (definition : DefVar defs args)
-    (arguments : Vars ctx args) :
-    denoteItem pre definitions env (.named definition arguments) ↔
-      definitions.lookup definition (Vars.denote env arguments) :=
-  Iff.rfl
-
-@[simp] theorem denoteItem_identity
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) (ports : List (Var ctx sig))
-    (atLeastTwo : 2 ≤ ports.length) :
-    denoteItem pre definitions env (.identity sig ports atLeastTwo) ↔
-      AllEqual (ports.map (env sig)) :=
-  Iff.rfl
-
-@[simp] theorem binary_identity
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) (left right : Var ctx sig) :
-    denoteItem pre definitions env
-        (Item.binaryIdentity sig left right) ↔
-      env sig left = env sig right := by
-  simp only [Item.binaryIdentity, denoteItem_identity, List.map_cons,
-    List.map_nil, AllEqual.pair]
-
-@[simp] theorem cut_denotes_negation
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) (body : Region defs ctx) :
-    denoteItem pre definitions env (.cut body) ↔
-      ¬ denoteRegion pre definitions env body :=
-  Iff.rfl
-
-@[simp] theorem bind_denotes_exists
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) (body : Region defs (sig :: ctx)) :
-    denoteItem pre definitions env (.bind sig body) ↔
-      ∃ value : pre.Domain sig,
-        denoteRegion pre definitions (env.extend value) body :=
-  Iff.rfl
-
-/-- Wire renaming preserves region denotation under environment pullback. -/
-theorem denoteRegion_renameWires
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre target) (rho : WireRenaming source target)
-    (region : Region defs source) :
-    denoteRegion pre definitions env (region.renameWires rho) ↔
-      denoteRegion pre definitions (Env.comp env rho) region := by
-  refine Region.rec
-    (motive_1 := fun source region =>
-      ∀ {target} (env : Env pre target)
-        (rho : WireRenaming source target),
-        denoteRegion pre definitions env (region.renameWires rho) ↔
-          denoteRegion pre definitions (Env.comp env rho) region)
-    (motive_2 := fun source item =>
-      ∀ {target} (env : Env pre target)
-        (rho : WireRenaming source target),
-        denoteItem pre definitions env (item.renameWires rho) ↔
-          denoteItem pre definitions (Env.comp env rho) item)
-    (motive_3 := fun source items =>
-      ∀ {target} (env : Env pre target)
-        (rho : WireRenaming source target),
-        denoteItemSeq pre definitions env (items.renameWires rho) ↔
-          denoteItemSeq pre definitions (Env.comp env rho) items)
-    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ region env rho
-  · intro _ items itemsLaw _ env rho
-    exact itemsLaw env rho
-  · intro _ _ head arguments _ env rho
-    simp [Item.renameWires, Env.comp]
-  · intro _ _ definition arguments _ env rho
-    simp [Item.renameWires]
-  · intro _ sig ports atLeastTwo _ env rho
-    simp only [Item.renameWires, denoteItem_identity, List.map_map]
-    rfl
-  · intro _ body bodyLaw _ env rho
-    simp only [Item.renameWires, cut_denotes_negation, bodyLaw]
-  · intro _ sig body bodyLaw _ env rho
-    simp only [Item.renameWires, bind_denotes_exists, bodyLaw,
-      Env.comp_extend]
-  · intro _ _ env rho
-    rfl
-  · intro _ head tail headLaw tailLaw _ env rho
-    simp only [ItemSeq.renameWires, denoteItemSeq_cons, headLaw, tailLaw]
-
-/-- Wire renaming preserves item denotation under environment pullback. -/
-theorem denoteItem_renameWires
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre target) (rho : WireRenaming source target)
-    (item : Item defs source) :
-    denoteItem pre definitions env (item.renameWires rho) ↔
-      denoteItem pre definitions (Env.comp env rho) item := by
-  have regionLaw := denoteRegion_renameWires pre definitions env rho
-    (Region.mk (.cons item .nil))
-  simpa [denoteRegion, Region.renameWires, ItemSeq.renameWires,
-    denoteItemSeq] using regionLaw
-
-/-- Wire renaming preserves conjunction denotation under pullback. -/
-theorem denoteItemSeq_renameWires
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre target) (rho : WireRenaming source target)
-    (items : ItemSeq defs source) :
-    denoteItemSeq pre definitions env (items.renameWires rho) ↔
-      denoteItemSeq pre definitions (Env.comp env rho) items := by
-  exact denoteRegion_renameWires pre definitions env rho (.mk items)
-
-/-- Definition renaming preserves region denotation under interpretation pullback. -/
-theorem denoteRegion_renameDefinitions
-    (pre : PreModel) (definitions : DefinitionEnv pre target)
-    (rho : DefinitionRenaming source target) (env : Env pre ctx)
-    (region : Region source ctx) :
-    denoteRegion pre definitions env (region.renameDefinitions rho) ↔
-      denoteRegion pre (definitions.comp rho) env region := by
-  refine Region.rec
-    (motive_1 := fun ctx region => ∀ env : Env pre ctx,
-      denoteRegion pre definitions env (region.renameDefinitions rho) ↔
-        denoteRegion pre (definitions.comp rho) env region)
-    (motive_2 := fun ctx item => ∀ env : Env pre ctx,
-      denoteItem pre definitions env (item.renameDefinitions rho) ↔
-        denoteItem pre (definitions.comp rho) env item)
-    (motive_3 := fun ctx items => ∀ env : Env pre ctx,
-      denoteItemSeq pre definitions env (items.renameDefinitions rho) ↔
-        denoteItemSeq pre (definitions.comp rho) env items)
-    ?_ ?_ ?_ ?_ ?_ ?_ ?_ ?_ region env
-  · intro _ items itemsLaw env
-    exact itemsLaw env
-  · intro _ _ head arguments env
-    rfl
-  · intro _ _ definition arguments env
-    rfl
-  · intro _ sig ports atLeastTwo env
-    rfl
-  · intro _ body bodyLaw env
-    simp only [Item.renameDefinitions, cut_denotes_negation, bodyLaw]
-  · intro _ sig body bodyLaw env
-    simp only [Item.renameDefinitions, bind_denotes_exists, bodyLaw]
-  · intro _ env
-    rfl
-  · intro _ head tail headLaw tailLaw env
-    simp only [ItemSeq.renameDefinitions, denoteItemSeq_cons,
-      headLaw, tailLaw]
-
-/-- Definition renaming preserves item denotation under interpretation pullback. -/
-theorem denoteItem_renameDefinitions
-    (pre : PreModel) (definitions : DefinitionEnv pre target)
-    (rho : DefinitionRenaming source target) (env : Env pre ctx)
-    (item : Item source ctx) :
-    denoteItem pre definitions env (item.renameDefinitions rho) ↔
-      denoteItem pre (definitions.comp rho) env item := by
-  have regionLaw := denoteRegion_renameDefinitions pre definitions rho env
-    (Region.mk (.cons item .nil))
-  simpa [denoteRegion, Region.renameDefinitions, ItemSeq.renameDefinitions,
-    denoteItemSeq] using regionLaw
-
-/-- Definition renaming preserves conjunction denotation under pullback. -/
-theorem denoteItemSeq_renameDefinitions
-    (pre : PreModel) (definitions : DefinitionEnv pre target)
-    (rho : DefinitionRenaming source target) (env : Env pre ctx)
-    (items : ItemSeq source ctx) :
-    denoteItemSeq pre definitions env (items.renameDefinitions rho) ↔
-      denoteItemSeq pre (definitions.comp rho) env items := by
-  exact denoteRegion_renameDefinitions pre definitions rho env (.mk items)
-
-/-- Capture-avoiding typed substitution obeys the wire-renaming semantic law. -/
-theorem denoteRegion_substitute
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre target) (substitution : WireSubstitution source target)
-    (region : Region defs source) :
-    denoteRegion pre definitions env (region.substitute substitution) ↔
-      denoteRegion pre definitions (Env.comp env substitution) region :=
-  denoteRegion_renameWires pre definitions env substitution region
-
-/-- Capture-avoiding typed substitution preserves item denotation. -/
-theorem denoteItem_substitute
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre target) (substitution : WireSubstitution source target)
-    (item : Item defs source) :
-    denoteItem pre definitions env (item.substitute substitution) ↔
-      denoteItem pre definitions (Env.comp env substitution) item :=
-  denoteItem_renameWires pre definitions env substitution item
-
-/-- Capture-avoiding typed substitution preserves sequence denotation. -/
-theorem denoteItemSeq_substitute
-    (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre target) (substitution : WireSubstitution source target)
-    (items : ItemSeq defs source) :
-    denoteItemSeq pre definitions env (items.substitute substitution) ↔
-      denoteItemSeq pre definitions (Env.comp env substitution) items :=
-  denoteItemSeq_renameWires pre definitions env substitution items
-
-/-! Executable semantic acceptance examples. -/
-
-example : Valid (blank : Region defs []) := by
-  simp [Valid]
-
-example (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) (x y : Var ctx sig) :
-    denoteItem pre definitions env (Item.binaryIdentity sig x y) ↔
-      env sig x = env sig y := by
-  simp
-
-example (pre : PreModel) (env : Env pre ctx)
-    (ports₁ ports₂ : List (Var ctx sig))
-    (permutation : ports₁.Perm ports₂) :
-    AllEqual (ports₁.map (env sig)) ↔ AllEqual (ports₂.map (env sig)) := by
-  exact AllEqual.perm (permutation.map (env sig))
-
-example (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre ctx) (body : Region defs (sig :: ctx)) :
-    denoteItem pre definitions env (.bind sig body) ↔
-      ∃ value : pre.Domain sig,
-        denoteRegion pre definitions (env.extend value) body := by
+theorem denoteOpen_castArity (model : Lambda.LambdaModel)
+    (named : NamedEnv model.Carrier signature)
+    (diagram : OpenDiagram signature sourceArity)
+    (equality : sourceArity = targetArity)
+    (args : Fin targetArity -> model.Carrier) :
+    denoteOpen model named (diagram.castArity equality) args <->
+      denoteOpen model named diagram (args ∘ Fin.cast equality) := by
+  subst targetArity
   rfl
 
-example (pre : PreModel) (definitions : DefinitionEnv pre defs)
-    (env : Env pre target) (substitution : WireSubstitution source target)
-    (region : Region defs source) :
-    denoteRegion pre definitions env (region.substitute substitution) ↔
-      denoteRegion pre definitions (Env.comp env substitution) region :=
-  denoteRegion_substitute pre definitions env substitution region
+@[simp] theorem denoteRegion_mk
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin outer -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx) (localWires : Nat)
+    (items : ItemSeq signature (outer + localWires) relCtx) :
+    denoteRegion model named env rels (Region.mk localWires items) <->
+      exists localEnv : Fin localWires -> model.Carrier,
+        denoteItemSeq model named (extendWireEnv env localEnv) rels items := by
+  rfl
 
-end VisualProof
+@[simp] theorem denoteItem_equation
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx) (output : Fin wires)
+    (term : Lambda.Term 0 (Fin wires)) :
+    denoteItem model named env rels (Item.equation output term) <->
+      env output = model.eval term env := by
+  rfl
+
+@[simp] theorem denoteItem_atom
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx) (relation : RelVar relCtx arity)
+    (arguments : Fin arity -> Fin wires) :
+    denoteItem model named env rels (Item.atom relation arguments) <->
+      rels.lookup relation (env ∘ arguments) := by
+  rfl
+
+@[simp] theorem denoteItem_named
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx) (relation : NamedRel signature arity)
+    (arguments : Fin arity -> Fin wires) :
+    denoteItem model named env rels (Item.named relation arguments) <->
+      named arity relation (env ∘ arguments) := by
+  rfl
+
+@[simp] theorem cut_denotes_negation
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx)
+    (body : Region signature wires relCtx) :
+    denoteItem model named env rels (Item.cut body) <->
+      Not (denoteRegion model named env rels body) := by
+  rfl
+
+@[simp] theorem bubble_denotes_exists
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx) (arity : Nat)
+    (body : Region signature wires (arity :: relCtx)) :
+    denoteItem model named env rels (Item.bubble arity body) <->
+      exists relation : Relation model.Carrier arity,
+        denoteRegion (relCtx := arity :: relCtx) model named env
+          (relation, rels) body := by
+  rfl
+
+@[simp] theorem denoteItemSeq_nil
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx) :
+    denoteItemSeq model named env rels (ItemSeq.nil :
+      ItemSeq signature wires relCtx) <-> True := by
+  rfl
+
+@[simp] theorem denoteItemSeq_cons
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx)
+    (item : Item signature wires relCtx)
+    (tail : ItemSeq signature wires relCtx) :
+    denoteItemSeq model named env rels (ItemSeq.cons item tail) <->
+      denoteItem model named env rels item /\
+        denoteItemSeq model named env rels tail := by
+  rfl
+
+theorem blank_zero_local_denotes_true
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx) :
+    denoteRegion model named env rels
+      (Region.mk 0 .nil : Region signature wires relCtx) <-> True := by
+  constructor
+  · intro _
+    trivial
+  · intro _
+    exact ⟨Fin.elim0, trivial⟩
+
+theorem two_item_sequence_denotes_conjunction
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx)
+    (first second : Item signature wires relCtx) :
+    denoteItemSeq model named env rels (.cons first (.cons second .nil)) <->
+      denoteItem model named env rels first /\
+        denoteItem model named env rels second := by
+  simp
+
+theorem bareLocalWireExample_denotes_iff_nonempty
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier []) :
+    denoteRegion (relCtx := []) model named Fin.elim0 PUnit.unit
+        bareLocalWireExample <->
+      Nonempty model.Carrier := by
+  constructor
+  · rintro ⟨localEnv, _⟩
+    exact ⟨localEnv 0⟩
+  · rintro ⟨value⟩
+    exact ⟨fun _ => value, trivial⟩
+
+theorem unary_bubble_denotes_exists
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx)
+    (body : Region signature wires (1 :: relCtx)) :
+    denoteItem model named env rels (Item.bubble 1 body) <->
+      exists predicate : (Fin 1 -> model.Carrier) -> Prop,
+        denoteRegion (relCtx := 1 :: relCtx) model named env
+          (predicate, rels) body := by
+  rfl
+
+theorem denoteOpen_iff_assignment
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (diagram : OpenDiagram signature arity)
+    (args : Fin arity -> model.Carrier) :
+    denoteOpen model named diagram args <->
+      exists assignment : BoundaryAssignment diagram model.Carrier,
+        assignment.args = args /\
+          denoteRegion (relCtx := []) model named assignment.classes PUnit.unit
+            diagram.body := by
+  rfl
+
+theorem aliasedBinaryBoundaryExample_rejects_unequal
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier [])
+    (args : Fin 2 -> model.Carrier) (unequal : args 0 ≠ args 1) :
+    Not (denoteOpen model named aliasedBinaryBoundaryExample args) := by
+  rintro ⟨assignment, hargs, _⟩
+  apply unequal
+  rw [← hargs]
+  exact (aliasedBinaryBoundaryExample_consistency_iff assignment.args).mp
+    ((boundaryAssignment_iff_aliasConsistent
+      aliasedBinaryBoundaryExample assignment.args).mp ⟨assignment, rfl⟩)
+
+theorem double_cut_denotes_iff
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx)
+    (body : Region signature wires relCtx) :
+    denoteItem model named env rels
+        (Item.cut (Region.mk 0 (.cons (Item.cut body) .nil))) <->
+      denoteRegion model named env rels body := by
+  simp only [cut_denotes_negation, denoteRegion_mk, denoteItemSeq_cons,
+    denoteItemSeq_nil, and_true]
+  constructor
+  · intro h
+    exact Classical.byContradiction fun hbody =>
+      h ⟨Fin.elim0, by simpa using hbody⟩
+  · intro hbody hnot
+    rcases hnot with ⟨localEnv, hlocal⟩
+    exact hlocal (by simpa using hbody)
+
+end VisualProof.Diagram

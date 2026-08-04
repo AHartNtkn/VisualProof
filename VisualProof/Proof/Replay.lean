@@ -1,245 +1,210 @@
-import VisualProof.Rule.Soundness
+import VisualProof.Rule.Soundness.All
 
-namespace VisualProof
+namespace VisualProof.Proof
 
-universe u
+open VisualProof
+open Diagram
+open Rule
 
-/-- Every registered theorem-interface wire is visible at the diagram root. -/
-def RootBoundary (diagram : ConcreteDiagram definitionCount)
-    (boundary : List diagram.WireId) : Prop :=
-  ∀ wire, wire ∈ boundary → (diagram.wires wire).scope = diagram.root
+/-- Execute one rule on an open proof state. A successful concrete rewrite is
+rejected when it deletes any pinned boundary identity. -/
+def applyOpenStep (context : ProofContext signature)
+    (orientation : Orientation) (input : OpenProofState signature)
+    (action : Step context input.diagram) :
+    Except StepError (OpenProofState signature) :=
+  match applyStep context orientation input.diagram action with
+  | .error error => .error error
+  | .ok receipt =>
+      match receipt.transportOpen input.boundary input.boundary_root_scoped with
+      | none => .error .boundaryMismatch
+      | some result => .ok result
 
-/-- Allocation totals accumulated from the raw construction owned by every
-checked step in a replay. -/
-structure ReplayAllocation where
-  regions : Nat
-  nodes : Nat
-  wires : Nat
-  deriving Repr, DecidableEq
+/-- A typed executable proof program indexed by the complete open state. The
+continuation is indexed by the actual boundary-transported result of the sole
+dispatcher, so neither a diagram nor its boundary can be substituted. -/
+inductive Program (context : ProofContext signature) (orientation : Orientation) :
+    OpenProofState signature → Type
+  | done (input) : Program context orientation input
+  | step {input : OpenProofState signature}
+      (action : Step context input.diagram)
+      (next : ∀ result,
+        applyOpenStep context orientation input action = .ok result →
+          Program context orientation result) :
+      Program context orientation input
 
-namespace ReplayAllocation
+def replay (context : ProofContext signature) (orientation : Orientation) :
+    (input : OpenProofState signature) → Program context orientation input →
+      Except StepError (OpenProofState signature)
+  | input, .done _ => .ok input
+  | input, .step action next =>
+      match happly : applyOpenStep context orientation input action with
+      | .error error => .error error
+      | .ok result => replay context orientation result (next result happly)
 
-def zero : ReplayAllocation :=
-  ⟨0, 0, 0⟩
+/-- Closed replay is the empty-boundary specialization of open replay. -/
+def replayClosed (context : ProofContext signature)
+    (orientation : Orientation) (input : CheckedDiagram signature)
+    (program : Program context orientation (OpenProofState.closed input)) :
+    Except StepError (OpenProofState signature) :=
+  replay context orientation (OpenProofState.closed input) program
 
-def add (left right : ReplayAllocation) : ReplayAllocation :=
-  ⟨left.regions + right.regions,
-    left.nodes + right.nodes,
-    left.wires + right.wires⟩
+/-- Transport an ordered boundary assignment along the positional arity
+equality established by successful replay.  Aliased boundary positions remain
+aliased because this changes only the finite index type, never the values. -/
+def transportArgs {sourceLength targetLength : Nat}
+    (length_eq : targetLength = sourceLength)
+    (args : Fin sourceLength → D) : Fin targetLength → D :=
+  args ∘ Fin.cast length_eq
 
-def ofStep
-    {source target : ConcreteDiagram definitionCount}
-    (allocation : StepAllocation source target) : ReplayAllocation :=
-  ⟨allocation.regions, allocation.nodes, allocation.wires⟩
+@[simp] theorem transportArgs_rfl (args : Fin length → D) :
+    transportArgs rfl args = args := by
+  rfl
 
-end ReplayAllocation
+theorem transportArgs_trans
+    (first : middleLength = sourceLength)
+    (second : targetLength = middleLength)
+    (args : Fin sourceLength → D) :
+    transportArgs second (transportArgs first args) =
+      transportArgs (second.trans first) args := by
+  subst middleLength
+  subst targetLength
+  rfl
 
-/-- A checked proof is one dependent chain of exact proof steps. Its ordered
-registered interface is transported after every step, so a missing semantic
-image rejects construction at the step where it disappears. -/
-inductive Proof
-    (definitions : CheckedDefinitions)
-    (orientation : Orientation) :
-    (source : CheckedDiagram definitions.intrinsic.signatures) →
-      List source.val.WireId → Type (u + 1)
-  | nil (source) (boundary)
-      (boundaryRoot : RootBoundary source.val boundary) :
-      Proof definitions orientation source boundary
-  | cons {source boundary}
-      (boundaryRoot : RootBoundary source.val boundary)
-      (step : ProofStep.{u} definitions orientation source)
-      (mapped : List (applyStep step).result.val.WireId)
-      (boundaryAccepted :
-        (applyStep step).transportRootBoundary boundary = some mapped)
-      (rest : Proof definitions orientation (applyStep step).result mapped) :
-      Proof definitions orientation source boundary
+/-- Boundary-parametric semantic composition between two checked open states.
+The equality records that the same ordered boundary positions survive, while
+`sound` records the implication in the selected proof orientation. -/
+structure ReplayEntailment (orientation : Orientation)
+    (source target : OpenProofState signature)
+    (named : NamedEnv Lambda.Individual signature) : Prop where
+  boundaryLength : target.boundary.length = source.boundary.length
+  sound : ∀ args : Fin source.boundary.length → Lambda.Individual,
+    DirectedImplication orientation
+      (source.denote Lambda.canonicalModel named args)
+      (target.denote Lambda.canonicalModel named
+        (transportArgs boundaryLength args))
 
-namespace Proof
+namespace ReplayEntailment
 
-/-- Unique checked endpoint obtained by executing the dependent step chain. -/
-def target :
-    {source : CheckedDiagram definitions.intrinsic.signatures} →
-    {boundary : List source.val.WireId} →
-      Proof.{u} definitions orientation source boundary →
-        CheckedDiagram definitions.intrinsic.signatures
-  | source, _, .nil .. => source
-  | _, _, .cons _ _ _ _ rest => rest.target
+theorem refl (orientation : Orientation) (state : OpenProofState signature)
+    (named : NamedEnv Lambda.Individual signature) :
+    ReplayEntailment orientation state state named := by
+  refine ⟨rfl, ?_⟩
+  intro args
+  cases orientation <;> exact id
 
-/-- Ordered registered interface at the checked endpoint. -/
-def targetBoundary :
-    {source : CheckedDiagram definitions.intrinsic.signatures} →
-    {boundary : List source.val.WireId} →
-    (proof : Proof.{u} definitions orientation source boundary) →
-      List proof.target.val.WireId
-  | _, boundary, .nil .. => boundary
-  | _, _, .cons _ _ _ _ rest => rest.targetBoundary
+theorem trans
+    (first : ReplayEntailment orientation source middle named)
+    (second : ReplayEntailment orientation middle target named) :
+    ReplayEntailment orientation source target named := by
+  refine ⟨second.boundaryLength.trans first.boundaryLength, ?_⟩
+  intro args
+  have htransport := transportArgs_trans first.boundaryLength
+    second.boundaryLength args
+  cases orientation with
+  | forward =>
+      intro sourceDenotes
+      have middleDenotes := first.sound args sourceDenotes
+      have targetDenotes := second.sound
+        (transportArgs first.boundaryLength args) middleDenotes
+      simpa only [htransport] using targetDenotes
+  | backward =>
+      intro targetDenotes
+      have targetDenotes' : target.denote Lambda.canonicalModel named
+          (transportArgs second.boundaryLength
+            (transportArgs first.boundaryLength args)) := by
+        simpa only [htransport] using targetDenotes
+      have middleDenotes := second.sound
+        (transportArgs first.boundaryLength args) targetDenotes'
+      exact first.sound args middleDenotes
 
-/-- Total logical transport composed in the same order as checked execution. -/
-def transport :
-    {source : CheckedDiagram definitions.intrinsic.signatures} →
-    {boundary : List source.val.WireId} →
-    (proof : Proof.{u} definitions orientation source boundary) →
-      WireTransport source.val proof.target.val
-  | source, _, .nil .. => WireTransport.identity source.val
-  | _, _, .cons _ step _ _ rest =>
-      (applyStep step).transport.compose rest.transport
+end ReplayEntailment
 
-/-- Root-visible transport composed in the same order as checked execution. -/
-def interface :
-    {source : CheckedDiagram definitions.intrinsic.signatures} →
-    {boundary : List source.val.WireId} →
-    (proof : Proof.{u} definitions orientation source boundary) →
-      RootInterfaceTransport source.val proof.target.val
-  | source, _, .nil .. =>
-      RootInterfaceTransport.ofTransport (WireTransport.identity source.val)
-  | _, _, .cons _ step _ _ rest =>
-      (applyStep step).interface.compose rest.interface
+private theorem directedEntailment_implication
+    (sound : DirectedEntailment tag orientation before after) :
+    DirectedImplication orientation before after := by
+  unfold DirectedEntailment at sound
+  cases hmode : tag.semanticMode <;> simp only [hmode] at sound
+  · exact sound
+  · cases orientation with
+    | forward => exact sound.mp
+    | backward => exact sound.mpr
 
-/-- Raw construction allocation accumulated across the checked proof. -/
-def allocation :
-    {source : CheckedDiagram definitions.intrinsic.signatures} →
-    {boundary : List source.val.WireId} →
-      Proof.{u} definitions orientation source boundary → ReplayAllocation
-  | _, _, .nil .. => ReplayAllocation.zero
-  | _, _, .cons _ step _ _ rest =>
-      ReplayAllocation.add
-        (ReplayAllocation.ofStep (applyStep step).allocation)
-        rest.allocation
+/-- One successful open step is semantically sound directly from the checked
+dispatcher theorem; replay has no separately supplied soundness authority. -/
+theorem applyOpenStep_sound
+    (happly : applyOpenStep context orientation input action = .ok result)
+    (valid : context.Valid) :
+    ReplayEntailment orientation input result
+      (Theory.interpretDefinitions context.definitions) := by
+  unfold applyOpenStep at happly
+  split at happly
+  · contradiction
+  · rename_i receipt hstep
+    split at happly
+    · contradiction
+    · rename_i transported htransport
+      obtain ⟨mapped, hboundary, rfl⟩ :=
+        receipt.transportOpen_result input.boundary
+          input.boundary_root_scoped transported htransport
+      cases happly
+      have stepSound := Rule.applyStep_sound hstep input.boundary
+        input.boundary_root_scoped mapped hboundary valid
+      refine ⟨receipt.interface.transportBoundary_length hboundary, ?_⟩
+      intro args
+      exact directedEntailment_implication (stepSound args)
 
-/-- Replay is the sole execution projection of a checked proof. -/
-def replay
-    {source : CheckedDiagram definitions.intrinsic.signatures}
-    {boundary : List source.val.WireId}
-    (proof : Proof.{u} definitions orientation source boundary) :
-    CheckedDiagram definitions.intrinsic.signatures :=
-  proof.target
-
-private theorem interfaceBoundary_compose
-    (first : RootInterfaceTransport source middle)
-    (second : RootInterfaceTransport middle diagramTarget)
-    (sourceBoundary : List source.WireId)
-    (middleBoundary : List middle.WireId)
-    (targetBoundary : List diagramTarget.WireId)
-    (firstAccepted :
-      first.transportBoundary sourceBoundary = some middleBoundary)
-    (secondAccepted :
-      second.transportBoundary middleBoundary = some targetBoundary) :
-    (first.compose second).transportBoundary sourceBoundary =
-      some targetBoundary := by
-  induction sourceBoundary generalizing middleBoundary targetBoundary with
-  | nil =>
-      simp [RootInterfaceTransport.transportBoundary] at firstAccepted
-      subst middleBoundary
-      simpa [RootInterfaceTransport.transportBoundary] using secondAccepted
-  | cons wire rest induction =>
-      simp only [RootInterfaceTransport.transportBoundary] at firstAccepted
-      cases firstHead : first.image? wire with
-      | none => simp [firstHead] at firstAccepted
-      | some middleWire =>
-          cases firstTail : first.transportBoundary rest with
-          | none => simp [firstHead, firstTail] at firstAccepted
-          | some middleRest =>
-              simp [firstHead, firstTail] at firstAccepted
-              subst middleBoundary
-              simp only [RootInterfaceTransport.transportBoundary]
-                at secondAccepted
-              cases secondHead : second.image? middleWire with
-              | none => simp [secondHead] at secondAccepted
-              | some targetWire =>
-                  cases secondTail :
-                      second.transportBoundary middleRest with
-                  | none => simp [secondHead, secondTail] at secondAccepted
-                  | some targetRest =>
-                      simp [secondHead, secondTail] at secondAccepted
-                      subst targetBoundary
-                      simp [RootInterfaceTransport.transportBoundary,
-                        RootInterfaceTransport.compose, firstHead, secondHead]
-                      change (((first.compose second).transportBoundary rest).bind
-                        fun mappedRest => some (targetWire :: mappedRest)) =
-                          some (targetWire :: targetRest)
-                      rw [induction middleRest targetRest firstTail secondTail]
-                      rfl
-
-private theorem interfaceBoundary_identity
-    (diagram : ConcreteDiagram definitionCount)
-    (boundary : List diagram.WireId)
-    (boundaryRoot : RootBoundary diagram boundary) :
-    RootInterfaceTransport.transportBoundary
-      (RootInterfaceTransport.ofTransport (WireTransport.identity diagram))
-      boundary = some boundary := by
-  induction boundary with
-  | nil => rfl
-  | cons wire rest induction =>
-      have wireRoot : (diagram.wires wire).scope = diagram.root :=
-        boundaryRoot wire (by simp)
-      have restRoot : RootBoundary diagram rest := by
-        intro candidate member
-        exact boundaryRoot candidate (by simp [member])
-      simp [RootInterfaceTransport.ofTransport, WireTransport.identity,
-        RootInterfaceTransport.transportBoundary, wireRoot]
-      change (((RootInterfaceTransport.ofTransport
-          (WireTransport.identity diagram)).transportBoundary rest).bind
-        fun mappedRest => some (wire :: mappedRest)) = some (wire :: rest)
-      rw [induction restRoot]
-      rfl
-
-/-- Checked replay preserves every registered boundary position and alias. -/
-theorem transportBoundary_exact
-    {source : CheckedDiagram definitions.intrinsic.signatures}
-    {boundary : List source.val.WireId}
-    (proof : Proof.{u} definitions orientation source boundary) :
-    proof.interface.transportBoundary boundary =
-      some proof.targetBoundary := by
-  induction proof with
-  | nil source boundary boundaryRoot =>
-      exact interfaceBoundary_identity _ _ boundaryRoot
-  | cons boundaryRoot step mapped boundaryAccepted rest induction =>
-      exact interfaceBoundary_compose
-        (applyStep step).interface rest.interface _ _ _
-          boundaryAccepted induction
-
-/-- Semantic soundness is structural composition of the exact owning theorem
-for each checked step. -/
+/-- Sound replay in either orientation.  Forward replay composes source-to-
+target implications; backward replay composes target-to-source implications. -/
 theorem replay_sound
-    (definitions : CheckedDefinitions)
-    {orientation : Orientation}
-    {source : CheckedDiagram definitions.intrinsic.signatures}
-    {boundary : List source.val.WireId}
-    (proof : Proof.{u} definitions orientation source boundary)
-    (model : Model.{u})
-    (definitionEnv : DefinitionEnv model.toPreModel
-      definitions.intrinsic.signatures)
-    (lawful : DefinitionLawful model.toPreModel definitions.intrinsic
-      definitionEnv) :
-    Directed orientation
-      (denoteChecked model.toPreModel definitionEnv source)
-      (denoteChecked model.toPreModel definitionEnv (replay proof)) := by
-  induction proof with
-  | nil =>
-      cases orientation <;> intro holds <;> exact holds
-  | cons boundaryRoot step mapped boundaryAccepted rest induction =>
-      have head := applyStep_sound definitions step model definitionEnv lawful
-      have tail := induction
-      cases orientation with
-      | forward => exact fun sourceHolds => tail (head sourceHolds)
-      | backward => exact fun targetHolds => head (tail targetHolds)
+    (program : Program context orientation input)
+    (hreplay : replay context orientation input program = .ok finish)
+    (valid : context.Valid) :
+    ReplayEntailment orientation input finish
+      (Theory.interpretDefinitions context.definitions) := by
+  induction program with
+  | done input =>
+      simp [replay] at hreplay
+      cases hreplay
+      exact ReplayEntailment.refl orientation finish
+        (Theory.interpretDefinitions context.definitions)
+  | @step input action next ih =>
+      simp only [replay] at hreplay
+      split at hreplay
+      · contradiction
+      · rename_i result happly
+        exact ReplayEntailment.trans
+          (applyOpenStep_sound happly valid)
+          (ih result happly hreplay)
 
-/-- Backward replay uses the same checked sequence and flips only the directed
-semantic reading of each step. -/
+/-- Forward replay preserves denotation for every ordered boundary assignment. -/
+theorem forward_replay_sound
+    (program : Program context .forward input)
+    (hreplay : replay context .forward input program = .ok finish)
+    (valid : context.Valid) :
+    ∃ length_eq : finish.boundary.length = input.boundary.length,
+      ∀ args : Fin input.boundary.length → Lambda.Individual,
+        input.denote Lambda.canonicalModel
+            (Theory.interpretDefinitions context.definitions) args →
+          finish.denote Lambda.canonicalModel
+            (Theory.interpretDefinitions context.definitions)
+            (transportArgs length_eq args) := by
+  let sound := replay_sound program hreplay valid
+  exact ⟨sound.boundaryLength, sound.sound⟩
+
+/-- Backward replay is goal reduction: denotation of the reduced endpoint for
+the transported assignment entails denotation of the original goal. -/
 theorem backward_replay_sound
-    (definitions : CheckedDefinitions)
-    {source : CheckedDiagram definitions.intrinsic.signatures}
-    {boundary : List source.val.WireId}
-    (proof : Proof.{u} definitions .backward source boundary)
-    (model : Model.{u})
-    (definitionEnv : DefinitionEnv model.toPreModel
-      definitions.intrinsic.signatures)
-    (lawful : DefinitionLawful model.toPreModel definitions.intrinsic
-      definitionEnv) :
-    denoteChecked model.toPreModel definitionEnv (replay proof) →
-      denoteChecked model.toPreModel definitionEnv source :=
-  replay_sound definitions proof model definitionEnv lawful
+    (program : Program context .backward goal)
+    (hreplay : replay context .backward goal program = .ok reduced)
+    (valid : context.Valid) :
+    ∃ length_eq : reduced.boundary.length = goal.boundary.length,
+      ∀ args : Fin goal.boundary.length → Lambda.Individual,
+        reduced.denote Lambda.canonicalModel
+            (Theory.interpretDefinitions context.definitions)
+            (transportArgs length_eq args) →
+          goal.denote Lambda.canonicalModel
+            (Theory.interpretDefinitions context.definitions) args := by
+  let sound := replay_sound program hreplay valid
+  exact ⟨sound.boundaryLength, sound.sound⟩
 
-end Proof
-
-end VisualProof
+end VisualProof.Proof

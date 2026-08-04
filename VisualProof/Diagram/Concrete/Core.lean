@@ -1,309 +1,168 @@
-import VisualProof.Data.Finite
-import VisualProof.Theory.Definition
+import VisualProof.Lambda.Syntax
 
-namespace VisualProof
+namespace VisualProof.Diagram
 
-instance : DecidableEq Sig := fun left right =>
-  if h : left == right then
-    isTrue (eq_of_beq h)
-  else
-    isFalse fun equality => h (by subst equality; simp)
-
-/-- A concrete region is either the unique sheet or a cut with a stored parent. -/
-inductive CRegion (regionCount : Nat)
+inductive CRegion (regions : Nat)
   | sheet
-  | cut (parent : Fin regionCount)
-  deriving Repr, DecidableEq
+  | cut (parent : Fin regions)
+  | bubble (parent : Fin regions) (arity : Nat)
+  deriving DecidableEq
 
-/-- Concrete node ports are derived positions, never an independent table. -/
 inductive CPort
-  | head
+  | output
+  | free (index : Nat)
   | arg (index : Nat)
-  | identity (index : Nat)
-  deriving Repr, DecidableEq
+  deriving DecidableEq
 
-/-- An endpoint names a node and one constructor-derived port. -/
-structure CEndpoint (nodeCount : Nat) where
-  node : Fin nodeCount
+structure CEndpoint (nodes : Nat) where
+  node : Fin nodes
   port : CPort
-  deriving Repr, DecidableEq
+  deriving DecidableEq
 
-/-- The three concrete zero-signature node forms. -/
-inductive CNode (regionCount definitionCount : Nat)
-  | atom (region : Fin regionCount) (args : List Sig)
-  | ref (region : Fin regionCount) (definition : Fin definitionCount)
-      (args : List Sig)
-  | identity (region : Fin regionCount) (sig : Sig) (arity : Nat)
-  deriving Repr, DecidableEq
+inductive CNode (regions : Nat)
+  | term (region : Fin regions) (freePorts : Nat)
+      (term : Lambda.Term 0 (Fin freePorts))
+  | atom (region binder : Fin regions)
+  | named (region : Fin regions) (definition arity : Nat)
 
-namespace CNode
+structure CWire (regions nodes : Nat) where
+  scope : Fin regions
+  endpoints : List (CEndpoint nodes)
 
-def region : CNode regionCount definitionCount → Fin regionCount
-  | .atom region _ | .ref region _ _ | .identity region _ _ => region
-
-/-- Replace the sole region carrier of a concrete node while preserving its
-constructor and intrinsic payload. -/
-def relocate (target : Fin targetRegionCount) :
-    CNode regionCount definitionCount →
-      CNode targetRegionCount definitionCount
-  | .atom _ args => .atom target args
-  | .ref _ definition args => .ref target definition args
-  | .identity _ sig arity => .identity target sig arity
-
-theorem match_relocate
-    (node : CNode regionCount definitionCount)
-    (target : Fin targetRegionCount) :
-    (match node with
-      | .atom _ args => .atom target args
-      | .ref _ definition args => .ref target definition args
-      | .identity _ sig arity => .identity target sig arity) =
-      node.relocate target := by
-  cases node <;> rfl
-
-@[simp] theorem region_relocate
-    (node : CNode regionCount definitionCount)
-    (target : Fin targetRegionCount) :
-    (node.relocate target).region = target := by
-  cases node <;> rfl
-
-@[simp] theorem relocate_relocate
-    (node : CNode regionCount definitionCount)
-    (first : Fin firstRegionCount)
-    (second : Fin secondRegionCount) :
-    (node.relocate first).relocate second = node.relocate second := by
-  cases node <;> rfl
-
-end CNode
-
-/-- A wire owns its signature, lexical scope, and finite endpoint incidence. -/
-structure CWire (regionCount nodeCount : Nat) where
-  sig : Sig
-  scope : Fin regionCount
-  endpoints : List (CEndpoint nodeCount)
-  deriving Repr, DecidableEq
-
-/-- The normalized concrete graph: separate finite IDs and total ownership tables. -/
-structure ConcreteDiagram (definitionCount : Nat) where
+structure ConcreteDiagram where
   regionCount : Nat
   nodeCount : Nat
   wireCount : Nat
   root : Fin regionCount
-  regions : Fin regionCount → CRegion regionCount
-  nodes : Fin nodeCount → CNode regionCount definitionCount
-  wires : Fin wireCount → CWire regionCount nodeCount
+  regions : Fin regionCount -> CRegion regionCount
+  nodes : Fin nodeCount -> CNode regionCount
+  wires : Fin wireCount -> CWire regionCount nodeCount
 
-/-- An ordered external boundary may repeat a wire to express aliases. -/
-structure OpenConcreteDiagram (definitionCount : Nat) where
-  diagram : ConcreteDiagram definitionCount
+structure OpenConcreteDiagram where
+  diagram : ConcreteDiagram
   boundary : List (Fin diagram.wireCount)
+
+namespace CRegion
+
+def parent? : CRegion regions -> Option (Fin regions)
+  | .sheet => none
+  | .cut parent => some parent
+  | .bubble parent _ => some parent
+
+end CRegion
+
+namespace CNode
+
+def region : CNode regions -> Fin regions
+  | .term region _ _ => region
+  | .atom region _ => region
+  | .named region _ _ => region
+
+end CNode
 
 namespace ConcreteDiagram
 
-abbrev RegionId (diagram : ConcreteDiagram definitionCount) :=
-  Fin diagram.regionCount
-
-abbrev NodeId (diagram : ConcreteDiagram definitionCount) :=
-  Fin diagram.nodeCount
-
-abbrev WireId (diagram : ConcreteDiagram definitionCount) :=
-  Fin diagram.wireCount
-
-/-- Follow exactly `steps` stored parent edges, stopping at a sheet. -/
-def climb (diagram : ConcreteDiagram definitionCount) :
-    Nat → diagram.RegionId → Option diagram.RegionId
+def climb (d : ConcreteDiagram) :
+    Nat -> Fin d.regionCount -> Option (Fin d.regionCount)
   | 0, region => some region
   | steps + 1, region =>
-      match diagram.regions region with
-      | .sheet => none
-      | .cut parent => climb diagram steps parent
+      match (d.regions region).parent? with
+      | none => none
+      | some parent => d.climb steps parent
 
-@[simp] theorem climb_zero (diagram : ConcreteDiagram definitionCount)
-    (region : diagram.RegionId) :
-    diagram.climb 0 region = some region := rfl
+@[simp] theorem climb_zero (d : ConcreteDiagram)
+    (region : Fin d.regionCount) :
+    d.climb 0 region = some region := rfl
 
-theorem climb_add
-    (diagram : ConcreteDiagram definitionCount)
-    (first second : Nat)
-    (region : diagram.RegionId) :
-    diagram.climb (first + second) region =
-      (diagram.climb first region).bind (diagram.climb second) := by
-  induction first generalizing region with
-  | zero => simp
-  | succ first induction =>
-      cases regionData : diagram.regions region with
-      | sheet =>
-          simp [Nat.succ_add, ConcreteDiagram.climb, regionData]
-      | cut parent =>
-          simpa [ConcreteDiagram.climb, regionData, Nat.succ_add] using
-            induction parent
+def Encloses (d : ConcreteDiagram)
+    (ancestor descendant : Fin d.regionCount) : Prop :=
+  exists steps : Fin (d.regionCount + 1),
+    d.climb steps descendant = some ancestor
 
-/-- Bounded ancestry; the bound prevents cycles from masquerading as trees. -/
-def Encloses (diagram : ConcreteDiagram definitionCount)
-    (ancestor descendant : diagram.RegionId) : Prop :=
-  (Data.Finite.allFin (diagram.regionCount + 1)).any (fun steps =>
-    diagram.climb steps descendant == some ancestor) = true
+namespace Encloses
 
-instance (diagram : ConcreteDiagram definitionCount)
-    (ancestor descendant : diagram.RegionId) :
-    Decidable (diagram.Encloses ancestor descendant) := by
+theorem refl (d : ConcreteDiagram) (region : Fin d.regionCount) :
+    d.Encloses region region := by
+  exact ⟨0, d.climb_zero region⟩
+
+end Encloses
+
+instance (d : ConcreteDiagram)
+    (ancestor descendant : Fin d.regionCount) :
+    Decidable (d.Encloses ancestor descendant) := by
   unfold Encloses
   infer_instance
 
-theorem encloses_refl (diagram : ConcreteDiagram definitionCount)
-    (region : diagram.RegionId) :
-    diagram.Encloses region region := by
-  unfold Encloses
-  rw [List.any_eq_true]
-  exact ⟨0, Data.Finite.mem_allFin 0, by simp⟩
+def ReachesRoot (d : ConcreteDiagram)
+    (region : Fin d.regionCount) : Prop :=
+  d.Encloses d.root region
 
-/-- The complete, deterministic finite support of each identifier sort. -/
-def regionsList (diagram : ConcreteDiagram definitionCount) :
-    List diagram.RegionId :=
-  Data.Finite.allFin diagram.regionCount
+instance (d : ConcreteDiagram) (region : Fin d.regionCount) :
+    Decidable (d.ReachesRoot region) := by
+  unfold ReachesRoot
+  infer_instance
 
-def nodesList (diagram : ConcreteDiagram definitionCount) :
-    List diagram.NodeId :=
-  Data.Finite.allFin diagram.nodeCount
+def binderArity? (d : ConcreteDiagram)
+    (binder : Fin d.regionCount) : Option Nat :=
+  match d.regions binder with
+  | .bubble _ arity => some arity
+  | _ => none
 
-def wiresList (diagram : ConcreteDiagram definitionCount) :
-    List diagram.WireId :=
-  Data.Finite.allFin diagram.wireCount
+def RequiresPort (d : ConcreteDiagram)
+    (node : Fin d.nodeCount) (port : CPort) : Prop :=
+  match d.nodes node with
+  | .term _ freePorts _ =>
+      port = .output \/ exists i : Fin freePorts, port = .free i
+  | .atom _ binder =>
+      match d.regions binder with
+      | .bubble _ arity => exists i : Fin arity, port = .arg i
+      | _ => False
+  | .named _ _ arity => exists i : Fin arity, port = .arg i
 
-def wiresAt (diagram : ConcreteDiagram definitionCount)
-    (region : diagram.RegionId) : List diagram.WireId :=
-  diagram.wiresList.filter fun wire => (diagram.wires wire).scope == region
+instance (d : ConcreteDiagram) (node : Fin d.nodeCount) (port : CPort) :
+    Decidable (d.RequiresPort node port) := by
+  unfold RequiresPort
+  split
+  · infer_instance
+  · split <;> infer_instance
+  · infer_instance
 
-def nodesAt (diagram : ConcreteDiagram definitionCount)
-    (region : diagram.RegionId) : List diagram.NodeId :=
-  diagram.nodesList.filter fun node => (diagram.nodes node).region == region
+def EndpointOccurs (d : ConcreteDiagram) (wire : Fin d.wireCount)
+    (endpoint : CEndpoint d.nodeCount) : Prop :=
+  endpoint ∈ (d.wires wire).endpoints
 
-def childrenOf (diagram : ConcreteDiagram definitionCount)
-    (region : diagram.RegionId) : List diagram.RegionId :=
-  diagram.regionsList.filter fun child =>
-    match diagram.regions child with
-    | .sheet => false
-    | .cut parent => parent == region
+instance (d : ConcreteDiagram) (wire : Fin d.wireCount)
+    (endpoint : CEndpoint d.nodeCount) :
+    Decidable (d.EndpointOccurs wire endpoint) := by
+  unfold EndpointOccurs
+  infer_instance
 
-/-- The ports implied by a node constructor, in positional order. -/
-def requiredPorts (diagram : ConcreteDiagram definitionCount)
-    (node : diagram.NodeId) : List CPort :=
-  match diagram.nodes node with
-  | .atom _ args => .head :: (List.range args.length).map .arg
-  | .ref _ _ args => (List.range args.length).map .arg
-  | .identity _ _ arity => (List.range arity).map .identity
+theorem requiresPort_term_iff (d : ConcreteDiagram)
+    (node : Fin d.nodeCount) (port : CPort)
+    (region : Fin d.regionCount) (freePorts : Nat)
+    (term : Lambda.Term 0 (Fin freePorts))
+    (hnode : d.nodes node = .term region freePorts term) :
+    d.RequiresPort node port <->
+      port = .output \/ exists i : Fin freePorts, port = .free i := by
+  simp only [RequiresPort, hnode]
 
-/-- Every stored incidence in canonical wire order. -/
-def endpointOccurrences (diagram : ConcreteDiagram definitionCount) :
-    List (diagram.WireId × CEndpoint diagram.nodeCount) :=
-  diagram.wiresList.flatMap fun wire =>
-    (diagram.wires wire).endpoints.map fun endpoint => (wire, endpoint)
+theorem requiresPort_atom_bubble_iff (d : ConcreteDiagram)
+    (node : Fin d.nodeCount) (port : CPort)
+    (region binder parent : Fin d.regionCount) (arity : Nat)
+    (hnode : d.nodes node = .atom region binder)
+    (hbinder : d.regions binder = .bubble parent arity) :
+    d.RequiresPort node port <->
+      exists i : Fin arity, port = .arg i := by
+  simp only [RequiresPort, hnode, hbinder]
 
-def endpointOwner? (diagram : ConcreteDiagram definitionCount)
-    (endpoint : CEndpoint diagram.nodeCount) : Option diagram.WireId :=
-  (diagram.endpointOccurrences.find? fun occurrence =>
-    occurrence.2 == endpoint).map Prod.fst
+theorem requiresPort_named_iff (d : ConcreteDiagram)
+    (node : Fin d.nodeCount) (port : CPort)
+    (region : Fin d.regionCount) (definition arity : Nat)
+    (hnode : d.nodes node = .named region definition arity) :
+    d.RequiresPort node port <->
+      exists i : Fin arity, port = .arg i := by
+  simp only [RequiresPort, hnode]
 
 end ConcreteDiagram
 
-/-- Rename a raw concrete region through a finite region equivalence. -/
-def CRegion.rename
-    (regions : Data.Finite.FiniteEquiv (Fin leftCount) (Fin rightCount)) :
-    CRegion leftCount → CRegion rightCount
-  | .sheet => .sheet
-  | .cut parent => .cut (regions parent)
-
-@[simp] theorem CRegion.rename_sheet
-    (regions : Data.Finite.FiniteEquiv (Fin leftCount) (Fin rightCount)) :
-    (CRegion.sheet : CRegion leftCount).rename regions = .sheet := rfl
-
-/-- Rename a raw concrete node through a finite region equivalence. -/
-def CNode.rename
-    (regions : Data.Finite.FiniteEquiv (Fin leftCount) (Fin rightCount)) :
-    CNode leftCount definitionCount → CNode rightCount definitionCount
-  | .atom region args => .atom (regions region) args
-  | .ref region definition args => .ref (regions region) definition args
-  | .identity region sig arity => .identity (regions region) sig arity
-
-@[simp] theorem CNode.rename_eq_relocate
-    (regions : Data.Finite.FiniteEquiv (Fin leftCount) (Fin rightCount))
-    (node : CNode leftCount definitionCount) :
-    node.rename regions = node.relocate (regions node.region) := by
-  cases node <;> rfl
-
-@[simp] theorem CNode.region_rename
-    (regions : Data.Finite.FiniteEquiv (Fin leftCount) (Fin rightCount))
-    (node : CNode leftCount definitionCount) :
-    (node.rename regions).region = regions node.region := by
-  cases node <;> rfl
-
-/--
-Port correspondence preserves atom/ref positions exactly. Identity indices are
-storage positions and therefore correspond only by identity incidence.
--/
-def PortCorresponds
-    (left : ConcreteDiagram definitionCount)
-    (right : ConcreteDiagram definitionCount)
-    (nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId)
-    (endpoint : CEndpoint left.nodeCount)
-    (candidate : CEndpoint right.nodeCount) : Prop :=
-  candidate.node = nodes endpoint.node ∧
-    match left.nodes endpoint.node, right.nodes candidate.node with
-    | .identity _ leftSig leftArity, .identity _ rightSig rightArity =>
-        leftSig = rightSig ∧ leftArity = rightArity ∧
-          (∃ leftIndex rightIndex,
-            endpoint.port = .identity leftIndex ∧
-              candidate.port = .identity rightIndex)
-    | _, _ => candidate.port = endpoint.port
-
-/--
-A raw concrete isomorphism is a finite renaming preserving every owned table.
-Endpoint order and identity storage indices are intentionally nonsemantic.
--/
-structure ConcreteIso {definitions : List (List Sig)}
-    (left right : ConcreteDiagram definitions.length) where
-  regions : Data.Finite.FiniteEquiv left.RegionId right.RegionId
-  nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId
-  wires : Data.Finite.FiniteEquiv left.WireId right.WireId
-  root : regions left.root = right.root
-  region_table :
-    ∀ region,
-      right.regions (regions region) =
-        (left.regions region).rename regions
-  node_table :
-    ∀ node,
-      right.nodes (nodes node) =
-        (left.nodes node).rename regions
-  wire_signature :
-    ∀ wire, (right.wires (wires wire)).sig = (left.wires wire).sig
-  wire_scope :
-    ∀ wire,
-      (right.wires (wires wire)).scope =
-        regions (left.wires wire).scope
-  endpointMap :
-    ∀ wire, CEndpoint left.nodeCount → CEndpoint right.nodeCount
-  endpointInverse :
-    ∀ wire, CEndpoint right.nodeCount → CEndpoint left.nodeCount
-  endpointMap_mem :
-    ∀ wire endpoint,
-      endpoint ∈ (left.wires wire).endpoints →
-        endpointMap wire endpoint ∈
-          (right.wires (wires wire)).endpoints
-  endpointInverse_mem :
-    ∀ wire candidate,
-      candidate ∈ (right.wires (wires wire)).endpoints →
-        endpointInverse wire candidate ∈ (left.wires wire).endpoints
-  endpointMap_left_inv :
-    ∀ wire endpoint,
-      endpoint ∈ (left.wires wire).endpoints →
-        endpointInverse wire (endpointMap wire endpoint) = endpoint
-  endpointMap_right_inv :
-    ∀ wire candidate,
-      candidate ∈ (right.wires (wires wire)).endpoints →
-        endpointMap wire (endpointInverse wire candidate) = candidate
-  endpointMap_corresponds :
-    ∀ wire endpoint,
-      endpoint ∈ (left.wires wire).endpoints →
-        PortCorresponds left right nodes endpoint
-          (endpointMap wire endpoint)
-
-end VisualProof
+end VisualProof.Diagram

@@ -1,428 +1,353 @@
 import VisualProof.Diagram.Semantics
 
-namespace VisualProof
+namespace VisualProof.Diagram
 
-universe u
+open VisualProof
+open Theory
 
-namespace Region
-
-/-- Surround one region's conjunction by fixed items at the same typed scope. -/
-def surround (leading : ItemSeq defs ctx) (body : Region defs ctx)
-    (suffix : ItemSeq defs ctx) : Region defs ctx :=
-  match body with
-  | .mk items => .mk (leading.append (items.append suffix))
-
-@[simp] theorem denote_surround
-    (pre : PreModel.{u}) (definitionEnv : DefinitionEnv pre defs)
-    (env : Env pre ctx) (leading suffix : ItemSeq defs ctx)
-    (body : Region defs ctx) :
-    denoteRegion pre definitionEnv env (surround leading body suffix) ↔
-      denoteItemSeq pre definitionEnv env leading ∧
-      denoteRegion pre definitionEnv env body ∧
-      denoteItemSeq pre definitionEnv env suffix := by
-  cases body
-  simp only [surround, denoteRegion, denoteItemSeq_append]
-
-end Region
-
-/--
-A genuine typed one-hole diagram context. `holeCtx` is the wire context expected
-by the hole and `outerCtx` is the context exposed after all recorded binders.
-Conjunction frames, cuts, and binders each own exactly one recursive child.
--/
-inductive DiagramContext (defs : List (List Sig)) :
-    List Sig → List Sig → Type
-  | hole : DiagramContext defs ctx ctx
-  | surround (leading : ItemSeq defs outerCtx)
-      (inner : DiagramContext defs holeCtx outerCtx)
-      (suffix : ItemSeq defs outerCtx) :
-      DiagramContext defs holeCtx outerCtx
-  | cut (inner : DiagramContext defs holeCtx outerCtx) :
-      DiagramContext defs holeCtx outerCtx
-  | bind (sig : Sig)
-      (inner : DiagramContext defs holeCtx (sig :: outerCtx)) :
-      DiagramContext defs holeCtx outerCtx
+inductive DiagramContext (signature : List Nat) :
+    (outerWires holeWires : Nat) -> (outerRels holeRels : RelCtx) -> Type
+  | hole : DiagramContext signature wires wires rels rels
+  | cut (localWires : Nat)
+      (before after : ItemSeq signature (outerWires + localWires) outerRels)
+      (child : DiagramContext signature (outerWires + localWires) holeWires
+        outerRels holeRels) :
+      DiagramContext signature outerWires holeWires outerRels holeRels
+  | bubble (localWires : Nat)
+      (before after : ItemSeq signature (outerWires + localWires) outerRels)
+      (arity : Nat)
+      (child : DiagramContext signature (outerWires + localWires) holeWires
+        (arity :: outerRels) holeRels) :
+      DiagramContext signature outerWires holeWires outerRels holeRels
 
 namespace DiagramContext
 
-/-- Fill the unique hole; typing prevents wire capture at every binder. -/
-def fill : DiagramContext defs holeCtx outerCtx →
-    Region defs holeCtx → Region defs outerCtx
+def cutDepth : DiagramContext signature outerWires holeWires outerRels holeRels ->
+    Nat
+  | .hole => 0
+  | .cut _ _ _ child => child.cutDepth + 1
+  | .bubble _ _ _ _ child => child.cutDepth
+
+def fill : DiagramContext signature outerWires holeWires outerRels holeRels ->
+    Region signature holeWires holeRels -> Region signature outerWires outerRels
   | .hole, body => body
-  | .surround leading inner suffix, body =>
-      Region.surround leading (inner.fill body) suffix
-  | .cut inner, body =>
-      .mk (.cons (.cut (inner.fill body)) .nil)
-  | .bind sig inner, body =>
-      .mk (.cons (.bind sig (inner.fill body)) .nil)
+  | .cut localWires before after child, body =>
+      .mk localWires
+        (before.append (.cons (.cut (child.fill body)) after))
+  | .bubble localWires before after arity child, body =>
+      .mk localWires
+        (before.append (.cons (.bubble arity (child.fill body)) after))
 
-/-- Number of negating cuts between the outer region and the hole. -/
-def cutDepth : DiagramContext defs holeCtx outerCtx → Nat
-  | .hole => 0
-  | .surround _ inner _ => inner.cutDepth
-  | .cut inner => inner.cutDepth + 1
-  | .bind _ inner => inner.cutDepth
+/-- Compose nested one-hole contexts.  The result first traverses `outer`
+and then `inner`; no second path or rebuilding representation is introduced. -/
+def comp
+    (outer : DiagramContext signature outerWires middleWires
+      outerRels middleRels)
+    (inner : DiagramContext signature middleWires holeWires
+      middleRels holeRels) :
+    DiagramContext signature outerWires holeWires outerRels holeRels :=
+  match outer with
+  | .hole => inner
+  | .cut localWires before after child =>
+      .cut localWires before after (child.comp inner)
+  | .bubble localWires before after arity child =>
+      .bubble localWires before after arity (child.comp inner)
 
-/-- Ordered signatures of binders crossed from the outside toward the hole. -/
-def binderPath : DiagramContext defs holeCtx outerCtx → List Sig
-  | .hole => []
-  | .surround _ inner _ => inner.binderPath
-  | .cut inner => inner.binderPath
-  | .bind sig inner => sig :: inner.binderPath
+@[simp] theorem fill_comp
+    (outer : DiagramContext signature outerWires middleWires
+      outerRels middleRels)
+    (inner : DiagramContext signature middleWires holeWires
+      middleRels holeRels)
+    (body : Region signature holeWires holeRels) :
+    (outer.comp inner).fill body = outer.fill (inner.fill body) := by
+  induction outer with
+  | hole => rfl
+  | cut localWires before after child induction =>
+      simp only [comp, fill, induction]
+  | bubble localWires before after arity child induction =>
+      simp only [comp, fill, induction]
 
-/-- Bind an ordered signature block around one context. -/
-def bindMany
-    {hole outer : List Sig} :
-    (bound : List Sig) →
-      DiagramContext definitions hole (bound ++ outer) →
-      DiagramContext definitions hole outer
-  | [], inner => inner
-  | sig :: rest, inner =>
-      bindMany rest (.bind sig inner)
+/-- Canonical embedding of wires inherited by the outer context into the
+complete wire carrier visible at its hole. -/
+def outerWire :
+    DiagramContext signature outerWires holeWires outerRels holeRels →
+      Fin outerWires → Fin holeWires
+  | .hole => id
+  | .cut localWires _ _ child =>
+      child.outerWire ∘ Fin.castAdd localWires
+  | .bubble localWires _ _ _ child =>
+      child.outerWire ∘ Fin.castAdd localWires
 
-/--
-`full` is exactly `stopped` with the ordered `bound` binder block occupying
-its unique hole.  The constructors retain the complete shared outer spine;
-the terminal constructor is the one permitted local-binder suffix.
--/
-inductive StopsAboveBindMany (bound : List Sig) :
-    {stoppedHole outer : List Sig} →
-    DiagramContext definitions stoppedHole outer →
-    DiagramContext definitions (bound ++ stoppedHole) outer →
-    Prop
-  | hole :
-      (full :
-        DiagramContext definitions (bound ++ stoppedHole) stoppedHole) →
-      full =
-        bindMany bound
-          (.hole :
-            DiagramContext definitions
-              (bound ++ stoppedHole) (bound ++ stoppedHole)) →
-      StopsAboveBindMany bound
-        (.hole : DiagramContext definitions stoppedHole stoppedHole) full
-  | surround
-      (leading suffix : ItemSeq definitions outer)
-      (inner : StopsAboveBindMany bound stopped full) :
-      StopsAboveBindMany bound
-        (.surround leading stopped suffix)
-        (.surround leading full suffix)
-  | cut
-      (inner : StopsAboveBindMany bound stopped full) :
-      StopsAboveBindMany bound (.cut stopped) (.cut full)
-  | bind
-      {full :
-        DiagramContext definitions (bound ++ stoppedHole) (sig :: outer)}
-      {stopped :
-        DiagramContext definitions stoppedHole (sig :: outer)}
-      (inner : StopsAboveBindMany bound stopped full) :
-      StopsAboveBindMany bound (.bind sig stopped) (.bind sig full)
+/-- Transporting the hole relation index commutes with adding a cut frame. -/
+theorem cut_transport_holeRels
+    {sourceHoleRels targetHoleRels : RelCtx}
+    (equality : sourceHoleRels = targetHoleRels)
+    (before after : ItemSeq signature (outerWires + localWires) outerRels)
+    (child : DiagramContext signature (outerWires + localWires) holeWires
+      outerRels targetHoleRels) :
+    equality.symm ▸
+        (DiagramContext.cut localWires before after child :
+          DiagramContext signature outerWires holeWires outerRels
+            targetHoleRels) =
+      DiagramContext.cut localWires before after (equality.symm ▸ child) := by
+  subst targetHoleRels
+  rfl
 
-private def spineLength :
-    DiagramContext definitions holeCtx outer → Nat
-  | .hole => 0
-  | .surround _ inner _ => inner.spineLength + 1
-  | .cut inner => inner.spineLength + 1
-  | .bind _ inner => inner.spineLength + 1
-
-private theorem spineLength_bindMany
-    (bound : List Sig)
-    (inner :
-      DiagramContext definitions holeCtx (bound ++ outer)) :
-    (bindMany bound inner).spineLength =
-      inner.spineLength + bound.length := by
-  induction bound generalizing outer with
-  | nil => rfl
-  | cons sig rest induction =>
-      simp only [bindMany, List.length_cons]
-      rw [induction]
-      simp only [spineLength, Nat.add_assoc, Nat.add_comm]
-      rfl
-
-private theorem StopsAboveBindMany.spineLength_eq
-    {stopped :
-      DiagramContext definitions stoppedHole outer}
-    {full :
-      DiagramContext definitions (bound ++ stoppedHole) outer}
-    (decomposition : StopsAboveBindMany bound stopped full) :
-    full.spineLength = stopped.spineLength + bound.length := by
-  induction decomposition with
-  | hole full exact =>
-      subst full
-      exact spineLength_bindMany bound _
-  | surround _ _ inner induction =>
-      simp only [spineLength]
-      omega
-  | cut inner induction =>
-      simp only [spineLength]
-      omega
-  | bind inner induction =>
-      simp only [spineLength]
-      omega
-
-/--
-The stopped context is determined by the existing complete context and the
-ordered binder block.  The proof follows the unique context spine.
--/
-theorem StopsAboveBindMany.stopped_unique
-    {full :
-      DiagramContext definitions (bound ++ stoppedHole) outer}
-    {left right :
-      DiagramContext definitions stoppedHole outer}
-    (leftDecomposition : StopsAboveBindMany bound left full)
-    (rightDecomposition : StopsAboveBindMany bound right full) :
-    left = right := by
-  have stoppedLengths :
-      left.spineLength = right.spineLength := by
-    have leftLength := leftDecomposition.spineLength_eq
-    have rightLength := rightDecomposition.spineLength_eq
-    omega
-  induction leftDecomposition with
-  | hole _ _ =>
-      cases rightDecomposition with
-      | hole _ _ => rfl
-      | surround _ _ _ =>
-          simp only [spineLength] at stoppedLengths
-          omega
-      | cut _ =>
-          simp only [spineLength] at stoppedLengths
-          omega
-      | bind _ =>
-          simp only [spineLength] at stoppedLengths
-          omega
-  | surround leading suffix inner induction =>
-      cases rightDecomposition with
-      | hole _ _ =>
-          simp only [spineLength] at stoppedLengths
-          omega
-      | surround _ _ rightInner =>
-          have innerLengths :
-              _ = _ := Nat.add_right_cancel stoppedLengths
-          exact congrArg (fun context =>
-            DiagramContext.surround leading context suffix)
-              (induction rightInner innerLengths)
-  | cut inner induction =>
-      cases rightDecomposition with
-      | hole _ _ =>
-          simp only [spineLength] at stoppedLengths
-          omega
-      | cut rightInner =>
-          have innerLengths :
-              _ = _ := Nat.add_right_cancel stoppedLengths
-          exact congrArg DiagramContext.cut
-            (induction rightInner innerLengths)
-  | bind inner induction =>
-      cases rightDecomposition with
-      | hole _ _ =>
-          simp only [spineLength] at stoppedLengths
-          omega
-      | bind rightInner =>
-          have innerLengths :
-              _ = _ := Nat.add_right_cancel stoppedLengths
-          exact congrArg (DiagramContext.bind _)
-            (induction rightInner innerLengths)
-
-/--
-Transporting a complete context's hole type commutes with retaining one
-sibling surround/cut frame around an existing decomposition.
--/
-theorem StopsAboveBindMany.surroundCut_cast
-    (same : fullHole = bound ++ stoppedHole)
-    (leading suffix : ItemSeq definitions outer)
-    (full : DiagramContext definitions fullHole outer)
-    (stopped : DiagramContext definitions stoppedHole outer)
-    (decomposition :
-      StopsAboveBindMany bound stopped (same ▸ full)) :
-    StopsAboveBindMany bound
-      (.surround leading (.cut stopped) suffix)
-      (same ▸ (.surround leading (.cut full) suffix)) := by
-  cases same
-  exact .surround leading suffix (.cut decomposition)
-
-/-- Reindex the shared exposed outer context of one decomposition. -/
-theorem StopsAboveBindMany.rebaseOuter
-    (same : leftOuter = rightOuter)
-    (stopped : DiagramContext definitions stoppedHole leftOuter)
-    (full :
-      DiagramContext definitions (bound ++ stoppedHole) leftOuter)
-    (decomposition : StopsAboveBindMany bound stopped full) :
-    StopsAboveBindMany bound (same ▸ stopped) (same ▸ full) := by
-  cases same
-  exact decomposition
-
-/-- Reindex the shared outer context while retaining an existing hole cast. -/
-theorem StopsAboveBindMany.rebaseOuter_cast
-    (holeExact : fullHole = bound ++ stoppedHole)
-    (outerExact : leftOuter = rightOuter)
-    (stopped : DiagramContext definitions stoppedHole leftOuter)
-    (full : DiagramContext definitions fullHole leftOuter)
-    (decomposition :
-      StopsAboveBindMany bound stopped (holeExact ▸ full)) :
-    StopsAboveBindMany bound
-      (outerExact ▸ stopped)
-      (holeExact ▸ (outerExact ▸ full)) := by
-  cases holeExact
-  cases outerExact
-  exact decomposition
-
-private def SemanticDirection (depth : Nat) (left right : Prop) : Prop :=
-  if depth % 2 = 0 then left → right else right → left
-
-private theorem mod_two_cases (value : Nat) :
-    value % 2 = 0 ∨ value % 2 = 1 := by
-  have bound := Nat.mod_lt value (by decide : 0 < 2)
-  omega
-
-/--
-The semantic direction of a one-hole context is determined solely by cut
-parity. The proof follows the actual context constructors; no entailment is
-stored in the context.
--/
-private theorem transport
-    (context : DiagramContext defs holeCtx outerCtx)
-    (pre : PreModel.{u}) (definitionEnv : DefinitionEnv pre defs)
-    (left right : Region defs holeCtx)
-    (entails : ∀ env : Env pre holeCtx,
-      denoteRegion pre definitionEnv env left →
-        denoteRegion pre definitionEnv env right) :
-    ∀ env : Env pre outerCtx,
-      SemanticDirection context.cutDepth
-        (denoteRegion pre definitionEnv env (context.fill left))
-        (denoteRegion pre definitionEnv env (context.fill right)) := by
-  induction context with
-  | hole =>
-      intro env
-      simpa [SemanticDirection, cutDepth, fill] using entails env
-  | surround leading inner suffix induction =>
-      intro env
-      have middle := induction left right entails env
-      rcases mod_two_cases inner.cutDepth with even | odd
-      · simp only [SemanticDirection, cutDepth, even, if_pos] at middle ⊢
-        intro source
-        simp only [fill] at source ⊢
-        rw [Region.denote_surround] at source ⊢
-        exact ⟨source.1, middle source.2.1, source.2.2⟩
-      · have notEven : inner.cutDepth % 2 ≠ 0 := by omega
-        simp only [SemanticDirection, cutDepth, notEven] at middle ⊢
-        intro source
-        simp only [fill] at source ⊢
-        rw [Region.denote_surround] at source ⊢
-        exact ⟨source.1, middle source.2.1, source.2.2⟩
-  | cut inner induction =>
-      intro env
-      have middle := induction left right entails env
-      rcases mod_two_cases inner.cutDepth with even | odd
-      · have successorOdd : (inner.cutDepth + 1) % 2 = 1 := by omega
-        have successorNotEven : (inner.cutDepth + 1) % 2 ≠ 0 := by omega
-        simp only [SemanticDirection, even, if_pos] at middle
-        simp only [SemanticDirection, cutDepth, successorNotEven,
-          fill, denoteRegion, denoteItemSeq, denoteItem]
-        rintro ⟨rightNot, _⟩
-        exact ⟨fun leftDenotes => rightNot (middle leftDenotes), trivial⟩
-      · have notEven : inner.cutDepth % 2 ≠ 0 := by omega
-        have successorEven : (inner.cutDepth + 1) % 2 = 0 := by omega
-        simp only [SemanticDirection, notEven] at middle
-        simp only [SemanticDirection, cutDepth, successorEven, if_pos,
-          fill, denoteRegion, denoteItemSeq, denoteItem]
-        rintro ⟨leftNot, _⟩
-        exact ⟨fun rightDenotes => leftNot (middle rightDenotes), trivial⟩
-  | bind sig inner induction =>
-      intro env
-      have middle := fun value => induction left right entails (env.extend value)
-      rcases mod_two_cases inner.cutDepth with even | odd
-      · simp only [SemanticDirection, cutDepth, even, if_pos] at middle ⊢
-        simp only [fill, denoteRegion, denoteItemSeq, denoteItem]
-        rintro ⟨⟨value, body⟩, _⟩
-        exact ⟨⟨value, middle value body⟩, trivial⟩
-      · have notEven : inner.cutDepth % 2 ≠ 0 := by omega
-        simp only [SemanticDirection, cutDepth, notEven] at middle ⊢
-        simp only [fill, denoteRegion, denoteItemSeq, denoteItem]
-        rintro ⟨⟨value, body⟩, _⟩
-        exact ⟨⟨value, middle value body⟩, trivial⟩
-
-/-- Even-cut contexts transport entailment in the forward direction. -/
-theorem context_mono
-    (context : DiagramContext defs holeCtx outerCtx)
-    (pre : PreModel.{u}) (definitionEnv : DefinitionEnv pre defs)
-    (left right : Region defs holeCtx)
-    (even : context.cutDepth % 2 = 0)
-    (entails : ∀ env : Env pre holeCtx,
-      denoteRegion pre definitionEnv env left →
-        denoteRegion pre definitionEnv env right)
-    (env : Env pre outerCtx) :
-    denoteRegion pre definitionEnv env (context.fill left) →
-      denoteRegion pre definitionEnv env (context.fill right) := by
-  have transported := transport context pre definitionEnv left right entails env
-  simpa [SemanticDirection, even] using transported
-
-/-- Odd-cut contexts reverse semantic entailment. -/
-theorem context_anti
-    (context : DiagramContext defs holeCtx outerCtx)
-    (pre : PreModel.{u}) (definitionEnv : DefinitionEnv pre defs)
-    (left right : Region defs holeCtx)
-    (odd : context.cutDepth % 2 = 1)
-    (entails : ∀ env : Env pre holeCtx,
-      denoteRegion pre definitionEnv env left →
-        denoteRegion pre definitionEnv env right)
-    (env : Env pre outerCtx) :
-    denoteRegion pre definitionEnv env (context.fill right) →
-      denoteRegion pre definitionEnv env (context.fill left) := by
-  have notEven : context.cutDepth % 2 ≠ 0 := by omega
-  have transported := transport context pre definitionEnv left right entails env
-  simpa [SemanticDirection, notEven] using transported
-
-/-- Semantic equivalence fills through every context, at every cut depth. -/
-theorem context_equiv
-    (context : DiagramContext defs holeCtx outerCtx)
-    (pre : PreModel.{u}) (definitionEnv : DefinitionEnv pre defs)
-    (left right : Region defs holeCtx)
-    (equivalent : ∀ env : Env pre holeCtx,
-      denoteRegion pre definitionEnv env left ↔
-        denoteRegion pre definitionEnv env right)
-    (env : Env pre outerCtx) :
-    denoteRegion pre definitionEnv env (context.fill left) ↔
-      denoteRegion pre definitionEnv env (context.fill right) := by
-  rcases mod_two_cases context.cutDepth with even | odd
-  · constructor
-    · exact context_mono context pre definitionEnv left right even
-        (fun holeEnv => (equivalent holeEnv).mp) env
-    · exact context_mono context pre definitionEnv right left even
-        (fun holeEnv => (equivalent holeEnv).mpr) env
-  · constructor
-    · exact context_anti context pre definitionEnv right left odd
-        (fun holeEnv => (equivalent holeEnv).mpr) env
-    · exact context_anti context pre definitionEnv left right odd
-        (fun holeEnv => (equivalent holeEnv).mp) env
+/-- Transporting the hole relation index commutes with adding a bubble frame. -/
+theorem bubble_transport_holeRels
+    {sourceHoleRels targetHoleRels : RelCtx}
+    (equality : sourceHoleRels = targetHoleRels)
+    (before after : ItemSeq signature (outerWires + localWires) outerRels)
+    (child : DiagramContext signature (outerWires + localWires) holeWires
+      (arity :: outerRels) targetHoleRels) :
+    equality.symm ▸
+        (DiagramContext.bubble localWires before after arity child :
+          DiagramContext signature outerWires holeWires outerRels
+            targetHoleRels) =
+      DiagramContext.bubble localWires before after arity
+        (equality.symm ▸ child) := by
+  subst targetHoleRels
+  rfl
 
 end DiagramContext
 
-export DiagramContext (context_mono context_anti context_equiv)
+theorem denoteItemSeq_append
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx)
+    (first second : ItemSeq signature wires relCtx) :
+    denoteItemSeq model named env rels (first.append second) <->
+      denoteItemSeq model named env rels first /\
+        denoteItemSeq model named env rels second := by
+  cases first with
+  | nil => simp
+  | cons item tail =>
+      simp only [ItemSeq.append, denoteItemSeq_cons,
+        denoteItemSeq_append model named env rels tail second]
+      constructor
+      · rintro ⟨hitem, htail, hsecond⟩
+        exact ⟨⟨hitem, htail⟩, hsecond⟩
+      · rintro ⟨⟨hitem, htail⟩, hsecond⟩
+        exact ⟨hitem, htail, hsecond⟩
 
-namespace ContextExamples
+theorem denoteItemSeq_frame
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx)
+    (before after : ItemSeq signature wires relCtx)
+    (item : Item signature wires relCtx) :
+    denoteItemSeq model named env rels
+        (before.append (.cons item after)) <->
+      denoteItemSeq model named env rels before /\
+        denoteItem model named env rels item /\
+          denoteItemSeq model named env rels after := by
+  rw [denoteItemSeq_append]
+  simp only [denoteItemSeq_cons]
 
-/-- One binder and one cut exercise both context indices and negative polarity. -/
-def binderCut : DiagramContext [] [.iota] [] :=
-  .bind .iota (.cut .hole)
+/-- Bubble-only descent preserves every outer wire value while exposing the
+denotation at the hole. -/
+theorem DiagramContext.denote_hole_of_cutDepth_zero_with_outer
+    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin outerWires -> model.Carrier)
+    (rels : RelEnv model.Carrier outerRels)
+    (body : Region signature holeWires holeRels)
+    (depth : ctx.cutDepth = 0)
+    (filled : denoteRegion model named env rels (ctx.fill body)) :
+    ∃ holeEnv : Fin holeWires -> model.Carrier,
+      ∃ holeRelEnv : RelEnv model.Carrier holeRels,
+        holeEnv ∘ ctx.outerWire = env ∧
+          denoteRegion model named holeEnv holeRelEnv body := by
+  induction ctx with
+  | hole =>
+      exact ⟨env, rels, rfl, filled⟩
+  | cut localWires before after child ih =>
+      simp [DiagramContext.cutDepth] at depth
+  | bubble localWires before after arity child ih =>
+      rcases filled with ⟨localEnv, hitems⟩
+      rcases (denoteItemSeq_frame model named
+        (extendWireEnv env localEnv) rels before after
+        (Item.bubble arity (child.fill body))).mp hitems with
+        ⟨_, ⟨relation, hchild⟩, _⟩
+      obtain ⟨holeEnv, holeRelEnv, outerAgrees, holeDenotes⟩ :=
+        ih (extendWireEnv env localEnv) (relation, rels) body depth hchild
+      refine ⟨holeEnv, holeRelEnv, ?_, holeDenotes⟩
+      funext wire
+      change holeEnv (child.outerWire (Fin.castAdd localWires wire)) = env wire
+      rw [show holeEnv (child.outerWire (Fin.castAdd localWires wire)) =
+          extendWireEnv env localEnv (Fin.castAdd localWires wire) from
+        congrFun outerAgrees (Fin.castAdd localWires wire)]
+      simp [extendWireEnv]
 
-example : binderCut.binderPath = [.iota] := rfl
+/--
+Filling a context that crosses only bubble boundaries exposes a denotation of the
+hole body under the wire and relation environments chosen by those bubbles.
+-/
+theorem DiagramContext.denote_hole_of_cutDepth_zero
+    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin outerWires -> model.Carrier)
+    (rels : RelEnv model.Carrier outerRels)
+    (body : Region signature holeWires holeRels)
+    (depth : ctx.cutDepth = 0)
+    (filled : denoteRegion model named env rels (ctx.fill body)) :
+    ∃ holeEnv : Fin holeWires -> model.Carrier,
+      ∃ holeRelEnv : RelEnv model.Carrier holeRels,
+        denoteRegion model named holeEnv holeRelEnv body := by
+  obtain ⟨holeEnv, holeRelEnv, _, holeDenotes⟩ :=
+    ctx.denote_hole_of_cutDepth_zero_with_outer model named env rels body
+      depth filled
+  exact ⟨holeEnv, holeRelEnv, holeDenotes⟩
 
-example : binderCut.cutDepth = 1 := rfl
+private theorem succ_even_implies_odd {n : Nat} (h : (n + 1) % 2 = 0) :
+    n % 2 = 1 := by
+  omega
 
-private def noDefinitions (pre : PreModel) : DefinitionEnv pre [] :=
-  fun {_} definition => nomatch definition
+private theorem succ_odd_implies_even {n : Nat} (h : (n + 1) % 2 = 1) :
+    n % 2 = 0 := by
+  omega
 
-example
-    (pre : PreModel) (left right : Region [] [.iota])
-    (entails : ∀ env : Env pre [.iota],
-      denoteRegion pre (noDefinitions pre) env left →
-        denoteRegion pre (noDefinitions pre) env right)
-    (env : Env pre []) :
-    denoteRegion pre (noDefinitions pre) env
-        (binderCut.fill right) →
-      denoteRegion pre (noDefinitions pre) env
-        (binderCut.fill left) :=
-  context_anti binderCut pre (noDefinitions pre)
-    left right rfl entails env
+private theorem context_polarity
+    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (a b : Region signature holeWires holeRels)
+    (hab : forall holeEnv holeRelEnv,
+      denoteRegion model named holeEnv holeRelEnv a ->
+        denoteRegion model named holeEnv holeRelEnv b) :
+    (forall (env : Fin outerWires -> model.Carrier)
+      (rels : RelEnv model.Carrier outerRels),
+      ctx.cutDepth % 2 = 0 ->
+      denoteRegion model named env rels (ctx.fill a) ->
+        denoteRegion model named env rels (ctx.fill b)) /\
+    (forall (env : Fin outerWires -> model.Carrier)
+      (rels : RelEnv model.Carrier outerRels),
+      ctx.cutDepth % 2 = 1 ->
+      denoteRegion model named env rels (ctx.fill b) ->
+        denoteRegion model named env rels (ctx.fill a)) := by
+  induction ctx with
+  | hole =>
+      constructor
+      · intro env rels _ ha
+        exact hab env rels ha
+      · intro _ _ hOdd _
+        simp [DiagramContext.cutDepth] at hOdd
+  | cut localWires before after child ih =>
+      constructor
+      · intro env rels hEven ha
+        rcases ha with ⟨localEnv, hitems⟩
+        rcases (denoteItemSeq_frame model named
+          (extendWireEnv env localEnv) rels before after
+          (Item.cut (child.fill a))).mp hitems with
+          ⟨hbefore, hchild, hafter⟩
+        refine ⟨localEnv, (denoteItemSeq_frame model named
+          (extendWireEnv env localEnv) rels before after
+          (Item.cut (child.fill b))).mpr ⟨hbefore, ?_, hafter⟩⟩
+        intro hb
+        apply hchild
+        exact (ih a b hab).2 (extendWireEnv env localEnv) rels
+          (succ_even_implies_odd hEven) hb
+      · intro env rels hOdd hb
+        rcases hb with ⟨localEnv, hitems⟩
+        rcases (denoteItemSeq_frame model named
+          (extendWireEnv env localEnv) rels before after
+          (Item.cut (child.fill b))).mp hitems with
+          ⟨hbefore, hchild, hafter⟩
+        refine ⟨localEnv, (denoteItemSeq_frame model named
+          (extendWireEnv env localEnv) rels before after
+          (Item.cut (child.fill a))).mpr ⟨hbefore, ?_, hafter⟩⟩
+        intro ha
+        apply hchild
+        exact (ih a b hab).1 (extendWireEnv env localEnv) rels
+          (succ_odd_implies_even hOdd) ha
+  | bubble localWires before after arity child ih =>
+      constructor
+      · intro env rels hEven ha
+        rcases ha with ⟨localEnv, hitems⟩
+        rcases (denoteItemSeq_frame model named
+          (extendWireEnv env localEnv) rels before after
+          (Item.bubble arity (child.fill a))).mp hitems with
+          ⟨hbefore, ⟨relation, hchild⟩, hafter⟩
+        refine ⟨localEnv, (denoteItemSeq_frame model named
+          (extendWireEnv env localEnv) rels before after
+          (Item.bubble arity (child.fill b))).mpr
+            ⟨hbefore, ⟨relation, ?_⟩, hafter⟩⟩
+        exact (ih a b hab).1 (extendWireEnv env localEnv) (relation, rels)
+          hEven hchild
+      · intro env rels hOdd hb
+        rcases hb with ⟨localEnv, hitems⟩
+        rcases (denoteItemSeq_frame model named
+          (extendWireEnv env localEnv) rels before after
+          (Item.bubble arity (child.fill b))).mp hitems with
+          ⟨hbefore, ⟨relation, hchild⟩, hafter⟩
+        refine ⟨localEnv, (denoteItemSeq_frame model named
+          (extendWireEnv env localEnv) rels before after
+          (Item.bubble arity (child.fill a))).mpr
+            ⟨hbefore, ⟨relation, ?_⟩, hafter⟩⟩
+        exact (ih a b hab).2 (extendWireEnv env localEnv) (relation, rels)
+          hOdd hchild
 
-end ContextExamples
+theorem context_mono
+    {ctx : DiagramContext signature outerWires holeWires outerRels holeRels}
+    {a b : Region signature holeWires holeRels}
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin outerWires -> model.Carrier)
+    (rels : RelEnv model.Carrier outerRels)
+    (hEven : ctx.cutDepth % 2 = 0)
+    (hab : forall holeEnv holeRelEnv,
+      denoteRegion model named holeEnv holeRelEnv a ->
+        denoteRegion model named holeEnv holeRelEnv b) :
+    denoteRegion model named env rels (ctx.fill a) ->
+      denoteRegion model named env rels (ctx.fill b) :=
+  (context_polarity ctx model named a b hab).1 env rels hEven
 
-end VisualProof
+theorem context_anti
+    {ctx : DiagramContext signature outerWires holeWires outerRels holeRels}
+    {a b : Region signature holeWires holeRels}
+    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (env : Fin outerWires -> model.Carrier)
+    (rels : RelEnv model.Carrier outerRels)
+    (hOdd : ctx.cutDepth % 2 = 1)
+    (hab : forall holeEnv holeRelEnv,
+      denoteRegion model named holeEnv holeRelEnv a ->
+        denoteRegion model named holeEnv holeRelEnv b) :
+    denoteRegion model named env rels (ctx.fill b) ->
+      denoteRegion model named env rels (ctx.fill a) :=
+  (context_polarity ctx model named a b hab).2 env rels hOdd
+
+def holeContextExample : DiagramContext [] 0 0 [] [] := .hole
+
+theorem holeContextExample_cutDepth : holeContextExample.cutDepth = 0 := rfl
+
+theorem holeContextExample_fill (body : Region [] 0 []) :
+    holeContextExample.fill body = body := rfl
+
+def oneCutContextExample : DiagramContext [] 0 1 [] [] :=
+  .cut 1 .nil .nil .hole
+
+theorem oneCutContextExample_cutDepth : oneCutContextExample.cutDepth = 1 := rfl
+
+theorem oneCutContextExample_fill (body : Region [] 1 []) :
+    oneCutContextExample.fill body =
+      Region.mk 1 (.cons (.cut body) .nil) := rfl
+
+def nestedCutContextExample : DiagramContext [] 0 3 [] [] :=
+  .cut 1 .nil .nil (.cut 2 .nil .nil .hole)
+
+theorem nestedCutContextExample_cutDepth :
+    nestedCutContextExample.cutDepth = 2 := rfl
+
+theorem nestedCutContextExample_fill (body : Region [] 3 []) :
+    nestedCutContextExample.fill body =
+      Region.mk 1
+        (.cons (.cut (Region.mk 2 (.cons (.cut body) .nil))) .nil) := rfl
+
+def bubbleContextExample : DiagramContext [] 0 1 [] [2] :=
+  .bubble 1 .nil .nil 2 .hole
+
+theorem bubbleContextExample_cutDepth : bubbleContextExample.cutDepth = 0 := rfl
+
+theorem bubbleContextExample_fill (body : Region [] 1 [2]) :
+    bubbleContextExample.fill body =
+      Region.mk 1 (.cons (.bubble 2 body) .nil) := rfl
+
+end VisualProof.Diagram

@@ -1,1264 +1,746 @@
-import VisualProof.Diagram.Concrete.WellFormed
+import VisualProof.Diagram.Concrete.Examples
+import VisualProof.Diagram.Isomorphism
 
-namespace VisualProof
+namespace VisualProof.Diagram
 
-open Data.Finite
+namespace CRegion
+
+def rename (regions : FiniteEquiv (Fin sourceRegions) (Fin targetRegions)) :
+    CRegion sourceRegions -> CRegion targetRegions
+  | .sheet => .sheet
+  | .cut parent => .cut (regions parent)
+  | .bubble parent arity => .bubble (regions parent) arity
+
+@[simp] theorem parent?_rename
+    (regions : FiniteEquiv (Fin sourceRegions) (Fin targetRegions))
+    (region : CRegion sourceRegions) :
+    (region.rename regions).parent? = region.parent?.map regions := by
+  cases region <;> rfl
+
+@[simp] theorem rename_refl (region : CRegion regions) :
+    region.rename (.refl (Fin regions)) = region := by
+  cases region <;> rfl
+
+@[simp] theorem rename_symm_rename
+    (regions : FiniteEquiv (Fin sourceRegions) (Fin targetRegions))
+    (region : CRegion sourceRegions) :
+    (region.rename regions).rename regions.symm = region := by
+  cases region <;> simp [rename]
+
+@[simp] theorem rename_trans
+    (first : FiniteEquiv (Fin firstRegions) (Fin secondRegions))
+    (second : FiniteEquiv (Fin secondRegions) (Fin thirdRegions))
+    (region : CRegion firstRegions) :
+    (region.rename first).rename second = region.rename (first.trans second) := by
+  cases region <;> rfl
+
+end CRegion
+
+namespace CNode
+
+def rename (regions : FiniteEquiv (Fin sourceRegions) (Fin targetRegions)) :
+    CNode sourceRegions -> CNode targetRegions
+  | .term region freePorts body => CNode.term (regions region) freePorts body
+  | .atom region binder => CNode.atom (regions region) (regions binder)
+  | .named region definition arity =>
+      CNode.named (regions region) definition arity
+
+@[simp] theorem region_rename
+    (regions : FiniteEquiv (Fin sourceRegions) (Fin targetRegions))
+    (node : CNode sourceRegions) :
+    (node.rename regions).region = regions node.region := by
+  cases node <;> simp [rename, CNode.region]
+
+@[simp] theorem rename_refl (node : CNode regions) :
+    node.rename (.refl (Fin regions)) = node := by
+  cases node <;> rfl
+
+@[simp] theorem rename_symm_rename
+    (regions : FiniteEquiv (Fin sourceRegions) (Fin targetRegions))
+    (node : CNode sourceRegions) :
+    (node.rename regions).rename regions.symm = node := by
+  cases node <;> simp [rename]
+
+@[simp] theorem rename_trans
+    (first : FiniteEquiv (Fin firstRegions) (Fin secondRegions))
+    (second : FiniteEquiv (Fin secondRegions) (Fin thirdRegions))
+    (node : CNode firstRegions) :
+    (node.rename first).rename second = node.rename (first.trans second) := by
+  cases node <;> rfl
+
+end CNode
+
+namespace CEndpoint
+
+def rename (nodes : FiniteEquiv (Fin sourceNodes) (Fin targetNodes))
+    (endpoint : CEndpoint sourceNodes) : CEndpoint targetNodes :=
+  { node := nodes endpoint.node, port := endpoint.port }
+
+@[simp] theorem rename_node
+    (nodes : FiniteEquiv (Fin sourceNodes) (Fin targetNodes))
+    (endpoint : CEndpoint sourceNodes) :
+    (endpoint.rename nodes).node = nodes endpoint.node := rfl
+
+@[simp] theorem rename_port
+    (nodes : FiniteEquiv (Fin sourceNodes) (Fin targetNodes))
+    (endpoint : CEndpoint sourceNodes) :
+    (endpoint.rename nodes).port = endpoint.port := rfl
+
+@[simp] theorem rename_refl (endpoint : CEndpoint nodes) :
+    endpoint.rename (.refl (Fin nodes)) = endpoint := by
+  cases endpoint
+  rfl
+
+@[simp] theorem rename_symm_rename
+    (nodes : FiniteEquiv (Fin sourceNodes) (Fin targetNodes))
+    (endpoint : CEndpoint sourceNodes) :
+    (endpoint.rename nodes).rename nodes.symm = endpoint := by
+  cases endpoint
+  simp [rename]
+
+@[simp] theorem rename_rename_symm
+    (nodes : FiniteEquiv (Fin sourceNodes) (Fin targetNodes))
+    (endpoint : CEndpoint targetNodes) :
+    (endpoint.rename nodes.symm).rename nodes = endpoint := by
+  cases endpoint with
+  | mk node port =>
+      unfold rename
+      congr
+      exact nodes.right_inv node
+
+@[simp] theorem rename_trans
+    (first : FiniteEquiv (Fin firstNodes) (Fin secondNodes))
+    (second : FiniteEquiv (Fin secondNodes) (Fin thirdNodes))
+    (endpoint : CEndpoint firstNodes) :
+    (endpoint.rename first).rename second = endpoint.rename (first.trans second) := by
+  rfl
+
+theorem rename_injective
+    (nodes : FiniteEquiv (Fin sourceNodes) (Fin targetNodes)) :
+    Function.Injective (rename nodes) := by
+  intro left right h
+  have := congrArg (rename nodes.symm) h
+  simpa only [rename_symm_rename] using this
+
+end CEndpoint
+
+structure ConcreteIso (source target : ConcreteDiagram) where
+  regionCount_eq : source.regionCount = target.regionCount
+  nodeCount_eq : source.nodeCount = target.nodeCount
+  wireCount_eq : source.wireCount = target.wireCount
+  regions : FiniteEquiv (Fin source.regionCount) (Fin target.regionCount)
+  nodes : FiniteEquiv (Fin source.nodeCount) (Fin target.nodeCount)
+  wires : FiniteEquiv (Fin source.wireCount) (Fin target.wireCount)
+  root_eq : regions source.root = target.root
+  regions_eq : forall region,
+    (source.regions region).rename regions = target.regions (regions region)
+  nodes_eq : forall node,
+    (source.nodes node).rename regions = target.nodes (nodes node)
+  wire_scope_eq : forall wire,
+    regions (source.wires wire).scope = (target.wires (wires wire)).scope
+  wire_endpoints_perm : forall wire,
+    ((source.wires wire).endpoints.map (CEndpoint.rename nodes)).Perm
+      (target.wires (wires wire)).endpoints
 
 namespace ConcreteIso
 
-/--
-Construction-owned correspondence between the incident endpoints of one
-already-corresponding wire.  The subtype carriers make incidence and both
-inverse laws structural, leaving only semantic port correspondence to prove.
--/
-structure EndpointFiberEquiv
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId)
-    (wires : Data.Finite.FiniteEquiv left.WireId right.WireId)
-    (wire : left.WireId) where
-  equivalence :
-    Data.Finite.FiniteEquiv
-      { endpoint // endpoint ∈ (left.wires wire).endpoints }
-      { candidate //
-        candidate ∈ (right.wires (wires wire)).endpoints }
-  corresponds :
-    ∀ endpoint,
-      PortCorresponds left right nodes endpoint.1
-        (equivalence endpoint).1
+def refl (diagram : ConcreteDiagram) : ConcreteIso diagram diagram where
+  regionCount_eq := rfl
+  nodeCount_eq := rfl
+  wireCount_eq := rfl
+  regions := .refl _
+  nodes := .refl _
+  wires := .refl _
+  root_eq := rfl
+  regions_eq := by simp
+  nodes_eq := by simp
+  wire_scope_eq := by simp
+  wire_endpoints_perm := by
+    intro wire
+    change ((diagram.wires wire).endpoints.map
+      (CEndpoint.rename (.refl _))).Perm (diagram.wires wire).endpoints
+    induction (diagram.wires wire).endpoints with
+    | nil => exact .nil
+    | cons head tail ih =>
+        simpa only [List.map_cons, CEndpoint.rename_refl] using ih.cons head
 
-/-- Restrict an existing concrete isomorphism to one incident-endpoint fiber. -/
-def EndpointFiberEquiv.ofIso
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (wire : left.WireId) :
-    EndpointFiberEquiv iso.nodes iso.wires wire where
-  equivalence :=
-    { toFun := fun endpoint =>
-        ⟨iso.endpointMap wire endpoint.1,
-          iso.endpointMap_mem wire endpoint.1 endpoint.2⟩
-      invFun := fun candidate =>
-        ⟨iso.endpointInverse wire candidate.1,
-          iso.endpointInverse_mem wire candidate.1 candidate.2⟩
-      left_inv := by
-        intro endpoint
-        apply Subtype.ext
-        exact iso.endpointMap_left_inv wire endpoint.1 endpoint.2
-      right_inv := by
-        intro candidate
-        apply Subtype.ext
-        exact iso.endpointMap_right_inv wire candidate.1 candidate.2 }
-  corresponds := by
-    intro endpoint
-    exact iso.endpointMap_corresponds wire endpoint.1 endpoint.2
-
-/--
-Assemble a raw concrete isomorphism from exact identifier tables and total
-per-wire endpoint fibers.  This is the non-searching construction boundary;
-callers provide the correspondences their construction receipts already own.
--/
-def ofEquivs
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (regions : Data.Finite.FiniteEquiv left.RegionId right.RegionId)
-    (nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId)
-    (wires : Data.Finite.FiniteEquiv left.WireId right.WireId)
-    (root : regions left.root = right.root)
-    (regionTable :
-      ∀ region,
-        right.regions (regions region) =
-          (left.regions region).rename regions)
-    (nodeTable :
-      ∀ node,
-        right.nodes (nodes node) =
-          (left.nodes node).rename regions)
-    (wireSignature :
-      ∀ wire, (right.wires (wires wire)).sig = (left.wires wire).sig)
-    (wireScope :
-      ∀ wire,
-        (right.wires (wires wire)).scope =
-          regions (left.wires wire).scope)
-    (endpointFibers :
-      ∀ wire, EndpointFiberEquiv nodes wires wire) :
-    ConcreteIso left right where
-  regions := regions
-  nodes := nodes
-  wires := wires
-  root := root
-  region_table := regionTable
-  node_table := nodeTable
-  wire_signature := wireSignature
-  wire_scope := wireScope
-  endpointMap := fun wire endpoint =>
-    if member : endpoint ∈ (left.wires wire).endpoints then
-      (endpointFibers wire).equivalence ⟨endpoint, member⟩
-    else
-      ⟨nodes endpoint.node, endpoint.port⟩
-  endpointInverse := fun wire candidate =>
-    if member : candidate ∈ (right.wires (wires wire)).endpoints then
-      (endpointFibers wire).equivalence.symm ⟨candidate, member⟩
-    else
-      ⟨nodes.symm candidate.node, candidate.port⟩
-  endpointMap_mem := by
-    intro wire endpoint member
-    simp only [dif_pos member]
-    exact ((endpointFibers wire).equivalence ⟨endpoint, member⟩).2
-  endpointInverse_mem := by
-    intro wire candidate member
-    simp only [dif_pos member]
-    exact
-      ((endpointFibers wire).equivalence.symm ⟨candidate, member⟩).2
-  endpointMap_left_inv := by
-    intro wire endpoint member
-    simp only [dif_pos member]
-    rw [dif_pos
-      ((endpointFibers wire).equivalence ⟨endpoint, member⟩).2]
-    exact congrArg Subtype.val
-      ((endpointFibers wire).equivalence.left_inv ⟨endpoint, member⟩)
-  endpointMap_right_inv := by
-    intro wire candidate member
-    simp only [dif_pos member]
-    rw [dif_pos
-      ((endpointFibers wire).equivalence.symm ⟨candidate, member⟩).2]
-    exact congrArg Subtype.val
-      ((endpointFibers wire).equivalence.right_inv ⟨candidate, member⟩)
-  endpointMap_corresponds := by
-    intro wire endpoint member
-    simp only [dif_pos member]
-    exact (endpointFibers wire).corresponds ⟨endpoint, member⟩
-
-private theorem portCorresponds_symm
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    {endpoint : CEndpoint left.nodeCount}
-    {candidate : CEndpoint right.nodeCount}
-    (corresponds : PortCorresponds left right iso.nodes endpoint candidate) :
-    PortCorresponds right left iso.nodes.symm candidate endpoint := by
-  unfold PortCorresponds at corresponds ⊢
-  have nodeEquality : endpoint.node = iso.nodes.symm candidate.node :=
-    (iso.nodes.left_inv endpoint.node).symm.trans
-      (congrArg iso.nodes.symm corresponds.1.symm)
-  refine ⟨nodeEquality, ?_⟩
-  cases leftNode : left.nodes endpoint.node <;>
-    cases rightNode : right.nodes candidate.node <;>
-    simp [leftNode, rightNode] at corresponds ⊢
-  all_goals try exact corresponds.2.symm
-  exact ⟨corresponds.2.1.symm, corresponds.2.2.1.symm,
-    corresponds.2.2.2.2, corresponds.2.2.2.1⟩
-
-theorem regionCount_eq
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right) :
-    left.regionCount = right.regionCount := by
-  apply Nat.le_antisymm
-  · exact Data.Finite.fin_card_le_of_injective iso.regions
-      iso.regions.injective
-  · exact Data.Finite.fin_card_le_of_injective iso.regions.invFun
-      (by
-        intro first second equality
-        have := congrArg iso.regions.toFun equality
-        simpa only [iso.regions.right_inv] using this)
-
-theorem nodeCount_eq
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right) :
-    left.nodeCount = right.nodeCount := by
-  apply Nat.le_antisymm
-  · exact Data.Finite.fin_card_le_of_injective iso.nodes iso.nodes.injective
-  · exact Data.Finite.fin_card_le_of_injective iso.nodes.invFun
-      (by
-        intro first second equality
-        have := congrArg iso.nodes.toFun equality
-        simpa only [iso.nodes.right_inv] using this)
-
-theorem wireCount_eq
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right) :
-    left.wireCount = right.wireCount := by
-  apply Nat.le_antisymm
-  · exact Data.Finite.fin_card_le_of_injective iso.wires iso.wires.injective
-  · exact Data.Finite.fin_card_le_of_injective iso.wires.invFun
-      (by
-        intro first second equality
-        have := congrArg iso.wires.toFun equality
-        simpa only [iso.wires.right_inv] using this)
-
-theorem target_region
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right) (region : right.RegionId) :
-    right.regions region =
-      (left.regions (iso.regions.symm region)).rename iso.regions := by
-  calc
-    right.regions region =
-        right.regions (iso.regions (iso.regions.symm region)) :=
-      congrArg right.regions (iso.regions.right_inv region).symm
-    _ = (left.regions (iso.regions.symm region)).rename iso.regions :=
-      iso.region_table _
-
-theorem target_node
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right) (node : right.NodeId) :
-    right.nodes node =
-      (left.nodes (iso.nodes.symm node)).rename iso.regions := by
-  calc
-    right.nodes node = right.nodes (iso.nodes (iso.nodes.symm node)) :=
-      congrArg right.nodes (iso.nodes.right_inv node).symm
-    _ = (left.nodes (iso.nodes.symm node)).rename iso.regions :=
-      iso.node_table _
-
-theorem endpoint_forward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (wire : left.WireId) (endpoint : CEndpoint left.nodeCount)
-    (member : endpoint ∈ (left.wires wire).endpoints) :
-    ∃ candidate,
-      candidate ∈ (right.wires (iso.wires wire)).endpoints ∧
-        PortCorresponds left right iso.nodes endpoint candidate :=
-  ⟨iso.endpointMap wire endpoint, iso.endpointMap_mem wire endpoint member,
-    iso.endpointMap_corresponds wire endpoint member⟩
-
-theorem endpoint_backward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (wire : left.WireId) (candidate : CEndpoint right.nodeCount)
-    (member : candidate ∈ (right.wires (iso.wires wire)).endpoints) :
-    ∃ endpoint,
-      endpoint ∈ (left.wires wire).endpoints ∧
-        PortCorresponds left right iso.nodes endpoint candidate := by
-  let endpoint := iso.endpointInverse wire candidate
-  have endpointMember := iso.endpointInverse_mem wire candidate member
-  refine ⟨endpoint, endpointMember, ?_⟩
-  have corresponds := iso.endpointMap_corresponds wire endpoint endpointMember
-  rw [iso.endpointMap_right_inv wire candidate member] at corresponds
-  exact corresponds
-
-def symm
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right) :
-    ConcreteIso right left where
+def symm {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) : ConcreteIso target source where
+  regionCount_eq := iso.regionCount_eq.symm
+  nodeCount_eq := iso.nodeCount_eq.symm
+  wireCount_eq := iso.wireCount_eq.symm
   regions := iso.regions.symm
   nodes := iso.nodes.symm
   wires := iso.wires.symm
-  root := (congrArg iso.regions.symm iso.root.symm).trans
-    (iso.regions.left_inv left.root)
-  region_table := by
+  root_eq := by
+    rw [<- iso.root_eq]
+    exact iso.regions.left_inv source.root
+  regions_eq := by
     intro region
-    have target := iso.target_region region
-    cases sourceData : left.regions (iso.regions.symm region) with
-    | sheet =>
-        rw [sourceData] at target
-        rw [target]
-        rfl
-    | cut parent =>
-        rw [sourceData] at target
-        rw [target]
-        simp [CRegion.rename]
-  node_table := by
+    calc
+      (target.regions region).rename iso.regions.symm =
+          (target.regions (iso.regions (iso.regions.symm region))).rename
+            iso.regions.symm := congrArg
+              (fun r => (target.regions r).rename iso.regions.symm)
+              (iso.regions.right_inv region).symm
+      _ = ((source.regions (iso.regions.symm region)).rename iso.regions).rename
+            iso.regions.symm := by rw [iso.regions_eq]
+      _ = source.regions (iso.regions.symm region) := by
+            simp only [CRegion.rename_symm_rename]
+  nodes_eq := by
     intro node
-    have target := iso.target_node node
-    cases sourceData : left.nodes (iso.nodes.symm node) with
-    | atom region args =>
-        rw [sourceData] at target
-        rw [target]
-        simp [CNode.rename]
-    | ref region definition args =>
-        rw [sourceData] at target
-        rw [target]
-        simp [CNode.rename]
-    | identity region sig arity =>
-        rw [sourceData] at target
-        rw [target]
-        simp [CNode.rename]
-  wire_signature := by
+    calc
+      (target.nodes node).rename iso.regions.symm =
+          (target.nodes (iso.nodes (iso.nodes.symm node))).rename
+            iso.regions.symm := congrArg
+              (fun n => (target.nodes n).rename iso.regions.symm)
+              (iso.nodes.right_inv node).symm
+      _ = ((source.nodes (iso.nodes.symm node)).rename iso.regions).rename
+            iso.regions.symm := by rw [iso.nodes_eq]
+      _ = source.nodes (iso.nodes.symm node) := by
+            simp only [CNode.rename_symm_rename]
+  wire_scope_eq := by
     intro wire
     calc
-      (left.wires (iso.wires.symm wire)).sig =
-          (right.wires (iso.wires (iso.wires.symm wire))).sig :=
-        (iso.wire_signature (iso.wires.symm wire)).symm
-      _ = (right.wires wire).sig :=
-        congrArg (fun target => (right.wires target).sig)
-          (iso.wires.right_inv wire)
-  wire_scope := by
-    intro wire
-    calc
-      (left.wires (iso.wires.symm wire)).scope =
+      iso.regions.symm (target.wires wire).scope =
           iso.regions.symm
-            (iso.regions (left.wires (iso.wires.symm wire)).scope) :=
-        (iso.regions.left_inv _).symm
+            (target.wires (iso.wires (iso.wires.symm wire))).scope := by
+              exact congrArg
+                (fun w => iso.regions.symm (target.wires w).scope)
+                (iso.wires.right_inv wire).symm
       _ = iso.regions.symm
-          (right.wires (iso.wires (iso.wires.symm wire))).scope :=
-        congrArg iso.regions.symm
-          (iso.wire_scope (iso.wires.symm wire)).symm
-      _ = iso.regions.symm (right.wires wire).scope :=
-        congrArg (fun target =>
-          iso.regions.symm (right.wires target).scope)
-          (iso.wires.right_inv wire)
-  endpointMap := fun wire candidate =>
-    iso.endpointInverse (iso.wires.symm wire) candidate
-  endpointInverse := fun wire endpoint =>
-    iso.endpointMap (iso.wires.symm wire) endpoint
-  endpointMap_mem := by
-    intro wire candidate member
-    have mappedMember : candidate ∈
-        (right.wires (iso.wires (iso.wires.symm wire))).endpoints := by
-      exact Eq.mp (congrArg
-        (fun target => candidate ∈ (right.wires target).endpoints)
-        (iso.wires.right_inv wire).symm) member
-    exact iso.endpointInverse_mem (iso.wires.symm wire) candidate
-      mappedMember
-  endpointInverse_mem := by
-    intro wire endpoint member
-    have candidateMember := iso.endpointMap_mem
-      (iso.wires.symm wire) endpoint member
-    have wireEquality : iso.wires (iso.wires.symm wire) = wire :=
-      iso.wires.right_inv wire
-    rw [wireEquality] at candidateMember
-    exact candidateMember
-  endpointMap_left_inv := by
-    intro wire candidate member
-    have mappedMember : candidate ∈
-        (right.wires (iso.wires (iso.wires.symm wire))).endpoints := by
-      exact Eq.mp (congrArg
-        (fun target => candidate ∈ (right.wires target).endpoints)
-        (iso.wires.right_inv wire).symm) member
-    exact iso.endpointMap_right_inv (iso.wires.symm wire) candidate
-      mappedMember
-  endpointMap_right_inv := by
-    intro wire endpoint member
-    exact iso.endpointMap_left_inv (iso.wires.symm wire) endpoint member
-  endpointMap_corresponds := by
-    intro wire candidate member
-    have mappedMember : candidate ∈
-        (right.wires (iso.wires (iso.wires.symm wire))).endpoints := by
-      exact Eq.mp (congrArg
-        (fun target => candidate ∈ (right.wires target).endpoints)
-        (iso.wires.right_inv wire).symm) member
-    let endpoint := iso.endpointInverse (iso.wires.symm wire) candidate
-    have endpointMember := iso.endpointInverse_mem
-      (iso.wires.symm wire) candidate mappedMember
-    have corresponds := iso.endpointMap_corresponds
-      (iso.wires.symm wire) endpoint endpointMember
-    rw [iso.endpointMap_right_inv (iso.wires.symm wire) candidate
-      mappedMember] at corresponds
-    exact portCorresponds_symm iso corresponds
+            (iso.regions (source.wires (iso.wires.symm wire)).scope) := by
+              rw [iso.wire_scope_eq]
+      _ = (source.wires (iso.wires.symm wire)).scope := by simp
+  wire_endpoints_perm := by
+    intro wire
+    have h := (iso.wire_endpoints_perm (iso.wires.symm wire)).symm.map
+      (CEndpoint.rename iso.nodes.symm)
+    have hwire := iso.wires.right_inv wire
+    change iso.wires (iso.wires.symm wire) = wire at hwire
+    rw [hwire] at h
+    have hcancel : ((source.wires (iso.wires.symm wire)).endpoints.map
+          (CEndpoint.rename iso.nodes)).map (CEndpoint.rename iso.nodes.symm) =
+        (source.wires (iso.wires.symm wire)).endpoints := by
+      induction (source.wires (iso.wires.symm wire)).endpoints with
+      | nil => rfl
+      | cons head tail ih =>
+          simp only [List.map_cons, CEndpoint.rename_symm_rename, ih]
+    rw [hcancel] at h
+    exact h
 
-private theorem portCorresponds_trans
-    {definitions : List (List Sig)}
-    {first second third : ConcreteDiagram definitions.length}
-    (left : ConcreteIso first second)
-    (right : ConcreteIso second third)
-    {source : CEndpoint first.nodeCount}
-    {middle : CEndpoint second.nodeCount}
-    {target : CEndpoint third.nodeCount}
-    (sourceMiddle :
-      PortCorresponds first second left.nodes source middle)
-    (middleTarget :
-      PortCorresponds second third right.nodes middle target) :
-    PortCorresponds first third (left.nodes.trans right.nodes)
-      source target := by
-  rcases source with ⟨sourceNode, sourcePort⟩
-  rcases middle with ⟨middleNode, middlePort⟩
-  rcases target with ⟨targetNode, targetPort⟩
-  have sourceNodeExact := sourceMiddle.1
-  change middleNode = left.nodes sourceNode at sourceNodeExact
-  subst middleNode
-  have middleNodeExact := middleTarget.1
-  change targetNode = right.nodes (left.nodes sourceNode) at middleNodeExact
-  subst targetNode
-  refine ⟨rfl, ?_⟩
-  have secondData := left.node_table sourceNode
-  have thirdData := right.node_table (left.nodes sourceNode)
-  unfold PortCorresponds at sourceMiddle middleTarget
-  cases firstNode : first.nodes sourceNode with
-  | atom region arguments =>
-      rw [firstNode] at secondData
-      rw [secondData] at thirdData
-      simp [firstNode, secondData, thirdData] at sourceMiddle middleTarget ⊢
-      exact middleTarget.trans sourceMiddle
-  | ref region definition arguments =>
-      rw [firstNode] at secondData
-      rw [secondData] at thirdData
-      simp [firstNode, secondData, thirdData] at sourceMiddle middleTarget ⊢
-      exact middleTarget.trans sourceMiddle
-  | identity region signature arity =>
-      rw [firstNode] at secondData
-      rw [secondData] at thirdData
-      simp [firstNode, secondData, thirdData] at sourceMiddle middleTarget ⊢
-      exact ⟨sourceMiddle.1, sourceMiddle.2.1,
-        sourceMiddle.2.2.1, middleTarget.2.2.2⟩
-
-/-- Compose two proved concrete isomorphisms directly.  The carrier maps and
-endpoint bijections compose definitionally; no checker or map discovery is
-involved. -/
-def trans
-    {definitions : List (List Sig)}
-    {first second third : ConcreteDiagram definitions.length}
-    (left : ConcreteIso first second)
-    (right : ConcreteIso second third) :
+def trans {first second third : ConcreteDiagram}
+    (left : ConcreteIso first second) (right : ConcreteIso second third) :
     ConcreteIso first third where
+  regionCount_eq := left.regionCount_eq.trans right.regionCount_eq
+  nodeCount_eq := left.nodeCount_eq.trans right.nodeCount_eq
+  wireCount_eq := left.wireCount_eq.trans right.wireCount_eq
   regions := left.regions.trans right.regions
   nodes := left.nodes.trans right.nodes
   wires := left.wires.trans right.wires
-  root := by
-    change right.regions (left.regions first.root) = third.root
-    rw [left.root, right.root]
-  region_table := by
+  root_eq := by simp [left.root_eq, right.root_eq]
+  regions_eq := by
     intro region
-    change third.regions (right.regions (left.regions region)) = _
-    rw [right.region_table, left.region_table]
-    cases first.regions region <;> rfl
-  node_table := by
+    calc
+      (first.regions region).rename (left.regions.trans right.regions) =
+          ((first.regions region).rename left.regions).rename right.regions := by
+            rw [CRegion.rename_trans]
+      _ = (second.regions (left.regions region)).rename right.regions := by
+            rw [left.regions_eq]
+      _ = third.regions (right.regions (left.regions region)) := by
+            rw [right.regions_eq]
+      _ = third.regions ((left.regions.trans right.regions) region) := rfl
+  nodes_eq := by
     intro node
-    change third.nodes (right.nodes (left.nodes node)) = _
-    rw [right.node_table, left.node_table]
-    cases first.nodes node <;> rfl
-  wire_signature := by
+    calc
+      (first.nodes node).rename (left.regions.trans right.regions) =
+          ((first.nodes node).rename left.regions).rename right.regions := by
+            rw [CNode.rename_trans]
+      _ = (second.nodes (left.nodes node)).rename right.regions := by
+            rw [left.nodes_eq]
+      _ = third.nodes (right.nodes (left.nodes node)) := by
+            rw [right.nodes_eq]
+      _ = third.nodes ((left.nodes.trans right.nodes) node) := rfl
+  wire_scope_eq := by
     intro wire
-    change (third.wires (right.wires (left.wires wire))).sig = _
-    rw [right.wire_signature, left.wire_signature]
-  wire_scope := by
+    exact (congrArg right.regions (left.wire_scope_eq wire)).trans
+      (right.wire_scope_eq (left.wires wire))
+  wire_endpoints_perm := by
     intro wire
-    change (third.wires (right.wires (left.wires wire))).scope = _
-    rw [right.wire_scope, left.wire_scope]
-    rfl
-  endpointMap := fun wire endpoint =>
-    right.endpointMap (left.wires wire) (left.endpointMap wire endpoint)
-  endpointInverse := fun wire endpoint =>
-    left.endpointInverse wire
-      (right.endpointInverse (left.wires wire) endpoint)
-  endpointMap_mem := by
-    intro wire endpoint member
-    exact right.endpointMap_mem (left.wires wire)
-      (left.endpointMap wire endpoint)
-      (left.endpointMap_mem wire endpoint member)
-  endpointInverse_mem := by
-    intro wire endpoint member
-    exact left.endpointInverse_mem wire
-      (right.endpointInverse (left.wires wire) endpoint)
-      (right.endpointInverse_mem (left.wires wire) endpoint member)
-  endpointMap_left_inv := by
-    intro wire endpoint member
-    rw [right.endpointMap_left_inv (left.wires wire)
-      (left.endpointMap wire endpoint)
-      (left.endpointMap_mem wire endpoint member)]
-    exact left.endpointMap_left_inv wire endpoint member
-  endpointMap_right_inv := by
-    intro wire endpoint member
-    rw [left.endpointMap_right_inv wire
-      (right.endpointInverse (left.wires wire) endpoint)
-      (right.endpointInverse_mem (left.wires wire) endpoint member)]
-    exact right.endpointMap_right_inv (left.wires wire) endpoint member
-  endpointMap_corresponds := by
-    intro wire endpoint member
-    apply portCorresponds_trans left right
-    · exact left.endpointMap_corresponds wire endpoint member
-    · exact right.endpointMap_corresponds (left.wires wire)
-        (left.endpointMap wire endpoint)
-        (left.endpointMap_mem wire endpoint member)
+    have hleft := (left.wire_endpoints_perm wire).map
+      (CEndpoint.rename right.nodes)
+    have h := hleft.trans (right.wire_endpoints_perm (left.wires wire))
+    simpa only [List.map_map, CEndpoint.rename_trans] using h
 
-/-- Transport one endpoint occurrence through the constructive equivalence
-owned by an explicitly supplied isomorphism. -/
-def transportEndpointOnWire
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (wire : left.WireId)
-    (endpoint : CEndpoint left.nodeCount)
-    (_member : endpoint ∈ (left.wires wire).endpoints) :
-    CEndpoint right.nodeCount :=
-  iso.endpointMap wire endpoint
+@[simp] theorem refl_regions (diagram : ConcreteDiagram) :
+    (refl diagram).regions = .refl _ := rfl
 
-@[simp] theorem transportEndpointOnWire_mem
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (wire : left.WireId)
-    (endpoint : CEndpoint left.nodeCount)
-    (member : endpoint ∈ (left.wires wire).endpoints) :
-    iso.transportEndpointOnWire wire endpoint member ∈
-      (right.wires (iso.wires wire)).endpoints :=
-  iso.endpointMap_mem wire endpoint member
-
-/-- Transport an ordered endpoint selection totally. The membership premise
-selects occurrences from the named source wire; list mapping preserves order
-and multiplicity. -/
-def transportEndpointsOnWire
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (wire : left.WireId)
-    (endpoints : List (CEndpoint left.nodeCount))
-    (members : ∀ endpoint, endpoint ∈ endpoints →
-      endpoint ∈ (left.wires wire).endpoints) :
-    List (CEndpoint right.nodeCount) :=
-  endpoints.attach.map fun endpoint =>
-    iso.transportEndpointOnWire wire endpoint.val
-      (members endpoint.val endpoint.property)
-
-theorem node_region
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right) (node : left.NodeId) :
-    (right.nodes (iso.nodes node)).region =
-      iso.regions (left.nodes node).region := by
-  rw [iso.node_table]
-  exact CNode.region_rename _ _
-
-theorem climb_transport
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right) (steps : Nat)
-    (region : left.RegionId) :
-    right.climb steps (iso.regions region) =
-      (left.climb steps region).map iso.regions := by
+theorem climb_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (steps : Nat)
+    (region : Fin source.regionCount) :
+    target.climb steps (iso.regions region) =
+      (source.climb steps region).map iso.regions := by
   induction steps generalizing region with
   | zero => rfl
   | succ steps ih =>
       simp only [ConcreteDiagram.climb]
-      rw [iso.region_table]
-      cases data : left.regions region with
-      | sheet => rfl
-      | cut parent =>
-          simp only [CRegion.rename]
+      rw [<- iso.regions_eq region, CRegion.parent?_rename]
+      cases hparent : (source.regions region).parent? with
+      | none => rfl
+      | some parent =>
+          simp only [Option.map_some]
           exact ih parent
 
-theorem encloses_transport
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    {ancestor descendant : left.RegionId}
-    (encloses : left.Encloses ancestor descendant) :
-    right.Encloses (iso.regions ancestor) (iso.regions descendant) := by
-  unfold ConcreteDiagram.Encloses at encloses ⊢
-  rw [List.any_eq_true] at encloses ⊢
-  obtain ⟨steps, _, climbed⟩ := encloses
-  let targetSteps : Fin (right.regionCount + 1) :=
+theorem encloses_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target)
+    {ancestor descendant : Fin source.regionCount}
+    (h : source.Encloses ancestor descendant) :
+    target.Encloses (iso.regions ancestor) (iso.regions descendant) := by
+  rcases h with ⟨steps, hsteps⟩
+  let targetSteps : Fin (target.regionCount + 1) :=
     Fin.cast (congrArg (fun count => count + 1) iso.regionCount_eq) steps
-  refine ⟨targetSteps, Data.Finite.mem_allFin targetSteps, ?_⟩
-  change (right.climb steps.val (iso.regions descendant) ==
-    some (iso.regions ancestor)) = true
-  rw [iso.climb_transport, eq_of_beq climbed]
-  simp
+  refine ⟨targetSteps, ?_⟩
+  change target.climb steps.val (iso.regions descendant) = some (iso.regions ancestor)
+  rw [iso.climb_transport, hsteps]
+  rfl
 
-theorem wiresAt_forward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    {region : left.RegionId} {wire : left.WireId}
-    (member : wire ∈ left.wiresAt region) :
-    iso.wires wire ∈ right.wiresAt (iso.regions region) := by
-  rw [ConcreteDiagram.wiresAt, List.mem_filter] at member ⊢
-  rcases member with ⟨_, member⟩
-  refine ⟨Data.Finite.mem_allFin _, ?_⟩
-  have scope := iso.wire_scope wire
-  have leftScope := eq_of_beq member
-  apply beq_iff_eq.mpr
-  exact scope.trans (congrArg iso.regions leftScope)
+theorem reachesRoot_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) {region : Fin source.regionCount}
+    (h : source.ReachesRoot region) :
+    target.ReachesRoot (iso.regions region) := by
+  unfold ConcreteDiagram.ReachesRoot at h ⊢
+  rw [<- iso.root_eq]
+  exact iso.encloses_transport h
 
-theorem wiresAt_backward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    {region : right.RegionId} {wire : right.WireId}
-    (member : wire ∈ right.wiresAt region) :
-    iso.wires.symm wire ∈ left.wiresAt (iso.regions.symm region) := by
-  rw [ConcreteDiagram.wiresAt, List.mem_filter] at member ⊢
-  rcases member with ⟨_, member⟩
-  refine ⟨Data.Finite.mem_allFin _, ?_⟩
-  apply beq_iff_eq.mpr
-  have scope := iso.wire_scope (iso.wires.symm wire)
-  have targetScope := eq_of_beq member
-  have mapped :
-      iso.regions (left.wires (iso.wires.symm wire)).scope = region := by
-    calc
-      iso.regions (left.wires (iso.wires.symm wire)).scope =
-          (right.wires (iso.wires (iso.wires.symm wire))).scope :=
-        scope.symm
-      _ = (right.wires wire).scope :=
-        congrArg (fun targetWire => (right.wires targetWire).scope)
-          (iso.wires.right_inv wire)
-      _ = region := targetScope
-  have pulled := congrArg iso.regions.invFun mapped
-  simpa only [iso.regions.left_inv] using pulled
+theorem endpoint_mem_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) {wire : Fin source.wireCount}
+    {endpoint : CEndpoint source.nodeCount}
+    (h : endpoint ∈ (source.wires wire).endpoints) :
+    endpoint.rename iso.nodes ∈ (target.wires (iso.wires wire)).endpoints := by
+  exact (iso.wire_endpoints_perm wire).mem_iff.mp (List.mem_map.mpr ⟨endpoint, h, rfl⟩)
 
-theorem nodesAt_forward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    {region : left.RegionId} {node : left.NodeId}
-    (member : node ∈ left.nodesAt region) :
-    iso.nodes node ∈ right.nodesAt (iso.regions region) := by
-  rw [ConcreteDiagram.nodesAt, List.mem_filter] at member ⊢
-  rcases member with ⟨_, member⟩
-  refine ⟨Data.Finite.mem_allFin _, ?_⟩
-  apply beq_iff_eq.mpr
-  rw [iso.node_region]
-  exact congrArg iso.regions (eq_of_beq member)
+theorem endpoint_mem_reflect {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) {wire : Fin source.wireCount}
+    {endpoint : CEndpoint source.nodeCount}
+    (h : endpoint.rename iso.nodes ∈
+      (target.wires (iso.wires wire)).endpoints) :
+    endpoint ∈ (source.wires wire).endpoints := by
+  have hmapped : endpoint.rename iso.nodes ∈
+      (source.wires wire).endpoints.map (CEndpoint.rename iso.nodes) :=
+    (iso.wire_endpoints_perm wire).mem_iff.mpr h
+  obtain ⟨other, hother, hrename⟩ := List.mem_map.mp hmapped
+  have : other = endpoint := CEndpoint.rename_injective iso.nodes hrename
+  simpa [this] using hother
 
-theorem nodesAt_backward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    {region : right.RegionId} {node : right.NodeId}
-    (member : node ∈ right.nodesAt region) :
-    iso.nodes.symm node ∈ left.nodesAt (iso.regions.symm region) := by
-  rw [ConcreteDiagram.nodesAt, List.mem_filter] at member ⊢
-  rcases member with ⟨_, member⟩
-  refine ⟨Data.Finite.mem_allFin _, ?_⟩
-  apply beq_iff_eq.mpr
-  have mapped :
-      iso.regions (left.nodes (iso.nodes.symm node)).region = region := by
-    calc
-      iso.regions (left.nodes (iso.nodes.symm node)).region =
-          (right.nodes (iso.nodes (iso.nodes.symm node))).region :=
-        (iso.node_region (iso.nodes.symm node)).symm
-      _ = (right.nodes node).region :=
-        congrArg (fun targetNode => (right.nodes targetNode).region)
-          (iso.nodes.right_inv node)
-      _ = region := eq_of_beq member
-  have pulled := congrArg iso.regions.invFun mapped
-  simpa only [iso.regions.left_inv] using pulled
+theorem target_region_eq {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (region : Fin target.regionCount) :
+    target.regions region =
+      (source.regions (iso.regions.symm region)).rename iso.regions := by
+  calc
+    target.regions region =
+        target.regions (iso.regions (iso.regions.symm region)) :=
+      congrArg target.regions (iso.regions.right_inv region).symm
+    _ = (source.regions (iso.regions.symm region)).rename iso.regions :=
+      (iso.regions_eq (iso.regions.symm region)).symm
 
-theorem childrenOf_forward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    {region child : left.RegionId}
-    (member : child ∈ left.childrenOf region) :
-    iso.regions child ∈ right.childrenOf (iso.regions region) := by
-  rw [ConcreteDiagram.childrenOf, List.mem_filter] at member ⊢
-  rcases member with ⟨_, member⟩
-  refine ⟨Data.Finite.mem_allFin _, ?_⟩
-  cases childData : left.regions child with
-  | sheet => simp [childData] at member
-  | cut parent =>
-      simp only [childData] at member
-      have parentEq : parent = region := by
-        exact eq_of_beq member
-      rw [iso.region_table, childData]
-      simp [CRegion.rename, parentEq]
+theorem target_node_eq {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (node : Fin target.nodeCount) :
+    target.nodes node =
+      (source.nodes (iso.nodes.symm node)).rename iso.regions := by
+  calc
+    target.nodes node = target.nodes (iso.nodes (iso.nodes.symm node)) :=
+      congrArg target.nodes (iso.nodes.right_inv node).symm
+    _ = (source.nodes (iso.nodes.symm node)).rename iso.regions :=
+      (iso.nodes_eq (iso.nodes.symm node)).symm
 
-theorem childrenOf_backward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    {region child : right.RegionId}
-    (member : child ∈ right.childrenOf region) :
-    iso.regions.symm child ∈ left.childrenOf (iso.regions.symm region) := by
-  have targetData := iso.target_region child
-  rw [ConcreteDiagram.childrenOf, List.mem_filter] at member ⊢
-  rcases member with ⟨_, member⟩
-  refine ⟨Data.Finite.mem_allFin _, ?_⟩
-  cases sourceData : left.regions (iso.regions.symm child) with
+theorem endpoint_mem_pullback {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) {wire : Fin target.wireCount}
+    {endpoint : CEndpoint target.nodeCount}
+    (h : endpoint ∈ (target.wires wire).endpoints) :
+    endpoint.rename iso.nodes.symm ∈
+      (source.wires (iso.wires.symm wire)).endpoints := by
+  apply iso.endpoint_mem_reflect
+  have hwire := iso.wires.right_inv wire
+  change iso.wires (iso.wires.symm wire) = wire at hwire
+  simpa only [CEndpoint.rename_rename_symm, hwire] using h
+
+theorem endpointOccurs_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) {wire : Fin source.wireCount}
+    {endpoint : CEndpoint source.nodeCount}
+    (h : source.EndpointOccurs wire endpoint) :
+    target.EndpointOccurs (iso.wires wire) (endpoint.rename iso.nodes) :=
+  iso.endpoint_mem_transport h
+
+theorem requiresPort_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) {node : Fin source.nodeCount}
+    {port : CPort} (h : source.RequiresPort node port) :
+    target.RequiresPort (iso.nodes node) port := by
+  unfold ConcreteDiagram.RequiresPort at h ⊢
+  rw [<- iso.nodes_eq node]
+  cases hnode : source.nodes node with
+  | term =>
+      simp only [hnode] at h
+      simpa only [hnode, CNode.rename] using h
+  | atom region binder =>
+      simp only [hnode] at h
+      simp only [CNode.rename]
+      rw [<- iso.regions_eq binder]
+      cases hbinder : source.regions binder <;>
+        simp only [hbinder, CRegion.rename] at h ⊢ <;> exact h
+  | named =>
+      simp only [hnode] at h
+      simpa only [hnode, CNode.rename] using h
+
+theorem rootIsSheet_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (h : source.RootIsSheet) :
+    target.RootIsSheet := by
+  unfold ConcreteDiagram.RootIsSheet at h ⊢
+  rw [<- iso.root_eq, <- iso.regions_eq source.root, h]
+  rfl
+
+theorem onlyRootIsSheet_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (h : source.OnlyRootIsSheet) :
+    target.OnlyRootIsSheet := by
+  unfold ConcreteDiagram.OnlyRootIsSheet at h ⊢
+  intro region hsheet
+  have hregions := iso.target_region_eq region
+  cases hsource : source.regions (iso.regions.symm region) with
   | sheet =>
-      rw [sourceData] at targetData
-      simp [targetData] at member
+      have hroot := h (iso.regions.symm region) hsource
+      calc
+        region = iso.regions (iso.regions.symm region) :=
+          (iso.regions.right_inv region).symm
+        _ = iso.regions source.root := congrArg iso.regions hroot
+        _ = target.root := iso.root_eq
   | cut parent =>
-      rw [sourceData] at targetData
-      rw [targetData] at member
-      simp only [CRegion.rename] at member
-      have mappedParent : iso.regions parent = region := by
-        exact eq_of_beq member
-      have parentEq : parent = iso.regions.symm region := by
-        have pulled := congrArg iso.regions.invFun mappedParent
-        simpa only [iso.regions.left_inv] using pulled
-      exact beq_iff_eq.mpr parentEq
+      rw [hsource] at hregions
+      simp only [CRegion.rename] at hregions
+      rw [hregions] at hsheet
+      contradiction
+  | bubble parent arity =>
+      rw [hsource] at hregions
+      simp only [CRegion.rename] at hregions
+      rw [hregions] at hsheet
+      contradiction
 
-theorem requiredPorts_forward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    {node : left.NodeId} {port : CPort}
-    (required : port ∈ left.requiredPorts node) :
-    port ∈ right.requiredPorts (iso.nodes node) := by
-  unfold ConcreteDiagram.requiredPorts at required ⊢
-  rw [iso.node_table]
-  cases nodeData : left.nodes node <;>
-    simpa [nodeData, CNode.rename] using required
+theorem allRegionsReachRoot_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (h : source.AllRegionsReachRoot) :
+    target.AllRegionsReachRoot := by
+  unfold ConcreteDiagram.AllRegionsReachRoot at h ⊢
+  intro region
+  have result := iso.reachesRoot_transport (h (iso.regions.symm region))
+  have heq := iso.regions.right_inv region
+  change iso.regions (iso.regions.symm region) = region at heq
+  rw [heq] at result
+  exact result
 
-theorem atom_owner_forward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (leftWellFormed : left.WellFormed definitions)
-    (rightWellFormed : right.WellFormed definitions)
-    {node : left.NodeId} {region : left.RegionId} {args : List Sig}
-    (nodeData : left.nodes node = .atom region args)
-    {port : CPort} {wire : left.WireId}
-    (owner : left.endpointOwner? ⟨node, port⟩ = some wire) :
-    right.endpointOwner? ⟨iso.nodes node, port⟩ =
-      some (iso.wires wire) := by
-  have incident :=
-    ConcreteDiagram.endpointOwner?_incident left ⟨node, port⟩ wire owner
-  obtain ⟨candidate, candidateMember, corresponds⟩ :=
-    iso.endpoint_forward wire ⟨node, port⟩ incident
-  have nodeEquality : candidate.node = iso.nodes node :=
-    corresponds.1
-  have rightNode :
-      right.nodes candidate.node =
-        .atom (iso.regions region) args := by
-    rw [corresponds.1, iso.node_table, nodeData]
-    rfl
-  have portEquality : candidate.port = port := by
-    unfold PortCorresponds at corresponds
-    rw [nodeData, rightNode] at corresponds
-    exact corresponds.2
-  have candidateEquality :
-      candidate = (⟨iso.nodes node, port⟩ :
-        CEndpoint right.nodeCount) := by
-    cases candidate with
-    | mk candidateNode candidatePort =>
-        simp only at nodeEquality portEquality ⊢
-        subst candidateNode
-        subst candidatePort
-        rfl
-  subst candidate
-  exact ConcreteDiagram.endpointOwner?_eq_of_incident definitions right
-    rightWellFormed (iso.nodes node) port
-    (iso.requiredPorts_forward
-      (ConcreteDiagram.incident_port_required definitions left
-        leftWellFormed
-        wire ⟨node, port⟩ incident))
-    (iso.wires wire) candidateMember
+theorem atomBindersAreBubbles_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (h : source.AtomBindersAreBubbles) :
+    target.AtomBindersAreBubbles := by
+  unfold ConcreteDiagram.AtomBindersAreBubbles at h ⊢
+  intro node
+  have hnodes := iso.target_node_eq node
+  cases hs : source.nodes (iso.nodes.symm node) with
+  | term =>
+      rw [hs] at hnodes
+      rw [hnodes]
+      trivial
+  | named =>
+      rw [hs] at hnodes
+      rw [hnodes]
+      trivial
+  | atom region binder =>
+      rw [hs] at hnodes
+      simp only [CNode.rename] at hnodes
+      rw [hnodes]
+      have hsource := h (iso.nodes.symm node)
+      rw [hs] at hsource
+      rcases hsource with ⟨parent, arity, hbinder⟩
+      exact ⟨iso.regions parent, arity, by
+        rw [<- iso.regions_eq binder, hbinder]
+        rfl⟩
 
-theorem atom_owner_backward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (leftWellFormed : left.WellFormed definitions)
-    {node : left.NodeId} {region : left.RegionId} {args : List Sig}
-    (nodeData : left.nodes node = .atom region args)
-    {port : CPort} {targetWire : right.WireId}
-    (owner : right.endpointOwner? ⟨iso.nodes node, port⟩ =
-      some targetWire) :
-    left.endpointOwner? ⟨node, port⟩ =
-      some (iso.wires.symm targetWire) := by
-  have incident :=
-    ConcreteDiagram.endpointOwner?_incident right
-      ⟨iso.nodes node, port⟩ targetWire owner
-  have mappedIncident :
-      (⟨iso.nodes node, port⟩ : CEndpoint right.nodeCount) ∈
-        (right.wires
-          (iso.wires (iso.wires.symm targetWire))).endpoints := by
-    change (⟨iso.nodes node, port⟩ : CEndpoint right.nodeCount) ∈
-      (right.wires
-        (iso.wires (iso.wires.invFun targetWire))).endpoints
-    rw [iso.wires.right_inv]
-    exact incident
-  obtain ⟨endpoint, endpointMember, corresponds⟩ :=
-    iso.endpoint_backward (iso.wires.symm targetWire)
-      ⟨iso.nodes node, port⟩ mappedIncident
-  have endpointNode : endpoint.node = node := by
-    apply iso.nodes.injective
-    exact corresponds.1.symm
-  have rightNode :
-      right.nodes
-          (⟨iso.nodes node, port⟩ :
-            CEndpoint right.nodeCount).node =
-        .atom (iso.regions region) args := by
-    rw [iso.node_table, nodeData]
-    rfl
-  have endpointPort : endpoint.port = port := by
-    unfold PortCorresponds at corresponds
-    rw [endpointNode, nodeData, rightNode] at corresponds
-    exact corresponds.2.symm
-  have endpointEquality :
-      endpoint = (⟨node, port⟩ : CEndpoint left.nodeCount) := by
-    cases endpoint with
-    | mk sourceNode sourcePort =>
-        simp only at endpointNode endpointPort ⊢
-        subst sourceNode
-        subst sourcePort
-        rfl
-  subst endpoint
-  have required :=
-    ConcreteDiagram.incident_port_required definitions left
-      leftWellFormed (iso.wires.symm targetWire)
-      ⟨node, port⟩ endpointMember
-  exact ConcreteDiagram.endpointOwner?_eq_of_incident definitions left
-    leftWellFormed node port required
-    (iso.wires.symm targetWire) endpointMember
+theorem atomBindersEnclose_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (h : source.AtomBindersEnclose) :
+    target.AtomBindersEnclose := by
+  unfold ConcreteDiagram.AtomBindersEnclose at h ⊢
+  intro node
+  have hnodes := iso.target_node_eq node
+  cases hs : source.nodes (iso.nodes.symm node) with
+  | term =>
+      rw [hs] at hnodes
+      rw [hnodes]
+      trivial
+  | named =>
+      rw [hs] at hnodes
+      rw [hnodes]
+      trivial
+  | atom region binder =>
+      rw [hs] at hnodes
+      simp only [CNode.rename] at hnodes
+      rw [hnodes]
+      have hsource := h (iso.nodes.symm node)
+      rw [hs] at hsource
+      exact iso.encloses_transport hsource
 
-theorem ref_owner_forward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (leftWellFormed : left.WellFormed definitions)
-    (rightWellFormed : right.WellFormed definitions)
-    {node : left.NodeId} {region : left.RegionId}
-    {definition : Fin definitions.length} {args : List Sig}
-    (nodeData : left.nodes node = .ref region definition args)
-    {port : CPort} {wire : left.WireId}
-    (owner : left.endpointOwner? ⟨node, port⟩ = some wire) :
-    right.endpointOwner? ⟨iso.nodes node, port⟩ =
-      some (iso.wires wire) := by
-  have incident :=
-    ConcreteDiagram.endpointOwner?_incident left ⟨node, port⟩ wire owner
-  obtain ⟨candidate, candidateMember, corresponds⟩ :=
-    iso.endpoint_forward wire ⟨node, port⟩ incident
-  have nodeEquality : candidate.node = iso.nodes node :=
-    corresponds.1
-  have rightNode :
-      right.nodes candidate.node =
-        .ref (iso.regions region) definition args := by
-    rw [nodeEquality, iso.node_table, nodeData]
-    rfl
-  have portEquality : candidate.port = port := by
-    unfold PortCorresponds at corresponds
-    rw [nodeData, rightNode] at corresponds
-    exact corresponds.2
-  have candidateEquality :
-      candidate = (⟨iso.nodes node, port⟩ :
-        CEndpoint right.nodeCount) := by
-    cases candidate with
-    | mk candidateNode candidatePort =>
-        simp only at nodeEquality portEquality ⊢
-        subst candidateNode
-        subst candidatePort
-        rfl
-  subst candidate
-  exact ConcreteDiagram.endpointOwner?_eq_of_incident definitions right
-    rightWellFormed (iso.nodes node) port
-    (iso.requiredPorts_forward
-      (ConcreteDiagram.incident_port_required definitions left
-        leftWellFormed wire ⟨node, port⟩ incident))
-    (iso.wires wire) candidateMember
+theorem namedReferencesResolve_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (signature : List Nat)
+    (h : source.NamedReferencesResolve signature) :
+    target.NamedReferencesResolve signature := by
+  unfold ConcreteDiagram.NamedReferencesResolve at h ⊢
+  intro node
+  have hnodes := iso.target_node_eq node
+  cases hs : source.nodes (iso.nodes.symm node) with
+  | term =>
+      rw [hs] at hnodes
+      rw [hnodes]
+      trivial
+  | atom =>
+      rw [hs] at hnodes
+      rw [hnodes]
+      trivial
+  | named region definition arity =>
+      rw [hs] at hnodes
+      simp only [CNode.rename] at hnodes
+      rw [hnodes]
+      have hsource := h (iso.nodes.symm node)
+      rw [hs] at hsource
+      exact hsource
 
-theorem ref_owner_backward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (leftWellFormed : left.WellFormed definitions)
-    {node : left.NodeId} {region : left.RegionId}
-    {definition : Fin definitions.length} {args : List Sig}
-    (nodeData : left.nodes node = .ref region definition args)
-    {port : CPort} {targetWire : right.WireId}
-    (owner : right.endpointOwner? ⟨iso.nodes node, port⟩ =
-      some targetWire) :
-    left.endpointOwner? ⟨node, port⟩ =
-      some (iso.wires.symm targetWire) := by
-  have incident :=
-    ConcreteDiagram.endpointOwner?_incident right
-      ⟨iso.nodes node, port⟩ targetWire owner
-  have mappedIncident :
-      (⟨iso.nodes node, port⟩ : CEndpoint right.nodeCount) ∈
-        (right.wires
-          (iso.wires (iso.wires.symm targetWire))).endpoints := by
-    change (⟨iso.nodes node, port⟩ : CEndpoint right.nodeCount) ∈
-      (right.wires
-        (iso.wires (iso.wires.invFun targetWire))).endpoints
-    rw [iso.wires.right_inv]
-    exact incident
-  obtain ⟨endpoint, endpointMember, corresponds⟩ :=
-    iso.endpoint_backward (iso.wires.symm targetWire)
-      ⟨iso.nodes node, port⟩ mappedIncident
-  have endpointNode : endpoint.node = node := by
-    apply iso.nodes.injective
-    exact corresponds.1.symm
-  have rightNode :
-      right.nodes
-          (⟨iso.nodes node, port⟩ :
-            CEndpoint right.nodeCount).node =
-        .ref (iso.regions region) definition args := by
-    rw [iso.node_table, nodeData]
-    rfl
-  have endpointPort : endpoint.port = port := by
-    unfold PortCorresponds at corresponds
-    rw [endpointNode, nodeData, rightNode] at corresponds
-    exact corresponds.2.symm
-  have endpointEquality :
-      endpoint = (⟨node, port⟩ : CEndpoint left.nodeCount) := by
-    cases endpoint with
-    | mk sourceNode sourcePort =>
-        simp only at endpointNode endpointPort ⊢
-        subst sourceNode
-        subst sourcePort
-        rfl
-  subst endpoint
-  have required :=
-    ConcreteDiagram.incident_port_required definitions left
-      leftWellFormed (iso.wires.symm targetWire)
-      ⟨node, port⟩ endpointMember
-  exact ConcreteDiagram.endpointOwner?_eq_of_incident definitions left
-    leftWellFormed node port required
-    (iso.wires.symm targetWire) endpointMember
+theorem endpointsAreValid_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (h : source.EndpointsAreValid) :
+    target.EndpointsAreValid := by
+  unfold ConcreteDiagram.EndpointsAreValid at h ⊢
+  intro wire endpoint hmem
+  have sourceMem := iso.endpoint_mem_pullback hmem
+  have required := iso.requiresPort_transport
+    (h (iso.wires.symm wire) (endpoint.rename iso.nodes.symm) sourceMem)
+  have hnode := iso.nodes.right_inv endpoint.node
+  change iso.nodes (iso.nodes.symm endpoint.node) = endpoint.node at hnode
+  change target.RequiresPort
+    (iso.nodes (iso.nodes.symm endpoint.node)) endpoint.port at required
+  rw [hnode] at required
+  exact required
 
-theorem identity_owner_forward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (rightWellFormed : right.WellFormed definitions)
-    {node : left.NodeId} {region : left.RegionId} {sig : Sig} {arity : Nat}
-    (nodeData : left.nodes node = .identity region sig arity)
-    {index : Nat} {wire : left.WireId}
-    (owner : left.endpointOwner? ⟨node, .identity index⟩ = some wire) :
-    ∃ targetIndex,
-      right.endpointOwner? ⟨iso.nodes node, .identity targetIndex⟩ =
-        some (iso.wires wire) := by
-  have incident :=
-    ConcreteDiagram.endpointOwner?_incident left
-      ⟨node, .identity index⟩ wire owner
-  obtain ⟨candidate, candidateMember, corresponds⟩ :=
-    iso.endpoint_forward wire ⟨node, .identity index⟩ incident
-  have nodeEquality : candidate.node = iso.nodes node :=
-    corresponds.1
-  have rightNode :
-      right.nodes candidate.node =
-        .identity (iso.regions region) sig arity := by
-    rw [nodeEquality, iso.node_table, nodeData]
-    rfl
-  unfold PortCorresponds at corresponds
-  rw [nodeData, rightNode] at corresponds
-  rcases corresponds with
-    ⟨_, _, _, ⟨leftIndex, rightIndex, _, candidatePort⟩⟩
-  have candidateEquality :
-      candidate = (⟨iso.nodes node, .identity rightIndex⟩ :
-        CEndpoint right.nodeCount) := by
-    cases candidate with
-    | mk candidateNode candidatePortValue =>
-        simp only at nodeEquality candidatePort ⊢
-        subst candidateNode
-        subst candidatePortValue
-        rfl
-  subst candidate
-  have required :=
-    ConcreteDiagram.incident_port_required definitions right
-      rightWellFormed (iso.wires wire)
-      ⟨iso.nodes node, .identity rightIndex⟩ candidateMember
-  exact ⟨rightIndex,
-    ConcreteDiagram.endpointOwner?_eq_of_incident definitions right
-      rightWellFormed (iso.nodes node) (.identity rightIndex) required
-      (iso.wires wire) candidateMember⟩
+theorem endpointsAreNodup_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (h : source.EndpointsAreNodup) :
+    target.EndpointsAreNodup := by
+  unfold ConcreteDiagram.EndpointsAreNodup at h ⊢
+  intro wire
+  let sourceWire := iso.wires.symm wire
+  have mappedNodup : ((source.wires sourceWire).endpoints.map
+      (CEndpoint.rename iso.nodes)).Nodup :=
+    (h sourceWire).map (CEndpoint.rename iso.nodes)
+      (fun _ _ hne heq => hne (CEndpoint.rename_injective iso.nodes heq))
+  have targetNodup := (iso.wire_endpoints_perm sourceWire).nodup_iff.mp mappedNodup
+  have hwire := iso.wires.right_inv wire
+  change iso.wires sourceWire = wire at hwire
+  simpa only [hwire] using targetNodup
 
-theorem identity_owner_backward
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    (leftWellFormed : left.WellFormed definitions)
-    {node : left.NodeId} {region : left.RegionId} {sig : Sig} {arity : Nat}
-    (nodeData : left.nodes node = .identity region sig arity)
-    {targetIndex : Nat} {targetWire : right.WireId}
-    (owner : right.endpointOwner?
-      ⟨iso.nodes node, .identity targetIndex⟩ = some targetWire) :
-    ∃ sourceIndex,
-      left.endpointOwner?
-        ⟨node, .identity sourceIndex⟩ =
-          some (iso.wires.symm targetWire) := by
-  have incident :=
-    ConcreteDiagram.endpointOwner?_incident right
-      ⟨iso.nodes node, .identity targetIndex⟩ targetWire owner
-  have mappedIncident :
-      (⟨iso.nodes node, .identity targetIndex⟩ :
-        CEndpoint right.nodeCount) ∈
-        (right.wires (iso.wires (iso.wires.symm targetWire))).endpoints := by
-    change (⟨iso.nodes node, .identity targetIndex⟩ :
-      CEndpoint right.nodeCount) ∈
-        (right.wires (iso.wires (iso.wires.invFun targetWire))).endpoints
-    rw [iso.wires.right_inv]
-    exact incident
-  obtain ⟨endpoint, endpointMember, corresponds⟩ :=
-    iso.endpoint_backward (iso.wires.symm targetWire)
-      ⟨iso.nodes node, .identity targetIndex⟩ mappedIncident
-  have nodeEquality : endpoint.node = node := by
-    apply iso.nodes.injective
-    calc
-      iso.nodes endpoint.node =
-          (⟨iso.nodes node, .identity targetIndex⟩ :
-            CEndpoint right.nodeCount).node := corresponds.1.symm
-      _ = iso.nodes node := rfl
-  have rightNode :
-      right.nodes
-          (⟨iso.nodes node, .identity targetIndex⟩ :
-            CEndpoint right.nodeCount).node =
-        .identity (iso.regions region) sig arity := by
-    rw [iso.node_table, nodeData]
-    rfl
-  unfold PortCorresponds at corresponds
-  rw [nodeEquality, nodeData, rightNode] at corresponds
-  rcases corresponds with
-    ⟨_, _, _, ⟨sourceIndex, _, endpointPort, _⟩⟩
-  have endpointEquality :
-      endpoint = (⟨node, .identity sourceIndex⟩ :
-        CEndpoint left.nodeCount) := by
-    cases endpoint with
-    | mk endpointNode endpointPortValue =>
-        simp only at nodeEquality endpointPort ⊢
-        subst endpointNode
-        subst endpointPortValue
-        rfl
-  subst endpoint
-  have required :=
-    ConcreteDiagram.incident_port_required definitions left
-      leftWellFormed (iso.wires.symm targetWire)
-      ⟨node, .identity sourceIndex⟩ endpointMember
-  exact ⟨sourceIndex,
-    ConcreteDiagram.endpointOwner?_eq_of_incident definitions left
-      leftWellFormed node (.identity sourceIndex) required
-      (iso.wires.symm targetWire) endpointMember⟩
+theorem wireEndpointsAreDisjoint_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (h : source.WireEndpointsAreDisjoint) :
+    target.WireEndpointsAreDisjoint := by
+  unfold ConcreteDiagram.WireEndpointsAreDisjoint at h ⊢
+  simp only [bne_iff_ne] at h ⊢
+  intro wire₁ wire₂ hne endpoint hmem₁
+  rw [Bool.not_eq_true']
+  apply decide_eq_false
+  intro hmem₂
+  let sourceWire₁ := iso.wires.symm wire₁
+  let sourceWire₂ := iso.wires.symm wire₂
+  let sourceEndpoint := endpoint.rename iso.nodes.symm
+  have sourceNe : sourceWire₁ ≠ sourceWire₂ := by
+    intro heq
+    apply hne
+    have hmapped := congrArg iso.wires heq
+    have hleft := iso.wires.right_inv wire₁
+    have hright := iso.wires.right_inv wire₂
+    change iso.wires sourceWire₁ = wire₁ at hleft
+    change iso.wires sourceWire₂ = wire₂ at hright
+    rw [hleft, hright] at hmapped
+    exact hmapped
+  have hbool := h sourceWire₁ sourceWire₂ sourceNe sourceEndpoint
+    (iso.endpoint_mem_pullback hmem₁)
+  rw [Bool.not_eq_true'] at hbool
+  exact (of_decide_eq_false hbool) (iso.endpoint_mem_pullback hmem₂)
 
-theorem identity_incidence_orderless
-    {definitions : List (List Sig)}
-    {left right : ConcreteDiagram definitions.length}
-    (iso : ConcreteIso left right)
-    {wire : left.WireId} {endpoint : CEndpoint left.nodeCount}
-    (member : endpoint ∈ (left.wires wire).endpoints) :
-    ∃ candidate,
-      candidate ∈ (right.wires (iso.wires wire)).endpoints ∧
-        PortCorresponds left right iso.nodes endpoint candidate :=
-  iso.endpoint_forward wire endpoint member
+theorem requiredPortsAreCovered_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (h : source.RequiredPortsAreCovered) :
+    target.RequiredPortsAreCovered := by
+  unfold ConcreteDiagram.RequiredPortsAreCovered at h ⊢
+  intro node
+  let sourceNode := iso.nodes.symm node
+  have hnode : iso.nodes sourceNode = node := iso.nodes.right_inv node
+  have covered {port : CPort}
+      (hcovered : exists wire,
+        source.EndpointOccurs wire ⟨sourceNode, port⟩) :
+      exists wire, target.EndpointOccurs wire ⟨node, port⟩ := by
+    rcases hcovered with ⟨wire, hwire⟩
+    refine ⟨iso.wires wire, ?_⟩
+    have mapped := iso.endpointOccurs_transport hwire
+    simpa only [CEndpoint.rename, hnode] using mapped
+  have hnodes := iso.target_node_eq node
+  cases hs : source.nodes sourceNode with
+  | term region freePorts term =>
+      rw [hs] at hnodes
+      simp only [CNode.rename] at hnodes
+      rw [hnodes]
+      simp only
+      have hsource := h sourceNode
+      rw [hs] at hsource
+      exact ⟨covered hsource.1, fun index => covered (hsource.2 index)⟩
+  | atom region binder =>
+      rw [hs] at hnodes
+      simp only [CNode.rename] at hnodes
+      rw [hnodes]
+      simp only
+      have hsource := h sourceNode
+      rw [hs] at hsource
+      simp only at hsource
+      have hbinderTarget := iso.regions_eq binder
+      cases hbinder : source.regions binder with
+      | sheet =>
+          rw [hbinder] at hbinderTarget
+          simp only [CRegion.rename] at hbinderTarget
+          rw [<- hbinderTarget]
+          trivial
+      | cut parent =>
+          rw [hbinder] at hbinderTarget
+          simp only [CRegion.rename] at hbinderTarget
+          rw [<- hbinderTarget]
+          trivial
+      | bubble parent arity =>
+          rw [hbinder] at hbinderTarget
+          simp only [CRegion.rename] at hbinderTarget
+          rw [<- hbinderTarget]
+          rw [hbinder] at hsource
+          intro index
+          exact covered (hsource index)
+  | named region definition arity =>
+      rw [hs] at hnodes
+      simp only [CNode.rename] at hnodes
+      rw [hnodes]
+      have hsource := h sourceNode
+      rw [hs] at hsource
+      intro index
+      exact covered (hsource index)
 
-private def explicitPortCorresponds
-    {definitions : List (List Sig)}
-    (left right : ConcreteDiagram definitions.length)
-    (nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId)
-    (endpoint : CEndpoint left.nodeCount)
-    (candidate : CEndpoint right.nodeCount) : Bool :=
-  decide (candidate.node = nodes endpoint.node) &&
-    match left.nodes endpoint.node, right.nodes candidate.node with
-    | .identity _ leftSig leftArity, .identity _ rightSig rightArity =>
-        decide (leftSig = rightSig) && decide (leftArity = rightArity) &&
-          match endpoint.port, candidate.port with
-          | .identity _, .identity _ => true
-          | _, _ => false
-    | _, _ => decide (candidate.port = endpoint.port)
+theorem wireScopesEnclose_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) (h : source.WireScopesEnclose) :
+    target.WireScopesEnclose := by
+  unfold ConcreteDiagram.WireScopesEnclose at h ⊢
+  intro wire endpoint hmem
+  let sourceWire := iso.wires.symm wire
+  let sourceEndpoint := endpoint.rename iso.nodes.symm
+  have sourceMem : sourceEndpoint ∈ (source.wires sourceWire).endpoints :=
+    iso.endpoint_mem_pullback hmem
+  have hencloses := iso.encloses_transport (h sourceWire sourceEndpoint sourceMem)
+  rw [iso.wire_scope_eq sourceWire] at hencloses
+  have nodeRegion := CNode.region_rename iso.regions (source.nodes sourceEndpoint.node)
+  rw [iso.nodes_eq sourceEndpoint.node] at nodeRegion
+  have hwire := iso.wires.right_inv wire
+  change iso.wires sourceWire = wire at hwire
+  rw [hwire] at hencloses
+  have hnode := iso.nodes.right_inv endpoint.node
+  change iso.nodes sourceEndpoint.node = endpoint.node at hnode
+  rw [hnode] at nodeRegion
+  rw [<- nodeRegion] at hencloses
+  exact hencloses
 
-private theorem explicitPortCorresponds_of_true
-    {definitions : List (List Sig)}
-    (left right : ConcreteDiagram definitions.length)
-    (nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId)
-    (endpoint : CEndpoint left.nodeCount)
-    (candidate : CEndpoint right.nodeCount)
-    (accepted :
-      explicitPortCorresponds left right nodes endpoint candidate = true) :
-    PortCorresponds left right nodes endpoint candidate := by
-  rcases endpoint with ⟨endpointNode, endpointPort⟩
-  rcases candidate with ⟨candidateNode, candidatePort⟩
-  unfold explicitPortCorresponds at accepted
-  rcases Bool.and_eq_true_iff.mp accepted with ⟨nodeExact, rest⟩
-  refine ⟨of_decide_eq_true nodeExact, ?_⟩
-  cases leftNode : left.nodes endpointNode <;>
-    cases rightNode : right.nodes candidateNode
-  all_goals rw [leftNode, rightNode] at rest
-  all_goals simp only at rest ⊢
-  all_goals try exact of_decide_eq_true rest
-  rename_i leftRegion leftSig leftArity rightRegion rightSig rightArity
-  rcases Bool.and_eq_true_iff.mp rest with ⟨sigArity, ports⟩
-  rcases Bool.and_eq_true_iff.mp sigArity with ⟨sigExact, arityExact⟩
-  cases endpointPort <;> cases candidatePort <;> simp_all
+def wellFormed_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) {signature : List Nat}
+    (h : source.WellFormed signature) : target.WellFormed signature where
+  root_is_sheet := iso.rootIsSheet_transport h.root_is_sheet
+  only_root_is_sheet := iso.onlyRootIsSheet_transport h.only_root_is_sheet
+  all_regions_reach_root :=
+    iso.allRegionsReachRoot_transport h.all_regions_reach_root
+  atom_binders_are_bubbles :=
+    iso.atomBindersAreBubbles_transport h.atom_binders_are_bubbles
+  atom_binders_enclose :=
+    iso.atomBindersEnclose_transport h.atom_binders_enclose
+  named_references_resolve :=
+    iso.namedReferencesResolve_transport signature h.named_references_resolve
+  endpoints_are_valid :=
+    iso.endpointsAreValid_transport h.endpoints_are_valid
+  endpoints_are_nodup :=
+    iso.endpointsAreNodup_transport h.endpoints_are_nodup
+  wire_endpoints_are_disjoint :=
+    iso.wireEndpointsAreDisjoint_transport h.wire_endpoints_are_disjoint
+  required_ports_are_covered :=
+    iso.requiredPortsAreCovered_transport h.required_ports_are_covered
+  wire_scopes_enclose :=
+    iso.wireScopesEnclose_transport h.wire_scopes_enclose
 
-private def explicitEndpointFiber
-    (endpoints : List (CEndpoint nodeCount))
-    (node : Fin nodeCount) (port : CPort) :
-    List (CEndpoint nodeCount) :=
-  endpoints.filter fun candidate =>
-    decide (candidate.node = node) &&
-      match port, candidate.port with
-      | .identity _, .identity _ => true
-      | _, _ => decide (candidate.port = port)
-
-private def explicitEndpointMap?
-    {definitions : List (List Sig)}
-    (left right : ConcreteDiagram definitions.length)
-    (nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId)
-    (wire : left.WireId)
-    (targetWire : right.WireId)
-    (endpoint : CEndpoint left.nodeCount) :
-    Option (CEndpoint right.nodeCount) :=
-  let sourceFiber := explicitEndpointFiber (left.wires wire).endpoints
-    endpoint.node endpoint.port
-  let targetFiber := explicitEndpointFiber
-    (right.wires targetWire).endpoints (nodes endpoint.node) endpoint.port
-  targetFiber[sourceFiber.idxOf endpoint]?
-
-private def explicitEndpointInverse?
-    {definitions : List (List Sig)}
-    (left right : ConcreteDiagram definitions.length)
-    (nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId)
-    (wire : left.WireId)
-    (targetWire : right.WireId)
-    (candidate : CEndpoint right.nodeCount) :
-    Option (CEndpoint left.nodeCount) :=
-  let targetFiber := explicitEndpointFiber
-    (right.wires targetWire).endpoints candidate.node candidate.port
-  let sourceFiber := explicitEndpointFiber (left.wires wire).endpoints
-    (nodes.symm candidate.node) candidate.port
-  sourceFiber[targetFiber.idxOf candidate]?
-
-/-- Validate an explicitly supplied finite identifier correspondence.  This
-checker proves table and incidence preservation but never enumerates or
-discovers a map. -/
-def checkEquivs?
-    {definitions : List (List Sig)}
-    (left right : ConcreteDiagram definitions.length)
-    (regions : Data.Finite.FiniteEquiv left.RegionId right.RegionId)
-    (nodes : Data.Finite.FiniteEquiv left.NodeId right.NodeId)
-    (wires : Data.Finite.FiniteEquiv left.WireId right.WireId) :
-    Option (ConcreteIso left right) := by
-  let rootValid := decide (regions left.root = right.root)
-  let regionsValid :=
-    (Data.Finite.allFin left.regionCount).all fun region =>
-      decide (right.regions (regions region) =
-        (left.regions region).rename regions)
-  let nodesValid :=
-    (Data.Finite.allFin left.nodeCount).all fun node =>
-      decide (right.nodes (nodes node) =
-        (left.nodes node).rename regions)
-  let signaturesValid :=
-    (Data.Finite.allFin left.wireCount).all fun wire =>
-      decide ((right.wires (wires wire)).sig = (left.wires wire).sig)
-  let scopesValid :=
-    (Data.Finite.allFin left.wireCount).all fun wire =>
-      decide ((right.wires (wires wire)).scope =
-        regions (left.wires wire).scope)
-  let forwardValid :=
-    (Data.Finite.allFin left.wireCount).all fun wire =>
-      (left.wires wire).endpoints.all fun endpoint =>
-        match explicitEndpointMap? left right nodes wire (wires wire)
-            endpoint with
-        | none => false
-        | some candidate =>
-            decide (candidate ∈
-              (right.wires (wires wire)).endpoints) &&
-            explicitPortCorresponds left right nodes endpoint candidate &&
-            decide (explicitEndpointInverse? left right nodes wire
-              (wires wire) candidate = some endpoint)
-  let backwardValid :=
-    (Data.Finite.allFin left.wireCount).all fun wire =>
-      (right.wires (wires wire)).endpoints.all fun candidate =>
-        match explicitEndpointInverse? left right nodes wire (wires wire)
-            candidate with
-        | none => false
-        | some endpoint =>
-            decide (endpoint ∈ (left.wires wire).endpoints) &&
-            decide (explicitEndpointMap? left right nodes wire
-              (wires wire) endpoint = some candidate)
-  if accepted : rootValid && regionsValid && nodesValid &&
-      signaturesValid && scopesValid && forwardValid && backwardValid then
-    have parts := Bool.and_eq_true_iff.mp accepted
-    have backwardAccepted := parts.2
-    have parts := Bool.and_eq_true_iff.mp parts.1
-    have forwardAccepted := parts.2
-    have parts := Bool.and_eq_true_iff.mp parts.1
-    have scopesAccepted := parts.2
-    have parts := Bool.and_eq_true_iff.mp parts.1
-    have signaturesAccepted := parts.2
-    have parts := Bool.and_eq_true_iff.mp parts.1
-    have nodesAccepted := parts.2
-    have parts := Bool.and_eq_true_iff.mp parts.1
-    have rootAccepted := parts.1
-    have regionsAccepted := parts.2
-    exact some
-      { regions := regions
-        nodes := nodes
-        wires := wires
-        root := of_decide_eq_true rootAccepted
-        region_table := by
-          intro region
-          exact of_decide_eq_true
-            (List.all_eq_true.mp regionsAccepted region
-              (Data.Finite.mem_allFin region))
-        node_table := by
-          intro node
-          exact of_decide_eq_true
-            (List.all_eq_true.mp nodesAccepted node
-              (Data.Finite.mem_allFin node))
-        wire_signature := by
-          intro wire
-          exact of_decide_eq_true
-            (List.all_eq_true.mp signaturesAccepted wire
-              (Data.Finite.mem_allFin wire))
-        wire_scope := by
-          intro wire
-          exact of_decide_eq_true
-            (List.all_eq_true.mp scopesAccepted wire
-              (Data.Finite.mem_allFin wire))
-        endpointMap := fun wire endpoint =>
-          (explicitEndpointMap? left right nodes wire (wires wire)
-            endpoint).getD ⟨nodes endpoint.node, endpoint.port⟩
-        endpointInverse := fun wire candidate =>
-          (explicitEndpointInverse? left right nodes wire (wires wire)
-            candidate).getD ⟨nodes.symm candidate.node, candidate.port⟩
-        endpointMap_mem := by
-          intro wire endpoint member
-          have wireAccepted :=
-            List.all_eq_true.mp forwardAccepted wire
-              (Data.Finite.mem_allFin wire)
-          have endpointAccepted :=
-            List.all_eq_true.mp wireAccepted endpoint member
-          cases mapped : explicitEndpointMap? left right nodes wire
-              (wires wire) endpoint with
-          | none => simp [mapped] at endpointAccepted
-          | some candidate =>
-              simp only [mapped, Bool.and_eq_true] at endpointAccepted
-              simpa [mapped] using
-                of_decide_eq_true endpointAccepted.1.1
-        endpointInverse_mem := by
-          intro wire candidate member
-          have wireAccepted :=
-            List.all_eq_true.mp backwardAccepted wire
-              (Data.Finite.mem_allFin wire)
-          have endpointAccepted :=
-            List.all_eq_true.mp wireAccepted candidate member
-          cases mapped : explicitEndpointInverse? left right nodes wire
-              (wires wire) candidate with
-          | none => simp [mapped] at endpointAccepted
-          | some endpoint =>
-              simp only [mapped, Bool.and_eq_true] at endpointAccepted
-              simpa [mapped] using
-                of_decide_eq_true endpointAccepted.1
-        endpointMap_left_inv := by
-          intro wire endpoint member
-          have wireAccepted := List.all_eq_true.mp forwardAccepted wire
-            (Data.Finite.mem_allFin wire)
-          have endpointAccepted :=
-            List.all_eq_true.mp wireAccepted endpoint member
-          cases mapped : explicitEndpointMap? left right nodes wire
-              (wires wire) endpoint with
-          | none => simp [mapped] at endpointAccepted
-          | some candidate =>
-              simp only [mapped, Bool.and_eq_true] at endpointAccepted
-              have inverseExact := of_decide_eq_true endpointAccepted.2
-              simpa [mapped, inverseExact]
-        endpointMap_right_inv := by
-          intro wire candidate member
-          have wireAccepted := List.all_eq_true.mp backwardAccepted wire
-            (Data.Finite.mem_allFin wire)
-          have endpointAccepted :=
-            List.all_eq_true.mp wireAccepted candidate member
-          cases mapped : explicitEndpointInverse? left right nodes wire
-              (wires wire) candidate with
-          | none => simp [mapped] at endpointAccepted
-          | some endpoint =>
-              simp only [mapped, Bool.and_eq_true] at endpointAccepted
-              have forwardExact := of_decide_eq_true endpointAccepted.2
-              simpa [mapped, forwardExact]
-        endpointMap_corresponds := by
-          intro wire endpoint member
-          have wireAccepted := List.all_eq_true.mp forwardAccepted wire
-            (Data.Finite.mem_allFin wire)
-          have endpointAccepted :=
-            List.all_eq_true.mp wireAccepted endpoint member
-          cases mapped : explicitEndpointMap? left right nodes wire
-              (wires wire) endpoint with
-          | none => simp [mapped] at endpointAccepted
-          | some candidate =>
-              simp only [mapped, Bool.and_eq_true] at endpointAccepted
-              simpa [mapped] using
-                explicitPortCorresponds_of_true left right nodes endpoint
-                  candidate endpointAccepted.1.2 }
-  else
-    exact none
+def checked_transport {source target : ConcreteDiagram}
+    (iso : ConcreteIso source target) {signature : List Nat}
+    (checked : CheckedDiagram signature) (hsource : checked.val = source) :
+    CheckedDiagram signature := by
+  subst source
+  exact ⟨target, iso.wellFormed_transport checked.property⟩
 
 end ConcreteIso
 
-end VisualProof
+namespace ConcreteExamples
+
+def nodeReverse : FiniteEquiv (Fin 2) (Fin 2) where
+  toFun := Fin.rev
+  invFun := Fin.rev
+  left_inv := Fin.rev_rev
+  right_inv := Fin.rev_rev
+
+@[simp] theorem nodeReverse_apply (node : Fin 2) :
+    nodeReverse node = Fin.rev node := rfl
+
+def validNestedRelabeled : ConcreteDiagram where
+  regionCount := validNested.regionCount
+  nodeCount := validNested.nodeCount
+  wireCount := validNested.wireCount
+  root := validNested.root
+  regions := validNested.regions
+  nodes := fun node =>
+    (validNested.nodes (nodeReverse.invFun node)).rename (.refl _)
+  wires := fun wire => {
+    scope := (validNested.wires wire).scope
+    endpoints := ((validNested.wires wire).endpoints.map
+      (CEndpoint.rename nodeReverse)).reverse
+  }
+
+def validNestedRelabeledIso :
+    ConcreteIso validNested validNestedRelabeled where
+  regionCount_eq := rfl
+  nodeCount_eq := rfl
+  wireCount_eq := rfl
+  regions := .refl _
+  nodes := nodeReverse
+  wires := .refl _
+  root_eq := rfl
+  regions_eq := by simp [validNestedRelabeled]
+  nodes_eq := by
+    intro node
+    change (validNested.nodes node).rename (.refl _) =
+      (validNested.nodes (Fin.rev (Fin.rev node))).rename (.refl _)
+    rw [Fin.rev_rev]
+  wire_scope_eq := by simp [validNestedRelabeled]
+  wire_endpoints_perm := by
+    intro wire
+    exact (List.reverse_perm _).symm
+
+theorem validNestedRelabeled_nontrivial :
+    (validNestedRelabeledIso.nodes (0 : Fin 2)).val = 1 := by
+  rfl
+
+theorem validNestedRelabeled_wellFormed :
+    validNestedRelabeled.WellFormed [] :=
+  validNestedRelabeledIso.wellFormed_transport
+    (checkWellFormed_iff.mp validNested_check)
+
+def validNestedRelabeledChecked : CheckedDiagram [] :=
+  validNestedRelabeledIso.checked_transport
+    ⟨validNested, checkWellFormed_iff.mp validNested_check⟩ rfl
+
+theorem validNestedRelabeled_checked_transport :
+    validNestedRelabeledChecked.val = validNestedRelabeled := rfl
+
+end ConcreteExamples
+
+end VisualProof.Diagram
