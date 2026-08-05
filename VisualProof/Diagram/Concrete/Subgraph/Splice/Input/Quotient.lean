@@ -9,9 +9,9 @@ open VisualProof.Diagram
 open VisualProof.Diagram.ConcreteElaboration
 
 /-- Proof-free inputs to checked concrete replacement. -/
-structure Input (signature : List Nat) where
-  frame : CheckedDiagram signature
-  pattern : CheckedOpenDiagram signature
+structure Input where
+  frame : CheckedDiagram
+  pattern : CheckedOpenDiagram
   site : Fin frame.val.regionCount
   attachment : Fin pattern.val.boundary.length → Fin frame.val.wireCount
   binderSpine : BinderSpine pattern.val.diagram
@@ -21,23 +21,23 @@ structure Input (signature : List Nat) where
 namespace Input
 
 /-- The designated terminal body of every splice pattern has an intrinsic view. -/
-theorem patternBodyView_complete (input : Input signature) :
+theorem patternBodyView_complete (input : Input ) :
     Nonempty (OpenSiteView input.pattern input.binderSpine.bodyContainer) :=
   openSiteView_complete input.pattern input.binderSpine.bodyContainer
 
-def terminalProxy (input : Input signature)
+def terminalProxy (input : Input )
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
     Fin input.binderSpine.proxyCount :=
   ⟨input.binderSpine.proxyCount - 1, by omega⟩
 
-@[simp] theorem terminalProxy_is_last (input : Input signature)
+@[simp] theorem terminalProxy_is_last (input : Input )
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
     (input.terminalProxy hnonempty).val =
       input.binderSpine.proxyCount - 1 := rfl
 
 /-- A nonempty proxy spine reaches its body through the ordinary nested
 compiler kernel, never through the open sheet-root kernel. -/
-theorem patternTerminalCompilerLeaf_complete (input : Input signature)
+theorem patternTerminalCompilerLeaf_complete (input : Input )
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
     ∃ (path : List Nat)
       (witness : Region.ContextPath input.pattern.elaborate.body path),
@@ -62,7 +62,7 @@ theorem patternTerminalCompilerLeaf_complete (input : Input signature)
   · exact leaf
 
 /-- Boundary-position equations; equal pattern-wire identities alone generate them. -/
-def attachmentEdges (input : Input signature) :
+def attachmentEdges (input : Input ) :
     List (Fin input.frame.val.wireCount × Fin input.frame.val.wireCount) :=
   (allFin input.pattern.val.boundary.length).flatMap fun left =>
     (allFin input.pattern.val.boundary.length).filterMap fun right =>
@@ -72,7 +72,7 @@ def attachmentEdges (input : Input signature) :
       else
         none
 
-theorem mem_attachmentEdges_iff (input : Input signature)
+theorem mem_attachmentEdges_iff (input : Input )
     (edge : Fin input.frame.val.wireCount × Fin input.frame.val.wireCount) :
     edge ∈ input.attachmentEdges ↔
       ∃ left right : Fin input.pattern.val.boundary.length,
@@ -91,31 +91,31 @@ theorem mem_attachmentEdges_iff (input : Input signature)
     rw [if_pos (by
       simpa only [List.get_eq_getElem] using hwire)]
 
-def attachmentPartition (input : Input signature) :
+def attachmentPartition (input : Input ) :
     FinitePartition input.frame.val.wireCount :=
   FinitePartition.ofEdges input.attachmentEdges
 
-theorem attachmentPartition_normalized (input : Input signature) :
+theorem attachmentPartition_normalized (input : Input ) :
     input.attachmentPartition.Normalized :=
   FinitePartition.ofEdges_normalized input.attachmentEdges
 
-def wireQuotient (input : Input signature) :
+def wireQuotient (input : Input ) :
     SurvivorDomain input.frame.val.wireCount :=
   input.attachmentPartition.quotientDomain
 
-def quotientWire (input : Input signature)
+def quotientWire (input : Input )
     (wire : Fin input.frame.val.wireCount) : input.wireQuotient.Carrier :=
   input.attachmentPartition.classIndex
     input.attachmentPartition_normalized wire
 
-theorem quotientWire_eq_iff (input : Input signature)
+theorem quotientWire_eq_iff (input : Input )
     (left right : Fin input.frame.val.wireCount) :
     input.quotientWire left = input.quotientWire right ↔
       input.attachmentPartition.related left right = true :=
   input.attachmentPartition.classIndex_eq_iff_related
     input.attachmentPartition_normalized left right
 
-@[simp] theorem quotientWire_wireQuotient_origin (input : Input signature)
+@[simp] theorem quotientWire_wireQuotient_origin (input : Input )
     (quotient : input.wireQuotient.Carrier) :
     input.quotientWire (input.wireQuotient.origin quotient) = quotient := by
   apply input.wireQuotient.origin_injective
@@ -125,7 +125,7 @@ theorem quotientWire_eq_iff (input : Input signature)
         input.attachmentPartition _).1
           (input.wireQuotient.origin_survives quotient)
 
-theorem equalBoundary_quotientWire_eq (input : Input signature)
+theorem equalBoundary_quotientWire_eq (input : Input )
     (left right : Fin input.pattern.val.boundary.length)
     (hequal : input.pattern.val.boundary.get left =
       input.pattern.val.boundary.get right) :
@@ -141,19 +141,18 @@ ordered boundary arguments constant on every attachment quotient class.  This
 is the semantic extraction needed when a replacement presentation coalesces
 more retained wires than the source presentation. -/
 theorem quotientWire_value_eq_of_pattern_denotes
-    (input : Input signature)
+    (input : Input )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (frameValue : Fin input.frame.val.wireCount → model.Carrier)
     (args : Fin input.pattern.val.boundary.length → model.Carrier)
     (realizes : ∀ position,
       frameValue (input.attachment position) = args position)
-    (denotes : input.pattern.denote model named args)
+    (denotes : input.pattern.denote model  args)
     {left right : Fin input.frame.val.wireCount}
     (sameClass : input.quotientWire left = input.quotientWire right) :
     frameValue left = frameValue right := by
   have aliasConsistent : AliasConsistent input.pattern.elaborate args := by
-    change denoteOpen model named input.pattern.elaborate args at denotes
+    change denoteOpen model  input.pattern.elaborate args at denotes
     rcases denotes with ⟨assignment, hargs, _⟩
     exact (boundaryAssignment_iff_aliasConsistent
       input.pattern.elaborate args).mp ⟨assignment, hargs⟩
@@ -180,23 +179,23 @@ theorem quotientWire_value_eq_of_pattern_denotes
     (fun firstSecond secondThird => firstSecond.trans secondThird) contains
   exact (input.quotientWire_eq_iff left right).mp sameClass
 
-def AttachmentsVisible (input : Input signature) : Prop :=
+def AttachmentsVisible (input : Input ) : Prop :=
   ∀ position,
     input.frame.val.Encloses
       (input.frame.val.wires (input.attachment position)).scope input.site
 
-def BinderTargetsInjective (input : Input signature) : Prop :=
+def BinderTargetsInjective (input : Input ) : Prop :=
   Function.Injective input.binderTarget
 
-def BinderTargetsMatch (input : Input signature) : Prop :=
+def BinderTargetsMatch (input : Input ) : Prop :=
   ∀ index, ∃ parent,
     input.frame.val.regions (input.binderTarget index) =
       .bubble parent (input.binderSpine.arity index)
 
-def BinderTargetsEnclose (input : Input signature) : Prop :=
+def BinderTargetsEnclose (input : Input ) : Prop :=
   ∀ index, input.frame.val.Encloses (input.binderTarget index) input.site
 
-structure Admissible (input : Input signature) : Prop where
+structure Admissible (input : Input ) : Prop where
   attachments_visible : input.AttachmentsVisible
   binder_targets_injective : input.BinderTargetsInjective
   binder_targets_match : input.BinderTargetsMatch
@@ -205,7 +204,7 @@ structure Admissible (input : Input signature) : Prop where
 /-- Each admissible target bubble is represented by the host compiler's
 lexical relation environment at the insertion site. -/
 theorem Admissible.binderTarget_relation
-    (input : Input signature) (hadmissible : input.Admissible)
+    (input : Input ) (hadmissible : input.Admissible)
     (view : SiteView input.frame input.site)
     (proxy : Fin input.binderSpine.proxyCount) :
     ∃ relation : Theory.RelVar view.focus.holeRels
@@ -221,9 +220,9 @@ theorem Admissible.binderTarget_relation
 into the host lexical context.  The map is determined by concrete proxy
 identity and the checked target-binder assignment, not by de Bruijn position. -/
 noncomputable def Admissible.terminalRelationRenaming
-    (input : Input signature) (hadmissible : input.Admissible)
+    (input : Input ) (hadmissible : input.Admissible)
     (host : SiteView input.frame input.site)
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     (patternPath : Region.ContextPath body path)
     (terminal : Fin input.binderSpine.proxyCount)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
@@ -251,25 +250,25 @@ noncomputable def Admissible.terminalRelationRenaming
       hasArity := target.hasArity.trans arityEq
     }
 
-instance (input : Input signature) : Decidable input.AttachmentsVisible := by
+instance (input : Input ) : Decidable input.AttachmentsVisible := by
   unfold AttachmentsVisible
   exact @Nat.decidableForallFin _ _ fun _ => inferInstance
 
-instance (input : Input signature) : Decidable input.BinderTargetsInjective := by
+instance (input : Input ) : Decidable input.BinderTargetsInjective := by
   unfold BinderTargetsInjective Function.Injective
   exact @Nat.decidableForallFin _ _ fun _ =>
     @Nat.decidableForallFin _ _ fun _ => inferInstance
 
-instance (input : Input signature) : Decidable input.BinderTargetsMatch := by
+instance (input : Input ) : Decidable input.BinderTargetsMatch := by
   unfold BinderTargetsMatch
   exact @Nat.decidableForallFin _ _ fun _ =>
     @Nat.decidableExistsFin _ _ fun _ => inferInstance
 
-instance (input : Input signature) : Decidable input.BinderTargetsEnclose := by
+instance (input : Input ) : Decidable input.BinderTargetsEnclose := by
   unfold BinderTargetsEnclose
   exact @Nat.decidableForallFin _ _ fun _ => inferInstance
 
-instance (input : Input signature) : Decidable input.Admissible := by
+instance (input : Input ) : Decidable input.Admissible := by
   by_cases hvisible : input.AttachmentsVisible
   · by_cases hinjective : input.BinderTargetsInjective
     · by_cases hmatch : input.BinderTargetsMatch
@@ -297,11 +296,11 @@ inductive Error
   | resultNotWellFormed (error : WFError)
   deriving DecidableEq
 
-abbrev CheckedInput (signature : List Nat) :=
-  { input : Input signature // input.Admissible }
+abbrev CheckedInput :=
+  { input : Input  // input.Admissible }
 
-def checkInput (input : Input signature) :
-    Except Error (CheckedInput signature) :=
+def checkInput (input : Input ) :
+    Except Error (CheckedInput ) :=
   if hvisible : input.AttachmentsVisible then
     if hinjective : input.BinderTargetsInjective then
       if hmatch : input.BinderTargetsMatch then
@@ -346,7 +345,7 @@ theorem checkInput_iff :
   · intro hadmissible
     exact ⟨⟨input, hadmissible⟩, input.checkInput_complete hadmissible, rfl⟩
 
-theorem related_eq_or_both_visible (input : Input signature)
+theorem related_eq_or_both_visible (input : Input )
     (hadmissible : input.Admissible)
     {left right : Fin input.frame.val.wireCount}
     (hrelated : input.attachmentPartition.related left right = true) :
@@ -380,22 +379,22 @@ theorem related_eq_or_both_visible (input : Input signature)
     hrelated
 
 /-- Original host wires represented by one dense quotient wire. -/
-def classWires (input : Input signature) (quotient : input.wireQuotient.Carrier) :
+def classWires (input : Input ) (quotient : input.wireQuotient.Carrier) :
     List (Fin input.frame.val.wireCount) :=
   filterFin fun wire => decide (input.quotientWire wire = quotient)
 
-@[simp] theorem mem_classWires (input : Input signature)
+@[simp] theorem mem_classWires (input : Input )
     (quotient : input.wireQuotient.Carrier)
     (wire : Fin input.frame.val.wireCount) :
     wire ∈ input.classWires quotient ↔ input.quotientWire wire = quotient := by
   simp [classWires]
 
-theorem classWires_nodup (input : Input signature)
+theorem classWires_nodup (input : Input )
     (quotient : input.wireQuotient.Carrier) :
     (input.classWires quotient).Nodup :=
   filterFin_nodup _
 
-theorem classWires_nonempty (input : Input signature)
+theorem classWires_nonempty (input : Input )
     (quotient : input.wireQuotient.Carrier) :
     (input.classWires quotient).length > 0 := by
   obtain ⟨wire, hwire⟩ :=
@@ -407,12 +406,12 @@ theorem classWires_nonempty (input : Input signature)
   | nil => simp [hclass] at hmem
   | cons head tail => simp
 
-def firstClassWire (input : Input signature)
+def firstClassWire (input : Input )
     (quotient : input.wireQuotient.Carrier) :
     Fin input.frame.val.wireCount :=
   (input.classWires quotient).get ⟨0, input.classWires_nonempty quotient⟩
 
-@[simp] theorem quotientWire_firstClassWire (input : Input signature)
+@[simp] theorem quotientWire_firstClassWire (input : Input )
     (quotient : input.wireQuotient.Carrier) :
     input.quotientWire (input.firstClassWire quotient) = quotient := by
   exact (input.mem_classWires quotient _).1 (List.get_mem _ _)
@@ -430,7 +429,7 @@ def outermostFrom (diagram : ConcreteDiagram) :
       outermostFrom diagram (chooseOuter diagram current next) tail
 
 theorem outermostFrom_encloses_of_common
-    (diagram : CheckedDiagram signature)
+    (diagram : CheckedDiagram )
     (site current : Fin diagram.val.regionCount)
     (tail : List (Fin diagram.val.regionCount))
     (hcurrent : diagram.val.Encloses current site)
@@ -479,24 +478,24 @@ theorem outermostFrom_encloses_of_common
             hresult.1 hchosenNext
         · exact hresult.2 region hregion
 
-def classScopes (input : Input signature)
+def classScopes (input : Input )
     (quotient : input.wireQuotient.Carrier) :
     List (Fin input.frame.val.regionCount) :=
   (input.classWires quotient).map fun wire =>
     (input.frame.val.wires wire).scope
 
-def classAllVisible (input : Input signature)
+def classAllVisible (input : Input )
     (quotient : input.wireQuotient.Carrier) : Prop :=
   ∀ wire, wire ∈ input.classWires quotient →
     input.frame.val.Encloses (input.frame.val.wires wire).scope input.site
 
-instance (input : Input signature) (quotient : input.wireQuotient.Carrier) :
+instance (input : Input ) (quotient : input.wireQuotient.Carrier) :
     Decidable (input.classAllVisible quotient) := by
   unfold classAllVisible
   infer_instance
 
 /-- Deterministic outermost class-member scope; singleton nonattachments retain theirs. -/
-def coalescedScope (input : Input signature)
+def coalescedScope (input : Input )
     (quotient : input.wireQuotient.Carrier) :
     Fin input.frame.val.regionCount :=
   let first := input.firstClassWire quotient
@@ -524,7 +523,7 @@ private theorem outermostFrom_mem_cons (diagram : ConcreteDiagram)
       · simp [htail]
 
 /-- A coalesced scope is always the scope of a wire in its quotient class. -/
-theorem coalescedScope_eq_member_scope (input : Input signature)
+theorem coalescedScope_eq_member_scope (input : Input )
     (quotient : input.wireQuotient.Carrier) :
     ∃ wire, wire ∈ input.classWires quotient ∧
       input.coalescedScope quotient = (input.frame.val.wires wire).scope := by
@@ -548,7 +547,7 @@ theorem coalescedScope_eq_member_scope (input : Input signature)
         (input.quotientWire_firstClassWire quotient)
     · simp only [coalescedScope, hall, reduceIte, first]
 
-theorem classWires_related (input : Input signature)
+theorem classWires_related (input : Input )
     (quotient : input.wireQuotient.Carrier)
     {left right : Fin input.frame.val.wireCount}
     (hleft : left ∈ input.classWires quotient)
@@ -558,7 +557,7 @@ theorem classWires_related (input : Input signature)
   exact (input.mem_classWires quotient left).1 hleft |>.trans
     ((input.mem_classWires quotient right).1 hright).symm
 
-theorem coalescedScope_encloses_member (input : Input signature)
+theorem coalescedScope_encloses_member (input : Input )
     (hadmissible : input.Admissible)
     (quotient : input.wireQuotient.Carrier)
     (wire : Fin input.frame.val.wireCount)
@@ -612,13 +611,13 @@ theorem coalescedScope_encloses_member (input : Input signature)
         (input.frame.val.wires (input.firstClassWire quotient)).scope
 
 /-- Exact endpoint union of an attachment class, in stable old-wire order. -/
-def coalescedEndpoints (input : Input signature)
+def coalescedEndpoints (input : Input )
     (quotient : input.wireQuotient.Carrier) :
     List (CEndpoint input.frame.val.nodeCount) :=
   (input.classWires quotient).flatMap fun wire =>
     (input.frame.val.wires wire).endpoints
 
-def coalesceFrameRaw (input : Input signature) : ConcreteDiagram where
+def coalesceFrameRaw (input : Input ) : ConcreteDiagram where
   regionCount := input.frame.val.regionCount
   nodeCount := input.frame.val.nodeCount
   wireCount := input.wireQuotient.count
@@ -630,31 +629,31 @@ def coalesceFrameRaw (input : Input signature) : ConcreteDiagram where
     endpoints := input.coalescedEndpoints quotient
   }
 
-@[simp] theorem coalesceFrameRaw_regionCount (input : Input signature) :
+@[simp] theorem coalesceFrameRaw_regionCount (input : Input ) :
     input.coalesceFrameRaw.regionCount = input.frame.val.regionCount := rfl
 
-@[simp] theorem coalesceFrameRaw_nodeCount (input : Input signature) :
+@[simp] theorem coalesceFrameRaw_nodeCount (input : Input ) :
     input.coalesceFrameRaw.nodeCount = input.frame.val.nodeCount := rfl
 
-@[simp] theorem coalesceFrameRaw_wireCount (input : Input signature) :
+@[simp] theorem coalesceFrameRaw_wireCount (input : Input ) :
     input.coalesceFrameRaw.wireCount = input.wireQuotient.count := rfl
 
-@[simp] theorem coalesceFrameRaw_regions (input : Input signature)
+@[simp] theorem coalesceFrameRaw_regions (input : Input )
     (region : Fin input.coalesceFrameRaw.regionCount) :
     input.coalesceFrameRaw.regions region = input.frame.val.regions region := rfl
 
-@[simp] theorem coalesceFrameRaw_nodes (input : Input signature)
+@[simp] theorem coalesceFrameRaw_nodes (input : Input )
     (node : Fin input.coalesceFrameRaw.nodeCount) :
     input.coalesceFrameRaw.nodes node = input.frame.val.nodes node := rfl
 
-@[simp] theorem coalesceFrameRaw_wire (input : Input signature)
+@[simp] theorem coalesceFrameRaw_wire (input : Input )
     (wire : Fin input.coalesceFrameRaw.wireCount) :
     input.coalesceFrameRaw.wires wire = {
       scope := input.coalescedScope wire
       endpoints := input.coalescedEndpoints wire
     } := rfl
 
-@[simp] theorem mem_coalescedEndpoints (input : Input signature)
+@[simp] theorem mem_coalescedEndpoints (input : Input )
     (quotient : input.wireQuotient.Carrier)
     (endpoint : CEndpoint input.frame.val.nodeCount) :
     endpoint ∈ input.coalescedEndpoints quotient ↔
@@ -663,7 +662,7 @@ def coalesceFrameRaw (input : Input signature) : ConcreteDiagram where
   simp [coalescedEndpoints]
 
 theorem endpointLists_nodup
-    (frame : CheckedDiagram signature)
+    (frame : CheckedDiagram )
     (wires : List (Fin frame.val.wireCount))
     (hnodup : wires.Nodup) :
     (wires.flatMap fun wire => (frame.val.wires wire).endpoints).Nodup := by
@@ -685,7 +684,7 @@ theorem endpointLists_nodup
         (by simpa using hwires) _ hfirst
       simp [ConcreteDiagram.EndpointOccurs, hendpoint] at hdisjoint
 
-theorem checked_endpoint_wire_unique (diagram : CheckedDiagram signature)
+theorem checked_endpoint_wire_unique (diagram : CheckedDiagram )
     (first second : Fin diagram.val.wireCount)
     (endpoint : CEndpoint diagram.val.nodeCount)
     (hfirst : diagram.val.EndpointOccurs first endpoint)
@@ -700,13 +699,13 @@ theorem checked_endpoint_wire_unique (diagram : CheckedDiagram signature)
     rw [hoccurs] at hdisjoint
     contradiction
 
-theorem coalescedEndpoints_nodup (input : Input signature)
+theorem coalescedEndpoints_nodup (input : Input )
     (quotient : input.wireQuotient.Carrier) :
     (input.coalescedEndpoints quotient).Nodup :=
   endpointLists_nodup input.frame (input.classWires quotient)
     (input.classWires_nodup quotient)
 
-theorem coalesceFrameRaw_climb (input : Input signature)
+theorem coalesceFrameRaw_climb (input : Input )
     (steps : Nat) (region : Fin input.frame.val.regionCount) :
     input.coalesceFrameRaw.climb steps region =
       input.frame.val.climb steps region := by
@@ -720,7 +719,7 @@ theorem coalesceFrameRaw_climb (input : Input signature)
           simp [ConcreteDiagram.climb, coalesceFrameRaw_regions,
             hparent, ih parent]
 
-theorem coalesceFrameRaw_encloses_iff (input : Input signature)
+theorem coalesceFrameRaw_encloses_iff (input : Input )
     (ancestor descendant : Fin input.frame.val.regionCount) :
     input.coalesceFrameRaw.Encloses ancestor descendant ↔
       input.frame.val.Encloses ancestor descendant := by
@@ -731,7 +730,7 @@ theorem coalesceFrameRaw_encloses_iff (input : Input signature)
   · rw [input.coalesceFrameRaw_climb]
     exact hsteps
 
-theorem endpointOccurs_quotient (input : Input signature)
+theorem endpointOccurs_quotient (input : Input )
     (wire : Fin input.frame.val.wireCount)
     (endpoint : CEndpoint input.frame.val.nodeCount)
     (hoccurs : input.frame.val.EndpointOccurs wire endpoint) :
@@ -740,9 +739,9 @@ theorem endpointOccurs_quotient (input : Input signature)
   rw [input.mem_coalescedEndpoints]
   exact ⟨wire, (input.mem_classWires _ wire).2 rfl, hoccurs⟩
 
-theorem coalesceFrameRaw_wellFormed (input : Input signature)
+theorem coalesceFrameRaw_wellFormed (input : Input )
     (hadmissible : input.Admissible) :
-    input.coalesceFrameRaw.WellFormed signature where
+    input.coalesceFrameRaw.WellFormed  where
   root_is_sheet := input.frame.property.root_is_sheet
   only_root_is_sheet := input.frame.property.only_root_is_sheet
   all_regions_reach_root := by
@@ -757,7 +756,6 @@ theorem coalesceFrameRaw_wellFormed (input : Input signature)
     have hold := input.frame.property.atom_binders_are_bubbles node
     cases hnode : input.frame.val.nodes node with
     | identity => simp [coalesceFrameRaw_nodes, hnode]
-    | named => simp [coalesceFrameRaw_nodes, hnode]
     | atom region binder =>
         simp only [hnode] at hold
         simpa [coalesceFrameRaw_nodes, coalesceFrameRaw_regions, hnode] using hold
@@ -767,22 +765,10 @@ theorem coalesceFrameRaw_wellFormed (input : Input signature)
     simp only [coalesceFrameRaw_nodes]
     cases hnode : input.frame.val.nodes node with
     | identity => trivial
-    | named => trivial
     | atom region binder =>
         simp only
         rw [input.coalesceFrameRaw_encloses_iff]
         simpa only [hnode] using input.frame.property.atom_binders_enclose node
-  named_references_resolve := by
-    unfold ConcreteDiagram.NamedReferencesResolve
-    intro node
-    change Fin input.frame.val.nodeCount at node
-    have hold := input.frame.property.named_references_resolve node
-    cases hnode : input.frame.val.nodes node with
-    | atom => simp [coalesceFrameRaw_nodes, hnode]
-    | identity => simp [coalesceFrameRaw_nodes, hnode]
-    | named region definition arity =>
-        simp only [hnode] at hold
-        simpa [coalesceFrameRaw_nodes, hnode] using hold
   endpoints_are_valid := by
     intro quotient endpoint hendpoint
     change input.wireQuotient.Carrier at quotient
@@ -795,9 +781,6 @@ theorem coalesceFrameRaw_wellFormed (input : Input signature)
     unfold ConcreteDiagram.RequiresPort at hvalid ⊢
     cases hnode : input.frame.val.nodes endpoint.node with
     | identity =>
-        simp [coalesceFrameRaw_nodes, hnode] at hvalid ⊢
-        exact hvalid
-    | named =>
         simp [coalesceFrameRaw_nodes, hnode] at hvalid ⊢
         exact hvalid
     | atom region binder =>
@@ -859,12 +842,6 @@ theorem coalesceFrameRaw_wellFormed (input : Input signature)
         obtain ⟨wire, hport⟩ := hcovered index
         exact ⟨input.quotientWire wire,
           input.endpointOccurs_quotient wire _ hport⟩
-    | named region definition arity =>
-        simp only [hnode] at hcovered ⊢
-        intro index
-        obtain ⟨wire, hport⟩ := hcovered index
-        exact ⟨input.quotientWire wire,
-          input.endpointOccurs_quotient wire _ hport⟩
   wire_scopes_enclose := by
     intro quotient endpoint hendpoint
     change input.wireQuotient.Carrier at quotient
@@ -878,12 +855,12 @@ theorem coalesceFrameRaw_wellFormed (input : Input signature)
     rw [input.coalesceFrameRaw_encloses_iff]
     exact ConcreteElaboration.checked_encloses_trans input.frame.property hscope hold
 
-def coalesceFrame (input : Input signature) (hadmissible : input.Admissible) :
-    CheckedDiagram signature :=
+def coalesceFrame (input : Input ) (hadmissible : input.Admissible) :
+    CheckedDiagram  :=
   ⟨input.coalesceFrameRaw, input.coalesceFrameRaw_wellFormed hadmissible⟩
 
 /-- The coalesced frame retains a checked intrinsic view at the splice site. -/
-theorem coalescedSiteView_complete (input : Input signature)
+theorem coalescedSiteView_complete (input : Input )
     (hadmissible : input.Admissible) :
     Nonempty (SiteView (input.coalesceFrame hadmissible) input.site) :=
   siteView_complete (input.coalesceFrame hadmissible) input.site
@@ -891,7 +868,7 @@ theorem coalescedSiteView_complete (input : Input signature)
 /-- Every attached boundary class is visible at the splice site after host
 wire coalescing.  The quotient wire is scoped at an outermost member scope,
 so merging aliases never captures it below the site. -/
-theorem quotientAttachment_visible (input : Input signature)
+theorem quotientAttachment_visible (input : Input )
     (hadmissible : input.Admissible)
     (position : Fin input.pattern.val.boundary.length) :
     input.coalesceFrameRaw.Encloses
@@ -913,7 +890,7 @@ visibility of any chosen original representative.  Nontrivial quotient
 classes contain only admissible attachment wires, hence all of their members
 are site-visible; singleton classes retain the original scope. -/
 theorem quotientWire_visible_at_site_iff
-    (input : Input signature)
+    (input : Input )
     (hadmissible : input.Admissible)
     (wire : Fin input.frame.val.wireCount) :
     input.coalesceFrameRaw.Encloses
@@ -951,7 +928,7 @@ theorem quotientWire_visible_at_site_iff
       wireVisible
 
 /-- Stable material/proxy and internal-wire blocks for plugging. -/
-structure PlugLayout (input : Input signature) where
+structure PlugLayout (input : Input ) where
   materialRegions : SurvivorDomain input.pattern.val.diagram.regionCount := {
     survives region := decide (input.binderSpine.IsMaterialRegion region)
   }

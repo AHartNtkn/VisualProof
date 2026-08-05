@@ -18,7 +18,7 @@ those receipts makes every carrier map below canonical: retained identifiers use
 the frame survivor index, while selected identifiers use the extraction order. -/
 
 private theorem anchor_not_selected
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val) :
     selection.val.anchor ∉ selection.selectedRegions := by
   intro hselected
@@ -28,7 +28,7 @@ private theorem anchor_not_selected
     host.property (selection.property.childRoots_direct child hchild) hencloses
 
 private theorem externalBinder_survives
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     (layout : FragmentLayout host.val selection)
@@ -52,7 +52,7 @@ private theorem touchingWire_survives
 
 /-- The retained anchor at which the extracted fragment is canonically put back. -/
 def originalSite
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     Fin (host.val.removeRaw selection decomposition.frameDomains).regionCount :=
   decomposition.frameDomains.regions.index selection.val.anchor (by
     apply (decomposition.frameDomains.region_survives_iff _).2
@@ -61,7 +61,7 @@ def originalSite
 /-- A boundary position of the extracted fragment returns to the retained dense
 image of the same touching host wire. -/
 def originalAttachment
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (position : Fin
       (host.val.extractOpenRaw selection
         decomposition.extraction.raw.layout).boundary.length) :
@@ -76,7 +76,7 @@ def originalAttachment
 /-- A generated proxy is reattached to the retained dense image of the external
 binder from which extraction generated it. -/
 def originalBinderTarget
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (index : Fin (host.val.extractedBinderSpine selection
       decomposition.extraction.raw.layout).proxyCount) :
     Fin (host.val.removeRaw selection decomposition.frameDomains).regionCount :=
@@ -87,8 +87,8 @@ def originalBinderTarget
 
 /-- The unique splice input induced by one lossless decomposition. -/
 def originalFragmentInput
-    (decomposition : Decomposition signature host selection) :
-    Input signature where
+    (decomposition : Decomposition  host selection) :
+    Input  where
   frame := ⟨host.val.removeRaw selection decomposition.frameDomains,
     ConcreteDiagram.removeRaw_wellFormed host selection
       decomposition.frameDomains⟩
@@ -107,11 +107,11 @@ def originalFragmentInput
 /-- The raw graph obtained by putting a decomposition's original fragment back
 into its original frame. -/
 def plugOriginalFragment
-    (decomposition : Decomposition signature host selection) : ConcreteDiagram :=
+    (decomposition : Decomposition  host selection) : ConcreteDiagram :=
   (originalFragmentInput decomposition).plugLayout.plugRaw
 
 theorem originalBoundary_get_injective
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     Function.Injective
       (host.val.extractOpenRaw selection
         decomposition.extraction.raw.layout).boundary.get := by
@@ -122,7 +122,7 @@ theorem originalBoundary_get_injective
     ConcreteDiagram.extractBoundaryRaw, FragmentLayout.boundaryWire] using hvals
 
 theorem originalAttachment_injective
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     Function.Injective (originalAttachment decomposition) := by
   intro left right heq
   have horigin := congrArg decomposition.frameDomains.wires.origin heq
@@ -135,7 +135,7 @@ theorem originalAttachment_injective
 /-- Reassembling the extracted fragment generates only reflexive attachment
 equations; consequently the host-wire quotient is discrete. -/
 theorem originalAttachmentPartition_related_iff
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (left right : Fin
       (originalFragmentInput decomposition).frame.val.wireCount) :
     (originalFragmentInput decomposition).attachmentPartition.related
@@ -156,7 +156,7 @@ theorem originalAttachmentPartition_related_iff
     exact FinitePartition.related_refl _ _
 
 theorem originalAttachmentPartition_representative
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (wire : Fin (originalFragmentInput decomposition).frame.val.wireCount) :
     (originalFragmentInput decomposition).attachmentPartition.representative
         wire = wire := by
@@ -168,7 +168,7 @@ theorem originalAttachmentPartition_representative
         hnormalized.symm)).symm
 
 def originalQuotientWireEquiv
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     FiniteEquiv
       (originalFragmentInput decomposition).wireQuotient.Carrier
       (Fin (originalFragmentInput decomposition).frame.val.wireCount) where
@@ -187,7 +187,7 @@ def originalQuotientWireEquiv
       wire _
 
 private noncomputable def originalMaterialIndex
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (material : (originalFragmentInput decomposition).plugLayout
       |>.materialRegions.Carrier) :
     Fin decomposition.extraction.raw.layout.materialRegionCount :=
@@ -201,7 +201,7 @@ private noncomputable def originalMaterialIndex
           |>.origin_survives material)))
 
 private theorem originalMaterialIndex_spec
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (material : (originalFragmentInput decomposition).plugLayout
       |>.materialRegions.Carrier) :
     decomposition.extraction.raw.layout.materialRegion
@@ -218,7 +218,7 @@ private theorem originalMaterialIndex_spec
           |>.origin_survives material)))
 
 private noncomputable def originalRegionMap
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     Fin (plugOriginalFragment decomposition).regionCount →
       Fin host.val.regionCount :=
   Fin.addCases decomposition.frameDomains.regions.origin
@@ -226,7 +226,7 @@ private noncomputable def originalRegionMap
       (originalMaterialIndex decomposition material))
 
 private theorem originalRegionMap_bijective
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     Function.Injective (originalRegionMap decomposition) ∧
       Function.Surjective (originalRegionMap decomposition) := by
   constructor
@@ -346,20 +346,20 @@ private theorem originalRegionMap_bijective
       exact decomposition.frameDomains.regions.origin_index region hsurvives
 
 private noncomputable def originalRegionEquiv
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     FiniteEquiv (Fin (plugOriginalFragment decomposition).regionCount)
       (Fin host.val.regionCount) :=
   finiteEquivOfBijective (originalRegionMap decomposition)
     (originalRegionMap_bijective decomposition)
 
 private def originalNodeMap
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     Fin (plugOriginalFragment decomposition).nodeCount → Fin host.val.nodeCount :=
   Fin.addCases decomposition.frameDomains.nodes.origin
     selection.selectedNodes.get
 
 private theorem originalNodeMap_bijective
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     Function.Injective (originalNodeMap decomposition) ∧
       Function.Surjective (originalNodeMap decomposition) := by
   constructor
@@ -424,14 +424,14 @@ private theorem originalNodeMap_bijective
           exact decomposition.frameDomains.nodes.origin_index node hsurvives⟩
 
 private noncomputable def originalNodeEquiv
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     FiniteEquiv (Fin (plugOriginalFragment decomposition).nodeCount)
       (Fin host.val.nodeCount) :=
   finiteEquivOfBijective (originalNodeMap decomposition)
     (originalNodeMap_bijective decomposition)
 
 private theorem originalInternalWireOrigin_lt
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (internal : (originalFragmentInput decomposition).plugLayout
       |>.internalWires.Carrier) :
     ((originalFragmentInput decomposition).plugLayout.internalWires.origin
@@ -471,7 +471,7 @@ private theorem originalInternalWireOrigin_lt
   exact List.mem_ofFn.mpr ⟨boundary, rfl⟩
 
 private def originalInternalWireIndex
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (internal : (originalFragmentInput decomposition).plugLayout
       |>.internalWires.Carrier) : Fin selection.internalWires.length :=
   ⟨((originalFragmentInput decomposition).plugLayout.internalWires.origin
@@ -479,7 +479,7 @@ private def originalInternalWireIndex
     originalInternalWireOrigin_lt decomposition internal⟩
 
 private theorem originalInternalWireIndex_spec
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (internal : (originalFragmentInput decomposition).plugLayout
       |>.internalWires.Carrier) :
     decomposition.extraction.raw.layout.internalWire
@@ -490,7 +490,7 @@ private theorem originalInternalWireIndex_spec
   rfl
 
 private def originalWireMap
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     Fin (plugOriginalFragment decomposition).wireCount → Fin host.val.wireCount :=
   Fin.addCases
     (fun quotient => decomposition.frameDomains.wires.origin
@@ -499,7 +499,7 @@ private def originalWireMap
       (originalInternalWireIndex decomposition internal))
 
 private theorem originalWireMap_bijective
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     Function.Injective (originalWireMap decomposition) ∧
       Function.Surjective (originalWireMap decomposition) := by
   constructor
@@ -602,14 +602,14 @@ private theorem originalWireMap_bijective
       exact decomposition.frameDomains.wires.origin_index wire hsurvives
 
 private noncomputable def originalWireEquiv
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     FiniteEquiv (Fin (plugOriginalFragment decomposition).wireCount)
       (Fin host.val.wireCount) :=
   finiteEquivOfBijective (originalWireMap decomposition)
     (originalWireMap_bijective decomposition)
 
 @[simp] private theorem originalRegionEquiv_frame
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (region : Fin (originalFragmentInput decomposition).frame.val.regionCount) :
     originalRegionEquiv decomposition
         ((originalFragmentInput decomposition).plugLayout.frameRegion region) =
@@ -619,7 +619,7 @@ private noncomputable def originalWireEquiv
   simp [originalRegionMap, Input.PlugLayout.frameRegion]
 
 @[simp] private theorem originalRegionEquiv_material
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (material : (originalFragmentInput decomposition).plugLayout
       |>.materialRegions.Carrier) :
     originalRegionEquiv decomposition
@@ -631,7 +631,7 @@ private noncomputable def originalWireEquiv
   simp [originalRegionMap, Input.PlugLayout.materialRegion]
 
 @[simp] private theorem originalNodeEquiv_frame
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (node : Fin (originalFragmentInput decomposition).frame.val.nodeCount) :
     originalNodeEquiv decomposition
         ((originalFragmentInput decomposition).plugLayout.frameNode node) =
@@ -641,7 +641,7 @@ private noncomputable def originalWireEquiv
   simp [originalNodeMap, Input.PlugLayout.frameNode]
 
 @[simp] private theorem originalNodeEquiv_pattern
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (node : Fin
       (originalFragmentInput decomposition).pattern.val.diagram.nodeCount) :
     originalNodeEquiv decomposition
@@ -652,7 +652,7 @@ private noncomputable def originalWireEquiv
   simp [originalNodeMap, Input.PlugLayout.patternNode]
 
 @[simp] private theorem originalWireEquiv_frame
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (wire : (originalFragmentInput decomposition).wireQuotient.Carrier) :
     originalWireEquiv decomposition
         ((originalFragmentInput decomposition).plugLayout.frameWire wire) =
@@ -663,7 +663,7 @@ private noncomputable def originalWireEquiv
   simp [originalWireMap, Input.PlugLayout.frameWire]
 
 @[simp] private theorem originalWireEquiv_internal
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (wire : (originalFragmentInput decomposition).plugLayout
       |>.internalWires.Carrier) :
     originalWireEquiv decomposition
@@ -675,7 +675,7 @@ private noncomputable def originalWireEquiv
   simp [originalWireMap, Input.PlugLayout.internalWire]
 
 private theorem originalRegion_frame_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (region : Fin (originalFragmentInput decomposition).frame.val.regionCount) :
     ((plugOriginalFragment decomposition).regions
         ((originalFragmentInput decomposition).plugLayout.frameRegion region)
@@ -731,7 +731,7 @@ private theorem originalRegion_frame_eq
         hparentSurvives
 
 private theorem selectedRegion_parent_cases
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     {region parent : Fin host.val.regionCount}
     (hselected : region ∈ selection.selectedRegions)
@@ -750,7 +750,7 @@ private theorem selectedRegion_parent_cases
       ⟨root, hroot, hrootParent⟩
 
 @[simp] private theorem originalRegionEquiv_site
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     originalRegionEquiv decomposition
         ((originalFragmentInput decomposition).plugLayout.frameRegion
           (originalFragmentInput decomposition).site) =
@@ -762,7 +762,7 @@ private theorem selectedRegion_parent_cases
   exact decomposition.frameDomains.regions.origin_index _ _
 
 private theorem originalRegionEquiv_fragmentMaterial
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (index : Fin decomposition.extraction.raw.layout.materialRegionCount) :
     originalRegionEquiv decomposition
         ((originalFragmentInput decomposition).plugLayout.bodyRegion
@@ -789,7 +789,7 @@ private theorem originalRegionEquiv_fragmentMaterial
   rw [hindex]
 
 private theorem originalRegionEquiv_fragmentParent
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     {region parent : Fin host.val.regionCount}
     (hselected : region ∈ selection.selectedRegions)
     (hparent : (host.val.regions region).parent? = some parent) :
@@ -812,7 +812,7 @@ private theorem originalRegionEquiv_fragmentParent
     rw [hfragment, originalRegionEquiv_fragmentMaterial, hget]
 
 private theorem root_not_selected
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val) :
     host.val.root ∉ selection.selectedRegions := by
   intro hselected
@@ -825,7 +825,7 @@ private theorem root_not_selected
   contradiction
 
 private theorem originalRegion_material_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (material : (originalFragmentInput decomposition).plugLayout
       |>.materialRegions.Carrier) :
     ((plugOriginalFragment decomposition).regions
@@ -879,7 +879,7 @@ private theorem fin_count_eq_of_equiv
   · exact fin_card_le_of_injective equiv.symm equiv.symm.injective
 
 private theorem original_root_eq
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     originalRegionEquiv decomposition (plugOriginalFragment decomposition).root =
       host.val.root := by
   change originalRegionEquiv decomposition
@@ -891,7 +891,7 @@ private theorem original_root_eq
   exact decomposition.frameDomains.root_origin
 
 private theorem originalRegions_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (region : Fin (plugOriginalFragment decomposition).regionCount) :
     ((plugOriginalFragment decomposition).regions region).rename
         (originalRegionEquiv decomposition) =
@@ -916,7 +916,7 @@ private theorem originalRegions_eq
       originalRegion_material_eq decomposition material
 
 private theorem originalRegionEquiv_fragmentNodeRegion
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (index : Fin decomposition.extraction.raw.layout.nodeCount) :
     originalRegionEquiv decomposition
         ((originalFragmentInput decomposition).plugLayout.bodyRegion
@@ -944,7 +944,7 @@ private theorem originalRegionEquiv_fragmentNodeRegion
     rw [hfragment, originalRegionEquiv_fragmentMaterial, hget]
 
 private theorem originalRegionEquiv_fragmentBinder
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (index : Fin decomposition.extraction.raw.layout.nodeCount)
     {region binder : Fin host.val.regionCount}
     (hnode : host.val.nodes (selection.selectedNodes.get index) =
@@ -994,7 +994,7 @@ private theorem originalRegionEquiv_fragmentBinder
     rw [decomposition.frameDomains.regions.origin_index, hget]
 
 private theorem originalNode_frame_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (node : Fin (originalFragmentInput decomposition).frame.val.nodeCount) :
     ((plugOriginalFragment decomposition).nodes
         ((originalFragmentInput decomposition).plugLayout.frameNode node)
@@ -1057,22 +1057,8 @@ private theorem originalNode_frame_eq
         decomposition.frameDomains.regions.origin_index region hregion',
         originalRegionEquiv_frame,
         decomposition.frameDomains.regions.origin_index binder hbinder]
-  | named region definition arity =>
-      have hregion := decomposition.frameDomains.nodeRegion_survives
-        (decomposition.frameDomains.nodes.origin_survives node)
-      have hregion' : decomposition.frameDomains.regions.survives region = true := by
-        simpa only [decomposition.frameDomains.nodes.origin_eq_enumeration_get,
-          hkind, CNode.region] using hregion
-      rw [hkind] at hreindexed
-      simp only [SurvivorDomain.reindexNode?] at hreindexed
-      rw [decomposition.frameDomains.regions.index?_index region hregion'] at hreindexed
-      have hframe := Option.some.inj hreindexed
-      rw [← hframe]
-      simp [Input.PlugLayout.mapFrameNode, CNode.rename]
-      exact decomposition.frameDomains.regions.origin_index region hregion'
-
 private theorem originalNode_pattern_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (index : Fin (originalFragmentInput decomposition).pattern.val.diagram.nodeCount) :
     ((plugOriginalFragment decomposition).nodes
         ((originalFragmentInput decomposition).plugLayout.patternNode index)
@@ -1102,16 +1088,8 @@ private theorem originalNode_pattern_eq
       simp [Input.PlugLayout.mapPatternNode, CNode.rename,
         howner,
         originalRegionEquiv_fragmentBinder decomposition index hkind, hkind]
-  | named region definition arity =>
-      have howner := originalRegionEquiv_fragmentNodeRegion decomposition index
-      simp only [hkind, CNode.region] at howner
-      rw [host.val.extractDiagramRaw_node_named selection
-        decomposition.extraction.raw.layout index region definition arity hkind]
-      simp [Input.PlugLayout.mapPatternNode, CNode.rename,
-        howner, hkind]
-
 private theorem originalNodes_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (node : Fin (plugOriginalFragment decomposition).nodeCount) :
     ((plugOriginalFragment decomposition).nodes node |>.rename
         (originalRegionEquiv decomposition)) =
@@ -1136,7 +1114,7 @@ private theorem originalNodes_eq
       originalNode_pattern_eq decomposition selected
 
 private theorem originalQuotientWire_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier) :
     (originalFragmentInput decomposition).quotientWire
         (originalQuotientWireEquiv decomposition quotient) = quotient := by
@@ -1161,7 +1139,7 @@ private theorem originalQuotientWire_eq
   simpa only [Input.quotientWire, originalQuotientWireEquiv] using hclass
 
 private theorem originalClassWire_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier)
     (wire : Fin (originalFragmentInput decomposition).frame.val.wireCount)
     (hmember : wire ∈
@@ -1173,7 +1151,7 @@ private theorem originalClassWire_eq
       hmember |>.trans (originalQuotientWire_eq decomposition quotient).symm
 
 private theorem originalClassWires_eq_singleton
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier) :
     (originalFragmentInput decomposition).classWires quotient =
       [originalQuotientWireEquiv decomposition quotient] := by
@@ -1202,7 +1180,7 @@ private theorem originalClassWires_eq_singleton
           simp at hnodup
 
 theorem originalCoalescedScope_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier) :
     (originalFragmentInput decomposition).coalescedScope quotient =
       ((originalFragmentInput decomposition).frame.val.wires
@@ -1220,7 +1198,7 @@ theorem originalCoalescedScope_eq
   · rfl
 
 theorem originalCoalescedEndpoints_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier) :
     (originalFragmentInput decomposition).coalescedEndpoints quotient =
       ((originalFragmentInput decomposition).frame.val.wires
@@ -1230,7 +1208,7 @@ theorem originalCoalescedEndpoints_eq
   simp
 
 @[simp] theorem originalQuotientWireEquiv_quotientWire
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (wire : Fin (originalFragmentInput decomposition).frame.val.wireCount) :
     originalQuotientWireEquiv decomposition
         ((originalFragmentInput decomposition).quotientWire wire) = wire := by
@@ -1244,7 +1222,7 @@ theorem originalCoalescedEndpoints_eq
 /-- For an original decomposition the attachment quotient is discrete, so
 coalescing its frame changes only the finite wire carrier. -/
 noncomputable def originalCoalescedFrameIso
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     ConcreteIso
       (originalFragmentInput decomposition).coalesceFrameRaw
       (host.val.removeRaw selection decomposition.frameDomains) where
@@ -1285,7 +1263,7 @@ noncomputable def originalCoalescedFrameIso
 
 /-- The raw removed frame with a caller-selected ordered root boundary. -/
 def originalFrameOpenRaw
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount)) :
     OpenConcreteDiagram where
@@ -1295,7 +1273,7 @@ def originalFrameOpenRaw
 /-- Cancellation of the discrete original quotient at every ordered boundary
 position.  This is list equality, so repeated aliases are retained. -/
 theorem originalCoalescedBoundary_map
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount)) :
     (sourceBoundary.map
@@ -1309,7 +1287,7 @@ theorem originalCoalescedBoundary_map
 
 /-- Ordered-open form of the discrete original coalesced-frame isomorphism. -/
 noncomputable def originalCoalescedFrameOpenIso
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount)) :
     OpenConcreteIso
@@ -1320,7 +1298,7 @@ noncomputable def originalCoalescedFrameOpenIso
   boundary := originalCoalescedBoundary_map decomposition sourceBoundary
 
 private theorem originalRegionEquiv_fragmentInternalScope
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (index : Fin decomposition.extraction.raw.layout.internalWireCount) :
     originalRegionEquiv decomposition
         ((originalFragmentInput decomposition).plugLayout.bodyRegion
@@ -1348,7 +1326,7 @@ private theorem originalRegionEquiv_fragmentInternalScope
       originalRegionEquiv_site]
 
 private theorem originalWire_frame_scope_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier) :
     originalRegionEquiv decomposition
         ((plugOriginalFragment decomposition).wires
@@ -1374,7 +1352,7 @@ private theorem originalWire_frame_scope_eq
     decomposition.frameDomains.regions.origin_index]
 
 private theorem originalWire_internal_scope_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (internal : (originalFragmentInput decomposition).plugLayout
       |>.internalWires.Carrier) :
     originalRegionEquiv decomposition
@@ -1402,7 +1380,7 @@ private theorem originalWire_internal_scope_eq
     (originalInternalWireIndex decomposition internal)
 
 private theorem originalWireScopes_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (wire : Fin (plugOriginalFragment decomposition).wireCount) :
     originalRegionEquiv decomposition
         ((plugOriginalFragment decomposition).wires wire).scope =
@@ -1429,7 +1407,7 @@ private theorem originalWireScopes_eq
       originalWire_internal_scope_eq decomposition internal
 
 private theorem originalFrameEndpoint_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (endpoint : CEndpoint
       (originalFragmentInput decomposition).frame.val.nodeCount) :
     ((originalFragmentInput decomposition).plugLayout.mapFrameEndpoint endpoint
@@ -1443,7 +1421,7 @@ private theorem originalFrameEndpoint_eq
       rw [originalNodeEquiv_frame]
 
 private theorem originalPatternEndpoint_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (endpoint : CEndpoint
       (originalFragmentInput decomposition).pattern.val.diagram.nodeCount) :
     ((originalFragmentInput decomposition).plugLayout.mapPatternEndpoint endpoint
@@ -1456,7 +1434,7 @@ private theorem originalPatternEndpoint_eq
       rw [originalNodeEquiv_pattern]
 
 private theorem originalInternalEndpoint_selected
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (index : Fin decomposition.extraction.raw.layout.internalWireCount)
     (endpoint : CEndpoint host.val.nodeCount)
     (hendpoint : endpoint ∈
@@ -1472,7 +1450,7 @@ private theorem originalInternalEndpoint_selected
   · exact selection.explicitWire_endpoint_selected hexplicit hendpoint
 
 private theorem originalWire_internal_endpoint_mem_iff
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (internal : (originalFragmentInput decomposition).plugLayout
       |>.internalWires.Carrier)
     (endpoint : CEndpoint host.val.nodeCount) :
@@ -1555,7 +1533,7 @@ private theorem originalWire_internal_endpoint_mem_iff
           (indexOf?_sound hnodeIndex)
 
 private theorem originalExposedPosition_sound
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (external : Fin
       (originalFragmentInput decomposition).pattern.val.exposedWires.length) :
     (originalFragmentInput decomposition).pattern.val.exposedWires.get external =
@@ -1578,7 +1556,7 @@ private theorem originalExposedPosition_sound
   simpa only [Input.PlugLayout.exposedPosition, exposed, boundary] using hsound.symm
 
 private theorem originalExposedWire_eq_boundaryWire
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (external : Fin
       (originalFragmentInput decomposition).pattern.val.exposedWires.length) :
     (originalFragmentInput decomposition).pattern.val.exposedWires.get external =
@@ -1596,7 +1574,7 @@ private theorem originalExposedWire_eq_boundaryWire
   rfl
 
 private theorem originalExposedAttachment_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier)
     (external : Fin
       (originalFragmentInput decomposition).pattern.val.exposedWires.length)
@@ -1611,7 +1589,7 @@ private theorem originalExposedAttachment_eq
   exact hattachment.trans (originalQuotientWire_eq decomposition quotient).symm
 
 private theorem originalExposedHostWire_eq
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier)
     (external : Fin
       (originalFragmentInput decomposition).pattern.val.exposedWires.length)
@@ -1635,7 +1613,7 @@ private theorem originalExposedHostWire_eq
   simpa only [originalAttachment, SurvivorDomain.origin_index] using horigin
 
 private theorem originalWire_frame_endpoint_forward
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier)
     (endpoint : CEndpoint host.val.nodeCount)
     (hmember : endpoint ∈ (((plugOriginalFragment decomposition).wires
@@ -1706,7 +1684,7 @@ private theorem originalWire_frame_endpoint_forward
     exact horiginalTarget
 
 private theorem originalWire_frame_endpoint_backward
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier)
     (endpoint : CEndpoint host.val.nodeCount)
     (hmember : endpoint ∈ (host.val.wires
@@ -1860,7 +1838,7 @@ private theorem originalWire_frame_endpoint_backward
       hreindex).symm
 
 private theorem originalWire_frame_endpoint_mem_iff
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier)
     (endpoint : CEndpoint host.val.nodeCount) :
     endpoint ∈ (((plugOriginalFragment decomposition).wires
@@ -1887,7 +1865,7 @@ private theorem perm_of_nodup_and_mem_iff
     simp [hvalue, hotherValue]
 
 private theorem originalRenamedEndpoints_nodup
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (wire : Fin (plugOriginalFragment decomposition).wireCount) :
     (((plugOriginalFragment decomposition).wires wire).endpoints.map
       (CEndpoint.rename (originalNodeEquiv decomposition))).Nodup := by
@@ -1901,7 +1879,7 @@ private theorem originalRenamedEndpoints_nodup
     |>.plugRaw_endpoints_are_nodup wire
 
 private theorem originalWire_frame_endpoints_perm
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier) :
     (((plugOriginalFragment decomposition).wires
         ((originalFragmentInput decomposition).plugLayout.frameWire quotient)
@@ -1915,7 +1893,7 @@ private theorem originalWire_frame_endpoints_perm
   · exact originalWire_frame_endpoint_mem_iff decomposition quotient
 
 private theorem originalWire_internal_endpoints_perm
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (internal : (originalFragmentInput decomposition).plugLayout
       |>.internalWires.Carrier) :
     (((plugOriginalFragment decomposition).wires
@@ -1930,7 +1908,7 @@ private theorem originalWire_internal_endpoints_perm
   · exact originalWire_internal_endpoint_mem_iff decomposition internal
 
 private theorem originalWireEndpoints_perm
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (wire : Fin (plugOriginalFragment decomposition).wireCount) :
     (((plugOriginalFragment decomposition).wires wire).endpoints.map
       (CEndpoint.rename (originalNodeEquiv decomposition))).Perm
@@ -1959,7 +1937,7 @@ private theorem originalWireEndpoints_perm
 /-- Removing a checked selection and then canonically plugging its extracted
 fragment back reconstructs the original concrete diagram up to finite renaming. -/
 noncomputable def reassemble_original_iso
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     ConcreteIso (plugOriginalFragment decomposition) host.val where
   regionCount_eq := fin_count_eq_of_equiv (originalRegionEquiv decomposition)
   nodeCount_eq := fin_count_eq_of_equiv (originalNodeEquiv decomposition)
@@ -1974,7 +1952,7 @@ noncomputable def reassemble_original_iso
   wire_endpoints_perm := originalWireEndpoints_perm decomposition
 
 @[simp] theorem reassemble_original_iso_frameWire
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (quotient : (originalFragmentInput decomposition).wireQuotient.Carrier) :
     (reassemble_original_iso decomposition).wires
         ((originalFragmentInput decomposition).plugLayout.frameWire quotient) =
@@ -1983,7 +1961,7 @@ noncomputable def reassemble_original_iso
   originalWireEquiv_frame decomposition quotient
 
 theorem touchingWire_scope_encloses_anchor
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (index : Fin selection.touchingWires.length) :
     host.val.Encloses
@@ -2023,7 +2001,7 @@ theorem touchingWire_scope_encloses_anchor
 splice side condition: touching wires are visible and external binders retain
 their distinct matching bubbles above the anchor. -/
 theorem originalFragmentInput_admissible
-    (decomposition : Decomposition signature host selection) :
+    (decomposition : Decomposition  host selection) :
     (originalFragmentInput decomposition).Admissible where
   attachments_visible := by
     intro position
@@ -2104,17 +2082,17 @@ theorem originalFragmentInput_admissible
 /-- Canonical raw reassembly is well formed without relying on the executable
 checker as an oracle. -/
 theorem plugOriginalFragment_wellFormed
-    (decomposition : Decomposition signature host selection) :
-    (plugOriginalFragment decomposition).WellFormed signature :=
-  Input.PlugLayout.plugRaw_wellFormed signature
+    (decomposition : Decomposition  host selection) :
+    (plugOriginalFragment decomposition).WellFormed  :=
+  Input.PlugLayout.plugRaw_wellFormed
     (originalFragmentInput decomposition)
     (originalFragmentInput decomposition).plugLayout
     (originalFragmentInput_admissible decomposition)
 
 /-- Hence the executable checked splice accepts every canonical reassembly. -/
 theorem reassemble_original_checked_complete
-    (decomposition : Decomposition signature host selection) :
-    ∃ result, Input.spliceChecked signature
+    (decomposition : Decomposition  host selection) :
+    ∃ result, Input.spliceChecked
       (originalFragmentInput decomposition) = .ok result :=
   (originalFragmentInput decomposition).spliceChecked_complete
     (originalFragmentInput_admissible decomposition)
@@ -2122,9 +2100,9 @@ theorem reassemble_original_checked_complete
 /-- A successful executable check of the canonical reassembly returns exactly
 the raw diagram used by the inverse construction. -/
 theorem reassemble_original_checked_value
-    (decomposition : Decomposition signature host selection)
-    {result : CheckedDiagram signature}
-    (hsplice : Input.spliceChecked signature
+    (decomposition : Decomposition  host selection)
+    {result : CheckedDiagram }
+    (hsplice : Input.spliceChecked
       (originalFragmentInput decomposition) = .ok result) :
     result.val = plugOriginalFragment decomposition := by
   exact (Input.spliceChecked_sound hsplice).1
@@ -2132,9 +2110,9 @@ theorem reassemble_original_checked_value
 /-- The checked result of canonical reassembly inherits the structural inverse
 witness, with the executable check's preservation equation discharged. -/
 noncomputable def reassemble_original_checked_iso
-    (decomposition : Decomposition signature host selection)
-    {result : CheckedDiagram signature}
-    (hsplice : Input.spliceChecked signature
+    (decomposition : Decomposition  host selection)
+    {result : CheckedDiagram }
+    (hsplice : Input.spliceChecked
       (originalFragmentInput decomposition) = .ok result) :
     ConcreteIso result.val host.val := by
   rw [reassemble_original_checked_value decomposition hsplice]
@@ -2142,35 +2120,35 @@ noncomputable def reassemble_original_checked_iso
 
 /-- Structural reassembly preserves closed concrete denotation. -/
 theorem plugOriginalFragment_denote_iff
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
+    :
     (plugOriginalFragment decomposition).denote
-        (plugOriginalFragment_wellFormed decomposition) model named ↔
-      host.val.denote host.property model named :=
+        (plugOriginalFragment_wellFormed decomposition) model  ↔
+      host.val.denote host.property model  :=
   (reassemble_original_iso decomposition).denote_iff
-    (plugOriginalFragment_wellFormed decomposition) host.property model named
+    (plugOriginalFragment_wellFormed decomposition) host.property model
 
 /-- Consequently, any successful checked canonical reassembly has exactly the
 same denotation as the original checked host. -/
 theorem reassemble_original_checked_denote_iff
-    (decomposition : Decomposition signature host selection)
-    {result : CheckedDiagram signature}
-    (hsplice : Input.spliceChecked signature
+    (decomposition : Decomposition  host selection)
+    {result : CheckedDiagram }
+    (hsplice : Input.spliceChecked
       (originalFragmentInput decomposition) = .ok result)
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
-    result.denote model named ↔ host.denote model named := by
-  change result.val.denote result.property model named ↔
-    host.val.denote host.property model named
+    :
+    result.denote model  ↔ host.denote model  := by
+  change result.val.denote result.property model  ↔
+    host.val.denote host.property model
   exact (reassemble_original_checked_iso decomposition hsplice).denote_iff
-    result.property host.property model named
+    result.property host.property model
 
 /-- Direct ordered host view of a canonical reassembly.  Its boundary is the
 retained-wire origin of each frame position, so order and aliases are retained
 without passing through the proof-dependent checked result. -/
 def reassembleCanonicalHostOpenRaw
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount)) :
     OpenConcreteDiagram where
@@ -2180,7 +2158,7 @@ def reassembleCanonicalHostOpenRaw
 /-- Canonical raw reassembly is an ordered-open isomorphism to the direct host
 view. -/
 noncomputable def reassemble_original_output_open_iso
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount)) :
     OpenConcreteIso
@@ -2219,14 +2197,14 @@ noncomputable def reassemble_original_output_open_iso
         rw [hhead, ih]
 
 theorem reassembleCanonicalHostOpenRaw_wellFormed
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       ((originalFragmentInput decomposition).frame.val.wires wire).scope =
         (originalFragmentInput decomposition).frame.val.root) :
     (reassembleCanonicalHostOpenRaw decomposition sourceBoundary).WellFormed
-      signature :=
+       :=
   (reassemble_original_output_open_iso decomposition sourceBoundary)
     |>.wellFormed_transport
       (Input.PlugLayout.outputOpenRoot_wellFormed
@@ -2236,13 +2214,13 @@ theorem reassembleCanonicalHostOpenRaw_wellFormed
         sourceBoundary sourceRoot)
 
 noncomputable def reassembleCanonicalHostOpen
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       ((originalFragmentInput decomposition).frame.val.wires wire).scope =
         (originalFragmentInput decomposition).frame.val.root) :
-    CheckedOpenDiagram signature :=
+    CheckedOpenDiagram  :=
   ⟨reassembleCanonicalHostOpenRaw decomposition sourceBoundary,
     reassembleCanonicalHostOpenRaw_wellFormed decomposition sourceBoundary
       sourceRoot⟩
@@ -2251,25 +2229,24 @@ noncomputable def reassembleCanonicalHostOpen
 direct ordered survivor boundary.  This statement is independent of the
 proof-dependent `CheckedDiagram` returned by `spliceChecked`. -/
 theorem reassemble_original_output_open_denotation_iff
-    (decomposition : Decomposition signature host selection)
+    (decomposition : Decomposition  host selection)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       ((originalFragmentInput decomposition).frame.val.wires wire).scope =
         (originalFragmentInput decomposition).frame.val.root)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Input.PlugLayout.outputOpenRoot (originalFragmentInput decomposition)
         (originalFragmentInput decomposition).plugLayout
         sourceBoundary).boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (Input.PlugLayout.checkedOutputOpenRoot
           (originalFragmentInput decomposition)
           (originalFragmentInput decomposition).plugLayout
           (originalFragmentInput_admissible decomposition)
           sourceBoundary sourceRoot).elaborate args ↔
-      denoteOpen model named
+      denoteOpen model
         (reassembleCanonicalHostOpen decomposition sourceBoundary
           sourceRoot).elaborate
         (args ∘ Fin.cast
@@ -2283,15 +2260,15 @@ theorem reassemble_original_output_open_denotation_iff
         (originalFragmentInput_admissible decomposition)
         sourceBoundary sourceRoot)
       (reassembleCanonicalHostOpenRaw_wellFormed decomposition sourceBoundary
-        sourceRoot) model named args
+        sourceRoot) model  args
 
 /-- The intrinsic source compiled for canonical reassembly denotes the direct
 original-host open view.  Both finite transports are determined by ordered
 boundary equalities, so repeated boundary positions are preserved. -/
 theorem reassemble_original_source_open_denotation_iff_direct
-    (decomposition : Decomposition signature host selection)
-    {result : CheckedDiagram signature}
-    (hsplice : Input.spliceChecked signature
+    (decomposition : Decomposition  host selection)
+    {result : CheckedDiagram }
+    (hsplice : Input.spliceChecked
       (originalFragmentInput decomposition) = .ok result)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount))
@@ -2299,7 +2276,6 @@ theorem reassemble_original_source_open_denotation_iff_direct
       ((originalFragmentInput decomposition).frame.val.wires wire).scope =
         (originalFragmentInput decomposition).frame.val.root)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Input.PlugLayout.checkedCoalescedOpenRoot
         (originalFragmentInput decomposition)
@@ -2319,10 +2295,10 @@ theorem reassemble_original_source_open_denotation_iff_direct
         Input.PlugLayout.checkedOutputOpenRoot,
         Input.PlugLayout.coalescedOpenRoot,
         Input.PlugLayout.outputOpenRoot]
-    denoteOpen model named
+    denoteOpen model
         (Input.compiledSpliceSourceOpen (originalFragmentInput decomposition)
           hsplice sourceBoundary sourceRoot) args ↔
-      denoteOpen model named
+      denoteOpen model
         (reassembleCanonicalHostOpen decomposition sourceBoundary
           sourceRoot).elaborate
         ((args ∘ Fin.cast arityEq.symm) ∘ Fin.cast
@@ -2345,19 +2321,19 @@ theorem reassemble_original_source_open_denotation_iff_direct
       Input.PlugLayout.outputOpenRoot]
   have hmain := Input.spliceChecked_open_denotation_iff
     (originalFragmentInput decomposition) hsplice sourceBoundary sourceRoot
-    model named args
+    model  args
   dsimp only at hmain
   rw [denoteOpen_castArity] at hmain
   exact hmain.trans
     (reassemble_original_output_open_denotation_iff decomposition
-      sourceBoundary sourceRoot model named (args ∘ Fin.cast arityEq.symm))
+      sourceBoundary sourceRoot model  (args ∘ Fin.cast arityEq.symm))
 
 /-- Map the ordered open boundary of a checked canonical reassembly onto the
 original host.  `List.map` retains order and repeated boundary positions. -/
 noncomputable def reassembleOriginalHostOpenRaw
-    (decomposition : Decomposition signature host selection)
-    {result : CheckedDiagram signature}
-    (hsplice : Input.spliceChecked signature
+    (decomposition : Decomposition  host selection)
+    {result : CheckedDiagram }
+    (hsplice : Input.spliceChecked
       (originalFragmentInput decomposition) = .ok result)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount)) :
@@ -2371,9 +2347,9 @@ noncomputable def reassembleOriginalHostOpenRaw
 /-- Canonical reassembly is an ordered-open concrete isomorphism to the
 original host, including when the caller repeats a boundary position. -/
 noncomputable def reassemble_original_result_open_iso
-    (decomposition : Decomposition signature host selection)
-    {result : CheckedDiagram signature}
-    (hsplice : Input.spliceChecked signature
+    (decomposition : Decomposition  host selection)
+    {result : CheckedDiagram }
+    (hsplice : Input.spliceChecked
       (originalFragmentInput decomposition) = .ok result)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount)) :
@@ -2386,9 +2362,9 @@ noncomputable def reassemble_original_result_open_iso
 
 /-- The ordered host view induced by a canonical reassembly is well formed. -/
 theorem reassembleOriginalHostOpenRaw_wellFormed
-    (decomposition : Decomposition signature host selection)
-    {result : CheckedDiagram signature}
-    (hsplice : Input.spliceChecked signature
+    (decomposition : Decomposition  host selection)
+    {result : CheckedDiagram }
+    (hsplice : Input.spliceChecked
       (originalFragmentInput decomposition) = .ok result)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount))
@@ -2396,7 +2372,7 @@ theorem reassembleOriginalHostOpenRaw_wellFormed
       ((originalFragmentInput decomposition).frame.val.wires wire).scope =
         (originalFragmentInput decomposition).frame.val.root) :
     (reassembleOriginalHostOpenRaw decomposition hsplice
-      sourceBoundary).WellFormed signature :=
+      sourceBoundary).WellFormed  :=
   (reassemble_original_result_open_iso decomposition hsplice sourceBoundary)
     |>.wellFormed_transport
       (Input.spliceCheckedResultOpenRaw_wellFormed
@@ -2405,16 +2381,16 @@ theorem reassembleOriginalHostOpenRaw_wellFormed
 /-- Checked ordered-open view of the original host induced by the boundary of
 a successful canonical reassembly. -/
 noncomputable def reassembleOriginalHostOpen
-    (decomposition : Decomposition signature host selection)
-    {result : CheckedDiagram signature}
-    (hsplice : Input.spliceChecked signature
+    (decomposition : Decomposition  host selection)
+    {result : CheckedDiagram }
+    (hsplice : Input.spliceChecked
       (originalFragmentInput decomposition) = .ok result)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       ((originalFragmentInput decomposition).frame.val.wires wire).scope =
         (originalFragmentInput decomposition).frame.val.root) :
-    CheckedOpenDiagram signature :=
+    CheckedOpenDiagram  :=
   ⟨reassembleOriginalHostOpenRaw decomposition hsplice sourceBoundary,
     reassembleOriginalHostOpenRaw_wellFormed decomposition hsplice
       sourceBoundary sourceRoot⟩
@@ -2422,9 +2398,9 @@ noncomputable def reassembleOriginalHostOpen
 /-- Ordered-open denotation of the actual checked canonical reassembly is
 exactly the denotation of the corresponding original-host view. -/
 theorem reassemble_original_result_open_denotation_iff
-    (decomposition : Decomposition signature host selection)
-    {result : CheckedDiagram signature}
-    (hsplice : Input.spliceChecked signature
+    (decomposition : Decomposition  host selection)
+    {result : CheckedDiagram }
+    (hsplice : Input.spliceChecked
       (originalFragmentInput decomposition) = .ok result)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount))
@@ -2432,7 +2408,6 @@ theorem reassemble_original_result_open_denotation_iff
       ((originalFragmentInput decomposition).frame.val.wires wire).scope =
         (originalFragmentInput decomposition).frame.val.root)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Input.spliceCheckedResultOpenRaw (originalFragmentInput decomposition)
         hsplice sourceBoundary).boundary.length → model.Carrier) :
@@ -2440,8 +2415,8 @@ theorem reassemble_original_result_open_denotation_iff
       (originalFragmentInput decomposition) hsplice sourceBoundary sourceRoot
     let hostOpen := reassembleOriginalHostOpen decomposition hsplice
       sourceBoundary sourceRoot
-    denoteOpen model named resultOpen.elaborate args ↔
-      denoteOpen model named hostOpen.elaborate
+    denoteOpen model  resultOpen.elaborate args ↔
+      denoteOpen model  hostOpen.elaborate
         (args ∘ Fin.cast
           (reassemble_original_result_open_iso decomposition hsplice
             sourceBoundary).boundary_length_eq.symm) := by
@@ -2451,15 +2426,15 @@ theorem reassemble_original_result_open_denotation_iff
     (Input.spliceCheckedResultOpenRaw_wellFormed
       (originalFragmentInput decomposition) hsplice sourceBoundary sourceRoot)
     (reassembleOriginalHostOpenRaw_wellFormed decomposition hsplice
-      sourceBoundary sourceRoot) model named args
+      sourceBoundary sourceRoot) model  args
 
 /-- The all-site splice source for canonical reassembly denotes the original
 host at the induced ordered boundary.  This composes the executable splice
 compiler theorem with the decomposition/reassembly inverse. -/
 theorem reassemble_original_source_open_denotation_iff
-    (decomposition : Decomposition signature host selection)
-    {result : CheckedDiagram signature}
-    (hsplice : Input.spliceChecked signature
+    (decomposition : Decomposition  host selection)
+    {result : CheckedDiagram }
+    (hsplice : Input.spliceChecked
       (originalFragmentInput decomposition) = .ok result)
     (sourceBoundary : List
       (Fin (originalFragmentInput decomposition).frame.val.wireCount))
@@ -2467,7 +2442,6 @@ theorem reassemble_original_source_open_denotation_iff
       ((originalFragmentInput decomposition).frame.val.wires wire).scope =
         (originalFragmentInput decomposition).frame.val.root)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Input.PlugLayout.checkedCoalescedOpenRoot
         (originalFragmentInput decomposition)
@@ -2486,10 +2460,10 @@ theorem reassemble_original_source_open_denotation_iff
         Input.spliceCheckedResultOpenRaw]
       simp [Input.PlugLayout.checkedCoalescedOpenRoot,
         Input.PlugLayout.coalescedOpenRoot, Input.PlugLayout.outputOpenRoot]
-    denoteOpen model named
+    denoteOpen model
         (Input.compiledSpliceSourceOpen (originalFragmentInput decomposition)
           hsplice sourceBoundary sourceRoot) args ↔
-      denoteOpen model named hostOpen.elaborate
+      denoteOpen model  hostOpen.elaborate
         ((args ∘ Fin.cast arityEq.symm) ∘ Fin.cast
           (reassemble_original_result_open_iso decomposition hsplice
             sourceBoundary).boundary_length_eq.symm) := by
@@ -2507,12 +2481,12 @@ theorem reassemble_original_source_open_denotation_iff
       Input.PlugLayout.coalescedOpenRoot, Input.PlugLayout.outputOpenRoot]
   have hspliceDenotation := Input.spliceChecked_result_open_denotation_iff
     (originalFragmentInput decomposition) hsplice sourceBoundary sourceRoot
-    model named args
+    model  args
   dsimp only at hspliceDenotation
   rw [denoteOpen_castArity] at hspliceDenotation
   exact hspliceDenotation.trans
     (reassemble_original_result_open_denotation_iff decomposition hsplice
-      sourceBoundary sourceRoot model named (args ∘ Fin.cast arityEq.symm))
+      sourceBoundary sourceRoot model  (args ∘ Fin.cast arityEq.symm))
 
 end Decomposition
 

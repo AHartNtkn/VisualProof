@@ -20,24 +20,22 @@ theorem spawnNodeRaw_finishRegion_site_projects
     (embedding : SpawnContextEmbedding input node scope portCount port
       source target)
     (targetNodup : (target.extend scope).Nodup)
-    (sourceItems : ItemSeq signature (source.extend scope).length rels)
-    (targetItems : ItemSeq signature (target.extend scope).length rels)
+    (sourceItems : ItemSeq  (source.extend scope).length rels)
+    (targetItems : ItemSeq  (target.extend scope).length rels)
     (hproject : ∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (rawEnv : Fin (target.extend scope).length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
-      denoteItemSeq model named rawEnv relEnv targetItems →
-        denoteItemSeq model named rawEnv relEnv
+      denoteItemSeq model  rawEnv relEnv targetItems →
+        denoteItemSeq model  rawEnv relEnv
           (sourceItems.renameWires (embedding.extend scope).index))
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin target.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
-    denoteRegion model named outerEnv relEnv
+    denoteRegion model  outerEnv relEnv
         (ConcreteElaboration.finishRegion
           (spawnNodeRaw input node scope portCount port) target scope
           targetItems) →
-      denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+      denoteRegion model  (outerEnv ∘ embedding.index) relEnv
         (ConcreteElaboration.finishRegion input source scope sourceItems) := by
   unfold ConcreteElaboration.finishRegion
   simp only [denoteRegion_mk]
@@ -52,16 +50,16 @@ theorem spawnNodeRaw_finishRegion_site_projects
         (Fin.castAdd portCount localWire))
   refine ⟨restrictedLocal, ?_⟩
   rw [ItemSeq.castWiresEq_eq_renameWires] at htarget ⊢
-  have htargetRaw := (denoteItemSeq_renameWires model named
+  have htargetRaw := (denoteItemSeq_renameWires model
     (Fin.cast (ConcreteElaboration.WireContext.length_extend target scope))
     (extendWireEnv outerEnv localEnv) relEnv targetItems).1 htarget
-  have holdRenamed := hproject model named _ relEnv htargetRaw
-  have holdRaw := (denoteItemSeq_renameWires model named
+  have holdRenamed := hproject model  _ relEnv htargetRaw
+  have holdRaw := (denoteItemSeq_renameWires model
     (embedding.extend scope).index
     ((extendWireEnv outerEnv localEnv) ∘
       Fin.cast (ConcreteElaboration.WireContext.length_extend target scope))
     relEnv sourceItems).1 holdRenamed
-  apply (denoteItemSeq_renameWires model named
+  apply (denoteItemSeq_renameWires model
     (Fin.cast (ConcreteElaboration.WireContext.length_extend source scope))
     (extendWireEnv (outerEnv ∘ embedding.index) restrictedLocal)
     relEnv sourceItems).2
@@ -160,10 +158,9 @@ theorem spawnNodeRaw_finishRegion_site_reflects
     (embedding : SpawnContextEmbedding input node scope portCount port
       source target)
     (targetNodup : (target.extend scope).Nodup)
-    (sourceItems : ItemSeq signature (source.extend scope).length rels)
-    (targetItems : ItemSeq signature (target.extend scope).length rels)
+    (sourceItems : ItemSeq  (source.extend scope).length rels)
+    (targetItems : ItemSeq  (target.extend scope).length rels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin target.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
     (freshValues : Fin portCount → model.Carrier)
@@ -171,12 +168,12 @@ theorem spawnNodeRaw_finishRegion_site_reflects
       (∀ fresh : Fin portCount,
         rawEnv (spawnNodeRaw_freshExtendedIndex input node scope portCount port
           target fresh) = freshValues fresh) →
-      denoteItemSeq model named rawEnv relEnv
+      denoteItemSeq model  rawEnv relEnv
           (sourceItems.renameWires (embedding.extend scope).index) →
-        denoteItemSeq model named rawEnv relEnv targetItems) :
-    denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+        denoteItemSeq model  rawEnv relEnv targetItems) :
+    denoteRegion model  (outerEnv ∘ embedding.index) relEnv
         (ConcreteElaboration.finishRegion input source scope sourceItems) →
-      denoteRegion model named outerEnv relEnv
+      denoteRegion model  outerEnv relEnv
         (ConcreteElaboration.finishRegion
           (spawnNodeRaw input node scope portCount port) target scope
           targetItems) := by
@@ -192,7 +189,7 @@ theorem spawnNodeRaw_finishRegion_site_reflects
           portCount port) index)
   refine ⟨targetLocal, ?_⟩
   rw [ItemSeq.castWiresEq_eq_renameWires] at hsource ⊢
-  have hsourceRaw := (denoteItemSeq_renameWires model named
+  have hsourceRaw := (denoteItemSeq_renameWires model
     (Fin.cast (ConcreteElaboration.WireContext.length_extend source scope))
     (extendWireEnv (outerEnv ∘ embedding.index) sourceLocal) relEnv
     sourceItems).1 hsource
@@ -218,12 +215,12 @@ theorem spawnNodeRaw_finishRegion_site_reflects
       Fin.cast (ConcreteElaboration.WireContext.length_extend source scope)) := by
     rw [hindex]
     exact henv
-  have hrenamed := (denoteItemSeq_renameWires model named
+  have hrenamed := (denoteItemSeq_renameWires model
     (embedding.extend scope).index
     ((extendWireEnv outerEnv targetLocal) ∘
       Fin.cast (ConcreteElaboration.WireContext.length_extend target scope))
     relEnv sourceItems).2 ((congrArg
-      (fun current => denoteItemSeq model named current relEnv sourceItems)
+      (fun current => denoteItemSeq model  current relEnv sourceItems)
       henv').mpr hsourceRaw)
   have hfresh : ∀ fresh : Fin portCount,
       ((extendWireEnv outerEnv targetLocal) ∘
@@ -233,7 +230,7 @@ theorem spawnNodeRaw_finishRegion_site_reflects
     intro fresh
     simp [spawnNodeRaw_freshExtendedIndex, extendWireEnv, targetLocal]
   have htargetRaw := hreflect _ hfresh hrenamed
-  exact (denoteItemSeq_renameWires model named
+  exact (denoteItemSeq_renameWires model
     (Fin.cast (ConcreteElaboration.WireContext.length_extend target scope))
     (extendWireEnv outerEnv targetLocal) relEnv targetItems).2 htargetRaw
 
@@ -245,30 +242,28 @@ theorem spawnNodeRaw_finishRoot_site_projects
     (scope : Fin source.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
     (hroot : source.diagram.root = scope)
-    (sourceItems : ItemSeq signature source.rootWires.length [])
-    (targetItems : ItemSeq signature
+    (sourceItems : ItemSeq  source.rootWires.length [])
+    (targetItems : ItemSeq
       (spawnNodeRawOpen source node scope portCount port).rootWires.length [])
     (hproject : ∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (rawEnv : Fin
         (spawnNodeRawOpen source node scope portCount port).rootWires.length →
           model.Carrier),
-      denoteItemSeq (relCtx := []) model named rawEnv PUnit.unit targetItems →
-        denoteItemSeq (relCtx := []) model named rawEnv PUnit.unit
+      denoteItemSeq (relCtx := []) model  rawEnv PUnit.unit targetItems →
+        denoteItemSeq (relCtx := []) model  rawEnv PUnit.unit
           (sourceItems.renameWires
             (spawnNodeRawOpenRootEmbedding source node scope portCount port
               hroot).index))
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin
       (spawnNodeRawOpen source node scope portCount port).exposedWires.length →
         model.Carrier) :
-    denoteRegion (relCtx := []) model named outerEnv PUnit.unit
+    denoteRegion (relCtx := []) model  outerEnv PUnit.unit
         (ConcreteElaboration.finishRoot
           (spawnNodeRawOpen source node scope portCount port).exposedWires
           (spawnNodeRawOpen source node scope portCount port).hiddenWires
           targetItems) →
-      denoteRegion (relCtx := []) model named
+      denoteRegion (relCtx := []) model
         (outerEnv ∘ spawnNodeRawOpenExternalClass source node scope portCount
           port) PUnit.unit
         (ConcreteElaboration.finishRoot source.exposedWires source.hiddenWires
@@ -281,20 +276,20 @@ theorem spawnNodeRaw_finishRoot_site_projects
       (spawnNodeRawOpenHiddenIndex source node scope portCount port hroot hidden)
   refine ⟨restrictedLocal, ?_⟩
   rw [ItemSeq.castWiresEq_eq_renameWires] at htarget ⊢
-  have htargetRaw := (denoteItemSeq_renameWires (relCtx := []) model named
+  have htargetRaw := (denoteItemSeq_renameWires (relCtx := []) model
     (Fin.cast (List.length_append
       (as := (spawnNodeRawOpen source node scope portCount port).exposedWires)
       (bs := (spawnNodeRawOpen source node scope portCount port).hiddenWires)))
     (extendWireEnv outerEnv localEnv) PUnit.unit targetItems).1 htarget
-  have holdRenamed := hproject model named _ htargetRaw
-  have holdRaw := (denoteItemSeq_renameWires (relCtx := []) model named
+  have holdRenamed := hproject model  _ htargetRaw
+  have holdRaw := (denoteItemSeq_renameWires (relCtx := []) model
     (spawnNodeRawOpenRootEmbedding source node scope portCount port hroot).index
     ((extendWireEnv outerEnv localEnv) ∘
       Fin.cast (List.length_append
         (as := (spawnNodeRawOpen source node scope portCount port).exposedWires)
         (bs := (spawnNodeRawOpen source node scope portCount port).hiddenWires)))
     PUnit.unit sourceItems).1 holdRenamed
-  apply (denoteItemSeq_renameWires (relCtx := []) model named
+  apply (denoteItemSeq_renameWires (relCtx := []) model
     (Fin.cast (List.length_append (as := source.exposedWires)
       (bs := source.hiddenWires)))
     (extendWireEnv
@@ -314,7 +309,7 @@ theorem spawnNodeRaw_finishRoot_site_projects
       Fin.cast (List.length_append (as := source.exposedWires)
         (bs := source.hiddenWires))) at henv
   exact (congrArg
-    (fun current => denoteItemSeq (relCtx := []) model named current
+    (fun current => denoteItemSeq (relCtx := []) model  current
       PUnit.unit sourceItems) henv).mp holdRaw
 
 /-- At a non-root spawn the root exposed/hidden split has identical positional
@@ -326,30 +321,28 @@ theorem spawnNodeRaw_finishRoot_away_projects
     (scope : Fin source.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
     (hne : source.diagram.root ≠ scope)
-    (sourceItems : ItemSeq signature source.rootWires.length [])
-    (targetItems : ItemSeq signature
+    (sourceItems : ItemSeq  source.rootWires.length [])
+    (targetItems : ItemSeq
       (spawnNodeRawOpen source node scope portCount port).rootWires.length [])
     (hproject : ∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (rawEnv : Fin
         (spawnNodeRawOpen source node scope portCount port).rootWires.length →
           model.Carrier),
-      denoteItemSeq (relCtx := []) model named rawEnv PUnit.unit targetItems →
-        denoteItemSeq (relCtx := []) model named rawEnv PUnit.unit
+      denoteItemSeq (relCtx := []) model  rawEnv PUnit.unit targetItems →
+        denoteItemSeq (relCtx := []) model  rawEnv PUnit.unit
           (sourceItems.renameWires
             (spawnNodeRawOpenRootEmbeddingAway source node scope portCount port
               hne).index))
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin
       (spawnNodeRawOpen source node scope portCount port).exposedWires.length →
         model.Carrier) :
-    denoteRegion (relCtx := []) model named outerEnv PUnit.unit
+    denoteRegion (relCtx := []) model  outerEnv PUnit.unit
         (ConcreteElaboration.finishRoot
           (spawnNodeRawOpen source node scope portCount port).exposedWires
           (spawnNodeRawOpen source node scope portCount port).hiddenWires
           targetItems) →
-      denoteRegion (relCtx := []) model named
+      denoteRegion (relCtx := []) model
         (outerEnv ∘ spawnNodeRawOpenExternalClass source node scope portCount
           port) PUnit.unit
         (ConcreteElaboration.finishRoot source.exposedWires source.hiddenWires
@@ -366,13 +359,13 @@ theorem spawnNodeRaw_finishRoot_away_projects
     localEnv ∘ Fin.cast hiddenLength.symm
   refine ⟨sourceLocal, ?_⟩
   rw [ItemSeq.castWiresEq_eq_renameWires] at htarget ⊢
-  have htargetRaw := (denoteItemSeq_renameWires (relCtx := []) model named
+  have htargetRaw := (denoteItemSeq_renameWires (relCtx := []) model
     (Fin.cast (List.length_append
       (as := (spawnNodeRawOpen source node scope portCount port).exposedWires)
       (bs := (spawnNodeRawOpen source node scope portCount port).hiddenWires)))
     (extendWireEnv outerEnv localEnv) PUnit.unit targetItems).1 htarget
-  have holdRenamed := hproject model named _ htargetRaw
-  have holdRaw := (denoteItemSeq_renameWires (relCtx := []) model named
+  have holdRenamed := hproject model  _ htargetRaw
+  have holdRaw := (denoteItemSeq_renameWires (relCtx := []) model
     (spawnNodeRawOpenRootEmbeddingAway source node scope portCount port
       hne).index
     ((extendWireEnv outerEnv localEnv) ∘
@@ -380,7 +373,7 @@ theorem spawnNodeRaw_finishRoot_away_projects
         (as := (spawnNodeRawOpen source node scope portCount port).exposedWires)
         (bs := (spawnNodeRawOpen source node scope portCount port).hiddenWires)))
     PUnit.unit sourceItems).1 holdRenamed
-  apply (denoteItemSeq_renameWires (relCtx := []) model named
+  apply (denoteItemSeq_renameWires (relCtx := []) model
     (Fin.cast (List.length_append (as := source.exposedWires)
       (bs := source.hiddenWires)))
     (extendWireEnv
@@ -400,7 +393,7 @@ theorem spawnNodeRaw_finishRoot_away_projects
       Fin.cast (List.length_append (as := source.exposedWires)
         (bs := source.hiddenWires))) at henv
   exact (congrArg
-    (fun current => denoteItemSeq (relCtx := []) model named current
+    (fun current => denoteItemSeq (relCtx := []) model  current
       PUnit.unit sourceItems) henv).mp holdRaw
 
 theorem spawnNodeRaw_finishRoot_away_reflects
@@ -409,30 +402,28 @@ theorem spawnNodeRaw_finishRoot_away_reflects
     (scope : Fin source.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
     (hne : source.diagram.root ≠ scope)
-    (sourceItems : ItemSeq signature source.rootWires.length [])
-    (targetItems : ItemSeq signature
+    (sourceItems : ItemSeq  source.rootWires.length [])
+    (targetItems : ItemSeq
       (spawnNodeRawOpen source node scope portCount port).rootWires.length [])
     (hproject : ∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (rawEnv : Fin
         (spawnNodeRawOpen source node scope portCount port).rootWires.length →
           model.Carrier),
-      denoteItemSeq (relCtx := []) model named rawEnv PUnit.unit
+      denoteItemSeq (relCtx := []) model  rawEnv PUnit.unit
           (sourceItems.renameWires
             (spawnNodeRawOpenRootEmbeddingAway source node scope portCount port
               hne).index) →
-        denoteItemSeq (relCtx := []) model named rawEnv PUnit.unit targetItems)
+        denoteItemSeq (relCtx := []) model  rawEnv PUnit.unit targetItems)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin
       (spawnNodeRawOpen source node scope portCount port).exposedWires.length →
         model.Carrier) :
-    denoteRegion (relCtx := []) model named
+    denoteRegion (relCtx := []) model
         (outerEnv ∘ spawnNodeRawOpenExternalClass source node scope portCount
           port) PUnit.unit
         (ConcreteElaboration.finishRoot source.exposedWires source.hiddenWires
           sourceItems) →
-      denoteRegion (relCtx := []) model named outerEnv PUnit.unit
+      denoteRegion (relCtx := []) model  outerEnv PUnit.unit
         (ConcreteElaboration.finishRoot
           (spawnNodeRawOpen source node scope portCount port).exposedWires
           (spawnNodeRawOpen source node scope portCount port).hiddenWires
@@ -450,7 +441,7 @@ theorem spawnNodeRaw_finishRoot_away_reflects
         model.Carrier := sourceLocal ∘ Fin.cast hiddenLength
   refine ⟨targetLocal, ?_⟩
   rw [ItemSeq.castWiresEq_eq_renameWires] at hsource ⊢
-  have hsourceRaw := (denoteItemSeq_renameWires (relCtx := []) model named
+  have hsourceRaw := (denoteItemSeq_renameWires (relCtx := []) model
     (Fin.cast (List.length_append (as := source.exposedWires)
       (bs := source.hiddenWires)))
     (extendWireEnv
@@ -475,7 +466,7 @@ theorem spawnNodeRaw_finishRoot_away_reflects
         (bs := source.hiddenWires))) at henv
   rw [hlocal] at henv
   rw [← henv] at hsourceRaw
-  have hrenamed := (denoteItemSeq_renameWires (relCtx := []) model named
+  have hrenamed := (denoteItemSeq_renameWires (relCtx := []) model
     (spawnNodeRawOpenRootEmbeddingAway source node scope portCount port
       hne).index
     ((extendWireEnv outerEnv targetLocal) ∘
@@ -483,8 +474,8 @@ theorem spawnNodeRaw_finishRoot_away_reflects
         (as := (spawnNodeRawOpen source node scope portCount port).exposedWires)
         (bs := (spawnNodeRawOpen source node scope portCount port).hiddenWires)))
     PUnit.unit sourceItems).2 hsourceRaw
-  have htargetRaw := hproject model named _ hrenamed
-  exact (denoteItemSeq_renameWires (relCtx := []) model named
+  have htargetRaw := hproject model  _ hrenamed
+  exact (denoteItemSeq_renameWires (relCtx := []) model
     (Fin.cast (List.length_append
       (as := (spawnNodeRawOpen source node scope portCount port).exposedWires)
       (bs := (spawnNodeRawOpen source node scope portCount port).hiddenWires)))
@@ -497,8 +488,8 @@ theorem spawnNodeRaw_compileRegion_site_projects
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (hnode : node.region = scope)
     (fuel : Nat)
     (source : ConcreteElaboration.WireContext input)
@@ -509,19 +500,18 @@ theorem spawnNodeRaw_compileRegion_site_projects
     (binders : ConcreteElaboration.BinderContext input rels)
     (hsourceExact : (source.extend scope).Exact scope)
     (htargetExact : (target.extend scope).Exact scope)
-    (sourceBody : Region signature source.length rels)
-    (targetBody : Region signature target.length rels)
-    (hsourceBody : ConcreteElaboration.compileRegion? signature input
+    (sourceBody : Region  source.length rels)
+    (targetBody : Region  target.length rels)
+    (hsourceBody : ConcreteElaboration.compileRegion?  input
       (fuel + 1) scope source binders = some sourceBody)
-    (htargetBody : ConcreteElaboration.compileRegion? signature
+    (htargetBody : ConcreteElaboration.compileRegion?
       (spawnNodeRaw input node scope portCount port)
       (fuel + 1) scope target binders = some targetBody) :
     ∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin target.length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
-      denoteRegion model named outerEnv relEnv targetBody →
-        denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+      denoteRegion model  outerEnv relEnv targetBody →
+        denoteRegion model  (outerEnv ∘ embedding.index) relEnv
           sourceBody := by
   let sourceNodes :=
     (filterFin fun old => decide ((input.nodes old).region = scope)).map
@@ -548,17 +538,17 @@ theorem spawnNodeRaw_compileRegion_site_projects
       List.map_map]
     rfl
   simp only [ConcreteElaboration.compileRegion?] at hsourceBody htargetBody
-  cases hsourceItemsEq : ConcreteElaboration.compileOccurrencesWith? signature
-      input (ConcreteElaboration.compileRegion? signature input fuel)
+  cases hsourceItemsEq : ConcreteElaboration.compileOccurrencesWith?
+      input (ConcreteElaboration.compileRegion?  input fuel)
       (source.extend scope) binders
       (ConcreteElaboration.localOccurrences input scope) with
   | none => simp [hsourceItemsEq] at hsourceBody
   | some sourceItems =>
     simp [hsourceItemsEq] at hsourceBody
     subst sourceBody
-    cases htargetItemsEq : ConcreteElaboration.compileOccurrencesWith? signature
+    cases htargetItemsEq : ConcreteElaboration.compileOccurrencesWith?
         (spawnNodeRaw input node scope portCount port)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port) fuel)
         (target.extend scope) binders
         (ConcreteElaboration.localOccurrences
@@ -568,9 +558,9 @@ theorem spawnNodeRaw_compileRegion_site_projects
       simp [htargetItemsEq] at htargetBody
       subst targetBody
       have htargetOrdered :
-          ConcreteElaboration.compileOccurrencesWith? signature
+          ConcreteElaboration.compileOccurrencesWith?
               (spawnNodeRaw input node scope portCount port)
-              (ConcreteElaboration.compileRegion? signature
+              (ConcreteElaboration.compileRegion?
                 (spawnNodeRaw input node scope portCount port) fuel)
               (target.extend scope) binders
               (targetNodes ++ (fresh ++ targetChildren)) =
@@ -580,33 +570,33 @@ theorem spawnNodeRaw_compileRegion_site_projects
       obtain ⟨nodeItems, restItems, hnodeItems, hrestItems,
           htargetItems⟩ :=
         ConcreteElaboration.compileOccurrencesWith?_append_split
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (spawnNodeRaw input node scope portCount port) fuel)
           (target.extend scope) binders targetNodes
           (fresh ++ targetChildren) targetItems htargetOrdered
       obtain ⟨freshItems, childItems, hfreshItems, hchildItems,
           hrestItemsEq⟩ :=
         ConcreteElaboration.compileOccurrencesWith?_append_split
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (spawnNodeRaw input node scope portCount port) fuel)
           (target.extend scope) binders fresh targetChildren restItems hrestItems
       have holdCompile :
-          ConcreteElaboration.compileOccurrencesWith? signature
+          ConcreteElaboration.compileOccurrencesWith?
               (spawnNodeRaw input node scope portCount port)
-              (ConcreteElaboration.compileRegion? signature
+              (ConcreteElaboration.compileRegion?
                 (spawnNodeRaw input node scope portCount port) fuel)
               (target.extend scope) binders
               ((ConcreteElaboration.localOccurrences input scope).map
                 (spawnNodeRaw_oldOccurrence input)) =
             some (nodeItems.append childItems) := by
         rw [hsourceOccurrences, List.map_append]
-        change ConcreteElaboration.compileOccurrencesWith? signature
+        change ConcreteElaboration.compileOccurrencesWith?
             (spawnNodeRaw input node scope portCount port)
-            (ConcreteElaboration.compileRegion? signature
+            (ConcreteElaboration.compileRegion?
               (spawnNodeRaw input node scope portCount port) fuel)
             (target.extend scope) binders (targetNodes ++ targetChildren) = _
         exact ConcreteElaboration.compileOccurrencesWith?_append
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (spawnNodeRaw input node scope portCount port) fuel)
           (target.extend scope) binders targetNodes targetChildren nodeItems
           childItems hnodeItems hchildItems
@@ -619,51 +609,50 @@ theorem spawnNodeRaw_compileRegion_site_projects
       have holdItems : nodeItems.append childItems =
           sourceItems.renameWires (embedding.extend scope).index :=
         Option.some.inj holdMap
-      intro model named outerEnv relEnv hdenotes
+      intro model  outerEnv relEnv hdenotes
       refine spawnNodeRaw_finishRegion_site_projects input node scope portCount
         port source target embedding htargetExact.nodup sourceItems targetItems
-        ?_ model named outerEnv relEnv hdenotes
-      intro currentModel currentNamed rawEnv currentRelEnv htargetDenotes
+        ?_ model  outerEnv relEnv hdenotes
+      intro currentModel currentNamed rawEnv htargetDenotes
       rw [htargetItems, hrestItemsEq] at htargetDenotes
       rw [denoteItemSeq_append] at htargetDenotes
       rcases htargetDenotes with ⟨hnodeDenotes, hrestDenotes⟩
       rw [denoteItemSeq_append] at hrestDenotes
       rcases hrestDenotes with ⟨_, hchildDenotes⟩
       rw [← holdItems]
-      exact (denoteItemSeq_append currentModel currentNamed rawEnv currentRelEnv
+      exact (denoteItemSeq_append currentModel currentNamed rawEnv
         nodeItems childItems).2 ⟨hnodeDenotes, hchildDenotes⟩
 
 /-- Successful open-root compilation at a root spawn projects to the source
 open root.  This is distinct from the nested-region kernel because the sole
 compiler uses `finishRoot` and its exposed/hidden partition at the sheet. -/
 theorem spawnNodeRaw_compileRoot_site_projects
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (node : CNode source.val.diagram.regionCount)
     (scope : Fin source.val.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
     (hnode : node.region = scope)
     (hroot : source.val.diagram.root = scope)
     (htarget : (spawnNodeRaw source.val.diagram node scope portCount port).WellFormed
-      signature)
-    (sourceBody : Region signature source.val.exposedWires.length [])
-    (targetBody : Region signature
+      )
+    (sourceBody : Region  source.val.exposedWires.length [])
+    (targetBody : Region
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length
       [])
-    (hsourceBody : ConcreteElaboration.compileRoot? signature
+    (hsourceBody : ConcreteElaboration.compileRoot?
       source.val.diagram source.val.exposedWires source.val.hiddenWires =
         some sourceBody)
-    (htargetBody : ConcreteElaboration.compileRoot? signature
+    (htargetBody : ConcreteElaboration.compileRoot?
       (spawnNodeRaw source.val.diagram node scope portCount port)
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires
       (spawnNodeRawOpen source.val node scope portCount port).hiddenWires =
         some targetBody) :
     ∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
           model.Carrier),
-      denoteRegion (relCtx := []) model named outerEnv PUnit.unit targetBody →
-        denoteRegion (relCtx := []) model named
+      denoteRegion (relCtx := []) model  outerEnv PUnit.unit targetBody →
+        denoteRegion (relCtx := []) model
           (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
             portCount port) PUnit.unit sourceBody := by
   let input := source.val.diagram
@@ -694,15 +683,15 @@ theorem spawnNodeRaw_compileRoot_site_projects
     simp only [input, sourceNodes, sourceChildren, targetNodes,
       targetChildren, fresh, List.map_map]
     rfl
-  change ConcreteElaboration.compileRoot? signature input
+  change ConcreteElaboration.compileRoot?  input
       source.val.exposedWires source.val.hiddenWires = some sourceBody
     at hsourceBody
-  change ConcreteElaboration.compileRoot? signature targetOpen.diagram
+  change ConcreteElaboration.compileRoot?  targetOpen.diagram
       targetOpen.exposedWires targetOpen.hiddenWires = some targetBody
     at htargetBody
   simp only [ConcreteElaboration.compileRoot?] at hsourceBody htargetBody
-  cases hsourceItemsEq : ConcreteElaboration.compileOccurrencesWith? signature
-      input (ConcreteElaboration.compileRegion? signature input input.regionCount)
+  cases hsourceItemsEq : ConcreteElaboration.compileOccurrencesWith?
+      input (ConcreteElaboration.compileRegion?  input input.regionCount)
       (source.val.exposedWires ++ source.val.hiddenWires)
       ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences input input.root) with
@@ -710,9 +699,9 @@ theorem spawnNodeRaw_compileRoot_site_projects
   | some sourceItems =>
     simp [hsourceItemsEq] at hsourceBody
     subst sourceBody
-    cases htargetItemsEq : ConcreteElaboration.compileOccurrencesWith? signature
+    cases htargetItemsEq : ConcreteElaboration.compileOccurrencesWith?
         targetOpen.diagram
-        (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+        (ConcreteElaboration.compileRegion?  targetOpen.diagram
           targetOpen.diagram.regionCount)
         (targetOpen.exposedWires ++ targetOpen.hiddenWires)
         ConcreteElaboration.BinderContext.empty
@@ -723,9 +712,9 @@ theorem spawnNodeRaw_compileRoot_site_projects
       simp [input, targetOpen, htargetItemsEq] at htargetBody
       subst targetBody
       have htargetOrdered :
-          ConcreteElaboration.compileOccurrencesWith? signature
+          ConcreteElaboration.compileOccurrencesWith?
               targetOpen.diagram
-              (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+              (ConcreteElaboration.compileRegion?  targetOpen.diagram
                 input.regionCount)
               targetOpen.rootWires ConcreteElaboration.BinderContext.empty
               (targetNodes ++ (fresh ++ targetChildren)) = some targetItems := by
@@ -734,35 +723,35 @@ theorem spawnNodeRaw_compileRoot_site_projects
       obtain ⟨nodeItems, restItems, hnodeItems, hrestItems,
           htargetItems⟩ :=
         ConcreteElaboration.compileOccurrencesWith?_append_split
-          (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+          (ConcreteElaboration.compileRegion?  targetOpen.diagram
             input.regionCount)
           targetOpen.rootWires ConcreteElaboration.BinderContext.empty
           targetNodes (fresh ++ targetChildren) targetItems htargetOrdered
       obtain ⟨freshItems, childItems, hfreshItems, hchildItems,
           hrestItemsEq⟩ :=
         ConcreteElaboration.compileOccurrencesWith?_append_split
-          (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+          (ConcreteElaboration.compileRegion?  targetOpen.diagram
             input.regionCount)
           targetOpen.rootWires ConcreteElaboration.BinderContext.empty
           fresh targetChildren restItems hrestItems
       have holdCompile :
-          ConcreteElaboration.compileOccurrencesWith? signature
+          ConcreteElaboration.compileOccurrencesWith?
               targetOpen.diagram
-              (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+              (ConcreteElaboration.compileRegion?  targetOpen.diagram
                 input.regionCount)
               targetOpen.rootWires ConcreteElaboration.BinderContext.empty
               ((ConcreteElaboration.localOccurrences input input.root).map
                 (spawnNodeRaw_oldOccurrence input)) =
             some (nodeItems.append childItems) := by
         rw [hsourceOccurrences, List.map_append]
-        change ConcreteElaboration.compileOccurrencesWith? signature
+        change ConcreteElaboration.compileOccurrencesWith?
             targetOpen.diagram
-            (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+            (ConcreteElaboration.compileRegion?  targetOpen.diagram
               input.regionCount)
             targetOpen.rootWires ConcreteElaboration.BinderContext.empty
             (targetNodes ++ targetChildren) = _
         exact ConcreteElaboration.compileOccurrencesWith?_append
-          (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+          (ConcreteElaboration.compileRegion?  targetOpen.diagram
             input.regionCount)
           targetOpen.rootWires ConcreteElaboration.BinderContext.empty
           targetNodes targetChildren nodeItems childItems hnodeItems hchildItems
@@ -776,8 +765,8 @@ theorem spawnNodeRaw_compileRoot_site_projects
         (OpenConcreteDiagram.rootWires_exact targetOpen
           (spawnNodeRawOpen_wellFormed source node scope portCount port htarget))
       have hsourceItemsRoot :
-          ConcreteElaboration.compileOccurrencesWith? signature input
-              (ConcreteElaboration.compileRegion? signature input
+          ConcreteElaboration.compileOccurrencesWith?  input
+              (ConcreteElaboration.compileRegion?  input
                 input.regionCount)
               source.val.rootWires ConcreteElaboration.BinderContext.empty
               (ConcreteElaboration.localOccurrences input input.root) =
@@ -785,9 +774,9 @@ theorem spawnNodeRaw_compileRoot_site_projects
         exact hsourceItemsEq
       rw [hsourceItemsRoot] at holdMap
       have holdCompileRaw :
-          ConcreteElaboration.compileOccurrencesWith? signature
+          ConcreteElaboration.compileOccurrencesWith?
               (spawnNodeRaw input node scope portCount port)
-              (ConcreteElaboration.compileRegion? signature
+              (ConcreteElaboration.compileRegion?
                 (spawnNodeRaw input node scope portCount port)
                 input.regionCount)
               targetOpen.rootWires ConcreteElaboration.BinderContext.empty
@@ -801,11 +790,11 @@ theorem spawnNodeRaw_compileRoot_site_projects
       have holdItems : nodeItems.append childItems =
           sourceItems.renameWires embedding.index := by
         exact Option.some.inj hmapped
-      intro model named outerEnv hdenotes
+      intro model  outerEnv hdenotes
       refine spawnNodeRaw_finishRoot_site_projects source.val node scope
-        portCount port hroot sourceItems targetItems ?_ model named outerEnv
+        portCount port hroot sourceItems targetItems ?_ model  outerEnv
         hdenotes
-      intro currentModel currentNamed rawEnv htargetDenotes
+      intro currentModel currentNamed htargetDenotes
       rw [htargetItems, hrestItemsEq] at htargetDenotes
       rw [denoteItemSeq_append] at htargetDenotes
       rcases htargetDenotes with ⟨hnodeDenotes, hrestDenotes⟩
@@ -817,11 +806,11 @@ theorem spawnNodeRaw_compileRoot_site_projects
               hroot).index := by
         exact holdItems
       have holdDenotes :=
-        (denoteItemSeq_append (relCtx := []) currentModel currentNamed rawEnv
+        (denoteItemSeq_append (relCtx := []) currentModel currentNamed
           PUnit.unit nodeItems childItems).2 ⟨hnodeDenotes, hchildDenotes⟩
       exact (congrArg
         (fun items => denoteItemSeq (relCtx := []) currentModel currentNamed
-          rawEnv PUnit.unit items) holdItemsExplicit).mp holdDenotes
+          PUnit.unit items) holdItemsExplicit).mp holdDenotes
 
 /-- Reverse root-site finishing kernel.  Fresh root-scope wires are hidden,
 so extending the source hidden valuation with caller-chosen witnesses yields
@@ -916,11 +905,10 @@ theorem spawnNodeRaw_finishRoot_site_reflects
     (scope : Fin source.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
     (hroot : source.diagram.root = scope)
-    (sourceItems : ItemSeq signature source.rootWires.length [])
-    (targetItems : ItemSeq signature
+    (sourceItems : ItemSeq  source.rootWires.length [])
+    (targetItems : ItemSeq
       (spawnNodeRawOpen source node scope portCount port).rootWires.length [])
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin
       (spawnNodeRawOpen source node scope portCount port).exposedWires.length →
         model.Carrier)
@@ -931,17 +919,17 @@ theorem spawnNodeRaw_finishRoot_site_reflects
       (∀ fresh : Fin portCount,
         rawEnv (spawnNodeRawOpenFreshRootIndex source node scope portCount port
           hroot fresh) = freshValues fresh) →
-      denoteItemSeq (relCtx := []) model named rawEnv PUnit.unit
+      denoteItemSeq (relCtx := []) model  rawEnv PUnit.unit
           (sourceItems.renameWires
             (spawnNodeRawOpenRootEmbedding source node scope portCount port
               hroot).index) →
-        denoteItemSeq (relCtx := []) model named rawEnv PUnit.unit targetItems) :
-    denoteRegion (relCtx := []) model named
+        denoteItemSeq (relCtx := []) model  rawEnv PUnit.unit targetItems) :
+    denoteRegion (relCtx := []) model
         (outerEnv ∘ spawnNodeRawOpenExternalClass source node scope portCount
           port) PUnit.unit
         (ConcreteElaboration.finishRoot source.exposedWires source.hiddenWires
           sourceItems) →
-      denoteRegion (relCtx := []) model named outerEnv PUnit.unit
+      denoteRegion (relCtx := []) model  outerEnv PUnit.unit
         (ConcreteElaboration.finishRoot
           (spawnNodeRawOpen source node scope portCount port).exposedWires
           (spawnNodeRawOpen source node scope portCount port).hiddenWires
@@ -970,7 +958,7 @@ theorem spawnNodeRaw_finishRoot_site_reflects
     Fin.addCases sourceLocal freshValues (Fin.cast hiddenLength index)
   refine ⟨targetLocal, ?_⟩
   rw [ItemSeq.castWiresEq_eq_renameWires] at hsource ⊢
-  have hsourceRaw := (denoteItemSeq_renameWires (relCtx := []) model named
+  have hsourceRaw := (denoteItemSeq_renameWires (relCtx := []) model
     (Fin.cast (List.length_append (as := source.exposedWires)
       (bs := source.hiddenWires)))
     (extendWireEnv
@@ -997,14 +985,14 @@ theorem spawnNodeRaw_finishRoot_site_reflects
       Fin.cast (List.length_append (as := source.exposedWires)
         (bs := source.hiddenWires))) at henv
   rw [hlocal] at henv
-  have hrenamed := (denoteItemSeq_renameWires (relCtx := []) model named
+  have hrenamed := (denoteItemSeq_renameWires (relCtx := []) model
     (spawnNodeRawOpenRootEmbedding source node scope portCount port hroot).index
     ((extendWireEnv outerEnv targetLocal) ∘
       Fin.cast (List.length_append
         (as := (spawnNodeRawOpen source node scope portCount port).exposedWires)
         (bs := (spawnNodeRawOpen source node scope portCount port).hiddenWires)))
     PUnit.unit sourceItems).2 ((congrArg
-      (fun current => denoteItemSeq (relCtx := []) model named current
+      (fun current => denoteItemSeq (relCtx := []) model  current
         PUnit.unit sourceItems) henv).mpr hsourceRaw)
   have hfresh : ∀ fresh : Fin portCount,
       ((extendWireEnv outerEnv targetLocal) ∘
@@ -1066,7 +1054,7 @@ theorem spawnNodeRaw_finishRoot_site_reflects
     rw [hhiddenCast]
     exact Fin.addCases_right fresh
   have htargetRaw := hreflect _ hfresh hrenamed
-  exact (denoteItemSeq_renameWires (relCtx := []) model named
+  exact (denoteItemSeq_renameWires (relCtx := []) model
     (Fin.cast (List.length_append
       (as := (spawnNodeRawOpen source node scope portCount port).exposedWires)
       (bs := (spawnNodeRawOpen source node scope portCount port).hiddenWires)))
@@ -1078,32 +1066,32 @@ theorem compileOccurrencesWith?_frame_split
       (region : Fin d.regionCount) →
       (context : ConcreteElaboration.WireContext d) →
       ConcreteElaboration.BinderContext d rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (context : ConcreteElaboration.WireContext d)
     (binders : ConcreteElaboration.BinderContext d rels)
     (before after : List (ConcreteElaboration.LocalOccurrence
       d.regionCount d.nodeCount))
     (focus : ConcreteElaboration.LocalOccurrence d.regionCount d.nodeCount)
-    (items : ItemSeq signature context.length rels)
-    (hitems : ConcreteElaboration.compileOccurrencesWith? signature d recurse
+    (items : ItemSeq  context.length rels)
+    (hitems : ConcreteElaboration.compileOccurrencesWith?  d recurse
       context binders (before ++ focus :: after) = some items) :
     ∃ beforeItems focusItem afterItems,
-      ConcreteElaboration.compileOccurrencesWith? signature d recurse context
+      ConcreteElaboration.compileOccurrencesWith?  d recurse context
           binders before = some beforeItems ∧
-      ConcreteElaboration.compileOccurrenceWith? signature d recurse context
+      ConcreteElaboration.compileOccurrenceWith?  d recurse context
           binders focus = some focusItem ∧
-      ConcreteElaboration.compileOccurrencesWith? signature d recurse context
+      ConcreteElaboration.compileOccurrencesWith?  d recurse context
           binders after = some afterItems ∧
       items = beforeItems.append (.cons focusItem afterItems) := by
   obtain ⟨beforeItems, restItems, hbefore, hrest, hitemsEq⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_append_split recurse context
       binders before (focus :: after) items hitems
   simp only [ConcreteElaboration.compileOccurrencesWith?] at hrest
-  cases hfocus : ConcreteElaboration.compileOccurrenceWith? signature d recurse
+  cases hfocus : ConcreteElaboration.compileOccurrenceWith?  d recurse
       context binders focus with
   | none => simp [hfocus] at hrest
   | some focusItem =>
-      cases hafter : ConcreteElaboration.compileOccurrencesWith? signature d
+      cases hafter : ConcreteElaboration.compileOccurrencesWith?  d
           recurse context binders after with
       | none => simp [hfocus, hafter] at hrest
       | some afterItems =>
@@ -1115,32 +1103,30 @@ theorem compileOccurrencesWith?_frame_split
 theorem finishRegion_denote_mono
     (d : ConcreteDiagram) (context : ConcreteElaboration.WireContext d)
     (region : Fin d.regionCount)
-    (sourceItems targetItems : ItemSeq signature
+    (sourceItems targetItems : ItemSeq
       (context.extend region).length rels)
     (hitems : ∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (env : Fin (context.extend region).length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
-      denoteItemSeq model named env relEnv sourceItems →
-        denoteItemSeq model named env relEnv targetItems)
+      denoteItemSeq model  env relEnv sourceItems →
+        denoteItemSeq model  env relEnv targetItems)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
-    denoteRegion model named outerEnv relEnv
+    denoteRegion model  outerEnv relEnv
         (ConcreteElaboration.finishRegion d context region sourceItems) →
-      denoteRegion model named outerEnv relEnv
+      denoteRegion model  outerEnv relEnv
         (ConcreteElaboration.finishRegion d context region targetItems) := by
   unfold ConcreteElaboration.finishRegion
   simp only [denoteRegion_mk]
   rintro ⟨localEnv, hsource⟩
   refine ⟨localEnv, ?_⟩
   rw [ItemSeq.castWiresEq_eq_renameWires] at hsource ⊢
-  have hsourceRaw := (denoteItemSeq_renameWires model named
+  have hsourceRaw := (denoteItemSeq_renameWires model
     (Fin.cast (ConcreteElaboration.WireContext.length_extend context region))
     (extendWireEnv outerEnv localEnv) relEnv sourceItems).1 hsource
-  have htargetRaw := hitems model named _ relEnv hsourceRaw
-  exact (denoteItemSeq_renameWires model named
+  have htargetRaw := hitems model  _ relEnv hsourceRaw
+  exact (denoteItemSeq_renameWires model
     (Fin.cast (ConcreteElaboration.WireContext.length_extend context region))
     (extendWireEnv outerEnv localEnv) relEnv targetItems).2 htargetRaw
 
@@ -1148,7 +1134,6 @@ theorem finishRegion_denote_mono
 introduction discharges it by choosing the fresh output wire's value to be the
 term denotation.  Ordinary polarity-restricted spawning does not need it. -/
 def SpawnRegionSiteReflection
-    {signature : List Nat}
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort) : Prop :=
@@ -1161,20 +1146,19 @@ def SpawnRegionSiteReflection
     (binders : ConcreteElaboration.BinderContext input rels)
     (hsourceExact : (source.extend scope).Exact scope)
     (htargetExact : (target.extend scope).Exact scope)
-    (sourceBody : Region signature source.length rels)
-    (targetBody : Region signature target.length rels),
-    ConcreteElaboration.compileRegion? signature input
+    (sourceBody : Region  source.length rels)
+    (targetBody : Region  target.length rels),
+    ConcreteElaboration.compileRegion?  input
         (fuel + 1) scope source binders = some sourceBody →
-      ConcreteElaboration.compileRegion? signature
+      ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port)
           (fuel + 1) scope target binders = some targetBody →
       ∀ (model : Model)
-        (named : NamedEnv model.Carrier signature)
         (outerEnv : Fin target.length → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
-        denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+        denoteRegion model  (outerEnv ∘ embedding.index) relEnv
             sourceBody →
-          denoteRegion model named outerEnv relEnv targetBody
+          denoteRegion model  outerEnv relEnv targetBody
 
 /-- One compiler induction transports the built-in spawn projection and, when
 supplied, the reverse site implication.  Keeping both directions behind this
@@ -1184,8 +1168,8 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (hnode : node.region = scope)
     {start : Fin input.regionCount} {path : List Nat}
     (route : Diagram.Splice.RegionRoute input start scope path)
@@ -1199,46 +1183,42 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
       (binders : ConcreteElaboration.BinderContext input rels)
       (hsourceExact : (source.extend start).Exact start)
       (htargetExact : (target.extend start).Exact start)
-      (sourceBody : Region signature source.length rels)
-      (targetBody : Region signature target.length rels)
-      (hsourceBody : ConcreteElaboration.compileRegion? signature input
+      (sourceBody : Region  source.length rels)
+      (targetBody : Region  target.length rels)
+      (hsourceBody : ConcreteElaboration.compileRegion?  input
         (fuel + 1) start source binders = some sourceBody)
-      (htargetBody : ConcreteElaboration.compileRegion? signature
+      (htargetBody : ConcreteElaboration.compileRegion?
         (spawnNodeRaw input node scope portCount port)
         (fuel + 1) start target binders = some targetBody),
       ((∀ (model : Model)
-        (named : NamedEnv model.Carrier signature)
         (outerEnv : Fin target.length → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
         depth % 2 = 0 →
-        denoteRegion model named outerEnv relEnv targetBody →
-          denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+        denoteRegion model  outerEnv relEnv targetBody →
+          denoteRegion model  (outerEnv ∘ embedding.index) relEnv
             sourceBody) ∧
       (∀ (model : Model)
-        (named : NamedEnv model.Carrier signature)
         (outerEnv : Fin target.length → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
         depth % 2 = 1 →
-        denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+        denoteRegion model  (outerEnv ∘ embedding.index) relEnv
             sourceBody →
-          denoteRegion model named outerEnv relEnv targetBody)) ∧
-      (SpawnRegionSiteReflection (signature := signature) input node scope
+          denoteRegion model  outerEnv relEnv targetBody)) ∧
+      (SpawnRegionSiteReflection  input node scope
           portCount port →
         ( (∀ (model : Model)
-            (named : NamedEnv model.Carrier signature)
             (outerEnv : Fin target.length → model.Carrier)
             (relEnv : RelEnv model.Carrier rels),
             depth % 2 = 0 →
-            denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+            denoteRegion model  (outerEnv ∘ embedding.index) relEnv
                 sourceBody →
-              denoteRegion model named outerEnv relEnv targetBody) ∧
+              denoteRegion model  outerEnv relEnv targetBody) ∧
           (∀ (model : Model)
-            (named : NamedEnv model.Carrier signature)
             (outerEnv : Fin target.length → model.Carrier)
             (relEnv : RelEnv model.Carrier rels),
             depth % 2 = 1 →
-            denoteRegion model named outerEnv relEnv targetBody →
-              denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+            denoteRegion model  outerEnv relEnv targetBody →
+              denoteRegion model  (outerEnv ∘ embedding.index) relEnv
                 sourceBody))) := by
   induction hdepth with
   | here region =>
@@ -1246,20 +1226,20 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
         sourceBody targetBody hsourceBody htargetBody
       constructor
       · constructor
-        · intro model named outerEnv relEnv _ hdenotes
+        · intro model  outerEnv relEnv _ hdenotes
           exact spawnNodeRaw_compileRegion_site_projects input node region
             portCount port hinput htarget hnode fuel source target embedding
             binders hsourceExact htargetExact sourceBody targetBody hsourceBody
-            htargetBody model named outerEnv relEnv hdenotes
-        · intro _ _ _ _ hodd
+            htargetBody model  outerEnv relEnv hdenotes
+        · intro _ _ _ hodd
           simp at hodd
       · intro hreflect
         constructor
-        · intro model named outerEnv relEnv _ hdenotes
+        · intro model  outerEnv relEnv _ hdenotes
           exact hreflect fuel source target embedding binders hsourceExact
             htargetExact sourceBody targetBody hsourceBody htargetBody model
-            named outerEnv relEnv hdenotes
-        · intro _ _ _ _ hodd
+             outerEnv relEnv hdenotes
+        · intro _ _ _ hodd
           simp at hodd
   | @cut start child targetRegion rest depth hparent position hposition tail
       child_is_cut tailDepth ih =>
@@ -1273,17 +1253,17 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
       obtain ⟨before, after, hlocal, hbeforeAway, hafterAway⟩ :=
         localOccurrences_split_at_child input start child position hposition
       simp only [ConcreteElaboration.compileRegion?] at hsourceBody htargetBody
-      cases hsourceItems : ConcreteElaboration.compileOccurrencesWith? signature
-          input (ConcreteElaboration.compileRegion? signature input fuel)
+      cases hsourceItems : ConcreteElaboration.compileOccurrencesWith?
+          input (ConcreteElaboration.compileRegion?  input fuel)
           (source.extend start) binders
           (ConcreteElaboration.localOccurrences input start) with
       | none => simp [hsourceItems] at hsourceBody
       | some sourceItems =>
         simp [hsourceItems] at hsourceBody
         subst sourceBody
-        cases htargetItems : ConcreteElaboration.compileOccurrencesWith? signature
+        cases htargetItems : ConcreteElaboration.compileOccurrencesWith?
             (spawnNodeRaw input node targetRegion portCount port)
-            (ConcreteElaboration.compileRegion? signature
+            (ConcreteElaboration.compileRegion?
               (spawnNodeRaw input node targetRegion portCount port) fuel)
             (target.extend start) binders
             (ConcreteElaboration.localOccurrences
@@ -1300,8 +1280,8 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
             rw [spawnNodeRaw_localOccurrences_old_of_ne input node targetRegion start
               portCount port hnode hne, hlocal]
           have hsourceFramed :
-              ConcreteElaboration.compileOccurrencesWith? signature input
-                (ConcreteElaboration.compileRegion? signature input fuel)
+              ConcreteElaboration.compileOccurrencesWith?  input
+                (ConcreteElaboration.compileRegion?  input fuel)
                 (source.extend start) binders
                 (before ++ .child child :: after) = some sourceItems := by
             rw [← hlocal]
@@ -1309,13 +1289,13 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
           obtain ⟨sourceBefore, sourceFocus, sourceAfter, hsourceBefore,
               hsourceFocus, hsourceAfter, hsourceItemsEq⟩ :=
             compileOccurrencesWith?_frame_split
-              (ConcreteElaboration.compileRegion? signature input fuel)
+              (ConcreteElaboration.compileRegion?  input fuel)
               (source.extend start) binders before after (.child child)
               sourceItems hsourceFramed
           have htargetFramed :
-              ConcreteElaboration.compileOccurrencesWith? signature
+              ConcreteElaboration.compileOccurrencesWith?
                 (spawnNodeRaw input node targetRegion portCount port)
-                (ConcreteElaboration.compileRegion? signature
+                (ConcreteElaboration.compileRegion?
                   (spawnNodeRaw input node targetRegion portCount port) fuel)
                 (target.extend start) binders
                 (before.map (spawnNodeRaw_oldOccurrence input) ++
@@ -1327,7 +1307,7 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
           obtain ⟨targetBefore, targetFocus, targetAfter, htargetBefore,
               htargetFocus, htargetAfter, htargetItemsEq⟩ :=
             compileOccurrencesWith?_frame_split
-              (ConcreteElaboration.compileRegion? signature
+              (ConcreteElaboration.compileRegion?
                 (spawnNodeRaw input node targetRegion portCount port) fuel)
               (target.extend start) binders
               (before.map (spawnNodeRaw_oldOccurrence input))
@@ -1343,13 +1323,13 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                 spawnNodeRaw_oldOccurrence, child_is_cut] at hsourceFocus htargetFocus
               rw [show (spawnNodeRaw input node targetRegion portCount port).regions
                 child = input.regions child by rfl, child_is_cut] at htargetFocus
-              cases hsourceChild : ConcreteElaboration.compileRegion? signature
+              cases hsourceChild : ConcreteElaboration.compileRegion?
                   input (childFuel + 1) child (source.extend start) binders with
               | none => simp [hsourceChild] at hsourceFocus
               | some sourceChild =>
                 simp [hsourceChild] at hsourceFocus
                 subst sourceFocus
-                cases htargetChild : ConcreteElaboration.compileRegion? signature
+                cases htargetChild : ConcreteElaboration.compileRegion?
                     (spawnNodeRaw input node targetRegion portCount port)
                     (childFuel + 1) child (target.extend start) binders with
                 | none =>
@@ -1405,14 +1385,14 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                     exact hfinish
                   constructor
                   · constructor
-                    · intro model named outerEnv relEnv heven htargetDenotes
+                    · intro model  outerEnv relEnv heven htargetDenotes
                       have htailOdd : depth % 2 = 1 := by omega
                       have hmapped := finishRegion_denote_mono
                         (spawnNodeRaw input node targetRegion portCount port)
                         target start targetItems
                         (sourceItems.renameWires (embedding.extend start).index)
                         (by
-                        intro currentModel currentNamed rawEnv currentRelEnv hitems
+                        intro currentModel currentNamed rawEnv hitems
                         rw [htargetItemsEq, hbeforeEq, hafterEq,
                           denoteItemSeq_frame] at hitems
                         rw [hsourceItemsEq, ItemSeq.renameWires_append,
@@ -1421,27 +1401,27 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                         refine ⟨hbefore, ?_, hafter⟩
                         intro hsourceRenamed
                         have hsourceRaw :=
-                          (denoteRegion_renameWires currentModel currentNamed
-                            (embedding.extend start).index rawEnv currentRelEnv
+                          (denoteRegion_renameWires currentModel
+                            (embedding.extend start).index currentNamed rawEnv
                             sourceChild).1 hsourceRenamed
                         exact hfocus (hchild.1.2 currentModel currentNamed rawEnv
-                          currentRelEnv htailOdd hsourceRaw))
-                        model named outerEnv relEnv htargetDenotes
+                          htailOdd hsourceRaw))
+                        model  outerEnv relEnv htargetDenotes
                       rw [hfinish'] at hmapped
-                      exact (denoteRegion_renameWires model named embedding.index
+                      exact (denoteRegion_renameWires model  embedding.index
                         outerEnv relEnv
                         (ConcreteElaboration.finishRegion input source start
                           sourceItems)).1 hmapped
-                    · intro model named outerEnv relEnv hodd hsourceDenotes
+                    · intro model  outerEnv relEnv hodd hsourceDenotes
                       have htailEven : depth % 2 = 0 := by omega
-                      have hmapped : denoteRegion model named outerEnv relEnv
+                      have hmapped : denoteRegion model  outerEnv relEnv
                           (ConcreteElaboration.finishRegion
                             (spawnNodeRaw input node targetRegion portCount port)
                             target start
                             (sourceItems.renameWires
                               (embedding.extend start).index)) := by
                         rw [hfinish']
-                        exact (denoteRegion_renameWires model named embedding.index
+                        exact (denoteRegion_renameWires model  embedding.index
                           outerEnv relEnv
                           (ConcreteElaboration.finishRegion input source start
                             sourceItems)).2 hsourceDenotes
@@ -1449,8 +1429,8 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                         (spawnNodeRaw input node targetRegion portCount port)
                         target start
                         (sourceItems.renameWires (embedding.extend start).index)
-                        targetItems _ model named outerEnv relEnv hmapped
-                      intro currentModel currentNamed rawEnv currentRelEnv hitems
+                        targetItems _ model  outerEnv relEnv hmapped
+                      intro currentModel currentNamed rawEnv hitems
                       rw [hsourceItemsEq, ItemSeq.renameWires_append,
                         ItemSeq.renameWires, denoteItemSeq_frame] at hitems
                       rw [htargetItemsEq, hbeforeEq, hafterEq,
@@ -1459,23 +1439,23 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                       refine ⟨hbefore, ?_, hafter⟩
                       intro htargetRaw
                       have hsourceRaw := hchild.1.1 currentModel currentNamed
-                        rawEnv currentRelEnv htailEven htargetRaw
+                        rawEnv htailEven htargetRaw
                       exact hfocus ((denoteRegion_renameWires currentModel
-                        currentNamed (embedding.extend start).index rawEnv
-                        currentRelEnv sourceChild).2 hsourceRaw)
+                        (embedding.extend start).index currentNamed rawEnv
+                        sourceChild).2 hsourceRaw)
                   · intro hreflect
                     have hchildReverse := hchild.2 hreflect
                     constructor
-                    · intro model named outerEnv relEnv heven hsourceDenotes
+                    · intro model  outerEnv relEnv heven hsourceDenotes
                       have htailOdd : depth % 2 = 1 := by omega
-                      have hmapped : denoteRegion model named outerEnv relEnv
+                      have hmapped : denoteRegion model  outerEnv relEnv
                           (ConcreteElaboration.finishRegion
                             (spawnNodeRaw input node targetRegion portCount port)
                             target start
                             (sourceItems.renameWires
                               (embedding.extend start).index)) := by
                         rw [hfinish']
-                        exact (denoteRegion_renameWires model named embedding.index
+                        exact (denoteRegion_renameWires model  embedding.index
                           outerEnv relEnv
                           (ConcreteElaboration.finishRegion input source start
                             sourceItems)).2 hsourceDenotes
@@ -1483,8 +1463,8 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                         (spawnNodeRaw input node targetRegion portCount port)
                         target start
                         (sourceItems.renameWires (embedding.extend start).index)
-                        targetItems _ model named outerEnv relEnv hmapped
-                      intro currentModel currentNamed rawEnv currentRelEnv hitems
+                        targetItems _ model  outerEnv relEnv hmapped
+                      intro currentModel currentNamed rawEnv hitems
                       rw [hsourceItemsEq, ItemSeq.renameWires_append,
                         ItemSeq.renameWires, denoteItemSeq_frame] at hitems
                       rw [htargetItemsEq, hbeforeEq, hafterEq,
@@ -1493,18 +1473,18 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                       refine ⟨hbefore, ?_, hafter⟩
                       intro htargetRaw
                       have hsourceRaw := hchildReverse.2 currentModel currentNamed
-                        rawEnv currentRelEnv htailOdd htargetRaw
+                        rawEnv htailOdd htargetRaw
                       exact hfocus ((denoteRegion_renameWires currentModel
-                        currentNamed (embedding.extend start).index rawEnv
-                        currentRelEnv sourceChild).2 hsourceRaw)
-                    · intro model named outerEnv relEnv hodd htargetDenotes
+                        (embedding.extend start).index currentNamed rawEnv
+                        sourceChild).2 hsourceRaw)
+                    · intro model  outerEnv relEnv hodd htargetDenotes
                       have htailEven : depth % 2 = 0 := by omega
                       have hmapped := finishRegion_denote_mono
                         (spawnNodeRaw input node targetRegion portCount port)
                         target start targetItems
                         (sourceItems.renameWires (embedding.extend start).index)
                         (by
-                        intro currentModel currentNamed rawEnv currentRelEnv hitems
+                        intro currentModel currentNamed rawEnv hitems
                         rw [htargetItemsEq, hbeforeEq, hafterEq,
                           denoteItemSeq_frame] at hitems
                         rw [hsourceItemsEq, ItemSeq.renameWires_append,
@@ -1513,14 +1493,14 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                         refine ⟨hbefore, ?_, hafter⟩
                         intro hsourceRenamed
                         have hsourceRaw :=
-                          (denoteRegion_renameWires currentModel currentNamed
-                            (embedding.extend start).index rawEnv currentRelEnv
+                          (denoteRegion_renameWires currentModel
+                            (embedding.extend start).index currentNamed rawEnv
                             sourceChild).1 hsourceRenamed
                         exact hfocus (hchildReverse.1 currentModel currentNamed
-                          rawEnv currentRelEnv htailEven hsourceRaw))
-                        model named outerEnv relEnv htargetDenotes
+                          rawEnv htailEven hsourceRaw))
+                        model  outerEnv relEnv htargetDenotes
                       rw [hfinish'] at hmapped
-                      exact (denoteRegion_renameWires model named embedding.index
+                      exact (denoteRegion_renameWires model  embedding.index
                         outerEnv relEnv
                         (ConcreteElaboration.finishRegion input source start
                           sourceItems)).1 hmapped
@@ -1536,17 +1516,17 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
       obtain ⟨before, after, hlocal, hbeforeAway, hafterAway⟩ :=
         localOccurrences_split_at_child input start child position hposition
       simp only [ConcreteElaboration.compileRegion?] at hsourceBody htargetBody
-      cases hsourceItems : ConcreteElaboration.compileOccurrencesWith? signature
-          input (ConcreteElaboration.compileRegion? signature input fuel)
+      cases hsourceItems : ConcreteElaboration.compileOccurrencesWith?
+          input (ConcreteElaboration.compileRegion?  input fuel)
           (source.extend start) binders
           (ConcreteElaboration.localOccurrences input start) with
       | none => simp [hsourceItems] at hsourceBody
       | some sourceItems =>
         simp [hsourceItems] at hsourceBody
         subst sourceBody
-        cases htargetItems : ConcreteElaboration.compileOccurrencesWith? signature
+        cases htargetItems : ConcreteElaboration.compileOccurrencesWith?
             (spawnNodeRaw input node targetRegion portCount port)
-            (ConcreteElaboration.compileRegion? signature
+            (ConcreteElaboration.compileRegion?
               (spawnNodeRaw input node targetRegion portCount port) fuel)
             (target.extend start) binders
             (ConcreteElaboration.localOccurrences
@@ -1563,8 +1543,8 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
             rw [spawnNodeRaw_localOccurrences_old_of_ne input node targetRegion
               start portCount port hnode hne, hlocal]
           have hsourceFramed :
-              ConcreteElaboration.compileOccurrencesWith? signature input
-                (ConcreteElaboration.compileRegion? signature input fuel)
+              ConcreteElaboration.compileOccurrencesWith?  input
+                (ConcreteElaboration.compileRegion?  input fuel)
                 (source.extend start) binders
                 (before ++ .child child :: after) = some sourceItems := by
             rw [← hlocal]
@@ -1572,13 +1552,13 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
           obtain ⟨sourceBefore, sourceFocus, sourceAfter, hsourceBefore,
               hsourceFocus, hsourceAfter, hsourceItemsEq⟩ :=
             compileOccurrencesWith?_frame_split
-              (ConcreteElaboration.compileRegion? signature input fuel)
+              (ConcreteElaboration.compileRegion?  input fuel)
               (source.extend start) binders before after (.child child)
               sourceItems hsourceFramed
           have htargetFramed :
-              ConcreteElaboration.compileOccurrencesWith? signature
+              ConcreteElaboration.compileOccurrencesWith?
                 (spawnNodeRaw input node targetRegion portCount port)
-                (ConcreteElaboration.compileRegion? signature
+                (ConcreteElaboration.compileRegion?
                   (spawnNodeRaw input node targetRegion portCount port) fuel)
                 (target.extend start) binders
                 (before.map (spawnNodeRaw_oldOccurrence input) ++
@@ -1590,7 +1570,7 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
           obtain ⟨targetBefore, targetFocus, targetAfter, htargetBefore,
               htargetFocus, htargetAfter, htargetItemsEq⟩ :=
             compileOccurrencesWith?_frame_split
-              (ConcreteElaboration.compileRegion? signature
+              (ConcreteElaboration.compileRegion?
                 (spawnNodeRaw input node targetRegion portCount port) fuel)
               (target.extend start) binders
               (before.map (spawnNodeRaw_oldOccurrence input))
@@ -1608,20 +1588,20 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                 child = input.regions child by rfl, child_is_bubble]
                 at htargetFocus
               simp only at htargetFocus
-              change (ConcreteElaboration.compileRegion? signature
+              change (ConcreteElaboration.compileRegion?
                 (spawnNodeRaw input node targetRegion portCount port)
                 (childFuel + 1) child (target.extend start)
                 (binders.push child arity)).bind
                   (fun body => some (Item.bubble arity body)) =
                     some targetFocus at htargetFocus
-              cases hsourceChild : ConcreteElaboration.compileRegion? signature
+              cases hsourceChild : ConcreteElaboration.compileRegion?
                   input (childFuel + 1) child (source.extend start)
                   (binders.push child arity) with
               | none => simp [hsourceChild] at hsourceFocus
               | some sourceChild =>
                 simp [hsourceChild] at hsourceFocus
                 subst sourceFocus
-                cases htargetChild : ConcreteElaboration.compileRegion? signature
+                cases htargetChild : ConcreteElaboration.compileRegion?
                     (spawnNodeRaw input node targetRegion portCount port)
                     (childFuel + 1) child (target.extend start)
                     (binders.push child arity) with
@@ -1678,14 +1658,14 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                     exact hfinish
                   constructor
                   · constructor
-                    · intro model named outerEnv relEnv heven htargetDenotes
+                    · intro model  outerEnv relEnv heven htargetDenotes
                       have htailEven : depth % 2 = 0 := by omega
                       have hmapped := finishRegion_denote_mono
                         (spawnNodeRaw input node targetRegion portCount port)
                         target start targetItems
                         (sourceItems.renameWires (embedding.extend start).index)
                         (by
-                        intro currentModel currentNamed rawEnv currentRelEnv hitems
+                        intro currentModel currentNamed rawEnv hitems
                         rw [htargetItemsEq, hbeforeEq, hafterEq,
                           denoteItemSeq_frame] at hitems
                         rw [hsourceItemsEq, ItemSeq.renameWires_append,
@@ -1695,28 +1675,28 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                         rcases hfocus with ⟨relation, htargetChildDenotes⟩
                         refine ⟨relation, ?_⟩
                         have hsourceRaw := hchild.1.1 currentModel currentNamed
-                          rawEnv (relation, currentRelEnv) htailEven
+                          (relation, rawEnv) htailEven
                           htargetChildDenotes
                         exact (denoteRegion_renameWires
-                          (relCtx := arity :: rels) currentModel currentNamed
-                          (embedding.extend start).index rawEnv
-                          (relation, currentRelEnv) sourceChild).2 hsourceRaw)
-                        model named outerEnv relEnv htargetDenotes
+                          (relCtx := arity :: rels) currentModel
+                          (embedding.extend start).index currentNamed
+                          (relation, rawEnv) sourceChild).2 hsourceRaw)
+                        model  outerEnv relEnv htargetDenotes
                       rw [hfinish'] at hmapped
-                      exact (denoteRegion_renameWires model named embedding.index
+                      exact (denoteRegion_renameWires model  embedding.index
                         outerEnv relEnv
                         (ConcreteElaboration.finishRegion input source start
                           sourceItems)).1 hmapped
-                    · intro model named outerEnv relEnv hodd hsourceDenotes
+                    · intro model  outerEnv relEnv hodd hsourceDenotes
                       have htailOdd : depth % 2 = 1 := by omega
-                      have hmapped : denoteRegion model named outerEnv relEnv
+                      have hmapped : denoteRegion model  outerEnv relEnv
                           (ConcreteElaboration.finishRegion
                             (spawnNodeRaw input node targetRegion portCount port)
                             target start
                             (sourceItems.renameWires
                               (embedding.extend start).index)) := by
                         rw [hfinish']
-                        exact (denoteRegion_renameWires model named embedding.index
+                        exact (denoteRegion_renameWires model  embedding.index
                           outerEnv relEnv
                           (ConcreteElaboration.finishRegion input source start
                             sourceItems)).2 hsourceDenotes
@@ -1724,8 +1704,8 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                         (spawnNodeRaw input node targetRegion portCount port)
                         target start
                         (sourceItems.renameWires (embedding.extend start).index)
-                        targetItems _ model named outerEnv relEnv hmapped
-                      intro currentModel currentNamed rawEnv currentRelEnv hitems
+                        targetItems _ model  outerEnv relEnv hmapped
+                      intro currentModel currentNamed rawEnv hitems
                       rw [hsourceItemsEq, ItemSeq.renameWires_append,
                         ItemSeq.renameWires, denoteItemSeq_frame] at hitems
                       rw [htargetItemsEq, hbeforeEq, hafterEq,
@@ -1736,24 +1716,23 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                       refine ⟨relation, ?_⟩
                       have hsourceRaw :=
                         (denoteRegion_renameWires (relCtx := arity :: rels)
-                          currentModel currentNamed
-                          (embedding.extend start).index rawEnv
-                          (relation, currentRelEnv) sourceChild).1 hsourceRenamed
-                      exact hchild.1.2 currentModel currentNamed rawEnv
-                        (relation, currentRelEnv) htailOdd hsourceRaw
+                          currentModel (embedding.extend start).index currentNamed
+                          (relation, rawEnv) sourceChild).1 hsourceRenamed
+                      exact hchild.1.2 currentModel currentNamed
+                        (relation, rawEnv) htailOdd hsourceRaw
                   · intro hreflect
                     have hchildReverse := hchild.2 hreflect
                     constructor
-                    · intro model named outerEnv relEnv heven hsourceDenotes
+                    · intro model  outerEnv relEnv heven hsourceDenotes
                       have htailEven : depth % 2 = 0 := by omega
-                      have hmapped : denoteRegion model named outerEnv relEnv
+                      have hmapped : denoteRegion model  outerEnv relEnv
                           (ConcreteElaboration.finishRegion
                             (spawnNodeRaw input node targetRegion portCount port)
                             target start
                             (sourceItems.renameWires
                               (embedding.extend start).index)) := by
                         rw [hfinish']
-                        exact (denoteRegion_renameWires model named embedding.index
+                        exact (denoteRegion_renameWires model  embedding.index
                           outerEnv relEnv
                           (ConcreteElaboration.finishRegion input source start
                             sourceItems)).2 hsourceDenotes
@@ -1761,8 +1740,8 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                         (spawnNodeRaw input node targetRegion portCount port)
                         target start
                         (sourceItems.renameWires (embedding.extend start).index)
-                        targetItems _ model named outerEnv relEnv hmapped
-                      intro currentModel currentNamed rawEnv currentRelEnv hitems
+                        targetItems _ model  outerEnv relEnv hmapped
+                      intro currentModel currentNamed rawEnv hitems
                       rw [hsourceItemsEq, ItemSeq.renameWires_append,
                         ItemSeq.renameWires, denoteItemSeq_frame] at hitems
                       rw [htargetItemsEq, hbeforeEq, hafterEq,
@@ -1773,19 +1752,18 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                       refine ⟨relation, ?_⟩
                       have hsourceRaw :=
                         (denoteRegion_renameWires (relCtx := arity :: rels)
-                          currentModel currentNamed
-                          (embedding.extend start).index rawEnv
-                          (relation, currentRelEnv) sourceChild).1 hsourceRenamed
-                      exact hchildReverse.1 currentModel currentNamed rawEnv
-                        (relation, currentRelEnv) htailEven hsourceRaw
-                    · intro model named outerEnv relEnv hodd htargetDenotes
+                          currentModel (embedding.extend start).index currentNamed
+                          (relation, rawEnv) sourceChild).1 hsourceRenamed
+                      exact hchildReverse.1 currentModel currentNamed
+                        (relation, rawEnv) htailEven hsourceRaw
+                    · intro model  outerEnv relEnv hodd htargetDenotes
                       have htailOdd : depth % 2 = 1 := by omega
                       have hmapped := finishRegion_denote_mono
                         (spawnNodeRaw input node targetRegion portCount port)
                         target start targetItems
                         (sourceItems.renameWires (embedding.extend start).index)
                         (by
-                        intro currentModel currentNamed rawEnv currentRelEnv hitems
+                        intro currentModel currentNamed rawEnv hitems
                         rw [htargetItemsEq, hbeforeEq, hafterEq,
                           denoteItemSeq_frame] at hitems
                         rw [hsourceItemsEq, ItemSeq.renameWires_append,
@@ -1795,15 +1773,15 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
                         rcases hfocus with ⟨relation, htargetChildDenotes⟩
                         refine ⟨relation, ?_⟩
                         have hsourceRaw := hchildReverse.2 currentModel
-                          currentNamed rawEnv (relation, currentRelEnv) htailOdd
+                          currentNamed (relation, rawEnv) htailOdd
                           htargetChildDenotes
                         exact (denoteRegion_renameWires
-                          (relCtx := arity :: rels) currentModel currentNamed
-                          (embedding.extend start).index rawEnv
-                          (relation, currentRelEnv) sourceChild).2 hsourceRaw)
-                        model named outerEnv relEnv htargetDenotes
+                          (relCtx := arity :: rels) currentModel
+                          (embedding.extend start).index currentNamed
+                          (relation, rawEnv) sourceChild).2 hsourceRaw)
+                        model  outerEnv relEnv htargetDenotes
                       rw [hfinish'] at hmapped
-                      exact (denoteRegion_renameWires model named embedding.index
+                      exact (denoteRegion_renameWires model  embedding.index
                         outerEnv relEnv
                         (ConcreteElaboration.finishRegion input source start
                           sourceItems)).1 hmapped
@@ -1814,8 +1792,8 @@ theorem spawnNodeRaw_compileRegion_route_projects
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (hnode : node.region = scope)
     {start : Fin input.regionCount} {path : List Nat}
     (route : Diagram.Splice.RegionRoute input start scope path)
@@ -1829,29 +1807,27 @@ theorem spawnNodeRaw_compileRegion_route_projects
     (binders : ConcreteElaboration.BinderContext input rels)
     (hsourceExact : (source.extend start).Exact start)
     (htargetExact : (target.extend start).Exact start)
-    (sourceBody : Region signature source.length rels)
-    (targetBody : Region signature target.length rels)
-    (hsourceBody : ConcreteElaboration.compileRegion? signature input
+    (sourceBody : Region  source.length rels)
+    (targetBody : Region  target.length rels)
+    (hsourceBody : ConcreteElaboration.compileRegion?  input
       (fuel + 1) start source binders = some sourceBody)
-    (htargetBody : ConcreteElaboration.compileRegion? signature
+    (htargetBody : ConcreteElaboration.compileRegion?
       (spawnNodeRaw input node scope portCount port)
       (fuel + 1) start target binders = some targetBody) :
     (∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin target.length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
       depth % 2 = 0 →
-      denoteRegion model named outerEnv relEnv targetBody →
-        denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+      denoteRegion model  outerEnv relEnv targetBody →
+        denoteRegion model  (outerEnv ∘ embedding.index) relEnv
           sourceBody) ∧
     (∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin target.length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
       depth % 2 = 1 →
-      denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+      denoteRegion model  (outerEnv ∘ embedding.index) relEnv
           sourceBody →
-        denoteRegion model named outerEnv relEnv targetBody) :=
+        denoteRegion model  outerEnv relEnv targetBody) :=
   (spawnNodeRaw_compileRegion_route_kernel input node scope portCount port
     hinput htarget hnode route hdepth fuel source target embedding binders
     hsourceExact htargetExact sourceBody targetBody hsourceBody htargetBody).1
@@ -1863,10 +1839,10 @@ theorem spawnNodeRaw_compileRegion_route_reflects
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (hnode : node.region = scope)
-    (hreflect : SpawnRegionSiteReflection (signature := signature) input node
+    (hreflect : SpawnRegionSiteReflection  input node
       scope portCount port)
     {start : Fin input.regionCount} {path : List Nat}
     (route : Diagram.Splice.RegionRoute input start scope path)
@@ -1880,28 +1856,26 @@ theorem spawnNodeRaw_compileRegion_route_reflects
     (binders : ConcreteElaboration.BinderContext input rels)
     (hsourceExact : (source.extend start).Exact start)
     (htargetExact : (target.extend start).Exact start)
-    (sourceBody : Region signature source.length rels)
-    (targetBody : Region signature target.length rels)
-    (hsourceBody : ConcreteElaboration.compileRegion? signature input
+    (sourceBody : Region  source.length rels)
+    (targetBody : Region  target.length rels)
+    (hsourceBody : ConcreteElaboration.compileRegion?  input
       (fuel + 1) start source binders = some sourceBody)
-    (htargetBody : ConcreteElaboration.compileRegion? signature
+    (htargetBody : ConcreteElaboration.compileRegion?
       (spawnNodeRaw input node scope portCount port)
       (fuel + 1) start target binders = some targetBody) :
     (∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin target.length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
       depth % 2 = 0 →
-      denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+      denoteRegion model  (outerEnv ∘ embedding.index) relEnv
           sourceBody →
-        denoteRegion model named outerEnv relEnv targetBody) ∧
+        denoteRegion model  outerEnv relEnv targetBody) ∧
     (∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin target.length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
       depth % 2 = 1 →
-      denoteRegion model named outerEnv relEnv targetBody →
-        denoteRegion model named (outerEnv ∘ embedding.index) relEnv
+      denoteRegion model  outerEnv relEnv targetBody →
+        denoteRegion model  (outerEnv ∘ embedding.index) relEnv
           sourceBody) :=
   (spawnNodeRaw_compileRegion_route_kernel input node scope portCount port
     hinput htarget hnode route hdepth fuel source target embedding binders
@@ -1909,7 +1883,7 @@ theorem spawnNodeRaw_compileRegion_route_reflects
       hreflect
 
 theorem regionRoute_hasCutDepth_exists
-    (hinput : input.WellFormed signature)
+    (hinput : input.WellFormed )
     (route : Diagram.Splice.RegionRoute input start target path) :
     ∃ depth, route.HasCutDepth depth := by
   induction route with

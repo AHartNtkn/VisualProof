@@ -13,37 +13,35 @@ This is stated over the authoritative occurrence compiler: successful full and
 filtered compilations fix the exact item sequences, while the caller supplies
 only the denotation of items deliberately removed by the Boolean filter. -/
 theorem compileOccurrencesWith_filter_denotes
-    {signature : List Nat}
     (diagram : ConcreteDiagram)
     (recurse : ∀ {rels : RelCtx},
       (region : Fin diagram.regionCount) →
       (context : ConcreteElaboration.WireContext diagram) →
       ConcreteElaboration.BinderContext diagram rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (context : ConcreteElaboration.WireContext diagram)
     (binders : ConcreteElaboration.BinderContext diagram rels)
     (keep : ConcreteElaboration.LocalOccurrence diagram.regionCount
       diagram.nodeCount → Bool)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (environment : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
     (occurrences : List (ConcreteElaboration.LocalOccurrence
       diagram.regionCount diagram.nodeCount))
-    (allItems keptItems : ItemSeq signature context.length rels)
-    (allCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (allItems keptItems : ItemSeq  context.length rels)
+    (allCompiled : ConcreteElaboration.compileOccurrencesWith?
       diagram recurse context binders occurrences = some allItems)
-    (keptCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (keptCompiled : ConcreteElaboration.compileOccurrencesWith?
       diagram recurse context binders (occurrences.filter keep) =
         some keptItems)
     (removedDenotes : ∀ occurrence,
       occurrence ∈ occurrences → keep occurrence = false →
       ∀ item,
-        ConcreteElaboration.compileOccurrenceWith? signature diagram recurse
+        ConcreteElaboration.compileOccurrenceWith?  diagram recurse
           context binders occurrence = some item →
-        denoteItem model named environment relEnv item)
-    (keptDenotes : denoteItemSeq model named environment relEnv keptItems) :
-    denoteItemSeq model named environment relEnv allItems := by
+        denoteItem model  environment relEnv item)
+    (keptDenotes : denoteItemSeq model  environment relEnv keptItems) :
+    denoteItemSeq model  environment relEnv allItems := by
   induction occurrences generalizing allItems keptItems with
   | nil =>
       simp only [ConcreteElaboration.compileOccurrencesWith?,
@@ -52,12 +50,12 @@ theorem compileOccurrencesWith_filter_denotes
       trivial
   | cons occurrence tail ih =>
       simp only [ConcreteElaboration.compileOccurrencesWith?] at allCompiled
-      cases headResult : ConcreteElaboration.compileOccurrenceWith? signature
+      cases headResult : ConcreteElaboration.compileOccurrenceWith?
           diagram recurse context binders occurrence with
       | none => simp [headResult] at allCompiled
       | some headItem =>
           cases tailResult : ConcreteElaboration.compileOccurrencesWith?
-              signature diagram recurse context binders tail with
+               diagram recurse context binders tail with
           | none => simp [headResult, tailResult] at allCompiled
           | some tailItems =>
               simp [headResult, tailResult] at allCompiled
@@ -71,9 +69,9 @@ theorem compileOccurrencesWith_filter_denotes
                   have tailRemoved : ∀ current,
                       current ∈ tail → keep current = false →
                       ∀ item,
-                        ConcreteElaboration.compileOccurrenceWith? signature
+                        ConcreteElaboration.compileOccurrenceWith?
                           diagram recurse context binders current = some item →
-                        denoteItem model named environment relEnv item := by
+                        denoteItem model  environment relEnv item := by
                     intro current member
                     exact removedDenotes current (by simp [member])
                   exact ⟨headDenotes,
@@ -84,7 +82,7 @@ theorem compileOccurrencesWith_filter_denotes
                   simp only [ConcreteElaboration.compileOccurrencesWith?,
                     headResult] at keptCompiled
                   cases keptTailResult :
-                      ConcreteElaboration.compileOccurrencesWith? signature
+                      ConcreteElaboration.compileOccurrencesWith?
                         diagram recurse context binders
                           (tail.filter keep) with
                   | none => simp [keptTailResult] at keptCompiled
@@ -95,9 +93,9 @@ theorem compileOccurrencesWith_filter_denotes
                           current ∈ tail → keep current = false →
                           ∀ item,
                             ConcreteElaboration.compileOccurrenceWith?
-                              signature diagram recurse context binders
+                               diagram recurse context binders
                                 current = some item →
-                            denoteItem model named environment relEnv item := by
+                            denoteItem model  environment relEnv item := by
                         intro current member
                         exact removedDenotes current (by simp [member])
                       exact ⟨keptDenotes.1,
@@ -109,31 +107,29 @@ covariant companion to `compileOccurrencesWith_filter_denotes`; together the
 two lemmas expose exactly the polarity split used when atom deletion crosses
 cuts. -/
 theorem compileOccurrencesWith_filter_denotes_of_all
-    {signature : List Nat}
     (diagram : ConcreteDiagram)
     (recurse : ∀ {rels : RelCtx},
       (region : Fin diagram.regionCount) →
       (context : ConcreteElaboration.WireContext diagram) →
       ConcreteElaboration.BinderContext diagram rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (context : ConcreteElaboration.WireContext diagram)
     (binders : ConcreteElaboration.BinderContext diagram rels)
     (keep : ConcreteElaboration.LocalOccurrence diagram.regionCount
       diagram.nodeCount → Bool)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (environment : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
     (occurrences : List (ConcreteElaboration.LocalOccurrence
       diagram.regionCount diagram.nodeCount))
-    (allItems keptItems : ItemSeq signature context.length rels)
-    (allCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (allItems keptItems : ItemSeq  context.length rels)
+    (allCompiled : ConcreteElaboration.compileOccurrencesWith?
       diagram recurse context binders occurrences = some allItems)
-    (keptCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (keptCompiled : ConcreteElaboration.compileOccurrencesWith?
       diagram recurse context binders (occurrences.filter keep) =
         some keptItems)
-    (allDenotes : denoteItemSeq model named environment relEnv allItems) :
-    denoteItemSeq model named environment relEnv keptItems := by
+    (allDenotes : denoteItemSeq model  environment relEnv allItems) :
+    denoteItemSeq model  environment relEnv keptItems := by
   induction occurrences generalizing allItems keptItems with
   | nil =>
       simp only [ConcreteElaboration.compileOccurrencesWith?,
@@ -142,12 +138,12 @@ theorem compileOccurrencesWith_filter_denotes_of_all
       trivial
   | cons occurrence tail ih =>
       simp only [ConcreteElaboration.compileOccurrencesWith?] at allCompiled
-      cases headResult : ConcreteElaboration.compileOccurrenceWith? signature
+      cases headResult : ConcreteElaboration.compileOccurrenceWith?
           diagram recurse context binders occurrence with
       | none => simp [headResult] at allCompiled
       | some headItem =>
           cases tailResult : ConcreteElaboration.compileOccurrencesWith?
-              signature diagram recurse context binders tail with
+               diagram recurse context binders tail with
           | none => simp [headResult, tailResult] at allCompiled
           | some tailItems =>
               simp [headResult, tailResult] at allCompiled
@@ -163,7 +159,7 @@ theorem compileOccurrencesWith_filter_denotes_of_all
                   simp only [ConcreteElaboration.compileOccurrencesWith?,
                     headResult] at keptCompiled
                   cases keptTailResult :
-                      ConcreteElaboration.compileOccurrencesWith? signature
+                      ConcreteElaboration.compileOccurrencesWith?
                         diagram recurse context binders
                           (tail.filter keep) with
                   | none => simp [keptTailResult] at keptCompiled

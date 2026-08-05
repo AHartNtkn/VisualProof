@@ -12,24 +12,22 @@ namespace InstantiationSemantic
 the open pattern's complete root conjunction under the authoritative seam
 map. -/
 theorem patternRootItems_denotes_of_output
-    {signature : List Nat}
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
-    (denotes : denoteItemSeq model named env relEnv outputLeaf.items) :
+    (denotes : denoteItemSeq model  env relEnv outputLeaf.items) :
     let pattern := Splice.Input.compiledSpliceOpenRootItems input.pattern
-    denoteItemSeq (relCtx := []) model named
+    denoteItemSeq (relCtx := []) model
       (env ∘ input.plugLayout.patternRootWireIndexMap hadmissible hzero
         outputWitness outputLeaf)
       (PUnit.unit : RelEnv model.Carrier []) pattern.items := by
@@ -54,30 +52,30 @@ theorem patternRootItems_denotes_of_output
     (pattern.items.renameWires
       (layout.patternRootSeamPreparedWireOfEmpty hadmissible host))
         |>.renameRelations patternRelations
-  have targetDenotes : denoteItemSeq model named targetEnv relEnv
+  have targetDenotes : denoteItemSeq model  targetEnv relEnv
       (outputLeaf.items.castWiresEq targetEq) := by
     rw [ItemSeq.castWiresEq_eq_renameWires,
       denoteItemSeq_renameWires]
     simpa [targetEnv, targetEq, Function.comp_def] using denotes
-  have itemsIso := layout.compiledSiteItemsIsoOfEmpty signature input
+  have itemsIso := layout.compiledSiteItemsIsoOfEmpty  input
     hadmissible host outputWitness outputLeaf hzero pattern.items
     pattern.computation
-  have preparedDenotes : denoteItemSeq model named sourceEnv relEnv
+  have preparedDenotes : denoteItemSeq model  sourceEnv relEnv
       (((host.compilerLeaf.items.renameWires
         (layout.hostSeamPreparedWireOfEmpty hadmissible host)).renameRelations
           (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
             outputWitness outputLeaf)).append patternPrepared) := by
-    apply (itemsIso.denotation model named sourceEnv targetEnv relEnv ?_).mpr
+    apply (itemsIso.denotation model  sourceEnv targetEnv relEnv ?_).mpr
     · exact targetDenotes
     · intro index
       rfl
   rw [denoteItemSeq_append] at preparedDenotes
   have patternPreparedDenotes := preparedDenotes.2
-  change denoteItemSeq model named sourceEnv relEnv
+  change denoteItemSeq model  sourceEnv relEnv
       ((pattern.items.renameWires
         (layout.patternRootSeamPreparedWireOfEmpty hadmissible host))
           |>.renameRelations patternRelations) at patternPreparedDenotes
-  rw [denoteItemSeq_renameRelations model named patternRelations
+  rw [denoteItemSeq_renameRelations model  patternRelations
     (PUnit.unit : RelEnv model.Carrier []) relEnv
     (RelEnv.pullback_agrees patternRelations relEnv)] at patternPreparedDenotes
   rw [denoteItemSeq_renameWires] at patternPreparedDenotes
@@ -97,18 +95,16 @@ theorem patternRootItems_denotes_of_output
 host block together with the complete prepared open-pattern root block
 constructs the authoritative post-splice compiler conjunction. -/
 theorem output_denotes_of_host_and_patternRootPrepared
-    {signature : List Nat}
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
@@ -129,7 +125,7 @@ theorem output_denotes_of_host_and_patternRootPrepared
           (layout.hostSeamPreparedWireOfEmpty hadmissible host)).renameRelations
           (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
             outputWitness outputLeaf)
-      denoteItemSeq model named sourceEnv relEnv hostPrepared)
+      denoteItemSeq model  sourceEnv relEnv hostPrepared)
     (patternDenotes :
       let layout := input.plugLayout
       let pattern := Splice.Input.compiledSpliceOpenRootItems input.pattern
@@ -151,8 +147,8 @@ theorem output_denotes_of_host_and_patternRootPrepared
         (pattern.items.renameWires
           (layout.patternRootSeamPreparedWireOfEmpty hadmissible host))
           |>.renameRelations patternRelations
-      denoteItemSeq model named sourceEnv relEnv patternPrepared) :
-    denoteItemSeq model named env relEnv outputLeaf.items := by
+      denoteItemSeq model  sourceEnv relEnv patternPrepared) :
+    denoteItemSeq model  env relEnv outputLeaf.items := by
   dsimp only at hostDenotes patternDenotes
   let layout := input.plugLayout
   let pattern := Splice.Input.compiledSpliceOpenRootItems input.pattern
@@ -178,16 +174,16 @@ theorem output_denotes_of_host_and_patternRootPrepared
     (pattern.items.renameWires
       (layout.patternRootSeamPreparedWireOfEmpty hadmissible host))
       |>.renameRelations patternRelations
-  have preparedDenotes : denoteItemSeq model named sourceEnv relEnv
+  have preparedDenotes : denoteItemSeq model  sourceEnv relEnv
       (hostPrepared.append patternPrepared) := by
     rw [denoteItemSeq_append]
     exact ⟨hostDenotes, patternDenotes⟩
-  have itemsIso := layout.compiledSiteItemsIsoOfEmpty signature input
+  have itemsIso := layout.compiledSiteItemsIsoOfEmpty  input
     hadmissible host outputWitness outputLeaf hzero pattern.items
     pattern.computation
-  have targetCastDenotes : denoteItemSeq model named targetEnv relEnv
+  have targetCastDenotes : denoteItemSeq model  targetEnv relEnv
       (outputLeaf.items.castWiresEq targetEq) := by
-    exact (itemsIso.denotation model named sourceEnv targetEnv relEnv
+    exact (itemsIso.denotation model  sourceEnv targetEnv relEnv
       (fun _ => rfl)).mp preparedDenotes
   rw [ItemSeq.castWiresEq_eq_renameWires,
     denoteItemSeq_renameWires] at targetCastDenotes
@@ -197,28 +193,26 @@ theorem output_denotes_of_host_and_patternRootPrepared
 same quotient valuation used by the executor, so repeated boundary aliases
 remain repeated rather than being silently separated. -/
 theorem pattern_denote_of_output
-    {signature : List Nat}
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
     (fallback : model.Carrier)
-    (denotes : denoteItemSeq model named env relEnv outputLeaf.items) :
+    (denotes : denoteItemSeq model  env relEnv outputLeaf.items) :
     let context := outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)
     let values := Splice.Input.siteQuotientEnvironment input context
       outputLeaf.wiresExact env fallback
-    input.pattern.denote model named (fun position =>
+    input.pattern.denote model  (fun position =>
       values (input.quotientWire (input.attachment position))) := by
   dsimp only
   let context := outputLeaf.inheritedWires.extend
@@ -226,24 +220,23 @@ theorem pattern_denote_of_output
   let values := Splice.Input.siteQuotientEnvironment input context
     outputLeaf.wiresExact env fallback
   apply Splice.Input.pattern_denote_of_patternRootItems input hadmissible
-    outputWitness outputLeaf hzero model named env fallback
+    outputWitness outputLeaf hzero model  env fallback
   exact patternRootItems_denotes_of_output input hadmissible host outputWitness
-    outputLeaf hzero model named env relEnv denotes
+    outputLeaf hzero model  env relEnv denotes
 
 /-- In the zero-spine executor branch, every denoting splice output certifies
 the payload's authoritative interpreted relation at the receipt-recorded
 argument vector. -/
 theorem interpretedRelation_of_output_empty
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -252,8 +245,7 @@ theorem interpretedRelation_of_output_empty
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
@@ -266,7 +258,7 @@ theorem interpretedRelation_of_output_empty
         site arguments).plugLayout.frameRegion site)).length → model.Carrier)
     (outputRelEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
     (fallback : model.Carrier)
-    (denotes : denoteItemSeq model named env outputRelEnv outputLeaf.items) :
+    (denotes : denoteItemSeq model  env outputRelEnv outputLeaf.items) :
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
     let context := outputLeaf.inheritedWires.extend
@@ -275,7 +267,7 @@ theorem interpretedRelation_of_output_empty
       context outputLeaf.wiresExact env fallback
     let wireValue : Fin state.diagram.val.wireCount → model.Carrier :=
       fun wire => quotientValues (spliceInput.quotientWire wire)
-    payload.interpretedRelation model named (wireValue ∘ state.parameters)
+    payload.interpretedRelation model  (wireValue ∘ state.parameters)
       (wireValue ∘ arguments) := by
   dsimp only
   let spliceInput := instantiateSpliceInput comprehension attachments binders
@@ -288,7 +280,7 @@ theorem interpretedRelation_of_output_empty
   let wireValue : Fin state.diagram.val.wireCount → model.Carrier :=
     fun wire => quotientValues (spliceInput.quotientWire wire)
   have patternDenotes := pattern_denote_of_output spliceInput hadmissible host
-    outputWitness outputLeaf hzero model named env outputRelEnv fallback denotes
+    outputWitness outputLeaf hzero model  env outputRelEnv fallback denotes
   have argumentValues :
       (fun position => quotientValues
         (spliceInput.quotientWire (spliceInput.attachment position))) =
@@ -305,7 +297,7 @@ theorem interpretedRelation_of_output_empty
         Function.comp_def]
     · simp [spliceInput, instantiateSpliceInput, wireValue,
         Function.comp_def]
-  change comprehension.denote model named
+  change comprehension.denote model
     (Fin.addCases (wireValue ∘ arguments) (wireValue ∘ state.parameters) ∘
       Fin.cast payload.boundarySplit)
   rw [← argumentValues]

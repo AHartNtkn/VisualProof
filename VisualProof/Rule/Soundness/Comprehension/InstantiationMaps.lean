@@ -17,16 +17,15 @@ private theorem map_owned_step
 
 /-- Composite frame-region map carried by a successful copy trace. -/
 def regionMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -41,16 +40,15 @@ def regionMap
 
 /-- Composite frame-node map carried by a successful copy trace. -/
 def nodeMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -65,16 +63,15 @@ def nodeMap
 
 /-- Composite quotient/frame-wire map carried by a successful copy trace. -/
 def wireMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -89,16 +86,15 @@ def wireMap
           (plan.spliceInput.quotientWire wire)))
 
 theorem regionMap_injective
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -116,16 +112,15 @@ theorem regionMap_injective
       simpa using congrArg Fin.val equal
 
 theorem nodeMap_injective
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -145,16 +140,15 @@ theorem nodeMap_injective
 /-- Alias materialization makes the composite host-wire map injective.  No
 two pre-existing wire identities are coalesced by any accepted copy step. -/
 theorem wireMap_injective
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -185,16 +179,15 @@ for every original wire/node pair.  Alias materialization makes each
 intermediate host quotient discrete, so no distinct original wire can acquire
 the mapped endpoint. -/
 theorem endpointOccurs_wireMap_nodeMap_iff
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -261,16 +254,15 @@ theorem endpointOccurs_wireMap_nodeMap_iff
 /-- The composite host-wire map carries each retained wire scope through the
 same composite region map. -/
 theorem wireMap_scope
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -321,16 +313,15 @@ theorem wireMap_scope
 /-- The composite frame map preserves every retained region constructor and
 maps its parent through the same composite region map. -/
 theorem regionMap_shape
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -394,16 +385,15 @@ theorem regionMap_shape
 /-- The composite frame map preserves every retained node constructor and
 maps all region-valued fields through the composite region map. -/
 theorem nodeMap_shape
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -415,9 +405,7 @@ theorem nodeMap_shape
       | .identity owner arity =>
           .identity (trace.regionMap owner) arity
       | .atom owner binder =>
-          .atom (trace.regionMap owner) (trace.regionMap binder)
-      | .named owner definition arity =>
-          .named (trace.regionMap owner) definition arity := by
+          .atom (trace.regionMap owner) (trace.regionMap binder) := by
   induction trace with
   | done fuel state pending_empty =>
       simp only [nodeMap, regionMap, id_eq]
@@ -438,9 +426,7 @@ theorem nodeMap_shape
           | .identity owner arity =>
               .identity (layout.frameRegion owner) arity
           | .atom owner binder =>
-              .atom (layout.frameRegion owner) (layout.frameRegion binder)
-          | .named owner definition arity =>
-              .named (layout.frameRegion owner) definition arity := by
+              .atom (layout.frameRegion owner) (layout.frameRegion binder) := by
         change layout.plugNode (layout.frameNode node) = _
         rw [layout.plugNode_frameNode]
         cases shape : state.diagram.val.nodes node <;>
@@ -459,10 +445,7 @@ theorem nodeMap_shape
                 .atom (Fin.cast (by rw [next_eq]; rfl)
                     (layout.frameRegion owner))
                   (Fin.cast (by rw [next_eq]; rfl)
-                    (layout.frameRegion binder))
-            | .named owner definition arity =>
-                .named (Fin.cast (by rw [next_eq]; rfl)
-                  (layout.frameRegion owner)) definition arity := by
+                    (layout.frameRegion binder)) := by
         intro next next_eq
         subst next
         simpa using rawShape
@@ -473,20 +456,16 @@ theorem nodeMap_shape
           simpa [nodeMap, regionMap, shape] using mapped
       | atom owner binder =>
           simpa [nodeMap, regionMap, shape] using mapped
-      | named owner definition arity =>
-          simpa [nodeMap, regionMap, shape] using mapped
-
 theorem regionMap_bubble
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -509,16 +488,15 @@ theorem regionMap_bubble
       exact ih
 
 theorem regionMap_root
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -545,16 +523,15 @@ theorem regionMap_root
       exact ih
 
 theorem regionMap_binderTargets
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -581,16 +558,15 @@ theorem regionMap_binderTargets
       exact ih
 
 theorem wireMap_parameters
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -619,16 +595,15 @@ theorem wireMap_parameters
 /-- The trace's composite node map transports exactly the executor-owned atom
 list; no processed occurrence is lost between copy steps. -/
 theorem ownedAtoms_eq_map
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -668,16 +643,15 @@ theorem ownedAtoms_eq_map
       rfl
 
 theorem result_pendingAtoms_empty
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -691,10 +665,9 @@ theorem result_pendingAtoms_empty
       exact ih
 
 theorem initial_processedAtoms_eq_map
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}

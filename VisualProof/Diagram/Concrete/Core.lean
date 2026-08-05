@@ -20,8 +20,6 @@ structure CEndpoint (nodes : Nat) where
 inductive CNode (regions : Nat)
   | atom (region binder : Fin regions)
   | identity (region : Fin regions) (arity : Nat)
-  | named (region : Fin regions) (definition arity : Nat)
-
 structure CWire (regions nodes : Nat) where
   scope : Fin regions
   endpoints : List (CEndpoint nodes)
@@ -53,8 +51,6 @@ namespace CNode
 def region : CNode regions -> Fin regions
   | .atom region _ => region
   | .identity region _ => region
-  | .named region _ _ => region
-
 end CNode
 
 namespace ConcreteDiagram
@@ -113,14 +109,11 @@ def RequiresPort (d : ConcreteDiagram)
       | .bubble _ arity => exists i : Fin arity, port = .arg i
       | _ => False
   | .identity _ arity => exists i : Fin arity, port = .arg i
-  | .named _ _ arity => exists i : Fin arity, port = .arg i
-
 instance (d : ConcreteDiagram) (node : Fin d.nodeCount) (port : CPort) :
     Decidable (d.RequiresPort node port) := by
   unfold RequiresPort
   split
   · split <;> infer_instance
-  · infer_instance
   · infer_instance
 
 def EndpointOccurs (d : ConcreteDiagram) (wire : Fin d.wireCount)
@@ -141,14 +134,6 @@ theorem requiresPort_atom_bubble_iff (d : ConcreteDiagram)
     d.RequiresPort node port <->
       exists i : Fin arity, port = .arg i := by
   simp only [RequiresPort, hnode, hbinder]
-
-theorem requiresPort_named_iff (d : ConcreteDiagram)
-    (node : Fin d.nodeCount) (port : CPort)
-    (region : Fin d.regionCount) (definition arity : Nat)
-    (hnode : d.nodes node = .named region definition arity) :
-    d.RequiresPort node port <->
-      exists i : Fin arity, port = .arg i := by
-  simp only [RequiresPort, hnode]
 
 theorem requiresPort_identity_iff (d : ConcreteDiagram)
     (node : Fin d.nodeCount) (port : CPort)

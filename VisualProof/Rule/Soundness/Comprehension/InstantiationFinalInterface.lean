@@ -12,16 +12,15 @@ namespace InstantiationTrace
 root boundary through exactly the same composite host-wire map as the
 instantiation trace.  Repeated boundary positions remain repeated. -/
 theorem interface_transportBoundary_eq_map
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -113,10 +112,9 @@ theorem interface_transportBoundary_eq_map
 /-- Specialization of `interface_transportBoundary_eq_map` to the executor's
 identity-interface initial state. -/
 theorem initialInterface_transportBoundary_eq_map
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -146,10 +144,9 @@ theorem initialInterface_transportBoundary_eq_map
 atom deletion, and final vacuous promotion—transports an ordered source
 boundary exactly to the boundary used by `finalSourceOpen`. -/
 theorem finalInterface_transportBoundary_eq_map
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -164,7 +161,7 @@ theorem finalInterface_transportBoundary_eq_map
     (hraw : vacuousElimRaw? (dropInstantiationAtomsRaw result) result.bubble =
       some raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root) :

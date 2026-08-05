@@ -794,9 +794,7 @@ theorem regular_nodeShape
       match input.nodes node with
       | .atom owner binder => .atom owner.castSucc binder.castSucc
       | .identity owner nodeArity =>
-          .identity owner.castSucc nodeArity
-      | .named owner definition nodeArity =>
-          .named owner.castSucc definition nodeArity := by
+          .identity owner.castSucc nodeArity := by
   have nodeNotSelected : node ∉ selection.val.directNodes := by
     intro selected
     have atAnchor := selection.property.directNodes_at_anchor node selected
@@ -813,9 +811,7 @@ theorem selected_nodeShape
       | .atom _ binder =>
           .atom (bubbleRegion input) binder.castSucc
       | .identity _ nodeArity =>
-          .identity (bubbleRegion input) nodeArity
-      | .named _ definition nodeArity =>
-          .named (bubbleRegion input) definition nodeArity := by
+          .identity (bubbleRegion input) nodeArity := by
   rw [vacuousIntroRaw_node, if_pos selected]
   cases input.nodes node <;> rfl
 
@@ -827,9 +823,7 @@ theorem unselected_nodeShape
       match input.nodes node with
       | .atom owner binder => .atom owner.castSucc binder.castSucc
       | .identity owner nodeArity =>
-          .identity owner.castSucc nodeArity
-      | .named owner definition nodeArity =>
-          .named owner.castSucc definition nodeArity := by
+          .identity owner.castSucc nodeArity := by
   rw [vacuousIntroRaw_node, if_neg unselected]
   cases input.nodes node <;> rfl
 

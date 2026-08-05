@@ -27,17 +27,16 @@ theorem aliasOccurrence_denotes_iff
         (materializedDiagram pattern attachment bodyContainer)) →
       ConcreteElaboration.BinderContext
         (materializedDiagram pattern attachment bodyContainer) currentRels →
-      Option (Region signature currentContext.length currentRels))
+      Option (Region  currentContext.length currentRels))
     (aliasIndex : Fin (aliasCount pattern attachment))
-    (items : ItemSeq signature context.length rels)
-    (compiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (items : ItemSeq  context.length rels)
+    (compiled : ConcreteElaboration.compileOccurrencesWith?
       (materializedDiagram pattern attachment bodyContainer) recurse context
       binders [.node (aliasNode pattern attachment aliasIndex)] = some items)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
-    denoteItemSeq model named env relEnv items ↔
+    denoteItemSeq model  env relEnv items ↔
       ∀ output input,
         ConcreteElaboration.resolvePort?
             (materializedDiagram pattern attachment bodyContainer) context
@@ -109,12 +108,12 @@ theorem aliasOccurrence_denotes_iff
 
 /-- Under the collapse environment, every inserted identity block denotes. -/
 theorem aliasOccurrences_denote_of_collapse
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
-        signature)
+        )
     (targetContext : ConcreteElaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
     (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)
@@ -130,28 +129,27 @@ theorem aliasOccurrences_denote_of_collapse
       ConcreteElaboration.BinderContext
         (materializedDiagram pattern.val attachment spine.bodyContainer)
           currentRels →
-      Option (Region signature currentContext.length currentRels))
-    (items : ItemSeq signature targetContext.length rels)
-    (compiled : ConcreteElaboration.compileOccurrencesWith? signature
+      Option (Region  currentContext.length currentRels))
+    (items : ItemSeq  targetContext.length rels)
+    (compiled : ConcreteElaboration.compileOccurrencesWith?
       (materializedDiagram pattern.val attachment spine.bodyContainer) recurse
       targetContext binders (aliasOccurrences pattern.val attachment) = some items)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin sourceContext.length → model.Carrier)
     (targetEnv : Fin targetContext.length → model.Carrier)
     (envEq : targetEnv = sourceEnv ∘ collapse.indexMap)
     (relEnv : RelEnv model.Carrier rels) :
-    denoteItemSeq model named targetEnv relEnv items := by
+    denoteItemSeq model  targetEnv relEnv items := by
   subst targetEnv
   unfold aliasOccurrences at compiled
   have general : ∀ (aliases : List (Fin (aliasCount pattern.val attachment)))
-      (items : ItemSeq signature targetContext.length rels),
-      ConcreteElaboration.compileOccurrencesWith? signature
+      (items : ItemSeq  targetContext.length rels),
+      ConcreteElaboration.compileOccurrencesWith?
           (materializedDiagram pattern.val attachment spine.bodyContainer) recurse
           targetContext binders
           (aliases.map fun current =>
             .node (aliasNode pattern.val attachment current)) = some items →
-      denoteItemSeq model named (sourceEnv ∘ collapse.indexMap) relEnv items := by
+      denoteItemSeq model  (sourceEnv ∘ collapse.indexMap) relEnv items := by
     intro aliases
     induction aliases with
     | nil =>
@@ -163,7 +161,7 @@ theorem aliasOccurrences_denote_of_collapse
       intro currentItems currentCompiled
       simp only [List.map_cons, ConcreteElaboration.compileOccurrencesWith?]
         at currentCompiled
-      cases headResult : ConcreteElaboration.compileOccurrenceWith? signature
+      cases headResult : ConcreteElaboration.compileOccurrenceWith?
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           recurse targetContext binders
           (.node (aliasNode pattern.val attachment aliasIndex)) with
@@ -171,7 +169,7 @@ theorem aliasOccurrences_denote_of_collapse
           rw [headResult] at currentCompiled
           simp at currentCompiled
       | some head =>
-          cases tailResult : ConcreteElaboration.compileOccurrencesWith? signature
+          cases tailResult : ConcreteElaboration.compileOccurrencesWith?
               (materializedDiagram pattern.val attachment spine.bodyContainer)
               recurse targetContext binders
               (rest.map fun current =>
@@ -186,7 +184,7 @@ theorem aliasOccurrences_denote_of_collapse
               rw [denoteItemSeq_cons]
               constructor
               · have oneCompiled : ConcreteElaboration.compileOccurrencesWith?
-                    signature
+
                     (materializedDiagram pattern.val attachment spine.bodyContainer)
                     recurse targetContext binders
                     [.node (aliasNode pattern.val attachment aliasIndex)] =
@@ -196,7 +194,7 @@ theorem aliasOccurrences_denote_of_collapse
                   rfl
                 have blockDenotes := (aliasOccurrence_denotes_iff pattern.val attachment
                   spine.bodyContainer targetContext binders recurse aliasIndex
-                  (.cons head .nil) oneCompiled model named
+                  (.cons head .nil) oneCompiled model
                   (sourceEnv ∘ collapse.indexMap) relEnv).2 (by
                     intro output input outputResult inputResult
                     obtain ⟨outputWire, outputOccurs, outputGet⟩ :=

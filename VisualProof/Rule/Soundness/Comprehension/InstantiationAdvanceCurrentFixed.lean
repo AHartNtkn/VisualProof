@@ -14,16 +14,15 @@ All lexical fixedness premises are derived from the target compiler receipt;
 the caller supplies only the trace-stable equality identifying the selected
 relation with the terminal comprehension relation. -/
 theorem advance_current_atom_denotes_nonempty_fixed
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -38,11 +37,10 @@ theorem advance_current_atom_denotes_nonempty_fixed
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
@@ -55,15 +53,15 @@ theorem advance_current_atom_denotes_nonempty_fixed
         site arguments).plugLayout.frameRegion site)).length → model.Carrier)
     (outputRelEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
     (fallback : model.Carrier)
-    (survivorItems : ItemSeq signature
+    (survivorItems : ItemSeq
       (outputLeaf.inheritedWires.extend
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)).length
       outputWitness.toFocus.holeRels)
-    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
-      (compileSurvivorRegion? signature
+      (compileSurvivorRegion?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible) outputLeaf.fuel)
       (outputLeaf.inheritedWires.extend
@@ -78,7 +76,7 @@ theorem advance_current_atom_denotes_nonempty_fixed
         (dropOccurrenceSurvives
           (advanceInstantiationState comprehension attachments binders payload
             state atom tail site arguments hadmissible))) = some survivorItems)
-    (survivorDenotes : denoteItemSeq model named outputEnv outputRelEnv
+    (survivorDenotes : denoteItemSeq model  outputEnv outputRelEnv
       survivorItems)
     (targetFixed : FixedRelationAt payload
       (advanceInstantiationState comprehension attachments binders payload
@@ -116,8 +114,8 @@ theorem advance_current_atom_denotes_nonempty_fixed
       let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
         outputContext outputLeaf.wiresExact outputEnv fallback
       ∀ index, sourceEnv index = quotientValues (sourceContext.get index))
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (sourceCompiled : ConcreteElaboration.compileNode? signature
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (sourceCompiled : ConcreteElaboration.compileNode?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceContext sourceBinders atom =
       some sourceItem)
@@ -129,9 +127,9 @@ theorem advance_current_atom_denotes_nonempty_fixed
       let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
         outputContext outputLeaf.wiresExact outputEnv fallback
       relationValue = terminalRelationOfValues payload state site arguments
-        hnonempty model named
+        hnonempty model
         (fun wire => quotientValues (spliceInput.quotientWire wire)) values) :
-    denoteItem model named sourceEnv
+    denoteItem model  sourceEnv
       (RelEnv.pullback relationMap outputRelEnv) sourceItem := by
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
@@ -150,7 +148,7 @@ theorem advance_current_atom_denotes_nonempty_fixed
     outputRelEnv targetProxies
   have recovered := advance_current_atom_denotes_nonempty comprehension
     attachments binders payload state atom tail site arguments node_eq
-    arguments_eq hnonempty hadmissible model named values outputWitness
+    arguments_eq hnonempty hadmissible model  values outputWitness
     outputLeaf outputEnv outputRelEnv fallback survivorItems survivorCompiled
     survivorDenotes proxyFixed sourceContext sourceBinders
     (RelEnv.pullback relationMap outputRelEnv) (by
@@ -162,16 +160,15 @@ theorem advance_current_atom_denotes_nonempty_fixed
 authoritative interpreted open comprehension, so the target receipt again
 supplies all remaining lexical evidence. -/
 theorem advance_current_atom_denotes_empty_fixed
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -186,9 +183,8 @@ theorem advance_current_atom_denotes_empty_fixed
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
@@ -201,15 +197,15 @@ theorem advance_current_atom_denotes_empty_fixed
         site arguments).plugLayout.frameRegion site)).length → model.Carrier)
     (outputRelEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
     (fallback : model.Carrier)
-    (survivorItems : ItemSeq signature
+    (survivorItems : ItemSeq
       (outputLeaf.inheritedWires.extend
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)).length
       outputWitness.toFocus.holeRels)
-    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
-      (compileSurvivorRegion? signature
+      (compileSurvivorRegion?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible) outputLeaf.fuel)
       (outputLeaf.inheritedWires.extend
@@ -224,7 +220,7 @@ theorem advance_current_atom_denotes_empty_fixed
         (dropOccurrenceSurvives
           (advanceInstantiationState comprehension attachments binders payload
             state atom tail site arguments hadmissible))) = some survivorItems)
-    (survivorDenotes : denoteItemSeq model named outputEnv outputRelEnv
+    (survivorDenotes : denoteItemSeq model  outputEnv outputRelEnv
       survivorItems)
     (targetFixed : FixedRelationAt payload
       (advanceInstantiationState comprehension attachments binders payload
@@ -258,8 +254,8 @@ theorem advance_current_atom_denotes_empty_fixed
       let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
         outputContext outputLeaf.wiresExact outputEnv fallback
       ∀ index, sourceEnv index = quotientValues (sourceContext.get index))
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (sourceCompiled : ConcreteElaboration.compileNode? signature
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (sourceCompiled : ConcreteElaboration.compileNode?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceContext sourceBinders atom =
       some sourceItem)
@@ -270,10 +266,10 @@ theorem advance_current_atom_denotes_empty_fixed
         (spliceInput.plugLayout.frameRegion site)
       let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
         outputContext outputLeaf.wiresExact outputEnv fallback
-      relationValue = payload.interpretedRelation model named
+      relationValue = payload.interpretedRelation model
         (fun index => quotientValues
           (spliceInput.quotientWire (state.parameters index)))) :
-    denoteItem model named sourceEnv
+    denoteItem model  sourceEnv
       (RelEnv.pullback relationMap outputRelEnv) sourceItem := by
   obtain ⟨sourceRelation, sourceLookup⟩ :=
     coalesced_bubbleRelation_exists comprehension attachments binders payload
@@ -285,7 +281,7 @@ theorem advance_current_atom_denotes_empty_fixed
     relationValue outputRelEnv targetFixed
   have recovered := advance_current_atom_denotes_empty comprehension attachments
     binders payload state atom tail site arguments node_eq arguments_eq hzero
-    hadmissible model named outputWitness outputLeaf outputEnv outputRelEnv
+    hadmissible model  outputWitness outputLeaf outputEnv outputRelEnv
     fallback survivorItems survivorCompiled survivorDenotes sourceContext
     sourceBinders (RelEnv.pullback relationMap outputRelEnv) (by
       simpa only [relationEq] using sourceFixed)

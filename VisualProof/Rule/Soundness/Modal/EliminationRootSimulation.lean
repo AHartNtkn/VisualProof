@@ -59,35 +59,34 @@ theorem concreteIsoOfEq_wires_val
 
 noncomputable def rootContextSimulation
     (trace : DoubleCutElimTrace input outer raw)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
-    (targetWellFormed : input.WellFormed signature)
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
+    (targetWellFormed : input.WellFormed )
     (boundary : List (Fin input.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.wires wire).scope = input.root)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection) :
-    let source : CheckedOpenDiagram signature :=
+    let source : CheckedOpenDiagram  :=
       ⟨trace.sourceOpen boundary,
         trace.sourceOpen_wellFormed sourceWellFormed targetWellFormed boundary
           boundaryRoot⟩
-    let target : CheckedOpenDiagram signature :=
+    let target : CheckedOpenDiagram  :=
       ⟨targetOpen input boundary,
         targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
     let simulation := trace.semanticSimulation sourceWellFormed
-      targetWellFormed model named
+      targetWellFormed model
     ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
       simulation direction source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires := by
-  let source : CheckedOpenDiagram signature :=
+  let source : CheckedOpenDiagram  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed sourceWellFormed targetWellFormed boundary
         boundaryRoot⟩
-  let target : CheckedOpenDiagram signature :=
+  let target : CheckedOpenDiagram  :=
     ⟨targetOpen input boundary,
       targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
   let simulation := trace.semanticSimulation sourceWellFormed
-    targetWellFormed model named
+    targetWellFormed model
   let promoted := trace.rootContextWitness sourceWellFormed targetWellFormed
     boundary boundaryRoot
   let outerRelation := trace.wireIdentityRelation source.val.exposedWires
@@ -128,7 +127,7 @@ noncomputable def rootContextSimulation
     apply ConcreteElaboration.directionalRootTransport_of_agreement direction
       source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires outerRelation
-      promoted.indexRelation model named sourceItems targetItems
+      promoted.indexRelation model  sourceItems targetItems
     · intro sourceOuter targetOuter outerAgreement
       have outerEq : sourceOuter = targetOuter := by
         funext index
@@ -207,7 +206,7 @@ noncomputable def rootContextSimulation
     have targetEnumeration :=
       ConcreteElaboration.BinderContext.Enumeration.empty input
     have transport := trace.focusedRootItems_transport sourceWellFormed
-      targetWellFormed model named direction trace.sourceDiagram.regionCount
+      targetWellFormed model  direction trace.sourceDiagram.regionCount
       input.regionCount source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires promoted
       ConcreteElaboration.BinderContext.empty
@@ -238,41 +237,40 @@ noncomputable def rootContextSimulation
     rw [relationMapEq, Region.renameRelations_id]
     exact ConcreteElaboration.finishRoot_denote direction
       source.val.exposedWires source.val.hiddenWires
-      target.val.exposedWires target.val.hiddenWires outerRelation model named
+      target.val.exposedWires target.val.hiddenWires outerRelation model
       sourceItems targetItems transport
 
 theorem boundaryWitness
     (trace : DoubleCutElimTrace input outer raw)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
-    (targetWellFormed : input.WellFormed signature)
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
+    (targetWellFormed : input.WellFormed )
     (boundary : List (Fin input.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.wires wire).scope = input.root)
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin boundary.length → model.Carrier) :
-    let source : CheckedOpenDiagram signature :=
+    let source : CheckedOpenDiagram  :=
       ⟨trace.sourceOpen boundary,
         trace.sourceOpen_wellFormed sourceWellFormed targetWellFormed boundary
           boundaryRoot⟩
-    let target : CheckedOpenDiagram signature :=
+    let target : CheckedOpenDiagram  :=
       ⟨targetOpen input boundary,
         targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
     let root := trace.rootContextSimulation sourceWellFormed targetWellFormed
-      boundary boundaryRoot model named direction
+      boundary boundaryRoot model  direction
     ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
-      direction source.elaborate target.elaborate root.outer model named
+      direction source.elaborate target.elaborate root.outer model
       args args := by
-  let source : CheckedOpenDiagram signature :=
+  let source : CheckedOpenDiagram  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed sourceWellFormed targetWellFormed boundary
         boundaryRoot⟩
-  let target : CheckedOpenDiagram signature :=
+  let target : CheckedOpenDiagram  :=
     ⟨targetOpen input boundary,
       targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
   let root := trace.rootContextSimulation sourceWellFormed targetWellFormed
-    boundary boundaryRoot model named direction
+    boundary boundaryRoot model  direction
   have exposedEq : source.val.exposedWires = target.val.exposedWires := rfl
   have sourceRootExact :
       ConcreteElaboration.WireContext.Exact
@@ -336,7 +334,7 @@ theorem boundaryWitness
 
 theorem interfaceTransport_transportBoundary
     (hraw : doubleCutElimRaw? input outer = some raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (boundary : List (Fin input.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.wires wire).scope = input.root) :
@@ -355,7 +353,7 @@ theorem interfaceTransport_transportBoundary
   have promotedRoot :
       (raw.wires (Fin.cast wireCountEq wire)).scope = raw.root := by
     have promoted := trace.targetRoot_scope_promoted
-      (signature := signature) wellFormed wire (sourceRoot wire member)
+       wellFormed wire (sourceRoot wire member)
     have transported := rootScope_transport rawEq.symm wire promoted
     have castEq :
         Fin.cast (congrArg ConcreteDiagram.wireCount rawEq.symm) wire =

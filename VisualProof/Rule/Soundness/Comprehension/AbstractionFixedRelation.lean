@@ -13,42 +13,38 @@ fresh abstraction bubble by the one comprehension relation chosen at the outer
 existential.  The relation variable is proof-relevant because intervening
 bubbles shift its de Bruijn index. -/
 structure FixedRelationWitness
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (binders : ConcreteElaboration.BinderContext trace.diagram rels)
     (relations : RelEnv model.Carrier rels) where
   relation : RelVar rels comprehension.val.boundary.length
   lookup : binders trace.bubble =
     some ⟨comprehension.val.boundary.length, relation⟩
   value : relations.lookup relation =
-    abstractionRelation (signature := signature) comprehension model named
+    abstractionRelation  comprehension model
 
 namespace FixedRelationWitness
 
 /-- Enter the executor-created abstraction bubble with the comprehension
 itself as its existential relation witness. -/
 def fresh
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (binders : ConcreteElaboration.BinderContext trace.diagram rels)
     (relations : RelEnv model.Carrier rels) :
-    FixedRelationWitness trace model named
+    FixedRelationWitness trace model
       (binders.push trace.bubble comprehension.val.boundary.length)
-      (abstractionRelation (signature := signature) comprehension model named,
+      (abstractionRelation  comprehension model ,
         relations) where
   relation := ConcreteElaboration.BinderContext.head
     comprehension.val.boundary.length
@@ -58,12 +54,12 @@ def fresh
 /-- Passing through any other target bubble preserves the fixed abstraction
 relation, shifting only its lexical relation index. -/
 def pushOther
-    (witness : FixedRelationWitness trace model named binders relations)
+    (witness : FixedRelationWitness trace model  binders relations)
     (child : Fin trace.diagram.regionCount)
     (arity : Nat)
     (other : child ≠ trace.bubble)
     (childRelation : Relation model.Carrier arity) :
-    FixedRelationWitness trace model named (binders.push child arity)
+    FixedRelationWitness trace model  (binders.push child arity)
       (childRelation, relations) where
   relation := ConcreteElaboration.BinderContext.liftVar arity witness.relation
   lookup := by
@@ -81,10 +77,9 @@ comprehension relation at the occurrence's ordered source-wire valuation.
 Unlike `compiledTargetAtom_denote_iff_relation`, this form remains valid below
 arbitrary intervening target binders. -/
 theorem compiledTargetAtom_denote_iff_fixed
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
@@ -92,7 +87,6 @@ theorem compiledTargetAtom_denote_iff_fixed
       occurrences)
     (occurrenceIndex : Fin occurrences.length)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext trace.diagram)
     (contextWitness : ContextWitness trace sourceContext targetContext)
@@ -104,14 +98,14 @@ theorem compiledTargetAtom_denote_iff_fixed
       sourceEnvironment targetEnvironment)
     (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
     (targetRelationEnvironment : RelEnv model.Carrier targetRels)
-    (fixed : FixedRelationWitness trace model named targetBinders
+    (fixed : FixedRelationWitness trace model  targetBinders
       targetRelationEnvironment)
-    (item : Item signature targetContext.length targetRels)
-    (compiled : ConcreteElaboration.compileNode? signature trace.diagram
+    (item : Item  targetContext.length targetRels)
+    (compiled : ConcreteElaboration.compileNode?  trace.diagram
       targetContext targetBinders (trace.targetAtom occurrenceIndex) =
         some item) :
-    denoteItem model named targetEnvironment targetRelationEnvironment item ↔
-      comprehension.denote model named
+    denoteItem model  targetEnvironment targetRelationEnvironment item ↔
+      comprehension.denote model
         (fun index : Fin comprehension.val.boundary.length =>
           touchingEnvironment input (occurrences.get occurrenceIndex)
             sourceContext sourceExact sourceEnvironment
@@ -135,14 +129,14 @@ theorem compiledTargetAtom_denote_iff_fixed
     (Option.some.inj compiled).symm
   subst item
   change targetRelationEnvironment.lookup fixed.relation
-      (targetEnvironment ∘ resolved) ↔ comprehension.denote model named _
+      (targetEnvironment ∘ resolved) ↔ comprehension.denote model  _
   rw [fixed.value]
-  change comprehension.denote model named (targetEnvironment ∘ resolved) ↔
-    comprehension.denote model named _
+  change comprehension.denote model  (targetEnvironment ∘ resolved) ↔
+    comprehension.denote model  _
   apply iff_of_eq
   apply congrArg
     (fun arguments : Fin comprehension.val.boundary.length → model.Carrier =>
-      comprehension.denote model named arguments)
+      comprehension.denote model  arguments)
   funext index
   have origin := trace.resolvedTargetAtom_origin occurrenceIndex
     occurrenceWitness targetContext resolved

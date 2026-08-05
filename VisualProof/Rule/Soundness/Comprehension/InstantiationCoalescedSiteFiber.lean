@@ -74,16 +74,15 @@ theorem exactContextWireValue_parameters
 /-- The current executor-owned atom remains in the survivor compiler and
 therefore exposes the fixed relation from any denoting survivor conjunction. -/
 theorem survivor_items_entail_fixedRelation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -96,7 +95,6 @@ theorem survivor_items_entail_fixedRelation
     (pending_eq : state.pendingAtoms = atom :: tail)
     (ownedNodup : state.ownedAtoms.Nodup)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
     (fuel : Nat)
@@ -110,13 +108,13 @@ theorem survivor_items_entail_fixedRelation
     (environment : Fin context.length → model.Carrier)
     (environment_eq : ∀ index,
       environment index = wireValue (context.get index))
-    (items : ItemSeq signature context.length rels)
-    (compiled : ConcreteElaboration.compileOccurrencesWith? signature
-      state.diagram.val (compileSurvivorRegion? signature state fuel)
+    (items : ItemSeq  context.length rels)
+    (compiled : ConcreteElaboration.compileOccurrencesWith?
+      state.diagram.val (compileSurvivorRegion?  state fuel)
       context binderContext
       ((ConcreteElaboration.localOccurrences state.diagram.val site).filter
         (dropOccurrenceSurvives state)) = some items)
-    (denotes : denoteItemSeq model named environment relEnv items) :
+    (denotes : denoteItemSeq model  environment relEnv items) :
     relationValue (wireValue ∘ arguments) := by
   let occurrences :=
     (ConcreteElaboration.localOccurrences state.diagram.val site).filter
@@ -134,42 +132,41 @@ theorem survivor_items_entail_fixedRelation
     indexOf?_sound occurrenceIndexEq
   let itemIndex := Fin.cast
     (ConcreteElaboration.compileOccurrencesWith?_length
-      (compileSurvivorRegion? signature state fuel) context binderContext
+      (compileSurvivorRegion?  state fuel) context binderContext
       compiled).symm occurrenceIndex
   have atIndex := ConcreteElaboration.compileOccurrencesWith?_get
-    (compileSurvivorRegion? signature state fuel) context binderContext
+    (compileSurvivorRegion?  state fuel) context binderContext
     compiled occurrenceIndex
-  have atAtom : ConcreteElaboration.compileOccurrenceWith? signature
-      state.diagram.val (compileSurvivorRegion? signature state fuel)
+  have atAtom : ConcreteElaboration.compileOccurrenceWith?
+      state.diagram.val (compileSurvivorRegion?  state fuel)
       context binderContext (.node atom) = some (items.get itemIndex) := by
     rw [← occurrenceEq]
     simpa [occurrences, itemIndex] using atIndex
-  have atomCompiled : ConcreteElaboration.compileNode? signature
+  have atomCompiled : ConcreteElaboration.compileNode?
       state.diagram.val context binderContext atom =
         some (items.get itemIndex) := by
     simpa [ConcreteElaboration.compileOccurrenceWith?] using atAtom
-  have atomDenotes : denoteItem model named environment relEnv
+  have atomDenotes : denoteItem model  environment relEnv
       (items.get itemIndex) :=
-    (denoteItemSeq_iff_get model named environment relEnv items).mp denotes
+    (denoteItemSeq_iff_get model  environment relEnv items).mp denotes
       itemIndex
   exact (compiled_atom_iff_fixedRelation payload state atom site arguments
-    node_eq arguments_eq model named wireValue relationValue context
+    node_eq arguments_eq model  wireValue relationValue context
     binderContext relEnv fixed relation lookup environment environment_eq
     (items.get itemIndex) atomCompiled).mp atomDenotes
 
 /-- Denotation of the active fixed-relation atom makes the complete source
 site valuation constant on every fiber of the canonical attachment quotient. -/
 theorem site_sourceEnvironment_fiberConstant
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -184,7 +181,6 @@ theorem site_sourceEnvironment_fiberConstant
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -192,9 +188,9 @@ theorem site_sourceEnvironment_fiberConstant
     (nonemptyRelationEq : ∀ hnonempty :
       payload.binderSpine.proxyCount ≠ 0,
       relationValue = terminalRelationOfParameterValues payload state site
-        arguments hnonempty model named parameterValues values)
+        arguments hnonempty model  parameterValues values)
     (emptyRelationEq : ∀ _hzero : payload.binderSpine.proxyCount = 0,
-      relationValue = payload.interpretedRelation model named parameterValues)
+      relationValue = payload.interpretedRelation model  parameterValues)
     (fuel : Nat)
     (context : ConcreteElaboration.WireContext state.diagram.val)
     (targetContext : ConcreteElaboration.WireContext
@@ -210,13 +206,13 @@ theorem site_sourceEnvironment_fiberConstant
       some ⟨payload.arity, relation⟩)
     (environment : Fin context.length → model.Carrier)
     (parameters : ParameterValuesAt state context environment parameterValues)
-    (items : ItemSeq signature context.length rels)
-    (compiled : ConcreteElaboration.compileOccurrencesWith? signature
-      state.diagram.val (compileSurvivorRegion? signature state fuel)
+    (items : ItemSeq  context.length rels)
+    (compiled : ConcreteElaboration.compileOccurrencesWith?
+      state.diagram.val (compileSurvivorRegion?  state fuel)
       context binderContext
       ((ConcreteElaboration.localOccurrences state.diagram.val site).filter
         (dropOccurrenceSurvives state)) = some items)
-    (denotes : denoteItemSeq model named environment relEnv items)
+    (denotes : denoteItemSeq model  environment relEnv items)
     (fallback : model.Carrier) :
     ∀ left right,
       siteQuotientIndexMap
@@ -243,7 +239,7 @@ theorem site_sourceEnvironment_fiberConstant
   have relationTruth : relationValue (wireValue ∘ arguments) :=
     survivor_items_entail_fixedRelation comprehension attachments binders
       payload state atom tail site arguments node_eq arguments_eq pending_eq
-      ownedNodup model named wireValue relationValue fuel context binderContext
+      ownedNodup model  wireValue relationValue fuel context binderContext
       relEnv fixed relation lookup environment environmentEq items compiled
       denotes
   intro left right mapped
@@ -259,7 +255,7 @@ theorem site_sourceEnvironment_fiberConstant
     environment left = wireValue (context.get left) := environmentEq left
     _ = wireValue (context.get right) :=
       relation_truth_quotientWire_value_eq payload state site arguments model
-        named wireValue relationValue values parameterValues parameterEq
+         wireValue relationValue values parameterValues parameterEq
         nonemptyRelationEq emptyRelationEq relationTruth sameClass
     _ = environment right := (environmentEq right).symm
 

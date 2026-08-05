@@ -13,10 +13,9 @@ namespace InstantiationSemantic
 binder spine uses the first certified copy as a reference; the zero-spine case
 uses the authoritative open-comprehension interpretation directly. -/
 noncomputable def relationOfTraceFocus
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -28,27 +27,25 @@ noncomputable def relationOfTraceFocus
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       (initialInstantiationState payload) result)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index)) :
     Relation model.Carrier payload.arity :=
   match trace with
-  | .done .. => payload.interpretedRelation model named parameterValues
+  | .done .. => payload.interpretedRelation model  parameterValues
   | .step _ state _ _ _ site _ arguments _ _ _ _ _ _ =>
       if hzero : payload.binderSpine.proxyCount = 0 then
-        payload.interpretedRelation model named parameterValues
+        payload.interpretedRelation model  parameterValues
       else
         terminalRelationOfParameterValues payload state site arguments hzero
-          model named parameterValues values
+          model  parameterValues values
 
 /-- The relation selected from a nonempty executor trace satisfies the one
 trace-wide relation contract consumed by every copy simulation. -/
 theorem relationOfTraceFocus_contract_of_step
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -75,32 +72,30 @@ theorem relationOfTraceFocus_contract_of_step
     {rest : InstantiationTrace comprehension attachments binders payload fuel
       plan.next result}
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index)) :
-    TraceRelationContract payload input model named
+    TraceRelationContract payload input model
       (relationOfTraceFocus
         (.step fuel (initialInstantiationState payload) result atom tail site
           candidate arguments plan pending_eq node_eq candidate_eq arguments_eq
           rest)
-        model named parameterValues values)
+        model  parameterValues values)
       values parameterValues := by
   by_cases hzero : payload.binderSpine.proxyCount = 0
-  · apply TraceRelationContract.of_empty payload input hzero model named
+  · apply TraceRelationContract.of_empty payload input hzero model
     simp [relationOfTraceFocus, hzero]
   · apply TraceRelationContract.of_nonempty payload input
-      (initialInstantiationState payload) site arguments hzero model named
+      (initialInstantiationState payload) site arguments hzero model
     simp [relationOfTraceFocus, hzero]
 
 /-- Final target-focus data determines the relation inserted by vacuous
 reconstruction.  The selector reads ordered parameters and enclosing proxy
 relations before pushing the selected bubble binder. -/
 noncomputable def finalFocusRelationSelector
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -115,9 +110,9 @@ noncomputable def finalFocusRelationSelector
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (targetWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
+    :
     VacuousElimTrace.FreshRelationSelector elimTrace targetWellFormed model := by
   intro sourceRels targetRels sourceContext targetContext sourceBinders
     targetBinders sourceExact targetExact sourceCover targetCover
@@ -147,7 +142,7 @@ noncomputable def finalFocusRelationSelector
   cases copyTrace with
   | done =>
       exact payloadArityEq ▸
-        payload.interpretedRelation model named parameterValues
+        payload.interpretedRelation model  parameterValues
   | step traceFuel _ _ atom tail site candidate arguments plan pending_eq
       node_eq candidate_eq arguments_eq rest =>
       let hadmissible :=
@@ -170,9 +165,9 @@ noncomputable def finalFocusRelationSelector
         targetRelations
       by_cases hzero : payload.binderSpine.proxyCount = 0
       · exact payloadArityEq ▸
-          payload.interpretedRelation model named parameterValues
+          payload.interpretedRelation model  parameterValues
       · exact payloadArityEq ▸ terminalRelationOfParameterValues payload
-          (initialInstantiationState payload) site arguments hzero model named
+          (initialInstantiationState payload) site arguments hzero model
           parameterValues proxyValues
 
 /-- In a nonempty executor trace, the relation chosen at the final vacuous
@@ -180,10 +175,9 @@ focus is exactly the trace-wide relation selected from the first certified
 copy.  This equality is kept explicit so the focused semantic proof can reuse
 the same witness before existential bubble semantics hides it. -/
 theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -213,9 +207,8 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (targetWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     {sourceRels targetRels : RelCtx}
     (sourceContext : ConcreteElaboration.WireContext elimTrace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext
@@ -281,11 +274,11 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
     let proxyValues := proxyRelationsOfParentCover payload result finalTargets
       targetBinders elimTrace.parent bubbleShape stateCover targetRelations
     (finalFocusRelationSelector wholeTrace elimTrace targetWellFormed
-      model named) sourceContext targetContext sourceBinders
+      model ) sourceContext targetContext sourceBinders
         targetBinders sourceExact targetExact sourceCover targetCover
         sourceEnumeration targetEnumeration binderWitness sourceEnvironment
         targetEnvironment sourceRelations targetRelations =
-      payloadArityEq ▸ relationOfTraceFocus wholeTrace model named
+      payloadArityEq ▸ relationOfTraceFocus wholeTrace model
         parameterValues proxyValues := by
   by_cases hzero : payload.binderSpine.proxyCount = 0
   · simp [finalFocusRelationSelector, relationOfTraceFocus, hzero]

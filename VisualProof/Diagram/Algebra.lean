@@ -5,23 +5,6 @@ namespace VisualProof.Diagram
 open VisualProof
 open Theory
 
-/-- An arity-preserving renaming of named relations between signatures. -/
-structure NamedRenaming (source target : List Nat) where
-  named : ∀ {arity}, NamedRel source arity → NamedRel target arity
-
-namespace NamedRenaming
-
-/-- Canonical inclusion of a signature into a right extension. -/
-def appendRight (signature suffix : List Nat) :
-    NamedRenaming signature (signature ++ suffix) where
-  named relation := {
-    index := Fin.cast (by simp) (Fin.castAdd suffix.length relation.index)
-    hasArity := by
-      simpa [List.get_eq_getElem,
-        List.getElem_append_left relation.index.isLt] using relation.hasArity
-  }
-
-end NamedRenaming
 
 namespace Region
 
@@ -40,8 +23,8 @@ def conjoinRightWire (outer firstLocal secondLocal : Nat) :
     (fun wire => Fin.natAdd outer (Fin.natAdd firstLocal wire))
 
 /-- Intrinsic conjunction with disjoint ownership of each operand's local wires. -/
-def conjoin : Region signature wires rels → Region signature wires rels →
-    Region signature wires rels
+def conjoin : Region  wires rels → Region  wires rels →
+    Region  wires rels
   | .mk firstLocal firstItems, .mk secondLocal secondItems =>
       .mk (firstLocal + secondLocal)
         ((firstItems.renameWires
@@ -49,7 +32,7 @@ def conjoin : Region signature wires rels → Region signature wires rels →
           (secondItems.renameWires
             (conjoinRightWire wires firstLocal secondLocal)))
 
-def blank : Region signature wires rels := .mk 0 .nil
+def blank : Region  wires rels := .mk 0 .nil
 
 /-- Embed a site's inherited and already-local wires into the combined local
 block used when material is adjoined at that exact site. -/
@@ -101,9 +84,9 @@ def adjoinMaterialWire (outer hostLocal addedLocal : Nat) :
 /-- Adjoin material inside a region after its existing local binders.  Unlike
 `conjoin`, the material can refer to the site's existing local witnesses. -/
 def adjoinAt (hostLocal : Nat)
-    (hostItems : ItemSeq signature (outer + hostLocal) rels)
-    (material : Region signature (outer + hostLocal) rels) :
-    Region signature outer rels :=
+    (hostItems : ItemSeq  (outer + hostLocal) rels)
+    (material : Region  (outer + hostLocal) rels) :
+    Region  outer rels :=
   match material with
   | .mk addedLocal addedItems =>
       .mk (hostLocal + addedLocal)
@@ -117,184 +100,37 @@ elaborate to this operation: pattern wires are mapped into the complete site
 wire context, pattern relation variables are mapped into the lexical host
 relation context, and the renamed material is adjoined after the host items. -/
 def spliceAt (hostLocal : Nat)
-    (hostItems : ItemSeq signature (outer + hostLocal) hostRels)
-    (material : Region signature patternWires patternRels)
+    (hostItems : ItemSeq  (outer + hostLocal) hostRels)
+    (material : Region  patternWires patternRels)
     (wireMap : Fin patternWires → Fin (outer + hostLocal))
     (relationMap : RelationRenaming patternRels hostRels) :
-    Region signature outer hostRels :=
+    Region  outer hostRels :=
   adjoinAt hostLocal hostItems
     ((material.renameWires wireMap).renameRelations relationMap)
 
 end Region
 
-mutual
-  def Region.renameNamed (rho : NamedRenaming source target) :
-      Region source wires rels → Region target wires rels
-    | .mk localWires items => .mk localWires (items.renameNamed rho)
-
-  def Item.renameNamed (rho : NamedRenaming source target) :
-      Item source wires rels → Item target wires rels
-    | .atom relation arguments => .atom relation arguments
-    | .identity arity arguments => .identity arity arguments
-    | .named relation arguments => .named (rho.named relation) arguments
-    | .cut body => .cut (body.renameNamed rho)
-    | .bubble arity body => .bubble arity (body.renameNamed rho)
-
-  def ItemSeq.renameNamed (rho : NamedRenaming source target) :
-      ItemSeq source wires rels → ItemSeq target wires rels
-    | .nil => .nil
-    | .cons item tail => .cons (item.renameNamed rho) (tail.renameNamed rho)
-end
-
-def OpenDiagram.renameNamed (rho : NamedRenaming source target)
-    (diagram : OpenDiagram source arity) : OpenDiagram target arity where
-  externalClasses := diagram.externalClasses
-  boundary := diagram.boundary
-  boundary_surjective := diagram.boundary_surjective
-  body := diagram.body.renameNamed rho
-
-def NamedEnv.Agrees (rho : NamedRenaming source target)
-    (sourceEnv : NamedEnv D source) (targetEnv : NamedEnv D target) : Prop :=
-  ∀ arity (relation : NamedRel source arity) args,
-    targetEnv arity (rho.named relation) args ↔
-      sourceEnv arity relation args
-
-mutual
-  theorem denoteRegion_renameNamed
-      (model : Model)
-      (rho : NamedRenaming source target)
-      (sourceNamed : NamedEnv model.Carrier source)
-      (targetNamed : NamedEnv model.Carrier target)
-      (agrees : NamedEnv.Agrees rho sourceNamed targetNamed)
-      (env : Fin wires → model.Carrier)
-      (rels : RelEnv model.Carrier relCtx)
-      (region : Region source wires relCtx) :
-      denoteRegion model targetNamed env rels (region.renameNamed rho) ↔
-        denoteRegion model sourceNamed env rels region := by
-    cases region with
-    | mk localWires items =>
-        simp only [Region.renameNamed, denoteRegion_mk]
-        constructor
-        · rintro ⟨localEnv, hitems⟩
-          exact ⟨localEnv,
-            (denoteItemSeq_renameNamed model rho sourceNamed targetNamed agrees
-              (extendWireEnv env localEnv) rels items).mp hitems⟩
-        · rintro ⟨localEnv, hitems⟩
-          exact ⟨localEnv,
-            (denoteItemSeq_renameNamed model rho sourceNamed targetNamed agrees
-              (extendWireEnv env localEnv) rels items).mpr hitems⟩
-
-  theorem denoteItem_renameNamed
-      (model : Model)
-      (rho : NamedRenaming source target)
-      (sourceNamed : NamedEnv model.Carrier source)
-      (targetNamed : NamedEnv model.Carrier target)
-      (agrees : NamedEnv.Agrees rho sourceNamed targetNamed)
-      (env : Fin wires → model.Carrier)
-      (rels : RelEnv model.Carrier relCtx)
-      (item : Item source wires relCtx) :
-      denoteItem model targetNamed env rels (item.renameNamed rho) ↔
-        denoteItem model sourceNamed env rels item := by
-    cases item with
-    | atom => rfl
-    | identity => rfl
-    | named relation arguments =>
-        simpa [Item.renameNamed, denoteItem_named] using
-          agrees _ relation (env ∘ arguments)
-    | cut body =>
-        simp only [Item.renameNamed, cut_denotes_negation]
-        rw [denoteRegion_renameNamed model rho sourceNamed targetNamed agrees
-          env rels body]
-    | bubble arity body =>
-        simp only [Item.renameNamed, bubble_denotes_exists]
-        constructor
-        · rintro ⟨relation, hbody⟩
-          exact ⟨relation,
-            (denoteRegion_renameNamed (relCtx := arity :: relCtx)
-              model rho sourceNamed targetNamed agrees
-              env (relation, rels) body).mp hbody⟩
-        · rintro ⟨relation, hbody⟩
-          exact ⟨relation,
-            (denoteRegion_renameNamed (relCtx := arity :: relCtx)
-              model rho sourceNamed targetNamed agrees
-              env (relation, rels) body).mpr hbody⟩
-
-  theorem denoteItemSeq_renameNamed
-      (model : Model)
-      (rho : NamedRenaming source target)
-      (sourceNamed : NamedEnv model.Carrier source)
-      (targetNamed : NamedEnv model.Carrier target)
-      (agrees : NamedEnv.Agrees rho sourceNamed targetNamed)
-      (env : Fin wires → model.Carrier)
-      (rels : RelEnv model.Carrier relCtx)
-      (items : ItemSeq source wires relCtx) :
-      denoteItemSeq model targetNamed env rels (items.renameNamed rho) ↔
-        denoteItemSeq model sourceNamed env rels items := by
-    cases items with
-    | nil => rfl
-    | cons item tail =>
-        simp only [ItemSeq.renameNamed, denoteItemSeq_cons]
-        rw [denoteItem_renameNamed model rho sourceNamed targetNamed agrees
-          env rels item,
-          denoteItemSeq_renameNamed model rho sourceNamed targetNamed agrees
-            env rels tail]
-end
-
-theorem denoteOpen_renameNamed
-    (model : Model)
-    (rho : NamedRenaming source target)
-    (sourceNamed : NamedEnv model.Carrier source)
-    (targetNamed : NamedEnv model.Carrier target)
-    (agrees : NamedEnv.Agrees rho sourceNamed targetNamed)
-    (diagram : OpenDiagram source arity)
-    (args : Fin arity → model.Carrier) :
-    denoteOpen model targetNamed (diagram.renameNamed rho) args ↔
-      denoteOpen model sourceNamed diagram args := by
-  unfold denoteOpen
-  constructor
-  · rintro ⟨assignment, hargs, hbody⟩
-    let sourceAssignment : BoundaryAssignment diagram model.Carrier := {
-      args := assignment.args
-      classes := assignment.classes
-      agrees := assignment.agrees
-    }
-    exact ⟨sourceAssignment, hargs,
-      (denoteRegion_renameNamed (relCtx := []) model rho sourceNamed
-        targetNamed agrees sourceAssignment.classes PUnit.unit
-        diagram.body).mp hbody⟩
-  · rintro ⟨assignment, hargs, hbody⟩
-    let targetAssignment :
-        BoundaryAssignment (diagram.renameNamed rho) model.Carrier := {
-      args := assignment.args
-      classes := assignment.classes
-      agrees := assignment.agrees
-    }
-    exact ⟨targetAssignment, hargs,
-      (denoteRegion_renameNamed (relCtx := []) model rho sourceNamed
-        targetNamed agrees targetAssignment.classes PUnit.unit
-        diagram.body).mpr hbody⟩
-
-structure ItemSeq.Focus (items : ItemSeq signature wires rels) where
-  before : ItemSeq signature wires rels
-  item : Item signature wires rels
-  after : ItemSeq signature wires rels
+structure ItemSeq.Focus (items : ItemSeq  wires rels) where
+  before : ItemSeq  wires rels
+  item : Item  wires rels
+  after : ItemSeq  wires rels
   rebuild : before.append (.cons item after) = items
 
 def Item.castWiresEq (equality : source = target)
-    (item : Item signature source rels) : Item signature target rels :=
-  Eq.mp (congrArg (fun wires => Item signature wires rels) equality) item
+    (item : Item  source rels) : Item  target rels :=
+  Eq.mp (congrArg (fun wires => Item  wires rels) equality) item
 
 def ItemSeq.castWiresEq (equality : source = target)
-    (items : ItemSeq signature source rels) : ItemSeq signature target rels :=
-  Eq.mp (congrArg (fun wires => ItemSeq signature wires rels) equality) items
+    (items : ItemSeq  source rels) : ItemSeq  target rels :=
+  Eq.mp (congrArg (fun wires => ItemSeq  wires rels) equality) items
 
 def Region.castWiresEq (equality : source = target)
-    (region : Region signature source rels) : Region signature target rels :=
-  Eq.mp (congrArg (fun wires => Region signature wires rels) equality) region
+    (region : Region  source rels) : Region  target rels :=
+  Eq.mp (congrArg (fun wires => Region  wires rels) equality) region
 
 @[simp] theorem ItemSeq.castWiresEq_trans
     (first : source = middle) (second : middle = target)
-    (items : ItemSeq signature source rels) :
+    (items : ItemSeq  source rels) :
     (items.castWiresEq first).castWiresEq second =
       items.castWiresEq (first.trans second) := by
   subst middle
@@ -303,7 +139,7 @@ def Region.castWiresEq (equality : source = target)
 
 @[simp] theorem Region.castWiresEq_mk
     (equality : sourceOuter = targetOuter)
-    (items : ItemSeq signature (sourceOuter + localWires) rels) :
+    (items : ItemSeq  (sourceOuter + localWires) rels) :
     Region.castWiresEq equality (Region.mk localWires items) =
       Region.mk localWires
         (items.castWiresEq
@@ -311,54 +147,28 @@ def Region.castWiresEq (equality : source = target)
   subst targetOuter
   rfl
 
-@[simp] theorem Item.castWiresEq_renameNamed
-    (equality : sourceWires = targetWires)
-    (rho : NamedRenaming sourceSignature targetSignature)
-    (item : Item sourceSignature sourceWires rels) :
-    (item.renameNamed rho).castWiresEq equality =
-      (item.castWiresEq equality).renameNamed rho := by
-  subst targetWires
-  rfl
-
-@[simp] theorem ItemSeq.castWiresEq_renameNamed
-    (equality : sourceWires = targetWires)
-    (rho : NamedRenaming sourceSignature targetSignature)
-    (items : ItemSeq sourceSignature sourceWires rels) :
-    (items.renameNamed rho).castWiresEq equality =
-      (items.castWiresEq equality).renameNamed rho := by
-  subst targetWires
-  rfl
-
-@[simp] theorem Region.castWiresEq_renameNamed
-    (equality : sourceWires = targetWires)
-    (rho : NamedRenaming sourceSignature targetSignature)
-    (region : Region sourceSignature sourceWires rels) :
-    (region.renameNamed rho).castWiresEq equality =
-      (region.castWiresEq equality).renameNamed rho := by
-  subst targetWires
-  rfl
 
 theorem Region.castWiresEq_eq_renameWires (equality : source = target)
-    (region : Region signature source rels) :
+    (region : Region  source rels) :
     region.castWiresEq equality = region.renameWires (Fin.cast equality) := by
   subst target
   simp [Region.castWiresEq, Region.renameWires_id]
 
 theorem Item.castWiresEq_eq_renameWires (equality : source = target)
-    (item : Item signature source rels) :
+    (item : Item  source rels) :
     item.castWiresEq equality = item.renameWires (Fin.cast equality) := by
   subst target
   simp [Item.castWiresEq, Item.renameWires_id]
 
 theorem ItemSeq.castWiresEq_eq_renameWires (equality : source = target)
-    (items : ItemSeq signature source rels) :
+    (items : ItemSeq  source rels) :
     items.castWiresEq equality = items.renameWires (Fin.cast equality) := by
   subst target
   simp [ItemSeq.castWiresEq, ItemSeq.renameWires_id]
 
 @[simp] theorem ItemSeq.castWiresEq_append
     (equality : source = target)
-    (first second : ItemSeq signature source rels) :
+    (first second : ItemSeq  source rels) :
     (first.append second).castWiresEq equality =
       (first.castWiresEq equality).append
         (second.castWiresEq equality) := by
@@ -367,8 +177,8 @@ theorem ItemSeq.castWiresEq_eq_renameWires (equality : source = target)
 
 @[simp] theorem ItemSeq.castWiresEq_cons
     (equality : source = target)
-    (item : Item signature source rels)
-    (tail : ItemSeq signature source rels) :
+    (item : Item  source rels)
+    (tail : ItemSeq  source rels) :
     (ItemSeq.cons item tail).castWiresEq equality =
       ItemSeq.cons (item.castWiresEq equality)
         (tail.castWiresEq equality) := by
@@ -378,7 +188,7 @@ theorem ItemSeq.castWiresEq_eq_renameWires (equality : source = target)
 @[simp] theorem Region.castWiresEq_adjoinAt_nil
     (equality : source = target)
     (hostLocal : Nat)
-    (material : Region signature (source + hostLocal) rels) :
+    (material : Region  (source + hostLocal) rels) :
     (Region.adjoinAt hostLocal .nil material).castWiresEq equality =
       Region.adjoinAt hostLocal .nil
         (material.castWiresEq
@@ -388,7 +198,7 @@ theorem ItemSeq.castWiresEq_eq_renameWires (equality : source = target)
 
 @[simp] theorem Region.castWiresEq_trans
     (first : source = middle) (second : middle = target)
-    (region : Region signature source rels) :
+    (region : Region  source rels) :
     (region.castWiresEq first).castWiresEq second =
       region.castWiresEq (first.trans second) := by
   subst middle
@@ -397,14 +207,14 @@ theorem ItemSeq.castWiresEq_eq_renameWires (equality : source = target)
 
 theorem Region.castWiresEq_proof_irrel
     (first second : source = target)
-    (region : Region signature source rels) :
+    (region : Region  source rels) :
     region.castWiresEq first = region.castWiresEq second := by
   rw [show first = second from Subsingleton.elim _ _]
 
 theorem Region.castWiresEq_castRels
     (wireEquality : sourceWires = targetWires)
     (relsEquality : sourceRels = targetRels)
-    (region : Region signature sourceWires sourceRels) :
+    (region : Region  sourceWires sourceRels) :
     (relsEquality ▸ region).castWiresEq wireEquality =
       relsEquality ▸ (region.castWiresEq wireEquality) := by
   subst targetWires
@@ -412,7 +222,7 @@ theorem Region.castWiresEq_castRels
   rfl
 
 @[simp] theorem Item.castWiresEq_cut
-    (equality : source = target) (body : Region signature source rels) :
+    (equality : source = target) (body : Region  source rels) :
     (Item.cut body).castWiresEq equality =
       Item.cut (body.castWiresEq equality) := by
   subst target
@@ -420,14 +230,14 @@ theorem Region.castWiresEq_castRels
 
 @[simp] theorem Item.castWiresEq_bubble
     (equality : source = target) (arity : Nat)
-    (body : Region signature source (arity :: rels)) :
+    (body : Region  source (arity :: rels)) :
     (Item.bubble arity body).castWiresEq equality =
       Item.bubble arity (body.castWiresEq equality) := by
   subst target
   rfl
 
 def ItemSeq.focusAt? :
-    (items : ItemSeq signature wires rels) → Nat → Option (ItemSeq.Focus items)
+    (items : ItemSeq  wires rels) → Nat → Option (ItemSeq.Focus items)
   | .nil, _ => none
   | .cons item tail, 0 => some {
       before := .nil
@@ -447,7 +257,7 @@ def ItemSeq.focusAt? :
       }
 
 theorem ItemSeq.focusAt?_complete
-    (items : ItemSeq signature wires rels) (index : Fin items.length) :
+    (items : ItemSeq  wires rels) (index : Fin items.length) :
     ∃ focus, items.focusAt? index.val = some focus ∧
       focus.item = items.get index := by
   cases items with
@@ -479,7 +289,7 @@ decreasing_by simp_all [ItemSeq.length]
 position.  This is the converse bound needed to transport a context path
 through an item permutation. -/
 theorem ItemSeq.focusAt?_index_lt
-    (items : ItemSeq signature wires rels) (index : Nat)
+    (items : ItemSeq  wires rels) (index : Nat)
     (focus : ItemSeq.Focus items)
     (hfocus : items.focusAt? index = some focus) :
     index < items.length := by
@@ -526,7 +336,7 @@ def ItemSeq.Focus.castWiresEq (equality : source = target)
 
 theorem ItemSeq.focusAt?_castWiresEq
     (equality : source = target)
-    (items : ItemSeq signature source rels) (index : Nat)
+    (items : ItemSeq  source rels) (index : Nat)
     (focus : ItemSeq.Focus items)
     (hfocus : items.focusAt? index = some focus) :
     (items.castWiresEq equality).focusAt? index =
@@ -537,10 +347,10 @@ theorem ItemSeq.focusAt?_castWiresEq
 /-- The structural focus decomposition is the corresponding single-item
 replacement. -/
 theorem ItemSeq.replaceAt_eq_focus
-    (items : ItemSeq signature wires rels) (index : Fin items.length)
+    (items : ItemSeq  wires rels) (index : Fin items.length)
     (focus : ItemSeq.Focus items)
     (hfocus : items.focusAt? index.val = some focus)
-    (replacement : Item signature wires rels) :
+    (replacement : Item  wires rels) :
     items.replaceAt index replacement =
       focus.before.append (.cons replacement focus.after) := by
   cases items with
@@ -564,34 +374,34 @@ termination_by items.length
 decreasing_by simp_all [ItemSeq.length]
 
 structure Region.ContextFocus
-    (region : Region signature wires rels) where
+    (region : Region  wires rels) where
   holeWires : Nat
   holeRels : RelCtx
-  context : DiagramContext signature wires holeWires rels holeRels
-  body : Region signature holeWires holeRels
+  context : DiagramContext  wires holeWires rels holeRels
+  body : Region  holeWires holeRels
   rebuild : context.fill body = region
 
 /-- Intrinsic evidence that a list of item positions selects a nested region.
 Unlike the executable lookup below, this type exposes the constructor evidence
 needed by semantic proofs without comparing dependent proof fields. -/
 inductive Region.ContextPath :
-    (region : Region signature wires rels) → List Nat → Type
-  | here (region : Region signature wires rels) : ContextPath region []
+    (region : Region  wires rels) → List Nat → Type
+  | here (region : Region  wires rels) : ContextPath region []
   | cut {localWires : Nat}
-      {items : ItemSeq signature (wires + localWires) rels}
+      {items : ItemSeq  (wires + localWires) rels}
       {index : Nat} {rest : List Nat}
       (focus : ItemSeq.Focus items)
       (atIndex : items.focusAt? index = some focus)
-      {child : Region signature (wires + localWires) rels}
+      {child : Region  (wires + localWires) rels}
       (isCut : focus.item = .cut child)
       (nested : ContextPath child rest) :
       ContextPath (.mk localWires items) (index :: rest)
   | bubble {localWires arity : Nat}
-      {items : ItemSeq signature (wires + localWires) rels}
+      {items : ItemSeq  (wires + localWires) rels}
       {index : Nat} {rest : List Nat}
       (focus : ItemSeq.Focus items)
       (atIndex : items.focusAt? index = some focus)
-      {child : Region signature (wires + localWires) (arity :: rels)}
+      {child : Region  (wires + localWires) (arity :: rels)}
       (isBubble : focus.item = .bubble arity child)
       (nested : ContextPath child rest) :
       ContextPath (.mk localWires items) (index :: rest)
@@ -645,7 +455,7 @@ theorem Region.ContextPath.unique
           rfl
 
 def Region.ContextPath.toFocus :
-    {region : Region signature wires rels} → {path : List Nat} →
+    {region : Region  wires rels} → {path : List Nat} →
       Region.ContextPath region path → Region.ContextFocus region
   | region, [], .here _ => {
       holeWires := wires
@@ -681,7 +491,7 @@ def Region.ContextPath.toFocus :
 body.  List concatenation is therefore the authoritative composition law for
 intrinsic region paths. -/
 noncomputable def Region.ContextPath.nest
-    {root : Region signature wires rels} {outerPath : List Nat}
+    {root : Region  wires rels} {outerPath : List Nat}
     (outer : Region.ContextPath root outerPath)
     {innerPath : List Nat}
     (inner : Region.ContextPath outer.toFocus.body innerPath) :
@@ -695,7 +505,7 @@ noncomputable def Region.ContextPath.nest
       exact .bubble focus atIndex isBubble (induction inner)
 
 @[simp] theorem Region.ContextPath.nest_toFocus_holeWires
-    {root : Region signature wires rels} {outerPath : List Nat}
+    {root : Region  wires rels} {outerPath : List Nat}
     (outer : Region.ContextPath root outerPath)
     {innerPath : List Nat}
     (inner : Region.ContextPath outer.toFocus.body innerPath) :
@@ -706,7 +516,7 @@ noncomputable def Region.ContextPath.nest
   | bubble focus atIndex isBubble nested induction => exact induction inner
 
 @[simp] theorem Region.ContextPath.nest_toFocus_holeRels
-    {root : Region signature wires rels} {outerPath : List Nat}
+    {root : Region  wires rels} {outerPath : List Nat}
     (outer : Region.ContextPath root outerPath)
     {innerPath : List Nat}
     (inner : Region.ContextPath outer.toFocus.body innerPath) :
@@ -717,7 +527,7 @@ noncomputable def Region.ContextPath.nest
   | bubble focus atIndex isBubble nested induction => exact induction inner
 
 theorem Region.ContextPath.nest_toFocus_body_heq
-    {root : Region signature wires rels} {outerPath : List Nat}
+    {root : Region  wires rels} {outerPath : List Nat}
     (outer : Region.ContextPath root outerPath)
     {innerPath : List Nat}
     (inner : Region.ContextPath outer.toFocus.body innerPath) :
@@ -734,7 +544,7 @@ def Region.ContextPath.castWiresEq (equality : source = target)
   exact witness
 
 def Region.ContextPath.castRelsEq
-    {source target : RelCtx} {region : Region signature wires source}
+    {source target : RelCtx} {region : Region  wires source}
     (equality : source = target)
     (witness : Region.ContextPath region path) :
     Region.ContextPath (equality ▸ region) path := by
@@ -742,7 +552,7 @@ def Region.ContextPath.castRelsEq
   exact witness
 
 @[simp] theorem Region.ContextPath.castRelsEq_toFocus_holeWires
-    {source target : RelCtx} {region : Region signature wires source}
+    {source target : RelCtx} {region : Region  wires source}
     (equality : source = target)
     (witness : Region.ContextPath region path) :
     (witness.castRelsEq equality).toFocus.holeWires =
@@ -751,7 +561,7 @@ def Region.ContextPath.castRelsEq
   rfl
 
 @[simp] theorem Region.ContextPath.castRelsEq_toFocus_holeRels
-    {source target : RelCtx} {region : Region signature wires source}
+    {source target : RelCtx} {region : Region  wires source}
     (equality : source = target)
     (witness : Region.ContextPath region path) :
     (witness.castRelsEq equality).toFocus.holeRels =
@@ -760,11 +570,11 @@ def Region.ContextPath.castRelsEq
   rfl
 
 theorem Region.ContextPath.castRelsEq_fill
-    {source target : RelCtx} {region : Region signature wires source}
+    {source target : RelCtx} {region : Region  wires source}
     {path : List Nat}
     (equality : source = target)
     (witness : Region.ContextPath region path)
-    (replacement : Region signature witness.toFocus.holeWires
+    (replacement : Region  witness.toFocus.holeWires
       witness.toFocus.holeRels) :
     let targetWitness := witness.castRelsEq equality
     let holeWiresEq : targetWitness.toFocus.holeWires =
@@ -773,7 +583,7 @@ theorem Region.ContextPath.castRelsEq_fill
     let holeRelsEq : targetWitness.toFocus.holeRels =
         witness.toFocus.holeRels :=
       witness.castRelsEq_toFocus_holeRels equality
-    let targetReplacement : Region signature
+    let targetReplacement : Region
         targetWitness.toFocus.holeWires targetWitness.toFocus.holeRels :=
       (holeRelsEq.symm ▸ replacement).castWiresEq holeWiresEq.symm
     targetWitness.toFocus.context.fill targetReplacement =
@@ -787,7 +597,7 @@ sequence sees only the complete block, so every nested child is transported
 by the same finite-carrier equality. -/
 def Region.ContextPath.relocal
     {sourceOuter sourceLocal targetOuter targetLocal : Nat}
-    {items : ItemSeq signature (sourceOuter + sourceLocal) rels}
+    {items : ItemSeq  (sourceOuter + sourceLocal) rels}
     {path : List Nat}
     (equality : sourceOuter + sourceLocal = targetOuter + targetLocal)
     (witness : Region.ContextPath (Region.mk sourceLocal items) path) :
@@ -843,11 +653,11 @@ def Region.ContextPath.relocal
 /-- Rebuilding after an outer-wire cast is the cast of the rebuilt region;
 the focused replacement is transported by the induced hole equalities. -/
 theorem Region.ContextPath.castWiresEq_fill
-    {source target : Nat} {region : Region signature source rels}
+    {source target : Nat} {region : Region  source rels}
     {path : List Nat}
     (equality : source = target)
     (witness : Region.ContextPath region path)
-    (replacement : Region signature witness.toFocus.holeWires
+    (replacement : Region  witness.toFocus.holeWires
       witness.toFocus.holeRels) :
     let targetWitness := witness.castWiresEq equality
     let holeWiresEq : targetWitness.toFocus.holeWires =
@@ -856,19 +666,19 @@ theorem Region.ContextPath.castWiresEq_fill
     let holeRelsEq : targetWitness.toFocus.holeRels =
       witness.toFocus.holeRels :=
         witness.castWiresEq_toFocus_holeRels equality
-    let targetReplacement : Region signature
+    let targetReplacement : Region
         targetWitness.toFocus.holeWires targetWitness.toFocus.holeRels :=
       (holeRelsEq.symm ▸ replacement).castWiresEq holeWiresEq.symm
-    DiagramContext.fill (signature := signature)
+    DiagramContext.fill
         targetWitness.toFocus.context targetReplacement =
-      (DiagramContext.fill (signature := signature)
+      (DiagramContext.fill
         witness.toFocus.context replacement).castWiresEq equality := by
   subst target
   rfl
 
 theorem Region.ContextPath.relocal_toFocus_holeWires_of_nonempty
     {sourceOuter sourceLocal targetOuter targetLocal : Nat}
-    {items : ItemSeq signature (sourceOuter + sourceLocal) rels}
+    {items : ItemSeq  (sourceOuter + sourceLocal) rels}
     {path : List Nat}
     (equality : sourceOuter + sourceLocal = targetOuter + targetLocal)
     (witness : Region.ContextPath (Region.mk sourceLocal items) path)
@@ -884,7 +694,7 @@ theorem Region.ContextPath.relocal_toFocus_holeWires_of_nonempty
 
 @[simp] theorem Region.ContextPath.relocal_toFocus_holeRels
     {sourceOuter sourceLocal targetOuter targetLocal : Nat}
-    {items : ItemSeq signature (sourceOuter + sourceLocal) rels}
+    {items : ItemSeq  (sourceOuter + sourceLocal) rels}
     {path : List Nat}
     (equality : sourceOuter + sourceLocal = targetOuter + targetLocal)
     (witness : Region.ContextPath (Region.mk sourceLocal items) path) :
@@ -903,12 +713,12 @@ operation as existentially closing the newly local root wires around the
 cast flattened replacement. -/
 theorem Region.ContextPath.relocal_zero_fill
     {sourceOuter targetOuter targetLocal : Nat}
-    {items : ItemSeq signature sourceOuter rels}
+    {items : ItemSeq  sourceOuter rels}
     {path : List Nat}
     (equality : sourceOuter = targetOuter + targetLocal)
     (witness : Region.ContextPath (Region.mk 0 items) path)
     (nonempty : path ≠ [])
-    (replacement : Region signature witness.toFocus.holeWires
+    (replacement : Region  witness.toFocus.holeWires
       witness.toFocus.holeRels) :
     let totalEquality : sourceOuter + 0 = targetOuter + targetLocal := by
       simpa using equality
@@ -919,13 +729,13 @@ theorem Region.ContextPath.relocal_zero_fill
     let holeRelsEq : targetWitness.toFocus.holeRels =
       witness.toFocus.holeRels :=
         witness.relocal_toFocus_holeRels totalEquality
-    let targetReplacement : Region signature
+    let targetReplacement : Region
         targetWitness.toFocus.holeWires targetWitness.toFocus.holeRels :=
       (holeRelsEq.symm ▸ replacement).castWiresEq holeWiresEq.symm
-    DiagramContext.fill (signature := signature)
+    DiagramContext.fill
         targetWitness.toFocus.context targetReplacement =
       Region.adjoinAt targetLocal .nil
-        ((DiagramContext.fill (signature := signature)
+        ((DiagramContext.fill
           witness.toFocus.context replacement).castWiresEq equality) := by
   subst sourceOuter
   cases witness with
@@ -955,9 +765,9 @@ theorem Region.ContextPath.relocal_zero_fill
 
 /-- Follow an intrinsic child-item path and return the unique typed context and
 focused region together with a reconstruction equation.  A path step must name
-a cut or bubble item; atoms and named relations cannot contain a region. -/
+a cut or bubble item; atoms and  relations cannot contain a region. -/
 def Region.contextAtPath? :
-    (region : Region signature wires rels) →
+    (region : Region  wires rels) →
       List Nat → Option (Region.ContextFocus region)
   | region, [] => some {
       holeWires := wires
@@ -992,11 +802,11 @@ def Region.contextAtPath? :
               simp only [DiagramContext.fill]
               rw [nested.rebuild, ← hitem, focus.rebuild]
           }
-      | .atom .. | .identity .. | .named .. => none
+      | .atom .. | .identity .. => none
 
 theorem Region.contextAtPath?_castWiresEq
     (equality : source = target)
-    (region : Region signature source rels) (path : List Nat)
+    (region : Region  source rels) (path : List Nat)
     (focus : Region.ContextFocus region)
     (hfocus : region.contextAtPath? path = some focus) :
     ∃ transported,
@@ -1005,8 +815,8 @@ theorem Region.contextAtPath?_castWiresEq
   exact ⟨focus, hfocus⟩
 
 @[simp] theorem Region.conjoin_localWires
-    (firstItems : ItemSeq signature (wires + firstLocal) rels)
-    (secondItems : ItemSeq signature (wires + secondLocal) rels) :
+    (firstItems : ItemSeq  (wires + firstLocal) rels)
+    (secondItems : ItemSeq  (wires + secondLocal) rels) :
     Region.conjoin (.mk firstLocal firstItems) (.mk secondLocal secondItems) =
       .mk (firstLocal + secondLocal)
         ((firstItems.renameWires
@@ -1051,27 +861,26 @@ private theorem extendWireEnv_rename
 mutual
   theorem denoteRegion_renameWires
       (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (rho : Fin source → Fin target)
       (env : Fin target → model.Carrier)
       (rels : RelEnv model.Carrier relCtx)
-      (region : Region signature source relCtx) :
-      denoteRegion model named env rels (region.renameWires rho) ↔
-        denoteRegion model named (env ∘ rho) rels region := by
+      (region : Region  source relCtx) :
+      denoteRegion model  env rels (region.renameWires rho) ↔
+        denoteRegion model  (env ∘ rho) rels region := by
     cases region with
     | mk localWires items =>
         simp only [Region.renameWires, denoteRegion_mk]
         constructor
         · rintro ⟨localEnv, hitems⟩
           refine ⟨localEnv, ?_⟩
-          have hrenamed := (denoteItemSeq_renameWires model named
+          have hrenamed := (denoteItemSeq_renameWires model
             (extendWireRenaming rho localWires)
             (extendWireEnv env localEnv) rels items).1 hitems
           rw [extendWireEnv_rename] at hrenamed
           exact hrenamed
         · rintro ⟨localEnv, hitems⟩
           refine ⟨localEnv, ?_⟩
-          apply (denoteItemSeq_renameWires model named
+          apply (denoteItemSeq_renameWires model
             (extendWireRenaming rho localWires)
             (extendWireEnv env localEnv) rels items).2
           rw [extendWireEnv_rename]
@@ -1079,20 +888,17 @@ mutual
 
   theorem denoteItem_renameWires
       (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (rho : Fin source → Fin target)
       (env : Fin target → model.Carrier)
       (rels : RelEnv model.Carrier relCtx)
-      (item : Item signature source relCtx) :
-      denoteItem model named env rels (item.renameWires rho) ↔
-        denoteItem model named (env ∘ rho) rels item := by
+      (item : Item  source relCtx) :
+      denoteItem model  env rels (item.renameWires rho) ↔
+        denoteItem model  (env ∘ rho) rels item := by
     cases item with
     | atom relation arguments =>
         simp [Item.renameWires, denoteItem_atom, Function.comp_def]
     | identity arity arguments =>
         simp [Item.renameWires, denoteItem_identity, Function.comp_def]
-    | named relation arguments =>
-        simp [Item.renameWires, denoteItem_named, Function.comp_def]
     | cut body =>
         simp only [Item.renameWires, cut_denotes_negation]
         rw [denoteRegion_renameWires]
@@ -1102,23 +908,22 @@ mutual
         · rintro ⟨relation, hbody⟩
           exact ⟨relation,
             (denoteRegion_renameWires (relCtx := arity :: relCtx)
-              model named rho env
+              model  rho env
               (relation, rels) body).1 hbody⟩
         · rintro ⟨relation, hbody⟩
           exact ⟨relation,
             (denoteRegion_renameWires (relCtx := arity :: relCtx)
-              model named rho env
+              model  rho env
               (relation, rels) body).2 hbody⟩
 
   theorem denoteItemSeq_renameWires
       (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (rho : Fin source → Fin target)
       (env : Fin target → model.Carrier)
       (rels : RelEnv model.Carrier relCtx)
-      (items : ItemSeq signature source relCtx) :
-      denoteItemSeq model named env rels (items.renameWires rho) ↔
-        denoteItemSeq model named (env ∘ rho) rels items := by
+      (items : ItemSeq  source relCtx) :
+      denoteItemSeq model  env rels (items.renameWires rho) ↔
+        denoteItemSeq model  (env ∘ rho) rels items := by
     cases items with
     | nil => constructor <;> intro <;> trivial
     | cons item tail =>
@@ -1168,17 +973,16 @@ private theorem extendWireEnv_adjoinMaterial
 
 theorem Region.denote_adjoinAt
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
     (hostLocal : Nat)
-    (hostItems : ItemSeq signature (outer + hostLocal) rels)
-    (material : Region signature (outer + hostLocal) rels) :
-    denoteRegion model named env relEnv
+    (hostItems : ItemSeq  (outer + hostLocal) rels)
+    (material : Region  (outer + hostLocal) rels) :
+    denoteRegion model  env relEnv
         (Region.adjoinAt hostLocal hostItems material) ↔
       ∃ hostEnv : Fin hostLocal → model.Carrier,
-        denoteItemSeq model named (extendWireEnv env hostEnv) relEnv hostItems ∧
-          denoteRegion model named (extendWireEnv env hostEnv) relEnv material := by
+        denoteItemSeq model  (extendWireEnv env hostEnv) relEnv hostItems ∧
+          denoteRegion model  (extendWireEnv env hostEnv) relEnv material := by
   cases material with
   | mk addedLocal addedItems =>
       simp only [Region.adjoinAt, denoteRegion_mk, denoteItemSeq_append]
@@ -1189,11 +993,11 @@ theorem Region.denote_adjoinAt
         let addedEnv : Fin addedLocal → model.Carrier :=
           fun wire => localEnv (Fin.natAdd hostLocal wire)
         refine ⟨hostEnv, ?_, ⟨addedEnv, ?_⟩⟩
-        · have renamed := (denoteItemSeq_renameWires model named
+        · have renamed := (denoteItemSeq_renameWires model
             (Region.adjoinHostWire outer hostLocal addedLocal)
             (extendWireEnv env localEnv) relEnv hostItems).mp hhost
           simpa [hostEnv, extendWireEnv_adjoinHost] using renamed
-        · have renamed := (denoteItemSeq_renameWires model named
+        · have renamed := (denoteItemSeq_renameWires model
             (Region.adjoinMaterialWire outer hostLocal addedLocal)
             (extendWireEnv env localEnv) relEnv addedItems).mp hmaterial
           simpa [hostEnv, addedEnv, extendWireEnv_adjoinMaterial] using renamed
@@ -1201,28 +1005,27 @@ theorem Region.denote_adjoinAt
         let localEnv : Fin (hostLocal + addedLocal) → model.Carrier :=
           Fin.addCases hostEnv addedEnv
         refine ⟨localEnv, ?_, ?_⟩
-        · apply (denoteItemSeq_renameWires model named
+        · apply (denoteItemSeq_renameWires model
             (Region.adjoinHostWire outer hostLocal addedLocal)
             (extendWireEnv env localEnv) relEnv hostItems).mpr
           simpa [localEnv, extendWireEnv_adjoinHost] using hhost
-        · apply (denoteItemSeq_renameWires model named
+        · apply (denoteItemSeq_renameWires model
             (Region.adjoinMaterialWire outer hostLocal addedLocal)
             (extendWireEnv env localEnv) relEnv addedItems).mpr
           simpa [localEnv, extendWireEnv_adjoinMaterial] using hmaterial
 
 theorem Region.adjoinAt_mono
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
-    (hostItems : ItemSeq signature (outer + hostLocal) rels)
-    (before after : Region signature (outer + hostLocal) rels)
+    (hostItems : ItemSeq  (outer + hostLocal) rels)
+    (before after : Region  (outer + hostLocal) rels)
     (entails : ∀ siteEnv,
-      denoteRegion model named siteEnv relEnv before →
-        denoteRegion model named siteEnv relEnv after) :
-    denoteRegion model named env relEnv
+      denoteRegion model  siteEnv relEnv before →
+        denoteRegion model  siteEnv relEnv after) :
+    denoteRegion model  env relEnv
         (Region.adjoinAt hostLocal hostItems before) →
-      denoteRegion model named env relEnv
+      denoteRegion model  env relEnv
         (Region.adjoinAt hostLocal hostItems after) := by
   intro hbefore
   rw [Region.denote_adjoinAt] at hbefore ⊢
@@ -1231,33 +1034,31 @@ theorem Region.adjoinAt_mono
 
 theorem Region.adjoinAt_equiv
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
-    (hostItems : ItemSeq signature (outer + hostLocal) rels)
-    (before after : Region signature (outer + hostLocal) rels)
+    (hostItems : ItemSeq  (outer + hostLocal) rels)
+    (before after : Region  (outer + hostLocal) rels)
     (equivalent : ∀ siteEnv,
-      denoteRegion model named siteEnv relEnv before ↔
-        denoteRegion model named siteEnv relEnv after) :
-    denoteRegion model named env relEnv
+      denoteRegion model  siteEnv relEnv before ↔
+        denoteRegion model  siteEnv relEnv after) :
+    denoteRegion model  env relEnv
         (Region.adjoinAt hostLocal hostItems before) ↔
-      denoteRegion model named env relEnv
+      denoteRegion model  env relEnv
         (Region.adjoinAt hostLocal hostItems after) := by
   constructor
-  · exact Region.adjoinAt_mono model named env relEnv hostItems before after
+  · exact Region.adjoinAt_mono model  env relEnv hostItems before after
       (fun siteEnv => (equivalent siteEnv).mp)
-  · exact Region.adjoinAt_mono model named env relEnv hostItems after before
+  · exact Region.adjoinAt_mono model  env relEnv hostItems after before
       (fun siteEnv => (equivalent siteEnv).mpr)
 
 theorem Region.denote_conjoin
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier)
     (rels : RelEnv model.Carrier relCtx)
-    (first second : Region signature wires relCtx) :
-    denoteRegion model named env rels (first.conjoin second) ↔
-      denoteRegion model named env rels first ∧
-        denoteRegion model named env rels second := by
+    (first second : Region  wires relCtx) :
+    denoteRegion model  env rels (first.conjoin second) ↔
+      denoteRegion model  env rels first ∧
+        denoteRegion model  env rels second := by
   cases first with
   | mk firstLocal firstItems =>
       cases second with
@@ -1270,20 +1071,20 @@ theorem Region.denote_conjoin
             constructor
             · refine ⟨fun wire => localEnv (Fin.castAdd secondLocal wire), ?_⟩
               rw [← extendWireEnv_conjoinLeft env localEnv]
-              exact (denoteItemSeq_renameWires model named
+              exact (denoteItemSeq_renameWires model
                 (Region.conjoinLeftWire wires firstLocal secondLocal)
                 (extendWireEnv env localEnv) rels firstItems).1 hfirst
             · refine ⟨fun wire => localEnv (Fin.natAdd firstLocal wire), ?_⟩
               rw [← extendWireEnv_conjoinRight env localEnv]
-              exact (denoteItemSeq_renameWires model named
+              exact (denoteItemSeq_renameWires model
                 (Region.conjoinRightWire wires firstLocal secondLocal)
                 (extendWireEnv env localEnv) rels secondItems).1 hsecond
           · rintro ⟨⟨firstEnv, hfirst⟩, ⟨secondEnv, hsecond⟩⟩
             let localEnv : Fin (firstLocal + secondLocal) → model.Carrier :=
               Fin.addCases firstEnv secondEnv
-            refine ⟨localEnv, (denoteItemSeq_append model named
+            refine ⟨localEnv, (denoteItemSeq_append model
               (extendWireEnv env localEnv) rels _ _).2 ⟨?_, ?_⟩⟩
-            · apply (denoteItemSeq_renameWires model named
+            · apply (denoteItemSeq_renameWires model
                 (Region.conjoinLeftWire wires firstLocal secondLocal)
                 (extendWireEnv env localEnv) rels firstItems).2
               have henv : extendWireEnv env localEnv ∘
@@ -1294,7 +1095,7 @@ theorem Region.denote_conjoin
                 simp [localEnv]
               rw [henv]
               exact hfirst
-            · apply (denoteItemSeq_renameWires model named
+            · apply (denoteItemSeq_renameWires model
                 (Region.conjoinRightWire wires firstLocal secondLocal)
                 (extendWireEnv env localEnv) rels secondItems).2
               have henv : extendWireEnv env localEnv ∘
@@ -1308,105 +1109,99 @@ theorem Region.denote_conjoin
 
 @[simp] theorem Region.denote_blank
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier)
     (rels : RelEnv model.Carrier relCtx) :
-    denoteRegion model named env rels (Region.blank : Region signature wires relCtx) := by
+    denoteRegion model  env rels (Region.blank : Region  wires relCtx) := by
   exact ⟨Fin.elim0, trivial⟩
 
 theorem DiagramContext.fill_conjoin_left_even
-    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
-    (first second : Region signature holeWires holeRels)
+    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
+    (first second : Region  holeWires holeRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (hEven : ctx.cutDepth % 2 = 0) :
-    denoteRegion model named env rels (ctx.fill (first.conjoin second)) →
-      denoteRegion model named env rels (ctx.fill first) := by
-  apply context_mono model named env rels hEven
+    denoteRegion model  env rels (ctx.fill (first.conjoin second)) →
+      denoteRegion model  env rels (ctx.fill first) := by
+  apply context_mono model  env rels hEven
   intro holeEnv holeRels hconjoin
-  exact (Region.denote_conjoin model named holeEnv holeRels first second).1
+  exact (Region.denote_conjoin model  holeEnv holeRels first second).1
     hconjoin |>.1
 
 theorem DiagramContext.fill_conjoin_right_even
-    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
-    (first second : Region signature holeWires holeRels)
+    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
+    (first second : Region  holeWires holeRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (hEven : ctx.cutDepth % 2 = 0) :
-    denoteRegion model named env rels (ctx.fill (first.conjoin second)) →
-      denoteRegion model named env rels (ctx.fill second) := by
-  apply context_mono model named env rels hEven
+    denoteRegion model  env rels (ctx.fill (first.conjoin second)) →
+      denoteRegion model  env rels (ctx.fill second) := by
+  apply context_mono model  env rels hEven
   intro holeEnv holeRels hconjoin
-  exact (Region.denote_conjoin model named holeEnv holeRels first second).1
+  exact (Region.denote_conjoin model  holeEnv holeRels first second).1
     hconjoin |>.2
 
 theorem DiagramContext.fill_conjoin_left_odd
-    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
-    (first second : Region signature holeWires holeRels)
+    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
+    (first second : Region  holeWires holeRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (hOdd : ctx.cutDepth % 2 = 1) :
-    denoteRegion model named env rels (ctx.fill first) →
-      denoteRegion model named env rels (ctx.fill (first.conjoin second)) := by
-  apply context_anti model named env rels hOdd
+    denoteRegion model  env rels (ctx.fill first) →
+      denoteRegion model  env rels (ctx.fill (first.conjoin second)) := by
+  apply context_anti model  env rels hOdd
   intro holeEnv holeRels hconjoin
-  exact (Region.denote_conjoin model named holeEnv holeRels first second).1
+  exact (Region.denote_conjoin model  holeEnv holeRels first second).1
     hconjoin |>.1
 
 theorem DiagramContext.fill_conjoin_right_odd
-    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
-    (first second : Region signature holeWires holeRels)
+    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
+    (first second : Region  holeWires holeRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (hOdd : ctx.cutDepth % 2 = 1) :
-    denoteRegion model named env rels (ctx.fill second) →
-      denoteRegion model named env rels (ctx.fill (first.conjoin second)) := by
-  apply context_anti model named env rels hOdd
+    denoteRegion model  env rels (ctx.fill second) →
+      denoteRegion model  env rels (ctx.fill (first.conjoin second)) := by
+  apply context_anti model  env rels hOdd
   intro holeEnv holeRels hconjoin
-  exact (Region.denote_conjoin model named holeEnv holeRels first second).1
+  exact (Region.denote_conjoin model  holeEnv holeRels first second).1
     hconjoin |>.2
 
 /-- Local semantic equivalence is substitutive through a context at either polarity. -/
 theorem DiagramContext.fill_equiv
-    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
-    (first second : Region signature holeWires holeRels)
+    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
+    (first second : Region  holeWires holeRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (hequiv : ∀ holeEnv holeRelEnv,
-      denoteRegion model named holeEnv holeRelEnv first ↔
-        denoteRegion model named holeEnv holeRelEnv second) :
-    denoteRegion model named env rels (ctx.fill first) ↔
-      denoteRegion model named env rels (ctx.fill second) := by
+      denoteRegion model  holeEnv holeRelEnv first ↔
+        denoteRegion model  holeEnv holeRelEnv second) :
+    denoteRegion model  env rels (ctx.fill first) ↔
+      denoteRegion model  env rels (ctx.fill second) := by
   constructor
   · by_cases heven : ctx.cutDepth % 2 = 0
-    · exact context_mono model named env rels heven
+    · exact context_mono model  env rels heven
         (fun holeEnv holeRelEnv => (hequiv holeEnv holeRelEnv).mp)
     · have hodd : ctx.cutDepth % 2 = 1 := by omega
       exact context_anti (ctx := ctx) (a := second) (b := first)
-        model named env rels hodd
+        model  env rels hodd
         (fun holeEnv holeRelEnv => (hequiv holeEnv holeRelEnv).mpr)
   · by_cases heven : ctx.cutDepth % 2 = 0
     · exact context_mono (ctx := ctx) (a := second) (b := first)
-        model named env rels heven
+        model  env rels heven
         (fun holeEnv holeRelEnv => (hequiv holeEnv holeRelEnv).mpr)
     · have hodd : ctx.cutDepth % 2 = 1 := by omega
-      exact context_anti model named env rels hodd
+      exact context_anti model  env rels hodd
         (fun holeEnv holeRelEnv => (hequiv holeEnv holeRelEnv).mp)
 
 /-- A boundary assignment is determined by its ordered arguments because every
 external class is represented by at least one boundary position. -/
 theorem BoundaryAssignment.classes_eq_of_args_eq
-    {diagram : OpenDiagram signature arity}
+    {diagram : OpenDiagram  arity}
     (first second : BoundaryAssignment diagram D)
     (hargs : first.args = second.args) :
     first.classes = second.classes := by
@@ -1424,14 +1219,13 @@ boundary classes has exactly the open denotation at the corresponding host
 values.  Aliased positions are handled by `BoundaryAssignment`, not by an
 independent equality convention. -/
 theorem OpenDiagram.denote_substituteBoundary
-    (diagram : OpenDiagram signature arity)
+    (diagram : OpenDiagram  arity)
     (assignment : BoundaryAssignment diagram (Fin wires))
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier) :
-    denoteRegion (relCtx := []) model named env PUnit.unit
+    denoteRegion (relCtx := []) model  env PUnit.unit
         (diagram.substituteBoundary assignment) ↔
-      denoteOpen model named diagram (env ∘ assignment.args) := by
+      denoteOpen model  diagram (env ∘ assignment.args) := by
   rw [OpenDiagram.substituteBoundary, denoteRegion_renameWires]
   constructor
   · intro hbody
@@ -1497,62 +1291,59 @@ theorem RelEnv.Agrees.lift
 mutual
   theorem denoteRegion_renameRelations
       (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (rho : RelationRenaming source target)
       (sourceEnv : RelEnv model.Carrier source)
       (targetEnv : RelEnv model.Carrier target)
       (agrees : RelEnv.Agrees rho sourceEnv targetEnv)
       (env : Fin wires → model.Carrier)
-      (region : Region signature wires source) :
-      denoteRegion model named env targetEnv (region.renameRelations rho) ↔
-        denoteRegion model named env sourceEnv region := by
+      (region : Region  wires source) :
+      denoteRegion model  env targetEnv (region.renameRelations rho) ↔
+        denoteRegion model  env sourceEnv region := by
     cases region with
     | mk localWires items =>
         simp only [Region.renameRelations, denoteRegion_mk]
         constructor
         · rintro ⟨localEnv, hitems⟩
           exact ⟨localEnv,
-            (denoteItemSeq_renameRelations model named rho sourceEnv targetEnv
+            (denoteItemSeq_renameRelations model  rho sourceEnv targetEnv
               agrees (extendWireEnv env localEnv) items).mp hitems⟩
         · rintro ⟨localEnv, hitems⟩
           exact ⟨localEnv,
-            (denoteItemSeq_renameRelations model named rho sourceEnv targetEnv
+            (denoteItemSeq_renameRelations model  rho sourceEnv targetEnv
               agrees (extendWireEnv env localEnv) items).mpr hitems⟩
 
   theorem denoteItem_renameRelations
       (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (rho : RelationRenaming source target)
       (sourceEnv : RelEnv model.Carrier source)
       (targetEnv : RelEnv model.Carrier target)
       (agrees : RelEnv.Agrees rho sourceEnv targetEnv)
       (env : Fin wires → model.Carrier)
-      (item : Item signature wires source) :
-      denoteItem model named env targetEnv (item.renameRelations rho) ↔
-        denoteItem model named env sourceEnv item := by
+      (item : Item  wires source) :
+      denoteItem model  env targetEnv (item.renameRelations rho) ↔
+        denoteItem model  env sourceEnv item := by
     cases item with
     | atom relation arguments =>
         simp only [Item.renameRelations, denoteItem_atom]
         rw [← agrees _ relation]
     | identity => rfl
-    | named relation arguments => rfl
     | cut body =>
         simp only [Item.renameRelations, cut_denotes_negation]
-        rw [denoteRegion_renameRelations model named rho sourceEnv targetEnv
+        rw [denoteRegion_renameRelations model  rho sourceEnv targetEnv
           agrees env body]
     | bubble arity body =>
         simp only [Item.renameRelations, bubble_denotes_exists]
         constructor
         · rintro ⟨relation, hbody⟩
           exact ⟨relation,
-            (denoteRegion_renameRelations model named
+            (denoteRegion_renameRelations model
               (RelationRenaming.lift rho arity)
               (relation, sourceEnv) (relation, targetEnv)
               (RelEnv.Agrees.lift rho sourceEnv targetEnv agrees relation)
               env body).mp hbody⟩
         · rintro ⟨relation, hbody⟩
           exact ⟨relation,
-            (denoteRegion_renameRelations model named
+            (denoteRegion_renameRelations model
               (RelationRenaming.lift rho arity)
               (relation, sourceEnv) (relation, targetEnv)
               (RelEnv.Agrees.lift rho sourceEnv targetEnv agrees relation)
@@ -1560,22 +1351,21 @@ mutual
 
   theorem denoteItemSeq_renameRelations
       (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (rho : RelationRenaming source target)
       (sourceEnv : RelEnv model.Carrier source)
       (targetEnv : RelEnv model.Carrier target)
       (agrees : RelEnv.Agrees rho sourceEnv targetEnv)
       (env : Fin wires → model.Carrier)
-      (items : ItemSeq signature wires source) :
-      denoteItemSeq model named env targetEnv (items.renameRelations rho) ↔
-        denoteItemSeq model named env sourceEnv items := by
+      (items : ItemSeq  wires source) :
+      denoteItemSeq model  env targetEnv (items.renameRelations rho) ↔
+        denoteItemSeq model  env sourceEnv items := by
     cases items with
     | nil => rfl
     | cons item tail =>
         simp only [ItemSeq.renameRelations, denoteItemSeq_cons]
-        rw [denoteItem_renameRelations model named rho sourceEnv targetEnv
+        rw [denoteItem_renameRelations model  rho sourceEnv targetEnv
           agrees env item,
-          denoteItemSeq_renameRelations model named rho sourceEnv targetEnv
+          denoteItemSeq_renameRelations model  rho sourceEnv targetEnv
             agrees env tail]
 end
 
@@ -1584,28 +1374,27 @@ conjuncts used by every splice-backed rule: the unchanged host items and the
 pattern material evaluated after wire and lexical-relation substitution. -/
 theorem Region.denote_spliceAt
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (hostRelEnv : RelEnv model.Carrier hostRels)
     (patternRelEnv : RelEnv model.Carrier patternRels)
     (hostLocal : Nat)
-    (hostItems : ItemSeq signature (outer + hostLocal) hostRels)
-    (material : Region signature patternWires patternRels)
+    (hostItems : ItemSeq  (outer + hostLocal) hostRels)
+    (material : Region  patternWires patternRels)
     (wireMap : Fin patternWires → Fin (outer + hostLocal))
     (relationMap : RelationRenaming patternRels hostRels)
     (relationsAgree : RelEnv.Agrees relationMap patternRelEnv hostRelEnv) :
-    denoteRegion model named env hostRelEnv
+    denoteRegion model  env hostRelEnv
         (Region.spliceAt hostLocal hostItems material wireMap relationMap) ↔
       ∃ hostEnv : Fin hostLocal → model.Carrier,
-        denoteItemSeq model named (extendWireEnv env hostEnv) hostRelEnv
+        denoteItemSeq model  (extendWireEnv env hostEnv) hostRelEnv
             hostItems ∧
-          denoteRegion model named
+          denoteRegion model
             (extendWireEnv env hostEnv ∘ wireMap) patternRelEnv material := by
   rw [Region.spliceAt, Region.denote_adjoinAt]
   apply exists_congr
   intro hostEnv
   apply and_congr Iff.rfl
-  rw [denoteRegion_renameRelations model named relationMap patternRelEnv
+  rw [denoteRegion_renameRelations model  relationMap patternRelEnv
       hostRelEnv relationsAgree (extendWireEnv env hostEnv)
       (material.renameWires wireMap),
     denoteRegion_renameWires]
@@ -1617,27 +1406,26 @@ semantic core for replacement rules whose concrete carrier is compiled by the
 splice subsystem. -/
 theorem Region.denote_spliceAt_mono
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (hostRelEnv : RelEnv model.Carrier hostRels)
     (hostLocal : Nat)
-    (hostItems : ItemSeq signature (outer + hostLocal) hostRels)
-    (source target : Region signature patternWires patternRels)
+    (hostItems : ItemSeq  (outer + hostLocal) hostRels)
+    (source target : Region  patternWires patternRels)
     (wireMap : Fin patternWires → Fin (outer + hostLocal))
     (relationMap : RelationRenaming patternRels hostRels)
     (entails : ∀ patternEnv,
-      denoteRegion model named patternEnv
+      denoteRegion model  patternEnv
           (RelEnv.pullback relationMap hostRelEnv) source →
-        denoteRegion model named patternEnv
+        denoteRegion model  patternEnv
           (RelEnv.pullback relationMap hostRelEnv) target) :
-    denoteRegion model named env hostRelEnv
+    denoteRegion model  env hostRelEnv
         (Region.spliceAt hostLocal hostItems source wireMap relationMap) →
-      denoteRegion model named env hostRelEnv
+      denoteRegion model  env hostRelEnv
         (Region.spliceAt hostLocal hostItems target wireMap relationMap) := by
-  rw [Region.denote_spliceAt model named env hostRelEnv
+  rw [Region.denote_spliceAt model  env hostRelEnv
       (RelEnv.pullback relationMap hostRelEnv) hostLocal hostItems source wireMap
       relationMap (RelEnv.pullback_agrees relationMap hostRelEnv),
-    Region.denote_spliceAt model named env hostRelEnv
+    Region.denote_spliceAt model  env hostRelEnv
       (RelEnv.pullback relationMap hostRelEnv) hostLocal hostItems target wireMap
       relationMap (RelEnv.pullback_agrees relationMap hostRelEnv)]
   rintro ⟨hostEnv, hhost, hsource⟩
@@ -1647,58 +1435,56 @@ theorem Region.denote_spliceAt_mono
 transports used by the concrete compiler. -/
 theorem Region.denote_spliceAt_mono_renamed
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin targetOuter → model.Carrier)
     (targetRelEnv : RelEnv model.Carrier targetRels)
     (hostLocal : Nat)
-    (hostItems : ItemSeq signature (outer + hostLocal) hostRels)
-    (source target : Region signature patternWires patternRels)
+    (hostItems : ItemSeq  (outer + hostLocal) hostRels)
+    (source target : Region  patternWires patternRels)
     (wireMap : Fin patternWires → Fin (outer + hostLocal))
     (relationMap : RelationRenaming patternRels hostRels)
     (outerMap : Fin outer → Fin targetOuter)
     (hostRelationMap : RelationRenaming hostRels targetRels)
     (entails : ∀ patternEnv,
-      denoteRegion model named patternEnv
+      denoteRegion model  patternEnv
           (RelEnv.pullback relationMap
             (RelEnv.pullback hostRelationMap targetRelEnv)) source →
-        denoteRegion model named patternEnv
+        denoteRegion model  patternEnv
           (RelEnv.pullback relationMap
             (RelEnv.pullback hostRelationMap targetRelEnv)) target) :
-    denoteRegion model named env targetRelEnv
+    denoteRegion model  env targetRelEnv
         (((Region.spliceAt hostLocal hostItems source wireMap relationMap)
           |>.renameRelations hostRelationMap).renameWires outerMap) →
-      denoteRegion model named env targetRelEnv
+      denoteRegion model  env targetRelEnv
         (((Region.spliceAt hostLocal hostItems target wireMap relationMap)
           |>.renameRelations hostRelationMap).renameWires outerMap) := by
   rw [denoteRegion_renameWires, denoteRegion_renameWires,
-    denoteRegion_renameRelations model named hostRelationMap
+    denoteRegion_renameRelations model  hostRelationMap
       (RelEnv.pullback hostRelationMap targetRelEnv) targetRelEnv
       (RelEnv.pullback_agrees hostRelationMap targetRelEnv)
       (env ∘ outerMap)
       (Region.spliceAt hostLocal hostItems source wireMap relationMap),
-    denoteRegion_renameRelations model named hostRelationMap
+    denoteRegion_renameRelations model  hostRelationMap
       (RelEnv.pullback hostRelationMap targetRelEnv) targetRelEnv
       (RelEnv.pullback_agrees hostRelationMap targetRelEnv)
       (env ∘ outerMap)
       (Region.spliceAt hostLocal hostItems target wireMap relationMap)]
-  exact Region.denote_spliceAt_mono model named (env ∘ outerMap)
+  exact Region.denote_spliceAt_mono model  (env ∘ outerMap)
     (RelEnv.pullback hostRelationMap targetRelEnv) hostLocal hostItems source
     target wireMap relationMap entails
 
 /-- Splicing material only strengthens the unchanged host at the splice site. -/
 theorem Region.denote_spliceAt_host
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (hostRelEnv : RelEnv model.Carrier hostRels)
     (hostLocal : Nat)
-    (hostItems : ItemSeq signature (outer + hostLocal) hostRels)
-    (material : Region signature patternWires patternRels)
+    (hostItems : ItemSeq  (outer + hostLocal) hostRels)
+    (material : Region  patternWires patternRels)
     (wireMap : Fin patternWires → Fin (outer + hostLocal))
     (relationMap : RelationRenaming patternRels hostRels) :
-    denoteRegion model named env hostRelEnv
+    denoteRegion model  env hostRelEnv
         (Region.spliceAt hostLocal hostItems material wireMap relationMap) →
-      denoteRegion model named env hostRelEnv (.mk hostLocal hostItems) := by
+      denoteRegion model  env hostRelEnv (.mk hostLocal hostItems) := by
   intro hsplice
   rw [Region.spliceAt, Region.denote_adjoinAt] at hsplice
   obtain ⟨hostEnv, hhost, _⟩ := hsplice
@@ -1708,29 +1494,28 @@ theorem Region.denote_spliceAt_host
 used by the concrete splice compiler. -/
 theorem Region.denote_spliceAt_host_renamed
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin targetOuter → model.Carrier)
     (targetRelEnv : RelEnv model.Carrier targetRels)
     (hostLocal : Nat)
-    (hostItems : ItemSeq signature (outer + hostLocal) hostRels)
-    (material : Region signature patternWires patternRels)
+    (hostItems : ItemSeq  (outer + hostLocal) hostRels)
+    (material : Region  patternWires patternRels)
     (wireMap : Fin patternWires → Fin (outer + hostLocal))
     (relationMap : RelationRenaming patternRels hostRels)
     (outerMap : Fin outer → Fin targetOuter)
     (hostRelationMap : RelationRenaming hostRels targetRels) :
-    denoteRegion model named env targetRelEnv
+    denoteRegion model  env targetRelEnv
         (((Region.spliceAt hostLocal hostItems material wireMap relationMap)
           |>.renameRelations hostRelationMap).renameWires outerMap) →
-      denoteRegion model named env targetRelEnv
+      denoteRegion model  env targetRelEnv
         (((Region.mk hostLocal hostItems).renameRelations hostRelationMap)
           |>.renameWires outerMap) := by
-  rw [denoteRegion_renameWires, denoteRegion_renameRelations model named
+  rw [denoteRegion_renameWires, denoteRegion_renameRelations model
     hostRelationMap (RelEnv.pullback hostRelationMap targetRelEnv) targetRelEnv
     (RelEnv.pullback_agrees hostRelationMap targetRelEnv)]
-  rw [denoteRegion_renameWires, denoteRegion_renameRelations model named
+  rw [denoteRegion_renameWires, denoteRegion_renameRelations model
     hostRelationMap (RelEnv.pullback hostRelationMap targetRelEnv) targetRelEnv
     (RelEnv.pullback_agrees hostRelationMap targetRelEnv)]
-  exact Region.denote_spliceAt_host model named (env ∘ outerMap)
+  exact Region.denote_spliceAt_host model  (env ∘ outerMap)
     (RelEnv.pullback hostRelationMap targetRelEnv) hostLocal hostItems material
     wireMap relationMap
 
@@ -1738,16 +1523,15 @@ theorem Region.denote_spliceAt_host_renamed
 region's denotation. -/
 theorem Region.denote_addUnusedLocals_iff
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (rels : RelEnv model.Carrier relCtx)
-    (items : ItemSeq signature (outer + hostLocal) relCtx)
+    (items : ItemSeq  (outer + hostLocal) relCtx)
     (extra : Nat) :
-    denoteRegion model named env rels
+    denoteRegion model  env rels
         (Region.mk (hostLocal + extra)
           (items.renameWires
             (Region.conjoinLeftWire outer hostLocal extra))) ↔
-      denoteRegion model named env rels (Region.mk hostLocal items) := by
+      denoteRegion model  env rels (Region.mk hostLocal items) := by
   simp only [denoteRegion_mk]
   constructor
   · rintro ⟨expanded, hitems⟩
@@ -1770,7 +1554,7 @@ theorem Region.denote_addUnusedLocals_iff
     let expanded : Fin (hostLocal + extra) → model.Carrier :=
       Fin.addCases original (fun _ => fallback)
     refine ⟨expanded, ?_⟩
-    apply (denoteItemSeq_renameWires model named
+    apply (denoteItemSeq_renameWires model
       (Region.conjoinLeftWire outer hostLocal extra)
       (extendWireEnv env expanded) rels items).2
     have henv :
@@ -1789,14 +1573,13 @@ block is semantically covariant.  This is the normalized root counterpart of
 `denote_spliceAt_host`. -/
 theorem Region.denote_mk_append_left
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
     (localWires : Nat)
-    (first second : ItemSeq signature (outer + localWires) rels) :
-    denoteRegion model named env relEnv
+    (first second : ItemSeq  (outer + localWires) rels) :
+    denoteRegion model  env relEnv
         (Region.mk localWires (first.append second)) →
-      denoteRegion model named env relEnv (Region.mk localWires first) := by
+      denoteRegion model  env relEnv (Region.mk localWires first) := by
   rw [denoteRegion_mk, denoteRegion_mk]
   rintro ⟨localEnv, hitems⟩
   rw [denoteItemSeq_append] at hitems
@@ -1804,108 +1587,104 @@ theorem Region.denote_mk_append_left
 
 /-- At even cut depth, host projection remains covariant through the context. -/
 theorem DiagramContext.fill_spliceAt_host_even
-    (ctx : DiagramContext signature outerWires siteWires outerRels hostRels)
+    (ctx : DiagramContext  outerWires siteWires outerRels hostRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (hostLocal : Nat)
-    (hostItems : ItemSeq signature (siteWires + hostLocal) hostRels)
-    (material : Region signature patternWires patternRels)
+    (hostItems : ItemSeq  (siteWires + hostLocal) hostRels)
+    (material : Region  patternWires patternRels)
     (wireMap : Fin patternWires → Fin (siteWires + hostLocal))
     (relationMap : RelationRenaming patternRels hostRels)
     (hEven : ctx.cutDepth % 2 = 0) :
-    denoteRegion model named env rels
+    denoteRegion model  env rels
         (ctx.fill (Region.spliceAt hostLocal hostItems material wireMap relationMap)) →
-      denoteRegion model named env rels (ctx.fill (.mk hostLocal hostItems)) := by
-  apply context_mono model named env rels hEven
+      denoteRegion model  env rels (ctx.fill (.mk hostLocal hostItems)) := by
+  apply context_mono model  env rels hEven
   intro holeEnv holeRelEnv hsplice
-  exact Region.denote_spliceAt_host model named holeEnv holeRelEnv hostLocal
+  exact Region.denote_spliceAt_host model  holeEnv holeRelEnv hostLocal
     hostItems material wireMap relationMap hsplice
 
 /-- At odd cut depth, host projection reverses through the context. -/
 theorem DiagramContext.fill_spliceAt_host_odd
-    (ctx : DiagramContext signature outerWires siteWires outerRels hostRels)
+    (ctx : DiagramContext  outerWires siteWires outerRels hostRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (hostLocal : Nat)
-    (hostItems : ItemSeq signature (siteWires + hostLocal) hostRels)
-    (material : Region signature patternWires patternRels)
+    (hostItems : ItemSeq  (siteWires + hostLocal) hostRels)
+    (material : Region  patternWires patternRels)
     (wireMap : Fin patternWires → Fin (siteWires + hostLocal))
     (relationMap : RelationRenaming patternRels hostRels)
     (hOdd : ctx.cutDepth % 2 = 1) :
-    denoteRegion model named env rels (ctx.fill (.mk hostLocal hostItems)) →
-      denoteRegion model named env rels
+    denoteRegion model  env rels (ctx.fill (.mk hostLocal hostItems)) →
+      denoteRegion model  env rels
         (ctx.fill (Region.spliceAt hostLocal hostItems material wireMap relationMap)) := by
-  apply context_anti model named env rels hOdd
+  apply context_anti model  env rels hOdd
   intro holeEnv holeRelEnv hsplice
-  exact Region.denote_spliceAt_host model named holeEnv holeRelEnv hostLocal
+  exact Region.denote_spliceAt_host model  holeEnv holeRelEnv hostLocal
     hostItems material wireMap relationMap hsplice
 
 /-- At even depth, a pointwise implication between replacement materials is
 covariant through both the splice site and its enclosing diagram context. -/
 theorem DiagramContext.fill_spliceAt_mono_even
-    (ctx : DiagramContext signature outerWires siteWires outerRels hostRels)
+    (ctx : DiagramContext  outerWires siteWires outerRels hostRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (hostLocal : Nat)
-    (hostItems : ItemSeq signature (siteWires + hostLocal) hostRels)
-    (source target : Region signature patternWires patternRels)
+    (hostItems : ItemSeq  (siteWires + hostLocal) hostRels)
+    (source target : Region  patternWires patternRels)
     (wireMap : Fin patternWires → Fin (siteWires + hostLocal))
     (relationMap : RelationRenaming patternRels hostRels)
     (hEven : ctx.cutDepth % 2 = 0)
     (entails : ∀ holeRelEnv patternEnv,
-      denoteRegion model named patternEnv
+      denoteRegion model  patternEnv
           (RelEnv.pullback relationMap holeRelEnv) source →
-        denoteRegion model named patternEnv
+        denoteRegion model  patternEnv
           (RelEnv.pullback relationMap holeRelEnv) target) :
-    denoteRegion model named env rels
+    denoteRegion model  env rels
         (ctx.fill
           (Region.spliceAt hostLocal hostItems source wireMap relationMap)) →
-      denoteRegion model named env rels
+      denoteRegion model  env rels
         (ctx.fill
           (Region.spliceAt hostLocal hostItems target wireMap relationMap)) := by
-  apply context_mono model named env rels hEven
+  apply context_mono model  env rels hEven
   intro holeEnv holeRelEnv hsource
-  exact Region.denote_spliceAt_mono model named holeEnv holeRelEnv hostLocal
+  exact Region.denote_spliceAt_mono model  holeEnv holeRelEnv hostLocal
     hostItems source target wireMap relationMap (entails holeRelEnv) hsource
 
 /-- At odd depth, the same local material implication is consumed
 contravariantly by the enclosing diagram context. -/
 theorem DiagramContext.fill_spliceAt_mono_odd
-    (ctx : DiagramContext signature outerWires siteWires outerRels hostRels)
+    (ctx : DiagramContext  outerWires siteWires outerRels hostRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (hostLocal : Nat)
-    (hostItems : ItemSeq signature (siteWires + hostLocal) hostRels)
-    (source target : Region signature patternWires patternRels)
+    (hostItems : ItemSeq  (siteWires + hostLocal) hostRels)
+    (source target : Region  patternWires patternRels)
     (wireMap : Fin patternWires → Fin (siteWires + hostLocal))
     (relationMap : RelationRenaming patternRels hostRels)
     (hOdd : ctx.cutDepth % 2 = 1)
     (entails : ∀ holeRelEnv patternEnv,
-      denoteRegion model named patternEnv
+      denoteRegion model  patternEnv
           (RelEnv.pullback relationMap holeRelEnv) source →
-        denoteRegion model named patternEnv
+        denoteRegion model  patternEnv
           (RelEnv.pullback relationMap holeRelEnv) target) :
-    denoteRegion model named env rels
+    denoteRegion model  env rels
         (ctx.fill
           (Region.spliceAt hostLocal hostItems target wireMap relationMap)) →
-      denoteRegion model named env rels
+      denoteRegion model  env rels
         (ctx.fill
           (Region.spliceAt hostLocal hostItems source wireMap relationMap)) := by
-  apply context_anti model named env rels hOdd
+  apply context_anti model  env rels hOdd
   intro holeEnv holeRelEnv htarget
-  exact Region.denote_spliceAt_mono model named holeEnv holeRelEnv hostLocal
+  exact Region.denote_spliceAt_mono model  holeEnv holeRelEnv hostLocal
     hostItems source target wireMap relationMap (entails holeRelEnv) htarget
 
 theorem ItemSeq.renameWires_append
-    : (first second : ItemSeq signature source rels) →
+    : (first second : ItemSeq  source rels) →
     (rho : Fin source → Fin target) →
     (first.append second).renameWires rho =
       (first.renameWires rho).append (second.renameWires rho)
@@ -1915,7 +1694,7 @@ theorem ItemSeq.renameWires_append
         (ItemSeq.renameWires_append tail second rho)
 
 theorem ItemSeq.renameRelations_append
-    : (first second : ItemSeq signature wires source) →
+    : (first second : ItemSeq  wires source) →
     (rho : RelationRenaming source target) →
     (first.append second).renameRelations rho =
       (first.renameRelations rho).append (second.renameRelations rho)
@@ -1925,7 +1704,7 @@ theorem ItemSeq.renameRelations_append
         (ItemSeq.renameRelations_append tail second rho)
 
 @[simp] theorem ItemSeq.renameRelations_length :
-    (items : ItemSeq signature wires source) →
+    (items : ItemSeq  wires source) →
     (rho : RelationRenaming source target) →
     (items.renameRelations rho).length = items.length
   | .nil, _ => rfl
@@ -1933,7 +1712,7 @@ theorem ItemSeq.renameRelations_append
       congrArg Nat.succ (ItemSeq.renameRelations_length tail rho)
 
 theorem ItemSeq.get_renameRelations
-    : (items : ItemSeq signature wires source) →
+    : (items : ItemSeq  wires source) →
       (rho : RelationRenaming source target) →
       (index : Fin items.length) →
       (items.renameRelations rho).get
@@ -1947,13 +1726,13 @@ theorem ItemSeq.get_renameRelations
           ItemSeq.get_renameRelations tail rho rest
 
 @[simp] theorem ItemSeq.castWiresEq_length (equality : source = target)
-    (items : ItemSeq signature source rels) :
+    (items : ItemSeq  source rels) :
     (items.castWiresEq equality).length = items.length := by
   subst target
   rfl
 
 theorem ItemSeq.get_castWiresEq (equality : source = target)
-    (items : ItemSeq signature source rels) (index : Fin items.length) :
+    (items : ItemSeq  source rels) (index : Fin items.length) :
     (items.castWiresEq equality).get
         (Fin.cast (ItemSeq.castWiresEq_length equality items).symm index) =
       (items.get index).castWiresEq equality := by
@@ -1961,7 +1740,7 @@ theorem ItemSeq.get_castWiresEq (equality : source = target)
   rfl
 
 @[simp] theorem ItemSeq.renameWires_length :
-    (items : ItemSeq signature source rels) →
+    (items : ItemSeq  source rels) →
     (rho : Fin source → Fin target) →
     (items.renameWires rho).length = items.length
   | .nil, _ => rfl
@@ -1970,7 +1749,7 @@ theorem ItemSeq.get_castWiresEq (equality : source = target)
 
 /-- Renaming wires preserves the finite carrier of item positions. -/
 def ItemSeq.renameWiresPositionEquiv
-    (items : ItemSeq signature source rels)
+    (items : ItemSeq  source rels)
     (rho : Fin source → Fin target) :
     FiniteEquiv (Fin items.length) (Fin (items.renameWires rho).length) where
   toFun := Fin.cast (ItemSeq.renameWires_length items rho).symm
@@ -2013,7 +1792,7 @@ def FiniteEquiv.finAddComm (left right : Nat) :
       simp
 
 @[simp] theorem ItemSeq.length_append :
-    (first second : ItemSeq signature wires rels) →
+    (first second : ItemSeq  wires rels) →
     (first.append second).length = first.length + second.length
   | .nil, second => (Nat.zero_add second.length).symm
   | .cons _ tail, second => by
@@ -2021,7 +1800,7 @@ def FiniteEquiv.finAddComm (left right : Nat) :
         congrArg Nat.succ (ItemSeq.length_append tail second)
 
 def ItemSeq.appendRenamePositionSwap
-    (first second : ItemSeq signature source rels)
+    (first second : ItemSeq  source rels)
     (wire : FiniteEquiv (Fin source) (Fin target)) :
     FiniteEquiv (Fin (first.append second).length)
       (Fin ((second.renameWires wire).append
@@ -2035,7 +1814,7 @@ def ItemSeq.appendRenamePositionSwap
         (second.renameWires wire) (first.renameWires wire)).symm)))
 
 theorem ItemSeq.get_append_left :
-    (first second : ItemSeq signature wires rels) →
+    (first second : ItemSeq  wires rels) →
     (index : Fin first.length) →
     (first.append second).get
         (Fin.cast (ItemSeq.length_append first second).symm
@@ -2050,7 +1829,7 @@ theorem ItemSeq.get_append_left :
             ItemSeq.get_append_left tail second rest
 
 theorem ItemSeq.get_append_right :
-    (first second : ItemSeq signature wires rels) →
+    (first second : ItemSeq  wires rels) →
     (index : Fin second.length) →
     (first.append second).get
         (Fin.cast (ItemSeq.length_append first second).symm
@@ -2058,7 +1837,7 @@ theorem ItemSeq.get_append_right :
       second.get index
   | .nil, second, index => by
       have hindex :
-          Fin.cast (ItemSeq.length_append (.nil : ItemSeq signature wires rels)
+          Fin.cast (ItemSeq.length_append (.nil : ItemSeq  wires rels)
             second).symm (Fin.natAdd 0 index) = index := by
         apply Fin.ext
         simp
@@ -2075,7 +1854,7 @@ theorem ItemSeq.get_append_right :
       exact ItemSeq.get_append_right tail second index
 
 theorem ItemSeq.get_renameWires :
-    (items : ItemSeq signature source rels) →
+    (items : ItemSeq  source rels) →
     (wire : Fin source → Fin target) →
     (index : Fin items.length) →
     (items.renameWires wire).get
@@ -2090,7 +1869,7 @@ theorem ItemSeq.get_renameWires :
             ItemSeq.get_renameWires tail wire rest
 mutual
   theorem Region.renameWires_renameRelations
-      (region : Region signature wires source)
+      (region : Region  wires source)
       (wire : Fin wires → Fin targetWires)
       (relation : RelationRenaming source target) :
       (region.renameWires wire).renameRelations relation =
@@ -2102,7 +1881,7 @@ mutual
             (extendWireRenaming wire localWires) relation)
 
   theorem Item.renameWires_renameRelations
-      (item : Item signature wires source)
+      (item : Item  wires source)
       (wire : Fin wires → Fin targetWires)
       (relation : RelationRenaming source target) :
       (item.renameWires wire).renameRelations relation =
@@ -2110,7 +1889,6 @@ mutual
     cases item with
     | atom rel arguments => rfl
     | identity arity arguments => rfl
-    | named rel arguments => rfl
     | cut body =>
         exact congrArg Item.cut
           (Region.renameWires_renameRelations body wire relation)
@@ -2120,7 +1898,7 @@ mutual
             (RelationRenaming.lift relation arity))
 
   theorem ItemSeq.renameWires_renameRelations
-      (items : ItemSeq signature wires source)
+      (items : ItemSeq  wires source)
       (wire : Fin wires → Fin targetWires)
       (relation : RelationRenaming source target) :
       (items.renameWires wire).renameRelations relation =
@@ -2156,7 +1934,7 @@ private theorem conjoinRightWire_natural
   · simp [Region.conjoinRightWire, extendWireRenaming]
 
 theorem Region.conjoin_renameWires
-    (first second : Region signature source rels)
+    (first second : Region  source rels)
     (rho : Fin source → Fin target) :
     (first.conjoin second).renameWires rho =
       (first.renameWires rho).conjoin (second.renameWires rho) := by
@@ -2170,7 +1948,7 @@ theorem Region.conjoin_renameWires
           rw [conjoinLeftWire_natural, conjoinRightWire_natural]
 
 theorem Region.conjoin_renameRelations
-    (first second : Region signature wires source)
+    (first second : Region  wires source)
     (rho : RelationRenaming source target) :
     (first.conjoin second).renameRelations rho =
       (first.renameRelations rho).conjoin (second.renameRelations rho) := by
@@ -2185,19 +1963,19 @@ theorem Region.conjoin_renameRelations
             ItemSeq.renameWires_renameRelations]
 
 theorem RegionIso.renameWiresEquiv
-    (region : Region signature source rels)
+    (region : Region  source rels)
     (wire : FiniteEquiv (Fin source) (Fin target)) :
-    RegionIso signature wire rels region (region.renameWires wire) := by
+    RegionIso  wire rels region (region.renameWires wire) := by
   apply Region.rec
     (motive_1 := fun source rels region =>
       ∀ {target}, (wire : FiniteEquiv (Fin source) (Fin target)) →
-        RegionIso signature wire rels region (region.renameWires wire))
+        RegionIso  wire rels region (region.renameWires wire))
     (motive_2 := fun source rels item =>
       ∀ {target}, (wire : FiniteEquiv (Fin source) (Fin target)) →
-        ItemIso signature wire rels item (item.renameWires wire))
+        ItemIso  wire rels item (item.renameWires wire))
     (motive_3 := fun source rels items =>
       ∀ {target}, (wire : FiniteEquiv (Fin source) (Fin target)) →
-        ∀ index, ItemIso signature wire rels (items.get index)
+        ∀ index, ItemIso  wire rels (items.get index)
           ((items.renameWires wire).get
             (items.renameWiresPositionEquiv wire index)))
   · intro source rels localWires items itemsIH target wire
@@ -2219,8 +1997,6 @@ theorem RegionIso.renameWiresEquiv
     exact ItemIso.atom relation rfl
   · intro source rels arity arguments target wire
     exact ItemIso.identity rfl
-  · intro source rels arity relation arguments target wire
-    exact ItemIso.named relation rfl
   · intro source rels body bodyIH target wire
     exact ItemIso.cut (bodyIH wire)
   · intro source rels arity body bodyIH target wire
@@ -2240,24 +2016,24 @@ theorem RegionIso.renameWiresEquiv
 intrinsic region isomorphism. -/
 theorem RegionIso.renameRelations
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    {source : Region signature sourceWires sourceRels}
-    {target : Region signature targetWires sourceRels}
-    (iso : RegionIso signature wire sourceRels source target)
+    {source : Region  sourceWires sourceRels}
+    {target : Region  targetWires sourceRels}
+    (iso : RegionIso  wire sourceRels source target)
     (rho : RelationRenaming sourceRels targetRels) :
-    RegionIso signature wire targetRels
+    RegionIso  wire targetRels
       (source.renameRelations rho) (target.renameRelations rho) := by
   exact RegionIso.rec
     (motive_1 := fun wire sourceRels source target _ =>
       ∀ {targetRels}, (rho : RelationRenaming sourceRels targetRels) →
-        RegionIso signature wire targetRels
+        RegionIso  wire targetRels
           (source.renameRelations rho) (target.renameRelations rho))
     (motive_2 := fun wire sourceRels source target _ =>
       ∀ {targetRels}, (rho : RelationRenaming sourceRels targetRels) →
-        ItemIso signature wire targetRels
+        ItemIso  wire targetRels
           (source.renameRelations rho) (target.renameRelations rho))
     (motive_3 := fun wire sourceRels source target _ =>
       ∀ {targetRels}, (rho : RelationRenaming sourceRels targetRels) →
-        ItemSeqIso signature wire targetRels
+        ItemSeqIso  wire targetRels
           (source.renameRelations rho) (target.renameRelations rho))
     (fun {_ _ _ _} {_} {_} {_} {_} localEquiv _ itemsIH {_} rho =>
       RegionIso.mk localEquiv (itemsIH rho))
@@ -2265,8 +2041,6 @@ theorem RegionIso.renameRelations
       ItemIso.atom (rho relation) arguments_eq)
     (fun {_ _ _} {_} {_} {_} {_} arguments_eq {_} _ =>
       ItemIso.identity arguments_eq)
-    (fun {_ _ _} {_} {_} relation {_} {_} arguments_eq {_} _ =>
-      ItemIso.named relation arguments_eq)
     (fun {_ _} {_} {_} {_} {_} _ bodyIH {_} rho =>
       ItemIso.cut (bodyIH rho))
     (fun {_ _ _} {_} {_} {_} {_} _ bodyIH {_} rho =>
@@ -2301,20 +2075,20 @@ theorem RegionIso.renameRelations
     iso rho
 
 theorem ItemSeqIso.renameWiresEquiv
-    (items : ItemSeq signature source rels)
+    (items : ItemSeq  source rels)
     (wire : FiniteEquiv (Fin source) (Fin target)) :
-    ItemSeqIso signature wire rels items (items.renameWires wire) := by
+    ItemSeqIso  wire rels items (items.renameWires wire) := by
   refine ItemSeqIso.permute (items.renameWiresPositionEquiv wire) ?_
   apply ItemSeq.rec
     (motive_1 := fun source rels region =>
       ∀ {target}, (wire : FiniteEquiv (Fin source) (Fin target)) →
-        RegionIso signature wire rels region (region.renameWires wire))
+        RegionIso  wire rels region (region.renameWires wire))
     (motive_2 := fun source rels item =>
       ∀ {target}, (wire : FiniteEquiv (Fin source) (Fin target)) →
-        ItemIso signature wire rels item (item.renameWires wire))
+        ItemIso  wire rels item (item.renameWires wire))
     (motive_3 := fun source rels items =>
       ∀ {target}, (wire : FiniteEquiv (Fin source) (Fin target)) →
-        ∀ index, ItemIso signature wire rels (items.get index)
+        ∀ index, ItemIso  wire rels (items.get index)
           ((items.renameWires wire).get
             (items.renameWiresPositionEquiv wire index)))
   · intro source rels localWires nested nestedIH target wire
@@ -2336,8 +2110,6 @@ theorem ItemSeqIso.renameWiresEquiv
     exact ItemIso.atom relation rfl
   · intro source rels arity arguments target wire
     exact ItemIso.identity rfl
-  · intro source rels arity relation arguments target wire
-    exact ItemIso.named relation rfl
   · intro source rels body bodyIH target wire
     exact ItemIso.cut (bodyIH wire)
   · intro source rels arity body bodyIH target wire
@@ -2354,19 +2126,19 @@ theorem ItemSeqIso.renameWiresEquiv
         ItemSeq.renameWires_length] using tailIH wire rest
 
 theorem ItemIso.renameWiresEquiv
-    (item : Item signature source rels)
+    (item : Item  source rels)
     (wire : FiniteEquiv (Fin source) (Fin target)) :
-    ItemIso signature wire rels item (item.renameWires wire) := by
+    ItemIso  wire rels item (item.renameWires wire) := by
   apply Item.rec
     (motive_1 := fun source rels region =>
       ∀ {target}, (wire : FiniteEquiv (Fin source) (Fin target)) →
-        RegionIso signature wire rels region (region.renameWires wire))
+        RegionIso  wire rels region (region.renameWires wire))
     (motive_2 := fun source rels item =>
       ∀ {target}, (wire : FiniteEquiv (Fin source) (Fin target)) →
-        ItemIso signature wire rels item (item.renameWires wire))
+        ItemIso  wire rels item (item.renameWires wire))
     (motive_3 := fun source rels items =>
       ∀ {target}, (wire : FiniteEquiv (Fin source) (Fin target)) →
-        ∀ index, ItemIso signature wire rels (items.get index)
+        ∀ index, ItemIso  wire rels (items.get index)
           ((items.renameWires wire).get
             (items.renameWiresPositionEquiv wire index)))
   · intro source rels localWires nested nestedIH target wire
@@ -2388,8 +2160,6 @@ theorem ItemIso.renameWiresEquiv
     exact ItemIso.atom relation rfl
   · intro source rels arity arguments target wire
     exact ItemIso.identity rfl
-  · intro source rels arity relation arguments target wire
-    exact ItemIso.named relation rfl
   · intro source rels body bodyIH target wire
     exact ItemIso.cut (bodyIH wire)
   · intro source rels arity body bodyIH target wire
@@ -2404,9 +2174,9 @@ theorem ItemIso.renameWiresEquiv
         ItemSeq.renameWires_length] using tailIH wire rest
 
 theorem ItemSeqIso.appendCommRename
-    (first second : ItemSeq signature source rels)
+    (first second : ItemSeq  source rels)
     (wire : FiniteEquiv (Fin source) (Fin target)) :
-    ItemSeqIso signature wire rels (first.append second)
+    ItemSeqIso  wire rels (first.append second)
       ((second.renameWires wire).append (first.renameWires wire)) := by
   refine ItemSeqIso.permute (first.appendRenamePositionSwap second wire) ?_
   intro index
@@ -2414,7 +2184,7 @@ theorem ItemSeqIso.appendCommRename
     Fin.cast (ItemSeq.length_append first second) index
   refine Fin.addCases (motive := fun splitIndex =>
       sumIndex = splitIndex →
-        ItemIso signature wire rels ((first.append second).get index)
+        ItemIso  wire rels ((first.append second).get index)
           (((second.renameWires wire).append (first.renameWires wire)).get
             (first.appendRenamePositionSwap second wire index)))
     (fun firstIndex hsum => by
@@ -2462,8 +2232,8 @@ theorem ItemSeqIso.appendCommRename
     sumIndex rfl
 
 theorem RegionIso.conjoin_blank_left
-    (region : Region signature wires rels) :
-    RegionIso signature (FiniteEquiv.refl (Fin wires)) rels
+    (region : Region  wires rels) :
+    RegionIso  (FiniteEquiv.refl (Fin wires)) rels
       region (Region.blank.conjoin region) := by
   cases region with
   | mk localWires items =>
@@ -2485,8 +2255,8 @@ theorem RegionIso.conjoin_blank_left
           (extendWireEquiv (FiniteEquiv.refl (Fin wires)) localEquiv)
 
 theorem RegionIso.conjoin_blank_right
-    (region : Region signature wires rels) :
-    RegionIso signature (FiniteEquiv.refl (Fin wires)) rels
+    (region : Region  wires rels) :
+    RegionIso  (FiniteEquiv.refl (Fin wires)) rels
       region (region.conjoin Region.blank) := by
   cases region with
   | mk localWires items =>
@@ -2508,8 +2278,8 @@ theorem RegionIso.conjoin_blank_right
           (extendWireEquiv (FiniteEquiv.refl (Fin wires)) localEquiv)
 
 theorem RegionIso.conjoin_assoc
-    (first second third : Region signature wires rels) :
-    RegionIso signature (FiniteEquiv.refl (Fin wires)) rels
+    (first second third : Region  wires rels) :
+    RegionIso  (FiniteEquiv.refl (Fin wires)) rels
       ((first.conjoin second).conjoin third)
       (first.conjoin (second.conjoin third)) := by
   cases first with
@@ -2596,8 +2366,8 @@ theorem RegionIso.conjoin_assoc
         simpa only [Region.conjoin, sourceItems, extended] using hiso
 
 theorem RegionIso.conjoin_comm
-    (first second : Region signature wires rels) :
-    RegionIso signature (FiniteEquiv.refl (Fin wires)) rels
+    (first second : Region  wires rels) :
+    RegionIso  (FiniteEquiv.refl (Fin wires)) rels
       (first.conjoin second) (second.conjoin first) := by
   cases first with
   | mk firstLocal firstItems =>
@@ -2644,8 +2414,8 @@ theorem RegionIso.conjoin_comm
 /-- Pull a focused-frame presentation back across an ambient wire renaming of
 its source sequence. -/
 def ItemSeqIso.Frame.prependRenameWires
-    {source : ItemSeq signature sourceWires rels}
-    {target : ItemSeq signature targetWires rels}
+    {source : ItemSeq  sourceWires rels}
+    {target : ItemSeq  targetWires rels}
     (firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires))
     {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
     (sourceIndex : Fin source.length) {targetIndex : Fin target.length}
@@ -2665,7 +2435,7 @@ def ItemSeqIso.Frame.prependRenameWires
       exact hne (firstPositions.injective heq)
     have hfirst := ItemIso.renameWiresEquiv (source.get index) firstWire
     have hsecond := frame.siblings (firstPositions index) hrenamedNe
-    have hsecond' : ItemIso signature secondWire rels
+    have hsecond' : ItemIso  secondWire rels
         ((source.get index).renameWires firstWire)
         (target.get (frame.positions (firstPositions index))) := by
       simpa only [firstPositions, ItemSeq.get_renameWires] using hsecond
@@ -2674,8 +2444,8 @@ def ItemSeqIso.Frame.prependRenameWires
 /-- Push a focused-frame presentation forward across an ambient wire
 renaming of its target sequence. -/
 def ItemSeqIso.Frame.appendRenameWires
-    {source : ItemSeq signature sourceWires rels}
-    {target : ItemSeq signature targetWires rels}
+    {source : ItemSeq  sourceWires rels}
+    {target : ItemSeq  targetWires rels}
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     (lastWire : FiniteEquiv (Fin targetWires) (Fin finalWires))
     {sourceIndex : Fin source.length} (targetIndex : Fin target.length)
@@ -2692,7 +2462,7 @@ def ItemSeqIso.Frame.appendRenameWires
   have hfirst := frame.siblings index hne
   have hlast := ItemIso.renameWiresEquiv
     (target.get (frame.positions index)) lastWire
-  have hlast' : ItemIso signature lastWire rels
+  have hlast' : ItemIso  lastWire rels
       (target.get (frame.positions index))
       ((target.renameWires lastWire).get
         (lastPositions (frame.positions index))) := by
@@ -2704,10 +2474,10 @@ target wire presentations, preserving the distinguished position values. -/
 theorem ItemSeqIso.Frame.pullPush
     {sourceWires middleSourceWires middleTargetWires targetWires : Nat}
     {rels : Theory.RelCtx}
-    {source : ItemSeq signature sourceWires rels}
-    {middleSource : ItemSeq signature middleSourceWires rels}
-    {middleTarget : ItemSeq signature middleTargetWires rels}
-    {target : ItemSeq signature targetWires rels}
+    {source : ItemSeq  sourceWires rels}
+    {middleSource : ItemSeq  middleSourceWires rels}
+    {middleTarget : ItemSeq  middleTargetWires rels}
+    {target : ItemSeq  targetWires rels}
     (firstWire : FiniteEquiv (Fin sourceWires) (Fin middleSourceWires))
     (middleWire : FiniteEquiv (Fin middleSourceWires)
       (Fin middleTargetWires))
@@ -2746,43 +2516,43 @@ theorem ItemSeqIso.Frame.pullPush
 its complete occurrence permutation; the recursively aligned child supplies
 only the distinguished cut/bubble item. This permits siblings to move across
 the focused position. -/
-inductive DiagramContextIso (signature : List Nat) :
+inductive DiagramContextIso :
     {sourceOuter sourceHole targetOuter targetHole : Nat} →
     (outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)) →
     (holeWire : FiniteEquiv (Fin sourceHole) (Fin targetHole)) →
     (outerRels holeRels : Theory.RelCtx) →
-    DiagramContext signature sourceOuter sourceHole outerRels holeRels →
-    DiagramContext signature targetOuter targetHole outerRels holeRels → Prop
+    DiagramContext  sourceOuter sourceHole outerRels holeRels →
+    DiagramContext  targetOuter targetHole outerRels holeRels → Prop
   | hole
       (wire : FiniteEquiv (Fin wires) (Fin targetWires)) :
-      DiagramContextIso signature wire wire rels rels
-        (.hole : DiagramContext signature wires wires rels rels)
-        (.hole : DiagramContext signature targetWires targetWires rels rels)
+      DiagramContextIso  wire wire rels rels
+        (.hole : DiagramContext  wires wires rels rels)
+        (.hole : DiagramContext  targetWires targetWires rels rels)
   | cut
       {outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
       {holeWire : FiniteEquiv (Fin sourceHole) (Fin targetHole)}
       (localWire : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
       (sourceBefore sourceAfter :
-        ItemSeq signature (sourceOuter + sourceLocal) outerRels)
+        ItemSeq  (sourceOuter + sourceLocal) outerRels)
       (targetBefore targetAfter :
-        ItemSeq signature (targetOuter + targetLocal) outerRels)
-      (sourceChild : DiagramContext signature
+        ItemSeq  (targetOuter + targetLocal) outerRels)
+      (sourceChild : DiagramContext
         (sourceOuter + sourceLocal) sourceHole outerRels holeRels)
-      (targetChild : DiagramContext signature
+      (targetChild : DiagramContext
         (targetOuter + targetLocal) targetHole outerRels holeRels)
-      (child : DiagramContextIso signature
+      (child : DiagramContextIso
         (extendWireEquiv outerWire localWire) holeWire outerRels holeRels
         sourceChild targetChild)
-      (frame : ∀ {sourceBody : Region signature
+      (frame : ∀ {sourceBody : Region
           (sourceOuter + sourceLocal) outerRels}
-          {targetBody : Region signature
+          {targetBody : Region
             (targetOuter + targetLocal) outerRels},
-        ItemIso signature (extendWireEquiv outerWire localWire) outerRels
+        ItemIso  (extendWireEquiv outerWire localWire) outerRels
             (.cut sourceBody) (.cut targetBody) →
-          ItemSeqIso signature (extendWireEquiv outerWire localWire) outerRels
+          ItemSeqIso  (extendWireEquiv outerWire localWire) outerRels
             (sourceBefore.append (.cons (.cut sourceBody) sourceAfter))
             (targetBefore.append (.cons (.cut targetBody) targetAfter))) :
-      DiagramContextIso signature outerWire holeWire outerRels holeRels
+      DiagramContextIso  outerWire holeWire outerRels holeRels
         (.cut sourceLocal sourceBefore sourceAfter sourceChild)
         (.cut targetLocal targetBefore targetAfter targetChild)
   | bubble
@@ -2790,28 +2560,28 @@ inductive DiagramContextIso (signature : List Nat) :
       {holeWire : FiniteEquiv (Fin sourceHole) (Fin targetHole)}
       (localWire : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
       (sourceBefore sourceAfter :
-        ItemSeq signature (sourceOuter + sourceLocal) outerRels)
+        ItemSeq  (sourceOuter + sourceLocal) outerRels)
       (targetBefore targetAfter :
-        ItemSeq signature (targetOuter + targetLocal) outerRels)
-      (sourceChild : DiagramContext signature
+        ItemSeq  (targetOuter + targetLocal) outerRels)
+      (sourceChild : DiagramContext
         (sourceOuter + sourceLocal) sourceHole (arity :: outerRels) holeRels)
-      (targetChild : DiagramContext signature
+      (targetChild : DiagramContext
         (targetOuter + targetLocal) targetHole (arity :: outerRels) holeRels)
-      (child : DiagramContextIso signature
+      (child : DiagramContextIso
         (extendWireEquiv outerWire localWire) holeWire
         (arity :: outerRels) holeRels sourceChild targetChild)
-      (frame : ∀ {sourceBody : Region signature
+      (frame : ∀ {sourceBody : Region
           (sourceOuter + sourceLocal) (arity :: outerRels)}
-          {targetBody : Region signature
+          {targetBody : Region
             (targetOuter + targetLocal) (arity :: outerRels)},
-        ItemIso signature (extendWireEquiv outerWire localWire) outerRels
+        ItemIso  (extendWireEquiv outerWire localWire) outerRels
             (.bubble arity sourceBody) (.bubble arity targetBody) →
-          ItemSeqIso signature (extendWireEquiv outerWire localWire) outerRels
+          ItemSeqIso  (extendWireEquiv outerWire localWire) outerRels
             (sourceBefore.append
               (.cons (.bubble arity sourceBody) sourceAfter))
             (targetBefore.append
               (.cons (.bubble arity targetBody) targetAfter))) :
-      DiagramContextIso signature outerWire holeWire outerRels holeRels
+      DiagramContextIso  outerWire holeWire outerRels holeRels
         (.bubble sourceLocal sourceBefore sourceAfter arity sourceChild)
         (.bubble targetLocal targetBefore targetAfter arity targetChild)
 
@@ -2819,7 +2589,7 @@ inductive DiagramContextIso (signature : List Nat) :
 The occurrence permutations and wire transports carried by the isomorphism
 do not affect polarity. -/
 theorem DiagramContextIso.cutDepth_eq
-    (iso : DiagramContextIso signature outerWire holeWire outerRels holeRels
+    (iso : DiagramContextIso  outerWire holeWire outerRels holeRels
       source target) :
     source.cutDepth = target.cutDepth := by
   induction iso <;> simp_all [DiagramContext.cutDepth]
@@ -2830,7 +2600,7 @@ theorem DiagramContext.cutDepth_castRels
     {sourceRels targetRels : Theory.RelCtx}
     {outerWires holeWires : Nat} {outerRels : Theory.RelCtx}
     (equality : sourceRels = targetRels)
-    (context : DiagramContext signature outerWires holeWires outerRels
+    (context : DiagramContext  outerWires holeWires outerRels
       sourceRels) :
     (equality ▸ context).cutDepth = context.cutDepth := by
   subst targetRels
@@ -2842,8 +2612,8 @@ theorem DiagramContextIso.cutFrame
     {outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
     {holeWire : FiniteEquiv (Fin sourceHole) (Fin targetHole)}
     (localWire : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
-    {sourceItems : ItemSeq signature (sourceOuter + sourceLocal) outerRels}
-    {targetItems : ItemSeq signature (targetOuter + targetLocal) outerRels}
+    {sourceItems : ItemSeq  (sourceOuter + sourceLocal) outerRels}
+    {targetItems : ItemSeq  (targetOuter + targetLocal) outerRels}
     {sourceIndex : Fin sourceItems.length}
     {targetIndex : Fin targetItems.length}
     (sourceFocus : ItemSeq.Focus sourceItems)
@@ -2852,14 +2622,14 @@ theorem DiagramContextIso.cutFrame
     (targetAt : targetItems.focusAt? targetIndex.val = some targetFocus)
     (frame : ItemSeqIso.Frame (extendWireEquiv outerWire localWire)
       sourceIndex targetIndex)
-    (sourceChild : DiagramContext signature
+    (sourceChild : DiagramContext
       (sourceOuter + sourceLocal) sourceHole outerRels holeRels)
-    (targetChild : DiagramContext signature
+    (targetChild : DiagramContext
       (targetOuter + targetLocal) targetHole outerRels holeRels)
-    (child : DiagramContextIso signature
+    (child : DiagramContextIso
       (extendWireEquiv outerWire localWire) holeWire outerRels holeRels
       sourceChild targetChild) :
-    DiagramContextIso signature outerWire holeWire outerRels holeRels
+    DiagramContextIso  outerWire holeWire outerRels holeRels
       (.cut sourceLocal sourceFocus.before sourceFocus.after sourceChild)
       (.cut targetLocal targetFocus.before targetFocus.after targetChild) := by
   apply DiagramContextIso.cut localWire sourceFocus.before sourceFocus.after
@@ -2876,8 +2646,8 @@ theorem DiagramContextIso.bubbleFrame
     {outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
     {holeWire : FiniteEquiv (Fin sourceHole) (Fin targetHole)}
     (localWire : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
-    {sourceItems : ItemSeq signature (sourceOuter + sourceLocal) outerRels}
-    {targetItems : ItemSeq signature (targetOuter + targetLocal) outerRels}
+    {sourceItems : ItemSeq  (sourceOuter + sourceLocal) outerRels}
+    {targetItems : ItemSeq  (targetOuter + targetLocal) outerRels}
     {sourceIndex : Fin sourceItems.length}
     {targetIndex : Fin targetItems.length}
     (sourceFocus : ItemSeq.Focus sourceItems)
@@ -2886,14 +2656,14 @@ theorem DiagramContextIso.bubbleFrame
     (targetAt : targetItems.focusAt? targetIndex.val = some targetFocus)
     (frame : ItemSeqIso.Frame (extendWireEquiv outerWire localWire)
       sourceIndex targetIndex)
-    (sourceChild : DiagramContext signature
+    (sourceChild : DiagramContext
       (sourceOuter + sourceLocal) sourceHole (arity :: outerRels) holeRels)
-    (targetChild : DiagramContext signature
+    (targetChild : DiagramContext
       (targetOuter + targetLocal) targetHole (arity :: outerRels) holeRels)
-    (child : DiagramContextIso signature
+    (child : DiagramContextIso
       (extendWireEquiv outerWire localWire) holeWire
       (arity :: outerRels) holeRels sourceChild targetChild) :
-    DiagramContextIso signature outerWire holeWire outerRels holeRels
+    DiagramContextIso  outerWire holeWire outerRels holeRels
       (.bubble sourceLocal sourceFocus.before sourceFocus.after arity sourceChild)
       (.bubble targetLocal targetFocus.before targetFocus.after arity targetChild) := by
   apply DiagramContextIso.bubble localWire sourceFocus.before sourceFocus.after
@@ -2909,10 +2679,10 @@ theorem DiagramContextIso.bubbleFrame
 /-- A site isomorphism lifts through every aligned compiler frame to the
 complete root. -/
 theorem DiagramContextIso.fill
-    (alignment : DiagramContextIso signature outerWire holeWire
+    (alignment : DiagramContextIso  outerWire holeWire
       outerRels holeRels sourceContext targetContext)
-    (site : RegionIso signature holeWire holeRels sourceSite targetSite) :
-    RegionIso signature outerWire outerRels
+    (site : RegionIso  holeWire holeRels sourceSite targetSite) :
+    RegionIso  outerWire outerRels
       (sourceContext.fill sourceSite) (targetContext.fill targetSite) := by
   induction alignment with
   | hole wire => exact site
@@ -2926,20 +2696,20 @@ theorem DiagramContextIso.fill
 /-- Root form of `DiagramContextIso.fill`, with reconstruction equations for
 the source and target focuses. -/
 theorem DiagramContextIso.root
-    {sourceRoot : Region signature sourceOuter outerRels}
-    {targetRoot : Region signature targetOuter outerRels}
-    {sourceContext : DiagramContext signature sourceOuter sourceHole
+    {sourceRoot : Region  sourceOuter outerRels}
+    {targetRoot : Region  targetOuter outerRels}
+    {sourceContext : DiagramContext  sourceOuter sourceHole
       outerRels holeRels}
-    {targetContext : DiagramContext signature targetOuter targetHole
+    {targetContext : DiagramContext  targetOuter targetHole
       outerRels holeRels}
-    {sourceSite : Region signature sourceHole holeRels}
-    {targetSite : Region signature targetHole holeRels}
-    (alignment : DiagramContextIso signature outerWire holeWire
+    {sourceSite : Region  sourceHole holeRels}
+    {targetSite : Region  targetHole holeRels}
+    (alignment : DiagramContextIso  outerWire holeWire
       outerRels holeRels sourceContext targetContext)
-    (site : RegionIso signature holeWire holeRels sourceSite targetSite)
+    (site : RegionIso  holeWire holeRels sourceSite targetSite)
     (sourceRebuild : sourceContext.fill sourceSite = sourceRoot)
     (targetRebuild : targetContext.fill targetSite = targetRoot) :
-    RegionIso signature outerWire outerRels sourceRoot targetRoot := by
+    RegionIso  outerWire outerRels sourceRoot targetRoot := by
   rw [← sourceRebuild, ← targetRebuild]
   exact alignment.fill site
 

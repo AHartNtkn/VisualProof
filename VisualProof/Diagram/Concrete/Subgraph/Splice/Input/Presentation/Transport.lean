@@ -13,7 +13,7 @@ namespace TwoInputPresentation
 /-- The retained-frame prefix position in the semantic insertion order used
 at a plugged site. -/
 def frameSiteSemanticIndex
-    (input : Input signature)
+    (input : Input )
     (index : Fin (ConcreteElaboration.localOccurrences
       input.coalesceFrameRaw input.site).length) :
     Fin input.plugLayout.semanticSiteOccurrences.length :=
@@ -72,11 +72,10 @@ theorem focusedFrameLocalOccurrences_get
 the executable site permutation, then transport the actual items returned by
 the two compiler sequences. -/
 theorem focusedFrameOccurrence_itemSimulation
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     {rels : Theory.RelCtx}
     (presentation : TwoInputPresentation source target)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceAdmissible : source.Admissible)
     (targetAdmissible : target.Admissible)
     (siteDirection direction : ConcreteElaboration.SimulationDirection)
@@ -113,8 +112,8 @@ theorem focusedFrameOccurrence_itemSimulation
         source.plugLayout.plugRaw childRels}
       {childTargetBinders : ConcreteElaboration.BinderContext
         target.plugLayout.plugRaw childRels}
-      {sourceBody : Region signature sourceContext.length childRels}
-      {targetBody : Region signature targetContext.length childRels},
+      {sourceBody : Region  sourceContext.length childRels}
+      {targetBody : Region  targetContext.length childRels},
       (source.plugLayout.plugRaw.regions child).parent? =
           some (source.plugLayout.frameRegion source.site) →
       (target.plugLayout.plugRaw.regions
@@ -129,28 +128,28 @@ theorem focusedFrameOccurrence_itemSimulation
       ConcreteElaboration.BinderContext.Enumeration
         target.plugLayout.plugRaw childTargetBinders
         (presentation.regionMap child) →
-      ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+      ConcreteElaboration.compileRegion?  source.plugLayout.plugRaw
           fuelSource child sourceContext childSourceBinders = some sourceBody →
-      ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+      ConcreteElaboration.compileRegion?  target.plugLayout.plugRaw
           fuelTarget (presentation.regionMap child) targetContext
           childTargetBinders = some targetBody →
-      ConcreteElaboration.RegionSimulation model named childDirection
+      ConcreteElaboration.RegionSimulation model  childDirection
         (presentation.contextIndexRelation sourceContext targetContext)
         sourceBody targetBody)
-    (sourceItems : ItemSeq signature sourceContext.length rels)
-    (targetItems : ItemSeq signature targetContext.length rels)
+    (sourceItems : ItemSeq  sourceContext.length rels)
+    (targetItems : ItemSeq  targetContext.length rels)
     (sourceItemsCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         source.plugLayout.plugRaw
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           source.plugLayout.plugRaw fuelSource)
         sourceContext sourceBinders
         (ConcreteElaboration.localOccurrences source.plugLayout.plugRaw
           (source.plugLayout.frameRegion source.site)) = some sourceItems)
     (targetItemsCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         target.plugLayout.plugRaw
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           target.plugLayout.plugRaw fuelTarget)
         targetContext targetBinders
         (ConcreteElaboration.localOccurrences target.plugLayout.plugRaw
@@ -168,7 +167,7 @@ theorem focusedFrameOccurrence_itemSimulation
       ∃ targetIndex : Fin targetItems.length,
         sourceIndex.val = sourceOccurrenceIndex.val ∧
         targetIndex.val = targetOccurrenceIndex.val ∧
-        ConcreteElaboration.ItemSimulation model named direction
+        ConcreteElaboration.ItemSimulation model  direction
           (presentation.contextIndexRelation sourceContext targetContext)
           (sourceItems.get sourceIndex) (targetItems.get targetIndex) := by
   dsimp only
@@ -182,12 +181,12 @@ theorem focusedFrameOccurrence_itemSimulation
     target.plugLayout.siteOccurrenceEquiv targetSemanticIndex
   have sourceLength :=
     ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature
+      (ConcreteElaboration.compileRegion?
         source.plugLayout.plugRaw fuelSource)
       sourceContext sourceBinders sourceItemsCompiled
   have targetLength :=
     ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature
+      (ConcreteElaboration.compileRegion?
         target.plugLayout.plugRaw fuelTarget)
       targetContext targetBinders targetItemsCompiled
   let sourceIndex := Fin.cast sourceLength.symm sourceOccurrenceIndex
@@ -212,11 +211,11 @@ theorem focusedFrameOccurrence_itemSimulation
       target.plugLayout.mapFrameOccurrence
       (presentation.focusedFrameLocalOccurrences_get frameIndex)
   have sourceGet := ConcreteElaboration.compileOccurrencesWith?_get
-    (ConcreteElaboration.compileRegion? signature
+    (ConcreteElaboration.compileRegion?
       source.plugLayout.plugRaw fuelSource)
     sourceContext sourceBinders sourceItemsCompiled sourceOccurrenceIndex
   have targetGet := ConcreteElaboration.compileOccurrencesWith?_get
-    (ConcreteElaboration.compileRegion? signature
+    (ConcreteElaboration.compileRegion?
       target.plugLayout.plugRaw fuelTarget)
     targetContext targetBinders targetItemsCompiled targetOccurrenceIndex
   rw [source.plugLayout.siteOccurrenceEquiv_spec sourceSemanticIndex,
@@ -225,7 +224,7 @@ theorem focusedFrameOccurrence_itemSimulation
     targetOccurrenceGet] at targetGet
   refine ⟨sourceIndex, targetIndex, rfl, rfl, ?_⟩
   exact presentation.focusedFrameOccurrence_itemSimulation_of_compiled
-    model named sourceAdmissible targetAdmissible siteDirection direction
+    model  sourceAdmissible targetAdmissible siteDirection direction
     fuelSource fuelTarget sourceContext targetContext sourceBinders targetBinders
     allowed bindersRelated sourceBindersCover targetBindersCover
     sourceEnumeration targetEnumeration recurse
@@ -664,12 +663,11 @@ theorem regularLocalTransport
       (targetContext.extend (presentation.regionMap region)).Exact
         (presentation.regionMap region))
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    (sourceItems : ItemSeq signature
+    (sourceItems : ItemSeq
       (sourceContext.extend region).length rels)
-    (targetItems : ItemSeq signature
+    (targetItems : ItemSeq
       (targetContext.extend (presentation.regionMap region)).length rels)
-    (items : ConcreteElaboration.ItemSeqSimulation model named direction
+    (items : ConcreteElaboration.ItemSeqSimulation model  direction
       (presentation.contextIndexRelation (sourceContext.extend region)
         (targetContext.extend (presentation.regionMap region)))
       sourceItems targetItems) :
@@ -677,13 +675,13 @@ theorem regularLocalTransport
       ConcreteElaboration.DirectionalLocalTransport direction sourceContext
         targetContext region (presentation.regionMap region)
         (presentation.contextIndexRelation sourceContext targetContext)
-        model named relEnv sourceItems targetItems := by
+        model  relEnv sourceItems targetItems := by
   apply ConcreteElaboration.directionalLocalTransport_of_agreement direction
     sourceContext targetContext region (presentation.regionMap region)
     (presentation.contextIndexRelation sourceContext targetContext)
     (presentation.contextIndexRelation (sourceContext.extend region)
       (targetContext.extend (presentation.regionMap region)))
-    model named sourceItems targetItems
+    model  sourceItems targetItems
   · exact presentation.regularLocalSelection sourceAdmissible targetAdmissible
       direction sourceContext targetContext region regular sourceExact
         targetExact model
@@ -826,7 +824,7 @@ theorem siteQuotientEnvironment_eq_of_related_wire
 /-- Reverse a paired replacement presentation without introducing a second
 notion of compatibility.  Frame, site, positional attachment, and locality
 evidence are all the symmetric forms of the original witnesses. -/
-def symm {signature : List Nat} {source target : Input signature}
+def symm {source target : Input }
     (presentation : TwoInputPresentation source target) :
     TwoInputPresentation target source where
   frame_eq := presentation.frame_eq.symm
@@ -845,11 +843,11 @@ def symm {signature : List Nat} {source target : Input signature}
     intro left right outside
     let sourceLeft :=
       Fin.cast
-        (congrArg (fun checked : CheckedDiagram signature =>
+        (congrArg (fun checked : CheckedDiagram  =>
           checked.val.wireCount) presentation.frame_eq).symm left
     let sourceRight :=
       Fin.cast
-        (congrArg (fun checked : CheckedDiagram signature =>
+        (congrArg (fun checked : CheckedDiagram  =>
           checked.val.wireCount) presentation.frame_eq).symm right
     have outsideSource :
         (source.frame.val.wires sourceLeft).scope ≠ source.site ∨
@@ -866,7 +864,7 @@ def symm {signature : List Nat} {source target : Input signature}
             (target.frame.val.wires left).scope.val =
                 (target.frame.val.wires
                   (Fin.cast
-                    (congrArg (fun checked : CheckedDiagram signature =>
+                    (congrArg (fun checked : CheckedDiagram  =>
                       checked.val.wireCount) presentation.frame_eq)
                     sourceLeft)).scope.val := by
                   congr
@@ -885,7 +883,7 @@ def symm {signature : List Nat} {source target : Input signature}
             (target.frame.val.wires right).scope.val =
                 (target.frame.val.wires
                   (Fin.cast
-                    (congrArg (fun checked : CheckedDiagram signature =>
+                    (congrArg (fun checked : CheckedDiagram  =>
                       checked.val.wireCount) presentation.frame_eq)
                     sourceRight)).scope.val := by
                   congr
@@ -1404,19 +1402,18 @@ theorem focusedBackwardEnvironmentsAgreeOfEmpty
 evidence needed to construct values on a potentially coarser target quotient.
 No target quotient valuation is selected before the local implication fires. -/
 theorem forwardQuotientEnvironment_of_pattern_entailment
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceValues : source.wireQuotient.Carrier → model.Carrier)
     (localLaw :
       let sourceArgs := fun position =>
         sourceValues (source.quotientWire (source.attachment position))
-      source.pattern.denote model named sourceArgs →
-        target.pattern.denote model named
+      source.pattern.denote model  sourceArgs →
+        target.pattern.denote model
           (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm))
     (sourceDenotes :
-      source.pattern.denote model named (fun position =>
+      source.pattern.denote model  (fun position =>
         sourceValues (source.quotientWire (source.attachment position)))) :
     ∃ targetValues : target.wireQuotient.Carrier → model.Carrier,
       (∀ wire,
@@ -1424,7 +1421,7 @@ theorem forwardQuotientEnvironment_of_pattern_entailment
             (target.quotientWire
               (Fin.cast presentation.frameWireCountEq wire)) =
           sourceValues (source.quotientWire wire)) ∧
-      target.pattern.denote model named (fun position =>
+      target.pattern.denote model  (fun position =>
         targetValues (target.quotientWire (target.attachment position))) := by
   let sourceArgs := fun position =>
     sourceValues (source.quotientWire (source.attachment position))
@@ -1433,7 +1430,7 @@ theorem forwardQuotientEnvironment_of_pattern_entailment
       sourceValues (source.quotientWire
         (Fin.cast presentation.frameWireCountEq.symm wire))
   have targetDenotes :
-      target.pattern.denote model named
+      target.pattern.denote model
         (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm) :=
     localLaw sourceDenotes
   have realizes : ∀ position,
@@ -1456,7 +1453,7 @@ theorem forwardQuotientEnvironment_of_pattern_entailment
         target.quotientWire left = target.quotientWire right →
           targetFrameValue left = targetFrameValue right := by
     intro left right sameClass
-    exact target.quotientWire_value_eq_of_pattern_denotes model named
+    exact target.quotientWire_value_eq_of_pattern_denotes model
       targetFrameValue
       (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm)
       realizes targetDenotes sameClass
@@ -1488,19 +1485,18 @@ theorem forwardQuotientEnvironment_of_pattern_entailment
 environment satisfying the target pattern can be transported to a source
 quotient environment once the target pattern entails the source pattern. -/
 theorem backwardQuotientEnvironment_of_pattern_entailment
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (targetValues : target.wireQuotient.Carrier → model.Carrier)
     (localLaw :
       let targetArgs := fun position =>
         targetValues (target.quotientWire (target.attachment position))
-      target.pattern.denote model named targetArgs →
-        source.pattern.denote model named
+      target.pattern.denote model  targetArgs →
+        source.pattern.denote model
           (targetArgs ∘ Fin.cast presentation.boundary_arity_eq))
     (targetDenotes :
-      target.pattern.denote model named (fun position =>
+      target.pattern.denote model  (fun position =>
         targetValues (target.quotientWire (target.attachment position)))) :
     ∃ sourceValues : source.wireQuotient.Carrier → model.Carrier,
       (∀ wire,
@@ -1508,7 +1504,7 @@ theorem backwardQuotientEnvironment_of_pattern_entailment
           targetValues
             (target.quotientWire
               (Fin.cast presentation.frameWireCountEq wire))) ∧
-      source.pattern.denote model named (fun position =>
+      source.pattern.denote model  (fun position =>
         sourceValues (source.quotientWire (source.attachment position))) := by
   let targetArgs := fun position =>
     targetValues (target.quotientWire (target.attachment position))
@@ -1517,7 +1513,7 @@ theorem backwardQuotientEnvironment_of_pattern_entailment
       targetValues (target.quotientWire
         (Fin.cast presentation.frameWireCountEq wire))
   have sourceDenotes :
-      source.pattern.denote model named
+      source.pattern.denote model
         (targetArgs ∘ Fin.cast presentation.boundary_arity_eq) :=
     localLaw targetDenotes
   have realizes : ∀ position,
@@ -1531,7 +1527,7 @@ theorem backwardQuotientEnvironment_of_pattern_entailment
         source.quotientWire left = source.quotientWire right →
           sourceFrameValue left = sourceFrameValue right := by
     intro left right sameClass
-    exact source.quotientWire_value_eq_of_pattern_denotes model named
+    exact source.quotientWire_value_eq_of_pattern_denotes model
       sourceFrameValue
       (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)
       realizes sourceDenotes sameClass

@@ -9,7 +9,7 @@ open VisualProof.Diagram
 /-- Equal intrinsic boundary identities are attached to the same retained host
 wire. This is the exact condition under which boundary aliases generate no
 nontrivial retained-host quotient equations. -/
-def AttachmentsRespectBoundary (input : Input signature) : Prop :=
+def AttachmentsRespectBoundary (input : Input ) : Prop :=
   ∀ left right,
     input.pattern.val.boundary.get left =
         input.pattern.val.boundary.get right →
@@ -18,7 +18,7 @@ def AttachmentsRespectBoundary (input : Input signature) : Prop :=
 /-- Attachment-respecting boundaries generate only reflexive retained-host
 equations, even when their ordered intrinsic boundary contains aliases. -/
 theorem attachmentPartition_related_iff_of_attachmentsRespectBoundary
-    (input : Input signature) (respects : input.AttachmentsRespectBoundary)
+    (input : Input ) (respects : input.AttachmentsRespectBoundary)
     (left right : Fin input.frame.val.wireCount) :
     input.attachmentPartition.related left right = true ↔ left = right := by
   constructor
@@ -35,7 +35,7 @@ theorem attachmentPartition_related_iff_of_attachmentsRespectBoundary
 /-- An alias-free intrinsic boundary is a useful sufficient condition for
 attachment-respecting input. -/
 theorem attachmentsRespectBoundary_of_boundary_nodup
-    (input : Input signature) (boundaryNodup : input.pattern.val.boundary.Nodup) :
+    (input : Input ) (boundaryNodup : input.pattern.val.boundary.Nodup) :
     input.AttachmentsRespectBoundary := by
   intro leftPosition rightPosition boundaryEq
   have positionsEq : leftPosition = rightPosition := by
@@ -47,14 +47,14 @@ theorem attachmentsRespectBoundary_of_boundary_nodup
 
 /-- Backwards-compatible alias-free corollary. -/
 theorem attachmentPartition_related_iff_of_boundary_nodup
-    (input : Input signature) (boundaryNodup : input.pattern.val.boundary.Nodup)
+    (input : Input ) (boundaryNodup : input.pattern.val.boundary.Nodup)
     (left right : Fin input.frame.val.wireCount) :
     input.attachmentPartition.related left right = true ↔ left = right :=
   attachmentPartition_related_iff_of_attachmentsRespectBoundary input
     (attachmentsRespectBoundary_of_boundary_nodup input boundaryNodup) left right
 
 theorem attachmentPartition_representative_of_attachmentsRespectBoundary
-    (input : Input signature) (respects : input.AttachmentsRespectBoundary)
+    (input : Input ) (respects : input.AttachmentsRespectBoundary)
     (wire : Fin input.frame.val.wireCount) :
     input.attachmentPartition.representative wire = wire := by
   have normalized := input.attachmentPartition_normalized wire
@@ -63,7 +63,7 @@ theorem attachmentPartition_representative_of_attachmentsRespectBoundary
       ((FinitePartition.related_eq_true_iff _ _ _).2 normalized.symm)).symm
 
 theorem attachmentPartition_representative_of_boundary_nodup
-    (input : Input signature) (boundaryNodup : input.pattern.val.boundary.Nodup)
+    (input : Input ) (boundaryNodup : input.pattern.val.boundary.Nodup)
     (wire : Fin input.frame.val.wireCount) :
     input.attachmentPartition.representative wire = wire :=
   attachmentPartition_representative_of_attachmentsRespectBoundary input
@@ -71,7 +71,7 @@ theorem attachmentPartition_representative_of_boundary_nodup
 
 /-- Canonical cancellation of the finite carrier introduced by a discrete
 attachment quotient. -/
-def discreteQuotientWireEquivOfAttachmentsRespectBoundary (input : Input signature)
+def discreteQuotientWireEquivOfAttachmentsRespectBoundary (input : Input )
     (respects : input.AttachmentsRespectBoundary) :
     FiniteEquiv input.wireQuotient.Carrier
       (Fin input.frame.val.wireCount) where
@@ -88,7 +88,7 @@ def discreteQuotientWireEquivOfAttachmentsRespectBoundary (input : Input signatu
         respects]
 
 /-- Alias-free corollary of attachment-respecting quotient cancellation. -/
-def discreteQuotientWireEquiv (input : Input signature)
+def discreteQuotientWireEquiv (input : Input )
     (boundaryNodup : input.pattern.val.boundary.Nodup) :
     FiniteEquiv input.wireQuotient.Carrier
       (Fin input.frame.val.wireCount) :=
@@ -96,7 +96,7 @@ def discreteQuotientWireEquiv (input : Input signature)
     (attachmentsRespectBoundary_of_boundary_nodup input boundaryNodup)
 
 @[simp] theorem discreteQuotientWireEquivOfAttachmentsRespectBoundary_quotientWire
-    (input : Input signature) (respects : input.AttachmentsRespectBoundary)
+    (input : Input ) (respects : input.AttachmentsRespectBoundary)
     (wire : Fin input.frame.val.wireCount) :
     discreteQuotientWireEquivOfAttachmentsRespectBoundary input respects
         (input.quotientWire wire) = wire := by
@@ -107,7 +107,7 @@ def discreteQuotientWireEquiv (input : Input signature)
     attachmentPartition_representative_of_attachmentsRespectBoundary input respects]
 
 @[simp] theorem discreteQuotientWireEquiv_quotientWire
-    (input : Input signature) (boundaryNodup : input.pattern.val.boundary.Nodup)
+    (input : Input ) (boundaryNodup : input.pattern.val.boundary.Nodup)
     (wire : Fin input.frame.val.wireCount) :
     discreteQuotientWireEquiv input boundaryNodup (input.quotientWire wire) =
       wire := by
@@ -118,7 +118,7 @@ def discreteQuotientWireEquiv (input : Input signature)
     attachmentPartition_representative_of_boundary_nodup input boundaryNodup]
 
 private theorem discreteClassWire_eq
-    (input : Input signature) (respects : input.AttachmentsRespectBoundary)
+    (input : Input ) (respects : input.AttachmentsRespectBoundary)
     (quotient : input.wireQuotient.Carrier)
     (wire : Fin input.frame.val.wireCount)
     (member : wire ∈ input.classWires quotient) :
@@ -131,7 +131,7 @@ private theorem discreteClassWire_eq
     (input.quotientWire_wireQuotient_origin quotient).symm
 
 theorem classWires_eq_singleton_of_attachmentsRespectBoundary
-    (input : Input signature) (respects : input.AttachmentsRespectBoundary)
+    (input : Input ) (respects : input.AttachmentsRespectBoundary)
     (quotient : input.wireQuotient.Carrier) :
     input.classWires quotient =
       [discreteQuotientWireEquivOfAttachmentsRespectBoundary input respects
@@ -162,7 +162,7 @@ theorem classWires_eq_singleton_of_attachmentsRespectBoundary
           simp at nodup
 
 theorem coalescedScope_eq_of_attachmentsRespectBoundary
-    (input : Input signature) (respects : input.AttachmentsRespectBoundary)
+    (input : Input ) (respects : input.AttachmentsRespectBoundary)
     (quotient : input.wireQuotient.Carrier) :
     input.coalescedScope quotient =
       (input.frame.val.wires
@@ -181,7 +181,7 @@ theorem coalescedScope_eq_of_attachmentsRespectBoundary
   · rfl
 
 theorem coalescedEndpoints_eq_of_attachmentsRespectBoundary
-    (input : Input signature) (respects : input.AttachmentsRespectBoundary)
+    (input : Input ) (respects : input.AttachmentsRespectBoundary)
     (quotient : input.wireQuotient.Carrier) :
     input.coalescedEndpoints quotient =
       (input.frame.val.wires
@@ -192,7 +192,7 @@ theorem coalescedEndpoints_eq_of_attachmentsRespectBoundary
   simp
 
 theorem coalescedScope_eq_of_boundary_nodup
-    (input : Input signature) (boundaryNodup : input.pattern.val.boundary.Nodup)
+    (input : Input ) (boundaryNodup : input.pattern.val.boundary.Nodup)
     (quotient : input.wireQuotient.Carrier) :
     input.coalescedScope quotient =
       (input.frame.val.wires
@@ -201,7 +201,7 @@ theorem coalescedScope_eq_of_boundary_nodup
     (attachmentsRespectBoundary_of_boundary_nodup input boundaryNodup) quotient
 
 theorem coalescedEndpoints_eq_of_boundary_nodup
-    (input : Input signature) (boundaryNodup : input.pattern.val.boundary.Nodup)
+    (input : Input ) (boundaryNodup : input.pattern.val.boundary.Nodup)
     (quotient : input.wireQuotient.Carrier) :
     input.coalescedEndpoints quotient =
       (input.frame.val.wires
@@ -218,7 +218,7 @@ private theorem fin_count_eq_of_equiv
 /-- With attachment-respecting boundary aliases, the executor's coalesced
 frame is canonically isomorphic to the unchanged frame. -/
 noncomputable def coalescedFrameIsoOfAttachmentsRespectBoundary
-    (input : Input signature) (respects : input.AttachmentsRespectBoundary) :
+    (input : Input ) (respects : input.AttachmentsRespectBoundary) :
     ConcreteIso input.coalesceFrameRaw input.frame.val where
   regionCount_eq := rfl
   nodeCount_eq := rfl
@@ -259,13 +259,13 @@ noncomputable def coalescedFrameIsoOfAttachmentsRespectBoundary
 
 /-- Alias-free corollary of the attachment-respecting frame isomorphism. -/
 noncomputable def coalescedFrameIsoOfBoundaryNodup
-    (input : Input signature) (boundaryNodup : input.pattern.val.boundary.Nodup) :
+    (input : Input ) (boundaryNodup : input.pattern.val.boundary.Nodup) :
     ConcreteIso input.coalesceFrameRaw input.frame.val :=
   coalescedFrameIsoOfAttachmentsRespectBoundary input
     (attachmentsRespectBoundary_of_boundary_nodup input boundaryNodup)
 
 theorem discreteCoalescedBoundary_map_of_attachmentsRespectBoundary
-    (input : Input signature) (respects : input.AttachmentsRespectBoundary)
+    (input : Input ) (respects : input.AttachmentsRespectBoundary)
     (boundary : List (Fin input.frame.val.wireCount)) :
     (boundary.map input.quotientWire).map
         (discreteQuotientWireEquivOfAttachmentsRespectBoundary input respects) =
@@ -277,7 +277,7 @@ theorem discreteCoalescedBoundary_map_of_attachmentsRespectBoundary
       rw [discreteQuotientWireEquivOfAttachmentsRespectBoundary_quotientWire, ih]
 
 theorem discreteCoalescedBoundary_map
-    (input : Input signature) (boundaryNodup : input.pattern.val.boundary.Nodup)
+    (input : Input ) (boundaryNodup : input.pattern.val.boundary.Nodup)
     (boundary : List (Fin input.frame.val.wireCount)) :
     (boundary.map input.quotientWire).map
         (discreteQuotientWireEquiv input boundaryNodup) = boundary :=
@@ -287,7 +287,7 @@ theorem discreteCoalescedBoundary_map
 /-- Ordered-open form of the discrete-frame cancellation. Repeated caller
 boundary positions are preserved as list positions. -/
 noncomputable def coalescedFrameOpenIsoOfAttachmentsRespectBoundary
-    (input : Input signature) (respects : input.AttachmentsRespectBoundary)
+    (input : Input ) (respects : input.AttachmentsRespectBoundary)
     (boundary : List (Fin input.frame.val.wireCount)) :
     OpenConcreteIso (PlugLayout.coalescedOpenRoot input boundary)
       { diagram := input.frame.val, boundary := boundary } where
@@ -296,7 +296,7 @@ noncomputable def coalescedFrameOpenIsoOfAttachmentsRespectBoundary
     respects boundary
 
 noncomputable def coalescedFrameOpenIsoOfBoundaryNodup
-    (input : Input signature) (boundaryNodup : input.pattern.val.boundary.Nodup)
+    (input : Input ) (boundaryNodup : input.pattern.val.boundary.Nodup)
     (boundary : List (Fin input.frame.val.wireCount)) :
     OpenConcreteIso (PlugLayout.coalescedOpenRoot input boundary)
       { diagram := input.frame.val, boundary := boundary } :=

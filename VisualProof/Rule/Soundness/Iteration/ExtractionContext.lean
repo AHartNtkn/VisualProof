@@ -10,7 +10,7 @@ open VisualProof.Diagram
 wire visible at the selection anchor.  Selected-subtree-local wires cannot
 occur in this context: their extracted scopes lie strictly below the body. -/
 theorem fragmentWireOrigin_scope_encloses_anchor
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (wire : Fin layout.wireCount)
@@ -71,7 +71,7 @@ theorem fragmentWireOrigin_scope_encloses_anchor
         boundary
 
 theorem fragmentWireOrigin_scope_encloses_anchor_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (wire : Fin layout.wireCount) :
@@ -141,7 +141,7 @@ theorem fragmentWireOrigin_scope_encloses_anchor_iff
   · exact fragmentWireOrigin_scope_encloses_anchor input selection layout wire
 
 theorem fragmentWireOrigin_mem_context_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -159,7 +159,7 @@ theorem fragmentWireOrigin_mem_context_iff
 /-- The semantic relation between an extracted lexical wire context and its
 host context is equality after applying extraction's wire provenance. -/
 def extractionContextRelation
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -175,7 +175,7 @@ def extractionContextRelation
 /-- Exact terminal-body and anchor contexts provide a canonical host index
 for every extracted context index. -/
 noncomputable def extractionContextIndexMap
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -190,7 +190,7 @@ noncomputable def extractionContextIndexMap
       ((fragmentExact.mem_iff _).1 (List.get_mem _ index)))))
 
 theorem extractionContextIndexMap_spec
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -211,7 +211,7 @@ theorem extractionContextIndexMap_spec
         ((fragmentExact.mem_iff _).1 (List.get_mem _ index)))))) |>.symm
 
 theorem extractionContextEnvironmentsAgree
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext

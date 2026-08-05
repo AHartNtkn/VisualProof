@@ -57,7 +57,7 @@ theorem rootTargetEnvironment_outer
 
 theorem rootSelectedTargetEnvironment_outer
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
@@ -94,7 +94,7 @@ theorem rootSelectedTargetEnvironment_outer
 
 theorem rootSelectedSourceEnvironment_outer
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (sourceAmbient sourceLocals :
       ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetAmbient targetLocals : ConcreteElaboration.WireContext input)
@@ -191,14 +191,13 @@ theorem rootSelectedSourceEnvironment_outer
 theorem targetRoot_doubleCut_denote_iff
     (trace : DoubleCutElimTrace input outer raw)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (targetContext : ConcreteElaboration.WireContext input)
-    (keptItems : ItemSeq signature targetContext.length rels)
-    (selectedItems : ItemSeq signature
+    (keptItems : ItemSeq  targetContext.length rels)
+    (selectedItems : ItemSeq
       ((targetContext.extend outer).extend trace.inner).length rels)
     (targetEnvironment : Fin targetContext.length → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
-    denoteItemSeq model named targetEnvironment relations
+    denoteItemSeq model  targetEnvironment relations
         (keptItems.append
           (.cons
             (.cut
@@ -209,11 +208,11 @@ theorem targetRoot_doubleCut_denote_iff
                       (targetContext.extend outer) trace.inner selectedItems))
                   .nil)))
             .nil)) ↔
-      denoteItemSeq model named targetEnvironment relations keptItems ∧
+      denoteItemSeq model  targetEnvironment relations keptItems ∧
         ∃ innerLocal :
             Fin (ConcreteElaboration.exactScopeWires input
               trace.inner).length → model.Carrier,
-          denoteItemSeq model named
+          denoteItemSeq model
             (ConcreteElaboration.extendedEnvironment
               (targetContext.extend outer) trace.inner
               (ConcreteElaboration.extendedEnvironment targetContext outer
@@ -227,7 +226,7 @@ theorem targetRoot_doubleCut_denote_iff
   constructor
   · intro doubleNegation
     have innerRegion :
-        denoteRegion model named
+        denoteRegion model
           (ConcreteElaboration.extendedEnvironment targetContext outer
             targetEnvironment (trace.emptyOuterEnvironment model.Carrier))
           relations
@@ -240,13 +239,13 @@ theorem targetRoot_doubleCut_denote_iff
       simpa only [denoteItemSeq_cons, denoteItemSeq_nil, and_true,
         cut_denotes_negation] using notInner
     exact (finishRegion_denote_iff input (targetContext.extend outer)
-      trace.inner selectedItems model named
+      trace.inner selectedItems model
       (ConcreteElaboration.extendedEnvironment targetContext outer
         targetEnvironment (trace.emptyOuterEnvironment model.Carrier))
       relations).mp innerRegion
   · intro innerItems
     have innerRegion := (finishRegion_denote_iff input
-      (targetContext.extend outer) trace.inner selectedItems model named
+      (targetContext.extend outer) trace.inner selectedItems model
       (ConcreteElaboration.extendedEnvironment targetContext outer
         targetEnvironment (trace.emptyOuterEnvironment model.Carrier))
       relations).mpr innerItems
@@ -258,7 +257,7 @@ theorem targetRoot_doubleCut_denote_iff
         (Fin.cast (congrArg List.length trace.outer_exactScopeWires) index)
     subst outerLocal
     have notInner :
-        ¬ denoteRegion model named
+        ¬ denoteRegion model
           (ConcreteElaboration.extendedEnvironment targetContext outer
             targetEnvironment (trace.emptyOuterEnvironment model.Carrier))
           relations
@@ -270,9 +269,8 @@ theorem targetRoot_doubleCut_denote_iff
 
 theorem focusedRootPartition_transport
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceAmbient sourceLocals :
       ConcreteElaboration.WireContext trace.sourceDiagram)
@@ -288,16 +286,16 @@ theorem focusedRootPartition_transport
       ∀ wire, wire ∈ targetAmbient → wire ∈ sourceAmbient)
     (sourceAmbientSubset :
       ∀ wire, wire ∈ sourceAmbient → wire ∈ targetAmbient)
-    (sourceKept sourceSelected : ItemSeq signature
+    (sourceKept sourceSelected : ItemSeq
       (sourceAmbient ++ sourceLocals).length [])
-    (targetKept : ItemSeq signature
+    (targetKept : ItemSeq
       (targetAmbient ++ targetLocals).length [])
-    (targetSelected : ItemSeq signature
+    (targetSelected : ItemSeq
       ((((targetAmbient ++ targetLocals).extend outer).extend
         trace.inner)).length [])
-    (keptSimulation : ConcreteElaboration.ItemSeqSimulation model named
+    (keptSimulation : ConcreteElaboration.ItemSeqSimulation model
       direction context.indexRelation sourceKept targetKept)
-    (selectedSimulation : ConcreteElaboration.ItemSeqSimulation model named
+    (selectedSimulation : ConcreteElaboration.ItemSeqSimulation model
       direction
         (context.extendRootSelected trace wellFormed
           (sourceAmbient ++ sourceLocals) (targetAmbient ++ targetLocals)
@@ -306,7 +304,7 @@ theorem focusedRootPartition_transport
     ConcreteElaboration.DirectionalRootTransport direction
       sourceAmbient sourceLocals targetAmbient targetLocals
       (trace.wireIdentityRelation sourceAmbient targetAmbient)
-      model named (sourceKept.append sourceSelected)
+      model  (sourceKept.append sourceSelected)
       (targetKept.append
         (.cons
           (.cut
@@ -327,7 +325,7 @@ theorem focusedRootPartition_transport
   | forward =>
       intro sourceLocal sourceDenotation
       obtain ⟨sourceKeptDenotation, sourceSelectedDenotation⟩ :=
-        (denoteItemSeq_append model named
+        (denoteItemSeq_append model
           (ConcreteElaboration.rootEnvironment sourceAmbient sourceLocals
             sourceOuter sourceLocal)
           relations sourceKept sourceSelected).mp sourceDenotation
@@ -374,7 +372,7 @@ theorem focusedRootPartition_transport
         targetSelectedPulled relations selectedAgreement
         sourceSelectedDenotation
       refine ⟨targetLocal, ?_⟩
-      apply (trace.targetRoot_doubleCut_denote_iff model named
+      apply (trace.targetRoot_doubleCut_denote_iff model
         (targetAmbient ++ targetLocals) targetKept targetSelected
         (ConcreteElaboration.rootEnvironment targetAmbient targetLocals
           targetOuter targetLocal) relations).mpr
@@ -390,7 +388,7 @@ theorem focusedRootPartition_transport
           targetOuter targetLocal
       obtain ⟨targetKeptDenotation, innerLocal,
           targetSelectedDenotation⟩ :=
-        (trace.targetRoot_doubleCut_denote_iff model named
+        (trace.targetRoot_doubleCut_denote_iff model
           (targetAmbient ++ targetLocals) targetKept targetSelected
           targetRootEnvironment relations).mp targetDenotation
       let targetOuterEnvironment :=
@@ -451,7 +449,7 @@ theorem focusedRootPartition_transport
       have sourceKeptDenotation := keptSimulation sourceEnvironment
         targetRootEnvironment relations contextAgreement targetKeptDenotation
       refine ⟨sourceLocal, ?_⟩
-      apply (denoteItemSeq_append model named
+      apply (denoteItemSeq_append model
         (ConcreteElaboration.rootEnvironment sourceAmbient sourceLocals
           sourceOuter sourceLocal)
         relations sourceKept sourceSelected).mpr

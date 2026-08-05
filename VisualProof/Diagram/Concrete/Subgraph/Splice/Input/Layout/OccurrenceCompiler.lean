@@ -14,29 +14,28 @@ namespace PlugLayout
 site.  All hypotheses are discharged from checked compiler leaves and concrete
 endpoint/binder provenance. -/
 theorem compileHostNode_at_site
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (node : Fin input.coalesceFrameRaw.nodeCount)
     (hnodeAtSite : (input.coalesceFrameRaw.nodes node).region = input.site) :
-    ConcreteElaboration.compileNode? signature layout.plugRaw
+    ConcreteElaboration.compileNode?  layout.plugRaw
         (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
       outputLeaf.binders (layout.frameNode node) =
-      (ConcreteElaboration.compileNode? signature
+      (ConcreteElaboration.compileNode?
         (input.coalesceFrame hadmissible).val
         (hostLeaf.inheritedWires.extend input.site) hostLeaf.binders node).map
-          (fun item : Item signature
+          (fun item : Item
               (hostLeaf.inheritedWires.extend input.site).length
               hostWitness.toFocus.holeRels =>
             (item.renameWires
@@ -63,11 +62,6 @@ theorem compileHostNode_at_site
         change input.frame.val.nodes node = .atom region binder at hsource
         rw [hsource]
         rfl
-    | named region definition arity =>
-        change input.frame.val.nodes node = .named region definition arity
-          at hsource
-        rw [hsource]
-        rfl
   · intro port
     apply ConcreteElaboration.resolvePort?_map_of_occurrence
       (concreteWireMap := layout.frameWire)
@@ -77,7 +71,7 @@ theorem compileHostNode_at_site
       (hmem := layout.frameWire_mem_outputSiteContext_iff hostWitness hostLeaf
         outputWitness outputLeaf)
       (targetDisjoint :=
-        (layout.plugRaw_wellFormed signature input hadmissible)
+        (layout.plugRaw_wellFormed  input hadmissible)
           |>.wire_endpoints_are_disjoint)
     · intro wire requested hoccurs
       simpa [mapFrameEndpoint] using
@@ -114,16 +108,15 @@ theorem compileHostNode_at_site
 
 /-- Exact compilation transport for one pattern node in the terminal body. -/
 theorem compilePatternNode_at_site
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -131,13 +124,13 @@ theorem compilePatternNode_at_site
     (node : Fin input.pattern.val.diagram.nodeCount)
     (hnodeAtSite : (input.pattern.val.diagram.nodes node).region =
       input.binderSpine.bodyContainer) :
-    ConcreteElaboration.compileNode? signature layout.plugRaw
+    ConcreteElaboration.compileNode?  layout.plugRaw
         (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
         outputLeaf.binders (layout.patternNode node) =
-      (ConcreteElaboration.compileNode? signature input.pattern.val.diagram
+      (ConcreteElaboration.compileNode?  input.pattern.val.diagram
         (patternLeaf.inheritedWires.extend input.binderSpine.bodyContainer)
         patternLeaf.binders node).map
-          (fun item : Item signature
+          (fun item : Item
               (patternLeaf.inheritedWires.extend
                 input.binderSpine.bodyContainer).length
               patternWitness.toFocus.holeRels =>
@@ -158,7 +151,6 @@ theorem compilePatternNode_at_site
     cases hsource : input.pattern.val.diagram.nodes node with
     | identity => rfl
     | atom => rfl
-    | named => rfl
   · intro port
     apply ConcreteElaboration.resolvePort?_map_of_occurrence
       (concreteWireMap := layout.patternPlugWire)
@@ -168,7 +160,7 @@ theorem compilePatternNode_at_site
       (hmem := layout.patternPlugWire_mem_outputSiteContext_iff hadmissible
         patternWitness patternLeaf outputWitness outputLeaf)
       (targetDisjoint :=
-        (layout.plugRaw_wellFormed signature input hadmissible)
+        (layout.plugRaw_wellFormed  input hadmissible)
           |>.wire_endpoints_are_disjoint)
     · intro wire requested hoccurs
       simpa [mapPatternEndpoint] using
@@ -206,12 +198,11 @@ theorem compilePatternNode_at_site
       patternLeaf outputWitness outputLeaf relation
 
 theorem compileHostNode_at_seam_iso_of_maps
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -232,21 +223,21 @@ theorem compileHostNode_at_seam_iso_of_maps
           outputWitness outputLeaf)
     (node : Fin input.coalesceFrameRaw.nodeCount)
     (hnodeAtSite : (input.coalesceFrameRaw.nodes node).region = input.site)
-    (sourceItem : Item signature
+    (sourceItem : Item
       (host.compilerLeaf.inheritedWires.extend input.site).length
       host.intrinsicPath.toFocus.holeRels)
-    (targetItem : Item signature
+    (targetItem : Item
       (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).length
       outputWitness.toFocus.holeRels)
-    (hsource : ConcreteElaboration.compileNode? signature
+    (hsource : ConcreteElaboration.compileNode?
       (input.coalesceFrame hadmissible).val
       (host.compilerLeaf.inheritedWires.extend input.site)
       host.compilerLeaf.binders node = some sourceItem)
-    (htarget : ConcreteElaboration.compileNode? signature layout.plugRaw
+    (htarget : ConcreteElaboration.compileNode?  layout.plugRaw
       (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
       outputLeaf.binders (layout.frameNode node) = some targetItem) :
-    ItemIso signature
+    ItemIso
       combined
       outputWitness.toFocus.holeRels
       ((sourceItem.renameWires
@@ -256,11 +247,11 @@ theorem compileHostNode_at_seam_iso_of_maps
       (targetItem.castWiresEq
         (ConcreteElaboration.WireContext.length_extend
           outputLeaf.inheritedWires (layout.frameRegion input.site))) := by
-  have htransport := layout.compileHostNode_at_site signature input hadmissible
+  have htransport := layout.compileHostNode_at_site  input hadmissible
     host.intrinsicPath host.compilerLeaf outputWitness outputLeaf node
     hnodeAtSite
   rw [htarget] at htransport
-  let transform := fun item : Item signature
+  let transform := fun item : Item
       (host.compilerLeaf.inheritedWires.extend input.site).length
       host.intrinsicPath.toFocus.holeRels =>
     (item.renameWires
@@ -269,7 +260,7 @@ theorem compileHostNode_at_seam_iso_of_maps
       (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
         outputWitness outputLeaf)
   have hmapped : Option.map transform
-        (ConcreteElaboration.compileNode? signature
+        (ConcreteElaboration.compileNode?
           (input.coalesceFrame hadmissible).val
           (host.compilerLeaf.inheritedWires.extend input.site)
           host.compilerLeaf.binders node) =
@@ -290,12 +281,11 @@ theorem compileHostNode_at_seam_iso_of_maps
     Item.renameWires_renameRelations, Item.renameWires_comp, hfactor] using hiso
 
 theorem compileHostNode_at_seam_iso
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -303,21 +293,21 @@ theorem compileHostNode_at_seam_iso
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (node : Fin input.coalesceFrameRaw.nodeCount)
     (hnodeAtSite : (input.coalesceFrameRaw.nodes node).region = input.site)
-    (sourceItem : Item signature
+    (sourceItem : Item
       (host.compilerLeaf.inheritedWires.extend input.site).length
       host.intrinsicPath.toFocus.holeRels)
-    (targetItem : Item signature
+    (targetItem : Item
       (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).length
       outputWitness.toFocus.holeRels)
-    (hsource : ConcreteElaboration.compileNode? signature
+    (hsource : ConcreteElaboration.compileNode?
       (input.coalesceFrame hadmissible).val
       (host.compilerLeaf.inheritedWires.extend input.site)
       host.compilerLeaf.binders node = some sourceItem)
-    (htarget : ConcreteElaboration.compileNode? signature layout.plugRaw
+    (htarget : ConcreteElaboration.compileNode?  layout.plugRaw
       (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
       outputLeaf.binders (layout.frameNode node) = some targetItem) :
-    ItemIso signature
+    ItemIso
       (layout.siteCombinedWireEquivOfNonempty hadmissible host
         (outputWitness := outputWitness) (outputLeaf := outputLeaf) hnonempty)
       outputWitness.toFocus.holeRels
@@ -328,7 +318,7 @@ theorem compileHostNode_at_seam_iso
       (targetItem.castWiresEq
         (ConcreteElaboration.WireContext.length_extend
           outputLeaf.inheritedWires (layout.frameRegion input.site))) := by
-  refine layout.compileHostNode_at_seam_iso_of_maps signature input hadmissible
+  refine layout.compileHostNode_at_seam_iso_of_maps  input hadmissible
     host outputWitness outputLeaf
     (layout.siteCombinedWireEquivOfNonempty hadmissible host outputWitness
       outputLeaf hnonempty)
@@ -343,17 +333,16 @@ theorem compileHostNode_at_seam_iso
     congrArg Fin.val hseam
 
 theorem compilePatternNode_at_seam_iso
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -362,22 +351,22 @@ theorem compilePatternNode_at_seam_iso
     (node : Fin input.pattern.val.diagram.nodeCount)
     (hnodeAtSite : (input.pattern.val.diagram.nodes node).region =
       input.binderSpine.bodyContainer)
-    (sourceItem : Item signature
+    (sourceItem : Item
       (patternLeaf.inheritedWires.extend
         input.binderSpine.bodyContainer).length
       patternWitness.toFocus.holeRels)
-    (targetItem : Item signature
+    (targetItem : Item
       (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).length
       outputWitness.toFocus.holeRels)
-    (hsource : ConcreteElaboration.compileNode? signature
+    (hsource : ConcreteElaboration.compileNode?
       input.pattern.val.diagram
       (patternLeaf.inheritedWires.extend input.binderSpine.bodyContainer)
       patternLeaf.binders node = some sourceItem)
-    (htarget : ConcreteElaboration.compileNode? signature layout.plugRaw
+    (htarget : ConcreteElaboration.compileNode?  layout.plugRaw
       (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
       outputLeaf.binders (layout.patternNode node) = some targetItem) :
-    ItemIso signature
+    ItemIso
       (layout.siteCombinedWireEquivOfNonempty hadmissible host
         (outputWitness := outputWitness) (outputLeaf := outputLeaf) hnonempty)
       outputWitness.toFocus.holeRels
@@ -393,11 +382,11 @@ theorem compilePatternNode_at_seam_iso
       (targetItem.castWiresEq
         (ConcreteElaboration.WireContext.length_extend
           outputLeaf.inheritedWires (layout.frameRegion input.site))) := by
-  have htransport := layout.compilePatternNode_at_site signature input
+  have htransport := layout.compilePatternNode_at_site  input
     hadmissible patternWitness patternLeaf outputWitness outputLeaf node
     hnodeAtSite
   rw [htarget] at htransport
-  let transform := fun item : Item signature
+  let transform := fun item : Item
       (patternLeaf.inheritedWires.extend
         input.binderSpine.bodyContainer).length
       patternWitness.toFocus.holeRels =>
@@ -407,7 +396,7 @@ theorem compilePatternNode_at_seam_iso
       (layout.patternRelationRenaming hadmissible patternWitness patternLeaf
         outputWitness outputLeaf)
   have hmapped : Option.map transform
-        (ConcreteElaboration.compileNode? signature input.pattern.val.diagram
+        (ConcreteElaboration.compileNode?  input.pattern.val.diagram
           (patternLeaf.inheritedWires.extend input.binderSpine.bodyContainer)
           patternLeaf.binders node) = some (transform sourceItem) := by
     exact (congrArg (Option.map transform) hsource).trans rfl
@@ -462,13 +451,13 @@ theorem seamRecursiveRegionIso_of_maps
       (combined.trans (FiniteEquiv.finCast targetEq.symm)).toFun ∘
           preparedWire = directWire)
     (relationMap : RelationRenaming sourceRels targetRels)
-    (sourceBody : Region signature sourceOuter sourceRels)
-    (targetBody : Region signature targetOuter targetRels)
-    (hrecursive : RegionIso signature
+    (sourceBody : Region  sourceOuter sourceRels)
+    (targetBody : Region  targetOuter targetRels)
+    (hrecursive : RegionIso
       (FiniteEquiv.refl (Fin targetOuter)) targetRels
       ((sourceBody.renameWires directWire).renameRelations relationMap)
       targetBody) :
-    RegionIso signature combined targetRels
+    RegionIso  combined targetRels
       ((sourceBody.renameWires preparedWire).renameRelations relationMap)
       (targetBody.castWiresEq targetEq) := by
   let toTargetContext := combined.trans (FiniteEquiv.finCast targetEq.symm)
@@ -476,13 +465,13 @@ theorem seamRecursiveRegionIso_of_maps
     (sourceBody.renameWires preparedWire).renameRelations relationMap
   change toTargetContext.toFun ∘ preparedWire = directWire at hwire
   have hfirstRaw := RegionIso.renameWiresEquiv sourcePrepared toTargetContext
-  have hfirst : RegionIso signature toTargetContext targetRels sourcePrepared
+  have hfirst : RegionIso  toTargetContext targetRels sourcePrepared
       ((sourceBody.renameWires directWire).renameRelations relationMap) := by
     simpa only [sourcePrepared, Region.renameWires_renameRelations,
       Region.renameWires_comp, hwire] using hfirstRaw
   have hlastRaw := RegionIso.renameWiresEquiv targetBody
     (FiniteEquiv.finCast targetEq)
-  have hlast : RegionIso signature (FiniteEquiv.finCast targetEq) targetRels
+  have hlast : RegionIso  (FiniteEquiv.finCast targetEq) targetRels
       targetBody (targetBody.castWiresEq targetEq) := by
     simpa only [Region.castWiresEq_eq_renameWires,
       FiniteEquiv.finCast] using hlastRaw
@@ -498,24 +487,24 @@ theorem seamRecursiveRegionIso_of_maps
   exact hcombined
 
 theorem hostSeamRecursiveRegionIso
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (sourceBody : Region signature
+    (sourceBody : Region
       (host.compilerLeaf.inheritedWires.extend input.site).length
       host.intrinsicPath.toFocus.holeRels)
-    (targetBody : Region signature
+    (targetBody : Region
       (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).length
       outputWitness.toFocus.holeRels)
-    (hrecursive : RegionIso signature
+    (hrecursive : RegionIso
       (FiniteEquiv.refl (Fin (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).length))
       outputWitness.toFocus.holeRels
@@ -525,7 +514,7 @@ theorem hostSeamRecursiveRegionIso
         (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
           outputWitness outputLeaf))
       targetBody) :
-    RegionIso signature
+    RegionIso
       (layout.siteCombinedWireEquivOfNonempty hadmissible host
         (outputWitness := outputWitness) (outputLeaf := outputLeaf) hnonempty)
       outputWitness.toFocus.holeRels
@@ -559,7 +548,7 @@ theorem hostSeamRecursiveRegionIso
       layout.hostSeamWireMapOfNonempty_eq hadmissible host outputWitness
         outputLeaf hnonempty
   have hfirstRaw := RegionIso.renameWiresEquiv sourcePrepared toTargetContext
-  have hfirst : RegionIso signature toTargetContext
+  have hfirst : RegionIso  toTargetContext
       outputWitness.toFocus.holeRels sourcePrepared
       ((sourceBody.renameWires
         (layout.hostSiteWireIndexMap host.intrinsicPath host.compilerLeaf
@@ -570,7 +559,7 @@ theorem hostSeamRecursiveRegionIso
       Region.renameWires_comp, hmap] using hfirstRaw
   have hlastRaw := RegionIso.renameWiresEquiv targetBody
     (FiniteEquiv.finCast targetEq)
-  have hlast : RegionIso signature (FiniteEquiv.finCast targetEq)
+  have hlast : RegionIso  (FiniteEquiv.finCast targetEq)
       outputWitness.toFocus.holeRels targetBody
       (targetBody.castWiresEq targetEq) := by
     simpa only [Region.castWiresEq_eq_renameWires,
@@ -590,30 +579,30 @@ theorem hostSeamRecursiveRegionIso
   exact hcombined
 
 theorem patternSeamRecursiveRegionIso
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (sourceBody : Region signature
+    (sourceBody : Region
       (patternLeaf.inheritedWires.extend
         input.binderSpine.bodyContainer).length
       patternWitness.toFocus.holeRels)
-    (targetBody : Region signature
+    (targetBody : Region
       (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).length
       outputWitness.toFocus.holeRels)
-    (hrecursive : RegionIso signature
+    (hrecursive : RegionIso
       (FiniteEquiv.refl (Fin (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).length))
       outputWitness.toFocus.holeRels
@@ -623,7 +612,7 @@ theorem patternSeamRecursiveRegionIso
         (layout.patternRelationRenaming hadmissible patternWitness patternLeaf
           outputWitness outputLeaf))
       targetBody) :
-    RegionIso signature
+    RegionIso
       (layout.siteCombinedWireEquivOfNonempty hadmissible host
         (outputWitness := outputWitness) (outputLeaf := outputLeaf) hnonempty)
       outputWitness.toFocus.holeRels
@@ -673,7 +662,7 @@ theorem patternSeamRecursiveRegionIso
     host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
     outputWitness outputLeaf hnonempty
   have hfirstRaw := RegionIso.renameWiresEquiv sourcePrepared toTargetContext
-  have hfirst : RegionIso signature toTargetContext
+  have hfirst : RegionIso  toTargetContext
       outputWitness.toFocus.holeRels sourcePrepared
       ((sourceBody.renameWires
         (layout.patternSiteWireIndexMap hadmissible patternWitness patternLeaf
@@ -685,7 +674,7 @@ theorem patternSeamRecursiveRegionIso
       hrelations] using hfirstRaw
   have hlastRaw := RegionIso.renameWiresEquiv targetBody
     (FiniteEquiv.finCast targetEq)
-  have hlast : RegionIso signature (FiniteEquiv.finCast targetEq)
+  have hlast : RegionIso  (FiniteEquiv.finCast targetEq)
       outputWitness.toFocus.holeRels targetBody
       (targetBody.castWiresEq targetEq) := by
     simpa only [Region.castWiresEq_eq_renameWires,
@@ -707,12 +696,11 @@ theorem patternSeamRecursiveRegionIso
 /-- Empty-proxy counterpart of `compilePatternNode_at_site`, using the open
 sheet-root compiler context. -/
 theorem compilePatternRootNode_at_site
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (hzero : input.binderSpine.proxyCount = 0)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -720,13 +708,13 @@ theorem compilePatternRootNode_at_site
     (node : Fin input.pattern.val.diagram.nodeCount)
     (hnodeAtRoot : (input.pattern.val.diagram.nodes node).region =
       input.pattern.val.diagram.root) :
-    ConcreteElaboration.compileNode? signature layout.plugRaw
+    ConcreteElaboration.compileNode?  layout.plugRaw
         (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
         outputLeaf.binders (layout.patternNode node) =
-      (ConcreteElaboration.compileNode? signature input.pattern.val.diagram
+      (ConcreteElaboration.compileNode?  input.pattern.val.diagram
         (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
         ConcreteElaboration.BinderContext.empty node).map
-          (fun item : Item signature
+          (fun item : Item
               (input.pattern.val.exposedWires ++
                 input.pattern.val.hiddenWires).length [] =>
             (item.renameWires
@@ -744,7 +732,6 @@ theorem compilePatternRootNode_at_site
     cases hsource : input.pattern.val.diagram.nodes node with
     | identity => rfl
     | atom => rfl
-    | named => rfl
   · intro port
     apply ConcreteElaboration.resolvePort?_map_of_occurrence
       (concreteWireMap := layout.patternPlugWire)
@@ -754,7 +741,7 @@ theorem compilePatternRootNode_at_site
       (hmem := layout.patternPlugWire_mem_outputRootContext_iff hadmissible
         hzero outputWitness outputLeaf)
       (targetDisjoint :=
-        (layout.plugRaw_wellFormed signature input hadmissible)
+        (layout.plugRaw_wellFormed  input hadmissible)
           |>.wire_endpoints_are_disjoint)
     · intro wire requested hoccurs
       simpa [mapPatternEndpoint] using
@@ -789,12 +776,11 @@ theorem compilePatternRootNode_at_site
 /-- Empty-proxy root-node compilation, transported through the same seam
 equivalence used by the host items. -/
 theorem compilePatternRootNode_at_seam_iso
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -803,21 +789,21 @@ theorem compilePatternRootNode_at_seam_iso
     (node : Fin input.pattern.val.diagram.nodeCount)
     (hnodeAtRoot : (input.pattern.val.diagram.nodes node).region =
       input.pattern.val.diagram.root)
-    (sourceItem : Item signature
+    (sourceItem : Item
       (input.pattern.val.exposedWires ++
         input.pattern.val.hiddenWires).length [])
-    (targetItem : Item signature
+    (targetItem : Item
       (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).length
       outputWitness.toFocus.holeRels)
-    (hsource : ConcreteElaboration.compileNode? signature
+    (hsource : ConcreteElaboration.compileNode?
       input.pattern.val.diagram
       (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
       ConcreteElaboration.BinderContext.empty node = some sourceItem)
-    (htarget : ConcreteElaboration.compileNode? signature layout.plugRaw
+    (htarget : ConcreteElaboration.compileNode?  layout.plugRaw
       (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
       outputLeaf.binders (layout.patternNode node) = some targetItem) :
-    ItemIso signature
+    ItemIso
       (layout.siteCombinedWireEquivOfEmpty hadmissible host
         (outputWitness := outputWitness) (outputLeaf := outputLeaf) hzero)
       outputWitness.toFocus.holeRels
@@ -828,10 +814,10 @@ theorem compilePatternRootNode_at_seam_iso
       (targetItem.castWiresEq
         (ConcreteElaboration.WireContext.length_extend
           outputLeaf.inheritedWires (layout.frameRegion input.site))) := by
-  have htransport := layout.compilePatternRootNode_at_site signature input
+  have htransport := layout.compilePatternRootNode_at_site  input
     hadmissible hzero outputWitness outputLeaf node hnodeAtRoot
   rw [htarget] at htransport
-  let transform := fun item : Item signature
+  let transform := fun item : Item
       (input.pattern.val.exposedWires ++
         input.pattern.val.hiddenWires).length [] =>
     (item.renameWires
@@ -839,7 +825,7 @@ theorem compilePatternRootNode_at_seam_iso
         outputLeaf)).renameRelations
       (emptyRelationRenaming outputWitness.toFocus.holeRels)
   have hmapped : Option.map transform
-        (ConcreteElaboration.compileNode? signature input.pattern.val.diagram
+        (ConcreteElaboration.compileNode?  input.pattern.val.diagram
           (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
           ConcreteElaboration.BinderContext.empty node) =
       some (transform sourceItem) := by
@@ -878,8 +864,7 @@ theorem compilePatternRootNode_at_seam_iso
 /-- Node-kernel transport at every retained material region.  This is the
 recursive step used for nested cuts and bubbles. -/
 theorem compilePatternNode_at_material
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (region : Fin input.pattern.val.diagram.regionCount)
@@ -900,11 +885,11 @@ theorem compilePatternNode_at_material
         input.pattern.val.diagram sourceBinders region)
     (node : Fin input.pattern.val.diagram.nodeCount)
     (hnodeAtRegion : (input.pattern.val.diagram.nodes node).region = region) :
-    ConcreteElaboration.compileNode? signature layout.plugRaw targetContext
+    ConcreteElaboration.compileNode?  layout.plugRaw targetContext
         targetBinders (layout.patternNode node) =
-      (ConcreteElaboration.compileNode? signature input.pattern.val.diagram
+      (ConcreteElaboration.compileNode?  input.pattern.val.diagram
         sourceContext sourceBinders node).map
-          (fun item : Item signature sourceContext.length sourceRels =>
+          (fun item : Item  sourceContext.length sourceRels =>
             (item.renameWires
               (layout.patternMaterialWireIndexMap hadmissible region hregion
                 sourceContext targetContext sourceExact targetExact)).renameRelations
@@ -924,7 +909,6 @@ theorem compilePatternNode_at_material
     cases hsource : input.pattern.val.diagram.nodes node with
     | identity => rfl
     | atom => rfl
-    | named => rfl
   · intro port
     apply ConcreteElaboration.resolvePort?_map_of_occurrence
       (concreteWireMap := layout.patternPlugWire)
@@ -934,7 +918,7 @@ theorem compilePatternNode_at_material
       (hmem := layout.patternPlugWire_mem_materialContext_iff hadmissible
         region hregion sourceContext targetContext sourceExact targetExact)
       (targetDisjoint :=
-        (layout.plugRaw_wellFormed signature input hadmissible)
+        (layout.plugRaw_wellFormed  input hadmissible)
           |>.wire_endpoints_are_disjoint)
     · intro wire requested hoccurs
       simpa [mapPatternEndpoint] using
@@ -972,8 +956,7 @@ theorem compilePatternNode_at_material
 compiler proofs can carry concrete lookup contracts and recover the canonical
 maps only at this kernel boundary. -/
 theorem compilePatternNode_at_material_of_maps
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (region : Fin input.pattern.val.diagram.regionCount)
@@ -1003,11 +986,11 @@ theorem compilePatternNode_at_material_of_maps
         some ⟨arity, relationMap relation⟩)
     (node : Fin input.pattern.val.diagram.nodeCount)
     (hnodeAtRegion : (input.pattern.val.diagram.nodes node).region = region) :
-    ConcreteElaboration.compileNode? signature layout.plugRaw targetContext
+    ConcreteElaboration.compileNode?  layout.plugRaw targetContext
         targetBinders (layout.patternNode node) =
-      (ConcreteElaboration.compileNode? signature input.pattern.val.diagram
+      (ConcreteElaboration.compileNode?  input.pattern.val.diagram
         sourceContext sourceBinders node).map
-          (fun item : Item signature sourceContext.length sourceRels =>
+          (fun item : Item  sourceContext.length sourceRels =>
             (item.renameWires wireMap).renameRelations relationMap) := by
   have hwire : wireMap =
       layout.patternMaterialWireIndexMap hadmissible region hregion
@@ -1028,13 +1011,12 @@ theorem compilePatternNode_at_material_of_maps
       sourceBinders targetBinders sourceCover targetCover sourceEnumeration
       relationMap relationSpec relation
   rw [hwire, hrelation]
-  exact layout.compilePatternNode_at_material signature input hadmissible region
+  exact layout.compilePatternNode_at_material  input hadmissible region
     hregion sourceContext targetContext sourceExact targetExact sourceBinders
     targetBinders sourceCover targetCover sourceEnumeration node hnodeAtRegion
 
 theorem compilePatternNode_at_material_iso
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (region : Fin input.pattern.val.diagram.regionCount)
@@ -1066,17 +1048,17 @@ theorem compilePatternNode_at_material_iso
         some ⟨arity, relationMap relation⟩)
     (node : Fin input.pattern.val.diagram.nodeCount)
     (hnodeAtRegion : (input.pattern.val.diagram.nodes node).region = region)
-    (sourceItem : Item signature (sourceOuter.extend region).length sourceRels)
-    (targetItem : Item signature
+    (sourceItem : Item  (sourceOuter.extend region).length sourceRels)
+    (targetItem : Item
       (targetOuter.extend (layout.bodyRegion region)).length targetRels)
-    (hsource : ConcreteElaboration.compileNode? signature
+    (hsource : ConcreteElaboration.compileNode?
       input.pattern.val.diagram (sourceOuter.extend region) sourceBinders node =
         some sourceItem)
-    (htarget : ConcreteElaboration.compileNode? signature layout.plugRaw
+    (htarget : ConcreteElaboration.compileNode?  layout.plugRaw
       (targetOuter.extend (layout.bodyRegion region)) targetBinders
         (layout.patternNode node) =
         some targetItem) :
-    ItemIso signature
+    ItemIso
       (extendWireEquiv (FiniteEquiv.refl (Fin targetOuter.length))
         (layout.materialLocalWireEquiv region hregion)) targetRels
       ((sourceItem.renameWires
@@ -1089,7 +1071,7 @@ theorem compilePatternNode_at_material_iso
     sourceOuter targetOuter outerMap
   have hextendedSpec := layout.materialExtendedWireMap_spec region hregion
     sourceOuter targetOuter outerMap outerSpec
-  have htransport := layout.compilePatternNode_at_material_of_maps signature
+  have htransport := layout.compilePatternNode_at_material_of_maps
     input hadmissible region hregion (sourceOuter.extend region)
     (targetOuter.extend (layout.bodyRegion region)) sourceExact targetExact
     sourceBinders targetBinders sourceCover targetCover
@@ -1124,8 +1106,7 @@ theorem compilePatternNode_at_material_iso
     hfactor] using hiso
 
 theorem materialRecursiveRegionIso
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (region : Fin input.pattern.val.diagram.regionCount)
     (hregion : input.binderSpine.IsMaterialRegion region)
@@ -1134,17 +1115,17 @@ theorem materialRecursiveRegionIso
     (targetOuter : ConcreteElaboration.WireContext layout.plugRaw)
     (outerMap : Fin sourceOuter.length → Fin targetOuter.length)
     (relationMap : RelationRenaming sourceRels targetRels)
-    (sourceBody : Region signature (sourceOuter.extend region).length sourceRels)
-    (targetBody : Region signature
+    (sourceBody : Region  (sourceOuter.extend region).length sourceRels)
+    (targetBody : Region
       (targetOuter.extend (layout.bodyRegion region)).length targetRels)
-    (hrecursive : RegionIso signature
+    (hrecursive : RegionIso
       (FiniteEquiv.refl
         (Fin (targetOuter.extend (layout.bodyRegion region)).length)) targetRels
       ((sourceBody.renameWires
         (layout.materialExtendedWireMap region hregion sourceOuter targetOuter
           outerMap)).renameRelations relationMap)
       targetBody) :
-    RegionIso signature
+    RegionIso
       (extendWireEquiv (FiniteEquiv.refl (Fin targetOuter.length))
         (layout.materialLocalWireEquiv region hregion)) targetRels
       ((sourceBody.renameWires
@@ -1173,7 +1154,7 @@ theorem materialRecursiveRegionIso
       layout.materialExtendedWireMap_factor region hregion sourceOuter
         targetOuter outerMap
   have hfirstRaw := RegionIso.renameWiresEquiv sourcePrepared toTargetContext
-  have hfirst : RegionIso signature toTargetContext targetRels sourcePrepared
+  have hfirst : RegionIso  toTargetContext targetRels sourcePrepared
       ((sourceBody.renameWires
         (layout.materialExtendedWireMap region hregion sourceOuter targetOuter
           outerMap)).renameRelations relationMap) := by
@@ -1181,7 +1162,7 @@ theorem materialRecursiveRegionIso
       Region.renameWires_comp, hmap] using hfirstRaw
   have hlastRaw := RegionIso.renameWiresEquiv targetBody
     (FiniteEquiv.finCast targetEq)
-  have hlast : RegionIso signature (FiniteEquiv.finCast targetEq) targetRels
+  have hlast : RegionIso  (FiniteEquiv.finCast targetEq) targetRels
       targetBody (targetBody.castWiresEq targetEq) := by
     simpa only [Region.castWiresEq_eq_renameWires,
       FiniteEquiv.finCast] using hlastRaw
@@ -1199,8 +1180,7 @@ theorem materialRecursiveRegionIso
   exact hcombined
 
 theorem compilePatternRegion_at_material
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceFuel targetFuel : Nat)
@@ -1231,15 +1211,15 @@ theorem compilePatternRegion_at_material
           (layout.binderRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (sourceBody : Region signature sourceOuter.length sourceRels)
-    (targetBody : Region signature targetOuter.length targetRels)
-    (hsource : ConcreteElaboration.compileRegion? signature
+    (sourceBody : Region  sourceOuter.length sourceRels)
+    (targetBody : Region  targetOuter.length targetRels)
+    (hsource : ConcreteElaboration.compileRegion?
       input.pattern.val.diagram sourceFuel region sourceOuter sourceBinders =
         some sourceBody)
-    (htarget : ConcreteElaboration.compileRegion? signature layout.plugRaw
+    (htarget : ConcreteElaboration.compileRegion?  layout.plugRaw
       targetFuel (layout.bodyRegion region) targetOuter targetBinders =
         some targetBody) :
-    RegionIso signature (FiniteEquiv.refl (Fin targetOuter.length)) targetRels
+    RegionIso  (FiniteEquiv.refl (Fin targetOuter.length)) targetRels
       ((sourceBody.renameWires outerMap).renameRelations relationMap)
       targetBody := by
   induction sourceFuel generalizing targetFuel region sourceOuter targetOuter
@@ -1264,19 +1244,19 @@ theorem compilePatternRegion_at_material
                 input.pattern.val.diagram.nodeCount),
               occurrence ∈ ConcreteElaboration.localOccurrences
                 input.pattern.val.diagram region →
-              ∀ (sourceItem : Item signature sourceExtended.length sourceRels)
-                (targetItem : Item signature targetExtended.length targetRels),
-              ConcreteElaboration.compileOccurrenceWith? signature
+              ∀ (sourceItem : Item  sourceExtended.length sourceRels)
+                (targetItem : Item  targetExtended.length targetRels),
+              ConcreteElaboration.compileOccurrenceWith?
                   input.pattern.val.diagram
-                  (ConcreteElaboration.compileRegion? signature
+                  (ConcreteElaboration.compileRegion?
                     input.pattern.val.diagram sourceFuel)
                   sourceExtended sourceBinders occurrence = some sourceItem →
-              ConcreteElaboration.compileOccurrenceWith? signature layout.plugRaw
-                  (ConcreteElaboration.compileRegion? signature layout.plugRaw
+              ConcreteElaboration.compileOccurrenceWith?  layout.plugRaw
+                  (ConcreteElaboration.compileRegion?  layout.plugRaw
                     targetFuel)
                   targetExtended targetBinders
                   (layout.mapPatternOccurrence occurrence) = some targetItem →
-              ItemIso signature extended targetRels
+              ItemIso  extended targetRels
                 ((sourceItem.renameWires sourceWireMap).renameRelations relationMap)
                 (targetItem.castWiresEq targetEq) := by
             intro occurrence hoccurrenceMem sourceItem targetItem
@@ -1286,7 +1266,7 @@ theorem compilePatternRegion_at_material
                 have hnodeRegion :=
                   (ConcreteElaboration.mem_localOccurrences_node _ _ _).1
                     hoccurrenceMem
-                exact layout.compilePatternNode_at_material_iso signature input
+                exact layout.compilePatternNode_at_material_iso  input
                   hadmissible region hregion sourceOuter targetOuter sourceExact
                   targetExact sourceBinders targetBinders sourceCover targetCover
                   sourceEnumeration outerMap outerSpec relationMap relationSpec node
@@ -1313,10 +1293,10 @@ theorem compilePatternRegion_at_material
                     have hsourceChildExact := sourceExact.extend_child
                       input.pattern.property.diagram_well_formed hparent
                     have htargetChildExact := targetExact.extend_child
-                      (layout.plugRaw_wellFormed signature input hadmissible)
+                      (layout.plugRaw_wellFormed  input hadmissible)
                       (layout.bodyRegion_parent_exact child region hchildMaterial
                         hparent)
-                    cases hsourceChild : ConcreteElaboration.compileRegion? signature
+                    cases hsourceChild : ConcreteElaboration.compileRegion?
                         input.pattern.val.diagram sourceFuel child sourceExtended
                         sourceBinders with
                     | none =>
@@ -1327,7 +1307,7 @@ theorem compilePatternRegion_at_material
                           hsourceChild] at hsourceItem
                         subst sourceItem
                         cases htargetChildResult :
-                            ConcreteElaboration.compileRegion? signature layout.plugRaw
+                            ConcreteElaboration.compileRegion?  layout.plugRaw
                               targetFuel (layout.bodyRegion child) targetExtended
                               targetBinders with
                         | none =>
@@ -1359,7 +1339,7 @@ theorem compilePatternRegion_at_material
                               compiledSource compiledTarget hsourceChild
                               htargetChildResult
                             have htransport :=
-                              layout.materialRecursiveRegionIso signature input region
+                              layout.materialRecursiveRegionIso  input region
                                 hregion sourceOuter targetOuter outerMap
                                 relationMap compiledSource compiledTarget hrecursive
                             simpa [Item.renameWires, Item.renameRelations] using
@@ -1373,10 +1353,10 @@ theorem compilePatternRegion_at_material
                     have hsourceChildExact := sourceExact.extend_child
                       input.pattern.property.diagram_well_formed hparent
                     have htargetChildExact := targetExact.extend_child
-                      (layout.plugRaw_wellFormed signature input hadmissible)
+                      (layout.plugRaw_wellFormed  input hadmissible)
                       (layout.bodyRegion_parent_exact child region hchildMaterial
                         hparent)
-                    cases hsourceChild : ConcreteElaboration.compileRegion? signature
+                    cases hsourceChild : ConcreteElaboration.compileRegion?
                         input.pattern.val.diagram sourceFuel child sourceExtended
                         (sourceBinders.push child arity) with
                     | none =>
@@ -1387,7 +1367,7 @@ theorem compilePatternRegion_at_material
                           hsourceChild] at hsourceItem
                         subst sourceItem
                         cases htargetChildResult :
-                            ConcreteElaboration.compileRegion? signature layout.plugRaw
+                            ConcreteElaboration.compileRegion?  layout.plugRaw
                               targetFuel (layout.bodyRegion child) targetExtended
                               (targetBinders.push (layout.bodyRegion child) arity) with
                         | none =>
@@ -1420,25 +1400,25 @@ theorem compilePatternRegion_at_material
                               compiledSource compiledTarget hsourceChild
                               htargetChildResult
                             have htransport :=
-                              layout.materialRecursiveRegionIso signature input region
+                              layout.materialRecursiveRegionIso  input region
                                 hregion sourceOuter targetOuter outerMap
                                 (RelationRenaming.lift relationMap arity)
                                 compiledSource compiledTarget hrecursive
                             simpa [Item.renameWires, Item.renameRelations] using
                               ItemIso.bubble htransport
           simp only [ConcreteElaboration.compileRegion?] at hsource htarget
-          cases hsourceItems : ConcreteElaboration.compileOccurrencesWith? signature
+          cases hsourceItems : ConcreteElaboration.compileOccurrencesWith?
               input.pattern.val.diagram
-              (ConcreteElaboration.compileRegion? signature input.pattern.val.diagram
+              (ConcreteElaboration.compileRegion?  input.pattern.val.diagram
                 sourceFuel) sourceExtended sourceBinders
               (ConcreteElaboration.localOccurrences input.pattern.val.diagram region) with
           | none => simp [sourceExtended, hsourceItems] at hsource
           | some sourceItems =>
               simp [sourceExtended, hsourceItems] at hsource
               subst sourceBody
-              cases htargetItems : ConcreteElaboration.compileOccurrencesWith? signature
+              cases htargetItems : ConcreteElaboration.compileOccurrencesWith?
                   layout.plugRaw
-                  (ConcreteElaboration.compileRegion? signature layout.plugRaw targetFuel)
+                  (ConcreteElaboration.compileRegion?  layout.plugRaw targetFuel)
                   targetExtended targetBinders
                   (ConcreteElaboration.localOccurrences layout.plugRaw
                     (layout.bodyRegion region)) with
@@ -1451,12 +1431,12 @@ theorem compilePatternRegion_at_material
                   let targetPrepared := targetItems.castWiresEq targetEq
                   have hsourceLength :=
                     ConcreteElaboration.compileOccurrencesWith?_length
-                      (ConcreteElaboration.compileRegion? signature
+                      (ConcreteElaboration.compileRegion?
                         input.pattern.val.diagram sourceFuel)
                       sourceExtended sourceBinders hsourceItems
                   have htargetLength :=
                     ConcreteElaboration.compileOccurrencesWith?_length
-                      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+                      (ConcreteElaboration.compileRegion?  layout.plugRaw
                         targetFuel) targetExtended targetBinders htargetItems
                   have hsourcePreparedLength : sourcePrepared.length =
                       (ConcreteElaboration.localOccurrences
@@ -1470,7 +1450,7 @@ theorem compilePatternRegion_at_material
                     (FiniteEquiv.finCast hsourcePreparedLength).trans
                       ((layout.materialOccurrenceEquiv region hregion).trans
                         (FiniteEquiv.finCast htargetPreparedLength.symm))
-                  have hitems : ItemSeqIso signature extended targetRels
+                  have hitems : ItemSeqIso  extended targetRels
                       sourcePrepared targetPrepared := by
                     apply ItemSeqIso.permute positions
                     intro sourceIndex
@@ -1482,12 +1462,12 @@ theorem compilePatternRegion_at_material
                       Fin.cast htargetLength.symm targetOccurrenceIndex
                     have hsourceGet :=
                       ConcreteElaboration.compileOccurrencesWith?_get
-                        (ConcreteElaboration.compileRegion? signature
+                        (ConcreteElaboration.compileRegion?
                           input.pattern.val.diagram sourceFuel)
                         sourceExtended sourceBinders hsourceItems occurrenceIndex
                     have htargetGet :=
                       ConcreteElaboration.compileOccurrencesWith?_get
-                        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+                        (ConcreteElaboration.compileRegion?  layout.plugRaw
                           targetFuel) targetExtended targetBinders htargetItems
                           targetOccurrenceIndex
                     rw [layout.materialOccurrenceEquiv_spec region hregion
@@ -1526,8 +1506,7 @@ theorem compilePatternRegion_at_material
 cannot cross the splice site.  The two admissible geometries are strict
 descent below the site and a disjoint sibling subtree. -/
 theorem compileFrameRegion_off_site
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceFuel targetFuel : Nat)
@@ -1560,15 +1539,15 @@ theorem compileFrameRegion_off_site
           (layout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (sourceBody : Region signature sourceOuter.length sourceRels)
-    (targetBody : Region signature targetOuter.length targetRels)
-    (hsource : ConcreteElaboration.compileRegion? signature
+    (sourceBody : Region  sourceOuter.length sourceRels)
+    (targetBody : Region  targetOuter.length targetRels)
+    (hsource : ConcreteElaboration.compileRegion?
       input.coalesceFrameRaw sourceFuel region sourceOuter sourceBinders =
         some sourceBody)
-    (htarget : ConcreteElaboration.compileRegion? signature layout.plugRaw
+    (htarget : ConcreteElaboration.compileRegion?  layout.plugRaw
       targetFuel (layout.frameRegion region) targetOuter targetBinders =
         some targetBody) :
-    Nonempty (RegionIsoPresentation signature
+    Nonempty (RegionIsoPresentation
       (FiniteEquiv.refl (Fin targetOuter.length)) targetRels
       ((sourceBody.renameWires outerMap).renameRelations relationMap)
       targetBody) := by
@@ -1594,19 +1573,19 @@ theorem compileFrameRegion_off_site
                 input.coalesceFrameRaw.nodeCount),
               occurrence ∈ ConcreteElaboration.localOccurrences
                 input.coalesceFrameRaw region →
-              ∀ (sourceItem : Item signature sourceExtended.length sourceRels)
-                (targetItem : Item signature targetExtended.length targetRels),
-              ConcreteElaboration.compileOccurrenceWith? signature
+              ∀ (sourceItem : Item  sourceExtended.length sourceRels)
+                (targetItem : Item  targetExtended.length targetRels),
+              ConcreteElaboration.compileOccurrenceWith?
                   input.coalesceFrameRaw
-                  (ConcreteElaboration.compileRegion? signature
+                  (ConcreteElaboration.compileRegion?
                     input.coalesceFrameRaw sourceFuel)
                   sourceExtended sourceBinders occurrence = some sourceItem →
-              ConcreteElaboration.compileOccurrenceWith? signature layout.plugRaw
-                  (ConcreteElaboration.compileRegion? signature layout.plugRaw
+              ConcreteElaboration.compileOccurrenceWith?  layout.plugRaw
+                  (ConcreteElaboration.compileRegion?  layout.plugRaw
                     targetFuel)
                   targetExtended targetBinders
                   (layout.mapFrameOccurrence occurrence) = some targetItem →
-              ItemIso signature extended targetRels
+              ItemIso  extended targetRels
                 ((sourceItem.renameWires sourceWireMap).renameRelations relationMap)
                 (targetItem.castWiresEq targetEq) := by
             intro occurrence hoccurrenceMem sourceItem targetItem
@@ -1616,7 +1595,7 @@ theorem compileFrameRegion_off_site
                 have hnodeRegion :=
                   (ConcreteElaboration.mem_localOccurrences_node _ _ _).1
                     hoccurrenceMem
-                exact layout.compileFrameNode_at_region_iso signature input
+                exact layout.compileFrameNode_at_region_iso  input
                   hadmissible region hne sourceOuter targetOuter sourceExact
                   targetExact sourceBinders targetBinders sourceCover
                   sourceEnumeration outerMap outerSpec relationMap relationSpec node
@@ -1673,9 +1652,9 @@ theorem compileFrameRegion_off_site
                     have hsourceChildExact := sourceExact.extend_child
                       (input.coalesceFrameRaw_wellFormed hadmissible) hparent
                     have htargetChildExact := targetExact.extend_child
-                      (layout.plugRaw_wellFormed signature input hadmissible)
+                      (layout.plugRaw_wellFormed  input hadmissible)
                       htargetParent
-                    cases hsourceChild : ConcreteElaboration.compileRegion? signature
+                    cases hsourceChild : ConcreteElaboration.compileRegion?
                         input.coalesceFrameRaw sourceFuel child sourceExtended
                         sourceBinders with
                     | none =>
@@ -1686,7 +1665,7 @@ theorem compileFrameRegion_off_site
                           hsourceChild] at hsourceItem
                         subst sourceItem
                         cases htargetChildResult :
-                            ConcreteElaboration.compileRegion? signature layout.plugRaw
+                            ConcreteElaboration.compileRegion?  layout.plugRaw
                               targetFuel (layout.frameRegion child) targetExtended
                               targetBinders with
                         | none =>
@@ -1720,7 +1699,7 @@ theorem compileFrameRegion_off_site
                               compiledSource compiledTarget hsourceChild
                               htargetChildResult
                             have htransport :=
-                              layout.frameRecursiveRegionIso signature input region
+                              layout.frameRecursiveRegionIso  input region
                                 hne sourceOuter targetOuter outerMap relationMap
                                 compiledSource compiledTarget hrecursive.iso
                             simpa [Item.renameWires, Item.renameRelations] using
@@ -1740,9 +1719,9 @@ theorem compileFrameRegion_off_site
                     have hsourceChildExact := sourceExact.extend_child
                       (input.coalesceFrameRaw_wellFormed hadmissible) hparent
                     have htargetChildExact := targetExact.extend_child
-                      (layout.plugRaw_wellFormed signature input hadmissible)
+                      (layout.plugRaw_wellFormed  input hadmissible)
                       htargetParent
-                    cases hsourceChild : ConcreteElaboration.compileRegion? signature
+                    cases hsourceChild : ConcreteElaboration.compileRegion?
                         input.coalesceFrameRaw sourceFuel child sourceExtended
                         (sourceBinders.push child arity) with
                     | none =>
@@ -1753,7 +1732,7 @@ theorem compileFrameRegion_off_site
                           hsourceChild] at hsourceItem
                         subst sourceItem
                         cases htargetChildResult :
-                            ConcreteElaboration.compileRegion? signature layout.plugRaw
+                            ConcreteElaboration.compileRegion?  layout.plugRaw
                               targetFuel (layout.frameRegion child) targetExtended
                               (targetBinders.push (layout.frameRegion child) arity) with
                         | none =>
@@ -1789,25 +1768,25 @@ theorem compileFrameRegion_off_site
                               compiledSource compiledTarget hsourceChild
                               htargetChildResult
                             have htransport :=
-                              layout.frameRecursiveRegionIso signature input region
+                              layout.frameRecursiveRegionIso  input region
                                 hne sourceOuter targetOuter outerMap
                                 (RelationRenaming.lift relationMap arity)
                                 compiledSource compiledTarget hrecursive.iso
                             simpa [Item.renameWires, Item.renameRelations] using
                               ItemIso.bubble htransport
           simp only [ConcreteElaboration.compileRegion?] at hsource htarget
-          cases hsourceItems : ConcreteElaboration.compileOccurrencesWith? signature
+          cases hsourceItems : ConcreteElaboration.compileOccurrencesWith?
               input.coalesceFrameRaw
-              (ConcreteElaboration.compileRegion? signature input.coalesceFrameRaw
+              (ConcreteElaboration.compileRegion?  input.coalesceFrameRaw
                 sourceFuel) sourceExtended sourceBinders
               (ConcreteElaboration.localOccurrences input.coalesceFrameRaw region) with
           | none => simp [sourceExtended, hsourceItems] at hsource
           | some sourceItems =>
               simp [sourceExtended, hsourceItems] at hsource
               subst sourceBody
-              cases htargetItems : ConcreteElaboration.compileOccurrencesWith? signature
+              cases htargetItems : ConcreteElaboration.compileOccurrencesWith?
                   layout.plugRaw
-                  (ConcreteElaboration.compileRegion? signature layout.plugRaw
+                  (ConcreteElaboration.compileRegion?  layout.plugRaw
                     targetFuel)
                   targetExtended targetBinders
                   (ConcreteElaboration.localOccurrences layout.plugRaw
@@ -1821,12 +1800,12 @@ theorem compileFrameRegion_off_site
                   let targetPrepared := targetItems.castWiresEq targetEq
                   have hsourceLength :=
                     ConcreteElaboration.compileOccurrencesWith?_length
-                      (ConcreteElaboration.compileRegion? signature
+                      (ConcreteElaboration.compileRegion?
                         input.coalesceFrameRaw sourceFuel)
                       sourceExtended sourceBinders hsourceItems
                   have htargetLength :=
                     ConcreteElaboration.compileOccurrencesWith?_length
-                      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+                      (ConcreteElaboration.compileRegion?  layout.plugRaw
                         targetFuel) targetExtended targetBinders htargetItems
                   have hsourcePreparedLength : sourcePrepared.length =
                       (ConcreteElaboration.localOccurrences
@@ -1841,7 +1820,7 @@ theorem compileFrameRegion_off_site
                       ((layout.frameOccurrenceEquiv region hne).trans
                         (FiniteEquiv.finCast htargetPreparedLength.symm))
                   have hitemAt : ∀ sourceIndex,
-                      ItemIso signature extended targetRels
+                      ItemIso  extended targetRels
                         (sourcePrepared.get sourceIndex)
                         (targetPrepared.get (positions sourceIndex)) := by
                     intro sourceIndex
@@ -1853,12 +1832,12 @@ theorem compileFrameRegion_off_site
                       Fin.cast htargetLength.symm targetOccurrenceIndex
                     have hsourceGet :=
                       ConcreteElaboration.compileOccurrencesWith?_get
-                        (ConcreteElaboration.compileRegion? signature
+                        (ConcreteElaboration.compileRegion?
                           input.coalesceFrameRaw sourceFuel)
                         sourceExtended sourceBinders hsourceItems occurrenceIndex
                     have htargetGet :=
                       ConcreteElaboration.compileOccurrencesWith?_get
-                        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+                        (ConcreteElaboration.compileRegion?  layout.plugRaw
                           targetFuel) targetExtended targetBinders htargetItems
                           targetOccurrenceIndex
                     rw [layout.frameOccurrenceEquiv_spec region hne
@@ -1893,7 +1872,7 @@ theorem compileFrameRegion_off_site
                     targetPrepared, localEquiv, extended, targetEq] using
                     (⟨RegionIsoPresentation.mk
                       (layout.frameLocalWireEquiv region hne) positions hitemAt⟩ :
-                      Nonempty (RegionIsoPresentation signature
+                      Nonempty (RegionIsoPresentation
                         (FiniteEquiv.refl (Fin targetOuter.length)) targetRels
                         (.mk (ConcreteElaboration.exactScopeWires
                           input.coalesceFrameRaw region).length sourcePrepared)
@@ -1902,8 +1881,7 @@ theorem compileFrameRegion_off_site
 
 /-- Strict-descendant specialization of `compileFrameRegion_off_site`. -/
 theorem compileFrameRegion_below_site
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceFuel targetFuel : Nat)
@@ -1934,18 +1912,18 @@ theorem compileFrameRegion_below_site
           (layout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (sourceBody : Region signature sourceOuter.length sourceRels)
-    (targetBody : Region signature targetOuter.length targetRels)
-    (hsource : ConcreteElaboration.compileRegion? signature
+    (sourceBody : Region  sourceOuter.length sourceRels)
+    (targetBody : Region  targetOuter.length targetRels)
+    (hsource : ConcreteElaboration.compileRegion?
       input.coalesceFrameRaw sourceFuel region sourceOuter sourceBinders =
         some sourceBody)
-    (htarget : ConcreteElaboration.compileRegion? signature layout.plugRaw
+    (htarget : ConcreteElaboration.compileRegion?  layout.plugRaw
       targetFuel (layout.frameRegion region) targetOuter targetBinders =
         some targetBody) :
-    RegionIso signature (FiniteEquiv.refl (Fin targetOuter.length)) targetRels
+    RegionIso  (FiniteEquiv.refl (Fin targetOuter.length)) targetRels
       ((sourceBody.renameWires outerMap).renameRelations relationMap)
       targetBody := by
-  exact (Classical.choice (layout.compileFrameRegion_off_site signature input hadmissible
+  exact (Classical.choice (layout.compileFrameRegion_off_site  input hadmissible
     sourceFuel targetFuel region hne (Or.inl hbelow) sourceOuter targetOuter
     sourceExact targetExact sourceBinders targetBinders sourceCover targetCover
     sourceEnumeration outerMap outerSpec relationMap relationSpec sourceBody
@@ -1954,8 +1932,7 @@ theorem compileFrameRegion_below_site
 /-- Disjoint-subtree specialization of `compileFrameRegion_off_site`, used
 for siblings of the distinguished root-to-site route. -/
 theorem compileFrameRegion_away_from_site
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceFuel targetFuel : Nat)
@@ -1985,15 +1962,15 @@ theorem compileFrameRegion_away_from_site
           (layout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (sourceBody : Region signature sourceOuter.length sourceRels)
-    (targetBody : Region signature targetOuter.length targetRels)
-    (hsource : ConcreteElaboration.compileRegion? signature
+    (sourceBody : Region  sourceOuter.length sourceRels)
+    (targetBody : Region  targetOuter.length targetRels)
+    (hsource : ConcreteElaboration.compileRegion?
       input.coalesceFrameRaw sourceFuel region sourceOuter sourceBinders =
         some sourceBody)
-    (htarget : ConcreteElaboration.compileRegion? signature layout.plugRaw
+    (htarget : ConcreteElaboration.compileRegion?  layout.plugRaw
       targetFuel (layout.frameRegion region) targetOuter targetBinders =
         some targetBody) :
-    RegionIso signature (FiniteEquiv.refl (Fin targetOuter.length)) targetRels
+    RegionIso  (FiniteEquiv.refl (Fin targetOuter.length)) targetRels
       ((sourceBody.renameWires outerMap).renameRelations relationMap)
       targetBody := by
   have hne : region ≠ input.site := by
@@ -2001,7 +1978,7 @@ theorem compileFrameRegion_away_from_site
     subst region
     exact haway
       (ConcreteDiagram.Encloses.refl input.coalesceFrameRaw input.site)
-  exact (Classical.choice (layout.compileFrameRegion_off_site signature input hadmissible
+  exact (Classical.choice (layout.compileFrameRegion_off_site  input hadmissible
     sourceFuel targetFuel region hne (Or.inr haway) sourceOuter targetOuter
     sourceExact targetExact sourceBinders targetBinders sourceCover targetCover
     sourceEnumeration outerMap outerSpec relationMap relationSpec sourceBody
@@ -2010,7 +1987,7 @@ theorem compileFrameRegion_away_from_site
 /-- Every retained route witnesses concrete enclosure. -/
 theorem RegionRoute.encloses
     (route : RegionRoute d start target path)
-    (hwf : d.WellFormed signature) : d.Encloses start target := by
+    (hwf : d.WellFormed ) : d.Encloses start target := by
   induction route with
   | here => exact ConcreteDiagram.Encloses.refl _ _
   | @step start child target rest hparent position hposition tail ih =>
@@ -2022,7 +1999,7 @@ theorem RegionRoute.encloses
 /-- A distinct direct sibling of the first route child cannot contain the
 route target. -/
 theorem RegionRoute.distinctSibling_away
-    (hwf : d.WellFormed signature)
+    (hwf : d.WellFormed )
     (route : RegionRoute d child target rest)
     (childParent : (d.regions child).parent? = some parent)
     (siblingParent : (d.regions sibling).parent? = some parent)
@@ -2047,8 +2024,7 @@ theorem RegionRoute.distinctSibling_away
 node is transported directly; a child occurrence is compiled by the
 disjoint-subtree theorem using the caller-supplied sibling geometry. -/
 theorem compileFrameOccurrence_away_from_site
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceFuel targetFuel : Nat)
@@ -2084,20 +2060,20 @@ theorem compileFrameOccurrence_away_from_site
       input.coalesceFrameRaw region)
     (childAway : ∀ child, occurrence = .child child →
       ¬ input.coalesceFrameRaw.Encloses child input.site)
-    (sourceItem : Item signature (sourceOuter.extend region).length sourceRels)
-    (targetItem : Item signature
+    (sourceItem : Item  (sourceOuter.extend region).length sourceRels)
+    (targetItem : Item
       (targetOuter.extend (layout.frameRegion region)).length targetRels)
-    (hsource : ConcreteElaboration.compileOccurrenceWith? signature
+    (hsource : ConcreteElaboration.compileOccurrenceWith?
       input.coalesceFrameRaw
-      (ConcreteElaboration.compileRegion? signature input.coalesceFrameRaw
+      (ConcreteElaboration.compileRegion?  input.coalesceFrameRaw
         sourceFuel)
       (sourceOuter.extend region) sourceBinders occurrence = some sourceItem)
-    (htarget : ConcreteElaboration.compileOccurrenceWith? signature
+    (htarget : ConcreteElaboration.compileOccurrenceWith?
       layout.plugRaw
-      (ConcreteElaboration.compileRegion? signature layout.plugRaw targetFuel)
+      (ConcreteElaboration.compileRegion?  layout.plugRaw targetFuel)
       (targetOuter.extend (layout.frameRegion region)) targetBinders
       (layout.mapFrameOccurrence occurrence) = some targetItem) :
-    ItemIso signature
+    ItemIso
       (extendWireEquiv (FiniteEquiv.refl (Fin targetOuter.length))
         (layout.frameLocalWireEquiv region hne)) targetRels
       ((sourceItem.renameWires
@@ -2110,7 +2086,7 @@ theorem compileFrameOccurrence_away_from_site
   | node node =>
       have hnodeRegion :=
         (ConcreteElaboration.mem_localOccurrences_node _ _ _).1 hoccurrence
-      exact layout.compileFrameNode_at_region_iso signature input hadmissible
+      exact layout.compileFrameNode_at_region_iso  input hadmissible
         region hne sourceOuter targetOuter sourceExact targetExact
         sourceBinders targetBinders sourceCover sourceEnumeration outerMap
         outerSpec relationMap relationSpec node hnodeRegion sourceItem targetItem
@@ -2141,8 +2117,8 @@ theorem compileFrameOccurrence_away_from_site
           have hsourceChildExact := sourceExact.extend_child
             (input.coalesceFrameRaw_wellFormed hadmissible) hparent
           have htargetChildExact := targetExact.extend_child
-            (layout.plugRaw_wellFormed signature input hadmissible) htargetParent
-          cases hsourceChild : ConcreteElaboration.compileRegion? signature
+            (layout.plugRaw_wellFormed  input hadmissible) htargetParent
+          cases hsourceChild : ConcreteElaboration.compileRegion?
               input.coalesceFrameRaw sourceFuel child (sourceOuter.extend region)
               sourceBinders with
           | none =>
@@ -2153,7 +2129,7 @@ theorem compileFrameOccurrence_away_from_site
                 hsourceChild] at hsource
               subst sourceItem
               cases htargetChildResult : ConcreteElaboration.compileRegion?
-                  signature layout.plugRaw targetFuel (layout.frameRegion child)
+                   layout.plugRaw targetFuel (layout.frameRegion child)
                   (targetOuter.extend (layout.frameRegion region)) targetBinders with
               | none =>
                   simp [mapFrameOccurrence,
@@ -2165,7 +2141,7 @@ theorem compileFrameOccurrence_away_from_site
                     htargetChildResult] at htarget
                   subst targetItem
                   have hrecursive := layout.compileFrameRegion_away_from_site
-                    signature input hadmissible sourceFuel targetFuel child haway
+                     input hadmissible sourceFuel targetFuel child haway
                     (sourceOuter.extend region)
                     (targetOuter.extend (layout.frameRegion region))
                     hsourceChildExact htargetChildExact sourceBinders targetBinders
@@ -2184,7 +2160,7 @@ theorem compileFrameOccurrence_away_from_site
                       sourceBinders targetBinders sourceEnumeration hchild
                       relationMap relationSpec)
                     compiledSource compiledTarget hsourceChild htargetChildResult
-                  have htransport := layout.frameRecursiveRegionIso signature input
+                  have htransport := layout.frameRecursiveRegionIso  input
                     region hne sourceOuter targetOuter outerMap relationMap
                     compiledSource compiledTarget hrecursive
                   simpa [Item.renameWires, Item.renameRelations] using
@@ -2202,8 +2178,8 @@ theorem compileFrameOccurrence_away_from_site
           have hsourceChildExact := sourceExact.extend_child
             (input.coalesceFrameRaw_wellFormed hadmissible) hparent
           have htargetChildExact := targetExact.extend_child
-            (layout.plugRaw_wellFormed signature input hadmissible) htargetParent
-          cases hsourceChild : ConcreteElaboration.compileRegion? signature
+            (layout.plugRaw_wellFormed  input hadmissible) htargetParent
+          cases hsourceChild : ConcreteElaboration.compileRegion?
               input.coalesceFrameRaw sourceFuel child (sourceOuter.extend region)
               (sourceBinders.push child arity) with
           | none =>
@@ -2214,7 +2190,7 @@ theorem compileFrameOccurrence_away_from_site
                 hsourceChild] at hsource
               subst sourceItem
               cases htargetChildResult : ConcreteElaboration.compileRegion?
-                  signature layout.plugRaw targetFuel (layout.frameRegion child)
+                   layout.plugRaw targetFuel (layout.frameRegion child)
                   (targetOuter.extend (layout.frameRegion region))
                   (targetBinders.push (layout.frameRegion child) arity) with
               | none =>
@@ -2227,7 +2203,7 @@ theorem compileFrameOccurrence_away_from_site
                     htargetChildResult] at htarget
                   subst targetItem
                   have hrecursive := layout.compileFrameRegion_away_from_site
-                    signature input hadmissible sourceFuel targetFuel child haway
+                     input hadmissible sourceFuel targetFuel child haway
                     (sourceOuter.extend region)
                     (targetOuter.extend (layout.frameRegion region))
                     hsourceChildExact htargetChildExact
@@ -2248,7 +2224,7 @@ theorem compileFrameOccurrence_away_from_site
                       sourceBinders targetBinders sourceEnumeration arity hchild
                       relationMap relationSpec)
                     compiledSource compiledTarget hsourceChild htargetChildResult
-                  have htransport := layout.frameRecursiveRegionIso signature input
+                  have htransport := layout.frameRecursiveRegionIso  input
                     region hne sourceOuter targetOuter outerMap
                     (RelationRenaming.lift relationMap arity)
                     compiledSource compiledTarget hrecursive
@@ -2259,8 +2235,7 @@ theorem compileFrameOccurrence_away_from_site
 frame, expressed in the target outer-wire coordinates.  The distinguished
 route child is deliberately omitted. -/
 theorem compileFrameSiblings_targetCoordinates
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceFuel targetFuel : Nat)
@@ -2295,20 +2270,20 @@ theorem compileFrameSiblings_targetCoordinates
           (layout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (sourceItems : ItemSeq signature
+    (sourceItems : ItemSeq
       (sourceOuter.extend region).length sourceRels)
-    (targetItems : ItemSeq signature
+    (targetItems : ItemSeq
       (targetOuter.extend (layout.frameRegion region)).length targetRels)
-    (hsourceItems : ConcreteElaboration.compileOccurrencesWith? signature
+    (hsourceItems : ConcreteElaboration.compileOccurrencesWith?
       input.coalesceFrameRaw
-      (ConcreteElaboration.compileRegion? signature input.coalesceFrameRaw
+      (ConcreteElaboration.compileRegion?  input.coalesceFrameRaw
         sourceFuel)
       (sourceOuter.extend region) sourceBinders
       (ConcreteElaboration.localOccurrences input.coalesceFrameRaw region) =
         some sourceItems)
-    (htargetItems : ConcreteElaboration.compileOccurrencesWith? signature
+    (htargetItems : ConcreteElaboration.compileOccurrencesWith?
       layout.plugRaw
-      (ConcreteElaboration.compileRegion? signature layout.plugRaw targetFuel)
+      (ConcreteElaboration.compileRegion?  layout.plugRaw targetFuel)
       (targetOuter.extend (layout.frameRegion region)) targetBinders
       (ConcreteElaboration.localOccurrences layout.plugRaw
         (layout.frameRegion region)) = some targetItems) :
@@ -2338,12 +2313,12 @@ theorem compileFrameSiblings_targetCoordinates
   let targetPrepared := targetItems.castWiresEq targetEq
   have hsourceLength :=
     ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature input.coalesceFrameRaw
+      (ConcreteElaboration.compileRegion?  input.coalesceFrameRaw
         sourceFuel)
       (sourceOuter.extend region) sourceBinders hsourceItems
   have htargetLength :=
     ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature layout.plugRaw targetFuel)
+      (ConcreteElaboration.compileRegion?  layout.plugRaw targetFuel)
       (targetOuter.extend (layout.frameRegion region)) targetBinders htargetItems
   have hsourcePreparedLength : sourcePrepared.length =
       (ConcreteElaboration.localOccurrences input.coalesceFrameRaw region).length := by
@@ -2379,17 +2354,17 @@ theorem compileFrameSiblings_targetCoordinates
     apply Fin.ext
     simpa [occurrenceIndex, sourceIndex] using congrArg Fin.val heq
   have hsourceGet := ConcreteElaboration.compileOccurrencesWith?_get
-    (ConcreteElaboration.compileRegion? signature input.coalesceFrameRaw
+    (ConcreteElaboration.compileRegion?  input.coalesceFrameRaw
       sourceFuel)
     (sourceOuter.extend region) sourceBinders hsourceItems occurrenceIndex
   have htargetGet := ConcreteElaboration.compileOccurrencesWith?_get
-    (ConcreteElaboration.compileRegion? signature layout.plugRaw targetFuel)
+    (ConcreteElaboration.compileRegion?  layout.plugRaw targetFuel)
     (targetOuter.extend (layout.frameRegion region)) targetBinders htargetItems
     targetOccurrenceIndex
   rw [layout.frameOccurrenceEquiv_spec region hne occurrenceIndex] at htargetGet
   let occurrence := (ConcreteElaboration.localOccurrences
     input.coalesceFrameRaw region).get occurrenceIndex
-  have hitem := layout.compileFrameOccurrence_away_from_site signature input
+  have hitem := layout.compileFrameOccurrence_away_from_site  input
     hadmissible sourceFuel targetFuel region hne sourceOuter targetOuter
     sourceExact targetExact sourceBinders targetBinders sourceCover targetCover
     sourceEnumeration outerMap outerSpec relationMap relationSpec occurrence

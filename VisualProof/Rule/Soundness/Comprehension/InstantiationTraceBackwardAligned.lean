@@ -11,41 +11,38 @@ namespace InstantiationSemantic
 /-- A bubble presentation whose inherited valuation is the restriction of one
 wire-indexed valuation on the executor state. -/
 def BubblePresentation.OuterAligned
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
     {model : Model}
-    {named : NamedEnv model.Carrier signature}
     {relationValue : Relation model.Carrier payload.arity}
     {values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index)}
     {parameterValues : Fin attachments.length → model.Carrier}
-    (presentation : BubblePresentation payload state model named relationValue
+    (presentation : BubblePresentation payload state model  relationValue
       values parameterValues)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier) : Prop :=
   ∀ index, presentation.environment index =
     wireValue (presentation.outer.get index)
 
 theorem coalescedBubblePresentation_of_target_outerAligned
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -55,19 +52,18 @@ theorem coalescedBubblePresentation_of_target_outerAligned
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier)
     (simulations : ∀ sourceFuel targetFuel,
       FixedAdvanceRegionSimulation comprehension attachments binders payload
-        state atom tail site arguments hadmissible model named relationValue
+        state atom tail site arguments hadmissible model  relationValue
         values parameterValues .backward sourceFuel targetFuel state.bubble)
     (target : BubblePresentation payload
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible)
-      model named relationValue values parameterValues)
+      model  relationValue values parameterValues)
     (targetWireValue : Fin
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val.wireCount →
@@ -77,7 +73,7 @@ theorem coalescedBubblePresentation_of_target_outerAligned
       payload state site arguments
     let source := coalescedBubblePresentation_of_target comprehension
       attachments binders payload state atom tail site arguments hadmissible
-      model named relationValue values parameterValues simulations target
+      model  relationValue values parameterValues simulations target
     source.OuterAligned (targetWireValue ∘ spliceInput.plugLayout.frameWire) := by
   dsimp only
   intro index
@@ -106,16 +102,15 @@ theorem coalescedBubblePresentation_of_target_outerAligned
       sourceExact targetExact index)
 
 theorem bubblePresentation_of_coalesced_outerAligned
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -125,7 +120,6 @@ theorem bubblePresentation_of_coalesced_outerAligned
     (respects : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).AttachmentsRespectBoundary)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -133,7 +127,7 @@ theorem bubblePresentation_of_coalesced_outerAligned
     (source : BubblePresentation payload
       (coalescedInstantiationState comprehension attachments binders payload
         state site arguments hadmissible)
-      model named relationValue values parameterValues)
+      model  relationValue values parameterValues)
     (sourceWireValue : Fin
       (coalescedInstantiationState comprehension attachments binders payload
         state site arguments hadmissible).diagram.val.wireCount → model.Carrier)
@@ -141,7 +135,7 @@ theorem bubblePresentation_of_coalesced_outerAligned
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
     let target := bubblePresentation_of_coalesced comprehension attachments
-      binders payload state site arguments hadmissible respects model named
+      binders payload state site arguments hadmissible respects model
       relationValue values parameterValues source
     target.OuterAligned (sourceWireValue ∘ spliceInput.quotientWire) := by
   dsimp only
@@ -191,59 +185,55 @@ theorem bubblePresentation_of_coalesced_outerAligned
 /-- A bubble presentation paired with the fact that its inherited environment
 is the restriction of a single valuation on the executor state. -/
 structure AlignedBubblePresentation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier) where
-  presentation : BubblePresentation payload state model named relationValue
+  presentation : BubblePresentation payload state model  relationValue
     values parameterValues
   aligned : presentation.OuterAligned wireValue
 
 /-- Backward semantic transport over the complete executor trace preserves
 alignment with the composite trace wire map. -/
 theorem alignedBubblePresentation_nonempty_of_trace
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier)
-    (simulations : RegionSimulationsEveryStep trace model named relationValue
+    (simulations : RegionSimulationsEveryStep trace model  relationValue
       values parameterValues)
     (targetWireValue : Fin result.diagram.val.wireCount → model.Carrier)
-    (target : AlignedBubblePresentation payload result model named relationValue
+    (target : AlignedBubblePresentation payload result model  relationValue
       values parameterValues targetWireValue) :
-    Nonempty (AlignedBubblePresentation payload state model named relationValue
+    Nonempty (AlignedBubblePresentation payload state model  relationValue
       values parameterValues (targetWireValue ∘ trace.wireMap)) := by
   induction trace with
   | done fuel state pending_empty =>
@@ -274,7 +264,7 @@ theorem alignedBubblePresentation_nonempty_of_trace
           (advanceInstantiationState plan.materialization.result attachments
             binders plan.operationalPayload state atom tail site arguments
             hadmissible)
-          model named relationValue values parameterValues := {
+          model  relationValue values parameterValues := {
         rels := nextAligned.presentation.rels
         outer := nextAligned.presentation.outer
         outerExact := nextAligned.presentation.outerExact
@@ -310,7 +300,7 @@ theorem alignedBubblePresentation_nonempty_of_trace
       let coalesced := coalescedBubblePresentation_of_target
         plan.materialization.result attachments binders
         plan.operationalPayload state atom tail site arguments hadmissible model
-        named relationValue values parameterValues
+         relationValue values parameterValues
         (fun sourceFuel targetFuel => simulation .backward sourceFuel targetFuel
           state.bubble (ConcreteDiagram.Encloses.refl _ _)) operationalTarget
       have coalescedAligned : coalesced.OuterAligned
@@ -318,14 +308,14 @@ theorem alignedBubblePresentation_nonempty_of_trace
         exact coalescedBubblePresentation_of_target_outerAligned
           plan.materialization.result attachments binders
           plan.operationalPayload state atom tail site arguments hadmissible model
-          named relationValue values parameterValues
+           relationValue values parameterValues
           (fun sourceFuel targetFuel => simulation .backward sourceFuel
             targetFuel state.bubble (ConcreteDiagram.Encloses.refl _ _))
           operationalTarget nextWireValue operationalAligned
       let source := bubblePresentation_of_coalesced
         plan.materialization.result attachments binders
         plan.operationalPayload state site arguments hadmissible
-        plan.attachmentsRespectBoundary model named relationValue values
+        plan.attachmentsRespectBoundary model  relationValue values
         parameterValues coalesced
       have sourceAligned : source.OuterAligned
           ((nextWireValue ∘ spliceInput.plugLayout.frameWire) ∘
@@ -333,10 +323,10 @@ theorem alignedBubblePresentation_nonempty_of_trace
         exact bubblePresentation_of_coalesced_outerAligned
           plan.materialization.result attachments binders
           plan.operationalPayload state site arguments hadmissible
-          plan.attachmentsRespectBoundary model named relationValue values
+          plan.attachmentsRespectBoundary model  relationValue values
           parameterValues coalesced
           (nextWireValue ∘ spliceInput.plugLayout.frameWire) coalescedAligned
-      let originalSource : BubblePresentation payload state model named
+      let originalSource : BubblePresentation payload state model
           relationValue values parameterValues := {
         rels := source.rels
         outer := source.outer
@@ -370,36 +360,34 @@ theorem alignedBubblePresentation_nonempty_of_trace
 /-- Canonical aligned presentation extracted from the propositional trace
 composition theorem. -/
 noncomputable def alignedBubblePresentation_of_trace
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier)
-    (simulations : RegionSimulationsEveryStep trace model named relationValue
+    (simulations : RegionSimulationsEveryStep trace model  relationValue
       values parameterValues)
     (targetWireValue : Fin result.diagram.val.wireCount → model.Carrier)
-    (target : AlignedBubblePresentation payload result model named relationValue
+    (target : AlignedBubblePresentation payload result model  relationValue
       values parameterValues targetWireValue) :
-    AlignedBubblePresentation payload state model named relationValue values
+    AlignedBubblePresentation payload state model  relationValue values
       parameterValues (targetWireValue ∘ trace.wireMap) :=
   Classical.choice (alignedBubblePresentation_nonempty_of_trace trace
-    model named relationValue values parameterValues simulations
+    model  relationValue values parameterValues simulations
     targetWireValue target)
 
 end InstantiationSemantic

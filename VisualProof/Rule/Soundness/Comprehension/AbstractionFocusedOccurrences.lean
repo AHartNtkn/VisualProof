@@ -437,16 +437,6 @@ theorem node_shape_of_surviving_not_direct
       rw [trace.regionMap_of_survives owner ownerSurvives,
         trace.regionMap_of_survives binder binderSurvives]
       simpa only [targetRegion] using (Option.some.inj result).symm
-  | named owner definition arity =>
-      have ownerSurvives : trace.domains.regions.survives owner = true := by
-        simpa [sourceShape] using trace.nodeOwner_survives node survives
-      simp only [sourceShape, notDirect, if_false,
-        trace.domains.regions.index?_index owner ownerSurvives,
-        Option.map_some] at result
-      simp only [mapNodeShape]
-      rw [trace.regionMap_of_survives owner ownerSurvives]
-      simpa only [targetRegion] using (Option.some.inj result).symm
-
 /-- A surviving child outside the wrap's direct roots preserves its complete
 region constructor under the survivor map. -/
 theorem region_shape_of_surviving_not_root
@@ -727,7 +717,7 @@ theorem bubble_not_local_child
     (wrap_anchor_survives payload) (Option.some.inj equal)
 
 theorem mem_selectedOccurrences_node_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (node : Fin input.val.nodeCount) :
     ConcreteElaboration.LocalOccurrence.node node ∈
@@ -743,7 +733,7 @@ theorem mem_selectedOccurrences_node_iff
         (selection.property.directNodes_at_anchor node direct), direct⟩
 
 theorem mem_selectedOccurrences_child_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (child : Fin input.val.regionCount) :
     ConcreteElaboration.LocalOccurrence.child child ∈
@@ -759,7 +749,7 @@ theorem mem_selectedOccurrences_child_iff
         (selection.property.childRoots_direct child direct), direct⟩
 
 theorem selectedOccurrences_nodup
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) :
     (ModalSoundness.selectedOccurrences input.val selection).Nodup := by
   unfold ModalSoundness.selectedOccurrences
@@ -1139,7 +1129,7 @@ theorem bubbleLocalOccurrences
 
 /-- Membership in the unselected wrap frame, specialized to nodes. -/
 theorem mem_keptOccurrences_node_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (node : Fin input.val.nodeCount) :
     ConcreteElaboration.LocalOccurrence.node node ∈
@@ -1159,7 +1149,7 @@ theorem mem_keptOccurrences_node_iff
 
 /-- Membership in the unselected wrap frame, specialized to child regions. -/
 theorem mem_keptOccurrences_child_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (child : Fin input.val.regionCount) :
     ConcreteElaboration.LocalOccurrence.child child ∈
@@ -1178,7 +1168,7 @@ theorem mem_keptOccurrences_child_iff
     simp [ModalSoundness.occurrenceSelected, member.2]
 
 theorem keptOccurrences_nodup
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) :
     (ModalSoundness.keptOccurrences input.val selection).Nodup := by
   unfold ModalSoundness.keptOccurrences

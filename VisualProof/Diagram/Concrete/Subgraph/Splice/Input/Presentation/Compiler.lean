@@ -397,9 +397,6 @@ def mapFrameNodeShape
   | .atom region binder =>
       .atom (presentation.regionMap region)
         (presentation.regionMap binder)
-  | .named region definition arity =>
-      .named (presentation.regionMap region) definition arity
-
 theorem frameNode_shape
     (presentation : TwoInputPresentation source target)
     (node : Fin source.frame.val.nodeCount) :
@@ -1798,11 +1795,10 @@ transported by the actual source and target compiler calls.  Nodes use shared
 port provenance; child wrappers use only their retained-frame shape and the
 authoritative recursive callback supplied by the compiler traversal. -/
 theorem focusedFrameOccurrence_itemSimulation_of_compiled
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     {rels : Theory.RelCtx}
     (presentation : TwoInputPresentation source target)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceAdmissible : source.Admissible)
     (targetAdmissible : target.Admissible)
     (siteDirection direction : ConcreteElaboration.SimulationDirection)
@@ -1839,8 +1835,8 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
         source.plugLayout.plugRaw childRels}
       {childTargetBinders : ConcreteElaboration.BinderContext
         target.plugLayout.plugRaw childRels}
-      {sourceBody : Region signature sourceContext.length childRels}
-      {targetBody : Region signature targetContext.length childRels},
+      {sourceBody : Region  sourceContext.length childRels}
+      {targetBody : Region  targetContext.length childRels},
       (source.plugLayout.plugRaw.regions child).parent? =
           some (source.plugLayout.frameRegion source.site) →
       (target.plugLayout.plugRaw.regions
@@ -1855,50 +1851,50 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
       ConcreteElaboration.BinderContext.Enumeration
         target.plugLayout.plugRaw childTargetBinders
         (presentation.regionMap child) →
-      ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+      ConcreteElaboration.compileRegion?  source.plugLayout.plugRaw
           fuelSource child sourceContext childSourceBinders = some sourceBody →
-      ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+      ConcreteElaboration.compileRegion?  target.plugLayout.plugRaw
           fuelTarget (presentation.regionMap child) targetContext
           childTargetBinders = some targetBody →
-      ConcreteElaboration.RegionSimulation model named childDirection
+      ConcreteElaboration.RegionSimulation model  childDirection
         (presentation.contextIndexRelation sourceContext targetContext)
         sourceBody targetBody)
     (occurrence : ConcreteElaboration.LocalOccurrence
       source.coalesceFrameRaw.regionCount source.coalesceFrameRaw.nodeCount)
     (member : occurrence ∈
       ConcreteElaboration.localOccurrences source.coalesceFrameRaw source.site)
-    (sourceItem : Item signature sourceContext.length rels)
-    (targetItem : Item signature targetContext.length rels)
+    (sourceItem : Item  sourceContext.length rels)
+    (targetItem : Item  targetContext.length rels)
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrenceWith? signature
+      ConcreteElaboration.compileOccurrenceWith?
         source.plugLayout.plugRaw
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           source.plugLayout.plugRaw fuelSource)
         sourceContext sourceBinders
         (source.plugLayout.mapFrameOccurrence occurrence) = some sourceItem)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrenceWith? signature
+      ConcreteElaboration.compileOccurrenceWith?
         target.plugLayout.plugRaw
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           target.plugLayout.plugRaw fuelTarget)
         targetContext targetBinders
         (target.plugLayout.mapFrameOccurrence
           (castLocalOccurrence source.frame target.frame
             presentation.frameRegionCountEq presentation.frameNodeCountEq
             occurrence)) = some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       (presentation.contextIndexRelation sourceContext targetContext)
       sourceItem targetItem := by
   cases occurrence with
   | node node =>
       have sourceNodeCompiled :
-          ConcreteElaboration.compileNode? signature
+          ConcreteElaboration.compileNode?
             source.plugLayout.plugRaw sourceContext sourceBinders
             (source.plugLayout.frameNode node) = some sourceItem := by
         simpa [ConcreteElaboration.compileOccurrenceWith?,
           PlugLayout.mapFrameOccurrence] using sourceCompiled
       have targetNodeCompiled :
-          ConcreteElaboration.compileNode? signature
+          ConcreteElaboration.compileNode?
             target.plugLayout.plugRaw targetContext targetBinders
             (target.plugLayout.frameNode
               (Fin.cast presentation.frameNodeCountEq node)) =
@@ -1910,7 +1906,7 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
       apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
         (source := source.plugLayout.plugRaw)
         (target := target.plugLayout.plugRaw)
-        model named direction sourceContext targetContext
+        model  direction sourceContext targetContext
         (presentation.contextIndexRelation sourceContext targetContext)
         sourceBinders targetBinders
         (ConcreteElaboration.identityRelationRenaming rels)
@@ -1941,24 +1937,22 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
             simpa [presentation.regionMap_frameRegion,
               ConcreteElaboration.identityRelationRenaming] using
                 ((bindersRelated frameBinder).symm.trans sourceLookup)
-        | named nodeRegion definition arity =>
-            simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
       · exact sourceNodeCompiled
       · exact targetNodeCompiled
   | child frameChild =>
       have sourceChildCompiled :
-          ConcreteElaboration.compileOccurrenceWith? signature
+          ConcreteElaboration.compileOccurrenceWith?
             source.plugLayout.plugRaw
-            (ConcreteElaboration.compileRegion? signature
+            (ConcreteElaboration.compileRegion?
               source.plugLayout.plugRaw fuelSource)
             sourceContext sourceBinders
             (.child (source.plugLayout.frameRegion frameChild)) =
               some sourceItem := by
         simpa [PlugLayout.mapFrameOccurrence] using sourceCompiled
       have targetChildCompiled :
-          ConcreteElaboration.compileOccurrenceWith? signature
+          ConcreteElaboration.compileOccurrenceWith?
             target.plugLayout.plugRaw
-            (ConcreteElaboration.compileRegion? signature
+            (ConcreteElaboration.compileRegion?
               target.plugLayout.plugRaw fuelTarget)
             targetContext targetBinders
             (.child (presentation.regionMap
@@ -2022,7 +2016,7 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
             rw [targetKind]
             rfl
           cases sourceResult :
-              ConcreteElaboration.compileRegion? signature
+              ConcreteElaboration.compileRegion?
                 source.plugLayout.plugRaw fuelSource
                 (source.plugLayout.frameRegion frameChild)
                 sourceContext sourceBinders with
@@ -2034,7 +2028,7 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
                 sourceKind, sourceResult] at sourceChildCompiled
               subst sourceItem
               cases targetResult :
-                  ConcreteElaboration.compileRegion? signature
+                  ConcreteElaboration.compileRegion?
                     target.plugLayout.plugRaw fuelTarget
                     (target.plugLayout.frameRegion
                       (Fin.cast presentation.frameRegionCountEq frameChild))
@@ -2059,10 +2053,10 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
                     (ConcreteElaboration.BinderContext.covers_cut_child
                       targetBindersCover targetKind)
                     (sourceEnumeration.cutChild
-                      (source.plugLayout.plugRaw_wellFormed signature source
+                      (source.plugLayout.plugRaw_wellFormed  source
                         sourceAdmissible) sourceKind)
                     (targetEnumeration.cutChild
-                      (target.plugLayout.plugRaw_wellFormed signature target
+                      (target.plugLayout.plugRaw_wellFormed  target
                         targetAdmissible) targetKind)
                     sourceResult (by
                       simpa [presentation.regionMap_frameRegion] using
@@ -2128,7 +2122,7 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
               (target.plugLayout.frameRegion
                 (Fin.cast presentation.frameRegionCountEq frameChild)) arity
           cases sourceResult :
-              ConcreteElaboration.compileRegion? signature
+              ConcreteElaboration.compileRegion?
                 source.plugLayout.plugRaw fuelSource
                 (source.plugLayout.frameRegion frameChild)
                 sourceContext sourcePushed with
@@ -2140,7 +2134,7 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
                 sourceKind, sourcePushed, sourceResult] at sourceChildCompiled
               subst sourceItem
               cases targetResult :
-                  ConcreteElaboration.compileRegion? signature
+                  ConcreteElaboration.compileRegion?
                     target.plugLayout.plugRaw fuelTarget
                     (target.plugLayout.frameRegion
                       (Fin.cast presentation.frameRegionCountEq frameChild))
@@ -2182,10 +2176,10 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
                     (ConcreteElaboration.BinderContext.push_covers_bubble_child
                       targetBindersCover targetKind)
                     (sourceEnumeration.bubbleChild
-                      (source.plugLayout.plugRaw_wellFormed signature source
+                      (source.plugLayout.plugRaw_wellFormed  source
                         sourceAdmissible) sourceKind)
                     (targetEnumeration.bubbleChild
-                      (target.plugLayout.plugRaw_wellFormed signature target
+                      (target.plugLayout.plugRaw_wellFormed  target
                         targetAdmissible) targetKind)
                     sourceResult (by
                       simpa [presentation.regionMap_frameRegion, targetPushed]

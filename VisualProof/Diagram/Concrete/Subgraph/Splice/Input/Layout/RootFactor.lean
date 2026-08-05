@@ -28,7 +28,7 @@ theorem closedSourceToOpenRootReindex_eq_of_extend_eq
   exact (extendWireEquiv ambient localEquiv).left_inv factored
 
 theorem rootHostClosedWire_eq_hostSeamWireMapOfNonempty
-    {signature : List Nat} (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -55,7 +55,7 @@ theorem rootHostClosedWire_eq_hostSeamWireMapOfNonempty
   rfl
 
 noncomputable def rootHostOpenEmbedding
-    {signature : List Nat} (input : Input signature)
+    (input : Input )
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -84,7 +84,7 @@ noncomputable def rootHostOpenEmbedding
         (exactContextToOpenRootWireEquiv checked context exact index))
 
 theorem rootHostWire_factor_before_reindex_nonempty
-    {signature : List Nat} (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -258,7 +258,7 @@ theorem rootHostWire_factor_before_reindex_nonempty
   exact congrArg (fun i => i.val) hindices
 
 theorem closedSourceToOpenRootReindex_host_factor_nonempty
-    {signature : List Nat} (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -305,7 +305,7 @@ theorem closedSourceToOpenRootReindex_host_factor_nonempty
     sourceBoundary sourceRoot hsite hnonempty index
 
 theorem rootHostWire_factor_before_reindex_empty
-    {signature : List Nat} (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -473,7 +473,7 @@ theorem rootHostWire_factor_before_reindex_empty
   exact congrArg (fun i => i.val) hindices
 
 theorem closedSourceToOpenRootReindex_host_factor_empty
-    {signature : List Nat} (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →

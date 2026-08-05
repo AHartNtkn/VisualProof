@@ -12,17 +12,15 @@ namespace AbstractionRawTrace
 block entails its corresponding fresh atom, simultaneously and in executor
 order. -/
 theorem occurrenceFamily_forward
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     {sourceRels targetRels : RelCtx}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (hostFuel : Nat)
     (region : Fin input.val.regionCount)
     (indices : List (Fin occurrences.length))
@@ -38,35 +36,35 @@ theorem occurrenceFamily_forward
       input.val sourceBinders region)
     (sourceExact : sourceContext.Exact region)
     (sourceItems : Fin occurrences.length →
-      ItemSeq signature sourceContext.length sourceRels)
+      ItemSeq  sourceContext.length sourceRels)
     (targetItems : Fin occurrences.length →
-      Item signature targetContext.length targetRels)
+      Item  targetContext.length targetRels)
     (sourceCompiled : ∀ index, index ∈ indices →
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-        (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+        (ConcreteElaboration.compileRegion?  input.val hostFuel)
         sourceContext sourceBinders
         (ModalSoundness.selectedOccurrences input.val
           (occurrences.get index).selection) = some (sourceItems index))
     (targetCompiled : ∀ index, index ∈ indices →
-      ConcreteElaboration.compileNode? signature trace.diagram targetContext
+      ConcreteElaboration.compileNode?  trace.diagram targetContext
         targetBinders (trace.targetAtom index) = some (targetItems index))
     (sourceEnvironment : Fin sourceContext.length → model.Carrier)
     (targetEnvironment : Fin targetContext.length → model.Carrier)
     (sourceRelations : RelEnv model.Carrier sourceRels)
     (targetRelations : RelEnv model.Carrier targetRels)
-    (fixed : @FixedRelationWitness targetRels signature input wrap
-      comprehension occurrences raw trace model named targetBinders
+    (fixed : @FixedRelationWitness targetRels  input wrap
+      comprehension occurrences raw trace model  targetBinders
         targetRelations)
     (environments : context.indexRelation.EnvironmentsAgree sourceEnvironment
       targetEnvironment)
-    (sourceDenotes : denoteItemSeq model named sourceEnvironment sourceRelations
+    (sourceDenotes : denoteItemSeq model  sourceEnvironment sourceRelations
       (occurrenceFamilyItems sourceItems indices)) :
-    denoteItemSeq model named targetEnvironment targetRelations
+    denoteItemSeq model  targetEnvironment targetRelations
       (occurrenceFamilyAtomItems targetItems indices) := by
-  apply (occurrenceFamilyAtomItems_denote_iff indices targetItems model named
+  apply (occurrenceFamilyAtomItems_denote_iff indices targetItems model
     targetEnvironment targetRelations).2
   have sourceBlocks := (occurrenceFamilyItems_denote_iff indices sourceItems
-    model named sourceEnvironment sourceRelations).1 sourceDenotes
+    model  sourceEnvironment sourceRelations).1 sourceDenotes
   intro index member
   have anchor := anchored index member
   have exactAt : sourceContext.Exact
@@ -82,13 +80,13 @@ theorem occurrenceFamily_forward
     rw [anchor]
     exact sourceEnumeration
   have relationDenotes := selectedOccurrence_denote_relation input
-    (occurrences.get index) (payload.witnesses index) model named hostFuel
+    (occurrences.get index) (payload.witnesses index) model  hostFuel
     sourceContext sourceBinders enumerationAt coverAt exactAt
     (sourceItems index) (sourceCompiled index member) sourceEnvironment
     sourceRelations (by
-      exact (IterationSoundness.denoteRegion_mk_zero_iff model named sourceEnvironment
+      exact (IterationSoundness.denoteRegion_mk_zero_iff model  sourceEnvironment
         sourceRelations (sourceItems index)).2 (sourceBlocks index member))
-  exact (trace.compiledTargetAtom_denote_iff_fixed payload index model named
+  exact (trace.compiledTargetAtom_denote_iff_fixed payload index model
     sourceContext targetContext context exactAt sourceEnvironment
     targetEnvironment environments targetBinders targetRelations fixed
     (targetItems index) (targetCompiled index member)).2 relationDenotes
@@ -97,17 +95,15 @@ theorem occurrenceFamily_forward
 valuations simultaneously.  The resulting source valuation still agrees with
 the target on every surviving wire and makes every selected block true. -/
 theorem occurrenceFamily_backward
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     {sourceRels targetRels : RelCtx}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (hostFuel : Nat)
     (region : Fin input.val.regionCount)
     (indices : List (Fin occurrences.length))
@@ -123,33 +119,33 @@ theorem occurrenceFamily_backward
       input.val sourceBinders region)
     (sourceExact : sourceContext.Exact region)
     (sourceItems : Fin occurrences.length →
-      ItemSeq signature sourceContext.length sourceRels)
+      ItemSeq  sourceContext.length sourceRels)
     (targetItems : Fin occurrences.length →
-      Item signature targetContext.length targetRels)
+      Item  targetContext.length targetRels)
     (sourceCompiled : ∀ index, index ∈ indices →
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-        (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+        (ConcreteElaboration.compileRegion?  input.val hostFuel)
         sourceContext sourceBinders
         (ModalSoundness.selectedOccurrences input.val
           (occurrences.get index).selection) = some (sourceItems index))
     (targetCompiled : ∀ index, index ∈ indices →
-      ConcreteElaboration.compileNode? signature trace.diagram targetContext
+      ConcreteElaboration.compileNode?  trace.diagram targetContext
         targetBinders (trace.targetAtom index) = some (targetItems index))
     (fallback : Fin sourceContext.length → model.Carrier)
     (targetEnvironment : Fin targetContext.length → model.Carrier)
     (sourceRelations : RelEnv model.Carrier sourceRels)
     (targetRelations : RelEnv model.Carrier targetRels)
-    (fixed : @FixedRelationWitness targetRels signature input wrap
-      comprehension occurrences raw trace model named targetBinders
+    (fixed : @FixedRelationWitness targetRels  input wrap
+      comprehension occurrences raw trace model  targetBinders
         targetRelations)
     (environments : context.indexRelation.EnvironmentsAgree fallback
       targetEnvironment)
-    (targetDenotes : denoteItemSeq model named targetEnvironment targetRelations
+    (targetDenotes : denoteItemSeq model  targetEnvironment targetRelations
       (occurrenceFamilyAtomItems targetItems indices)) :
     ∃ sourceEnvironment : Fin sourceContext.length → model.Carrier,
       context.indexRelation.EnvironmentsAgree sourceEnvironment
           targetEnvironment ∧
-        denoteItemSeq model named sourceEnvironment sourceRelations
+        denoteItemSeq model  sourceEnvironment sourceRelations
           (occurrenceFamilyItems sourceItems indices) ∧
         (∀ hostIndex, (∀ index, index ∈ indices →
             sourceContext.get hostIndex ∉
@@ -157,13 +153,13 @@ theorem occurrenceFamily_backward
           sourceEnvironment hostIndex = fallback hostIndex) := by
   classical
   have targetAtoms := (occurrenceFamilyAtomItems_denote_iff indices targetItems
-    model named targetEnvironment targetRelations).1 targetDenotes
+    model  targetEnvironment targetRelations).1 targetDenotes
   have realized : ∀ index, index ∈ indices →
       ∃ environment : Fin sourceContext.length → model.Carrier,
         (∀ hostIndex, sourceContext.get hostIndex ∉
             (occurrences.get index).selection.internalWires →
           environment hostIndex = fallback hostIndex) ∧
-        denoteItemSeq model named environment sourceRelations
+        denoteItemSeq model  environment sourceRelations
           (sourceItems index) := by
     intro index member
     have anchor := anchored index member
@@ -181,12 +177,12 @@ theorem occurrenceFamily_backward
       rw [anchor]
       exact sourceEnumeration
     have relationDenotes :=
-      (trace.compiledTargetAtom_denote_iff_fixed payload index model named
+      (trace.compiledTargetAtom_denote_iff_fixed payload index model
         sourceContext targetContext context exactAt fallback targetEnvironment
         environments targetBinders targetRelations fixed (targetItems index)
         (targetCompiled index member)).1 (targetAtoms index member)
     exact relation_selectedOccurrence_environment input comprehension
-      (occurrences.get index) (payload.witnesses index) model named hostFuel
+      (occurrences.get index) (payload.witnesses index) model  hostFuel
       sourceContext sourceBinders enumerationAt coverAt exactAt
       (sourceItems index) (sourceCompiled index member) fallback sourceRelations
       relationDenotes
@@ -211,16 +207,16 @@ theorem occurrenceFamily_backward
     exact trace.occurrenceFamilyEnvironment_agrees payload indices sourceContext
       targetContext context values fallback targetEnvironment environments
   refine ⟨sourceEnvironment, agreement, ?_, ?_⟩
-  · apply (occurrenceFamilyItems_denote_iff indices sourceItems model named
+  · apply (occurrenceFamilyItems_denote_iff indices sourceItems model
       sourceEnvironment sourceRelations).2
     intro index member
-    have valueDenotes : denoteItemSeq model named (values index) sourceRelations
+    have valueDenotes : denoteItemSeq model  (values index) sourceRelations
         (sourceItems index) := by
       dsimp only [values]
       rw [dif_pos member]
       exact (Classical.choose_spec (realized index member)).2
     apply (selectedOccurrence_denote_congr input (occurrences.get index)
-      (payload.witnesses index) model named hostFuel sourceContext sourceBinders
+      (payload.witnesses index) model  hostFuel sourceContext sourceBinders
       (by
         rw [anchored index member]
         exact sourceEnumeration)

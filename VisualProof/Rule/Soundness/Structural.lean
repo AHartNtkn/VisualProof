@@ -70,7 +70,7 @@ final checked-result and ordered-boundary casts.
 -/
 
 private def realizedOperationalOpen
-    {signature : List Nat} {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {receipt : StepReceipt input} {raw : ConcreteDiagram}
     {provenance : WireProvenance input.val raw}
     {interface : InterfaceTransport input.val raw}
@@ -80,12 +80,12 @@ private def realizedOperationalOpen
       (input.val.wires wire).scope = input.val.root)
     {mapped : List (Fin receipt.result.val.wireCount)}
     (htransport : receipt.interface.transportBoundary boundary = some mapped) :
-    CheckedOpenDiagram signature :=
+    CheckedOpenDiagram  :=
   ⟨realizes.rawResultOpen mapped,
     realizes.rawResultOpen_wellFormed sourceRoot htransport⟩
 
 private def realizedOperationalIso
-    {signature : List Nat} {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {receipt : StepReceipt input} {raw : ConcreteDiagram}
     {provenance : WireProvenance input.val raw}
     {interface : InterfaceTransport input.val raw}
@@ -701,8 +701,8 @@ private theorem severWireRaw_compileNode?_collapse
     (originalNodup : original.Nodup)
     (inputDisjoint : input.WireEndpointsAreDisjoint)
     (node : Fin input.nodeCount) :
-    ConcreteElaboration.compileNode? signature input original binders node =
-      (ConcreteElaboration.compileNode? signature
+    ConcreteElaboration.compileNode?  input original binders node =
+      (ConcreteElaboration.compileNode?
         (severWireRaw input wire keep) expanded binders node).map
           (Item.renameWires collapse.indexMap) := by
   have hports : ∀ port,
@@ -741,21 +741,6 @@ private theorem severWireRaw_compileNode?_collapse
                   (fun index => .arg index) <;>
                 simp [Item.renameWires,
                   Function.comp_def]
-  | named region definition arity =>
-      simp only [ConcreteElaboration.compileNode?, hnode,
-        severWireRaw_nodes]
-      have harguments := ConcreteElaboration.resolvePorts?_map
-        expanded original node node collapse.indexMap arity
-        (fun index => .arg index) hports
-      rw [harguments]
-      cases hrelation :
-          ConcreteElaboration.namedRel? signature definition arity <;>
-        simp
-      cases hexpanded : ConcreteElaboration.resolvePorts?
-          (severWireRaw input wire keep) expanded node arity
-          (fun index => .arg index) <;>
-        simp [Item.renameWires, Function.comp_def]
-
 @[simp] private theorem severWireRaw_localOccurrences
     (input : ConcreteDiagram) (wire : Fin input.wireCount)
     (keep : List (CEndpoint input.nodeCount))
@@ -811,12 +796,12 @@ private theorem severWireRawOpen_exposedWires
   exact eraseDups_map_injective_soundness Fin.castSucc hinjective _
 
 private theorem severWireRawOpen_wellFormed
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (CEndpoint source.val.diagram.nodeCount))
     (htarget : (severWireRaw source.val.diagram wire keep).WellFormed
-      signature) :
-    (severWireRawOpen source.val wire keep).WellFormed signature where
+      ) :
+    (severWireRawOpen source.val wire keep).WellFormed  where
   diagram_well_formed := htarget
   boundary_is_root_scoped := by
     intro targetWire hmember
@@ -939,11 +924,11 @@ context with the fresh split identity collapsed back to its source identity.
 This is deliberately non-injective: endpoint partitioning changes identity
 multiplicity, not the incidence represented by either compiled occurrence. -/
 private noncomputable def severWireRawOpen_rootCollapse
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (CEndpoint source.val.diagram.nodeCount))
     (htarget : (severWireRaw source.val.diagram wire keep).WellFormed
-      signature) :
+      ) :
     SeverContextCollapse source.val.diagram wire keep
       (severWireRawOpen source.val wire keep).rootWires
       source.val.rootWires :=
@@ -969,7 +954,7 @@ private noncomputable def severWireRawOpen_rootCollapse
       rwa [severWireRaw_scope_collapse, severWireRaw_root] at hscope)
 
 private theorem severWireRawOpen_rootCollapse_source_nodup
-    (source : CheckedOpenDiagram signature) :
+    (source : CheckedOpenDiagram ) :
     source.val.rootWires.Nodup :=
   source.val.rootWires_nodup
 
@@ -1040,11 +1025,11 @@ private theorem severHiddenIndex_get
       congrArg (severWireCollapse source.diagram wire keep) hget.symm
 
 private theorem severRootCollapse_index_exposed
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (CEndpoint source.val.diagram.nodeCount))
     (targetWellFormed : (severWireRaw source.val.diagram wire keep).WellFormed
-      signature)
+      )
     (index : Fin (severWireRawOpen source.val wire keep).exposedWires.length) :
     let collapse := severWireRawOpen_rootCollapse source wire keep targetWellFormed
     collapse.indexMap
@@ -1085,11 +1070,11 @@ private theorem severRootCollapse_index_exposed
           simp [sourceIndex, OpenConcreteDiagram.rootWires])
 
 private theorem severRootCollapse_index_hidden_of_ne
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (CEndpoint source.val.diagram.nodeCount))
     (targetWellFormed : (severWireRaw source.val.diagram wire keep).WellFormed
-      signature)
+      )
     (hne : source.val.diagram.root ≠
       (source.val.diagram.wires wire).scope)
     (index : Fin (severWireRawOpen source.val wire keep).hiddenWires.length) :
@@ -1132,11 +1117,11 @@ private theorem severRootCollapse_index_hidden_of_ne
           simp [sourceIndex, OpenConcreteDiagram.rootWires])
 
 private noncomputable def severTargetHiddenEnv
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (CEndpoint source.val.diagram.nodeCount))
     (targetWellFormed : (severWireRaw source.val.diagram wire keep).WellFormed
-      signature)
+      )
     (sourceOuter : Fin source.val.exposedWires.length → D)
     (sourceHidden : Fin source.val.hiddenWires.length → D) :
     Fin (severWireRawOpen source.val wire keep).hiddenWires.length → D :=
@@ -1169,11 +1154,11 @@ private theorem rootEnvironment_hidden_soundness
   simp [ConcreteElaboration.rootEnvironment, extendWireEnv]
 
 private theorem severRootEnvironment_collapse
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (CEndpoint source.val.diagram.nodeCount))
     (targetWellFormed : (severWireRaw source.val.diagram wire keep).WellFormed
-      signature)
+      )
     (sourceOuter : Fin source.val.exposedWires.length → D)
     (targetOuter :
       Fin (severWireRawOpen source.val wire keep).exposedWires.length → D)
@@ -1232,11 +1217,11 @@ private noncomputable def severSourceHiddenEnv
       (List.length_map (as := source.hiddenWires) Fin.castSucc)).symm)
 
 private theorem severRootEnvironment_uncollapse_of_ne
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (CEndpoint source.val.diagram.nodeCount))
     (targetWellFormed : (severWireRaw source.val.diagram wire keep).WellFormed
-      signature)
+      )
     (hne : source.val.diagram.root ≠
       (source.val.diagram.wires wire).scope)
     (sourceOuter : Fin source.val.exposedWires.length → D)
@@ -1368,7 +1353,7 @@ private theorem severAllowed_bubble
   exact allowed parentRoute parentDepth
 
 private theorem severAllowed_root
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (site : Fin source.val.diagram.regionCount)
     (orientation : Orientation)
     (polarity : erasurePolarity orientation
@@ -1401,15 +1386,15 @@ private theorem severAllowed_backward_ne_site
   simp [severDepthAllowed] at impossible
 
 private noncomputable def severWireSimulation
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (CEndpoint source.val.diagram.nodeCount))
     (targetWellFormed : (severWireRaw source.val.diagram wire keep).WellFormed
-      signature)
+      )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
-    ConcreteElaboration.ConcreteSemanticSimulation signature
-      source.val.diagram (severWireRaw source.val.diagram wire keep) model named where
+    :
+    ConcreteElaboration.ConcreteSemanticSimulation
+      source.val.diagram (severWireRaw source.val.diagram wire keep) model  where
   source_wellFormed := source.property.diagram_well_formed
   target_wellFormed := targetWellFormed
   regionMap := id
@@ -1496,7 +1481,7 @@ private noncomputable def severWireSimulation
       (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
       (ConcreteElaboration.ContextIndexRelation.backwardMap
         (collapse.extend region).indexMap)
-      model named
+      model
       (sourceItems.renameRelations
         (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
       targetItems ?_ itemSemantics
@@ -1531,7 +1516,7 @@ private noncomputable def severWireSimulation
     rcases binderWitness with ⟨relationContextsEq, bindersEq⟩
     subst targetRels
     cases bindersEq
-    change ConcreteElaboration.ItemSimulation model named direction
+    change ConcreteElaboration.ItemSimulation model  direction
       (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
       (sourceItem.renameRelations
         ((fun relation => relation) : RelationRenaming sourceRels sourceRels))
@@ -1540,7 +1525,7 @@ private noncomputable def severWireSimulation
     have nodeEq : sourceNode = targetNode := by
       exact ConcreteElaboration.LocalOccurrence.node.inj nodeMapped
     subst targetNode
-    have mapped := severWireRaw_compileNode?_collapse (signature := signature)
+    have mapped := severWireRaw_compileNode?_collapse
       source.val.diagram wire keep expanded original collapse sourceBinders sourceNodup
       source.property.diagram_well_formed.wire_endpoints_are_disjoint sourceNode
     rw [sourceCompiled, targetCompiled] at mapped
@@ -1550,7 +1535,7 @@ private noncomputable def severWireSimulation
     intro sourceEnv targetEnv relEnv environments
     rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap]
       at environments
-    have renamed := denoteItem_renameWires model named collapse.indexMap
+    have renamed := denoteItem_renameWires model  collapse.indexMap
       sourceEnv relEnv targetItem
     rw [environments] at renamed
     cases direction with
@@ -1562,26 +1547,25 @@ private noncomputable def severWireSimulation
     exact False.elim distinguished
 
 private noncomputable def severWireRootContext
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (CEndpoint source.val.diagram.nodeCount))
     (targetWellFormed : (severWireRaw source.val.diagram wire keep).WellFormed
-      signature)
+      )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (orientation : Orientation)
     (polarity : erasurePolarity orientation
       (concreteCutDepth source.val.diagram
         (source.val.diagram.wires wire).scope)) :
     let simulation := severWireSimulation source wire keep targetWellFormed
-      model named
+      model
     ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation simulation
       (severDirection orientation)
       source.val.exposedWires source.val.hiddenWires
       (severWireRawOpen source.val wire keep).exposedWires
       (severWireRawOpen source.val wire keep).hiddenWires := by
   let simulation := severWireSimulation source wire keep targetWellFormed
-    model named
+    model
   let collapse := severWireRawOpen_rootCollapse source wire keep targetWellFormed
   refine {
     outer := ConcreteElaboration.ContextIndexRelation.backwardMap
@@ -1608,7 +1592,7 @@ private noncomputable def severWireRootContext
       (ConcreteElaboration.ContextIndexRelation.backwardMap
         (severExposedIndex source.val wire keep))
       (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
-      model named
+      model
       (sourceItems.renameRelations
         (simulation.relationMap simulation.binders_empty))
       targetItems ?_ itemSemantics
@@ -1704,23 +1688,22 @@ private theorem severSourceBoundaryClass
   exact severSourceExposedIndex_exposedIndex source wire keep _
 
 private theorem severBoundaryWitness
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (CEndpoint source.val.diagram.nodeCount))
     (targetWellFormed : (severWireRaw source.val.diagram wire keep).WellFormed
-      signature)
+      )
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceArgs : Fin source.val.boundary.length → model.Carrier) :
     ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       direction source.elaborate
       (CheckedOpenDiagram.elaborate (⟨severWireRawOpen source.val wire keep,
         severWireRawOpen_wellFormed source wire keep targetWellFormed⟩ :
-          CheckedOpenDiagram signature))
+          CheckedOpenDiagram ))
       (ConcreteElaboration.ContextIndexRelation.backwardMap
         (severExposedIndex source.val wire keep))
-      model named sourceArgs
+      model  sourceArgs
       (sourceArgs ∘ Fin.cast (severBoundaryLengthEq source.val wire keep)) := by
   cases direction with
   | forward =>
@@ -1728,7 +1711,7 @@ private theorem severBoundaryWitness
       let targetAssignment : BoundaryAssignment
           (CheckedOpenDiagram.elaborate (⟨severWireRawOpen source.val wire keep,
             severWireRawOpen_wellFormed source wire keep targetWellFormed⟩ :
-              CheckedOpenDiagram signature)) model.Carrier := {
+              CheckedOpenDiagram )) model.Carrier := {
         args := sourceArgs ∘ Fin.cast
           (severBoundaryLengthEq source.val wire keep)
         classes := sourceAssignment.classes ∘
@@ -1785,16 +1768,16 @@ private theorem severBoundaryWitness
       rw [severSourceExposedIndex_exposedIndex]
 
 private def severOperationalOpen
-    (source : OpenProofState signature)
+    (source : OpenProofState )
     (wire : Fin source.diagram.val.wireCount)
     (keep : List (CEndpoint source.diagram.val.nodeCount))
     (targetWellFormed : (severWireRaw source.diagram.val wire keep).WellFormed
-      signature) : CheckedOpenDiagram signature :=
+      ) : CheckedOpenDiagram  :=
   ⟨severWireRawOpen source.asCheckedOpen.val wire keep,
     severWireRawOpen_wellFormed source.asCheckedOpen wire keep targetWellFormed⟩
 
 private def severOperationalIso
-    {input : CheckedDiagram signature} {receipt : StepReceipt input}
+    {input : CheckedDiagram } {receipt : StepReceipt input}
     {wire : Fin input.val.wireCount}
     {keep : List (CEndpoint input.val.nodeCount)}
     (realizes : receipt.Realizes (severWireRaw input.val wire keep)
@@ -1822,8 +1805,8 @@ private def severOperationalIso
 its checked orientation and the cut polarity of the split wire's binding
 scope, at every ordered open boundary. -/
 theorem applyWireSever_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (wire : Fin input.val.wireCount)
     (keep : List (CEndpoint input.val.nodeCount))
     (receipt : StepReceipt input)
@@ -1834,7 +1817,7 @@ theorem applyWireSever_sound
   have success := applyWireSever_success orientation input wire keep receipt
     happly
   have targetWellFormed : (severWireRaw input.val wire keep).WellFormed
-      signature := realizes.result_eq ▸ receipt.result.property
+       := realizes.result_eq ▸ receipt.result.property
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := fun boundary sourceRoot mapped htransport =>
       severOperationalOpen {
@@ -1845,26 +1828,25 @@ theorem applyWireSever_sound
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       severOperationalIso realizes boundary sourceRoot mapped htransport)
   intro model boundary sourceRoot mapped htransport valid args
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
   }
   let target := severOperationalOpen source wire keep targetWellFormed
-  let named := Theory.interpretDefinitions model context.definitions
   let simulation := severWireSimulation source.asCheckedOpen wire keep
-    targetWellFormed model named
+    targetWellFormed model
   let rootContext := severWireRootContext source.asCheckedOpen wire keep
-    targetWellFormed model named orientation success.1
+    targetWellFormed model  orientation success.1
   have allowed : simulation.Allowed (severDirection orientation)
       source.asCheckedOpen.val.diagram.root := by
     exact severAllowed_root source.asCheckedOpen
       (source.asCheckedOpen.val.diagram.wires wire).scope orientation success.1
   have boundaryWitness := severBoundaryWitness source.asCheckedOpen wire keep
-    targetWellFormed (severDirection orientation) model named args
+    targetWellFormed (severDirection orientation) model  args
   have semantic :=
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      source.asCheckedOpen target model named simulation
+      source.asCheckedOpen target model  simulation
       (severDirection orientation) rootContext allowed args
       (args ∘ Fin.cast
         (severBoundaryLengthEq source.asCheckedOpen.val wire keep))
@@ -2117,8 +2099,8 @@ private theorem joinWireRaw_scope
 
 /-- Every successful wire-join receipt preserves ordered-open semantics. -/
 theorem applyWireJoin_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (first second : Fin input.val.wireCount)
     (receipt : StepReceipt input)
     (happly : applyWireJoin orientation input first second = .ok receipt) :
@@ -2128,21 +2110,21 @@ theorem applyWireJoin_sound
     first second receipt happly
 
 private def iterationOperationalOpen
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root) :
-    CheckedOpenDiagram signature :=
+    CheckedOpenDiagram  :=
   Splice.Input.PlugLayout.checkedOutputOpenRoot
     (iterationInput input selection target)
     (iterationInput input selection target).plugLayout hadmissible boundary
     sourceRoot
 
 private def iterationOperationalIso
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {receipt : StepReceipt input}
@@ -2176,8 +2158,8 @@ private def iterationOperationalIso
 
 /-- Receipt bridge for the proper nested, nonempty iteration case. -/
 private theorem applyIteration_sound_proper_nonempty
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (receipt : StepReceipt input)
@@ -2207,15 +2189,14 @@ private theorem applyIteration_sound_proper_nonempty
   obtain ⟨alignment⟩ :=
     IterationSoundness.properIterationOpenTargetAlignment_complete certificate
   have semantic := IterationSoundness.properIterationOpen_output_equiv
-    hsplice sourceRoot hnonempty certificate alignment model
-    (Theory.interpretDefinitions model context.definitions) args
+    hsplice sourceRoot hnonempty certificate alignment model args
   simpa only [DirectedEntailment, StepTag.semanticMode,
     iterationOperationalOpen] using semantic
 
 /-- Receipt bridge for the proper nested, empty-spine iteration case. -/
 private theorem applyIteration_sound_proper_zero
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (receipt : StepReceipt input)
@@ -2246,15 +2227,14 @@ private theorem applyIteration_sound_proper_zero
     IterationSoundness.properIterationRootOpenTargetAlignment_complete
       certificate
   have semantic := IterationSoundness.properIterationRootOpen_output_equiv
-    hsplice sourceRoot hzero certificate alignment model
-    (Theory.interpretDefinitions model context.definitions) args
+    hsplice sourceRoot hzero certificate alignment model args
   simpa only [DirectedEntailment, StepTag.semanticMode,
     iterationOperationalOpen] using semantic
 
 /-- Receipt bridge for a proper root-anchor, nonempty-spine iteration. -/
 private theorem applyIteration_sound_root_nonempty
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (receipt : StepReceipt input)
@@ -2289,15 +2269,14 @@ private theorem applyIteration_sound_root_nonempty
       certificate
   have semantic :=
     IterationSoundness.properIterationOrderedRoot_output_equiv_nonempty
-      hsplice sourceRoot hnonempty certificate alignment model
-      (Theory.interpretDefinitions model context.definitions) args
+      hsplice sourceRoot hnonempty certificate alignment model args
   simpa only [DirectedEntailment, StepTag.semanticMode,
     iterationOperationalOpen] using semantic
 
 /-- Receipt bridge for a proper root-anchor, empty-spine iteration. -/
 private theorem applyIteration_sound_root_zero
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (receipt : StepReceipt input)
@@ -2330,15 +2309,14 @@ private theorem applyIteration_sound_root_zero
       certificate
   have semantic :=
     IterationSoundness.properIterationOrderedRoot_output_equiv_zero
-      hsplice sourceRoot hzero certificate alignment model
-      (Theory.interpretDefinitions model context.definitions) args
+      hsplice sourceRoot hzero certificate alignment model args
   simpa only [DirectedEntailment, StepTag.semanticMode,
     iterationOperationalOpen] using semantic
 
 /-- Receipt bridge for every executor-accepted same-site iteration. -/
 private theorem applyIteration_sound_same
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (receipt : StepReceipt input)
@@ -2363,8 +2341,7 @@ private theorem applyIteration_sound_same
         (iterationInput input selection target).binderSpine.proxyCount ≠ 0
     · have semantic :=
         IterationSoundness.sameSite_root_output_equiv_nonempty hsplice
-          sourceRoot targetEq success.2.1 hroot hnonempty model
-          (Theory.interpretDefinitions model context.definitions) args
+          sourceRoot targetEq success.2.1 hroot hnonempty model args
       simpa only [DirectedEntailment, StepTag.semanticMode,
         iterationOperationalOpen] using semantic
     · have hzero :
@@ -2373,16 +2350,14 @@ private theorem applyIteration_sound_same
           hnonempty (Nat.ne_of_gt positive))
       have semantic := IterationSoundness.sameSite_root_output_equiv_zero
         hsplice sourceRoot targetEq success.2.1 hroot hzero
-        model
-        (Theory.interpretDefinitions model context.definitions) args
+        model args
       simpa only [DirectedEntailment, StepTag.semanticMode,
         iterationOperationalOpen] using semantic
   · by_cases hnonempty :
         (iterationInput input selection target).binderSpine.proxyCount ≠ 0
     · have semantic :=
         IterationSoundness.sameSite_nested_output_equiv_nonempty hsplice
-          sourceRoot targetEq success.2.1 hroot hnonempty model
-          (Theory.interpretDefinitions model context.definitions) args
+          sourceRoot targetEq success.2.1 hroot hnonempty model args
       simpa only [DirectedEntailment, StepTag.semanticMode,
         iterationOperationalOpen] using semantic
     · have hzero :
@@ -2391,15 +2366,14 @@ private theorem applyIteration_sound_same
           hnonempty (Nat.ne_of_gt positive))
       have semantic := IterationSoundness.sameSite_nested_output_equiv_zero
         hsplice sourceRoot targetEq success.2.1 hroot hzero
-        model
-        (Theory.interpretDefinitions model context.definitions) args
+        model args
       simpa only [DirectedEntailment, StepTag.semanticMode,
         iterationOperationalOpen] using semantic
 
 /-- Every successful iteration receipt preserves ordered-open semantics. -/
 theorem applyIteration_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (receipt : StepReceipt input)
@@ -2440,8 +2414,8 @@ theorem applyIteration_sound
 deiteration hole, and the public iteration theorem supplies its complete
 ordered-open semantic equivalence for every anchor and binder-spine case. -/
 private theorem deiterationReinsert_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     SuccessfulReceiptSound context orientation
@@ -2461,8 +2435,8 @@ private theorem deiterationReinsert_sound
 
 /-- Every successful deiteration receipt preserves ordered-open semantics. -/
 theorem applyDeiteration_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (receipt : StepReceipt input)
@@ -2475,8 +2449,8 @@ theorem applyDeiteration_sound
 
 /-- Every successful double-cut introduction receipt is equivalent. -/
 theorem applyDoubleCutIntro_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (receipt : StepReceipt input)
     (happly : applyDoubleCutIntro input selection = .ok receipt) :
@@ -2484,7 +2458,7 @@ theorem applyDoubleCutIntro_sound
       (.doubleCutIntro selection) receipt := by
   have realizes := applyDoubleCutIntro_realizes happly
   have targetWellFormed :
-      (doubleCutIntroRaw input.val selection).WellFormed signature :=
+      (doubleCutIntroRaw input.val selection).WellFormed  :=
     realizes.result_eq ▸ receipt.result.property
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := fun boundary sourceRoot mapped htransport =>
@@ -2505,34 +2479,33 @@ theorem applyDoubleCutIntro_sound
         (ModalSoundness.doubleCutIntroInterfaceTransport_transportBoundary
           input.val selection boundary sourceRoot))
   intro model boundary sourceRoot mapped htransport valid args
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
   }
-  let target : CheckedOpenDiagram signature :=
+  let target : CheckedOpenDiagram  :=
     ⟨ModalSoundness.doubleCutIntroRawOpen source.asCheckedOpen.val selection,
       ModalSoundness.doubleCutIntroRawOpen_wellFormed source.asCheckedOpen
         selection targetWellFormed⟩
-  let named := Theory.interpretDefinitions model context.definitions
   let simulation := ModalSoundness.doubleCutIntroSimulation input selection
-    targetWellFormed model named
+    targetWellFormed model
   have forward :=
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      source.asCheckedOpen target model named simulation .forward
+      source.asCheckedOpen target model  simulation .forward
       (ModalSoundness.doubleCutIntroRootContext source.asCheckedOpen selection
-        targetWellFormed model named .forward)
+        targetWellFormed model  .forward)
       True.intro args args
       (ModalSoundness.doubleCutIntroBoundaryWitness source.asCheckedOpen
-        selection targetWellFormed .forward model named args)
+        selection targetWellFormed .forward model  args)
   have backward :=
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      source.asCheckedOpen target model named simulation .backward
+      source.asCheckedOpen target model  simulation .backward
       (ModalSoundness.doubleCutIntroRootContext source.asCheckedOpen selection
-        targetWellFormed model named .backward)
+        targetWellFormed model  .backward)
       True.intro args args
       (ModalSoundness.doubleCutIntroBoundaryWitness source.asCheckedOpen
-        selection targetWellFormed .backward model named args)
+        selection targetWellFormed .backward model  args)
   dsimp only
   unfold DirectedEntailment
   simp only [StepTag.semanticMode]
@@ -2546,8 +2519,8 @@ theorem applyDoubleCutIntro_sound
 
 /-- Every successful double-cut elimination receipt is equivalent. -/
 theorem applyDoubleCutElim_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (region : Fin input.val.regionCount)
     (receipt : StepReceipt input)
     (happly : applyDoubleCutElim input region = .ok receipt) :
@@ -2555,10 +2528,10 @@ theorem applyDoubleCutElim_sound
       (.doubleCutElim region) receipt := by
   obtain ⟨raw, hraw, realizes⟩ := applyDoubleCutElim_realizes happly
   let trace := doubleCutElimTrace hraw
-  have rawWellFormed : raw.WellFormed signature :=
+  have rawWellFormed : raw.WellFormed  :=
     realizes.result_eq ▸ receipt.result.property
-  have sourceWellFormed : trace.sourceDiagram.WellFormed signature := by
-    exact Eq.mp (congrArg (fun diagram => diagram.WellFormed signature)
+  have sourceWellFormed : trace.sourceDiagram.WellFormed  := by
+    exact Eq.mp (congrArg (fun diagram => diagram.WellFormed )
       trace.promotion.raw_eq_diagram) rawWellFormed
   let rawBoundary := fun (boundary : List (Fin input.val.wireCount)) =>
     boundary.map (Fin.cast (doubleCutElimRaw?_wireCount hraw).symm)
@@ -2571,7 +2544,7 @@ theorem applyDoubleCutElim_sound
         some _mapped) =>
     (⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed sourceWellFormed input.property boundary
-        sourceRoot⟩ : CheckedOpenDiagram signature)
+        sourceRoot⟩ : CheckedOpenDiagram )
   let operationalIso := fun
       (boundary : List (Fin input.val.wireCount))
       (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -2601,38 +2574,37 @@ theorem applyDoubleCutElim_sound
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := operational) (operationalIso := operationalIso)
   intro model boundary sourceRoot mapped htransport valid args
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
   }
-  let target : CheckedOpenDiagram signature :=
+  let target : CheckedOpenDiagram  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed sourceWellFormed input.property boundary
         sourceRoot⟩
-  let original : CheckedOpenDiagram signature :=
+  let original : CheckedOpenDiagram  :=
     ⟨DoubleCutElimTrace.targetOpen input.val boundary,
       DoubleCutElimTrace.targetOpen_wellFormed input.property boundary
         sourceRoot⟩
-  let named := Theory.interpretDefinitions model context.definitions
   let simulation := trace.semanticSimulation sourceWellFormed input.property
-    model named
+    model
   have forward :=
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      target original model named simulation .forward
+      target original model  simulation .forward
       (trace.rootContextSimulation sourceWellFormed input.property boundary
-        sourceRoot model named .forward)
+        sourceRoot model  .forward)
       True.intro args args
       (trace.boundaryWitness sourceWellFormed input.property boundary
-        sourceRoot .forward model named args)
+        sourceRoot .forward model  args)
   have backward :=
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      target original model named simulation .backward
+      target original model  simulation .backward
       (trace.rootContextSimulation sourceWellFormed input.property boundary
-        sourceRoot model named .backward)
+        sourceRoot model  .backward)
       True.intro args args
       (trace.boundaryWitness sourceWellFormed input.property boundary
-        sourceRoot .backward model named args)
+        sourceRoot .backward model  args)
   dsimp only
   unfold DirectedEntailment
   simp only [StepTag.semanticMode]
@@ -2646,8 +2618,8 @@ theorem applyDoubleCutElim_sound
 
 /-- Every successful vacuous-cut introduction receipt is equivalent. -/
 theorem applyVacuousIntro_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val) (arity : Nat)
     (receipt : StepReceipt input)
     (happly : applyVacuousIntro input selection arity = .ok receipt) :
@@ -2655,7 +2627,7 @@ theorem applyVacuousIntro_sound
       (.vacuousIntro selection arity) receipt := by
   have realizes := applyVacuousIntro_realizes happly
   have targetWellFormed :
-      (vacuousIntroRaw input.val selection arity).WellFormed signature :=
+      (vacuousIntroRaw input.val selection arity).WellFormed  :=
     realizes.result_eq ▸ receipt.result.property
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := fun boundary sourceRoot mapped htransport =>
@@ -2676,35 +2648,34 @@ theorem applyVacuousIntro_sound
         (VacuousSoundness.vacuousIntroInterfaceTransport_transportBoundary
           input.val selection arity boundary sourceRoot))
   intro model boundary sourceRoot mapped htransport valid args
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
   }
-  let target : CheckedOpenDiagram signature :=
+  let target : CheckedOpenDiagram  :=
     ⟨VacuousSoundness.vacuousIntroRawOpen source.asCheckedOpen.val selection
         arity,
       VacuousSoundness.vacuousIntroRawOpen_wellFormed source.asCheckedOpen
         selection arity targetWellFormed⟩
-  let named := Theory.interpretDefinitions model context.definitions
   let simulation := VacuousSoundness.vacuousIntroSimulation input selection
-    arity targetWellFormed model named
+    arity targetWellFormed model
   have forward :=
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      source.asCheckedOpen target model named simulation .forward
+      source.asCheckedOpen target model  simulation .forward
       (VacuousSoundness.vacuousIntroRootContext source.asCheckedOpen selection
-        arity targetWellFormed model named .forward)
+        arity targetWellFormed model  .forward)
       True.intro args args
       (VacuousSoundness.vacuousIntroBoundaryWitness source.asCheckedOpen
-        selection arity targetWellFormed .forward model named args)
+        selection arity targetWellFormed .forward model  args)
   have backward :=
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      source.asCheckedOpen target model named simulation .backward
+      source.asCheckedOpen target model  simulation .backward
       (VacuousSoundness.vacuousIntroRootContext source.asCheckedOpen selection
-        arity targetWellFormed model named .backward)
+        arity targetWellFormed model  .backward)
       True.intro args args
       (VacuousSoundness.vacuousIntroBoundaryWitness source.asCheckedOpen
-        selection arity targetWellFormed .backward model named args)
+        selection arity targetWellFormed .backward model  args)
   dsimp only
   unfold DirectedEntailment
   simp only [StepTag.semanticMode]
@@ -2718,8 +2689,8 @@ theorem applyVacuousIntro_sound
 
 /-- Every successful vacuous-cut elimination receipt is equivalent. -/
 theorem applyVacuousElim_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : CheckedDiagram )
     (region : Fin input.val.regionCount)
     (receipt : StepReceipt input)
     (happly : applyVacuousElim input region = .ok receipt) :
@@ -2727,10 +2698,10 @@ theorem applyVacuousElim_sound
       (.vacuousElim region) receipt := by
   obtain ⟨raw, hraw, realizes⟩ := applyVacuousElim_realizes happly
   let trace := vacuousElimTrace hraw
-  have rawWellFormed : raw.WellFormed signature :=
+  have rawWellFormed : raw.WellFormed  :=
     realizes.result_eq ▸ receipt.result.property
-  have sourceWellFormed : trace.sourceDiagram.WellFormed signature := by
-    exact Eq.mp (congrArg (fun diagram => diagram.WellFormed signature)
+  have sourceWellFormed : trace.sourceDiagram.WellFormed  := by
+    exact Eq.mp (congrArg (fun diagram => diagram.WellFormed )
       trace.promotion.raw_eq_diagram) rawWellFormed
   let rawBoundary := fun (boundary : List (Fin input.val.wireCount)) =>
     boundary.map (Fin.cast (vacuousElimRaw?_wireCount hraw).symm)
@@ -2743,7 +2714,7 @@ theorem applyVacuousElim_sound
         some _mapped) =>
     (⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed sourceWellFormed input.property boundary
-        sourceRoot⟩ : CheckedOpenDiagram signature)
+        sourceRoot⟩ : CheckedOpenDiagram )
   let operationalIso := fun
       (boundary : List (Fin input.val.wireCount))
       (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -2773,20 +2744,19 @@ theorem applyVacuousElim_sound
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := operational) (operationalIso := operationalIso)
   intro model boundary sourceRoot mapped htransport valid args
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
   }
-  let target : CheckedOpenDiagram signature :=
+  let target : CheckedOpenDiagram  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed sourceWellFormed input.property boundary
         sourceRoot⟩
-  let original : CheckedOpenDiagram signature :=
+  let original : CheckedOpenDiagram  :=
     ⟨VacuousElimTrace.targetOpen input.val boundary,
       VacuousElimTrace.targetOpen_wellFormed input.property boundary
         sourceRoot⟩
-  let named := Theory.interpretDefinitions model context.definitions
   let freshForward := fun {sourceRels targetRels : RelCtx}
       (_sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
       (_targetContext : ConcreteElaboration.WireContext input.val)
@@ -2812,23 +2782,23 @@ theorem applyVacuousElim_sound
       (_targetRelations : RelEnv model.Carrier targetRels) =>
     (fun _ => False : Relation model.Carrier trace.arity)
   let simulation := trace.semanticSimulation sourceWellFormed input.property
-    model named freshForward
+    model  freshForward
   have forward :=
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      target original model named simulation .forward
+      target original model  simulation .forward
       (trace.rootContextSimulation sourceWellFormed input.property boundary
-        sourceRoot model named freshForward .forward)
+        sourceRoot model  freshForward .forward)
       True.intro args args
       (trace.boundaryWitness sourceWellFormed input.property boundary
-        sourceRoot .forward model named freshForward args)
+        sourceRoot .forward model  freshForward args)
   have backward :=
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      target original model named simulation .backward
+      target original model  simulation .backward
       (trace.rootContextSimulation sourceWellFormed input.property boundary
-        sourceRoot model named freshForward .backward)
+        sourceRoot model  freshForward .backward)
       True.intro args args
       (trace.boundaryWitness sourceWellFormed input.property boundary
-        sourceRoot .backward model named freshForward args)
+        sourceRoot .backward model  freshForward args)
   dsimp only
   unfold DirectedEntailment
   simp only [StepTag.semanticMode]

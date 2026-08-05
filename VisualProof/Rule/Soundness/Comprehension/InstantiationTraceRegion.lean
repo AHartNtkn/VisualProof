@@ -13,23 +13,21 @@ namespace InstantiationSemantic
 /-- Every accepted executor step carries the complete fixed-relation region
 simulation for every region enclosed by the moving quantified bubble. -/
 def RegionSimulationsEveryStep
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -44,40 +42,38 @@ def RegionSimulationsEveryStep
         state.diagram.val.Encloses state.bubble region →
         FixedAdvanceRegionSimulation plan.materialization.result attachments
           binders plan.operationalPayload state atom tail site arguments
-          hadmissible model named relationValue values parameterValues direction
+          hadmissible model  relationValue values parameterValues direction
           sourceFuel targetFuel region) ∧
-      RegionSimulationsEveryStep rest model named relationValue values
+      RegionSimulationsEveryStep rest model  relationValue values
         parameterValues
 
 /-- The executor trace, shape ledger, target ledger, and fixed trace relation
 jointly discharge every hypothesis of the one-step recursive simulation. -/
 theorem regionSimulationsEveryStep_of
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier)
     (invariants : StepInvariantsEveryStep trace)
     (targets : BinderTargetsEveryStep trace)
-    (relations : RelationContractsEveryStep trace model named relationValue
+    (relations : RelationContractsEveryStep trace model  relationValue
       values parameterValues) :
-    RegionSimulationsEveryStep trace model named relationValue values
+    RegionSimulationsEveryStep trace model  relationValue values
       parameterValues := by
   induction trace with
   | done => trivial
@@ -105,7 +101,7 @@ theorem regionSimulationsEveryStep_of
       have operationalEmptyRelationEq :
           ∀ _hzero : plan.operationalPayload.binderSpine.proxyCount = 0,
             relationValue = plan.operationalPayload.interpretedRelation model
-              named parameterValues := by
+               parameterValues := by
         intro hzero
         have sourceEq := emptyRelationEq (by
           simpa [InstantiationCopyPlan.operationalPayload,
@@ -115,7 +111,7 @@ theorem regionSimulationsEveryStep_of
         apply sourceEq.trans
         funext relationArguments
         apply propext
-        exact (plan.materialization.denote_iff model named
+        exact (plan.materialization.denote_iff model
           (Fin.addCases relationArguments parameterValues ∘
             Fin.cast payload.boundarySplit)).symm
       refine ⟨?_, ih restInvariants restTargets restRelations⟩
@@ -137,16 +133,15 @@ theorem regionSimulationsEveryStep_of
             Splice.AttachmentAliasMaterialization.binderSpine] using hnonempty
         apply (nonemptyRelationEq sourceNonempty).trans
         exact terminalRelationOfParameterValues_materialized payload state site
-          arguments plan.materialization sourceNonempty model named parameterValues
+          arguments plan.materialization sourceNonempty model  parameterValues
           values
       · exact operationalEmptyRelationEq
       · exact enclosed
 
 theorem initial_regionSimulationsEveryStep
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -158,19 +153,18 @@ theorem initial_regionSimulationsEveryStep
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       (initialInstantiationState payload) result)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier)
-    (contract : TraceRelationContract payload input model named relationValue
+    (contract : TraceRelationContract payload input model  relationValue
       values parameterValues) :
-    RegionSimulationsEveryStep trace model named relationValue values
+    RegionSimulationsEveryStep trace model  relationValue values
       parameterValues := by
-  exact regionSimulationsEveryStep_of trace model named relationValue values
+  exact regionSimulationsEveryStep_of trace model  relationValue values
     parameterValues (initial_stepInvariantsEveryStep trace)
     (initial_binderTargetsEveryStep trace)
-    (contract.everyStep trace model named relationValue values parameterValues)
+    (contract.everyStep trace model  relationValue values parameterValues)
 
 end InstantiationSemantic
 

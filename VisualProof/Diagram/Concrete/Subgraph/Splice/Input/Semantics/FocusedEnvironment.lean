@@ -36,7 +36,7 @@ theorem PlugLayout.exposedPosition_sound
 argument vector is positional while its class map identifies exactly the
 repeated boundary identities declared by the checked open pattern. -/
 def patternAttachmentAssignment
-    (input : Input signature) :
+    (input : Input ) :
     BoundaryAssignment input.pattern.elaborate
       (Fin input.wireQuotient.count) where
   args position := input.quotientWire (input.attachment position)
@@ -56,19 +56,18 @@ def patternAttachmentAssignment
 /-- Substituting quotient classes into the intrinsic pattern body is exactly
 the open-pattern denotation at the ordered attachment values. -/
 theorem denote_patternAttachmentAssignment
-    (input : Input signature)
+    (input : Input )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (values : input.wireQuotient.Carrier → model.Carrier) :
-    denoteRegion (relCtx := []) model named values PUnit.unit
+    denoteRegion (relCtx := []) model  values PUnit.unit
         (input.pattern.elaborate.substituteBoundary
           input.patternAttachmentAssignment) ↔
-      input.pattern.denote model named
+      input.pattern.denote model
         (fun position =>
           values (input.quotientWire (input.attachment position))) := by
   simpa [patternAttachmentAssignment, Function.comp_def] using
     input.pattern.elaborate.denote_substituteBoundary
-      input.patternAttachmentAssignment model named values
+      input.patternAttachmentAssignment model  values
 
 /-- Read a wire value from an exact compiler context.  Exactness supplies
 existence and nodup makes the result independent of the chosen index. -/
@@ -116,7 +115,7 @@ context at the focused site.  Invisible classes are semantically irrelevant
 there and receive the supplied fallback; visible classes read the unique
 compiler-context value of their plug-layout wire. -/
 noncomputable def siteQuotientEnvironment
-    (input : Input signature)
+    (input : Input )
     (context : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
     (exact : context.Exact
       (input.plugLayout.frameRegion input.site))
@@ -136,7 +135,7 @@ noncomputable def siteQuotientEnvironment
     else fallback
 
 theorem siteQuotientEnvironment_eq
-    (input : Input signature)
+    (input : Input )
     (context : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
     (exact : context.Exact
       (input.plugLayout.frameRegion input.site))
@@ -161,7 +160,7 @@ theorem siteQuotientEnvironment_eq
 /-- Every ordered attachment reads its quotient value from the unique
 focused compiler-context index carrying that quotient wire. -/
 theorem siteQuotientEnvironment_attachment_eq
-    (input : Input signature)
+    (input : Input )
     (hadmissible : input.Admissible)
     (context : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
     (exact : context.Exact
@@ -187,7 +186,7 @@ theorem siteQuotientEnvironment_attachment_eq
 frame locals read their quotient value; pattern locals read the existential
 hidden-root valuation supplied by the intrinsic open-pattern denotation. -/
 noncomputable def focusedLocalEnvironmentOfEmpty
-    (input : Input signature)
+    (input : Input )
     (hzero : input.binderSpine.proxyCount = 0)
     (values : input.wireQuotient.Carrier → D)
     (hiddenEnv : Fin input.pattern.val.hiddenWires.length → D) :
@@ -203,7 +202,7 @@ noncomputable def focusedLocalEnvironmentOfEmpty
       hiddenEnv semantic
 
 @[simp] theorem focusedLocalEnvironmentOfEmpty_frame
-    (input : Input signature)
+    (input : Input )
     (hzero : input.binderSpine.proxyCount = 0)
     (values : input.wireQuotient.Carrier → D)
     (hiddenEnv : Fin input.pattern.val.hiddenWires.length → D)
@@ -218,7 +217,7 @@ noncomputable def focusedLocalEnvironmentOfEmpty
     FiniteEquiv.symm_apply_apply, extendWireEnv]
 
 @[simp] theorem focusedLocalEnvironmentOfEmpty_hidden
-    (input : Input signature)
+    (input : Input )
     (hzero : input.binderSpine.proxyCount = 0)
     (values : input.wireQuotient.Carrier → D)
     (hiddenEnv : Fin input.pattern.val.hiddenWires.length → D)
@@ -237,7 +236,7 @@ every actual compiler-context index carrying a retained-frame wire.  Outer
 indices use the caller's agreement hypothesis; exact-site indices use the
 retained-frame half of `siteLocalWireEquivOfEmpty`. -/
 theorem focusedExtendedEnvironment_frameWire_eq
-    (input : Input signature)
+    (input : Input )
     (hzero : input.binderSpine.proxyCount = 0)
     (context : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
     (outerEnv : Fin context.length → D)
@@ -372,26 +371,25 @@ entail the checked pattern at the quotient valuation.  This theorem owns the
 environment reconstruction independently of how the root-item denotation was
 transported from a concrete focused conjunction. -/
 theorem pattern_denote_of_patternRootItems
-    (input : Input signature)
+    (input : Input )
     (hadmissible : input.Admissible)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)
     (fallback : model.Carrier)
     (patternDenotes :
       let pattern := compiledSpliceOpenRootItems input.pattern
-      denoteItemSeq (relCtx := []) model named
+      denoteItemSeq (relCtx := []) model
         (env ∘ input.plugLayout.patternRootWireIndexMap hadmissible hzero
           outputWitness outputLeaf)
         (PUnit.unit : RelEnv model.Carrier []) pattern.items) :
-    input.pattern.denote model named (fun position =>
+    input.pattern.denote model  (fun position =>
       siteQuotientEnvironment input
         (outputLeaf.inheritedWires.extend
           (input.plugLayout.frameRegion input.site))
@@ -475,7 +473,7 @@ theorem pattern_denote_of_patternRootItems
         BoundaryAssignment.map, values, Function.comp_def, extendWireEnv] using
           valueEq.symm
     · simp [split, hiddenEnv, Function.comp_def, extendWireEnv]
-  change denoteOpen model named input.pattern.elaborate
+  change denoteOpen model  input.pattern.elaborate
     (fun position => values
       (input.quotientWire (input.attachment position)))
   refine ⟨assignment, ?_, ?_⟩
@@ -484,14 +482,14 @@ theorem pattern_denote_of_patternRootItems
     unfold ConcreteElaboration.finishRoot
     refine ⟨hiddenEnv, ?_⟩
     rw [ItemSeq.castWiresEq_eq_renameWires]
-    apply (denoteItemSeq_renameWires (relCtx := []) model named
+    apply (denoteItemSeq_renameWires (relCtx := []) model
       (Fin.cast (by simp [OpenConcreteDiagram.rootWires]))
       (extendWireEnv assignment.classes hiddenEnv)
       (PUnit.unit : RelEnv model.Carrier []) pattern.items).mpr
     exact Eq.mp
       (congrArg (fun wireEnv :
           Fin input.pattern.val.rootWires.length → model.Carrier =>
-        denoteItemSeq (relCtx := []) model named wireEnv
+        denoteItemSeq (relCtx := []) model  wireEnv
           (PUnit.unit : RelEnv model.Carrier []) pattern.items)
         rootEnvironmentEq)
       patternDenotes
@@ -502,15 +500,14 @@ The exposed part is the canonical quotient-class assignment used by the
 splice input, so the result can be transported occurrence-by-occurrence into
 the concrete focused context. -/
 theorem patternRootItems_of_pattern_denote
-    (input : Input signature)
+    (input : Input )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (values : input.wireQuotient.Carrier → model.Carrier)
-    (denotes : input.pattern.denote model named (fun position =>
+    (denotes : input.pattern.denote model  (fun position =>
       values (input.quotientWire (input.attachment position)))) :
     let pattern := compiledSpliceOpenRootItems input.pattern
     ∃ hiddenEnv : Fin input.pattern.val.hiddenWires.length → model.Carrier,
-      denoteItemSeq (relCtx := []) model named
+      denoteItemSeq (relCtx := []) model
         (extendWireEnv
           (input.patternAttachmentAssignment.map values).classes hiddenEnv ∘
             Fin.cast (by simp [OpenConcreteDiagram.rootWires]))
@@ -518,10 +515,10 @@ theorem patternRootItems_of_pattern_denote
   dsimp only
   let pattern := compiledSpliceOpenRootItems input.pattern
   have substituted :
-      denoteRegion (relCtx := []) model named values PUnit.unit
+      denoteRegion (relCtx := []) model  values PUnit.unit
         (input.pattern.elaborate.substituteBoundary
           input.patternAttachmentAssignment) :=
-    (input.denote_patternAttachmentAssignment model named values).2 denotes
+    (input.denote_patternAttachmentAssignment model  values).2 denotes
   rw [OpenDiagram.substituteBoundary, denoteRegion_renameWires] at substituted
   rw [pattern.elaborate_body] at substituted
   unfold ConcreteElaboration.finishRoot at substituted
@@ -533,7 +530,7 @@ theorem patternRootItems_of_pattern_denote
       values ∘ input.patternAttachmentAssignment.classes =
         (input.patternAttachmentAssignment.map values).classes := rfl
   rw [← classesEq]
-  exact (denoteItemSeq_renameWires (relCtx := []) model named
+  exact (denoteItemSeq_renameWires (relCtx := []) model
     (Fin.cast (by simp [OpenConcreteDiagram.rootWires]))
     (extendWireEnv
       (values ∘ input.patternAttachmentAssignment.classes) hiddenEnv)
@@ -543,9 +540,9 @@ theorem patternRootItems_of_pattern_denote
 empty-spine root valuation: exposed root wires read their quotient values and
 hidden root wires read the supplied hidden witness. -/
 theorem focusedExtendedEnvironment_patternRoot_eq
-    (input : Input signature)
+    (input : Input )
     (hadmissible : input.Admissible)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
@@ -656,20 +653,20 @@ an outer-scoped wire has the same quotient equality on both sides, so replacing
 the focused conjunction cannot move an existential wire binder across its
 enclosing logical context. -/
 def SiteLocalQuotientAgreement
-    (source target : Input signature)
+    (source target : Input )
     (frameEq : source.frame = target.frame) : Prop :=
   ∀ left right : Fin source.frame.val.wireCount,
     (source.frame.val.wires left).scope ≠ source.site ∨
       (source.frame.val.wires right).scope ≠ source.site →
     (source.quotientWire left = source.quotientWire right ↔
       target.quotientWire
-          (Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+          (Fin.cast (congrArg (fun checked : CheckedDiagram  =>
             checked.val.wireCount) frameEq) left) =
         target.quotientWire
-          (Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+          (Fin.cast (congrArg (fun checked : CheckedDiagram  =>
             checked.val.wireCount) frameEq) right))
 
-instance (source target : Input signature)
+instance (source target : Input )
     (frameEq : source.frame = target.frame) :
     Decidable (SiteLocalQuotientAgreement source target frameEq) := by
   unfold SiteLocalQuotientAgreement
@@ -679,15 +676,15 @@ instance (source target : Input signature)
 /-- Structural presentation shared by two canonical splice inputs over the
 same retained frame and site. Ordered positions agree. Boundary quotient
 partitions may differ only at the focused site's own wire-binding level. -/
-structure TwoInputPresentation (source target : Input signature) where
+structure TwoInputPresentation (source target : Input ) where
   frame_eq : source.frame = target.frame
   site_eq :
-    Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+    Fin.cast (congrArg (fun checked : CheckedDiagram  =>
       checked.val.regionCount) frame_eq) source.site = target.site
   boundary_arity_eq : source.pattern.val.boundary.length =
     target.pattern.val.boundary.length
   attachment_eq : ∀ position,
-    Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+    Fin.cast (congrArg (fun checked : CheckedDiagram  =>
       checked.val.wireCount) frame_eq) (source.attachment position) =
       target.attachment (Fin.cast boundary_arity_eq position)
   site_local_quotients :

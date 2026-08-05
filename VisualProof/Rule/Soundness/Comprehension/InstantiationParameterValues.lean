@@ -11,23 +11,21 @@ namespace InstantiationSemantic
 parameter valuation and fixed proxy family, with no arbitrary total wire
 valuation in its interface. -/
 noncomputable def terminalRelationOfParameterValues
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index)) :
@@ -43,7 +41,7 @@ noncomputable def terminalRelationOfParameterValues
         ∃ relEnv : RelEnv model.Carrier pattern.witness.toFocus.holeRels,
           TerminalRelationsMatch payload state site arguments hnonempty values
               relEnv ∧
-            denoteRegion model named
+            denoteRegion model
               (terminalInheritedEnvironment payload state site arguments
                 hnonempty assignment)
               relEnv
@@ -52,32 +50,30 @@ noncomputable def terminalRelationOfParameterValues
                 pattern.leaf.items)
 
 theorem terminalRelationOfValues_eq_parameterValues
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameters : wireValue ∘ state.parameters = parameterValues) :
-    terminalRelationOfValues payload state site arguments hnonempty model named
+    terminalRelationOfValues payload state site arguments hnonempty model
         wireValue values =
       terminalRelationOfParameterValues payload state site arguments hnonempty
-        model named parameterValues values := by
+        model  parameterValues values := by
   funext relationArguments
   apply propext
   simp only [terminalRelationOfValues, terminalRelationOfParameterValues]
@@ -87,16 +83,15 @@ theorem terminalRelationOfValues_eq_parameterValues
 comprehension relation is independent of the executor state, occurrence site,
 and ordered argument wires used to install a copy. -/
 theorem terminalRelationOfParameterValues_eq
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (left right : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (leftSite : Fin left.diagram.val.regionCount)
@@ -105,14 +100,13 @@ theorem terminalRelationOfParameterValues_eq
     (rightArguments : Fin payload.arity → Fin right.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index)) :
     terminalRelationOfParameterValues payload left leftSite leftArguments
-        hnonempty model named parameterValues values =
+        hnonempty model  parameterValues values =
       terminalRelationOfParameterValues payload right rightSite rightArguments
-        hnonempty model named parameterValues values := by
+        hnonempty model  parameterValues values := by
   funext relationArguments
   apply propext
   rfl
@@ -160,16 +154,15 @@ theorem ParameterValuesAt.extend
 /-- At an accepted splice site, the quotient-host valuation reads each source
 parameter at the fixed value carried by the next state's exact target context. -/
 theorem siteQuotientEnvironment_parameter
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)

@@ -2,47 +2,47 @@ import VisualProof.Diagram.Core
 
 namespace VisualProof.Diagram
 
-structure OpenDiagram (signature : List Nat) (arity : Nat) where
+structure OpenDiagram (arity : Nat) where
   externalClasses : Nat
   boundary : Fin arity -> Fin externalClasses
   boundary_surjective : Function.Surjective boundary
-  body : Region signature externalClasses []
+  body : Region externalClasses []
 
 namespace OpenDiagram
 
 /-- Transport only the dependent arity index of an open diagram. -/
-def castArity (diagram : OpenDiagram signature sourceArity)
+def castArity (diagram : OpenDiagram sourceArity)
     (equality : sourceArity = targetArity) :
-    OpenDiagram signature targetArity :=
+    OpenDiagram targetArity :=
   equality ▸ diagram
 
 @[simp] theorem castArity_externalClasses
-    (diagram : OpenDiagram signature sourceArity)
+    (diagram : OpenDiagram sourceArity)
     (equality : sourceArity = targetArity) :
     (diagram.castArity equality).externalClasses = diagram.externalClasses := by
   subst targetArity
   rfl
 
 @[simp] theorem castArity_rfl
-    (diagram : OpenDiagram signature arity) :
+    (diagram : OpenDiagram arity) :
     diagram.castArity rfl = diagram := rfl
 
 end OpenDiagram
 
-structure BoundaryAssignment (d : OpenDiagram signature arity) (D : Type u) where
+structure BoundaryAssignment (d : OpenDiagram arity) (D : Type u) where
   args : Fin arity -> D
   classes : Fin d.externalClasses -> D
   agrees : forall i, classes (d.boundary i) = args i
 
-def AliasConsistent (d : OpenDiagram signature arity)
+def AliasConsistent (d : OpenDiagram arity)
     (args : Fin arity -> D) : Prop :=
   forall i j, d.boundary i = d.boundary j -> args i = args j
 
-private def preimageSearch (d : OpenDiagram signature arity)
+private def preimageSearch (d : OpenDiagram arity)
     (c : Fin d.externalClasses) : Option (Fin arity) :=
   (List.ofFn id).find? (fun i => decide (d.boundary i = c))
 
-private theorem preimageSearch_ne_none (d : OpenDiagram signature arity)
+private theorem preimageSearch_ne_none (d : OpenDiagram arity)
     (c : Fin d.externalClasses) : preimageSearch d c ≠ none := by
   intro hnone
   obtain ⟨i, hi⟩ := d.boundary_surjective c
@@ -50,13 +50,13 @@ private theorem preimageSearch_ne_none (d : OpenDiagram signature arity)
     (List.mem_ofFn.mpr ⟨i, rfl⟩)
   exact hreject (decide_eq_true hi)
 
-def boundaryRepresentative (d : OpenDiagram signature arity)
+def boundaryRepresentative (d : OpenDiagram arity)
     (c : Fin d.externalClasses) : Fin arity :=
   match h : preimageSearch d c with
   | some i => i
   | none => False.elim (preimageSearch_ne_none d c h)
 
-theorem boundaryRepresentative_mapsTo (d : OpenDiagram signature arity)
+theorem boundaryRepresentative_mapsTo (d : OpenDiagram arity)
     (c : Fin d.externalClasses) :
     d.boundary (boundaryRepresentative d c) = c := by
   unfold boundaryRepresentative
@@ -70,7 +70,7 @@ theorem boundaryRepresentative_mapsTo (d : OpenDiagram signature arity)
     exact False.elim (preimageSearch_ne_none d c h)
 
 theorem boundaryAssignment_iff_aliasConsistent
-    (d : OpenDiagram signature arity) (args : Fin arity -> D) :
+    (d : OpenDiagram arity) (args : Fin arity -> D) :
     (exists assignment : BoundaryAssignment d D, assignment.args = args) <->
       AliasConsistent d args := by
   constructor

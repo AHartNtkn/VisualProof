@@ -19,7 +19,7 @@ theorem Splice.RegionRoute.path_ne_nil
 /-- The root path obtained by composing the canonical anchor view with an
 anchor-relative route is exactly the executor's canonical host path. -/
 theorem iterationAnchorRoute_hostPath
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -45,7 +45,7 @@ theorem iterationAnchorRoute_hostPath
 copy resource and an unselected block containing a complete intrinsic route to
 the iteration target. -/
 theorem coalescedAnchor_factor_and_route
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -60,21 +60,21 @@ theorem coalescedAnchor_factor_and_route
         spliceInput.coalesceFrameRaw selection.val.anchor leaf.inheritedWires
         leaf.binders leaf.fuel leaf.items leaf.itemsComputation leaf.wiresExact
         leaf.bindersCover leaf.binderEnumeration
-    ∃ (keptItems selectedItems : ItemSeq signature
+    ∃ (keptItems selectedItems : ItemSeq
         (leaf.inheritedWires.extend selection.val.anchor).length
         anchorView.focus.holeRels)
       (path : List Nat)
       (route : Splice.RegionRoute spliceInput.coalesceFrameRaw
         selection.val.anchor target path),
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
           spliceInput.coalesceFrameRaw
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             spliceInput.coalesceFrameRaw leaf.fuel)
           (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
           (keptOccurrences input.val selection) = some keptItems ∧
-        ConcreteElaboration.compileOccurrencesWith? signature
+        ConcreteElaboration.compileOccurrencesWith?
           spliceInput.coalesceFrameRaw
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             spliceInput.coalesceFrameRaw leaf.fuel)
           (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
           (selectedOccurrences input.val selection) = some selectedItems ∧
@@ -82,13 +82,12 @@ theorem coalescedAnchor_factor_and_route
           (spliceInput.coalesceFrame hadmissible) hereLeaf
           (keptOccurrences input.val selection) keptItems route) ∧
         ∀ (model : Model)
-          (named : NamedEnv model.Carrier signature)
           (env : Fin (leaf.inheritedWires.extend
             selection.val.anchor).length → model.Carrier)
           (relEnv : RelEnv model.Carrier anchorView.focus.holeRels),
-          denoteItemSeq model named env relEnv leaf.items ↔
-            denoteRegion model named env relEnv (Region.mk 0 selectedItems) ∧
-            denoteRegion model named env relEnv (Region.mk 0 keptItems) := by
+          denoteItemSeq model  env relEnv leaf.items ↔
+            denoteRegion model  env relEnv (Region.mk 0 selectedItems) ∧
+            denoteRegion model  env relEnv (Region.mk 0 keptItems) := by
   dsimp only
   let spliceInput := iterationInput input selection target
   let anchorView := iterationCoalescedAnchorView input selection target
@@ -157,37 +156,37 @@ theorem coalescedAnchor_factor_and_route
     firstChildOccurs
   refine ⟨keptItems, selectedItems, path, route, keptCompiled,
     selectedCompiled, ⟨routeResult⟩, ?_⟩
-  intro model named env relEnv
-  change denoteItemSeq model named env relEnv hereLeaf.items ↔ _
+  intro model  env relEnv
+  change denoteItemSeq model  env relEnv hereLeaf.items ↔ _
   calc
-    denoteItemSeq model named env relEnv hereLeaf.items ↔
-        denoteItemSeq model named env relEnv
-          (keptItems.append selectedItems) := factor model named env relEnv
-    _ ↔ denoteItemSeq model named env relEnv keptItems ∧
-        denoteItemSeq model named env relEnv selectedItems :=
-      denoteItemSeq_append model named env relEnv keptItems selectedItems
-    _ ↔ denoteRegion model named env relEnv (Region.mk 0 selectedItems) ∧
-        denoteRegion model named env relEnv (Region.mk 0 keptItems) := by
+    denoteItemSeq model  env relEnv hereLeaf.items ↔
+        denoteItemSeq model  env relEnv
+          (keptItems.append selectedItems) := factor model  env relEnv
+    _ ↔ denoteItemSeq model  env relEnv keptItems ∧
+        denoteItemSeq model  env relEnv selectedItems :=
+      denoteItemSeq_append model  env relEnv keptItems selectedItems
+    _ ↔ denoteRegion model  env relEnv (Region.mk 0 selectedItems) ∧
+        denoteRegion model  env relEnv (Region.mk 0 keptItems) := by
       rw [denoteRegion_mk_zero_iff, denoteRegion_mk_zero_iff]
       exact and_comm
 
 /-- The retained compiler path is carried by the selection partition to the
 exact authoritative anchor-relative route. -/
 theorem coalescedRoute_partition_alignment
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (targetNe : target ≠ selection.val.anchor)
-    {keptItems selectedItems : ItemSeq signature
+    {keptItems selectedItems : ItemSeq
       ((iterationCoalescedAnchorView input selection target hadmissible)
         |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
       (iterationCoalescedAnchorView input selection target hadmissible
         ).focus.holeRels}
     (keptCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
           (iterationInput input selection target).coalesceFrameRaw
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (iterationInput input selection target).coalesceFrameRaw
             (iterationCoalescedAnchorView input selection target hadmissible
               ).compilerLeaf.fuel)
@@ -197,9 +196,9 @@ theorem coalescedRoute_partition_alignment
             ).compilerLeaf.binders
           (keptOccurrences input.val selection) = some keptItems)
     (selectedCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
           (iterationInput input selection target).coalesceFrameRaw
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (iterationInput input selection target).coalesceFrameRaw
             (iterationCoalescedAnchorView input selection target hadmissible
               ).compilerLeaf.fuel)
@@ -251,7 +250,7 @@ theorem coalescedRoute_partition_alignment
       (terminal : CompiledRouteTerminal
         ((iterationInput input selection target).coalesceFrame hadmissible)
         hereLeaf keptItems route (compiledPosition.val :: rest) retained)
-      (iso : RegionIso signature
+      (iso : RegionIso
         (FiniteEquiv.refl
           (Fin (leaf.inheritedWires.extend selection.val.anchor).length))
         (iterationCoalescedAnchorView input selection target hadmissible
@@ -319,12 +318,12 @@ theorem coalescedRoute_partition_alignment
 /-- The retained route's terminal lexical state is the executable splice
 compiler's canonical state at the same concrete target. -/
 theorem coalescedRouteTerminal_hostLexical
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (hencloses : input.val.Encloses selection.val.anchor target)
-    {keptItems : ItemSeq signature
+    {keptItems : ItemSeq
       ((iterationCoalescedAnchorView input selection target hadmissible)
         |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
       (iterationCoalescedAnchorView input selection target hadmissible

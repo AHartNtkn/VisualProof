@@ -23,20 +23,20 @@ private theorem map_append_vacuous
 
 @[simp] theorem domain_parent
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     (vacuousRegionDomain input bubble).survives trace.parent = true :=
   trace.parent_survives wellFormed
 
 def targetIndex
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     Fin (vacuousRegionDomain input bubble).count :=
   (vacuousRegionDomain input bubble).index trace.parent
     (trace.domain_parent wellFormed)
 
 @[simp] theorem targetIndex_origin
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     (vacuousRegionDomain input bubble).origin
         (trace.targetIndex wellFormed) = trace.parent := by
   exact SurvivorDomain.origin_index _ _ _
@@ -65,7 +65,7 @@ def occurrenceMap
 
 private theorem mappedOwner_eq_targetIndex_iff
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (owner : Fin input.regionCount)
     (mapped : Fin (vacuousRegionDomain input bubble).count)
     (result :
@@ -117,7 +117,7 @@ private theorem mappedOwner_eq_region_iff
 
 private theorem chosenOwner_eq_origin_regular_iff
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (owner : Fin input.regionCount)
     (region : Fin (vacuousRegionDomain input bubble).count)
     (regular : region ≠ trace.targetIndex wellFormed) :
@@ -139,7 +139,7 @@ private theorem chosenOwner_eq_origin_regular_iff
 
 theorem promotedNode_region_eq_targetIndex_iff
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (node : Fin input.nodeCount) :
     (trace.promotion.nodes node).region = trace.targetIndex wellFormed ↔
       (input.nodes node).region = trace.parent ∨
@@ -178,22 +178,9 @@ theorem promotedNode_region_eq_targetIndex_iff
       rw [← regionResult]
       exact mappedOwner_eq_targetIndex_iff trace wellFormed owner mappedOwner
         ownerResult
-  | named owner definition arity =>
-      rw [nodeShape] at result
-      simp only [promoteNode?] at result
-      rw [Option.map_eq_some_iff] at result
-      obtain ⟨mapped, mappedResult, nodeResult⟩ := result
-      change (trace.promotion.nodes node).region =
-          trace.targetIndex wellFormed ↔
-        owner = trace.parent ∨ owner = bubble
-      have regionResult := congrArg CNode.region nodeResult
-      rw [← regionResult]
-      exact mappedOwner_eq_targetIndex_iff trace wellFormed owner mapped
-        mappedResult
-
 theorem promotedNode_region_eq_regular_iff
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (node : Fin input.nodeCount)
     (region : Fin (vacuousRegionDomain input bubble).count)
     (regular : region ≠ trace.targetIndex wellFormed) :
@@ -235,23 +222,9 @@ theorem promotedNode_region_eq_regular_iff
         ownerResult).trans
           (trace.chosenOwner_eq_origin_regular_iff wellFormed owner region
             regular)
-  | named owner definition arity =>
-      rw [nodeShape] at result
-      simp only [promoteNode?] at result
-      rw [Option.map_eq_some_iff] at result
-      obtain ⟨mapped, mappedResult, nodeResult⟩ := result
-      change (trace.promotion.nodes node).region = region ↔
-        owner = trace.origin region
-      have regionResult := congrArg CNode.region nodeResult
-      rw [← regionResult]
-      exact (mappedOwner_eq_region_iff trace owner mapped region
-        mappedResult).trans
-          (trace.chosenOwner_eq_origin_regular_iff wellFormed owner region
-            regular)
-
 theorem regular_nodeShape
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region : Fin (vacuousRegionDomain input bubble).count)
     (regular : region ≠ trace.targetIndex wellFormed)
     (node : Fin input.nodeCount)
@@ -259,9 +232,7 @@ theorem regular_nodeShape
     input.nodes node =
       match trace.promotion.nodes node with
       | .identity owner arity => .identity (trace.origin owner) arity
-      | .atom owner binder => .atom (trace.origin owner) (trace.origin binder)
-      | .named owner definition arity =>
-          .named (trace.origin owner) definition arity := by
+      | .atom owner binder => .atom (trace.origin owner) (trace.origin binder) := by
   have result := trace.promotion.node_result node
   have ownerEq :=
     (trace.promotedNode_region_eq_regular_iff
@@ -296,16 +267,6 @@ theorem regular_nodeShape
           binder mappedBinder).1 binderResult
       rw [← Option.some.inj nodeResult]
       simp [ownerEq, mappedOwnerEq, binderEq.symm]
-  | named owner definition arity =>
-      rw [originalShape] at result ownerEq
-      simp only [CNode.region, promoteNode?] at result ownerEq
-      rw [Option.map_eq_some_iff] at result
-      obtain ⟨mapped, mappedResult, nodeResult⟩ := result
-      have mappedEq : mapped = region :=
-        (congrArg CNode.region nodeResult).trans nodeRegion
-      rw [← nodeResult]
-      simp [originalShape, ownerEq, mappedEq]
-
 theorem focused_nodeShape
     (trace : VacuousElimTrace input bubble raw)
     (node : Fin input.nodeCount) (owner : Fin input.regionCount)
@@ -313,8 +274,7 @@ theorem focused_nodeShape
     input.nodes node =
       match trace.promotion.nodes node with
       | .identity _ arity => .identity owner arity
-      | .atom _ binder => .atom owner (trace.origin binder)
-      | .named _ definition arity => .named owner definition arity := by
+      | .atom _ binder => .atom owner (trace.origin binder) := by
   have result := trace.promotion.node_result node
   cases originalShape : input.nodes node with
   | identity originalOwner arity =>
@@ -342,17 +302,9 @@ theorem focused_nodeShape
           binder mappedBinder).1 binderResult
       rw [← Option.some.inj nodeResult]
       simp [ownerEq, binderEq.symm]
-  | named originalOwner definition arity =>
-      rw [originalShape] at result ownerEq
-      simp only [CNode.region, promoteNode?] at result ownerEq
-      rw [Option.map_eq_some_iff] at result
-      obtain ⟨mapped, mappedResult, nodeResult⟩ := result
-      rw [← nodeResult]
-      simp [ownerEq]
-
 theorem promotedWire_scope_eq_targetIndex_iff
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount) :
     (trace.promotion.wires wire).scope = trace.targetIndex wellFormed ↔
       (input.wires wire).scope = trace.parent ∨
@@ -375,7 +327,7 @@ theorem promotedWire_scope_eq_targetIndex_iff
 
 theorem promotedWire_scope_eq_regular_iff
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount)
     (region : Fin (vacuousRegionDomain input bubble).count)
     (regular : region ≠ trace.targetIndex wellFormed) :
@@ -401,7 +353,7 @@ theorem promotedWire_scope_eq_regular_iff
 
 theorem regular_exactScopeWires
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region : Fin (vacuousRegionDomain input bubble).count)
     (regular : region ≠ trace.targetIndex wellFormed) :
     ConcreteElaboration.exactScopeWires trace.sourceDiagram region =
@@ -433,7 +385,7 @@ theorem promotedWire_endpoints
 
 theorem promotedRegion_parent_eq_targetIndex_iff
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region : Fin (vacuousRegionDomain input bubble).count) :
     (trace.promotion.regions region).parent? =
         some (trace.targetIndex wellFormed) ↔
@@ -502,7 +454,7 @@ theorem promotedRegion_parent_eq_targetIndex_iff
 
 theorem promotedRegion_parent_eq_regular_iff
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (child region : Fin (vacuousRegionDomain input bubble).count)
     (regular : region ≠ trace.targetIndex wellFormed) :
     (trace.promotion.regions child).parent? = some region ↔
@@ -573,7 +525,7 @@ theorem promotedRegion_parent_eq_regular_iff
 
 theorem regular_regionShape
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (parent : Fin (vacuousRegionDomain input bubble).count)
     (regular : parent ≠ trace.targetIndex wellFormed)
     (child : Fin (vacuousRegionDomain input bubble).count)
@@ -895,7 +847,7 @@ is the information needed by comprehension instantiation to choose its one
 trace-wide relation witness. -/
 def FreshRelationSelector
     (trace : VacuousElimTrace input bubble raw)
-    (targetWellFormed : input.WellFormed signature)
+    (targetWellFormed : input.WellFormed )
     (model : Model) :=
   ∀ {sourceRels targetRels : RelCtx}
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
@@ -942,7 +894,7 @@ def extendRegular
     {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input}
     (witness : PromotedContextWitness trace sourceContext targetContext)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region : Fin trace.sourceDiagram.regionCount)
     (regular : region ≠ trace.targetIndex wellFormed) :
     PromotedContextWitness trace
@@ -1076,7 +1028,7 @@ private theorem promoted_endpointOccurs
 
 theorem resolvedPorts_related
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input)
     (node : Fin input.nodeCount) (port : CPort)
@@ -1180,7 +1132,7 @@ def occurrenceSelected
 
 def selectedOccurrences
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     List (ConcreteElaboration.LocalOccurrence
       trace.sourceDiagram.regionCount trace.sourceDiagram.nodeCount) :=
   (ConcreteElaboration.localOccurrences trace.sourceDiagram
@@ -1188,7 +1140,7 @@ def selectedOccurrences
 
 def keptOccurrences
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     List (ConcreteElaboration.LocalOccurrence
       trace.sourceDiagram.regionCount trace.sourceDiagram.nodeCount) :=
   (ConcreteElaboration.localOccurrences trace.sourceDiagram
@@ -1197,7 +1149,7 @@ def keptOccurrences
 
 theorem kept_node_region
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (node : Fin input.nodeCount)
     (member : ConcreteElaboration.LocalOccurrence.node node ∈
       trace.keptOccurrences wellFormed) :
@@ -1215,7 +1167,7 @@ theorem kept_node_region
 
 theorem selected_node_region
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (node : Fin input.nodeCount)
     (member : ConcreteElaboration.LocalOccurrence.node node ∈
       trace.selectedOccurrences wellFormed) :
@@ -1224,7 +1176,7 @@ theorem selected_node_region
 
 theorem kept_child_parent
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (child : Fin trace.sourceDiagram.regionCount)
     (member : ConcreteElaboration.LocalOccurrence.child child ∈
       trace.keptOccurrences wellFormed) :
@@ -1243,7 +1195,7 @@ theorem kept_child_parent
 
 theorem selected_child_parent
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (child : Fin trace.sourceDiagram.regionCount)
     (member : ConcreteElaboration.LocalOccurrence.child child ∈
       trace.selectedOccurrences wellFormed) :
@@ -1253,7 +1205,7 @@ theorem selected_child_parent
 
 theorem focusOccurrences_perm_partition
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     List.Perm
       (trace.keptOccurrences wellFormed ++ trace.selectedOccurrences wellFormed)
       (ConcreteElaboration.localOccurrences trace.sourceDiagram
@@ -1307,7 +1259,7 @@ private def canonicalTargetKeptOccurrences
 
 private theorem selectedOccurrences_eq_canonical
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     trace.selectedOccurrences wellFormed =
       trace.canonicalSelectedOccurrences := by
   unfold selectedOccurrences canonicalSelectedOccurrences
@@ -1342,7 +1294,7 @@ private theorem selectedOccurrences_eq_canonical
 
 private theorem keptOccurrences_eq_canonical
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     trace.keptOccurrences wellFormed = trace.canonicalKeptOccurrences := by
   unfold keptOccurrences canonicalKeptOccurrences
     ConcreteElaboration.localOccurrences occurrenceSelected filterFin
@@ -1447,7 +1399,7 @@ private theorem allFin_domain_count_map_origin
 
 theorem child_of_bubble_survives
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (child : Fin input.regionCount)
     (parentEq : (input.regions child).parent? = some bubble) :
     (vacuousRegionDomain input bubble).survives child = true := by
@@ -1461,7 +1413,7 @@ theorem child_of_bubble_survives
 
 theorem child_of_regular_survives
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region : Fin (vacuousRegionDomain input bubble).count)
     (regular : region ≠ trace.targetIndex wellFormed)
     (child : Fin input.regionCount)
@@ -1484,7 +1436,7 @@ theorem child_of_regular_survives
 
 theorem child_of_parent_ne_bubble_survives
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (child : Fin input.regionCount)
     (parentEq : (input.regions child).parent? = some trace.parent)
     (childNeBubble : child ≠ bubble) :
@@ -1493,7 +1445,7 @@ theorem child_of_parent_ne_bubble_survives
 
 theorem targetKeptOccurrences_eq_mapped
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     trace.targetKeptOccurrences =
       (trace.keptOccurrences wellFormed).map trace.occurrenceMap := by
   rw [trace.targetKeptOccurrences_eq_canonical,
@@ -1595,7 +1547,7 @@ theorem targetBubbleComplement
 
 theorem targetFocusOccurrences_perm
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     List.Perm
       ((trace.keptOccurrences wellFormed).map trace.occurrenceMap ++
         [ConcreteElaboration.LocalOccurrence.child bubble])
@@ -1617,7 +1569,7 @@ theorem targetFocusOccurrences_perm
 
 theorem parentWire_mem_focusExact
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount)
     (member : wire ∈
       ConcreteElaboration.exactScopeWires input trace.parent) :
@@ -1634,7 +1586,7 @@ theorem parentWire_mem_focusExact
 
 theorem bubbleWire_mem_focusExact
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount)
     (member : wire ∈ ConcreteElaboration.exactScopeWires input bubble) :
     wire ∈ ConcreteElaboration.exactScopeWires trace.sourceDiagram
@@ -1655,7 +1607,7 @@ def PromotedContextWitness.extendFocused
     {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input}
     (witness : PromotedContextWitness trace sourceContext targetContext)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     PromotedContextWitness trace
       (sourceContext.extend (trace.targetIndex wellFormed))
       (targetContext.extend trace.parent) := by
@@ -1689,7 +1641,7 @@ def PromotedContextWitness.extendSelected
     {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input}
     (witness : PromotedContextWitness trace sourceContext targetContext)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     PromotedContextWitness trace
       (sourceContext.extend (trace.targetIndex wellFormed))
       ((targetContext.extend trace.parent).extend bubble) := by
@@ -1728,7 +1680,7 @@ theorem PromotedContextWitness.extendSelected_source_subset_target
     {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input}
     (witness : PromotedContextWitness trace sourceContext targetContext)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     ∀ wire, wire ∈ sourceContext.extend (trace.targetIndex wellFormed) →
       wire ∈ (targetContext.extend trace.parent).extend bubble := by
   intro wire member
@@ -1740,7 +1692,7 @@ theorem PromotedContextWitness.extendSelected_source_subset_target
 
 theorem bubble_localOccurrences
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     ConcreteElaboration.localOccurrences input bubble =
       (trace.selectedOccurrences wellFormed).map trace.occurrenceMap := by
   rw [trace.selectedOccurrences_eq_canonical wellFormed]
@@ -1799,7 +1751,7 @@ theorem bubble_localOccurrences
 
 theorem regular_localOccurrences
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region : Fin (vacuousRegionDomain input bubble).count)
     (regular : region ≠ trace.targetIndex wellFormed) :
     ConcreteElaboration.localOccurrences input (trace.origin region) =
@@ -1877,9 +1829,8 @@ theorem regular_localOccurrences
 
 theorem compileNode_itemSimulation
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input)
@@ -1893,23 +1844,21 @@ theorem compileNode_itemSimulation
     (nodeShape : input.nodes node =
       match trace.sourceDiagram.nodes node with
       | .identity owner arity => .identity (regionMap owner) arity
-      | .atom owner binder => .atom (regionMap owner) (trace.origin binder)
-      | .named owner definition arity =>
-          .named (regionMap owner) definition arity)
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
+      | .atom owner binder => .atom (regionMap owner) (trace.origin binder))
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileNode? signature trace.sourceDiagram
+      ConcreteElaboration.compileNode?  trace.sourceDiagram
         sourceContext sourceBinders node = some sourceItem)
     (targetCompiled :
-      ConcreteElaboration.compileNode? signature input targetContext
+      ConcreteElaboration.compileNode?  input targetContext
         targetBinders node = some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       (trace.wireIdentityRelation sourceContext targetContext)
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
     (source := trace.sourceDiagram) (target := input)
-    model named direction sourceContext targetContext
+    model  direction sourceContext targetContext
     (trace.wireIdentityRelation sourceContext targetContext)
     sourceBinders targetBinders binderWitness.relationMap node node
     regionMap trace.origin

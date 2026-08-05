@@ -13,16 +13,15 @@ namespace InstantiationTrace
 /-- Composite image of a frame occurrence through every accepted copy step.
 This map precedes processed-atom compaction and final vacuous promotion. -/
 def frameOccurrenceMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -36,16 +35,15 @@ def frameOccurrenceMap
   | .child region => .child (trace.regionMap region)
 
 @[simp] theorem frameOccurrenceMap_node
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -56,16 +54,15 @@ def frameOccurrenceMap
   rfl
 
 @[simp] theorem frameOccurrenceMap_child
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -80,16 +77,15 @@ def frameOccurrenceMap
 moving quantified bubble.  The active site is enclosed by that bubble, so the
 executor's off-site frame theorem applies at every recursive step. -/
 theorem localOccurrences_frameMap_of_outside
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -244,10 +240,9 @@ quantified bubble.  Unlike `droppedFrameOccurrenceMap`, this also applies to
 the quantified bubble's parent, whose child occurrence is needed by the
 focused compiler proof. -/
 def droppedOutsideOccurrenceMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -273,10 +268,9 @@ def droppedOutsideOccurrenceMap
   | .child child => .child (copyTrace.regionMap child)
 
 private theorem frameOccurrence_survives_of_outside
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -305,10 +299,9 @@ private theorem frameOccurrence_survives_of_outside
   | child child => rfl
 
 private theorem dropOrigin_droppedOutsideOccurrenceMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -343,10 +336,9 @@ private theorem dropOrigin_droppedOutsideOccurrenceMap
 /-- Atom compaction preserves the exact ordered local traversal of every
 region outside the moving quantified bubble, including its parent. -/
 theorem dropped_localOccurrences_of_outside
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -437,10 +429,9 @@ theorem dropped_localOccurrences_of_outside
 fallback branch is irrelevant to a regular local traversal; it makes the map
 total without pretending that nodes inside the rewritten bubble survive. -/
 def droppedFrameOccurrenceMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -467,10 +458,9 @@ def droppedFrameOccurrenceMap
   | .child child => .child (copyTrace.regionMap child)
 
 private theorem frameOccurrence_survives_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -499,10 +489,9 @@ private theorem frameOccurrence_survives_of_regular
   | child child => rfl
 
 private theorem dropOrigin_droppedFrameOccurrenceMap_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -538,10 +527,9 @@ private theorem dropOrigin_droppedFrameOccurrenceMap_of_regular
 /-- Atom compaction preserves the exact ordered local traversal of every
 regular frame region. -/
 theorem dropped_localOccurrences_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -652,10 +640,9 @@ private theorem vacuousOccurrenceMap_injective
 instantiation trace.  On a regular local traversal every node takes the
 certified node branch; the fallback only totalizes the function. -/
 def finalFrameOccurrenceMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -670,7 +657,7 @@ def finalFrameOccurrenceMap
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region) :
     ConcreteElaboration.LocalOccurrence input.val.regionCount input.val.nodeCount →
@@ -687,10 +674,9 @@ def finalFrameOccurrenceMap
       .child (copyTrace.finalRegionMap elimTrace finalWellFormed child)
 
 private theorem vacuousOrigin_finalFrameOccurrenceMap_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -705,7 +691,7 @@ private theorem vacuousOrigin_finalFrameOccurrenceMap_of_regular
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region)
     (occurrence : ConcreteElaboration.LocalOccurrence
@@ -742,10 +728,9 @@ private theorem vacuousOrigin_finalFrameOccurrenceMap_of_regular
 /-- The complete executor trace preserves the exact ordered local traversal
 of every region outside the quantified parent subtree. -/
 theorem final_localOccurrences_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -760,7 +745,7 @@ theorem final_localOccurrences_of_regular
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region) :
     ConcreteElaboration.localOccurrences elimTrace.sourceDiagram

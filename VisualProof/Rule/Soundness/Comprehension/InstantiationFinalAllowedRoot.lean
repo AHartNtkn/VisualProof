@@ -12,10 +12,9 @@ namespace InstantiationTrace
 the complete instantiation trace.  The mapped route has exactly the same cut
 count; inserted comprehension material is not part of this frame route. -/
 theorem mapRouteToFinalFocus
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -30,7 +29,7 @@ theorem mapRouteToFinalFocus
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     {start target : Fin input.val.regionCount}
     {path : List Nat}
     (route : Splice.RegionRoute input.val start target path)
@@ -144,10 +143,9 @@ theorem mapRouteToFinalFocus
 /-- The quantified bubble and its immediate parent have the same concrete cut
 depth because the connecting boundary is a bubble, not a cut. -/
 theorem bubble_parent_concreteCutDepth
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -192,10 +190,9 @@ theorem bubble_parent_concreteCutDepth
 /-- Executor polarity at the original quantified bubble is exactly the
 `FinalAllowed` condition at the root of the promoted operational diagram. -/
 theorem finalAllowed_root
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -209,9 +206,9 @@ theorem finalAllowed_root
     {raw : ConcreteDiagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
+    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed )
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (direction : ConcreteElaboration.SimulationDirection)
     (allowedDepth : FinalDepthAllowed direction
       (concreteCutDepth input.val bubble)) :

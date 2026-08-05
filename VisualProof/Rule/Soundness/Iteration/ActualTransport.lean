@@ -34,13 +34,13 @@ theorem relationRenamingOfEq_eq_of_binderLookup
 executable full-context index to be the inherited index transported from the
 retained route. -/
 theorem compiledRouteTerminal_hostIndex_eq
-    (checked : CheckedDiagram signature)
+    (checked : CheckedDiagram )
     {start target : Fin checked.val.regionCount}
     {startOuter : Nat} {startRels : RelCtx}
-    {startBody : Region signature startOuter startRels}
+    {startBody : Region  startOuter startRels}
     (startLeaf : Splice.Region.ContextPath.CompilerLeaf checked.val start
       (.here startBody))
-    (compiledItems : ItemSeq signature
+    (compiledItems : ItemSeq
       (startLeaf.inheritedWires.extend start).length startRels)
     {routePath : List Nat}
     (route : Splice.RegionRoute checked.val start target routePath)
@@ -49,7 +49,7 @@ theorem compiledRouteTerminal_hostIndex_eq
     (terminal : CompiledRouteTerminal checked startLeaf compiledItems route
       compiledPath routeWitness)
     {hostOuter : Nat} {hostRels : RelCtx}
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Splice.Region.ContextPath.CompilerLeaf checked.val target
@@ -86,7 +86,7 @@ theorem compiledRouteTerminal_hostIndex_eq
 /-- Iteration's exposed pattern attachment is exactly the quotient of the
 host wire from which that extracted boundary wire originated. -/
 theorem iterationExposedAttachment_eq_fragmentOrigin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (external : Fin
@@ -124,7 +124,7 @@ theorem iterationExposedAttachment_eq_fragmentOrigin
 /-- In the empty-spine branch, the executable exposed-wire substitution and
 the extraction context relation select the same coalesced anchor wire. -/
 theorem iterationRootWire_sameWire
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -199,11 +199,11 @@ theorem iterationRootWire_sameWire
 /-- The executable empty-spine wire map factors through the retained route's
 terminal inherited-wire map. -/
 theorem iterationRootWireFactor
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
-    {keptItems : ItemSeq signature
+    {keptItems : ItemSeq
       ((iterationCoalescedAnchorView input selection target hadmissible)
         |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
       (iterationCoalescedAnchorView input selection target hadmissible
@@ -305,7 +305,7 @@ theorem iterationRootWireFactor
 /-- The concrete wire selected by the executable terminal wire map is the
 same coalesced anchor wire selected by extraction's context relation. -/
 theorem iterationTerminalWire_sameWire
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -398,12 +398,12 @@ theorem iterationTerminalWire_sameWire
 /-- The extraction compiler and the splice compiler name the same concrete
 host binder for every terminal pattern relation. -/
 theorem iterationExtractionTerminalHostBinder_eq_terminalBinderTarget
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
@@ -448,13 +448,13 @@ theorem iterationExtractionTerminalHostBinder_eq_terminalBinderTarget
 /-- The relation substitution used by the executable splice is exactly the
 selected-anchor substitution transported down the retained route. -/
 theorem iterationTerminalRelationFactor
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    {keptItems : ItemSeq signature
+    {keptItems : ItemSeq
       ((iterationCoalescedAnchorView input selection target hadmissible)
         |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
       (iterationCoalescedAnchorView input selection target hadmissible
@@ -576,13 +576,13 @@ theorem iterationTerminalRelationFactor
 /-- The executable terminal wire index is the retained route's inherited
 anchor index, transported to the canonical host leaf at the target. -/
 theorem iterationTerminalWireFactor
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    {keptItems : ItemSeq signature
+    {keptItems : ItemSeq
       ((iterationCoalescedAnchorView input selection target hadmissible)
         |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
       (iterationCoalescedAnchorView input selection target hadmissible

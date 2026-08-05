@@ -7,7 +7,7 @@ open VisualProof.Data.Finite
 open VisualProof.Theory
 
 private theorem checkedOpen_rootWires_exact
-    (checked : CheckedOpenDiagram signature) :
+    (checked : CheckedOpenDiagram ) :
     WireContext.Exact checked.val.rootWires checked.val.diagram.root := by
   constructor
   · exact checked.val.rootWires_nodup
@@ -23,7 +23,7 @@ private theorem checkedOpen_rootWires_exact
 /-- Canonically reorder any exact root context of an open diagram into that
 diagram's exposed-then-hidden root context. -/
 noncomputable def exactContextToOpenRootWireEquiv
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     (context : WireContext checked.val.diagram)
     (exact : context.Exact checked.val.diagram.root) :
     FiniteEquiv (Fin context.length) (Fin checked.val.rootWires.length) :=
@@ -46,7 +46,7 @@ noncomputable def exactContextToOpenRootWireEquiv
           checked.property.diagram_well_formed.root_is_sheet hencloses)
 
 theorem exactContextToOpenRootWireEquiv_spec
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     (context : WireContext checked.val.diagram)
     (exact : context.Exact checked.val.diagram.root)
     (index : Fin context.length) :
@@ -56,24 +56,24 @@ theorem exactContextToOpenRootWireEquiv_spec
   exact FiniteEquiv.restrictLists_spec _ _ _ _ _ _ index
 
 theorem compiledOpenRootItemsIsoFromExactContext
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     (context : WireContext checked.val.diagram)
     (exact : context.Exact checked.val.diagram.root)
-    {closedItems : ItemSeq signature context.length []}
-    {openItems : ItemSeq signature checked.val.rootWires.length []}
-    (hclosed : compileOccurrencesWith? signature checked.val.diagram
-      (compileRegion? signature checked.val.diagram
+    {closedItems : ItemSeq  context.length []}
+    {openItems : ItemSeq  checked.val.rootWires.length []}
+    (hclosed : compileOccurrencesWith?  checked.val.diagram
+      (compileRegion?  checked.val.diagram
         checked.val.diagram.regionCount)
       context BinderContext.empty
       (localOccurrences checked.val.diagram checked.val.diagram.root) =
         some closedItems)
-    (hopen : compileOccurrencesWith? signature checked.val.diagram
-      (compileRegion? signature checked.val.diagram
+    (hopen : compileOccurrencesWith?  checked.val.diagram
+      (compileRegion?  checked.val.diagram
         checked.val.diagram.regionCount)
       checked.val.rootWires BinderContext.empty
       (localOccurrences checked.val.diagram checked.val.diagram.root) =
         some openItems) :
-    ItemSeqIso signature
+    ItemSeqIso
       (exactContextToOpenRootWireEquiv checked context exact) []
       closedItems openItems := by
   apply compileRootItems?_equivariant
@@ -87,16 +87,16 @@ theorem compiledOpenRootItemsIsoFromExactContext
 
 namespace CheckedDiagram
 
-def elaborate (checked : CheckedDiagram signature) : Region signature 0 [] :=
-  (compileRoot? signature checked.val []
+def elaborate (checked : CheckedDiagram ) : Region  0 [] :=
+  (compileRoot?  checked.val []
     (exactScopeWires checked.val checked.val.root)).get
       (Option.isSome_iff_exists.mpr
         (compileRoot?_complete checked.property [] _
           (closedRootWires_exact checked.property)))
 
-theorem elaborate_computation (checked : CheckedDiagram signature) :
+theorem elaborate_computation (checked : CheckedDiagram ) :
     exists body,
-      compileRoot? signature checked.val []
+      compileRoot?  checked.val []
           (exactScopeWires checked.val checked.val.root) = some body /\
         checked.elaborate = body := by
   obtain ⟨body, hbody⟩ := compileRoot?_complete checked.property [] _
@@ -109,12 +109,12 @@ end CheckedDiagram
 namespace CheckedOpenDiagram
 
 /-- Total elaboration of a checked open concrete diagram. -/
-def elaborate (checked : CheckedOpenDiagram signature) :
-    OpenDiagram signature checked.val.boundary.length where
+def elaborate (checked : CheckedOpenDiagram ) :
+    OpenDiagram  checked.val.boundary.length where
   externalClasses := checked.val.exposedWires.length
   boundary := checked.val.boundaryClass
   boundary_surjective := checked.val.boundaryClass_surjective
-  body := (compileRoot? signature checked.val.diagram
+  body := (compileRoot?  checked.val.diagram
     checked.val.exposedWires checked.val.hiddenWires).get
       (Option.isSome_iff_exists.mpr
         (compileRoot?_complete checked.property.diagram_well_formed _ _ (by
@@ -122,19 +122,19 @@ def elaborate (checked : CheckedOpenDiagram signature) :
             openRootWires_exact checked.property)))
 
 @[simp] theorem elaborate_externalClasses
-    (checked : CheckedOpenDiagram signature) :
+    (checked : CheckedOpenDiagram ) :
     checked.elaborate.externalClasses = checked.val.exposedWires.length :=
   rfl
 
 @[simp] theorem elaborate_boundary
-    (checked : CheckedOpenDiagram signature) :
+    (checked : CheckedOpenDiagram ) :
     checked.elaborate.boundary = checked.val.boundaryClass :=
   rfl
 
 theorem elaborate_body_computation
-    (checked : CheckedOpenDiagram signature) :
+    (checked : CheckedOpenDiagram ) :
     exists body,
-      compileRoot? signature checked.val.diagram checked.val.exposedWires
+      compileRoot?  checked.val.diagram checked.val.exposedWires
           checked.val.hiddenWires = some body ∧
         checked.elaborate.body = body := by
   obtain ⟨body, hbody⟩ := compileRoot?_complete
@@ -147,25 +147,25 @@ theorem elaborate_body_computation
 end CheckedOpenDiagram
 
 private theorem checked_asOpen_compileRoot_eq
-    (checked : CheckedDiagram signature) :
-    compileRoot? signature checked.asOpen.val.diagram
+    (checked : CheckedDiagram ) :
+    compileRoot?  checked.asOpen.val.diagram
         checked.asOpen.val.exposedWires checked.asOpen.val.hiddenWires =
-      compileRoot? signature checked.val []
+      compileRoot?  checked.val []
         (exactScopeWires checked.val checked.val.root) := by
-  change compileRoot? signature checked.val [] checked.val.asOpen.hiddenWires =
-    compileRoot? signature checked.val []
+  change compileRoot?  checked.val [] checked.val.asOpen.hiddenWires =
+    compileRoot?  checked.val []
       (exactScopeWires checked.val checked.val.root)
   rw [ConcreteDiagram.asOpen_hiddenWires]
 
 namespace CheckedDiagram
 
 @[simp] theorem asOpen_elaborate_externalClasses
-    (checked : CheckedDiagram signature) :
+    (checked : CheckedDiagram ) :
     checked.asOpen.elaborate.externalClasses = 0 := rfl
 
 /-- Empty-boundary open elaboration is exactly the existing closed elaboration. -/
 @[simp] theorem asOpen_elaborate_body
-    (checked : CheckedDiagram signature) :
+    (checked : CheckedDiagram ) :
     checked.asOpen.elaborate.body = checked.elaborate := by
   obtain ⟨openBody, hopenKernel, hopenElaborate⟩ :=
     CheckedOpenDiagram.elaborate_body_computation checked.asOpen
@@ -181,22 +181,22 @@ end CheckedDiagram
 
 namespace OpenConcreteDiagram
 
-def elaborate (d : OpenConcreteDiagram) (hwf : d.WellFormed signature) :
-    OpenDiagram signature d.boundary.length :=
+def elaborate (d : OpenConcreteDiagram) (hwf : d.WellFormed ) :
+    OpenDiagram  d.boundary.length :=
   CheckedOpenDiagram.elaborate ⟨d, hwf⟩
 
 theorem elaborate_proof_irrelevant (d : OpenConcreteDiagram)
-    (first second : d.WellFormed signature) :
+    (first second : d.WellFormed ) :
     d.elaborate first = d.elaborate second := by
   rfl
 
 @[simp] theorem elaborate_externalClasses (d : OpenConcreteDiagram)
-    (hwf : d.WellFormed signature) :
+    (hwf : d.WellFormed ) :
     (d.elaborate hwf).externalClasses = d.exposedWires.length :=
   rfl
 
 @[simp] theorem elaborate_boundary (d : OpenConcreteDiagram)
-    (hwf : d.WellFormed signature) :
+    (hwf : d.WellFormed ) :
     (d.elaborate hwf).boundary = d.boundaryClass :=
   rfl
 
@@ -204,29 +204,29 @@ end OpenConcreteDiagram
 
 namespace ConcreteDiagram
 
-def elaborate (d : ConcreteDiagram) (hwf : d.WellFormed signature) :
-    Region signature 0 [] :=
+def elaborate (d : ConcreteDiagram) (hwf : d.WellFormed ) :
+    Region  0 [] :=
   CheckedDiagram.elaborate ⟨d, hwf⟩
 
 theorem elaborate_proof_irrelevant (d : ConcreteDiagram)
-    (first second : d.WellFormed signature) :
+    (first second : d.WellFormed ) :
     d.elaborate first = d.elaborate second := by
   rfl
 
 @[simp] theorem asOpen_elaborate_externalClasses (d : ConcreteDiagram)
-    (hwf : d.WellFormed signature) :
+    (hwf : d.WellFormed ) :
     (d.asOpen.elaborate (d.asOpen_wellFormed hwf)).externalClasses = 0 :=
   CheckedDiagram.asOpen_elaborate_externalClasses ⟨d, hwf⟩
 
 @[simp] theorem asOpen_elaborate_body (d : ConcreteDiagram)
-    (hwf : d.WellFormed signature) :
+    (hwf : d.WellFormed ) :
     (d.asOpen.elaborate (d.asOpen_wellFormed hwf)).body = d.elaborate hwf :=
   CheckedDiagram.asOpen_elaborate_body ⟨d, hwf⟩
 
 theorem elaborate_computation (d : ConcreteDiagram)
-    (hwf : d.WellFormed signature) :
+    (hwf : d.WellFormed ) :
     exists body,
-      compileRoot? signature d [] (exactScopeWires d d.root) = some body /\
+      compileRoot?  d [] (exactScopeWires d d.root) = some body /\
         d.elaborate hwf = body :=
   CheckedDiagram.elaborate_computation ⟨d, hwf⟩
 

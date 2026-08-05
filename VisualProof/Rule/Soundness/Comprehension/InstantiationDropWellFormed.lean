@@ -7,8 +7,7 @@ open VisualProof.Diagram
 
 namespace InstantiationDrop
 
-variable {signature : List Nat}
-variable {origin : CheckedDiagram signature}
+variable {origin : CheckedDiagram }
 variable {p q : Nat}
 
 @[simp] theorem raw_regions
@@ -152,8 +151,6 @@ theorem requiresPort_iff
   | atom region binder =>
       simp only [raw_regions]
       cases state.diagram.val.regions binder <;> rfl
-  | named => rfl
-
 theorem endpointOccurs_of_surviving
     (state : InstantiationState origin p q)
     {wire : Fin state.diagram.val.wireCount}
@@ -172,7 +169,7 @@ theorem endpointOccurs_of_surviving
 
 theorem raw_wellFormed
     (state : InstantiationState origin p q) :
-    (dropInstantiationAtomsRaw state).WellFormed signature where
+    (dropInstantiationAtomsRaw state).WellFormed  where
   root_is_sheet := by
     simpa [ConcreteDiagram.RootIsSheet] using
       state.diagram.property.root_is_sheet
@@ -189,7 +186,6 @@ theorem raw_wellFormed
     cases hnode : state.diagram.val.nodes
         ((instantiationAtomDomain state).origin node) with
     | identity => trivial
-    | named => trivial
     | atom region binder =>
         have source := state.diagram.property.atom_binders_are_bubbles
           ((instantiationAtomDomain state).origin node)
@@ -201,23 +197,11 @@ theorem raw_wellFormed
     cases hnode : state.diagram.val.nodes
         ((instantiationAtomDomain state).origin node) with
     | identity => trivial
-    | named => trivial
     | atom region binder =>
         have source := state.diagram.property.atom_binders_enclose
           ((instantiationAtomDomain state).origin node)
         simp only [hnode] at source
         exact (raw_encloses_iff state binder region).2 source
-  named_references_resolve := by
-    intro node
-    rw [raw_node]
-    cases hnode : state.diagram.val.nodes
-        ((instantiationAtomDomain state).origin node) with
-    | identity => trivial
-    | atom => trivial
-    | named region definition arity =>
-        have source := state.diagram.property.named_references_resolve
-          ((instantiationAtomDomain state).origin node)
-        simpa only [hnode] using source
   endpoints_are_valid := by
     intro wire endpoint hendpoint
     obtain ⟨original, horiginal, hreindex⟩ :=
@@ -277,14 +261,6 @@ theorem raw_wellFormed
             intro port
             obtain ⟨wire, hwire⟩ := hcovered port
             exact ⟨wire, hindex ▸ endpointOccurs_of_surviving state hwire hsurvives⟩
-    | named region definition arity =>
-        have hcovered := state.diagram.property.required_ports_are_covered
-          original
-        simp only [hnode] at hcovered
-        rw [raw_node, hnode]
-        intro port
-        obtain ⟨wire, hwire⟩ := hcovered port
-        exact ⟨wire, hindex ▸ endpointOccurs_of_surviving state hwire hsurvives⟩
   wire_scopes_enclose := by
     intro wire endpoint hendpoint
     obtain ⟨original, horiginal, hreindex⟩ :=
@@ -299,7 +275,7 @@ theorem raw_wellFormed
 vacuous-binder step therefore composes with the existing certified modal
 simulation instead of relying on an unchecked intermediate. -/
 def checkedDrop (state : InstantiationState origin p q) :
-    CheckedDiagram signature :=
+    CheckedDiagram  :=
   ⟨dropInstantiationAtomsRaw state, raw_wellFormed state⟩
 
 end InstantiationDrop

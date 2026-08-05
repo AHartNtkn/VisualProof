@@ -204,7 +204,7 @@ theorem materialized_focused_localOccurrences
 /-- Retained nodes compile with exactly the materialized-wire collapse
 relation on their resolved ports. -/
 theorem oldNode_itemSimulation
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)
@@ -218,19 +218,18 @@ theorem oldNode_itemSimulation
       (materializedDiagram pattern.val attachment spine.bodyContainer) rels)
     (bindersEqual : HEq sourceBinders targetBinders)
     (sourceNode : Fin pattern.val.diagram.nodeCount)
-    (sourceItem : Item signature sourceContext.length rels)
-    (targetItem : Item signature targetContext.length rels)
-    (sourceCompiled : ConcreteElaboration.compileNode? signature
+    (sourceItem : Item  sourceContext.length rels)
+    (targetItem : Item  targetContext.length rels)
+    (sourceCompiled : ConcreteElaboration.compileNode?
       pattern.val.diagram sourceContext sourceBinders sourceNode =
         some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode? signature
+    (targetCompiled : ConcreteElaboration.compileNode?
       (materializedDiagram pattern.val attachment spine.bodyContainer)
       targetContext targetBinders
       (liftOldNode pattern.val attachment sourceNode) = some targetItem)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
       sourceItem targetItem := by
   cases bindersEqual
@@ -238,7 +237,7 @@ theorem oldNode_itemSimulation
     ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
       (source := pattern.val.diagram)
       (target := materializedDiagram pattern.val attachment spine.bodyContainer)
-      model named direction sourceContext targetContext
+      model  direction sourceContext targetContext
       (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
       sourceBinders sourceBinders
       (ConcreteElaboration.identityRelationRenaming rels)
@@ -290,7 +289,7 @@ theorem oldNode_itemSimulation
 the canonical lifted-old target position.  This orientation deliberately
 ignores fresh alias positions until the distinguished identity block. -/
 theorem oldNode_itemSimulation_oldIndex
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)
@@ -304,19 +303,18 @@ theorem oldNode_itemSimulation_oldIndex
       (materializedDiagram pattern.val attachment spine.bodyContainer) rels)
     (bindersEqual : HEq sourceBinders targetBinders)
     (sourceNode : Fin pattern.val.diagram.nodeCount)
-    (sourceItem : Item signature sourceContext.length rels)
-    (targetItem : Item signature targetContext.length rels)
-    (sourceCompiled : ConcreteElaboration.compileNode? signature
+    (sourceItem : Item  sourceContext.length rels)
+    (targetItem : Item  targetContext.length rels)
+    (sourceCompiled : ConcreteElaboration.compileNode?
       pattern.val.diagram sourceContext sourceBinders sourceNode =
         some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode? signature
+    (targetCompiled : ConcreteElaboration.compileNode?
       (materializedDiagram pattern.val attachment spine.bodyContainer)
       targetContext targetBinders
       (liftOldNode pattern.val attachment sourceNode) = some targetItem)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       (ConcreteElaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
       sourceItem targetItem := by
   cases bindersEqual
@@ -324,7 +322,7 @@ theorem oldNode_itemSimulation_oldIndex
     ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
       (source := pattern.val.diagram)
       (target := materializedDiagram pattern.val attachment spine.bodyContainer)
-      model named direction sourceContext targetContext
+      model  direction sourceContext targetContext
       (ConcreteElaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
       sourceBinders sourceBinders
       (ConcreteElaboration.identityRelationRenaming rels)

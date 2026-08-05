@@ -13,16 +13,15 @@ compiler transport plus caller-supplied recursive transport for child
 occurrences.  The occurrence equivalence removes any dependence on dense
 enumeration order. -/
 theorem advance_offsite_items_simulation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -67,14 +66,13 @@ theorem advance_offsite_items_simulation
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
-    (sourceItems : ItemSeq signature sourceContext.length sourceRels)
-    (targetItems : ItemSeq signature targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (sourceItems : ItemSeq  sourceContext.length sourceRels)
+    (targetItems : ItemSeq  targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw
-      (compileSurvivorRegion? signature
+      (compileSurvivorRegion?
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible) sourceFuel)
       sourceContext sourceBinders
@@ -84,10 +82,10 @@ theorem advance_offsite_items_simulation
         (dropOccurrenceSurvives
           (coalescedInstantiationState comprehension attachments binders payload
             state site arguments hadmissible))) = some sourceItems)
-    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload state
         atom tail site arguments hadmissible).diagram.val
-      (compileSurvivorRegion? signature
+      (compileSurvivorRegion?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible) targetFuel)
       targetContext targetBinders
@@ -108,29 +106,29 @@ theorem advance_offsite_items_simulation
           (dropOccurrenceSurvives
             (coalescedInstantiationState comprehension attachments binders
               payload state site arguments hadmissible)))
-      (sourceItem : Item signature sourceContext.length sourceRels)
-      (targetItem : Item signature targetContext.length targetRels),
-      ConcreteElaboration.compileOccurrenceWith? signature
+      (sourceItem : Item  sourceContext.length sourceRels)
+      (targetItem : Item  targetContext.length targetRels),
+      ConcreteElaboration.compileOccurrenceWith?
           (instantiateSpliceInput comprehension attachments binders payload state
             site arguments).coalesceFrameRaw
-          (compileSurvivorRegion? signature
+          (compileSurvivorRegion?
             (coalescedInstantiationState comprehension attachments binders
               payload state site arguments hadmissible) sourceFuel)
           sourceContext sourceBinders (.child child) = some sourceItem →
-      ConcreteElaboration.compileOccurrenceWith? signature
+      ConcreteElaboration.compileOccurrenceWith?
           (advanceInstantiationState comprehension attachments binders payload
             state atom tail site arguments hadmissible).diagram.val
-          (compileSurvivorRegion? signature
+          (compileSurvivorRegion?
             (advanceInstantiationState comprehension attachments binders payload
               state atom tail site arguments hadmissible) targetFuel)
           targetContext targetBinders
           ((instantiateSpliceInput comprehension attachments binders payload
             state site arguments).plugLayout.mapFrameOccurrence (.child child)) =
             some targetItem →
-      ConcreteElaboration.ItemSimulation model named direction
+      ConcreteElaboration.ItemSimulation model  direction
         (ConcreteElaboration.ContextIndexRelation.forwardMap wireMap)
         (sourceItem.renameRelations relationMap) targetItem) :
-    ConcreteElaboration.ItemSeqSimulation model named direction
+    ConcreteElaboration.ItemSeqSimulation model  direction
       (ConcreteElaboration.ContextIndexRelation.forwardMap wireMap)
       (sourceItems.renameRelations relationMap) targetItems := by
   let spliceInput := instantiateSpliceInput comprehension attachments binders
@@ -147,8 +145,8 @@ theorem advance_offsite_items_simulation
     (ConcreteElaboration.localOccurrences next.diagram.val
       (layout.frameRegion region)).filter (dropOccurrenceSurvives next)
   apply compileOccurrences_simulation_of_equiv
-    (compileSurvivorRegion? signature coalesced sourceFuel)
-    (compileSurvivorRegion? signature next targetFuel)
+    (compileSurvivorRegion?  coalesced sourceFuel)
+    (compileSurvivorRegion?  next targetFuel)
     sourceContext targetContext sourceBinders targetBinders sourceOccurrences
     targetOccurrences
     (advanceOffsiteOccurrenceEquiv comprehension attachments binders payload
@@ -156,7 +154,7 @@ theorem advance_offsite_items_simulation
     layout.mapFrameOccurrence
     (advanceOffsiteOccurrenceEquiv_spec comprehension attachments binders payload
       state atom tail site arguments node_eq hadmissible region hne)
-    model named direction
+    model  direction
     (ConcreteElaboration.ContextIndexRelation.forwardMap wireMap) relationMap
   · intro occurrence member sourceItem targetItem sourceAt targetAt
     cases occurrence with
@@ -167,7 +165,7 @@ theorem advance_offsite_items_simulation
         apply frameNode_simulation_of_mapped spliceInput hadmissible region
           sourceContext targetContext sourceExact targetExact sourceBinders
           targetBinders sourceCover sourceEnumeration wireMap wireSpec
-          relationMap relationSpec node nodeRegion model named direction
+          relationMap relationSpec node nodeRegion model  direction
           sourceItem targetItem
         · simpa [ConcreteElaboration.compileOccurrenceWith?] using sourceAt
         · simpa [layout, Splice.Input.PlugLayout.mapFrameOccurrence,

@@ -7,9 +7,9 @@ open VisualProof.Data.Finite
 open VisualProof.Diagram
 
 noncomputable def deiterationExtraction
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) :
-    CheckedExtraction signature input selection where
+    CheckedExtraction  input selection where
   raw := {}
   fragment :=
     ⟨input.val.extractOpenRaw selection {},
@@ -17,9 +17,9 @@ noncomputable def deiterationExtraction
   fragment_eq := rfl
 
 noncomputable def deiterationDecomposition
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) :
-    Decomposition signature input selection where
+    Decomposition  input selection where
   frameDomains := deiterationDomains input selection
   frame :=
     ⟨input.val.removeRaw selection (deiterationDomains input selection),
@@ -29,47 +29,47 @@ noncomputable def deiterationDecomposition
   extraction := deiterationExtraction input selection
 
 noncomputable def deiterationRemoved
-    (input : CheckedDiagram signature)
-    (selection : CheckedSelection input.val) : CheckedDiagram signature :=
+    (input : CheckedDiagram )
+    (selection : CheckedSelection input.val) : CheckedDiagram  :=
   (deiterationDecomposition input selection).frame
 
 noncomputable def deiterationReinsertTarget
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) :
     Fin (deiterationRemoved input selection).val.regionCount :=
   Splice.Decomposition.originalSite
     (deiterationDecomposition input selection)
 
 noncomputable def deiterationReinsertInput
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) : Splice.Input signature :=
+    (witness : DeiterationWitness input selection) : Splice.Input  :=
   iterationInput (deiterationRemoved input selection)
     (deiterationRetainedSelection input selection witness)
     (deiterationReinsertTarget input selection)
 
 @[simp] theorem deiterationRemoved_val
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) :
     (deiterationRemoved input selection).val =
       input.val.removeRaw selection (deiterationDomains input selection) := rfl
 
 @[simp] theorem deiterationReinsertInput_frame
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationReinsertInput input selection witness).frame =
       deiterationRemoved input selection := rfl
 
 @[simp] theorem deiterationReinsertInput_site
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationReinsertInput input selection witness).site =
       deiterationReinsertTarget input selection := rfl
 
 theorem deiterationSelectedRegions_length_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     witness.justifier.selectedRegions.length =
@@ -82,7 +82,7 @@ theorem deiterationSelectedRegions_length_eq
   omega
 
 theorem deiterationJustifier_not_selects_selectionAnchor
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     ¬ witness.justifier.val.SelectsRegion selection.val.anchor := by
@@ -134,7 +134,7 @@ theorem deiterationJustifier_not_selects_selectionAnchor
         regionMember
 
 theorem deiterationSelectionAnchor_survives
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) :
     (deiterationDomains input selection).regions.survives
         selection.val.anchor = true := by
@@ -148,7 +148,7 @@ theorem deiterationSelectionAnchor_survives
     childEncloses
 
 theorem deiterationReinsert_encloses
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationRemoved input selection).val.Encloses
@@ -164,7 +164,7 @@ theorem deiterationReinsert_encloses
     deiterationRetainedSelection, deiterationRetainedRequest] using transported
 
 theorem deiterationReinsert_not_selected
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     ¬ (deiterationRetainedSelection input selection witness).val.SelectsRegion
@@ -182,7 +182,7 @@ theorem deiterationReinsert_not_selected
   exact deiterationJustifier_not_selects_selectionAnchor input selection witness
 
 theorem deiterationReinsertInput_admissible
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationReinsertInput input selection witness).Admissible where
@@ -237,25 +237,25 @@ theorem deiterationReinsertInput_admissible
 /-- The certified inverse insertion is accepted by the splice checker for
 every executor-accepted deiteration witness. -/
 theorem deiterationReinsert_complete
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
-    ∃ result, Splice.Input.spliceChecked signature
+    ∃ result, Splice.Input.spliceChecked
       (deiterationReinsertInput input selection witness) = .ok result :=
   (deiterationReinsertInput input selection witness).spliceChecked_complete
     (deiterationReinsertInput_admissible input selection witness)
 
 noncomputable def deiterationReinsertResult
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) : CheckedDiagram signature :=
+    (witness : DeiterationWitness input selection) : CheckedDiagram  :=
   Classical.choose (deiterationReinsert_complete input selection witness)
 
 theorem deiterationReinsertResult_spec
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
-    Splice.Input.spliceChecked signature
+    Splice.Input.spliceChecked
         (deiterationReinsertInput input selection witness) =
       .ok (deiterationReinsertResult input selection witness) :=
   Classical.choose_spec (deiterationReinsert_complete input selection witness)
@@ -264,7 +264,7 @@ theorem deiterationReinsertResult_spec
 the enclosing, non-selection, and checked-splice branches are all discharged
 from the deiteration witness rather than assumed. -/
 theorem applyIteration_deiterationReinsert_complete
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     ∃ receipt, applyIteration (deiterationRemoved input selection)
@@ -278,7 +278,7 @@ theorem applyIteration_deiterationReinsert_complete
       (deiterationReinsert_not_selected input selection witness selected)
   · split
     · rename_i error hsplice
-      have accepted : Splice.Input.spliceChecked signature
+      have accepted : Splice.Input.spliceChecked
           (iterationInput (deiterationRemoved input selection)
             (deiterationRetainedSelection input selection witness)
             (deiterationReinsertTarget input selection)) =
@@ -289,7 +289,7 @@ theorem applyIteration_deiterationReinsert_complete
     · exact ⟨_, rfl⟩
 
 noncomputable def deiterationReinsertReceipt
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     StepReceipt (deiterationRemoved input selection) :=
@@ -297,7 +297,7 @@ noncomputable def deiterationReinsertReceipt
     (applyIteration_deiterationReinsert_complete input selection witness)
 
 theorem deiterationReinsertReceipt_spec
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     applyIteration (deiterationRemoved input selection)

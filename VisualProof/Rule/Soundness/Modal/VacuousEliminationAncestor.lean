@@ -10,8 +10,8 @@ open VisualProof.Diagram
 ancestor of the eliminated bubble's parent. -/
 private theorem sourceAncestor_maps
     (trace : VacuousElimTrace input bubble raw)
-    (targetWellFormed : input.WellFormed signature)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
+    (targetWellFormed : input.WellFormed )
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
     (descendant ancestor : Fin trace.sourceDiagram.regionCount)
     (descendantEnclosesFocus : trace.sourceDiagram.Encloses descendant
       (trace.targetIndex targetWellFormed))
@@ -61,8 +61,8 @@ private theorem sourceAncestor_maps
 parent under the survivor origin map. -/
 theorem sourceEnclosesFocus_iff_forward
     (trace : VacuousElimTrace input bubble raw)
-    (targetWellFormed : input.WellFormed signature)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
+    (targetWellFormed : input.WellFormed )
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
     (ancestor : Fin trace.sourceDiagram.regionCount)
     (encloses : trace.sourceDiagram.Encloses ancestor
       (trace.targetIndex targetWellFormed)) :
@@ -81,8 +81,8 @@ theorem sourceEnclosesFocus_iff_forward
 the promoted focus. -/
 private theorem targetAncestor_lifts
     (trace : VacuousElimTrace input bubble raw)
-    (targetWellFormed : input.WellFormed signature)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
+    (targetWellFormed : input.WellFormed )
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
     (targetCurrent : Fin input.regionCount)
     (sourceCurrent : Fin trace.sourceDiagram.regionCount)
     (currentOrigin : trace.origin sourceCurrent = targetCurrent)
@@ -160,8 +160,8 @@ private theorem targetAncestor_lifts
 surviving representative enclosing the promoted focus. -/
 theorem sourceEnclosesFocus_iff_backward
     (trace : VacuousElimTrace input bubble raw)
-    (targetWellFormed : input.WellFormed signature)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
+    (targetWellFormed : input.WellFormed )
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
     (ancestor : Fin input.regionCount)
     (encloses : input.Encloses ancestor trace.parent) :
     ∃ sourceAncestor,

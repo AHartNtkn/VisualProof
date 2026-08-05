@@ -8,7 +8,7 @@ open VisualProof.Diagram
 
 /-- The extracted iteration pattern has no repeated boundary wire identities. -/
 theorem iterationPattern_boundary_get_injective
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount) :
     Function.Injective
@@ -20,7 +20,7 @@ theorem iterationPattern_boundary_get_injective
 /-- Iteration attaches distinct extracted boundary positions to the
 corresponding distinct touching host wires. -/
 theorem iterationAttachment_injective
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount) :
     Function.Injective (iterationInput input selection target).attachment := by
@@ -43,7 +43,7 @@ theorem iterationAttachment_injective
 /-- Extraction-generated iteration inputs have a discrete attachment
 partition: the splice compiler never coalesces two retained frame wires. -/
 theorem iterationAttachmentPartition_related_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (left right : Fin input.val.wireCount) :
@@ -65,7 +65,7 @@ theorem iterationAttachmentPartition_related_iff
     exact FinitePartition.related_refl _ _
 
 theorem iterationAttachmentPartition_representative
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (wire : Fin input.val.wireCount) :
@@ -80,7 +80,7 @@ theorem iterationAttachmentPartition_representative
 /-- Canonical identification of the iteration quotient carrier with the
 unchanged frame-wire carrier. -/
 def iterationQuotientWireEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount) :
     FiniteEquiv
@@ -101,7 +101,7 @@ def iterationQuotientWireEquiv
       wire _
 
 private theorem iterationQuotientWire_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (quotient : (iterationInput input selection target).wireQuotient.Carrier) :
@@ -129,7 +129,7 @@ private theorem iterationQuotientWire_eq
   simpa only [Splice.Input.quotientWire, iterationQuotientWireEquiv] using classEq
 
 private theorem iterationClassWire_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (quotient : (iterationInput input selection target).wireQuotient.Carrier)
@@ -144,7 +144,7 @@ private theorem iterationClassWire_eq
         (iterationQuotientWire_eq input selection target quotient).symm
 
 private theorem iterationClassWires_eq_singleton
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (quotient : (iterationInput input selection target).wireQuotient.Carrier) :
@@ -178,7 +178,7 @@ private theorem iterationClassWires_eq_singleton
           simp at nodup
 
 theorem iterationCoalescedScope_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (quotient : (iterationInput input selection target).wireQuotient.Carrier) :
@@ -199,7 +199,7 @@ theorem iterationCoalescedScope_eq
   · rfl
 
 theorem iterationCoalescedEndpoints_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (quotient : (iterationInput input selection target).wireQuotient.Carrier) :
@@ -211,7 +211,7 @@ theorem iterationCoalescedEndpoints_eq
   simp [iterationInput]
 
 @[simp] theorem iterationQuotientWireEquiv_quotientWire
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (wire : Fin input.val.wireCount) :
@@ -234,7 +234,7 @@ private theorem fin_count_eq_of_equiv
 coalesced frame used by the splice compiler is isomorphic to the original
 input diagram, with regions and nodes fixed pointwise. -/
 noncomputable def iterationCoalescedFrameIso
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount) :
     ConcreteIso (iterationInput input selection target).coalesceFrameRaw
@@ -275,7 +275,7 @@ noncomputable def iterationCoalescedFrameIso
 /-- The canonical coalesced open frame for iteration is the original open
 frame, including the caller's ordered and potentially repeated boundary. -/
 noncomputable def iterationCoalescedOpenIso
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (boundary : List (Fin input.val.wireCount)) :

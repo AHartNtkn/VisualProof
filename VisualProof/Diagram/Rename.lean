@@ -84,46 +84,44 @@ theorem RelationRenaming.lift_comp_fun
 
 mutual
   def Region.renameWires (rho : Fin source -> Fin target) :
-      Region signature source rels -> Region signature target rels
+      Region  source rels -> Region  target rels
     | .mk localWires items =>
         .mk localWires (items.renameWires (extendWireRenaming rho localWires))
 
   def Item.renameWires (rho : Fin source -> Fin target) :
-      Item signature source rels -> Item signature target rels
+      Item  source rels -> Item  target rels
     | .atom relation arguments => .atom relation (rho ∘ arguments)
     | .identity arity arguments => .identity arity (rho ∘ arguments)
-    | .named relation arguments => .named relation (rho ∘ arguments)
     | .cut body => .cut (body.renameWires rho)
     | .bubble arity body => .bubble arity (body.renameWires rho)
 
   def ItemSeq.renameWires (rho : Fin source -> Fin target) :
-      ItemSeq signature source rels -> ItemSeq signature target rels
+      ItemSeq  source rels -> ItemSeq  target rels
     | .nil => .nil
     | .cons item tail => .cons (item.renameWires rho) (tail.renameWires rho)
 end
 
 mutual
   def Region.renameRelations (rho : RelationRenaming source target) :
-      Region signature wires source -> Region signature wires target
+      Region  wires source -> Region  wires target
     | .mk localWires items => .mk localWires (items.renameRelations rho)
 
   def Item.renameRelations (rho : RelationRenaming source target) :
-      Item signature wires source -> Item signature wires target
+      Item  wires source -> Item  wires target
     | .atom relation arguments => .atom (rho relation) arguments
     | .identity arity arguments => .identity arity arguments
-    | .named relation arguments => .named relation arguments
     | .cut body => .cut (body.renameRelations rho)
     | .bubble arity body =>
         .bubble arity (body.renameRelations (RelationRenaming.lift rho arity))
 
   def ItemSeq.renameRelations (rho : RelationRenaming source target) :
-      ItemSeq signature wires source -> ItemSeq signature wires target
+      ItemSeq  wires source -> ItemSeq  wires target
     | .nil => .nil
     | .cons item tail =>
         .cons (item.renameRelations rho) (tail.renameRelations rho)
 end
 
-theorem Region.renameWires_id (region : Region signature wires rels) :
+theorem Region.renameWires_id (region : Region  wires rels) :
     region.renameWires id = region := by
   apply Region.rec
     (motive_1 := fun _ _ region => region.renameWires id = region)
@@ -136,8 +134,6 @@ theorem Region.renameWires_id (region : Region signature wires rels) :
     simp [Item.renameWires, Function.comp_def]
   · intro _ _ arity arguments
     simp [Item.renameWires, Function.comp_def]
-  · intro _ _ _ relation arguments
-    simp [Item.renameWires, Function.comp_def]
   · intro _ _ body ih
     exact congrArg Item.cut ih
   · intro _ _ arity body ih
@@ -148,7 +144,7 @@ theorem Region.renameWires_id (region : Region signature wires rels) :
     simp only [ItemSeq.renameWires]
     rw [ihItem, ihTail]
 
-theorem Item.renameWires_id (item : Item signature wires rels) :
+theorem Item.renameWires_id (item : Item  wires rels) :
     item.renameWires id = item := by
   have h := Region.renameWires_id
     (Region.mk 0 (ItemSeq.cons item ItemSeq.nil))
@@ -158,14 +154,14 @@ theorem Item.renameWires_id (item : Item signature wires rels) :
       ItemSeq.cons item ItemSeq.nil := eq_of_heq (Region.mk.inj h).2
   exact (ItemSeq.cons.inj hseq).1
 
-theorem ItemSeq.renameWires_id (items : ItemSeq signature wires rels) :
+theorem ItemSeq.renameWires_id (items : ItemSeq  wires rels) :
     items.renameWires id = items := by
   have h := Region.renameWires_id (Region.mk 0 items)
   simp only [Region.renameWires, extendWireRenaming_id] at h
   exact eq_of_heq (Region.mk.inj h).2
 
 mutual
-  theorem Region.renameWires_comp (region : Region signature source rels)
+  theorem Region.renameWires_comp (region : Region  source rels)
       (rho : Fin source -> Fin middle) (tau : Fin middle -> Fin target) :
       (region.renameWires rho).renameWires tau =
         region.renameWires (tau ∘ rho) := by
@@ -181,21 +177,20 @@ mutual
           _ = _ := congrArg (fun f => items.renameWires f)
             (extendWireRenaming_comp rho tau localWires)
 
-  theorem Item.renameWires_comp (item : Item signature source rels)
+  theorem Item.renameWires_comp (item : Item  source rels)
       (rho : Fin source -> Fin middle) (tau : Fin middle -> Fin target) :
       (item.renameWires rho).renameWires tau =
         item.renameWires (tau ∘ rho) := by
     cases item with
     | atom relation arguments => rfl
     | identity arity arguments => rfl
-    | named relation arguments => rfl
     | cut body =>
         exact congrArg Item.cut (Region.renameWires_comp body rho tau)
     | bubble arity body =>
         exact congrArg (Item.bubble arity)
           (Region.renameWires_comp body rho tau)
 
-  theorem ItemSeq.renameWires_comp (items : ItemSeq signature source rels)
+  theorem ItemSeq.renameWires_comp (items : ItemSeq  source rels)
       (rho : Fin source -> Fin middle) (tau : Fin middle -> Fin target) :
       (items.renameWires rho).renameWires tau =
         items.renameWires (tau ∘ rho) := by
@@ -206,7 +201,7 @@ mutual
         rw [Item.renameWires_comp, ItemSeq.renameWires_comp]
 end
 
-theorem Region.renameRelations_id (region : Region signature wires rels) :
+theorem Region.renameRelations_id (region : Region  wires rels) :
     region.renameRelations (fun r => r) = region := by
   apply Region.rec
     (motive_1 := fun _ _ region =>
@@ -221,8 +216,6 @@ theorem Region.renameRelations_id (region : Region signature wires rels) :
     rfl
   · intro _ _ arity arguments
     rfl
-  · intro _ _ _ relation arguments
-    rfl
   · intro _ _ body ih
     exact congrArg Item.cut ih
   · intro _ _ arity body ih
@@ -235,7 +228,7 @@ theorem Region.renameRelations_id (region : Region signature wires rels) :
     simp only [ItemSeq.renameRelations]
     rw [ihItem, ihTail]
 
-theorem Item.renameRelations_id (item : Item signature wires rels) :
+theorem Item.renameRelations_id (item : Item  wires rels) :
     item.renameRelations (fun r => r) = item := by
   have h := Region.renameRelations_id
     (Region.mk 0 (ItemSeq.cons item ItemSeq.nil))
@@ -244,13 +237,13 @@ theorem Item.renameRelations_id (item : Item signature wires rels) :
       ItemSeq.cons item ItemSeq.nil := eq_of_heq (Region.mk.inj h).2
   exact (ItemSeq.cons.inj hseq).1
 
-theorem ItemSeq.renameRelations_id (items : ItemSeq signature wires rels) :
+theorem ItemSeq.renameRelations_id (items : ItemSeq  wires rels) :
     items.renameRelations (fun r => r) = items := by
   have h := Region.renameRelations_id (Region.mk 0 items)
   simp only [Region.renameRelations] at h
   exact eq_of_heq (Region.mk.inj h).2
 
-theorem Region.renameRelations_comp (region : Region signature wires source)
+theorem Region.renameRelations_comp (region : Region  wires source)
     (rho : RelationRenaming source middle)
     (tau : RelationRenaming middle target) :
     (region.renameRelations rho).renameRelations tau =
@@ -277,8 +270,6 @@ theorem Region.renameRelations_comp (region : Region signature wires source)
     rfl
   · intro _ _ arity arguments _ _ rho tau
     rfl
-  · intro _ _ _ relation arguments _ _ rho tau
-    rfl
   · intro _ _ body ih _ _ rho tau
     exact congrArg Item.cut (ih rho tau)
   · intro _ _ arity body ih _ _ rho tau
@@ -292,7 +283,7 @@ theorem Region.renameRelations_comp (region : Region signature wires source)
     simp only [ItemSeq.renameRelations]
     rw [ihItem rho tau, ihTail rho tau]
 
-theorem Item.renameRelations_comp (item : Item signature wires source)
+theorem Item.renameRelations_comp (item : Item  wires source)
     (rho : RelationRenaming source middle)
     (tau : RelationRenaming middle target) :
     (item.renameRelations rho).renameRelations tau =
@@ -303,7 +294,7 @@ theorem Item.renameRelations_comp (item : Item signature wires source)
   have hseq := eq_of_heq (Region.mk.inj h).2
   exact (ItemSeq.cons.inj hseq).1
 
-theorem ItemSeq.renameRelations_comp (items : ItemSeq signature wires source)
+theorem ItemSeq.renameRelations_comp (items : ItemSeq  wires source)
     (rho : RelationRenaming source middle)
     (tau : RelationRenaming middle target) :
     (items.renameRelations rho).renameRelations tau =
@@ -329,23 +320,23 @@ theorem BoundaryAssignment.map_comp (assignment : BoundaryAssignment d D)
   cases assignment
   rfl
 
-def OpenDiagram.identityBoundaryAssignment (d : OpenDiagram signature arity) :
+def OpenDiagram.identityBoundaryAssignment (d : OpenDiagram  arity) :
     BoundaryAssignment d (Fin d.externalClasses) where
   args := d.boundary
   classes := id
   agrees := fun _ => rfl
 
-def OpenDiagram.substituteBoundary (d : OpenDiagram signature arity)
+def OpenDiagram.substituteBoundary (d : OpenDiagram  arity)
     (assignment : BoundaryAssignment d (Fin wires)) :
-    Region signature wires [] :=
+    Region  wires [] :=
   d.body.renameWires assignment.classes
 
-theorem OpenDiagram.substituteBoundary_id (d : OpenDiagram signature arity) :
+theorem OpenDiagram.substituteBoundary_id (d : OpenDiagram  arity) :
     d.substituteBoundary d.identityBoundaryAssignment = d.body := by
   exact Region.renameWires_id d.body
 
 theorem OpenDiagram.substituteBoundary_comp
-    (d : OpenDiagram signature arity)
+    (d : OpenDiagram  arity)
     (assignment : BoundaryAssignment d (Fin source))
     (rho : Fin source -> Fin target) :
     (d.substituteBoundary assignment).renameWires rho =

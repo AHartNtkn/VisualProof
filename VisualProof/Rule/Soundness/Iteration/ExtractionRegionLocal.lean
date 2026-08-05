@@ -8,7 +8,7 @@ open VisualProof.Diagram
 
 /-- Index of the host-local wire represented by one extracted local wire. -/
 noncomputable def extractionMaterialLocalToHost
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount) :
@@ -26,7 +26,7 @@ noncomputable def extractionMaterialLocalToHost
       (List.get_mem _ index)))
 
 theorem extractionMaterialLocalToHost_indexOf
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
@@ -51,7 +51,7 @@ theorem extractionMaterialLocalToHost_indexOf
       (List.get_mem _ index)))
 
 theorem extractionMaterialLocalToHost_spec
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
@@ -76,7 +76,7 @@ theorem extractionMaterialLocalToHost_spec
 
 /-- Index of the unique extracted local preimage of one host-local wire. -/
 noncomputable def extractionMaterialLocalFromHost
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount) :
@@ -94,7 +94,7 @@ noncomputable def extractionMaterialLocalFromHost
     Classical.choose (indexOf?_complete (Classical.choose_spec evidence).2)
 
 theorem extractionMaterialLocalFromHost_spec
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
@@ -135,7 +135,7 @@ theorem extractionMaterialLocalFromHost_spec
 /-- Exact local-wire provenance is a finite equivalence, not merely an
 injection. -/
 noncomputable def extractionMaterialLocalEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount) :
@@ -268,7 +268,7 @@ theorem extendedIndex_cases
 values are forced by the outer agreement; copied local values are selected by
 the canonical full-context index map. -/
 theorem extractionExtendedEnvironmentsAgree_backward
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -366,7 +366,7 @@ theorem extractionExtendedEnvironmentsAgree_backward
 values are selected from the unique extracted preimages; ambient values remain
 the already-related host valuation. -/
 theorem extractionExtendedEnvironmentsAgree_forward
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -479,7 +479,7 @@ theorem extractionExtendedEnvironmentsAgree_forward
 /-- Direction-independent packaging of the two exact valuation-selection
 arguments required by `directionalLocalTransport_of_agreement`. -/
 theorem extractionDirectionalEnvironmentSelection
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (direction : ConcreteElaboration.SimulationDirection)

@@ -334,16 +334,15 @@ theorem patternLocalSelectionMapped
 /-- The input-local authoritative simulation from the intrinsic pattern graph
 to the corresponding retained material inside the concrete plug. -/
 noncomputable def patternConcreteSemanticSimulation
-    {signature : List Nat}
-    {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
-    ConcreteElaboration.ConcreteSemanticSimulation signature
-      input.pattern.val.diagram layout.plugRaw model named where
+    :
+    ConcreteElaboration.ConcreteSemanticSimulation
+      input.pattern.val.diagram layout.plugRaw model  where
   source_wellFormed := input.pattern.property.diagram_well_formed
-  target_wellFormed := layout.plugRaw_wellFormed signature input hadmissible
+  target_wellFormed := layout.plugRaw_wellFormed  input hadmissible
   regionMap := layout.patternSimulationRegionMap
   binderMap := layout.binderRegion
   Distinguished := fun region =>
@@ -511,7 +510,7 @@ noncomputable def patternConcreteSemanticSimulation
       (ConcreteElaboration.ContextIndexRelation.forwardMap indexMap)
       (ConcreteElaboration.ContextIndexRelation.forwardMap
         (layout.patternExtendedWireMap sourceContext targetContext region
-          hregion indexMap)) model named
+          hregion indexMap)) model
       (sourceItems.renameRelations binderWitness.relationMap) targetItems ?_
       itemSemantics
     exact layout.patternLocalSelectionMapped direction region hregion
@@ -529,7 +528,7 @@ noncomputable def patternConcreteSemanticSimulation
     apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
       (source := input.pattern.val.diagram)
       (target := layout.plugRaw)
-      model named direction sourceContext targetContext
+      model  direction sourceContext targetContext
       (ConcreteElaboration.ContextIndexRelation.forwardMap indexMap)
       sourceBinders targetBinders binderWitness.relationMap sourceNode
       (layout.patternNode sourceNode)
@@ -552,7 +551,7 @@ noncomputable def patternConcreteSemanticSimulation
               ⟨sourceNode, requested⟩ (by
                 simpa [mapPatternEndpoint] using occurs)
           exact ⟨sourceWire, wireEq, sourceOccurs⟩)
-        ((layout.plugRaw_wellFormed signature input hadmissible)
+        ((layout.plugRaw_wellFormed  input hadmissible)
           |>.wire_endpoints_are_disjoint) port
       rw [targetResolved, sourceResolved] at resolved
       exact Option.some.inj resolved |>.symm
@@ -571,12 +570,10 @@ All recursive cut and bubble semantics are delegated to the generalized
 compiler theorem; callers supply only the actual compiler contexts and
 results reached at the enclosing splice site. -/
 theorem compilePatternRegion_denote_at_material
-    {signature : List Nat}
-    {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     {sourceRels targetRels : Theory.RelCtx}
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
@@ -604,19 +601,19 @@ theorem compilePatternRegion_denote_at_material
     (sourceExact : (sourceContext.extend region).Exact region)
     (targetExact : (targetContext.extend (layout.bodyRegion region)).Exact
       (layout.bodyRegion region))
-    (sourceBody : Region signature sourceContext.length sourceRels)
-    (targetBody : Region signature targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileRegion? signature
+    (sourceBody : Region  sourceContext.length sourceRels)
+    (targetBody : Region  targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileRegion?
       input.pattern.val.diagram fuelSource region sourceContext sourceBinders =
         some sourceBody)
-    (targetCompiled : ConcreteElaboration.compileRegion? signature
+    (targetCompiled : ConcreteElaboration.compileRegion?
       layout.plugRaw fuelTarget (layout.bodyRegion region) targetContext
         targetBinders = some targetBody) :
-    ConcreteElaboration.RegionSimulation model named direction
+    ConcreteElaboration.RegionSimulation model  direction
       (ConcreteElaboration.ContextIndexRelation.forwardMap indexMap)
       (sourceBody.renameRelations binderWitness.relationMap) targetBody := by
   let simulation := layout.patternConcreteSemanticSimulation hadmissible model
-    named
+
   have atRegion : simulation.AtRegion (some indexMap) region :=
     ⟨hregion, indexMap, rfl, indexSpec, memberSpec⟩
   have result := simulation.compileRegion_denote direction fuelSource fuelTarget
@@ -641,45 +638,43 @@ focused compiler context.  Root nodes use the public node kernel; every root
 child is material for an empty proxy spine and therefore recurses through
 `compilePatternRegion_denote_at_material`. -/
 theorem compilePatternRootOccurrence_at_site_simulation
-    {signature : List Nat}
-    {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (occurrence : ConcreteElaboration.LocalOccurrence
       input.pattern.val.diagram.regionCount
       input.pattern.val.diagram.nodeCount)
     (hoccurrence : occurrence ∈ ConcreteElaboration.localOccurrences
       input.pattern.val.diagram input.pattern.val.diagram.root)
-    (sourceItem : Item signature
+    (sourceItem : Item
       (input.pattern.val.exposedWires ++
         input.pattern.val.hiddenWires).length [])
-    (targetItem : Item signature
+    (targetItem : Item
       (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).length
       outputWitness.toFocus.holeRels)
-    (hsource : ConcreteElaboration.compileOccurrenceWith? signature
+    (hsource : ConcreteElaboration.compileOccurrenceWith?
       input.pattern.val.diagram
-      (ConcreteElaboration.compileRegion? signature input.pattern.val.diagram
+      (ConcreteElaboration.compileRegion?  input.pattern.val.diagram
         input.pattern.val.diagram.regionCount)
       (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
       ConcreteElaboration.BinderContext.empty occurrence = some sourceItem)
-    (htarget : ConcreteElaboration.compileOccurrenceWith? signature
+    (htarget : ConcreteElaboration.compileOccurrenceWith?
       layout.plugRaw
-      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      (ConcreteElaboration.compileRegion?  layout.plugRaw
         outputLeaf.fuel)
       (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
       outputLeaf.binders (layout.mapPatternOccurrence occurrence) =
         some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       (ConcreteElaboration.ContextIndexRelation.forwardMap
         (layout.patternRootWireIndexMap hadmissible hzero outputWitness
           outputLeaf))
@@ -705,12 +700,12 @@ theorem compilePatternRootOccurrence_at_site_simulation
       have nodeRegion :=
         (ConcreteElaboration.mem_localOccurrences_node _ _ _).1 hoccurrence
       simp only [ConcreteElaboration.compileOccurrenceWith?] at hsource
-      change ConcreteElaboration.compileNode? signature layout.plugRaw
+      change ConcreteElaboration.compileNode?  layout.plugRaw
           targetContext outputLeaf.binders (layout.patternNode node) =
         some targetItem at htarget
       apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
         (source := input.pattern.val.diagram) (target := layout.plugRaw)
-        model named direction sourceContext targetContext
+        model  direction sourceContext targetContext
         (ConcreteElaboration.ContextIndexRelation.forwardMap indexMap)
         ConcreteElaboration.BinderContext.empty outputLeaf.binders
         (emptyRelationRenaming outputWitness.toFocus.holeRels) node
@@ -734,7 +729,7 @@ theorem compilePatternRootOccurrence_at_site_simulation
                 ⟨node, requested⟩ (by
                   simpa [mapPatternEndpoint] using occurs)
             exact ⟨sourceWire, wireEq, sourceOccurs⟩)
-          ((layout.plugRaw_wellFormed signature input hadmissible)
+          ((layout.plugRaw_wellFormed  input hadmissible)
             |>.wire_endpoints_are_disjoint) port
         rw [targetResolved, sourceResolved] at resolved
         exact Option.some.inj resolved |>.symm
@@ -757,7 +752,7 @@ theorem compilePatternRootOccurrence_at_site_simulation
           input.binderSpine.bodyContainer hmaterial parentBody).trans
           (congrArg some layout.bodyRegion_bodyContainer)
       have targetExact := outputLeaf.wiresExact.extend_child
-        (layout.plugRaw_wellFormed signature input hadmissible) targetParent
+        (layout.plugRaw_wellFormed  input hadmissible) targetParent
       cases childKind : input.pattern.val.diagram.regions child with
       | sheet =>
           simp [ConcreteElaboration.compileOccurrenceWith?, childKind]
@@ -773,7 +768,7 @@ theorem compilePatternRootOccurrence_at_site_simulation
               (layout.bodyRegion child) =
                 CRegion.cut (layout.frameRegion input.site) := by
             simpa only [layout.bodyRegion_bodyContainer] using targetKind
-          cases sourceResult : ConcreteElaboration.compileRegion? signature
+          cases sourceResult : ConcreteElaboration.compileRegion?
               input.pattern.val.diagram input.pattern.val.diagram.regionCount
               child sourceContext ConcreteElaboration.BinderContext.empty with
           | none =>
@@ -783,7 +778,7 @@ theorem compilePatternRootOccurrence_at_site_simulation
               simp [ConcreteElaboration.compileOccurrenceWith?, childKind,
                 sourceContext, sourceResult] at hsource
               subst sourceItem
-              cases targetResult : ConcreteElaboration.compileRegion? signature
+              cases targetResult : ConcreteElaboration.compileRegion?
                   layout.plugRaw outputLeaf.fuel (layout.bodyRegion child)
                   targetContext outputLeaf.binders with
               | none =>
@@ -796,7 +791,7 @@ theorem compilePatternRootOccurrence_at_site_simulation
                     targetContext, targetResult] at htarget
                   subst targetItem
                   have bodies := layout.compilePatternRegion_denote_at_material
-                    hadmissible model named direction.flip
+                    hadmissible model  direction.flip
                     input.pattern.val.diagram.regionCount outputLeaf.fuel
                     sourceContext targetContext indexMap indexSpec memberSpec
                     ConcreteElaboration.BinderContext.empty outputLeaf.binders
@@ -810,7 +805,7 @@ theorem compilePatternRootOccurrence_at_site_simulation
                       input.pattern.val.diagram).cutChild
                         input.pattern.property.diagram_well_formed childKind)
                     (outputLeaf.binderEnumeration.cutChild
-                      (layout.plugRaw_wellFormed signature input hadmissible)
+                      (layout.plugRaw_wellFormed  input hadmissible)
                       targetKindAtSite)
                     sourceExact targetExact sourceBody targetBody sourceResult
                     targetResult
@@ -842,7 +837,7 @@ theorem compilePatternRootOccurrence_at_site_simulation
             (layout.bodyRegion child) arity
           let pushedWitness := PatternBinderWitness.pushMaterial layout
             rootWitness child arity hmaterial
-          cases sourceResult : ConcreteElaboration.compileRegion? signature
+          cases sourceResult : ConcreteElaboration.compileRegion?
               input.pattern.val.diagram input.pattern.val.diagram.regionCount
               child sourceContext sourcePushed with
           | none =>
@@ -852,7 +847,7 @@ theorem compilePatternRootOccurrence_at_site_simulation
               simp [ConcreteElaboration.compileOccurrenceWith?, childKind,
                 sourceContext, sourcePushed, sourceResult] at hsource
               subst sourceItem
-              cases targetResult : ConcreteElaboration.compileRegion? signature
+              cases targetResult : ConcreteElaboration.compileRegion?
                   layout.plugRaw outputLeaf.fuel (layout.bodyRegion child)
                   targetContext targetPushed with
               | none =>
@@ -865,7 +860,7 @@ theorem compilePatternRootOccurrence_at_site_simulation
                     targetContext, targetPushed, targetResult] at htarget
                   subst targetItem
                   have bodies := layout.compilePatternRegion_denote_at_material
-                    hadmissible model named direction
+                    hadmissible model  direction
                     input.pattern.val.diagram.regionCount outputLeaf.fuel
                     sourceContext targetContext indexMap indexSpec memberSpec
                     sourcePushed targetPushed pushedWitness child hmaterial
@@ -878,7 +873,7 @@ theorem compilePatternRootOccurrence_at_site_simulation
                       input.pattern.val.diagram).bubbleChild
                         input.pattern.property.diagram_well_formed childKind)
                     (outputLeaf.binderEnumeration.bubbleChild
-                      (layout.plugRaw_wellFormed signature input hadmissible)
+                      (layout.plugRaw_wellFormed  input hadmissible)
                       targetKindAtSite)
                     sourceExact targetExact sourceBody targetBody sourceResult
                     targetResult
@@ -899,7 +894,7 @@ theorem compilePatternRootOccurrence_at_site_simulation
 /-- A retained-frame position in the semantic insertion order of an arbitrary
 plug-layout witness for the same input. -/
 def frameSiteSemanticIndexAt
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (index : Fin (ConcreteElaboration.localOccurrences
       input.coalesceFrameRaw input.site).length) :
@@ -913,7 +908,7 @@ def frameSiteSemanticIndexAt
 /-- The terminal-pattern position in semantic insertion order for an empty
 proxy spine. -/
 def patternSiteSemanticIndex
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hzero : input.binderSpine.proxyCount = 0)
     (index : Fin (ConcreteElaboration.localOccurrences
@@ -931,25 +926,23 @@ def patternSiteSemanticIndex
 insertion order and the executable site permutation, then transport the item
 returned by the actual focused compiler. -/
 theorem focusedPatternOccurrence_itemSimulation
-    {signature : List Nat}
-    {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (patternIndex : Fin
       (compiledSpliceOpenRootItems input.pattern).items.length) :
     let pattern := compiledSpliceOpenRootItems input.pattern
     let occurrenceIndex := Fin.cast
       (ConcreteElaboration.compileOccurrencesWith?_length
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           input.pattern.val.diagram input.pattern.val.diagram.regionCount)
         (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
         ConcreteElaboration.BinderContext.empty pattern.computation)
@@ -959,7 +952,7 @@ theorem focusedPatternOccurrence_itemSimulation
         (patternSiteSemanticIndex input layout hzero occurrenceIndex)
     ∃ targetIndex : Fin outputLeaf.items.length,
       targetIndex.val = targetOccurrenceIndex.val ∧
-        ConcreteElaboration.ItemSimulation model named direction
+        ConcreteElaboration.ItemSimulation model  direction
           (ConcreteElaboration.ContextIndexRelation.forwardMap
             (layout.patternRootWireIndexMap hadmissible hzero
               outputWitness outputLeaf))
@@ -970,7 +963,7 @@ theorem focusedPatternOccurrence_itemSimulation
   let pattern := compiledSpliceOpenRootItems input.pattern
   have patternLength :=
     ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature
+      (ConcreteElaboration.compileRegion?
         input.pattern.val.diagram input.pattern.val.diagram.regionCount)
       (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
       ConcreteElaboration.BinderContext.empty pattern.computation
@@ -980,25 +973,25 @@ theorem focusedPatternOccurrence_itemSimulation
   let targetOccurrenceIndex := layout.siteOccurrenceEquiv semanticIndex
   have targetLength :=
     ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      (ConcreteElaboration.compileRegion?  layout.plugRaw
         outputLeaf.fuel)
       (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
       outputLeaf.binders outputLeaf.itemsComputation
   let targetIndex := Fin.cast targetLength.symm targetOccurrenceIndex
   have sourceGet := ConcreteElaboration.compileOccurrencesWith?_get
-    (ConcreteElaboration.compileRegion? signature input.pattern.val.diagram
+    (ConcreteElaboration.compileRegion?  input.pattern.val.diagram
       input.pattern.val.diagram.regionCount)
     (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
     ConcreteElaboration.BinderContext.empty pattern.computation occurrenceIndex
   have targetGet := ConcreteElaboration.compileOccurrencesWith?_get
-    (ConcreteElaboration.compileRegion? signature layout.plugRaw
+    (ConcreteElaboration.compileRegion?  layout.plugRaw
       outputLeaf.fuel)
     (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
     outputLeaf.binders outputLeaf.itemsComputation targetOccurrenceIndex
   rw [layout.siteOccurrenceEquiv_spec semanticIndex] at targetGet
   have targetGet' :
-      ConcreteElaboration.compileOccurrenceWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrenceWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           outputLeaf.fuel)
         (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
         outputLeaf.binders
@@ -1011,7 +1004,7 @@ theorem focusedPatternOccurrence_itemSimulation
       targetIndex] using targetGet
   refine ⟨targetIndex, rfl, ?_⟩
   exact layout.compilePatternRootOccurrence_at_site_simulation hadmissible
-    outputWitness outputLeaf hzero model named direction
+    outputWitness outputLeaf hzero model  direction
     ((ConcreteElaboration.localOccurrences input.pattern.val.diagram
       input.pattern.val.diagram.root).get occurrenceIndex)
     (List.get_mem _ occurrenceIndex)
@@ -1024,24 +1017,22 @@ items are transported through the authoritative pattern compiler simulation.
 The executable node/child enumeration order is handled solely by
 `siteOccurrenceEquiv`. -/
 theorem denoteFocusedItems_of_patternRootItems_and_frame
-    {signature : List Nat}
-    {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
     (patternDenotes :
       let pattern := compiledSpliceOpenRootItems input.pattern
-      denoteItemSeq (relCtx := []) model named
+      denoteItemSeq (relCtx := []) model
         (env ∘ layout.patternRootWireIndexMap hadmissible hzero
           outputWitness outputLeaf)
         (PUnit.unit : RelEnv model.Carrier []) pattern.items)
@@ -1053,28 +1044,28 @@ theorem denoteFocusedItems_of_patternRootItems_and_frame
             (layout.frameSiteSemanticIndexAt input frameIndex)
         let itemIndex := Fin.cast
           (ConcreteElaboration.compileOccurrencesWith?_length
-            (ConcreteElaboration.compileRegion? signature layout.plugRaw
+            (ConcreteElaboration.compileRegion?  layout.plugRaw
               outputLeaf.fuel)
             (outputLeaf.inheritedWires.extend
               (layout.frameRegion input.site))
             outputLeaf.binders outputLeaf.itemsComputation).symm
           occurrenceIndex
-        denoteItem model named env relEnv (outputLeaf.items.get itemIndex)) :
-    denoteItemSeq model named env relEnv outputLeaf.items := by
+        denoteItem model  env relEnv (outputLeaf.items.get itemIndex)) :
+    denoteItemSeq model  env relEnv outputLeaf.items := by
   let pattern := compiledSpliceOpenRootItems input.pattern
   have targetLength :=
     ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      (ConcreteElaboration.compileRegion?  layout.plugRaw
         outputLeaf.fuel)
       (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
       outputLeaf.binders outputLeaf.itemsComputation
   have patternLength :=
     ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature
+      (ConcreteElaboration.compileRegion?
         input.pattern.val.diagram input.pattern.val.diagram.regionCount)
       (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
       ConcreteElaboration.BinderContext.empty pattern.computation
-  apply (denoteItemSeq_iff_get model named env relEnv outputLeaf.items).mpr
+  apply (denoteItemSeq_iff_get model  env relEnv outputLeaf.items).mpr
   intro targetIndex
   let targetOccurrenceIndex := Fin.cast targetLength targetIndex
   let semanticIndex := layout.siteOccurrenceEquiv.symm targetOccurrenceIndex
@@ -1127,7 +1118,7 @@ theorem denoteFocusedItems_of_patternRootItems_and_frame
       exact congrArg Fin.val semanticRecover.symm
     obtain ⟨actualIndex, actualIndexVal, simulation⟩ :=
       layout.focusedPatternOccurrence_itemSimulation hadmissible outputWitness
-        outputLeaf hzero model named .forward patternIndex
+        outputLeaf hzero model  .forward patternIndex
     have actualIndexEq : actualIndex = targetIndex := by
       apply Fin.ext
       calc
@@ -1147,7 +1138,7 @@ theorem denoteFocusedItems_of_patternRootItems_and_frame
         _ = targetIndex.val := rfl
     subst actualIndex
     have intrinsicDenotes :=
-      (denoteItemSeq_iff_get (relCtx := []) model named
+      (denoteItemSeq_iff_get (relCtx := []) model
         (env ∘ layout.patternRootWireIndexMap hadmissible hzero
           outputWitness outputLeaf)
         (PUnit.unit : RelEnv model.Carrier []) pattern.items).mp
@@ -1158,7 +1149,7 @@ theorem denoteFocusedItems_of_patternRootItems_and_frame
       simpa using RelEnv.pullback_agrees
         (emptyRelationRenaming outputWitness.toFocus.holeRels) relEnv
     have renamedDenotes :=
-      (denoteItem_renameRelations model named
+      (denoteItem_renameRelations model
         (emptyRelationRenaming outputWitness.toFocus.holeRels)
         (PUnit.unit : RelEnv model.Carrier []) relEnv relationAgrees
         (env ∘ layout.patternRootWireIndexMap hadmissible hzero
@@ -1179,23 +1170,22 @@ pattern-root conjunction under the canonical direct wire map.  Pattern
 positions are selected by the executable site permutation, while individual
 items are transported exclusively by the recursive semantic simulation. -/
 theorem denotePatternRootItems_of_denoteFocusedItems
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
-    (denotes : denoteItemSeq model named env relEnv outputLeaf.items) :
+    (denotes : denoteItemSeq model  env relEnv outputLeaf.items) :
     let pattern := compiledSpliceOpenRootItems input.pattern
-    denoteItemSeq (relCtx := []) model named
+    denoteItemSeq (relCtx := []) model
       (env ∘ layout.patternRootWireIndexMap hadmissible hzero
         outputWitness outputLeaf)
       (PUnit.unit : RelEnv model.Carrier []) pattern.items := by
@@ -1203,18 +1193,18 @@ theorem denotePatternRootItems_of_denoteFocusedItems
   let pattern := compiledSpliceOpenRootItems input.pattern
   have hpatternLength :=
     ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature
+      (ConcreteElaboration.compileRegion?
         input.pattern.val.diagram input.pattern.val.diagram.regionCount)
       (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
       ConcreteElaboration.BinderContext.empty pattern.computation
   have htargetLength :=
     ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      (ConcreteElaboration.compileRegion?  layout.plugRaw
         outputLeaf.fuel)
       (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
       outputLeaf.binders outputLeaf.itemsComputation
   have hbody := input.binderSpine.body_eq_root_of_empty hzero
-  apply (denoteItemSeq_iff_get (relCtx := []) model named
+  apply (denoteItemSeq_iff_get (relCtx := []) model
     (env ∘ layout.patternRootWireIndexMap hadmissible hzero
       outputWitness outputLeaf)
     (PUnit.unit : RelEnv model.Carrier []) pattern.items).mpr
@@ -1237,20 +1227,20 @@ theorem denotePatternRootItems_of_denoteFocusedItems
   let targetOccurrenceIndex := layout.siteOccurrenceEquiv occurrenceIndex
   let targetOriginalIndex := Fin.cast htargetLength.symm targetOccurrenceIndex
   have hsourceGet := ConcreteElaboration.compileOccurrencesWith?_get
-    (ConcreteElaboration.compileRegion? signature input.pattern.val.diagram
+    (ConcreteElaboration.compileRegion?  input.pattern.val.diagram
       input.pattern.val.diagram.regionCount)
     (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
     ConcreteElaboration.BinderContext.empty pattern.computation
     patternOccurrenceIndex
   have htargetGet := ConcreteElaboration.compileOccurrencesWith?_get
-    (ConcreteElaboration.compileRegion? signature layout.plugRaw
+    (ConcreteElaboration.compileRegion?  layout.plugRaw
       outputLeaf.fuel)
     (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
     outputLeaf.binders outputLeaf.itemsComputation targetOccurrenceIndex
   rw [layout.siteOccurrenceEquiv_spec occurrenceIndex] at htargetGet
-  have htargetGet' : ConcreteElaboration.compileOccurrenceWith? signature
+  have htargetGet' : ConcreteElaboration.compileOccurrenceWith?
       layout.plugRaw
-      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      (ConcreteElaboration.compileRegion?  layout.plugRaw
         outputLeaf.fuel)
       (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
       outputLeaf.binders
@@ -1260,14 +1250,14 @@ theorem denotePatternRootItems_of_denoteFocusedItems
         some (outputLeaf.items.get targetOriginalIndex) := by
     simpa [semanticSiteOccurrences, occurrenceIndex, hbody] using htargetGet
   have simulation := layout.compilePatternRootOccurrence_at_site_simulation
-    hadmissible outputWitness outputLeaf hzero model named .backward
+    hadmissible outputWitness outputLeaf hzero model  .backward
     ((ConcreteElaboration.localOccurrences input.pattern.val.diagram
       input.pattern.val.diagram.root).get patternOccurrenceIndex)
     (List.get_mem _ patternOccurrenceIndex)
     (pattern.items.get patternOriginalIndex)
     (outputLeaf.items.get targetOriginalIndex) hsourceGet htargetGet'
   have targetDenotes :=
-    (denoteItemSeq_iff_get model named env relEnv outputLeaf.items).mp
+    (denoteItemSeq_iff_get model  env relEnv outputLeaf.items).mp
       denotes targetOriginalIndex
   have transformedDenotes := simulation
     (env ∘ layout.patternRootWireIndexMap hadmissible hzero
@@ -1283,7 +1273,7 @@ theorem denotePatternRootItems_of_denoteFocusedItems
       (PUnit.unit : RelEnv model.Carrier []) relEnv := by
     simpa using RelEnv.pullback_agrees
       (emptyRelationRenaming outputWitness.toFocus.holeRels) relEnv
-  exact (denoteItem_renameRelations model named
+  exact (denoteItem_renameRelations model
     (emptyRelationRenaming outputWitness.toFocus.holeRels)
     (PUnit.unit : RelEnv model.Carrier []) relEnv relationAgrees
     (env ∘ layout.patternRootWireIndexMap hadmissible hzero
@@ -1296,30 +1286,29 @@ end PlugLayout
 intrinsic checked pattern at the quotient valuation read from that exact
 focused context.  Hidden pattern-root wires remain existential locals. -/
 theorem pattern_denote_of_denoteFocusedItems
-    (input : Input signature)
+    (input : Input )
     (hadmissible : input.Admissible)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
     (fallback : model.Carrier)
-    (denotes : denoteItemSeq model named env relEnv outputLeaf.items) :
-    input.pattern.denote model named (fun position =>
+    (denotes : denoteItemSeq model  env relEnv outputLeaf.items) :
+    input.pattern.denote model  (fun position =>
       siteQuotientEnvironment input
         (outputLeaf.inheritedWires.extend
           (input.plugLayout.frameRegion input.site))
         outputLeaf.wiresExact env fallback
         (input.quotientWire (input.attachment position))) := by
   apply pattern_denote_of_patternRootItems input hadmissible outputWitness
-    outputLeaf hzero model named env fallback
+    outputLeaf hzero model  env fallback
   exact input.plugLayout.denotePatternRootItems_of_denoteFocusedItems input
-    hadmissible outputWitness outputLeaf hzero model named env relEnv denotes
+    hadmissible outputWitness outputLeaf hzero model  env relEnv denotes
 
 end VisualProof.Diagram.Splice.Input

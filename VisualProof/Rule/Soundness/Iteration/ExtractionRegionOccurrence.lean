@@ -16,7 +16,7 @@ private theorem directParent_encloses
 /-- A direct child of copied material is itself copied material.  Administrative
 root and proxy regions cannot occur below material. -/
 theorem materialDirectChild_is_material
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (parent : Fin layout.materialRegionCount)
@@ -46,7 +46,7 @@ theorem materialDirectChild_is_material
 
 /-- Parenthood of copied material reflects exact host parenthood. -/
 theorem materialDirectChild_origin_parent
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (parent child : Fin layout.materialRegionCount)
@@ -88,7 +88,7 @@ theorem materialDirectChild_origin_parent
       simp [CRegion.parent?, origin]
 
 private theorem materialClimb_reflects
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (ancestor : Fin layout.materialRegionCount) :
@@ -154,7 +154,7 @@ private theorem materialClimb_reflects
 /-- An ancestry relation between copied material regions reflects the exact
 host ancestry relation between their provenances. -/
 theorem materialEncloses_reflects
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (ancestor descendant : Fin layout.materialRegionCount)
@@ -169,7 +169,7 @@ theorem materialEncloses_reflects
 /-- Mapping any occurrence local to copied material back through provenance
 produces an occurrence local to the corresponding host region. -/
 theorem extractionHostOccurrenceMap_mem_local_material
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (parent : Fin layout.materialRegionCount)
@@ -217,7 +217,7 @@ theorem extractionHostOccurrenceMap_mem_local_material
 /-- Every host occurrence local to selected material has an extracted local
 preimage with that exact provenance. -/
 theorem hostLocalOccurrence_has_extractionPreimage
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (parent : Fin layout.materialRegionCount)
@@ -294,7 +294,7 @@ theorem hostLocalOccurrence_has_extractionPreimage
         rw [originEq]
 
 @[simp] theorem extractionHostOccurrenceMap_materialChild
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (index : Fin layout.materialRegionCount) :
@@ -313,7 +313,7 @@ theorem hostLocalOccurrence_has_extractionPreimage
       (selection.selectedRegions.get candidate)) chosenEq
 
 private theorem extractionHostOccurrenceMap_injective_on_materialLocals
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (parent : Fin layout.materialRegionCount)
@@ -392,7 +392,7 @@ private theorem perm_of_nodup_and_mem_iff
 /-- Recursive material occurrences are exactly the host region's direct
 occurrences, up to extraction provenance and compiler-irrelevant ordering. -/
 theorem extractionHostOccurrenceMap_material_perm_host
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (parent : Fin layout.materialRegionCount) :

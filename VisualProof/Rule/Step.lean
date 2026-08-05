@@ -1,6 +1,4 @@
-import VisualProof.Theory.Semantics
 import VisualProof.Diagram.Concrete.Subgraph.Splice
-import VisualProof.Rule.NamedReference
 
 namespace VisualProof.Rule
 
@@ -48,14 +46,14 @@ private theorem concreteCutDepthAux_root_eq_zero
 
 /-- The sheet root is at positive depth zero. -/
 theorem concreteCutDepth_root_eq_zero
-    (checked : Diagram.CheckedDiagram signature) :
+    (checked : Diagram.CheckedDiagram ) :
     concreteCutDepth checked.val checked.val.root = 0 := by
   unfold concreteCutDepth
   exact concreteCutDepthAux_root_eq_zero checked.val
     checked.property.root_is_sheet checked.val.regionCount
 
 private theorem concreteCutDepthAux_coalesceFrameRaw
-    (input : Diagram.Splice.Input signature) (fuel : Nat)
+    (input : Diagram.Splice.Input ) (fuel : Nat)
     (region : Fin input.frame.val.regionCount) :
     concreteCutDepthAux input.coalesceFrameRaw fuel region =
       concreteCutDepthAux input.frame.val fuel region := by
@@ -70,7 +68,7 @@ private theorem concreteCutDepthAux_coalesceFrameRaw
 /-- Coalescing wire classes changes no region kind or parent edge, hence no
 cut depth. -/
 theorem concreteCutDepth_coalesceFrameRaw
-    (input : Diagram.Splice.Input signature)
+    (input : Diagram.Splice.Input )
     (region : Fin input.frame.val.regionCount) :
     concreteCutDepth input.coalesceFrameRaw region =
       concreteCutDepth input.frame.val region := by
@@ -79,7 +77,7 @@ theorem concreteCutDepth_coalesceFrameRaw
     region
 
 private theorem concreteCutDepthAux_removeRaw
-    (host : Diagram.CheckedDiagram signature)
+    (host : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection host.val)
     (domains : Diagram.FrameDomains host.val selection)
     (fuel : Nat) (region : Fin host.val.regionCount)
@@ -152,7 +150,7 @@ theorem siteView_concreteCutDepth_eq
 region.  The compact identifier may change, but every retained parent edge and
 its cut/bubble kind is unchanged. -/
 theorem concreteCutDepth_removeRaw_index
-    (host : Diagram.CheckedDiagram signature)
+    (host : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection host.val)
     (domains : Diagram.FrameDomains host.val selection)
     (region : Fin host.val.regionCount)
@@ -186,7 +184,7 @@ theorem concreteCutDepth_removeRaw_index
 /-- The canonical retained splice site of a decomposition has exactly the cut
 depth of the original selection anchor. -/
 theorem Diagram.Splice.Decomposition.originalSite_concreteCutDepth_eq
-    (decomposition : Diagram.Decomposition signature host selection) :
+    (decomposition : Diagram.Decomposition  host selection) :
     concreteCutDepth
         (host.val.removeRaw selection decomposition.frameDomains)
         (Diagram.Splice.Decomposition.originalSite decomposition) =
@@ -198,7 +196,7 @@ theorem openSiteView_concreteCutDepth_eq
     (view : Diagram.Splice.OpenSiteView checked site) :
     concreteCutDepth checked.val.diagram site =
       view.focus.context.cutDepth := by
-  let closed : Diagram.CheckedDiagram _ :=
+  let closed : Diagram.CheckedDiagram :=
     ⟨checked.val.diagram, checked.property.diagram_well_formed⟩
   have pathBound : view.path.length ≤ checked.val.diagram.regionCount :=
     VisualProof.Diagram.ConcreteElaboration.ParentTraversal.checked_climb_to_root_steps_le_regionCount
@@ -217,7 +215,7 @@ theorem openSiteView_concreteCutDepth_eq
   simpa [concreteCutDepth, rootDepth] using routeDepth
 
 private theorem binderProxy_concreteCutDepthAux_eq_zero
-    (pattern : Diagram.CheckedOpenDiagram signature)
+    (pattern : Diagram.CheckedOpenDiagram )
     (spine : Diagram.BinderSpine pattern.val.diagram)
     (index : Fin spine.proxyCount) (fuel : Nat) :
     concreteCutDepthAux pattern.val.diagram fuel (spine.proxy index) = 0 := by
@@ -233,7 +231,7 @@ private theorem binderProxy_concreteCutDepthAux_eq_zero
           ih ⟨index.val - 1, by omega⟩
 
 theorem binderSpine_body_concreteCutDepth_eq_zero
-    (pattern : Diagram.CheckedOpenDiagram signature)
+    (pattern : Diagram.CheckedOpenDiagram )
     (spine : Diagram.BinderSpine pattern.val.diagram) :
     concreteCutDepth pattern.val.diagram spine.bodyContainer = 0 := by
   by_cases hzero : spine.proxyCount = 0
@@ -246,7 +244,7 @@ theorem binderSpine_body_concreteCutDepth_eq_zero
       ⟨spine.proxyCount - 1, by omega⟩ pattern.val.diagram.regionCount
 
 theorem patternBodyView_cutDepth_eq_zero
-    (input : Diagram.Splice.Input signature)
+    (input : Diagram.Splice.Input )
     (view : Diagram.Splice.OpenSiteView input.pattern
       input.binderSpine.bodyContainer) :
     view.focus.context.cutDepth = 0 := by
@@ -260,7 +258,6 @@ inductive Orientation
 
 /-- Canonical logical rule inventory, in serialized `ProofStep` order. -/
 inductive StepTag
-  | relationSpawn
   | boundRelationSpawn
   | wireJoin
   | erasure
@@ -274,18 +271,16 @@ inductive StepTag
   | theorem
   | vacuousIntro
   | vacuousElim
-  | relUnfold
-  | relFold
   deriving DecidableEq, Repr
 
 def StepTag.all : List StepTag :=
-  [.relationSpawn, .boundRelationSpawn, .wireJoin,
+  [.boundRelationSpawn, .wireJoin,
     .erasure, .wireSever, .iteration, .deiteration,
     .doubleCutIntro, .doubleCutElim,
     .comprehensionInstantiate, .comprehensionAbstract,
-    .theorem, .vacuousIntro, .vacuousElim, .relUnfold, .relFold]
+    .theorem, .vacuousIntro, .vacuousElim]
 
-theorem StepTag.all_length : StepTag.all.length = 16 := by
+theorem StepTag.all_length : StepTag.all.length = 13 := by
   native_decide
 
 theorem StepTag.all_nodup : StepTag.all.Nodup := by
@@ -301,12 +296,11 @@ inductive SemanticMode
 
 /-- Whether a rule is genuinely one-way or a polarity-blind equivalence. -/
 def StepTag.semanticMode : StepTag → SemanticMode
-  | .relationSpawn | .boundRelationSpawn | .wireJoin
+  | .boundRelationSpawn | .wireJoin
   | .erasure | .wireSever | .comprehensionInstantiate
   | .comprehensionAbstract | .theorem => .directed
   | .iteration | .deiteration | .doubleCutIntro | .doubleCutElim
-  | .vacuousIntro | .vacuousElim
-  | .relUnfold | .relFold => .equivalent
+  | .vacuousIntro | .vacuousElim => .equivalent
 
 def DirectedImplication (orientation : Orientation)
     (before after : Prop) : Prop :=
@@ -332,7 +326,6 @@ inductive StepError
   | occurrenceMismatch
   | boundaryMismatch
   | nonVacuousBinder
-  | unknownDefinition
   | unknownTheorem
   | binderKindOrArityMismatch
   | binderDoesNotEnclose
@@ -754,20 +747,20 @@ theorem transportBoundary_get_eq
 end InterfaceTransport
 
 /-- A checked proof state with an ordered, possibly aliased open boundary. -/
-structure OpenProofState (signature : List Nat) where
-  diagram : Diagram.CheckedDiagram signature
+structure OpenProofState where
+  diagram : Diagram.CheckedDiagram
   boundary : List (Fin diagram.val.wireCount)
   boundary_root_scoped : ∀ wire, wire ∈ boundary →
     (diagram.val.wires wire).scope = diagram.val.root
 
-def OpenProofState.closed (diagram : Diagram.CheckedDiagram signature) :
-    OpenProofState signature where
+def OpenProofState.closed (diagram : Diagram.CheckedDiagram ) :
+    OpenProofState  where
   diagram := diagram
   boundary := []
   boundary_root_scoped := by simp
 
-def OpenProofState.asCheckedOpen (state : OpenProofState signature) :
-    Diagram.CheckedOpenDiagram signature := ⟨{
+def OpenProofState.asCheckedOpen (state : OpenProofState ) :
+    Diagram.CheckedOpenDiagram  := ⟨{
   diagram := state.diagram.val
   boundary := state.boundary
 }, {
@@ -775,26 +768,25 @@ def OpenProofState.asCheckedOpen (state : OpenProofState signature) :
   boundary_is_root_scoped := state.boundary_root_scoped
 }⟩
 
-def OpenProofState.denote (state : OpenProofState signature)
+def OpenProofState.denote (state : OpenProofState )
     (model : Model)
-    (named : Diagram.NamedEnv model.Carrier signature)
     (args : Fin state.boundary.length → model.Carrier) : Prop :=
-  state.asCheckedOpen.denote model named args
+  state.asCheckedOpen.denote model  args
 
 /-- Canonical successful-step receipt. Graph identity provenance and logical
 open-interface transport are separate authorities: the former is injective,
 while the latter may record semantically intentional coalescence. -/
-structure StepReceipt (input : Diagram.CheckedDiagram signature) where
-  result : Diagram.CheckedDiagram signature
+structure StepReceipt (input : Diagram.CheckedDiagram ) where
+  result : Diagram.CheckedDiagram
   provenance : WireProvenance input.val result.val
   interface : InterfaceTransport input.val result.val
 
 def StepReceipt.ofChecked
-    (input : Diagram.CheckedDiagram signature) (raw : Diagram.ConcreteDiagram)
+    (input : Diagram.CheckedDiagram ) (raw : Diagram.ConcreteDiagram)
     (provenance : WireProvenance input.val raw)
     (interface : InterfaceTransport input.val raw)
-    (result : Diagram.CheckedDiagram signature)
-    (hcheck : Diagram.checkWellFormed signature raw = .ok result) :
+    (result : Diagram.CheckedDiagram )
+    (hcheck : Diagram.checkWellFormed  raw = .ok result) :
     StepReceipt input where
   result := result
   provenance := provenance.castTarget
@@ -820,11 +812,11 @@ structure StepReceipt.Realizes
       expectedInterface.image? wire
 
 theorem StepReceipt.ofChecked_realizes
-    (input : Diagram.CheckedDiagram signature) (raw : Diagram.ConcreteDiagram)
+    (input : Diagram.CheckedDiagram ) (raw : Diagram.ConcreteDiagram)
     (expectedProvenance : WireProvenance input.val raw)
     (expectedInterface : InterfaceTransport input.val raw)
-    (result : Diagram.CheckedDiagram signature)
-    (hcheck : Diagram.checkWellFormed signature raw = .ok result) :
+    (result : Diagram.CheckedDiagram )
+    (hcheck : Diagram.checkWellFormed  raw = .ok result) :
     (StepReceipt.ofChecked input raw expectedProvenance expectedInterface result
       hcheck).Realizes raw expectedProvenance expectedInterface := by
   have hresult := Diagram.checkWellFormed_preserves_input hcheck
@@ -838,7 +830,7 @@ theorem StepReceipt.ofChecked_realizes
 namespace StepReceipt.Realizes
 
 def targetWire
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -848,7 +840,7 @@ def targetWire
   Fin.cast (congrArg Diagram.ConcreteDiagram.wireCount realizes.result_eq)
 
 def targetBoundary
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -859,7 +851,7 @@ def targetBoundary
   mapped.map realizes.targetWire
 
 theorem expected_provenance_image_eq_some
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -873,7 +865,7 @@ theorem expected_provenance_image_eq_some
   rfl
 
 theorem expected_interface_image_eq_some
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -890,7 +882,7 @@ theorem expected_interface_image_eq_some
 operation witnessed by `Realizes`.  This is positional: no list quotient or
 deduplication occurs. -/
 theorem transportBoundary_expected
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -926,7 +918,7 @@ If the exact operation transports every requested position, the checked
 receipt does too.  This is the inverse existence direction to
 `transportBoundary_expected`; it preserves order and repeated positions. -/
 theorem transportBoundary_receipt_complete
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -966,7 +958,7 @@ theorem transportBoundary_receipt_complete
 receipt.  Boundary positions are cast positionwise through `result_eq`; in
 particular, repeated aliases remain repeated. -/
 def rawResultOpen
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -978,7 +970,7 @@ def rawResultOpen
   boundary := realizes.targetBoundary mapped
 
 @[simp] theorem rawResultOpen_boundary_length
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -989,7 +981,7 @@ def rawResultOpen
   simp [rawResultOpen, targetBoundary]
 
 def rawResultOpen_wellFormed
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -1000,9 +992,9 @@ def rawResultOpen_wellFormed
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
     (htransport : receipt.interface.transportBoundary boundary = some mapped) :
-    (realizes.rawResultOpen mapped).WellFormed signature where
+    (realizes.rawResultOpen mapped).WellFormed  where
   diagram_well_formed := by
-    change raw.WellFormed signature
+    change raw.WellFormed
     exact realizes.result_eq ▸ receipt.result.property
   boundary_is_root_scoped :=
     expectedInterface.transportBoundary_root_scoped sourceRoot
@@ -1011,7 +1003,7 @@ def rawResultOpen_wellFormed
 /-- The canonical raw open view and the receipt result are the same ordered
 open graph up to the finite casts forced by `result_eq`. -/
 def rawResultOpenIso
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -1038,7 +1030,7 @@ def rawResultOpenIso
 /-- Uniqueness of successful positional transport aligns any operation-facing
 raw boundary with the receipt's canonical raw boundary. -/
 theorem expectedMapped_eq_targetBoundary
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -1058,7 +1050,7 @@ raw boundary.  This packages exact positional boundary transport as an open
 isomorphism; repeated positions are preserved because the proof uses list
 equality, not membership. -/
 def operationalIso_to_rawResultOpen
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -1087,7 +1079,7 @@ the exact ordered target used by boundary-parametric receipt soundness.  The
 operational isomorphism must preserve the boundary list, so order and repeated
 aliases survive unchanged. -/
 theorem operationalOpen_denote_iff_result
-    {signature : List Nat} {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {receipt : StepReceipt input} {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -1098,27 +1090,26 @@ theorem operationalOpen_denote_iff_result
       (input.val.wires wire).scope = input.val.root)
     {mapped : List (Fin receipt.result.val.wireCount)}
     (htransport : receipt.interface.transportBoundary boundary = some mapped)
-    (operational : Diagram.CheckedOpenDiagram signature)
+    (operational : Diagram.CheckedOpenDiagram )
     (operationalIso : Diagram.OpenConcreteIso operational.val
       (realizes.rawResultOpen mapped))
     (model : Model)
-    (named : Diagram.NamedEnv model.Carrier signature)
     (args : Fin boundary.length → model.Carrier) :
-    let target : OpenProofState signature := {
+    let target : OpenProofState  := {
       diagram := receipt.result
       boundary := mapped
       boundary_root_scoped :=
         receipt.interface.transportBoundary_root_scoped sourceRoot htransport
     }
     let totalIso := operationalIso.trans (realizes.rawResultOpenIso mapped)
-    operational.denote model named
+    operational.denote model
         (args ∘ Fin.cast (totalIso.boundary_length_eq.trans
           (receipt.interface.transportBoundary_length htransport))) ↔
-      target.denote model named
+      target.denote model
         (args ∘ Fin.cast
           (receipt.interface.transportBoundary_length htransport)) := by
   dsimp only
-  let target : OpenProofState signature := {
+  let target : OpenProofState  := {
     diagram := receipt.result
     boundary := mapped
     boundary_root_scoped :=
@@ -1135,21 +1126,20 @@ theorem operationalOpen_denote_iff_result
     apply congrArg args
     rfl
   have hdenote := totalIso.denote_iff operational.property
-    target.asCheckedOpen.property model named sourceArgs
-  change operational.denote model named sourceArgs ↔
-    target.asCheckedOpen.denote model named targetArgs
+    target.asCheckedOpen.property model  sourceArgs
+  change operational.denote model  sourceArgs ↔
+    target.asCheckedOpen.denote model  targetArgs
   rw [← hargs]
   exact hdenote
 
 end StepReceipt.Realizes
 
-def StepReceipt.transportOpen {signature : List Nat}
-    {input : Diagram.CheckedDiagram signature}
+def StepReceipt.transportOpen {input : Diagram.CheckedDiagram }
     (receipt : StepReceipt input)
     (boundary : List (Fin input.val.wireCount))
     (rootScoped : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root) :
-    Option (OpenProofState signature) :=
+    Option (OpenProofState ) :=
   match htransport : receipt.interface.transportBoundary boundary with
   | none => none
   | some mapped => some {
@@ -1161,13 +1151,12 @@ def StepReceipt.transportOpen {signature : List Nat}
 
 /-- Successful open-state transport exposes the exact ordered boundary
 transport and the open state constructed from it. -/
-theorem StepReceipt.transportOpen_result {signature : List Nat}
-    {input : Diagram.CheckedDiagram signature}
+theorem StepReceipt.transportOpen_result {input : Diagram.CheckedDiagram }
     (receipt : StepReceipt input)
     (boundary : List (Fin input.val.wireCount))
     (rootScoped : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (result : OpenProofState signature)
+    (result : OpenProofState )
     (hopen : receipt.transportOpen boundary rootScoped = some result) :
     ∃ (mapped : List (Fin receipt.result.val.wireCount))
       (htransport :
@@ -1191,51 +1180,35 @@ inductive Direction
   | reverse
   deriving DecidableEq, Repr
 
-structure TheoremSchema (signature : List Nat) where
-  left : Diagram.CheckedOpenDiagram signature
-  right : Diagram.CheckedOpenDiagram signature
+structure TheoremSchema where
+  left : Diagram.CheckedOpenDiagram
+  right : Diagram.CheckedOpenDiagram
   sameBoundaryArity : left.val.boundary.length = right.val.boundary.length
 
-structure ProofContext (signature : List Nat) where
-  definitions : Theory.VerifiedDefinitions signature
-  theorems : List (TheoremSchema signature)
+structure ProofContext where
+  theorems : List (TheoremSchema )
 
-def ProofContext.definitionEntry (context : ProofContext signature)
-    (index : Fin signature.length) : Theory.DefinitionEntry signature index :=
-  context.definitions.entry index
-
-def ProofContext.definition? (context : ProofContext signature) (index : Nat) :
-    Option (Diagram.CheckedOpenDiagram signature) :=
-  if h : index < signature.length then
-    some (context.definitionEntry ⟨index, h⟩).body
-  else none
-
-theorem ProofContext.definition?_eq_some
-    (context : ProofContext signature) (index : Fin signature.length) :
-    context.definition? index.val = some (context.definitionEntry index).body := by
-  simp [ProofContext.definition?, index.isLt]
-
-structure AbstractionOccurrence (input : Diagram.CheckedDiagram signature) where
+structure AbstractionOccurrence (input : Diagram.CheckedDiagram ) where
   selection : Diagram.CheckedSelection input.val
   args : List (Fin input.val.wireCount)
 
-private def selectedLayout (input : Diagram.CheckedDiagram signature)
+private def selectedLayout (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val) :
     Diagram.FragmentLayout input.val selection := {}
 
-def selectedFragment (input : Diagram.CheckedDiagram signature)
+def selectedFragment (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val) :
     Diagram.OpenConcreteDiagram :=
   input.val.extractOpenRaw selection (selectedLayout input selection)
 
 theorem selectedFragment_wellFormed
-    (input : Diagram.CheckedDiagram signature)
+    (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val) :
-    (selectedFragment input selection).WellFormed signature :=
+    (selectedFragment input selection).WellFormed  :=
   Diagram.ConcreteDiagram.extractOpenRaw_wellFormed input selection
     (selectedLayout input selection)
 
-def pinnedSelectedFragment (input : Diagram.CheckedDiagram signature)
+def pinnedSelectedFragment (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val) (arity : Nat)
     (position : Fin arity →
       Fin selection.touchingWires.length) : Diagram.OpenConcreteDiagram where
@@ -1246,7 +1219,7 @@ def pinnedSelectedFragment (input : Diagram.CheckedDiagram signature)
 /-- The pinned selected fragment is independent of the private choice of
 fragment-layout witness: a checked selection determines that layout uniquely. -/
 theorem pinnedSelectedFragment_eq_extractOpenRaw
-    (input : Diagram.CheckedDiagram signature)
+    (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val) (arity : Nat)
     (position : Fin arity → Fin selection.touchingWires.length)
     (layout : Diagram.FragmentLayout input.val selection) :
@@ -1258,10 +1231,10 @@ theorem pinnedSelectedFragment_eq_extractOpenRaw
   rw [Diagram.FragmentLayout.unique (selectedLayout input selection) layout]
 
 theorem pinnedSelectedFragment_wellFormed
-    (input : Diagram.CheckedDiagram signature)
+    (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val) (arity : Nat)
     (position : Fin arity → Fin selection.touchingWires.length) :
-    (pinnedSelectedFragment input selection arity position).WellFormed signature where
+    (pinnedSelectedFragment input selection arity position).WellFormed  where
   diagram_well_formed :=
     Diagram.ConcreteDiagram.extractDiagramRaw_wellFormed input selection
       (selectedLayout input selection)
@@ -1273,7 +1246,7 @@ theorem pinnedSelectedFragment_wellFormed
     simp [Diagram.ConcreteDiagram.extractBoundaryRaw]
 
 /-- The canonical declaration that an ordinary open diagram has no proxy prefix. -/
-def emptyBinderSpine (pattern : Diagram.CheckedOpenDiagram signature) :
+def emptyBinderSpine (pattern : Diagram.CheckedOpenDiagram ) :
     Diagram.BinderSpine pattern.val.diagram where
   proxyCount := 0
   proxy := nofun
@@ -1285,7 +1258,7 @@ def emptyBinderSpine (pattern : Diagram.CheckedOpenDiagram signature) :
   body_eq_terminal_of_nonempty := fun h => False.elim (h rfl)
   proxy_region := fun index => Fin.elim0 index
 
-def emptyTerminalBody (pattern : Diagram.CheckedOpenDiagram signature) :
+def emptyTerminalBody (pattern : Diagram.CheckedOpenDiagram ) :
     (emptyBinderSpine pattern).TerminalBodyContract pattern.val where
   root_direct_child := fun h => False.elim (h rfl)
   nonterminal_direct_child := fun index => Fin.elim0 index
@@ -1295,7 +1268,7 @@ def emptyTerminalBody (pattern : Diagram.CheckedOpenDiagram signature) :
   nonterminal_has_no_nonboundary_wires := fun index => Fin.elim0 index
   boundary_is_root_scoped := pattern.property.boundary_is_root_scoped
 
-private def selectedProxy (input : Diagram.CheckedDiagram signature)
+private def selectedProxy (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (index : Fin (selectedLayout input selection).proxyCount) :
     Fin (selectedFragment input selection).diagram.regionCount :=
@@ -1307,7 +1280,7 @@ justifies deiteration. The matcher constructs this value; the rule layer
 does not contain a competing search procedure. Boundary order, repeated
 aliases, and external binder identities are pinned explicitly.
 -/
-structure DeiterationWitness (input : Diagram.CheckedDiagram signature)
+structure DeiterationWitness (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val) where
   justifier : Diagram.CheckedSelection input.val
   ancestor : input.val.Encloses justifier.val.anchor selection.val.anchor
@@ -1334,9 +1307,9 @@ host argument list. `position` may repeat, so intrinsic boundary aliases are
 represented without inventing new host wires; surjectivity prevents silently
 discarding a crossing wire.
 -/
-structure PinnedOccurrence (input : Diagram.CheckedDiagram signature)
+structure PinnedOccurrence (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
-    (pattern : Diagram.CheckedOpenDiagram signature)
+    (pattern : Diagram.CheckedOpenDiagram )
     (args : List (Fin input.val.wireCount)) where
   args_length : args.length = pattern.val.boundary.length
   position : Fin pattern.val.boundary.length →
@@ -1355,8 +1328,8 @@ One abstraction occurrence together with a concrete diagonalized relation and
 an intrinsic proof that it is exactly capture-avoiding boundary substitution
 of the supplied comprehension.
 -/
-structure AbstractionWitness (input : Diagram.CheckedDiagram signature)
-    (comprehension : Diagram.CheckedOpenDiagram signature)
+structure AbstractionWitness (input : Diagram.CheckedDiagram )
+    (comprehension : Diagram.CheckedOpenDiagram )
     (occurrenceData : AbstractionOccurrence input) where
   args_length : occurrenceData.args.length = comprehension.val.boundary.length
   assignment : Diagram.BoundaryAssignment comprehension.elaborate
@@ -1365,7 +1338,7 @@ structure AbstractionWitness (input : Diagram.CheckedDiagram signature)
     occurrenceData.selection.touchingWires.get (assignment.args index) =
       occurrenceData.args.get (Fin.cast args_length.symm index)
   all_touching_used : Function.Surjective assignment.args
-  diagonal : Diagram.CheckedOpenDiagram signature
+  diagonal : Diagram.CheckedOpenDiagram
   diagonal_boundary_length : diagonal.val.boundary.length =
     occurrenceData.selection.touchingWires.length
   diagonal_externalClasses : diagonal.elaborate.externalClasses =
@@ -1382,9 +1355,9 @@ structure AbstractionWitness (input : Diagram.CheckedDiagram signature)
     (selectedFragment input occurrenceData.selection) diagonal.val
 
 structure ComprehensionAbstractPayload
-    (input : Diagram.CheckedDiagram signature)
+    (input : Diagram.CheckedDiagram )
     (wrap : Diagram.CheckedSelection input.val)
-    (comprehension : Diagram.CheckedOpenDiagram signature)
+    (comprehension : Diagram.CheckedOpenDiagram )
     (occurrences : List (AbstractionOccurrence input)) where
   witnesses : ∀ index : Fin occurrences.length,
     AbstractionWitness input comprehension (occurrences.get index)
@@ -1412,9 +1385,9 @@ structure ComprehensionAbstractPayload
       (occurrences.get right).selection.selectedRegions
 
 structure ComprehensionInstantiatePayload
-    (input : Diagram.CheckedDiagram signature)
+    (input : Diagram.CheckedDiagram )
     (bubble : Fin input.val.regionCount)
-    (comprehension : Diagram.CheckedOpenDiagram signature)
+    (comprehension : Diagram.CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount ×
@@ -1435,45 +1408,16 @@ structure ComprehensionInstantiatePayload
     input.val.Encloses (binderTargets index) bubble ∧
       binderTargets index ≠ bubble
 
-/-- An exact pinned occurrence of one named-reference node together with the
-checked definition body that will replace it. -/
-structure RelUnfoldPayload (input : Diagram.CheckedDiagram signature)
-    (node : Fin input.val.nodeCount)
-    (definition : Fin signature.length) where
-  selection : Diagram.CheckedSelection input.val
-  args : List (Fin input.val.wireCount)
-  wiring : NamedReferenceWiring (signature.get definition)
-  occurrence : PinnedOccurrence input selection
-    (wiredNamedReferencePattern signature definition wiring) args
-  selected_node : selection.selectedNodes = [node]
-  body : Diagram.CheckedOpenDiagram signature
-
-def RelUnfoldPayload.source
-    {signature : List Nat}
-    {input : Diagram.CheckedDiagram signature}
-    {node : Fin input.val.nodeCount}
-    {definition : Fin signature.length}
-    (payload : RelUnfoldPayload input node definition) :
-    Diagram.CheckedOpenDiagram signature :=
-  wiredNamedReferencePattern signature definition payload.wiring
-
-/-- Exact pinned occurrence of a named relation body, ready to contract. -/
-structure RelFoldPayload (input : Diagram.CheckedDiagram signature)
-    (selection : Diagram.CheckedSelection input.val)
-    (definition : Nat) (args : List (Fin input.val.wireCount)) where
-  body : Diagram.CheckedOpenDiagram signature
-  occurrence : PinnedOccurrence input selection body args
-
 /-- Proof-bearing refinement of a cited theorem side at one exact occurrence. -/
-structure TheoremPayload (input : Diagram.CheckedDiagram signature)
+structure TheoremPayload (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (args : List (Fin input.val.wireCount)) where
-  source : Diagram.CheckedOpenDiagram signature
-  target : Diagram.CheckedOpenDiagram signature
+  source : Diagram.CheckedOpenDiagram
+  target : Diagram.CheckedOpenDiagram
   sameBoundaryArity : source.val.boundary.length = target.val.boundary.length
   occurrence : PinnedOccurrence input selection source args
 
-def theoremSidesMatch (schema : TheoremSchema signature) (direction : Direction)
+def theoremSidesMatch (schema : TheoremSchema ) (direction : Direction)
     (payload : TheoremPayload input selection args) : Prop :=
   match direction with
   | .forward =>
@@ -1487,10 +1431,8 @@ def theoremSidesMatch (schema : TheoremSchema signature) (direction : Direction)
 Proof-bearing refinement of one serialized step against its current input.
 Finite references cannot be stale, and selection closure is already validated.
 -/
-inductive Step (context : ProofContext signature)
-    (input : Diagram.CheckedDiagram signature)
-  | relationSpawn (region : Fin input.val.regionCount)
-      (definition arity : Nat)
+inductive Step (context : ProofContext )
+    (input : Diagram.CheckedDiagram )
   | boundRelationSpawn (region binder : Fin input.val.regionCount)
       (arity : Nat)
   | wireJoin (first second : Fin input.val.wireCount)
@@ -1504,7 +1446,7 @@ inductive Step (context : ProofContext signature)
   | doubleCutIntro (selection : Diagram.CheckedSelection input.val)
   | doubleCutElim (region : Fin input.val.regionCount)
   | comprehensionInstantiate (bubble : Fin input.val.regionCount)
-      (comprehension : Diagram.CheckedOpenDiagram signature)
+      (comprehension : Diagram.CheckedOpenDiagram )
       (attachments : List (Fin input.val.wireCount))
       (binders : List
         (Fin comprehension.val.diagram.regionCount ×
@@ -1512,7 +1454,7 @@ inductive Step (context : ProofContext signature)
       (payload : ComprehensionInstantiatePayload input bubble comprehension
         attachments binders)
   | comprehensionAbstract (wrap : Diagram.CheckedSelection input.val)
-      (comprehension : Diagram.CheckedOpenDiagram signature)
+      (comprehension : Diagram.CheckedOpenDiagram )
       (occurrences : List (AbstractionOccurrence input))
       (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
   | theorem (theoremIndex : Fin context.theorems.length)
@@ -1524,18 +1466,8 @@ inductive Step (context : ProofContext signature)
   | vacuousIntro (selection : Diagram.CheckedSelection input.val)
       (arity : Nat)
   | vacuousElim (region : Fin input.val.regionCount)
-  | relUnfold (node : Fin input.val.nodeCount)
-      (definition : Fin signature.length)
-      (payload : RelUnfoldPayload input node definition)
-      (body_eq : payload.body.val = (context.definitionEntry definition).body.val)
-  | relFold (selection : Diagram.CheckedSelection input.val)
-      (definition : Fin signature.length)
-      (args : List (Fin input.val.wireCount))
-      (payload : RelFoldPayload input selection definition.val args)
-      (body_eq : payload.body.val = (context.definitionEntry definition).body.val)
 
 def Step.tag : Step context input → StepTag
-  | .relationSpawn .. => .relationSpawn
   | .boundRelationSpawn .. => .boundRelationSpawn
   | .wireJoin .. => .wireJoin
   | .erasure .. => .erasure
@@ -1549,8 +1481,6 @@ def Step.tag : Step context input → StepTag
   | .theorem .. => .theorem
   | .vacuousIntro .. => .vacuousIntro
   | .vacuousElim .. => .vacuousElim
-  | .relUnfold .. => .relUnfold
-  | .relFold .. => .relFold
 
 theorem Step.tag_mem_all (step : Step context input) :
     step.tag ∈ StepTag.all := StepTag.mem_all step.tag

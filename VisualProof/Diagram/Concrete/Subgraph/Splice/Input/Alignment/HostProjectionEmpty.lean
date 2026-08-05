@@ -11,7 +11,7 @@ open VisualProof.Diagram.ConcreteElaboration
 /-- The executable empty-spine splice transported into the coalesced-open
 compiler leaf's lexical coordinates. -/
 noncomputable def compiledSpliceCoalescedActualOfEmpty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -21,7 +21,7 @@ noncomputable def compiledSpliceCoalescedActualOfEmpty
     (hrels : (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
       sourceRoot).focus.holeRels =
         (compiledSpliceHostView input hadmissible).focus.holeRels) :
-    Region signature
+    Region
       (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
         sourceRoot).focus.holeWires
       (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
@@ -58,14 +58,14 @@ noncomputable def compiledSpliceCoalescedActualOfEmpty
 /-- The executable empty-spine splice in the output open compiler leaf's
 lexical coordinates. -/
 noncomputable def compiledSpliceOutputActualOfEmpty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hnested : input.site ≠ input.frame.val.root)
     (_hzero : input.binderSpine.proxyCount = 0) :
-    Region signature
+    Region
       (compiledSpliceOutputOpenView input layout hadmissible sourceBoundary
         sourceRoot).focus.holeWires
       (compiledSpliceOutputOpenView input layout hadmissible sourceBoundary
@@ -103,7 +103,7 @@ noncomputable def compiledSpliceOutputActualOfEmpty
 /-- Exact empty-spine splice regions agree across the paired nested compiler
 frames. -/
 theorem compiledNestedActualFocusIsoOfEmpty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -128,7 +128,7 @@ theorem compiledNestedActualFocusIsoOfEmpty
       sourceBoundary sourceRoot hnested
     let alignment := layout.compiledNestedFrameContextIso input hadmissible
       sourceBoundary sourceRoot hnested
-    RegionIso signature alignment.holeWire sourceView.focus.holeRels
+    RegionIso  alignment.holeWire sourceView.focus.holeRels
       (compiledSpliceCoalescedActualOfEmpty input layout hadmissible
         sourceBoundary sourceRoot hnested hzero hrels)
       (alignment.holeRelsEq.symm ▸
@@ -218,7 +218,7 @@ theorem compiledNestedActualFocusIsoOfEmpty
     calc
       _ = (rawSource.renameRelations hostRelation).renameWires
           sourceHostWire.symm := by
-        apply congrArg (fun region : Region signature
+        apply congrArg (fun region : Region
           host.compilerLeaf.inheritedWires.length outputView.focus.holeRels =>
             region.renameWires sourceHostWire.symm)
         apply congrArg (fun relation : RelationRenaming host.focus.holeRels
@@ -244,15 +244,15 @@ theorem compiledNestedActualFocusIsoOfEmpty
 private theorem DiagramContext.fill_transport_holeRels_empty
     {sourceRels targetRels : Theory.RelCtx}
     (hrels : sourceRels = targetRels)
-    (context : DiagramContext signature outer hole outerRels targetRels)
-    (body : Region signature hole targetRels) :
+    (context : DiagramContext  outer hole outerRels targetRels)
+    (body : Region  hole targetRels) :
     (hrels.symm ▸ context).fill (hrels.symm ▸ body) =
       context.fill body := by
   subst targetRels
   rfl
 
 theorem compiledNestedActualRootIsoOfEmpty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -270,7 +270,7 @@ theorem compiledNestedActualRootIsoOfEmpty
       sourceBoundary sourceRoot
     let outputView := compiledSpliceOutputOpenView input layout hadmissible
       sourceBoundary sourceRoot
-    RegionIso signature
+    RegionIso
       (PlugLayout.rootExposedWireEquiv input layout sourceBoundary) []
       (sourceView.focus.context.fill
         (compiledSpliceCoalescedActualOfEmpty input layout hadmissible
@@ -295,7 +295,7 @@ theorem compiledNestedActualRootIsoOfEmpty
   exact targetFill ▸ rootIso
 
 noncomputable def compiledSpliceNestedCoalescedActualOpenOfEmpty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -305,7 +305,7 @@ noncomputable def compiledSpliceNestedCoalescedActualOpenOfEmpty
     (hrels : (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
       sourceRoot).focus.holeRels =
         (compiledSpliceHostView input hadmissible).focus.holeRels) :
-    OpenDiagram signature
+    OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let source := (PlugLayout.checkedCoalescedOpenRoot input hadmissible
@@ -318,7 +318,7 @@ noncomputable def compiledSpliceNestedCoalescedActualOpenOfEmpty
         sourceBoundary sourceRoot hnested hzero hrels))
 
 noncomputable def compiledSpliceNestedActualIsoOfEmpty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →

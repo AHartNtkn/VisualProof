@@ -13,19 +13,18 @@ namespace AbstractionRawTrace
 focused wrap kernel, which owns existential relation introduction and every
 occurrence replacement inside the wrapped material. -/
 noncomputable def semanticSimulation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
-    (targetWellFormed : trace.diagram.WellFormed signature)
+    (targetWellFormed : trace.diagram.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
-    ConcreteElaboration.ConcreteSemanticSimulation signature input.val
-      trace.diagram model named where
+    :
+    ConcreteElaboration.ConcreteSemanticSimulation  input.val
+      trace.diagram model  where
   source_wellFormed := input.property
   target_wellFormed := targetWellFormed
   regionMap := trace.regionMap
@@ -149,7 +148,7 @@ noncomputable def semanticSimulation
       context.down.indexRelation
       (context.down.extend region
         (Classical.not_not.mp regular).1).indexRelation
-      model named (sourceItems.renameRelations binderWitness.relationMap)
+      model  (sourceItems.renameRelations binderWitness.relationMap)
       targetItems
     · exact trace.regularEnvironmentSelection targetWellFormed direction
         sourceContext targetContext context.down region
@@ -166,7 +165,7 @@ noncomputable def semanticSimulation
     rw [canonical] at mapped
     have targetNodeEq := ConcreteElaboration.LocalOccurrence.node.inj mapped
     subst targetNode
-    exact trace.regularNode_itemSimulation model named direction sourceContext
+    exact trace.regularNode_itemSimulation model  direction sourceContext
       targetContext context.down sourceNodup sourceBinders targetBinders
       binderWitness
       region regular' sourceNode nodeRegion sourceItem targetItem sourceCompiled
@@ -187,15 +186,15 @@ noncomputable def semanticSimulation
         (region : Fin input.val.regionCount) →
         (context : ConcreteElaboration.WireContext input.val) →
         ConcreteElaboration.BinderContext input.val rels →
-        Option (Region signature context.length rels) :=
-      fun {rels} => ConcreteElaboration.compileRegion? signature input.val
+        Option (Region  context.length rels) :=
+      fun {rels} => ConcreteElaboration.compileRegion?  input.val
         fuelSource
     let targetRecurse : ∀ {rels : RelCtx},
         (region : Fin trace.diagram.regionCount) →
         (context : ConcreteElaboration.WireContext trace.diagram) →
         ConcreteElaboration.BinderContext trace.diagram rels →
-        Option (Region signature context.length rels) :=
-      fun {rels} => ConcreteElaboration.compileRegion? signature trace.diagram
+        Option (Region  context.length rels) :=
+      fun {rels} => ConcreteElaboration.compileRegion?  trace.diagram
         fuelTarget
     let sourceExtended := sourceContext.extend wrap.val.anchor
     let targetExtended := targetContext.extend
@@ -257,7 +256,7 @@ noncomputable def semanticSimulation
       at targetBubbleCompiled
     let targetPushed := targetBinders.push trace.bubble
       comprehension.val.boundary.length
-    cases bubbleResult : ConcreteElaboration.compileRegion? signature
+    cases bubbleResult : ConcreteElaboration.compileRegion?
         trace.diagram fuelTarget trace.bubble targetExtended targetPushed with
     | none => simp [targetPushed, bubbleResult] at targetBubbleCompiled
     | some bubbleBody =>
@@ -280,20 +279,20 @@ noncomputable def semanticSimulation
             have keptPointwise : ∀ occurrence,
                 occurrence ∈ ModalSoundness.keptOccurrences input.val wrap →
                 ∀ sourceItem targetItem,
-                ConcreteElaboration.compileOccurrenceWith? signature input.val
+                ConcreteElaboration.compileOccurrenceWith?  input.val
                     sourceRecurse sourceExtended sourceBinders occurrence =
                       some sourceItem →
-                ConcreteElaboration.compileOccurrenceWith? signature
+                ConcreteElaboration.compileOccurrenceWith?
                     trace.diagram targetRecurse targetExtended targetBinders
                     (trace.survivorOccurrence occurrence) = some targetItem →
-                ConcreteElaboration.ItemSimulation model named .forward
+                ConcreteElaboration.ItemSimulation model  .forward
                   focusedContext.indexRelation
                   (sourceItem.renameRelations binderWitness.relationMap)
                   targetItem := by
               intro occurrence member sourceItem targetItem sourceOccurrence
                 targetOccurrence
               exact trace.focusedKeptOccurrence_itemSimulation payload
-                targetWellFormed model named .forward fuelSource
+                targetWellFormed model  .forward fuelSource
                 (bubbleFuel + 1) sourceExtended targetExtended focusedContext
                 sourceBinders targetBinders binderWitness sourceExact targetExact
                 sourceBindersCover targetBindersCover sourceEnumeration
@@ -306,7 +305,7 @@ noncomputable def semanticSimulation
                 (by simpa [targetRecurse] using targetOccurrence)
             have keptSimulation :=
               ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
-                model named .forward sourceRecurse targetRecurse sourceExtended
+                model  .forward sourceRecurse targetRecurse sourceExtended
                 targetExtended sourceBinders targetBinders
                 focusedContext.indexRelation binderWitness.relationMap
                 trace.survivorOccurrence
@@ -358,8 +357,8 @@ noncomputable def semanticSimulation
                 (region : Fin trace.diagram.regionCount) →
                 (context : ConcreteElaboration.WireContext trace.diagram) →
                 ConcreteElaboration.BinderContext trace.diagram rels →
-                Option (Region signature context.length rels) :=
-              fun {rels} => ConcreteElaboration.compileRegion? signature
+                Option (Region  context.length rels) :=
+              fun {rels} => ConcreteElaboration.compileRegion?
                 trace.diagram bubbleFuel
             obtain ⟨targetBubblePartitionItems,
                 targetBubblePartitionCompiled⟩ :=
@@ -379,8 +378,8 @@ noncomputable def semanticSimulation
                 targetSelectedSurvivors targetAtoms
                 targetBubblePartitionItems targetBubblePartitionCompiled
             have sourceBlockExists : ∀ index, index ∈ indices →
-                ∃ items : ItemSeq signature sourceExtended.length sourceRels,
-                  ConcreteElaboration.compileOccurrencesWith? signature
+                ∃ items : ItemSeq  sourceExtended.length sourceRels,
+                  ConcreteElaboration.compileOccurrencesWith?
                     input.val sourceRecurse sourceExtended sourceBinders
                     (ModalSoundness.selectedOccurrences input.val
                       (occurrences.get index).selection) = some items := by
@@ -396,12 +395,12 @@ noncomputable def semanticSimulation
                     indexMember,
                   occurrenceMember⟩
             let sourceFamilyItems : Fin occurrences.length →
-                ItemSeq signature sourceExtended.length sourceRels :=
+                ItemSeq  sourceExtended.length sourceRels :=
               fun index => if member : index ∈ indices then
                 Classical.choose (sourceBlockExists index member)
               else .nil
             have sourceFamilyCompiled : ∀ index, index ∈ indices →
-                ConcreteElaboration.compileOccurrencesWith? signature
+                ConcreteElaboration.compileOccurrencesWith?
                   input.val sourceRecurse sourceExtended sourceBinders
                   (ModalSoundness.selectedOccurrences input.val
                     (occurrences.get index).selection) =
@@ -423,9 +422,9 @@ noncomputable def semanticSimulation
                 simpa [selectedAtWrap, selectedAt, indices] using
                   sourceFamilyAggregateCompiled)
             have targetAtomExists : ∀ index, index ∈ indices →
-                ∃ item : Item signature bubbleContext.length
+                ∃ item : Item  bubbleContext.length
                     (comprehension.val.boundary.length :: targetRels),
-                  ConcreteElaboration.compileNode? signature trace.diagram
+                  ConcreteElaboration.compileNode?  trace.diagram
                     bubbleContext targetPushed (trace.targetAtom index) =
                       some item := by
               intro index indexMember
@@ -437,13 +436,13 @@ noncomputable def semanticSimulation
                 simpa [ConcreteElaboration.compileOccurrenceWith?] using
                   compiled⟩
             let targetFamilyItems : Fin occurrences.length →
-                Item signature bubbleContext.length
+                Item  bubbleContext.length
                   (comprehension.val.boundary.length :: targetRels) :=
               fun index => if member : index ∈ indices then
                 Classical.choose (targetAtomExists index member)
               else .cut (.mk 0 .nil)
             have targetFamilyCompiled : ∀ index, index ∈ indices →
-                ConcreteElaboration.compileNode? signature trace.diagram
+                ConcreteElaboration.compileNode?  trace.diagram
                   bubbleContext targetPushed (trace.targetAtom index) =
                     some (targetFamilyItems index) := by
               intro index member
@@ -464,7 +463,7 @@ noncomputable def semanticSimulation
               exact targetFamilyCompiler.symm.trans (by
                 simpa [targetAtoms] using targetAtomCompiled)
             have sourceSelectedCanonicalCompiled :
-                ConcreteElaboration.compileOccurrencesWith? signature input.val
+                ConcreteElaboration.compileOccurrencesWith?  input.val
                   sourceRecurse sourceExtended sourceBinders
                   (selectedSurvivors ++ selectedAtWrap) =
                     some (sourceSurvivorItems.append
@@ -472,7 +471,7 @@ noncomputable def semanticSimulation
               rw [← sourceSelectedPartitionEq]
               exact sourceSelectedPartitionCompiled
             have targetBubbleCanonicalCompiled :
-                ConcreteElaboration.compileOccurrencesWith? signature
+                ConcreteElaboration.compileOccurrencesWith?
                   trace.diagram bubbleRecurse bubbleContext targetPushed
                   (targetSelectedSurvivors ++ targetAtoms) =
                     some (targetSurvivorItems.append targetAtomItems) := by
@@ -511,12 +510,12 @@ noncomputable def semanticSimulation
                 child ≠ wrap.val.anchor →
                 AbstractionAllowed input.val wrap.val.anchor childDirection
                     child →
-                  FixedRegionSimulation trace model named childDirection
+                  FixedRegionSimulation trace model  childDirection
                     fuelSource bubbleFuel child := by
               intro childDirection child childSelected childSurvives
                 childNotWrap childAllowed
               exact trace.fixedRegionSimulation payload targetWellFormed model
-                named childDirection fuelSource bubbleFuel child childSurvives
+                 childDirection fuelSource bubbleFuel child childSurvives
                 childNotWrap childSelected childAllowed
             have bubbleContextEq : bubbleContext = targetExtended := by
               exact trace.extend_bubble_eq targetExtended
@@ -531,7 +530,7 @@ noncomputable def semanticSimulation
               exact targetExact
             have selectedSimulation :=
               trace.focusedSelectedSurvivingSources_semantic payload
-                targetWellFormed model named fuelSource bubbleFuel
+                targetWellFormed model  fuelSource bubbleFuel
                 sourceExtended (targetExtended.extend trace.bubble)
                 selectedContext sourceBinders targetBinders binderWitness
                 sourceExact selectedTargetExact
@@ -566,7 +565,7 @@ noncomputable def semanticSimulation
               (DoubleCutElimTrace.finishRegion_denote_iff input.val
                 sourceContext wrap.val.anchor
                 (sourceItems.renameRelations binderWitness.relationMap)
-                model named sourceEnvironment targetRelations).1 sourceDenotes
+                model  sourceEnvironment targetRelations).1 sourceDenotes
             obtain ⟨targetLocal, focusedAgreement⟩ :=
               trace.survivorEnvironmentSelection targetWellFormed .forward
                 sourceContext targetContext context.down wrap.val.anchor
@@ -582,9 +581,9 @@ noncomputable def semanticSimulation
               binderWitness.relationMap targetRelations
             have baseRelationAgreement := RelEnv.pullback_agrees
               binderWitness.relationMap targetRelations
-            have sourceRawDenote : denoteItemSeq model named
+            have sourceRawDenote : denoteItemSeq model
                 sourceLocalEnvironment sourceRelations sourceItems :=
-              (denoteItemSeq_renameRelations model named
+              (denoteItemSeq_renameRelations model
                 binderWitness.relationMap sourceRelations targetRelations
                 baseRelationAgreement sourceLocalEnvironment sourceItems).1
                   sourceItemsDenote
@@ -593,18 +592,18 @@ noncomputable def semanticSimulation
               sourcePartition sourceCanonicalNodup
               (ConcreteElaboration.localOccurrences_nodup input.val
                 wrap.val.anchor)
-              sourcePartitionCompiled sourceCompiled model named
+              sourcePartitionCompiled sourceCompiled model
               sourceLocalEnvironment sourceRelations
             have sourceCanonicalDenote := sourcePermutation.mpr sourceRawDenote
             rw [sourcePartitionEq] at sourceCanonicalDenote
             have sourceParts :=
-              (denoteItemSeq_append model named sourceLocalEnvironment
+              (denoteItemSeq_append model  sourceLocalEnvironment
                 sourceRelations sourceKeptItems sourceSelectedItems).1
                 sourceCanonicalDenote
-            have sourceKeptRenamed : denoteItemSeq model named
+            have sourceKeptRenamed : denoteItemSeq model
                 sourceLocalEnvironment targetRelations
                 (sourceKeptItems.renameRelations binderWitness.relationMap) :=
-              (denoteItemSeq_renameRelations model named
+              (denoteItemSeq_renameRelations model
                 binderWitness.relationMap sourceRelations targetRelations
                 baseRelationAgreement sourceLocalEnvironment
                 sourceKeptItems).2 sourceParts.1
@@ -617,15 +616,15 @@ noncomputable def semanticSimulation
                 sourceSelectedCanonicalNodup
                 (selectedOccurrences_nodup input wrap)
                 sourceSelectedCanonicalCompiled sourceSelectedCompiled model
-                named sourceLocalEnvironment sourceRelations
+                 sourceLocalEnvironment sourceRelations
             have sourceSelectedCanonicalDenote :=
               sourceSelectedPermutation.mpr sourceParts.2
             have sourceSelectedParts :=
-              (denoteItemSeq_append model named sourceLocalEnvironment
+              (denoteItemSeq_append model  sourceLocalEnvironment
                 sourceRelations sourceSurvivorItems
                 sourceFamilyAggregateItems).1 sourceSelectedCanonicalDenote
             let freshRelation := abstractionRelation
-              (signature := signature) comprehension model named
+               comprehension model
             let freshRelations : RelEnv model.Carrier
                 (comprehension.val.boundary.length :: targetRels) :=
               (freshRelation, targetRelations)
@@ -638,11 +637,11 @@ noncomputable def semanticSimulation
                 BinderWitness.weakenRelationMap, freshRelations,
                 RelEnv.lookup, ConcreteElaboration.BinderContext.liftVar]
                 using baseRelationAgreement arity relation
-            have sourceSurvivorRenamed : denoteItemSeq model named
+            have sourceSurvivorRenamed : denoteItemSeq model
                 sourceLocalEnvironment freshRelations
                 (sourceSurvivorItems.renameRelations
                   freshWitness.relationMap) :=
-              (denoteItemSeq_renameRelations model named
+              (denoteItemSeq_renameRelations model
                 freshWitness.relationMap sourceRelations freshRelations
                 freshRelationAgreement sourceLocalEnvironment
                 sourceSurvivorItems).2 sourceSelectedParts.1
@@ -658,7 +657,7 @@ noncomputable def semanticSimulation
               exact focusedContext.castTarget_agrees
                 (trace.extend_bubble_eq targetExtended) sourceLocalEnvironment
                 targetLocalEnvironment focusedAgreement
-            have fixedFresh := FixedRelationWitness.fresh trace model named
+            have fixedFresh := FixedRelationWitness.fresh trace model
               targetBinders targetRelations
             have targetSurvivorDenote := selectedSimulation
               sourceLocalEnvironment targetBubbleEnvironment freshRelations
@@ -669,23 +668,23 @@ noncomputable def semanticSimulation
               intro index member
               exact (mem_anchorIndices occurrences wrap.val.anchor index).1
                 member
-            have sourceFamilyDenote : denoteItemSeq model named
+            have sourceFamilyDenote : denoteItemSeq model
                 sourceLocalEnvironment sourceRelations
                 (occurrenceFamilyItems sourceFamilyItems indices) := by
               rw [sourceFamilyEq]
               exact sourceSelectedParts.2
             have targetFamilyDenote := trace.occurrenceFamily_forward payload
-              model named fuelSource wrap.val.anchor indices anchored
+              model  fuelSource wrap.val.anchor indices anchored
               sourceExtended (targetExtended.extend trace.bubble)
               selectedContext sourceBinders targetPushed sourceBindersCover
               sourceEnumeration sourceExact sourceFamilyItems targetFamilyItems
               sourceFamilyCompiled targetFamilyCompiled sourceLocalEnvironment
               targetBubbleEnvironment sourceRelations freshRelations fixedFresh
               selectedAgreement sourceFamilyDenote
-            have targetBubbleCanonicalDenote : denoteItemSeq model named
+            have targetBubbleCanonicalDenote : denoteItemSeq model
                 targetBubbleEnvironment freshRelations
                 (targetSurvivorItems.append targetAtomItems) := by
-              apply (denoteItemSeq_append model named targetBubbleEnvironment
+              apply (denoteItemSeq_append model  targetBubbleEnvironment
                 freshRelations targetSurvivorItems targetAtomItems).2
               refine ⟨targetSurvivorDenote, ?_⟩
               rw [← targetFamilyEq]
@@ -696,42 +695,42 @@ noncomputable def semanticSimulation
                 targetBubblePartition
                 (ConcreteElaboration.localOccurrences_nodup trace.diagram
                   trace.bubble) targetBubbleCanonicalNodup bubbleItemsCompiled
-                targetBubbleCanonicalCompiled model named
+                targetBubbleCanonicalCompiled model
                 targetBubbleEnvironment freshRelations
             have bubbleItemsDenote :=
               targetBubblePermutation.mpr targetBubbleCanonicalDenote
-            have bubbleItemsDenoteActual : denoteItemSeq model named
+            have bubbleItemsDenoteActual : denoteItemSeq model
                 (ConcreteElaboration.extendedEnvironment targetExtended
                   trace.bubble targetLocalEnvironment bubbleLocal)
                 freshRelations bubbleItems := by
               rw [trace.extendedEnvironment_bubble_empty]
               exact bubbleItemsDenote
-            have bubbleBodyDenote : denoteRegion model named
+            have bubbleBodyDenote : denoteRegion model
                 targetLocalEnvironment freshRelations
                 (ConcreteElaboration.finishRegion trace.diagram targetExtended
                   trace.bubble bubbleItems) :=
               (DoubleCutElimTrace.finishRegion_denote_iff trace.diagram
-                targetExtended trace.bubble bubbleItems model named
+                targetExtended trace.bubble bubbleItems model
                 targetLocalEnvironment freshRelations).2
                   ⟨bubbleLocal, bubbleItemsDenoteActual⟩
-            have targetBubbleDenote : denoteItem model named
+            have targetBubbleDenote : denoteItem model
                 targetLocalEnvironment targetRelations
                 (.bubble comprehension.val.boundary.length
                   (ConcreteElaboration.finishRegion trace.diagram targetExtended
                     trace.bubble bubbleItems)) := by
               simp only [bubble_denotes_exists]
               exact ⟨freshRelation, bubbleBodyDenote⟩
-            have targetCanonicalDenote : denoteItemSeq model named
+            have targetCanonicalDenote : denoteItemSeq model
                 targetLocalEnvironment targetRelations
                 (targetKeptItems.append (.cons
                   (.bubble comprehension.val.boundary.length
                     (ConcreteElaboration.finishRegion trace.diagram
                       targetExtended trace.bubble bubbleItems)) .nil)) := by
-              apply (denoteItemSeq_append model named targetLocalEnvironment
+              apply (denoteItemSeq_append model  targetLocalEnvironment
                 targetRelations targetKeptItems _).2
               exact ⟨targetKeptDenote, by simpa using targetBubbleDenote⟩
             have targetCanonicalCompiled :
-                ConcreteElaboration.compileOccurrencesWith? signature
+                ConcreteElaboration.compileOccurrencesWith?
                   trace.diagram targetRecurse targetExtended targetBinders
                   ((ModalSoundness.keptOccurrences input.val wrap).map
                       trace.survivorOccurrence ++
@@ -750,12 +749,12 @@ noncomputable def semanticSimulation
               (ConcreteElaboration.localOccurrences_nodup trace.diagram
                 (trace.regionMap wrap.val.anchor)) targetCanonicalNodup
               targetCompiled targetCanonicalCompiled
-              model named targetLocalEnvironment targetRelations
+              model  targetLocalEnvironment targetRelations
             have targetItemsDenote := targetPermutation.mpr
               targetCanonicalDenote
             apply (DoubleCutElimTrace.finishRegion_denote_iff trace.diagram
               targetContext (trace.regionMap wrap.val.anchor) targetItems
-              model named targetEnvironment targetRelations).2
+              model  targetEnvironment targetRelations).2
             exact ⟨targetLocal, targetItemsDenote⟩
 
 end AbstractionRawTrace

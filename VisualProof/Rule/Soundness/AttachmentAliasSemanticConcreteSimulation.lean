@@ -31,7 +31,7 @@ theorem bodyContainer_isSpineRegion (spine : BinderSpine diagram) :
 
 theorem spineRegion_ne_cut
     (spine : BinderSpine diagram)
-    (wellFormed : diagram.WellFormed signature)
+    (wellFormed : diagram.WellFormed )
     (child parent : Fin diagram.regionCount)
     (spineChild : IsSpineRegion spine child) :
     diagram.regions child ≠ .cut parent := by
@@ -44,7 +44,7 @@ theorem spineRegion_ne_cut
 
 theorem parent_isSpineRegion_of_bubble
     (spine : BinderSpine diagram)
-    (wellFormed : diagram.WellFormed signature)
+    (wellFormed : diagram.WellFormed )
     (child parent : Fin diagram.regionCount)
     (spineChild : IsSpineRegion spine child)
     (bubble : diagram.regions child = .bubble parent arity) :
@@ -62,7 +62,7 @@ theorem parent_isSpineRegion_of_bubble
 
 theorem directChild_body_not_spine
     (spine : BinderSpine diagram)
-    (wellFormed : diagram.WellFormed signature)
+    (wellFormed : diagram.WellFormed )
     (child : Fin diagram.regionCount)
     (childParent : (diagram.regions child).parent? = some spine.bodyContainer) :
     ¬ IsSpineRegion spine child := by
@@ -94,7 +94,7 @@ theorem directChild_body_not_spine
       omega
 
 def indexRelation (mode : Mode)
-    {pattern : CheckedOpenDiagram signature}
+    {pattern : CheckedOpenDiagram }
     {attachment : Fin pattern.val.boundary.length → Host}
     {spine : BinderSpine pattern.val.diagram}
     {targetContext : ConcreteElaboration.WireContext
@@ -124,18 +124,18 @@ theorem identityBinder_relationMap_same
 
 noncomputable def concreteSimulation
     (mode : Mode)
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
-        signature)
+        )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
-    ConcreteElaboration.ConcreteSemanticSimulation signature pattern.val.diagram
+    :
+    ConcreteElaboration.ConcreteSemanticSimulation  pattern.val.diagram
       (materializedDiagram pattern.val attachment spine.bodyContainer)
-      model named where
+      model  where
   source_wellFormed := pattern.property.diagram_well_formed
   target_wellFormed := targetWellFormed
   regionMap := id
@@ -226,12 +226,12 @@ noncomputable def concreteSimulation
     simp only [id_eq] at targetExact targetCover targetEnumeration targetCompiled ⊢
     change ∀ relEnv, ConcreteElaboration.DirectionalLocalTransport direction
       sourceContext targetContext region region (indexRelation mode collapse)
-      model named relEnv sourceItems targetItems
+      model  relEnv sourceItems targetItems
     let extendedCollapse := extendCollapse pattern attachment spine contract
       targetContext sourceContext collapse region targetExact sourceExact
     apply ConcreteElaboration.directionalLocalTransport_of_agreement direction
       sourceContext targetContext region region (indexRelation mode collapse)
-      (indexRelation mode extendedCollapse) model named sourceItems targetItems
+      (indexRelation mode extendedCollapse) model  sourceItems targetItems
     · intro sourceOuter targetOuter outerAgrees
       cases mode with
       | forward =>
@@ -330,12 +330,12 @@ noncomputable def concreteSimulation
     | forward =>
         exact oldNode_itemSimulation pattern attachment spine sourceContext
           targetContext collapse sourceNodup sourceBinders targetBinders bindersEq
-          sourceNode sourceItem targetItem sourceCompiled targetCompiled model named
+          sourceNode sourceItem targetItem sourceCompiled targetCompiled model
           direction
     | backward =>
         exact oldNode_itemSimulation_oldIndex pattern attachment spine sourceContext
           targetContext collapse targetNodup sourceBinders targetBinders bindersEq
-          sourceNode sourceItem targetItem sourceCompiled targetCompiled model named
+          sourceNode sourceItem targetItem sourceCompiled targetCompiled model
           direction
   focusedRegionKernel := by
     intro sourceRels targetRels direction fuelSource fuelTarget region sourceContext
@@ -363,11 +363,11 @@ noncomputable def concreteSimulation
     simp only [id_eq] at targetExact targetCover targetEnumeration targetCompiled ⊢
     apply ConcreteElaboration.finishRegion_denote mode.direction sourceContext
       targetContext spine.bodyContainer spine.bodyContainer
-      (indexRelation mode collapse) model named sourceItems targetItems
+      (indexRelation mode collapse) model  sourceItems targetItems
     cases mode with
     | forward =>
         exact focusedLocalTransport_forward pattern attachment spine contract
-          targetWellFormed model named fuelSource fuelTarget sourceContext
+          targetWellFormed model  fuelSource fuelTarget sourceContext
           targetContext collapse sourceExact targetExact sourceBinders targetBinders
           bindersEq sourceCover targetCover sourceEnumeration targetEnumeration
           (by
@@ -402,7 +402,7 @@ noncomputable def concreteSimulation
           sourceItems targetItems sourceCompiled targetCompiled
     | backward =>
         exact focusedLocalTransport_backward pattern attachment spine contract
-          targetWellFormed model named fuelSource fuelTarget sourceContext
+          targetWellFormed model  fuelSource fuelTarget sourceContext
           targetContext collapse sourceExact targetExact sourceBinders targetBinders
           bindersEq sourceCover targetCover sourceEnumeration targetEnumeration
           (by

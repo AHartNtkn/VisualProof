@@ -13,10 +13,9 @@ namespace FinalContextWitness
 /-- The selected original parent-and-bubble environment is the restriction of
 the single valuation induced by the exact promoted-focus context. -/
 theorem selectedTargetEnvironment_wireValue
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -31,7 +30,7 @@ theorem selectedTargetEnvironment_wireValue
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     {sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input.val}
@@ -71,10 +70,9 @@ theorem selectedTargetEnvironment_wireValue
 /-- Extend a target local valuation across executor-only source wires while
 fixing every certified image of an original local wire. -/
 noncomputable def sourceLocalEnvironment
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -89,7 +87,7 @@ noncomputable def sourceLocalEnvironment
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
@@ -107,10 +105,9 @@ noncomputable def sourceLocalEnvironment
     else Classical.choice inferInstance
 
 theorem sourceLocalEnvironment_image
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -125,7 +122,7 @@ theorem sourceLocalEnvironment_image
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
@@ -151,10 +148,9 @@ theorem sourceLocalEnvironment_image
   rw [chosenEq]
 
 theorem regularTargetEnvironment_outer
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -169,7 +165,7 @@ theorem regularTargetEnvironment_outer
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input.val)
@@ -233,10 +229,9 @@ theorem regularTargetEnvironment_outer
   exact outerAgreement sourceIndex targetIndex rfl
 
 theorem regularTargetEnvironment_local
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -251,7 +246,7 @@ theorem regularTargetEnvironment_local
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input.val)
@@ -325,10 +320,9 @@ theorem regularTargetEnvironment_local
 /-- The complete valuation-selection contract used by regular local compiler
 transport in either semantic direction. -/
 theorem regularEnvironmentSelection
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -343,7 +337,7 @@ theorem regularEnvironmentSelection
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram)

@@ -13,16 +13,15 @@ relation obtained from the current quantified bubble's certified proxy
 binders.  This is the bridge between per-splice compiler extraction and the
 single relation witness eventually chosen for the eliminated bubble. -/
 theorem terminalRelationOfValues_iff_nonempty
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -30,22 +29,21 @@ theorem terminalRelationOfValues_iff_nonempty
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (targets : BinderTargetsAtBubble payload state)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val
       state.bubble hostWitness)
     (hostRelEnv : RelEnv model.Carrier hostWitness.toFocus.holeRels)
     (relationArguments : Fin payload.arity → model.Carrier) :
-    terminalRelationOfValues payload state site arguments hnonempty model named
+    terminalRelationOfValues payload state site arguments hnonempty model
         wireValue
         (proxyRelationsAtBubble payload state targets hostWitness hostLeaf
           hostRelEnv)
         relationArguments ↔
       terminalRelationOfNonempty payload state site arguments hnonempty targets
-        model named wireValue hostWitness hostLeaf hostRelEnv
+        model  wireValue hostWitness hostLeaf hostRelEnv
         relationArguments := by
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
@@ -67,7 +65,7 @@ theorem terminalRelationOfValues_iff_nonempty
             RelEnv model.Carrier pattern.witness.toFocus.holeRels,
           TerminalRelationsMatch payload state site arguments hnonempty values
               terminalRelEnv ∧
-            denoteRegion model named
+            denoteRegion model
               (terminalInheritedEnvironment payload state site arguments
                 hnonempty assignment)
               terminalRelEnv
@@ -78,7 +76,7 @@ theorem terminalRelationOfValues_iff_nonempty
       assignment.args =
           Fin.addCases relationArguments (wireValue ∘ state.parameters) ∘
             Fin.cast payload.boundarySplit ∧
-        denoteRegion model named
+        denoteRegion model
           (terminalInheritedEnvironment payload state site arguments hnonempty
             assignment)
           hostRelEnv
@@ -97,7 +95,7 @@ theorem terminalRelationOfValues_iff_nonempty
       have pullbackAgrees := RelEnv.pullback_agrees relationMap hostRelEnv arity
         relation
       exact matched.trans (pulledLookup.symm.trans pullbackAgrees)
-    exact (denoteRegion_renameRelations model named relationMap terminalRelEnv
+    exact (denoteRegion_renameRelations model  relationMap terminalRelEnv
       hostRelEnv agrees
       (terminalInheritedEnvironment payload state site arguments hnonempty
         assignment)
@@ -109,7 +107,7 @@ theorem terminalRelationOfValues_iff_nonempty
     · intro arity relation
       exact terminalRelationPullback_lookup payload state site arguments
         hnonempty targets hostWitness hostLeaf hostRelEnv relation
-    · exact (denoteRegion_renameRelations model named relationMap pulled
+    · exact (denoteRegion_renameRelations model  relationMap pulled
         hostRelEnv (RelEnv.pullback_agrees relationMap hostRelEnv)
         (terminalInheritedEnvironment payload state site arguments hnonempty
           assignment)

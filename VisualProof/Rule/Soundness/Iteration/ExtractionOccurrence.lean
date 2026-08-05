@@ -8,7 +8,7 @@ open VisualProof.Diagram
 open VisualProof.Rule.ModalSoundness
 
 private theorem selectedOccurrence_node_direct
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (node : Fin input.val.nodeCount)
     (member : ConcreteElaboration.LocalOccurrence.node node ∈
@@ -18,7 +18,7 @@ private theorem selectedOccurrence_node_direct
   simpa [occurrenceSelected] using member.2
 
 private theorem selectedOccurrence_child_direct
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (child : Fin input.val.regionCount)
     (member : ConcreteElaboration.LocalOccurrence.child child ∈
@@ -82,7 +82,7 @@ theorem bodyContainer_ne_materialRegion
 terminal body of the extracted open pattern.  Membership is retained in the
 type, so this construction contains no search-failure fallback. -/
 noncomputable def extractedSelectedOccurrence
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
@@ -101,7 +101,7 @@ noncomputable def extractedSelectedOccurrence
 /-- Every mapped selected occurrence is emitted directly by the extracted
 pattern compiler at its terminal body container. -/
 theorem extractedSelectedOccurrence_mem_terminal
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
@@ -146,7 +146,7 @@ theorem extractedSelectedOccurrence_mem_terminal
 /-- A fragment node emitted at the terminal body comes from a directly
 selected anchor node, not from inside one of the selected child subtrees. -/
 theorem terminalNode_origin_direct
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (node : Fin layout.nodeCount)
@@ -172,7 +172,7 @@ theorem terminalNode_origin_direct
 
 /-- Node part of reverse occurrence coverage for extraction. -/
 theorem terminalNode_has_selected_preimage
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (node : Fin layout.nodeCount)
@@ -215,7 +215,7 @@ theorem terminalNode_has_selected_preimage
     simpa only [List.get_eq_getElem] using helements)
 
 theorem selectedRegion_ne_root
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     {region : Fin input.val.regionCount}
     (selected : region ∈ selection.selectedRegions) :
@@ -232,7 +232,7 @@ theorem selectedRegion_ne_root
   contradiction
 
 theorem fragmentParent_body_of_selected_child_parent
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {region parent : Fin input.val.regionCount}
@@ -259,7 +259,7 @@ theorem fragmentParent_body_of_selected_child_parent
         (mapped.symm.trans parentMapped))
 
 private theorem proxy_not_direct_child_of_bodyContainer
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (index : Fin layout.proxyCount) :
@@ -293,7 +293,7 @@ private theorem proxy_not_direct_child_of_bodyContainer
       omega
 
 theorem terminalChild_is_material
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (child : Fin layout.regionCount)
@@ -313,7 +313,7 @@ theorem terminalChild_is_material
   · exact material
 
 private theorem terminalMaterial_origin_direct
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (index : Fin layout.materialRegionCount)
@@ -373,7 +373,7 @@ private theorem terminalMaterial_origin_direct
 
 /-- Child-region part of reverse occurrence coverage for extraction. -/
 theorem terminalChild_has_selected_preimage
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (child : Fin layout.regionCount)
@@ -424,7 +424,7 @@ theorem terminalChild_has_selected_preimage
 unreachable on `selectedOccurrences`; making the map total lets the compiler
 simulation consume it with the ordinary `List.map` interface. -/
 noncomputable def extractionOccurrenceMap
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
     ConcreteElaboration.LocalOccurrence input.val.regionCount
@@ -443,7 +443,7 @@ noncomputable def extractionOccurrenceMap
         .child layout.root
 
 theorem extractionOccurrenceMap_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
@@ -464,7 +464,7 @@ theorem extractionOccurrenceMap_eq
       rfl
 
 private theorem extractionOccurrenceMap_injective_on_selected
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {left right : ConcreteElaboration.LocalOccurrence input.val.regionCount
@@ -546,7 +546,7 @@ private theorem perm_of_nodup_and_mem_iff
 /-- The selected anchor occurrences and the extracted pattern's terminal-body
 occurrences are the same finite family, up to the extraction renaming. -/
 theorem extractionOccurrenceMap_selected_perm_terminal
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
     ((selectedOccurrences input.val selection).map
@@ -614,7 +614,7 @@ theorem extractionOccurrenceMap_selected_perm_terminal
 occurrence from which extraction built it.  Administrative proxy/root children
 use the anchor fallback, but those branches never occur in the terminal body. -/
 noncomputable def extractionHostOccurrenceMap
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
     ConcreteElaboration.LocalOccurrence layout.regionCount layout.nodeCount →
@@ -629,7 +629,7 @@ noncomputable def extractionHostOccurrenceMap
         .child selection.val.anchor
 
 theorem extractionHostOccurrenceMap_leftInverse
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
@@ -673,7 +673,7 @@ theorem extractionHostOccurrenceMap_leftInverse
 used by compiler simulation from the extracted pattern into the retained
 ancestor block. -/
 theorem extractionHostOccurrenceMap_terminal_perm_selected
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
     (ConcreteElaboration.localOccurrences

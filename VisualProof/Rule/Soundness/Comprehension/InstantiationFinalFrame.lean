@@ -10,10 +10,9 @@ namespace InstantiationTrace
 /-- Pointwise-preserved source frame: outside the rewritten bubble and away
 from the parent focus where vacuous elimination performs the replacement. -/
 def FrameRegular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -25,10 +24,9 @@ def FrameRegular
 /-- A copied region can be the final moving bubble only when it was the
 original quantified bubble. -/
 theorem regionMap_ne_result_bubble
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -50,10 +48,9 @@ theorem regionMap_ne_result_bubble
 /-- Away from the deleted bubble, the composite final region map has the
 expected copy-trace origin. -/
 theorem origin_finalRegionMap_of_ne_bubble
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -68,7 +65,7 @@ theorem origin_finalRegionMap_of_ne_bubble
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount)
     (notBubble : region ≠ bubble) :
     elimTrace.origin
@@ -82,10 +79,9 @@ theorem origin_finalRegionMap_of_ne_bubble
 /-- The copy trace preserves the direct-parent relation of every original
 frame child through the post-copy atom compaction. -/
 theorem dropped_region_parent
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -122,10 +118,9 @@ theorem dropped_region_parent
 /-- Every child of a regular source region remains a child of the mapped
 regular region after copying, atom compaction, and vacuous promotion. -/
 theorem final_region_parent_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -140,7 +135,7 @@ theorem final_region_parent_of_regular
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (parent child : Fin input.val.regionCount)
     (regular : FrameRegular payload parent)
     (childParent : (input.val.regions child).parent? = some parent) :
@@ -187,10 +182,9 @@ theorem final_region_parent_of_regular
 preserves each direct child constructor and maps its parent through the
 composite final region map. -/
 theorem final_region_shape_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -205,7 +199,7 @@ theorem final_region_shape_of_regular
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (parent : Fin input.val.regionCount)
     (regular : FrameRegular payload parent)
     (child : Fin input.val.regionCount)
@@ -321,10 +315,9 @@ theorem final_region_shape_of_regular
 /-- A node owned by a regular region lies outside the quantified bubble and
 therefore survives the executor's post-copy atom compaction. -/
 theorem node_outside_bubble_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -341,10 +334,9 @@ theorem node_outside_bubble_of_regular
 /-- Dense final node index of an original node known to lie outside the
 quantified bubble.  Vacuous promotion preserves the compacted node carrier. -/
 def finalNodeMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -366,10 +358,9 @@ def finalNodeMap
 /-- The composite node map sends every node owned by a regular region to the
 mapped regular region. -/
 theorem finalNodeMap_region
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -384,7 +375,7 @@ theorem finalNodeMap_region
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region)
     (node : Fin input.val.nodeCount)
@@ -427,10 +418,9 @@ theorem finalNodeMap_region
 /-- Retained nodes in regular regions preserve their complete constructor,
 including atom binders transported through the composite region map. -/
 theorem final_node_shape_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -445,7 +435,7 @@ theorem final_node_shape_of_regular
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region)
     (node : Fin input.val.nodeCount)
@@ -460,10 +450,7 @@ theorem final_node_shape_of_regular
             arity
       | .atom owner binder =>
           .atom (copyTrace.finalRegionMap elimTrace finalWellFormed owner)
-            (copyTrace.finalRegionMap elimTrace finalWellFormed binder)
-      | .named owner definition arity =>
-          .named (copyTrace.finalRegionMap elimTrace finalWellFormed owner)
-            definition arity := by
+            (copyTrace.finalRegionMap elimTrace finalWellFormed binder) := by
   dsimp only
   let outside := node_outside_bubble_of_regular payload region regular node
     nodeRegion
@@ -519,13 +506,6 @@ theorem final_node_shape_of_regular
           rw [targetShape'] at promotedShape
           rw [droppedShape] at promotedShape
           cases promotedShape
-      | named targetOwner targetDefinition targetArity =>
-          have targetShape' : elimTrace.promotion.nodes
-              (copyTrace.droppedNodeMap node outside) =
-                .named targetOwner targetDefinition targetArity := targetShape
-          rw [targetShape'] at promotedShape
-          rw [droppedShape] at promotedShape
-          cases promotedShape
   | atom sourceOwner sourceBinder =>
       have sourceOwnerEq : sourceOwner = region := by
         rw [sourceShape] at nodeRegion
@@ -571,53 +551,6 @@ theorem final_node_shape_of_regular
               (binderOrigin.symm.trans mappedBinderOrigin.symm)
           subst targetBinder
           simpa [sourceShape] using targetShape
-      | named targetOwner targetDefinition targetArity =>
-          have targetShape' : elimTrace.promotion.nodes
-              (copyTrace.droppedNodeMap node outside) =
-                .named targetOwner targetDefinition targetArity := targetShape
-          rw [targetShape'] at promotedShape
-          rw [droppedShape] at promotedShape
-          cases promotedShape
-  | named sourceOwner sourceDefinition sourceArity =>
-      have sourceOwnerEq : sourceOwner = region := by
-        rw [sourceShape] at nodeRegion
-        exact nodeRegion
-      subst sourceOwner
-      rw [sourceShape] at droppedShape
-      simp only [mapNodeShape] at droppedShape
-      cases targetShape : elimTrace.sourceDiagram.nodes
-          (copyTrace.finalNodeMap elimTrace node outside) with
-      | identity targetOwner targetArity =>
-          have targetShape' : elimTrace.promotion.nodes
-              (copyTrace.droppedNodeMap node outside) =
-                .identity targetOwner targetArity := targetShape
-          rw [targetShape'] at promotedShape
-          rw [droppedShape] at promotedShape
-          cases promotedShape
-      | atom targetOwner targetBinder =>
-          have targetShape' : elimTrace.promotion.nodes
-              (copyTrace.droppedNodeMap node outside) =
-                .atom targetOwner targetBinder := targetShape
-          rw [targetShape'] at promotedShape
-          rw [droppedShape] at promotedShape
-          cases promotedShape
-      | named targetOwner targetDefinition targetArity =>
-          have targetOwnerEq : targetOwner =
-              copyTrace.finalRegionMap elimTrace finalWellFormed region := by
-            rw [targetShape] at finalOwner
-            exact finalOwner
-          subst targetOwner
-          have targetShape' : elimTrace.promotion.nodes
-              (copyTrace.droppedNodeMap node outside) =
-                .named (copyTrace.finalRegionMap elimTrace finalWellFormed region)
-                  targetDefinition targetArity := targetShape
-          rw [targetShape'] at promotedShape
-          simp only at promotedShape
-          rw [originRegion] at promotedShape
-          rw [droppedShape] at promotedShape
-          cases promotedShape
-          simpa [sourceShape] using targetShape
-
 end InstantiationTrace
 
 end VisualProof.Rule

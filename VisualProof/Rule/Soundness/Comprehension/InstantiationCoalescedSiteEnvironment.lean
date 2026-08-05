@@ -10,7 +10,7 @@ namespace InstantiationSemantic
 /-- Canonical compiler-index map from an exact host context at the splice site
 to the exact context of its attachment quotient. -/
 noncomputable def siteQuotientIndexMap
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (sourceContext : ConcreteElaboration.WireContext input.frame.val)
     (targetContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
@@ -25,7 +25,7 @@ noncomputable def siteQuotientIndexMap
             (List.get_mem sourceContext index)))))
 
 theorem siteQuotientIndexMap_spec
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (sourceContext : ConcreteElaboration.WireContext input.frame.val)
     (targetContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
@@ -47,7 +47,7 @@ theorem siteQuotientIndexMap_spec
 /-- Every quotient wire visible at the site has a visible original
 representative, so the canonical exact-context map is onto. -/
 theorem siteQuotientIndexMap_surjective
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (sourceContext : ConcreteElaboration.WireContext input.frame.val)
     (targetContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
@@ -87,7 +87,7 @@ theorem siteQuotientIndexMap_surjective
 /-- The complete site map restricts to any certified quotient map on the
 inherited compiler context. -/
 theorem siteQuotientIndexMap_outer
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (sourceOuter : ConcreteElaboration.WireContext input.frame.val)
     (targetOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)

@@ -8,59 +8,54 @@ open Theory
 
 namespace CheckedDiagram
 
-def denote (checked : CheckedDiagram signature)
+def denote (checked : CheckedDiagram )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) : Prop :=
-  denoteRegion (relCtx := []) model named Fin.elim0 PUnit.unit checked.elaborate
+    : Prop :=
+  denoteRegion (relCtx := []) model  Fin.elim0 PUnit.unit checked.elaborate
 
-theorem denote_eq_intrinsic (checked : CheckedDiagram signature)
+theorem denote_eq_intrinsic (checked : CheckedDiagram )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
-    checked.denote model named =
-      denoteRegion (relCtx := []) model named Fin.elim0 PUnit.unit
+    :
+    checked.denote model  =
+      denoteRegion (relCtx := []) model  Fin.elim0 PUnit.unit
         checked.elaborate := rfl
 
 end CheckedDiagram
 
 namespace CheckedOpenDiagram
 
-def denote (checked : CheckedOpenDiagram signature)
+def denote (checked : CheckedOpenDiagram )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin checked.val.boundary.length → model.Carrier) : Prop :=
-  VisualProof.Diagram.denoteOpen model named checked.elaborate args
+  VisualProof.Diagram.denoteOpen model  checked.elaborate args
 
-theorem denote_eq_intrinsic (checked : CheckedOpenDiagram signature)
+theorem denote_eq_intrinsic (checked : CheckedOpenDiagram )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin checked.val.boundary.length → model.Carrier) :
-    checked.denote model named args =
-      VisualProof.Diagram.denoteOpen model named checked.elaborate args := rfl
+    checked.denote model  args =
+      VisualProof.Diagram.denoteOpen model  checked.elaborate args := rfl
 
 end CheckedOpenDiagram
 
 namespace OpenConcreteDiagram
 
-def denote (d : OpenConcreteDiagram) (hwf : d.WellFormed signature)
+def denote (d : OpenConcreteDiagram) (hwf : d.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin d.boundary.length → model.Carrier) : Prop :=
-  CheckedOpenDiagram.denote ⟨d, hwf⟩ model named args
+  CheckedOpenDiagram.denote ⟨d, hwf⟩ model  args
 
 theorem denote_eq_intrinsic (d : OpenConcreteDiagram)
-    (hwf : d.WellFormed signature)
+    (hwf : d.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin d.boundary.length → model.Carrier) :
-    d.denote hwf model named args =
-      VisualProof.Diagram.denoteOpen model named (d.elaborate hwf) args := rfl
+    d.denote hwf model  args =
+      VisualProof.Diagram.denoteOpen model  (d.elaborate hwf) args := rfl
 
 theorem denote_proof_irrelevant (d : OpenConcreteDiagram)
-    (first second : d.WellFormed signature)
+    (first second : d.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin d.boundary.length → model.Carrier) :
-    d.denote first model named args = d.denote second model named args := by
+    d.denote first model  args = d.denote second model  args := by
   rfl
 
 end OpenConcreteDiagram
@@ -70,36 +65,35 @@ namespace OpenConcreteIso
 /-- Ordered open concrete isomorphism preserves denotation positionwise. -/
 theorem denote_iff {source target : OpenConcreteDiagram}
     (iso : OpenConcreteIso source target)
-    (hsource : source.WellFormed signature)
-    (htarget : target.WellFormed signature)
+    (hsource : source.WellFormed )
+    (htarget : target.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin source.boundary.length -> model.Carrier) :
-    source.denote hsource model named args <->
-      target.denote htarget model named
+    source.denote hsource model  args <->
+      target.denote htarget model
         (args ∘ Fin.cast iso.boundary_length_eq.symm) := by
-  change denoteOpen model named (source.elaborate hsource) args <->
-    denoteOpen model named (target.elaborate htarget)
+  change denoteOpen model  (source.elaborate hsource) args <->
+    denoteOpen model  (target.elaborate htarget)
       (args ∘ Fin.cast iso.boundary_length_eq.symm)
   exact (iso.elaborate_isomorphic hsource htarget).denoteOpen_iff
-    model named args |>.trans
-      (denoteOpen_castArity model named (target.elaborate htarget)
+    model  args |>.trans
+      (denoteOpen_castArity model  (target.elaborate htarget)
         iso.boundary_length_eq.symm args)
 
 end OpenConcreteIso
 
 namespace ConcreteDiagram
 
-def denote (d : ConcreteDiagram) (hwf : d.WellFormed signature)
+def denote (d : ConcreteDiagram) (hwf : d.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) : Prop :=
-  CheckedDiagram.denote ⟨d, hwf⟩ model named
+    : Prop :=
+  CheckedDiagram.denote ⟨d, hwf⟩ model
 
 theorem denote_proof_irrelevant (d : ConcreteDiagram)
-    (first second : d.WellFormed signature)
+    (first second : d.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
-    d.denote first model named = d.denote second model named := by
+    :
+    d.denote first model  = d.denote second model  := by
   rfl
 
 end ConcreteDiagram
@@ -108,13 +102,13 @@ namespace ConcreteIso
 
 theorem denote_iff {source target : ConcreteDiagram}
     (iso : ConcreteIso source target)
-    (hsource : source.WellFormed signature)
-    (htarget : target.WellFormed signature)
+    (hsource : source.WellFormed )
+    (htarget : target.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
-    source.denote hsource model named ↔ target.denote htarget model named := by
+    :
+    source.denote hsource model  ↔ target.denote htarget model  := by
   exact iso_denotation (iso.elaborate_isomorphic hsource htarget)
-    model named Fin.elim0 PUnit.unit
+    model  Fin.elim0 PUnit.unit
 
 end ConcreteIso
 

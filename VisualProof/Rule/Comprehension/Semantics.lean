@@ -10,71 +10,63 @@ open Theory
 /-- A checked open comprehension with `arity` relation arguments followed by
 fixed parameter positions denotes an actual relation in every model. -/
 def interpretedComprehension
-    {signature : List Nat}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (arity parameterCount : Nat)
     (boundarySplit :
       comprehension.val.boundary.length = arity + parameterCount)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (parameters : Fin parameterCount → model.Carrier) :
     Relation model.Carrier arity :=
   fun arguments =>
-    comprehension.denote model named
+    comprehension.denote model
       (Fin.addCases arguments parameters ∘ Fin.cast boundarySplit)
 
 theorem interpretedComprehension_apply
-    {signature : List Nat}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (arity parameterCount : Nat)
     (boundarySplit :
       comprehension.val.boundary.length = arity + parameterCount)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (parameters : Fin parameterCount → model.Carrier)
     (arguments : Fin arity → model.Carrier) :
     interpretedComprehension comprehension arity parameterCount boundarySplit
-        model named parameters arguments ↔
-      comprehension.denote model named
+        model  parameters arguments ↔
+      comprehension.denote model
         (Fin.addCases arguments parameters ∘ Fin.cast boundarySplit) :=
   Iff.rfl
 
 /-- The instantiation payload's ordered split is exactly the relation witness
 used to eliminate its quantified relation. -/
 def ComprehensionInstantiatePayload.interpretedRelation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders :
       List (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (parameters : Fin attachments.length → model.Carrier) :
     Relation model.Carrier payload.arity :=
-  interpretedComprehension (signature := signature) comprehension payload.arity
+  interpretedComprehension  comprehension payload.arity
     attachments.length
-    payload.boundarySplit model named parameters
+    payload.boundarySplit model  parameters
 
 theorem ComprehensionInstantiatePayload.interpretedRelation_apply
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders :
       List (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (parameters : Fin attachments.length → model.Carrier)
     (arguments : Fin payload.arity → model.Carrier) :
-    payload.interpretedRelation model named parameters arguments ↔
-      comprehension.denote model named
+    payload.interpretedRelation model  parameters arguments ↔
+      comprehension.denote model
         (Fin.addCases arguments parameters ∘
           Fin.cast payload.boundarySplit) :=
   Iff.rfl
@@ -82,57 +74,50 @@ theorem ComprehensionInstantiatePayload.interpretedRelation_apply
 /-- Abstraction uses the comprehension itself as its existential relation
 witness. Repeated argument positions remain repeated function applications. -/
 def abstractionRelation
-    {signature : List Nat}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
+    :
     Relation model.Carrier comprehension.val.boundary.length :=
-  fun arguments => comprehension.denote model named arguments
+  fun arguments => comprehension.denote model  arguments
 
 theorem abstractionRelation_apply
-    {signature : List Nat}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (arguments :
       Fin comprehension.val.boundary.length → model.Carrier) :
-    abstractionRelation comprehension model named arguments ↔
-      comprehension.denote model named arguments :=
+    abstractionRelation comprehension model  arguments ↔
+      comprehension.denote model  arguments :=
   Iff.rfl
 
 /-- Each certified diagonal occurrence denotes application of the single
 abstraction witness relation to its possibly aliased ordered arguments. -/
 theorem AbstractionWitness.diagonal_denote_iff_relation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
-    {comprehension : CheckedOpenDiagram signature}
+    {input : CheckedDiagram }
+    {comprehension : CheckedOpenDiagram }
     {occurrence : AbstractionOccurrence input}
     (witness : AbstractionWitness input comprehension occurrence)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (environment :
       Fin occurrence.selection.touchingWires.length → model.Carrier) :
-    witness.diagonal.denote model named
+    witness.diagonal.denote model
         ((environment ∘ Fin.cast witness.diagonal_externalClasses) ∘
           witness.diagonal.elaborate.boundary) ↔
-      abstractionRelation (signature := signature) comprehension model named
+      abstractionRelation  comprehension model
         (environment ∘ witness.assignment.args) := by
-  exact diagonalize_denotation witness model named environment
+  exact diagonalize_denotation witness model  environment
 
 /-- The comprehension itself supplies the existential relation required by
 positive abstraction. -/
 theorem abstractionRelation_witness
-    {signature : List Nat}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (body :
       Relation model.Carrier comprehension.val.boundary.length → Prop)
     (holds :
-      body (abstractionRelation (signature := signature) comprehension model named)) :
+      body (abstractionRelation  comprehension model )) :
     ∃ relation :
         Relation model.Carrier comprehension.val.boundary.length,
       body relation :=
-  ⟨abstractionRelation (signature := signature) comprehension model named, holds⟩
+  ⟨abstractionRelation  comprehension model , holds⟩
 
 end VisualProof.Rule

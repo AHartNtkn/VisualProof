@@ -11,52 +11,51 @@ open VisualProof.Diagram.ConcreteElaboration
 namespace TwoInputPresentation
 
 /-- A replacement law over arbitrary ordered boundary values. -/
-def LocalLaw {signature : List Nat} {source target : Input signature}
+def LocalLaw {source target : Input }
     (presentation : TwoInputPresentation source target)
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature) : Prop :=
+    : Prop :=
   match direction with
   | .forward => ∀ sourceArgs,
-      source.pattern.denote model named sourceArgs →
-        target.pattern.denote model named
+      source.pattern.denote model  sourceArgs →
+        target.pattern.denote model
           (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm)
   | .backward => ∀ targetArgs,
-      target.pattern.denote model named targetArgs →
-        source.pattern.denote model named
+      target.pattern.denote model  targetArgs →
+        source.pattern.denote model
           (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)
 
 /-- The maximally useful local replacement law: it is required only for
 ordered boundary values induced by an actual splice quotient valuation. -/
-def AttachmentLocalLaw {signature : List Nat} {source target : Input signature}
+def AttachmentLocalLaw {source target : Input }
     (presentation : TwoInputPresentation source target)
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature) : Prop :=
+    : Prop :=
   match direction with
   | .forward => ∀ sourceValues : source.wireQuotient.Carrier → model.Carrier,
-      source.pattern.denote model named (fun position =>
+      source.pattern.denote model  (fun position =>
         sourceValues (source.quotientWire (source.attachment position))) →
-      target.pattern.denote model named
+      target.pattern.denote model
         ((fun position =>
           sourceValues (source.quotientWire (source.attachment position))) ∘
           Fin.cast presentation.boundary_arity_eq.symm)
   | .backward => ∀ targetValues : target.wireQuotient.Carrier → model.Carrier,
-      target.pattern.denote model named (fun position =>
+      target.pattern.denote model  (fun position =>
         targetValues (target.quotientWire (target.attachment position))) →
-      source.pattern.denote model named
+      source.pattern.denote model
         ((fun position =>
           targetValues (target.quotientWire (target.attachment position))) ∘
           Fin.cast presentation.boundary_arity_eq)
 
 theorem LocalLaw.toAttachmentLocalLaw
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    (law : presentation.LocalLaw direction model named) :
-    presentation.AttachmentLocalLaw direction model named := by
+    (law : presentation.LocalLaw direction model ) :
+    presentation.AttachmentLocalLaw direction model  := by
   cases direction <;> intro values denotes <;> exact law _ denotes
 
 /-- Complete proof-dependent local transport at the distinguished splice site
@@ -67,7 +66,7 @@ executable occurrence order.  The complete derived environment agreement is
 retained because a distinguished sheet root must later recover its prescribed
 ordered boundary assignment from that same proof-dependent valuation. -/
 theorem focusedForwardLocalTransportWithAgreementOfEmpty
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     {rels : Theory.RelCtx}
     (presentation : TwoInputPresentation source target)
     (sourceAdmissible : source.Admissible)
@@ -76,7 +75,6 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
     (targetZero : target.binderSpine.proxyCount = 0)
     (siteDirection : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (fuelSource fuelTarget : Nat)
     (sourceContext : ConcreteElaboration.WireContext
       source.plugLayout.plugRaw)
@@ -115,10 +113,10 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
         source.plugLayout.plugRaw childRels}
       {childTargetBinders : ConcreteElaboration.BinderContext
         target.plugLayout.plugRaw childRels}
-      {sourceBody : Region signature
+      {sourceBody : Region
         (sourceContext.extend
           (source.plugLayout.frameRegion source.site)).length childRels}
-      {targetBody : Region signature
+      {targetBody : Region
         (targetContext.extend targetRegion).length childRels},
       (source.plugLayout.plugRaw.regions child).parent? =
           some (source.plugLayout.frameRegion source.site) →
@@ -134,30 +132,30 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
       ConcreteElaboration.BinderContext.Enumeration
         target.plugLayout.plugRaw childTargetBinders
         (presentation.regionMap child) →
-      ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+      ConcreteElaboration.compileRegion?  source.plugLayout.plugRaw
           fuelSource child
           (sourceContext.extend
             (source.plugLayout.frameRegion source.site))
           childSourceBinders = some sourceBody →
-      ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+      ConcreteElaboration.compileRegion?  target.plugLayout.plugRaw
           fuelTarget (presentation.regionMap child)
           (targetContext.extend targetRegion)
           childTargetBinders = some targetBody →
-      ConcreteElaboration.RegionSimulation model named childDirection
+      ConcreteElaboration.RegionSimulation model  childDirection
         (presentation.contextIndexRelation
           (sourceContext.extend
             (source.plugLayout.frameRegion source.site))
           (targetContext.extend targetRegion))
         sourceBody targetBody)
-    (sourceItems : ItemSeq signature
+    (sourceItems : ItemSeq
       (sourceContext.extend
         (source.plugLayout.frameRegion source.site)).length rels)
-    (targetItems : ItemSeq signature
+    (targetItems : ItemSeq
       (targetContext.extend targetRegion).length rels)
     (sourceItemsCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         source.plugLayout.plugRaw
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           source.plugLayout.plugRaw fuelSource)
         (sourceContext.extend
           (source.plugLayout.frameRegion source.site))
@@ -165,20 +163,20 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
         (ConcreteElaboration.localOccurrences source.plugLayout.plugRaw
           (source.plugLayout.frameRegion source.site)) = some sourceItems)
     (targetItemsCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         target.plugLayout.plugRaw
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           target.plugLayout.plugRaw fuelTarget)
         (targetContext.extend targetRegion)
         targetBinders
         (ConcreteElaboration.localOccurrences target.plugLayout.plugRaw
           targetRegion) = some targetItems)
-    (localLaw : presentation.AttachmentLocalLaw .forward model named) :
+    (localLaw : presentation.AttachmentLocalLaw .forward model ) :
     ∀ relEnv sourceOuter targetOuter,
       (presentation.contextIndexRelation sourceContext targetContext
         ).EnvironmentsAgree sourceOuter targetOuter →
       ∀ sourceLocal,
-        denoteItemSeq model named
+        denoteItemSeq model
           (ConcreteElaboration.extendedEnvironment sourceContext
             (source.plugLayout.frameRegion source.site) sourceOuter
             sourceLocal)
@@ -193,7 +191,7 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
                 sourceLocal)
               (ConcreteElaboration.extendedEnvironment targetContext
                 targetRegion targetOuter targetLocal) ∧
-          denoteItemSeq model named
+          denoteItemSeq model
             (ConcreteElaboration.extendedEnvironment targetContext
               targetRegion targetOuter targetLocal)
             relEnv targetItems := by
@@ -228,16 +226,16 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
       (sourceContext.extend (source.plugLayout.frameRegion source.site))
       sourceExact sourceEnv fallback
   have sourcePatternDenotes :
-      source.pattern.denote model named (fun position =>
+      source.pattern.denote model  (fun position =>
         sourceValues (source.quotientWire (source.attachment position))) := by
     exact pattern_denote_of_denoteFocusedItems source sourceAdmissible
-      sourceWitness sourceLeaf sourceZero model named sourceEnv relEnv fallback
+      sourceWitness sourceLeaf sourceZero model  sourceEnv relEnv fallback
       sourceDenotes
   obtain ⟨targetValues, valuesAgree, targetPatternDenotes⟩ :=
-    presentation.forwardQuotientEnvironment_of_pattern_entailment model named
+    presentation.forwardQuotientEnvironment_of_pattern_entailment model
       sourceValues (localLaw sourceValues) sourcePatternDenotes
   obtain ⟨targetHidden, targetPatternItemsDenote⟩ :=
-    target.patternRootItems_of_pattern_denote model named targetValues
+    target.patternRootItems_of_pattern_denote model  targetValues
       targetPatternDenotes
   let targetLocal :=
     focusedLocalEnvironmentOfEmpty target targetZero targetValues targetHidden
@@ -255,7 +253,7 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
       targetOuterValues
   have targetPatternItemsFocused :
       let pattern := compiledSpliceOpenRootItems target.pattern
-      denoteItemSeq (relCtx := []) model named
+      denoteItemSeq (relCtx := []) model
         (targetEnv ∘ target.plugLayout.patternRootWireIndexMap targetAdmissible
           targetZero targetWitness targetLeaf)
         (PUnit.unit : RelEnv model.Carrier []) pattern.items := by
@@ -286,7 +284,7 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
       fallback targetValues targetHidden valuesAgree
   refine ⟨targetLocal, extendedAgrees, ?_⟩
   apply target.plugLayout.denoteFocusedItems_of_patternRootItems_and_frame
-    targetAdmissible targetWitness targetLeaf targetZero model named targetEnv
+    targetAdmissible targetWitness targetLeaf targetZero model  targetEnv
     relEnv targetPatternItemsFocused
   intro targetFrameIndex
   have frameLengths := congrArg List.length
@@ -301,7 +299,7 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
     rfl
   obtain ⟨sourceIndex, targetIndex, sourceIndexVal, targetIndexVal,
       itemSimulation⟩ :=
-    presentation.focusedFrameOccurrence_itemSimulation model named
+    presentation.focusedFrameOccurrence_itemSimulation model
       sourceAdmissible targetAdmissible siteDirection .forward fuelSource
       fuelTarget
       (sourceContext.extend (source.plugLayout.frameRegion source.site))
@@ -310,7 +308,7 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
       targetBindersCover sourceEnumeration targetEnumeration recurse sourceItems
       targetItems sourceItemsCompiled targetItemsCompiled sourceFrameIndex
   have sourceItemDenotes :=
-    (denoteItemSeq_iff_get model named sourceEnv relEnv sourceItems).mp
+    (denoteItemSeq_iff_get model  sourceEnv relEnv sourceItems).mp
       sourceDenotes sourceIndex
   have targetOccurrenceIndexEq :
       (target.plugLayout.siteOccurrenceEquiv
@@ -321,7 +319,7 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
     exact targetIndexVal.symm
   let expectedTargetIndex := Fin.cast
     (ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+      (ConcreteElaboration.compileRegion?  target.plugLayout.plugRaw
         fuelTarget)
       (targetContext.extend (target.plugLayout.frameRegion target.site))
       targetBinders targetItemsCompiled).symm
@@ -338,7 +336,7 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
 in the backward direction, retaining the complete derived environment
 agreement for the distinguished-root kernel. -/
 theorem focusedBackwardLocalTransportWithAgreementOfEmpty
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     {rels : Theory.RelCtx}
     (presentation : TwoInputPresentation source target)
     (sourceAdmissible : source.Admissible)
@@ -347,7 +345,6 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
     (targetZero : target.binderSpine.proxyCount = 0)
     (siteDirection : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (fuelSource fuelTarget : Nat)
     (sourceContext : ConcreteElaboration.WireContext
       source.plugLayout.plugRaw)
@@ -386,10 +383,10 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
         source.plugLayout.plugRaw childRels}
       {childTargetBinders : ConcreteElaboration.BinderContext
         target.plugLayout.plugRaw childRels}
-      {sourceBody : Region signature
+      {sourceBody : Region
         (sourceContext.extend
           (source.plugLayout.frameRegion source.site)).length childRels}
-      {targetBody : Region signature
+      {targetBody : Region
         (targetContext.extend targetRegion).length childRels},
       (source.plugLayout.plugRaw.regions child).parent? =
           some (source.plugLayout.frameRegion source.site) →
@@ -405,30 +402,30 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
       ConcreteElaboration.BinderContext.Enumeration
         target.plugLayout.plugRaw childTargetBinders
         (presentation.regionMap child) →
-      ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+      ConcreteElaboration.compileRegion?  source.plugLayout.plugRaw
           fuelSource child
           (sourceContext.extend
             (source.plugLayout.frameRegion source.site))
           childSourceBinders = some sourceBody →
-      ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+      ConcreteElaboration.compileRegion?  target.plugLayout.plugRaw
           fuelTarget (presentation.regionMap child)
           (targetContext.extend targetRegion)
           childTargetBinders = some targetBody →
-      ConcreteElaboration.RegionSimulation model named childDirection
+      ConcreteElaboration.RegionSimulation model  childDirection
         (presentation.contextIndexRelation
           (sourceContext.extend
             (source.plugLayout.frameRegion source.site))
           (targetContext.extend targetRegion))
         sourceBody targetBody)
-    (sourceItems : ItemSeq signature
+    (sourceItems : ItemSeq
       (sourceContext.extend
         (source.plugLayout.frameRegion source.site)).length rels)
-    (targetItems : ItemSeq signature
+    (targetItems : ItemSeq
       (targetContext.extend targetRegion).length rels)
     (sourceItemsCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         source.plugLayout.plugRaw
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           source.plugLayout.plugRaw fuelSource)
         (sourceContext.extend
           (source.plugLayout.frameRegion source.site))
@@ -436,20 +433,20 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
         (ConcreteElaboration.localOccurrences source.plugLayout.plugRaw
           (source.plugLayout.frameRegion source.site)) = some sourceItems)
     (targetItemsCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         target.plugLayout.plugRaw
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           target.plugLayout.plugRaw fuelTarget)
         (targetContext.extend targetRegion)
         targetBinders
         (ConcreteElaboration.localOccurrences target.plugLayout.plugRaw
           targetRegion) = some targetItems)
-    (localLaw : presentation.AttachmentLocalLaw .backward model named) :
+    (localLaw : presentation.AttachmentLocalLaw .backward model ) :
     ∀ relEnv sourceOuter targetOuter,
       (presentation.contextIndexRelation sourceContext targetContext
         ).EnvironmentsAgree sourceOuter targetOuter →
       ∀ targetLocal,
-        denoteItemSeq model named
+        denoteItemSeq model
           (ConcreteElaboration.extendedEnvironment targetContext targetRegion
             targetOuter targetLocal)
           relEnv targetItems →
@@ -463,7 +460,7 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
                 sourceLocal)
               (ConcreteElaboration.extendedEnvironment targetContext
                 targetRegion targetOuter targetLocal) ∧
-          denoteItemSeq model named
+          denoteItemSeq model
             (ConcreteElaboration.extendedEnvironment sourceContext
               (source.plugLayout.frameRegion source.site) sourceOuter
               sourceLocal)
@@ -499,16 +496,16 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
       (targetContext.extend (target.plugLayout.frameRegion target.site))
       targetExact targetEnv fallback
   have targetPatternDenotes :
-      target.pattern.denote model named (fun position =>
+      target.pattern.denote model  (fun position =>
         targetValues (target.quotientWire (target.attachment position))) := by
     exact pattern_denote_of_denoteFocusedItems target targetAdmissible
-      targetWitness targetLeaf targetZero model named targetEnv relEnv fallback
+      targetWitness targetLeaf targetZero model  targetEnv relEnv fallback
       targetDenotes
   obtain ⟨sourceValues, valuesAgree, sourcePatternDenotes⟩ :=
-    presentation.backwardQuotientEnvironment_of_pattern_entailment model named
+    presentation.backwardQuotientEnvironment_of_pattern_entailment model
       targetValues (localLaw targetValues) targetPatternDenotes
   obtain ⟨sourceHidden, sourcePatternItemsDenote⟩ :=
-    source.patternRootItems_of_pattern_denote model named sourceValues
+    source.patternRootItems_of_pattern_denote model  sourceValues
       sourcePatternDenotes
   let sourceLocal :=
     focusedLocalEnvironmentOfEmpty source sourceZero sourceValues sourceHidden
@@ -526,7 +523,7 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
       sourceOuterValues
   have sourcePatternItemsFocused :
       let pattern := compiledSpliceOpenRootItems source.pattern
-      denoteItemSeq (relCtx := []) model named
+      denoteItemSeq (relCtx := []) model
         (sourceEnv ∘ source.plugLayout.patternRootWireIndexMap sourceAdmissible
           sourceZero sourceWitness sourceLeaf)
         (PUnit.unit : RelEnv model.Carrier []) pattern.items := by
@@ -557,12 +554,12 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
       fallback sourceValues sourceHidden valuesAgree
   refine ⟨sourceLocal, extendedAgrees, ?_⟩
   apply source.plugLayout.denoteFocusedItems_of_patternRootItems_and_frame
-    sourceAdmissible sourceWitness sourceLeaf sourceZero model named sourceEnv
+    sourceAdmissible sourceWitness sourceLeaf sourceZero model  sourceEnv
     relEnv sourcePatternItemsFocused
   intro sourceFrameIndex
   obtain ⟨sourceIndex, targetIndex, sourceIndexVal, targetIndexVal,
       itemSimulation⟩ :=
-    presentation.focusedFrameOccurrence_itemSimulation model named
+    presentation.focusedFrameOccurrence_itemSimulation model
       sourceAdmissible targetAdmissible siteDirection .backward fuelSource
       fuelTarget
       (sourceContext.extend (source.plugLayout.frameRegion source.site))
@@ -571,7 +568,7 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
       targetBindersCover sourceEnumeration targetEnumeration recurse sourceItems
       targetItems sourceItemsCompiled targetItemsCompiled sourceFrameIndex
   have targetItemDenotes :=
-    (denoteItemSeq_iff_get model named targetEnv relEnv targetItems).mp
+    (denoteItemSeq_iff_get model  targetEnv relEnv targetItems).mp
       targetDenotes targetIndex
   have sourceOccurrenceIndexEq :
       (source.plugLayout.siteOccurrenceEquiv
@@ -581,7 +578,7 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
     sourceIndexVal.symm
   let expectedSourceIndex := Fin.cast
     (ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+      (ConcreteElaboration.compileRegion?  source.plugLayout.plugRaw
         fuelSource)
       (sourceContext.extend (source.plugLayout.frameRegion source.site))
       sourceBinders sourceItemsCompiled).symm
@@ -598,7 +595,7 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
 All regular regions are transported structurally; the distinguished site uses
 the proof-dependent local implication supplied by the caller. -/
 noncomputable def concreteSemanticSimulationOfEmpty
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
     (sourceAdmissible : source.Admissible)
     (targetAdmissible : target.Admissible)
@@ -607,14 +604,13 @@ noncomputable def concreteSemanticSimulationOfEmpty
     (sourceBoundary : List (Fin source.frame.val.wireCount))
     (siteDirection : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    (localLaw : presentation.AttachmentLocalLaw siteDirection model named) :
-    ConcreteElaboration.ConcreteSemanticSimulation signature
-      source.plugLayout.plugRaw target.plugLayout.plugRaw model named where
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model ) :
+    ConcreteElaboration.ConcreteSemanticSimulation
+      source.plugLayout.plugRaw target.plugLayout.plugRaw model  where
   source_wellFormed :=
-    source.plugLayout.plugRaw_wellFormed signature source sourceAdmissible
+    source.plugLayout.plugRaw_wellFormed  source sourceAdmissible
   target_wellFormed :=
-    target.plugLayout.plugRaw_wellFormed signature target targetAdmissible
+    target.plugLayout.plugRaw_wellFormed  target targetAdmissible
   regionMap := presentation.regionMap
   binderMap := presentation.regionMap
   Distinguished := presentation.Distinguished
@@ -707,12 +703,12 @@ noncomputable def concreteSemanticSimulationOfEmpty
             (fun {arity} (relation : Theory.RelVar sourceRels arity) =>
               relation) := rfl
     have itemSemantics' :
-        ConcreteElaboration.ItemSeqSimulation model named direction
+        ConcreteElaboration.ItemSeqSimulation model  direction
           (presentation.contextIndexRelation
             (sourceContext.extend region)
             (targetContext.extend (presentation.regionMap region)))
           sourceItems targetItems := by
-      change ConcreteElaboration.ItemSeqSimulation model named direction
+      change ConcreteElaboration.ItemSeqSimulation model  direction
         (presentation.contextIndexRelation
           (sourceContext.extend region)
           (targetContext.extend (presentation.regionMap region)))
@@ -724,12 +720,12 @@ noncomputable def concreteSemanticSimulationOfEmpty
     have transport :=
       presentation.regularLocalTransport sourceAdmissible targetAdmissible
       direction sourceContext targetContext region regular sourceExact
-      targetExact model named sourceItems targetItems itemSemantics'
+      targetExact model  sourceItems targetItems itemSemantics'
     change ∀ relEnv,
       ConcreteElaboration.DirectionalLocalTransport direction sourceContext
         targetContext region (presentation.regionMap region)
         (presentation.contextIndexRelation sourceContext targetContext)
-        model named relEnv
+        model  relEnv
         (sourceItems.renameRelations
           (ConcreteElaboration.identityRelationRenaming sourceRels))
         targetItems
@@ -766,7 +762,7 @@ noncomputable def concreteSemanticSimulationOfEmpty
       apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
         (source := source.plugLayout.plugRaw)
         (target := target.plugLayout.plugRaw)
-        model named direction sourceContext targetContext
+        model  direction sourceContext targetContext
         (presentation.contextIndexRelation sourceContext targetContext)
         sourceBinders targetBinders
         (ConcreteElaboration.identityRelationRenaming sourceRels)
@@ -797,8 +793,6 @@ noncomputable def concreteSemanticSimulationOfEmpty
             simpa [presentation.regionMap_frameRegion,
               ConcreteElaboration.identityRelationRenaming] using
                 ((bindersRelated frameBinder).symm.trans sourceLookup)
-        | named owner definition arity =>
-            simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
       · exact sourceCompiled
       · exact targetCompiled
     · intro mappedOccurrence sourceNodeRegion sourceCompiled
@@ -834,10 +828,10 @@ noncomputable def concreteSemanticSimulationOfEmpty
           source.plugLayout.plugRaw childRels}
         {childTargetBinders : ConcreteElaboration.BinderContext
           target.plugLayout.plugRaw childRels}
-        {sourceBody : Region signature
+        {sourceBody : Region
           (sourceContext.extend
             (source.plugLayout.frameRegion source.site)).length childRels}
-        {targetBody : Region signature
+        {targetBody : Region
           (targetContext.extend
             (presentation.regionMap
               (source.plugLayout.frameRegion source.site))).length childRels},
@@ -856,18 +850,18 @@ noncomputable def concreteSemanticSimulationOfEmpty
         ConcreteElaboration.BinderContext.Enumeration
           target.plugLayout.plugRaw childTargetBinders
           (presentation.regionMap child) →
-        ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+        ConcreteElaboration.compileRegion?  source.plugLayout.plugRaw
             fuelSource child
             (sourceContext.extend
               (source.plugLayout.frameRegion source.site))
             childSourceBinders = some sourceBody →
-        ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+        ConcreteElaboration.compileRegion?  target.plugLayout.plugRaw
             fuelTarget (presentation.regionMap child)
             (targetContext.extend
               (presentation.regionMap
                 (source.plugLayout.frameRegion source.site)))
             childTargetBinders = some targetBody →
-        ConcreteElaboration.RegionSimulation model named childDirection
+        ConcreteElaboration.RegionSimulation model  childDirection
           (presentation.contextIndexRelation
             (sourceContext.extend
               (source.plugLayout.frameRegion source.site))
@@ -889,7 +883,7 @@ noncomputable def concreteSemanticSimulationOfEmpty
             RelationRenaming childRels childRels) =
               (fun {arity} (relation : Theory.RelVar childRels arity) =>
                 relation) := rfl
-      change ConcreteElaboration.RegionSimulation model named childDirection
+      change ConcreteElaboration.RegionSimulation model  childDirection
         (presentation.contextIndexRelation
           (sourceContext.extend
             (source.plugLayout.frameRegion source.site))
@@ -909,7 +903,7 @@ noncomputable def concreteSemanticSimulationOfEmpty
             (presentation.regionMap
               (source.plugLayout.frameRegion source.site))
             (presentation.contextIndexRelation sourceContext targetContext)
-            model named relEnv sourceItems targetItems := by
+            model  relEnv sourceItems targetItems := by
       cases siteDirection with
       | forward =>
           intro relEnv sourceOuter targetOuter outerAgrees sourceLocal
@@ -917,7 +911,7 @@ noncomputable def concreteSemanticSimulationOfEmpty
           obtain ⟨targetLocal, _extendedAgrees, targetDenotes⟩ :=
             presentation.focusedForwardLocalTransportWithAgreementOfEmpty
               sourceAdmissible targetAdmissible sourceZero targetZero .forward
-              model named fuelSource fuelTarget sourceContext targetContext
+              model  fuelSource fuelTarget sourceContext targetContext
               (presentation.regionMap
                 (source.plugLayout.frameRegion source.site))
               presentation.regionMap_site
@@ -934,7 +928,7 @@ noncomputable def concreteSemanticSimulationOfEmpty
           obtain ⟨sourceLocal, _extendedAgrees, sourceDenotes⟩ :=
             presentation.focusedBackwardLocalTransportWithAgreementOfEmpty
               sourceAdmissible targetAdmissible sourceZero targetZero .backward
-              model named fuelSource fuelTarget sourceContext targetContext
+              model  fuelSource fuelTarget sourceContext targetContext
               (presentation.regionMap
                 (source.plugLayout.frameRegion source.site))
               presentation.regionMap_site
@@ -951,7 +945,7 @@ noncomputable def concreteSemanticSimulationOfEmpty
             (fun {arity} (relation : Theory.RelVar sourceRels arity) =>
               relation) := rfl
     rw [ConcreteElaboration.finishRegion_renameRelations]
-    change ConcreteElaboration.RegionSimulation model named siteDirection
+    change ConcreteElaboration.RegionSimulation model  siteDirection
       (presentation.contextIndexRelation sourceContext targetContext)
       (ConcreteElaboration.finishRegion source.plugLayout.plugRaw
         sourceContext (source.plugLayout.frameRegion source.site)
@@ -966,14 +960,14 @@ noncomputable def concreteSemanticSimulationOfEmpty
       (presentation.regionMap
         (source.plugLayout.frameRegion source.site))
       (presentation.contextIndexRelation sourceContext targetContext)
-      model named sourceItems targetItems transport
+      model  sourceItems targetItems transport
 
 /-- Recurse below a distinguished sheet root while the focused transport uses
 the closed exact-scope ordering.  Child bodies are compiled once more in the
 actual open-root ordering, transported by the authoritative shared concrete
 simulation, and moved back by same-diagram compiler equivariance. -/
 theorem rootExactChildSimulationOfEmpty
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
     (sourceAdmissible : source.Admissible)
     (targetAdmissible : target.Admissible)
@@ -993,8 +987,7 @@ theorem rootExactChildSimulationOfEmpty
       target.plugLayout.plugRaw.root)
     (siteDirection : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    (localLaw : presentation.AttachmentLocalLaw siteDirection model named) :
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model ) :
     ∀ {childDirection : ConcreteElaboration.SimulationDirection}
       {child : Fin source.plugLayout.plugRaw.regionCount}
       {childRels : Theory.RelCtx}
@@ -1002,8 +995,8 @@ theorem rootExactChildSimulationOfEmpty
         source.plugLayout.plugRaw childRels}
       {childTargetBinders : ConcreteElaboration.BinderContext
         target.plugLayout.plugRaw childRels}
-      {sourceBody : Region signature sourceClosed.length childRels}
-      {targetBody : Region signature targetClosed.length childRels},
+      {sourceBody : Region  sourceClosed.length childRels}
+      {targetBody : Region  targetClosed.length childRels},
       (source.plugLayout.plugRaw.regions child).parent? =
           some (source.plugLayout.frameRegion source.site) →
       (target.plugLayout.plugRaw.regions
@@ -1018,14 +1011,14 @@ theorem rootExactChildSimulationOfEmpty
       ConcreteElaboration.BinderContext.Enumeration
         target.plugLayout.plugRaw childTargetBinders
         (presentation.regionMap child) →
-      ConcreteElaboration.compileRegion? signature source.plugLayout.plugRaw
+      ConcreteElaboration.compileRegion?  source.plugLayout.plugRaw
           source.plugLayout.plugRaw.regionCount child sourceClosed
           childSourceBinders = some sourceBody →
-      ConcreteElaboration.compileRegion? signature target.plugLayout.plugRaw
+      ConcreteElaboration.compileRegion?  target.plugLayout.plugRaw
           target.plugLayout.plugRaw.regionCount
           (presentation.regionMap child) targetClosed
           childTargetBinders = some targetBody →
-      ConcreteElaboration.RegionSimulation model named childDirection
+      ConcreteElaboration.RegionSimulation model  childDirection
         (presentation.contextIndexRelation sourceClosed targetClosed)
         sourceBody targetBody := by
   intro childDirection child childRels childSourceBinders childTargetBinders
@@ -1065,7 +1058,7 @@ theorem rootExactChildSimulationOfEmpty
     (openRootWires_exact
       (PlugLayout.checkedOutputOpenRoot source source.plugLayout
         sourceAdmissible sourceBoundary sourceRoot)).extend_child
-      (source.plugLayout.plugRaw_wellFormed signature source sourceAdmissible)
+      (source.plugLayout.plugRaw_wellFormed  source sourceAdmissible)
       sourceParentRoot
   have targetOpenExact :
       (ConcreteElaboration.WireContext.extend
@@ -1077,11 +1070,11 @@ theorem rootExactChildSimulationOfEmpty
       (PlugLayout.checkedOutputOpenRoot target target.plugLayout
         targetAdmissible (presentation.targetBoundary sourceBoundary)
         targetRoot)).extend_child
-      (target.plugLayout.plugRaw_wellFormed signature target targetAdmissible)
+      (target.plugLayout.plugRaw_wellFormed  target targetAdmissible)
       targetParentRoot
   obtain ⟨sourceOpenBody, sourceOpenCompiled⟩ :=
     ConcreteElaboration.compileRegion?_complete
-      (source.plugLayout.plugRaw_wellFormed signature source sourceAdmissible)
+      (source.plugLayout.plugRaw_wellFormed  source sourceAdmissible)
       (depth := 1)
       (fuel := source.plugLayout.plugRaw.regionCount)
       (region := child)
@@ -1091,7 +1084,7 @@ theorem rootExactChildSimulationOfEmpty
       (by omega) sourceOpenExact sourceCover
   obtain ⟨targetOpenBody, targetOpenCompiled⟩ :=
     ConcreteElaboration.compileRegion?_complete
-      (target.plugLayout.plugRaw_wellFormed signature target targetAdmissible)
+      (target.plugLayout.plugRaw_wellFormed  target targetAdmissible)
       (depth := 1)
       (fuel := target.plugLayout.plugRaw.regionCount)
       (region := presentation.regionMap child)
@@ -1099,18 +1092,18 @@ theorem rootExactChildSimulationOfEmpty
       (binders := childTargetBinders)
       (by simpa [ConcreteDiagram.climb, targetParentRoot])
       (by omega) targetOpenExact targetCover
-  have sourceIso : RegionIso signature sourceEquiv childRels
+  have sourceIso : RegionIso  sourceEquiv childRels
       sourceBody sourceOpenBody := by
     exact ConcreteElaboration.compileRegion?_equivariant_sameDiagram
-      (source.plugLayout.plugRaw_wellFormed signature source sourceAdmissible)
+      (source.plugLayout.plugRaw_wellFormed  source sourceAdmissible)
       (PlugLayout.outputExactContextToOpenRootWireEquiv_spec source
         source.plugLayout sourceAdmissible sourceBoundary sourceRoot
         sourceClosed sourceClosedExact)
       sourceOpenExact rfl sourceCompiled sourceOpenCompiled
-  have targetIso : RegionIso signature targetEquiv childRels
+  have targetIso : RegionIso  targetEquiv childRels
       targetBody targetOpenBody := by
     exact ConcreteElaboration.compileRegion?_equivariant_sameDiagram
-      (target.plugLayout.plugRaw_wellFormed signature target targetAdmissible)
+      (target.plugLayout.plugRaw_wellFormed  target targetAdmissible)
       (PlugLayout.outputExactContextToOpenRootWireEquiv_spec target
         target.plugLayout targetAdmissible
         (presentation.targetBoundary sourceBoundary) targetRoot targetClosed
@@ -1119,7 +1112,7 @@ theorem rootExactChildSimulationOfEmpty
   let simulation :=
     presentation.concreteSemanticSimulationOfEmpty sourceAdmissible
       targetAdmissible sourceZero targetZero sourceBoundary siteDirection
-      model named localLaw
+      model  localLaw
   let context : presentation.ContextWitness sourceBoundary
       sourceOpen.rootWires targetOpen.rootWires := .root
   have rootFocused :
@@ -1152,11 +1145,11 @@ theorem rootExactChildSimulationOfEmpty
           (fun {arity} (relation : Theory.RelVar childRels arity) =>
             relation) := rfl
   have openSimulation :
-      ConcreteElaboration.RegionSimulation model named childDirection
+      ConcreteElaboration.RegionSimulation model  childDirection
         (presentation.contextIndexRelation sourceOpen.rootWires
           targetOpen.rootWires)
         sourceOpenBody targetOpenBody := by
-    change ConcreteElaboration.RegionSimulation model named childDirection
+    change ConcreteElaboration.RegionSimulation model  childDirection
       (presentation.contextIndexRelation sourceOpen.rootWires
         targetOpen.rootWires)
       (sourceOpenBody.renameRelations
@@ -1181,11 +1174,11 @@ theorem rootExactChildSimulationOfEmpty
         targetClosedExact)
       sourceEnv targetEnv environments
   have sourceDenotation :=
-    sourceIso.denotation model named sourceEnv sourceOpenEnv relEnv
+    sourceIso.denotation model  sourceEnv sourceOpenEnv relEnv
       (by intro sourceIndex
           exact congrArg sourceEnv (sourceEquiv.left_inv sourceIndex))
   have targetDenotation :=
-    targetIso.denotation model named targetEnv targetOpenEnv relEnv
+    targetIso.denotation model  targetEnv targetOpenEnv relEnv
       (by intro targetIndex
           exact congrArg targetEnv (targetEquiv.left_inv targetIndex))
   cases childDirection with
@@ -1204,7 +1197,7 @@ theorem rootExactChildSimulationOfEmpty
 compiler conjunction.  This is the focused-root semantic kernel before the
 caller-selected ordered boundary split is reconstructed. -/
 theorem rootClosedTransportOfEmpty
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
     (sourceAdmissible : source.Admissible)
     (targetAdmissible : target.Admissible)
@@ -1216,8 +1209,7 @@ theorem rootClosedTransportOfEmpty
     (hsite : source.site = source.frame.val.root)
     (siteDirection : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    (localLaw : presentation.AttachmentLocalLaw siteDirection model named)
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model )
     (allowed : presentation.Allowed siteDirection siteDirection
       source.plugLayout.plugRaw.root) :
     let targetSiteRoot := presentation.target_site_eq_root_of_root hsite
@@ -1229,7 +1221,7 @@ theorem rootClosedTransportOfEmpty
         targetAdmissible targetSiteRoot).items
     match siteDirection with
     | .forward => ∀ sourceEnv,
-        denoteItemSeq (relCtx := []) model named sourceEnv
+        denoteItemSeq (relCtx := []) model  sourceEnv
           (PUnit.unit : RelEnv model.Carrier []) sourceItems →
         ∃ targetEnv,
           (presentation.contextIndexRelation
@@ -1238,10 +1230,10 @@ theorem rootClosedTransportOfEmpty
             (ConcreteElaboration.exactScopeWires target.plugLayout.plugRaw
               (target.plugLayout.frameRegion target.site))).EnvironmentsAgree
               sourceEnv targetEnv ∧
-          denoteItemSeq (relCtx := []) model named targetEnv
+          denoteItemSeq (relCtx := []) model  targetEnv
             (PUnit.unit : RelEnv model.Carrier []) targetItems
     | .backward => ∀ targetEnv,
-        denoteItemSeq (relCtx := []) model named targetEnv
+        denoteItemSeq (relCtx := []) model  targetEnv
           (PUnit.unit : RelEnv model.Carrier []) targetItems →
         ∃ sourceEnv,
           (presentation.contextIndexRelation
@@ -1250,7 +1242,7 @@ theorem rootClosedTransportOfEmpty
             (ConcreteElaboration.exactScopeWires target.plugLayout.plugRaw
               (target.plugLayout.frameRegion target.site))).EnvironmentsAgree
               sourceEnv targetEnv ∧
-          denoteItemSeq (relCtx := []) model named sourceEnv
+          denoteItemSeq (relCtx := []) model  sourceEnv
             (PUnit.unit : RelEnv model.Carrier []) sourceItems := by
   dsimp only
   have targetSiteRoot := presentation.target_site_eq_root_of_root hsite
@@ -1269,14 +1261,14 @@ theorem rootClosedTransportOfEmpty
         (source.plugLayout.frameRegion source.site)).Exact
           (source.plugLayout.frameRegion source.site) := by
     simpa [hsite] using ConcreteElaboration.WireContext.root_exact
-      (source.plugLayout.plugRaw_wellFormed signature source sourceAdmissible)
+      (source.plugLayout.plugRaw_wellFormed  source sourceAdmissible)
   have targetExact :
       (ConcreteElaboration.WireContext.extend
         ([] : ConcreteElaboration.WireContext target.plugLayout.plugRaw)
         (target.plugLayout.frameRegion target.site)).Exact
           (target.plugLayout.frameRegion target.site) := by
     simpa [targetSiteRoot] using ConcreteElaboration.WireContext.root_exact
-      (target.plugLayout.plugRaw_wellFormed signature target
+      (target.plugLayout.plugRaw_wellFormed  target
         targetAdmissible)
   have sourceRootExact :
       (ConcreteElaboration.WireContext.extend
@@ -1297,7 +1289,7 @@ theorem rootClosedTransportOfEmpty
         (source.plugLayout.frameRegion source.site) := by
     simpa [hsite] using
       ConcreteElaboration.BinderContext.empty_covers_root
-        (source.plugLayout.plugRaw_wellFormed signature source
+        (source.plugLayout.plugRaw_wellFormed  source
           sourceAdmissible)
   have targetCover :
       (ConcreteElaboration.BinderContext.empty :
@@ -1306,7 +1298,7 @@ theorem rootClosedTransportOfEmpty
         (target.plugLayout.frameRegion target.site) := by
     simpa [targetSiteRoot] using
       ConcreteElaboration.BinderContext.empty_covers_root
-        (target.plugLayout.plugRaw_wellFormed signature target
+        (target.plugLayout.plugRaw_wellFormed  target
           targetAdmissible)
   cases siteDirection with
   | forward =>
@@ -1334,7 +1326,7 @@ theorem rootClosedTransportOfEmpty
       obtain ⟨targetEnv, environments, targetDenotes⟩ :=
         presentation.focusedForwardLocalTransportWithAgreementOfEmpty
           sourceAdmissible targetAdmissible sourceZero targetZero .forward
-          model named source.plugLayout.plugRaw.regionCount
+          model  source.plugLayout.plugRaw.regionCount
           target.plugLayout.plugRaw.regionCount
           ([] : ConcreteElaboration.WireContext source.plugLayout.plugRaw)
           ([] : ConcreteElaboration.WireContext target.plugLayout.plugRaw)
@@ -1360,7 +1352,7 @@ theorem rootClosedTransportOfEmpty
                 ([] : ConcreteElaboration.WireContext
                   target.plugLayout.plugRaw)
                 (target.plugLayout.frameRegion target.site))
-              sourceRootExact targetRootExact .forward model named localLaw)
+              sourceRootExact targetRootExact .forward model  localLaw)
           sourceItems targetItems
           (by simpa [sourceItems] using
             (compiledSpliceOutputRootItemsAtSite source source.plugLayout
@@ -1411,7 +1403,7 @@ theorem rootClosedTransportOfEmpty
       obtain ⟨sourceEnv, environments, sourceDenotes⟩ :=
         presentation.focusedBackwardLocalTransportWithAgreementOfEmpty
           sourceAdmissible targetAdmissible sourceZero targetZero .backward
-          model named source.plugLayout.plugRaw.regionCount
+          model  source.plugLayout.plugRaw.regionCount
           target.plugLayout.plugRaw.regionCount
           ([] : ConcreteElaboration.WireContext source.plugLayout.plugRaw)
           ([] : ConcreteElaboration.WireContext target.plugLayout.plugRaw)
@@ -1437,7 +1429,7 @@ theorem rootClosedTransportOfEmpty
                 ([] : ConcreteElaboration.WireContext
                   target.plugLayout.plugRaw)
                 (target.plugLayout.frameRegion target.site))
-              sourceRootExact targetRootExact .backward model named localLaw)
+              sourceRootExact targetRootExact .backward model  localLaw)
           sourceItems targetItems
           (by simpa [sourceItems] using
             (compiledSpliceOutputRootItemsAtSite source source.plugLayout
@@ -1468,7 +1460,7 @@ theorem rootClosedTransportOfEmpty
 are related by their shared retained-frame wire, even when the two quotient
 partitions identify different sets of site-local wires. -/
 theorem rootBoundaryClosedIndicesRelated
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
     (sourceAdmissible : source.Admissible)
     (targetAdmissible : target.Admissible)
@@ -1494,14 +1486,14 @@ theorem rootBoundaryClosedIndicesRelated
       simpa [sourceContext, PlugLayout.plugRaw, hsite,
         ConcreteElaboration.WireContext.extend] using
         (ConcreteElaboration.WireContext.root_exact
-          (source.plugLayout.plugRaw_wellFormed signature source
+          (source.plugLayout.plugRaw_wellFormed  source
             sourceAdmissible))
     let targetExact : ConcreteElaboration.WireContext.Exact targetContext
         target.plugLayout.plugRaw.root := by
       simpa [targetContext, PlugLayout.plugRaw, targetSiteRoot,
         ConcreteElaboration.WireContext.extend] using
         (ConcreteElaboration.WireContext.root_exact
-          (target.plugLayout.plugRaw_wellFormed signature target
+          (target.plugLayout.plugRaw_wellFormed  target
             targetAdmissible))
     let sourceEquiv :=
       PlugLayout.outputExactContextToOpenRootWireEquiv source
@@ -1543,14 +1535,14 @@ theorem rootBoundaryClosedIndicesRelated
     simpa [sourceContext, PlugLayout.plugRaw, hsite,
       ConcreteElaboration.WireContext.extend] using
       (ConcreteElaboration.WireContext.root_exact
-        (source.plugLayout.plugRaw_wellFormed signature source
+        (source.plugLayout.plugRaw_wellFormed  source
           sourceAdmissible))
   let targetExact : ConcreteElaboration.WireContext.Exact targetContext
       target.plugLayout.plugRaw.root := by
     simpa [targetContext, PlugLayout.plugRaw, targetSiteRoot,
       ConcreteElaboration.WireContext.extend] using
       (ConcreteElaboration.WireContext.root_exact
-        (target.plugLayout.plugRaw_wellFormed signature target
+        (target.plugLayout.plugRaw_wellFormed  target
           targetAdmissible))
   let sourceEquiv :=
     PlugLayout.outputExactContextToOpenRootWireEquiv source
@@ -1625,7 +1617,7 @@ sheet root.  The complete transported valuation reconstructs the target's
 own exposed-class partition, so repeated ordered boundary positions remain
 fixed even when site-local quotient aliases differ. -/
 theorem rootOutput_denoteOfEmpty
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
     (sourceAdmissible : source.Admissible)
     (targetAdmissible : target.Admissible)
@@ -1637,20 +1629,19 @@ theorem rootOutput_denoteOfEmpty
     (hsite : source.site = source.frame.val.root)
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    (localLaw : presentation.AttachmentLocalLaw direction model named)
+    (localLaw : presentation.AttachmentLocalLaw direction model )
     (allowed : presentation.Allowed direction direction
       source.plugLayout.plugRaw.root)
     (args : Fin sourceBoundary.length → model.Carrier) :
     direction.Entails
       ((PlugLayout.checkedOutputOpenRoot source source.plugLayout
-        sourceAdmissible sourceBoundary sourceRoot).denote model named
+        sourceAdmissible sourceBoundary sourceRoot).denote model
         (args ∘ Fin.cast (by simp [PlugLayout.checkedOutputOpenRoot,
           PlugLayout.outputOpenRoot])))
       ((PlugLayout.checkedOutputOpenRoot target target.plugLayout
         targetAdmissible (presentation.targetBoundary sourceBoundary)
         (presentation.targetBoundary_root sourceBoundary sourceRoot)).denote
-        model named
+        model
         (args ∘ Fin.cast (by simp [PlugLayout.checkedOutputOpenRoot,
           PlugLayout.outputOpenRoot, targetBoundary]))) := by
   let targetSiteRoot := presentation.target_site_eq_root_of_root hsite
@@ -1687,14 +1678,14 @@ theorem rootOutput_denoteOfEmpty
     simpa [sourceContext, PlugLayout.plugRaw, hsite,
       ConcreteElaboration.WireContext.extend] using
       (ConcreteElaboration.WireContext.root_exact
-        (source.plugLayout.plugRaw_wellFormed signature source
+        (source.plugLayout.plugRaw_wellFormed  source
           sourceAdmissible))
   let targetExact : ConcreteElaboration.WireContext.Exact targetContext
       target.plugLayout.plugRaw.root := by
     simpa [targetContext, PlugLayout.plugRaw, targetSiteRoot,
       ConcreteElaboration.WireContext.extend] using
       (ConcreteElaboration.WireContext.root_exact
-        (target.plugLayout.plugRaw_wellFormed signature target
+        (target.plugLayout.plugRaw_wellFormed  target
           targetAdmissible))
   let sourceEquiv :=
     PlugLayout.outputExactContextToOpenRootWireEquiv source
@@ -1706,17 +1697,17 @@ theorem rootOutput_denoteOfEmpty
       (presentation.targetBoundary sourceBoundary)
       (presentation.targetBoundary_root sourceBoundary sourceRoot)
       targetContext targetExact
-  have sourceIso : ItemSeqIso signature sourceEquiv []
+  have sourceIso : ItemSeqIso  sourceEquiv []
       sourceClosedItems.items sourceItems.items := by
-    exact PlugLayout.compiledOutputRootItemsIsoFromExactContext signature
+    exact PlugLayout.compiledOutputRootItemsIsoFromExactContext
       source source.plugLayout sourceAdmissible sourceBoundary sourceRoot
       sourceContext sourceExact
       (by simpa [sourceClosedItems, sourceContext, PlugLayout.plugRaw,
           hsite] using sourceClosedItems.computation)
       (by simpa [sourceItems, sourceOpen] using sourceItems.computation)
-  have targetIso : ItemSeqIso signature targetEquiv []
+  have targetIso : ItemSeqIso  targetEquiv []
       targetClosedItems.items targetItems.items := by
-    exact PlugLayout.compiledOutputRootItemsIsoFromExactContext signature
+    exact PlugLayout.compiledOutputRootItemsIsoFromExactContext
       target target.plugLayout targetAdmissible
       (presentation.targetBoundary sourceBoundary)
       (presentation.targetBoundary_root sourceBoundary sourceRoot)
@@ -1729,7 +1720,7 @@ theorem rootOutput_denoteOfEmpty
       intro sourceDenotes
       obtain ⟨sourceAssignment, sourceAssignmentArgs, sourceHidden,
           sourceOpenDenotes⟩ :=
-        (sourceItems.denote_iff model named sourceArgs).mp (by
+        (sourceItems.denote_iff model  sourceArgs).mp (by
           simpa [sourceOpen, sourceArgs] using sourceDenotes)
       let sourceComplete :=
         ConcreteElaboration.rootEnvironment sourceOpen.val.exposedWires
@@ -1737,10 +1728,10 @@ theorem rootOutput_denoteOfEmpty
       let sourceClosedEnv : Fin sourceContext.length → model.Carrier :=
         sourceComplete ∘ sourceEquiv
       have sourceClosedDenotes :
-          denoteItemSeq (relCtx := []) model named sourceClosedEnv
+          denoteItemSeq (relCtx := []) model  sourceClosedEnv
             (PUnit.unit : RelEnv model.Carrier [])
             sourceClosedItems.items := by
-        apply (sourceIso.denotation model named sourceClosedEnv sourceComplete
+        apply (sourceIso.denotation model  sourceClosedEnv sourceComplete
           (PUnit.unit : RelEnv model.Carrier []) (by
             intro sourceIndex
             rfl)).mpr
@@ -1748,16 +1739,16 @@ theorem rootOutput_denoteOfEmpty
       obtain ⟨targetClosedEnv, environments, targetClosedDenotes⟩ :=
         presentation.rootClosedTransportOfEmpty sourceAdmissible
           targetAdmissible sourceZero targetZero sourceBoundary sourceRoot
-          hsite .forward model named localLaw allowed sourceClosedEnv
+          hsite .forward model  localLaw allowed sourceClosedEnv
           (by simpa [sourceClosedItems, targetClosedItems] using
             sourceClosedDenotes)
       let targetComplete : Fin targetOpen.val.rootWires.length →
           model.Carrier :=
         targetClosedEnv ∘ targetEquiv.symm
       have targetOpenDenotes :
-          denoteItemSeq (relCtx := []) model named targetComplete
+          denoteItemSeq (relCtx := []) model  targetComplete
             (PUnit.unit : RelEnv model.Carrier []) targetItems.items := by
-        apply (targetIso.denotation model named targetClosedEnv targetComplete
+        apply (targetIso.denotation model  targetClosedEnv targetComplete
           (PUnit.unit : RelEnv model.Carrier []) (by
             intro targetIndex
             change targetClosedEnv
@@ -1828,7 +1819,7 @@ theorem rootOutput_denoteOfEmpty
             _ = targetArgs targetPosition := by
               simp [sourceArgs, targetArgs, sourcePosition, position]
       }
-      apply (targetItems.denote_iff model named targetArgs).mpr
+      apply (targetItems.denote_iff model  targetArgs).mpr
       refine ⟨targetAssignment, rfl, targetHidden, ?_⟩
       simpa [targetAssignment, targetClasses, targetHidden,
         rootEnvironment_of_complete] using targetOpenDenotes
@@ -1836,7 +1827,7 @@ theorem rootOutput_denoteOfEmpty
       intro targetDenotes
       obtain ⟨targetAssignment, targetAssignmentArgs, targetHidden,
           targetOpenDenotes⟩ :=
-        (targetItems.denote_iff model named targetArgs).mp (by
+        (targetItems.denote_iff model  targetArgs).mp (by
           simpa [targetOpen, targetArgs] using targetDenotes)
       let targetComplete :=
         ConcreteElaboration.rootEnvironment targetOpen.val.exposedWires
@@ -1844,10 +1835,10 @@ theorem rootOutput_denoteOfEmpty
       let targetClosedEnv : Fin targetContext.length → model.Carrier :=
         targetComplete ∘ targetEquiv
       have targetClosedDenotes :
-          denoteItemSeq (relCtx := []) model named targetClosedEnv
+          denoteItemSeq (relCtx := []) model  targetClosedEnv
             (PUnit.unit : RelEnv model.Carrier [])
             targetClosedItems.items := by
-        apply (targetIso.denotation model named targetClosedEnv targetComplete
+        apply (targetIso.denotation model  targetClosedEnv targetComplete
           (PUnit.unit : RelEnv model.Carrier []) (by
             intro targetIndex
             rfl)).mpr
@@ -1855,16 +1846,16 @@ theorem rootOutput_denoteOfEmpty
       obtain ⟨sourceClosedEnv, environments, sourceClosedDenotes⟩ :=
         presentation.rootClosedTransportOfEmpty sourceAdmissible
           targetAdmissible sourceZero targetZero sourceBoundary sourceRoot
-          hsite .backward model named localLaw allowed targetClosedEnv
+          hsite .backward model  localLaw allowed targetClosedEnv
           (by simpa [sourceClosedItems, targetClosedItems] using
             targetClosedDenotes)
       let sourceComplete : Fin sourceOpen.val.rootWires.length →
           model.Carrier :=
         sourceClosedEnv ∘ sourceEquiv.symm
       have sourceOpenDenotes :
-          denoteItemSeq (relCtx := []) model named sourceComplete
+          denoteItemSeq (relCtx := []) model  sourceComplete
             (PUnit.unit : RelEnv model.Carrier []) sourceItems.items := by
-        apply (sourceIso.denotation model named sourceClosedEnv sourceComplete
+        apply (sourceIso.denotation model  sourceClosedEnv sourceComplete
           (PUnit.unit : RelEnv model.Carrier []) (by
             intro sourceIndex
             change sourceClosedEnv
@@ -1935,7 +1926,7 @@ theorem rootOutput_denoteOfEmpty
             _ = sourceArgs sourcePosition := by
               simp [sourceArgs, targetArgs, targetPosition, position]
       }
-      apply (sourceItems.denote_iff model named sourceArgs).mpr
+      apply (sourceItems.denote_iff model  sourceArgs).mpr
       refine ⟨sourceAssignment, rfl, sourceHidden, ?_⟩
       simpa [sourceAssignment, sourceClasses, sourceHidden,
         rootEnvironment_of_complete] using sourceOpenDenotes
@@ -1945,7 +1936,7 @@ The root remains regular, so its existential hidden-wire semantics is derived
 from the proved complete root-context bijection and the generic item
 simulation. -/
 noncomputable def nestedRootContextSimulationOfEmpty
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
     (sourceAdmissible : source.Admissible)
     (targetAdmissible : target.Admissible)
@@ -1958,12 +1949,11 @@ noncomputable def nestedRootContextSimulationOfEmpty
     (siteDirection rootDirection :
       ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    (localLaw : presentation.AttachmentLocalLaw siteDirection model named) :
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model ) :
     ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
       (presentation.concreteSemanticSimulationOfEmpty sourceAdmissible
         targetAdmissible sourceZero targetZero sourceBoundary siteDirection
-        model named localLaw)
+        model  localLaw)
       rootDirection
       (PlugLayout.outputOpenRoot source source.plugLayout
         sourceBoundary).exposedWires
@@ -1984,7 +1974,7 @@ noncomputable def nestedRootContextSimulationOfEmpty
   let simulation :=
     presentation.concreteSemanticSimulationOfEmpty sourceAdmissible
       targetAdmissible sourceZero targetZero sourceBoundary siteDirection
-      model named localLaw
+      model  localLaw
   have rootRegular :
       ¬ presentation.Distinguished source.plugLayout.plugRaw.root :=
     presentation.root_not_distinguished_of_nested hnested
@@ -2013,7 +2003,7 @@ noncomputable def nestedRootContextSimulationOfEmpty
       (ConcreteElaboration.ContextIndexRelation.forwardMap exposedEquiv)
       (presentation.contextIndexRelation sourceOpen.rootWires
         targetOpen.rootWires)
-      model named
+      model
       (sourceItems.renameRelations
         (simulation.relationMap simulation.binders_empty))
       targetItems
@@ -2040,7 +2030,7 @@ noncomputable def nestedRootContextSimulationOfEmpty
 /-- The common ordered retained-frame argument vector supplies the directional
 boundary witness for the paired nested plugged outputs. -/
 theorem nestedDirectionalBoundaryWitnessOfEmpty
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
     (sourceAdmissible : source.Admissible)
     (targetAdmissible : target.Admissible)
@@ -2050,7 +2040,6 @@ theorem nestedDirectionalBoundaryWitnessOfEmpty
     (hnested : source.site ≠ source.frame.val.root)
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
     ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       direction
@@ -2062,7 +2051,7 @@ theorem nestedDirectionalBoundaryWitnessOfEmpty
       (ConcreteElaboration.ContextIndexRelation.forwardMap
         (presentation.outputRootExposedWireEquivOfNested sourceAdmissible
           targetAdmissible sourceBoundary sourceRoot hnested))
-      model named
+      model
       (args ∘ Fin.cast (by simp [PlugLayout.checkedOutputOpenRoot,
         PlugLayout.outputOpenRoot]))
       (args ∘ Fin.cast (by simp [PlugLayout.checkedOutputOpenRoot,
@@ -2107,7 +2096,7 @@ theorem nestedDirectionalBoundaryWitnessOfEmpty
       targetAdmissible (presentation.targetBoundary sourceBoundary)
       (presentation.targetBoundary_root sourceBoundary sourceRoot)).elaborate
     (ConcreteElaboration.ContextIndexRelation.forwardMap exposedEquiv)
-    model named sourceArgs targetArgs
+    model  sourceArgs targetArgs
   cases direction with
   | forward =>
       intro sourceAssignment sourceAssignmentArgs _sourceDenotes
@@ -2199,7 +2188,7 @@ lifted through the actual checked open compiler outputs.  The active root
 direction is the variance allowed by the enclosing cut parity; the ordered
 boundary arguments are preserved positionally. -/
 theorem nestedOutput_denoteOfEmpty
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
     (sourceAdmissible : source.Admissible)
     (targetAdmissible : target.Admissible)
@@ -2212,20 +2201,19 @@ theorem nestedOutput_denoteOfEmpty
     (siteDirection rootDirection :
       ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    (localLaw : presentation.AttachmentLocalLaw siteDirection model named)
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model )
     (allowed : presentation.Allowed siteDirection rootDirection
       source.plugLayout.plugRaw.root)
     (args : Fin sourceBoundary.length → model.Carrier) :
     rootDirection.Entails
       ((PlugLayout.checkedOutputOpenRoot source source.plugLayout
-        sourceAdmissible sourceBoundary sourceRoot).denote model named
+        sourceAdmissible sourceBoundary sourceRoot).denote model
         (args ∘ Fin.cast (by simp [PlugLayout.checkedOutputOpenRoot,
           PlugLayout.outputOpenRoot])))
       ((PlugLayout.checkedOutputOpenRoot target target.plugLayout
         targetAdmissible (presentation.targetBoundary sourceBoundary)
         (presentation.targetBoundary_root sourceBoundary sourceRoot)).denote
-        model named
+        model
         (args ∘ Fin.cast (by simp [PlugLayout.checkedOutputOpenRoot,
           PlugLayout.outputOpenRoot, targetBoundary]))) := by
   let sourceOpen :=
@@ -2238,11 +2226,11 @@ theorem nestedOutput_denoteOfEmpty
   let simulation :=
     presentation.concreteSemanticSimulationOfEmpty sourceAdmissible
       targetAdmissible sourceZero targetZero sourceBoundary siteDirection
-      model named localLaw
+      model  localLaw
   let rootContext :=
     presentation.nestedRootContextSimulationOfEmpty sourceAdmissible
       targetAdmissible sourceZero targetZero sourceBoundary sourceRoot hnested
-      siteDirection rootDirection model named localLaw
+      siteDirection rootDirection model  localLaw
   let sourceArgs : Fin sourceOpen.val.boundary.length → model.Carrier :=
     args ∘ Fin.cast (by simp [sourceOpen,
       PlugLayout.checkedOutputOpenRoot, PlugLayout.outputOpenRoot])
@@ -2253,10 +2241,10 @@ theorem nestedOutput_denoteOfEmpty
   have boundary :=
     presentation.nestedDirectionalBoundaryWitnessOfEmpty sourceAdmissible
       targetAdmissible sourceBoundary sourceRoot hnested rootDirection model
-      named args
+       args
   exact
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      sourceOpen targetOpen model named simulation rootDirection rootContext
+      sourceOpen targetOpen model  simulation rootDirection rootContext
       allowed sourceArgs targetArgs (by
         simpa [sourceOpen, targetOpen, simulation, rootContext, sourceArgs,
           targetArgs] using boundary)
@@ -2264,11 +2252,11 @@ theorem nestedOutput_denoteOfEmpty
 /-- The root paired-output theorem transported back across each splice
 compiler's canonical intrinsic source view. -/
 theorem compiledSpliceSourceOpen_entails_of_root
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
-    {sourceResult targetResult : CheckedDiagram signature}
-    (sourceSplice : spliceChecked signature source = .ok sourceResult)
-    (targetSplice : spliceChecked signature target = .ok targetResult)
+    {sourceResult targetResult : CheckedDiagram }
+    (sourceSplice : spliceChecked  source = .ok sourceResult)
+    (targetSplice : spliceChecked  target = .ok targetResult)
     (sourceBoundary : List (Fin source.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (source.frame.val.wires wire).scope = source.frame.val.root)
@@ -2277,18 +2265,17 @@ theorem compiledSpliceSourceOpen_entails_of_root
     (targetZero : target.binderSpine.proxyCount = 0)
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    (localLaw : presentation.AttachmentLocalLaw direction model named)
+    (localLaw : presentation.AttachmentLocalLaw direction model )
     (allowed : presentation.Allowed direction direction
       source.plugLayout.plugRaw.root)
     (args : Fin sourceBoundary.length → model.Carrier) :
     direction.Entails
-      (denoteOpen model named
+      (denoteOpen model
         (compiledSpliceSourceOpen source sourceSplice sourceBoundary sourceRoot)
         (args ∘ Fin.cast (by simp [compiledSpliceSourceOpen,
           PlugLayout.checkedCoalescedOpenRoot,
           PlugLayout.coalescedOpenRoot])))
-      (denoteOpen model named
+      (denoteOpen model
         (compiledSpliceSourceOpen target targetSplice
           (presentation.targetBoundary sourceBoundary)
           (presentation.targetBoundary_root sourceBoundary sourceRoot))
@@ -2311,16 +2298,16 @@ theorem compiledSpliceSourceOpen_entails_of_root
       PlugLayout.coalescedOpenRoot, targetBoundary])
   have sourceCompiler :=
     spliceChecked_open_denotation_iff source sourceSplice sourceBoundary
-      sourceRoot model named sourceArgs
+      sourceRoot model  sourceArgs
   have targetCompiler :=
     spliceChecked_open_denotation_iff target targetSplice
       (presentation.targetBoundary sourceBoundary)
       (presentation.targetBoundary_root sourceBoundary sourceRoot)
-      model named targetArgs
+      model  targetArgs
   have output :=
     presentation.rootOutput_denoteOfEmpty sourceAdmissible targetAdmissible
       sourceZero targetZero sourceBoundary sourceRoot hsite direction model
-      named localLaw allowed args
+       localLaw allowed args
   cases direction with
   | forward =>
       intro sourceDenotes
@@ -2344,11 +2331,11 @@ theorem compiledSpliceSourceOpen_entails_of_root
 /-- The nested paired-output theorem transported back across each splice
 compiler's canonical intrinsic source view. -/
 theorem compiledSpliceSourceOpen_entails_of_nested
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
-    {sourceResult targetResult : CheckedDiagram signature}
-    (sourceSplice : spliceChecked signature source = .ok sourceResult)
-    (targetSplice : spliceChecked signature target = .ok targetResult)
+    {sourceResult targetResult : CheckedDiagram }
+    (sourceSplice : spliceChecked  source = .ok sourceResult)
+    (targetSplice : spliceChecked  target = .ok targetResult)
     (sourceBoundary : List (Fin source.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (source.frame.val.wires wire).scope = source.frame.val.root)
@@ -2358,18 +2345,17 @@ theorem compiledSpliceSourceOpen_entails_of_nested
     (siteDirection rootDirection :
       ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    (localLaw : presentation.AttachmentLocalLaw siteDirection model named)
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model )
     (allowed : presentation.Allowed siteDirection rootDirection
       source.plugLayout.plugRaw.root)
     (args : Fin sourceBoundary.length → model.Carrier) :
     rootDirection.Entails
-      (denoteOpen model named
+      (denoteOpen model
         (compiledSpliceSourceOpen source sourceSplice sourceBoundary sourceRoot)
         (args ∘ Fin.cast (by simp [compiledSpliceSourceOpen,
           PlugLayout.checkedCoalescedOpenRoot,
           PlugLayout.coalescedOpenRoot])))
-      (denoteOpen model named
+      (denoteOpen model
         (compiledSpliceSourceOpen target targetSplice
           (presentation.targetBoundary sourceBoundary)
           (presentation.targetBoundary_root sourceBoundary sourceRoot))
@@ -2392,16 +2378,16 @@ theorem compiledSpliceSourceOpen_entails_of_nested
       PlugLayout.coalescedOpenRoot, targetBoundary])
   have sourceCompiler :=
     spliceChecked_open_denotation_iff source sourceSplice sourceBoundary
-      sourceRoot model named sourceArgs
+      sourceRoot model  sourceArgs
   have targetCompiler :=
     spliceChecked_open_denotation_iff target targetSplice
       (presentation.targetBoundary sourceBoundary)
       (presentation.targetBoundary_root sourceBoundary sourceRoot)
-      model named targetArgs
+      model  targetArgs
   have output :=
     presentation.nestedOutput_denoteOfEmpty sourceAdmissible targetAdmissible
       sourceZero targetZero sourceBoundary sourceRoot hnested siteDirection
-      rootDirection model named localLaw allowed args
+      rootDirection model  localLaw allowed args
   cases rootDirection with
   | forward =>
       intro sourceDenotes
@@ -2427,11 +2413,11 @@ proper nested site.  Root direction is forced to equal the focused direction
 when the site is the root; nested sites retain the cut-parity-selected root
 direction. -/
 theorem compiledSpliceSourceOpen_entails_at_attachments
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
-    {sourceResult targetResult : CheckedDiagram signature}
-    (sourceSplice : spliceChecked signature source = .ok sourceResult)
-    (targetSplice : spliceChecked signature target = .ok targetResult)
+    {sourceResult targetResult : CheckedDiagram }
+    (sourceSplice : spliceChecked  source = .ok sourceResult)
+    (targetSplice : spliceChecked  target = .ok targetResult)
     (sourceBoundary : List (Fin source.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (source.frame.val.wires wire).scope = source.frame.val.root)
@@ -2440,18 +2426,17 @@ theorem compiledSpliceSourceOpen_entails_at_attachments
     (siteDirection rootDirection :
       ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    (localLaw : presentation.AttachmentLocalLaw siteDirection model named)
+    (localLaw : presentation.AttachmentLocalLaw siteDirection model )
     (allowed : presentation.Allowed siteDirection rootDirection
       source.plugLayout.plugRaw.root)
     (args : Fin sourceBoundary.length → model.Carrier) :
     rootDirection.Entails
-      (denoteOpen model named
+      (denoteOpen model
         (compiledSpliceSourceOpen source sourceSplice sourceBoundary sourceRoot)
         (args ∘ Fin.cast (by simp [compiledSpliceSourceOpen,
           PlugLayout.checkedCoalescedOpenRoot,
           PlugLayout.coalescedOpenRoot])))
-      (denoteOpen model named
+      (denoteOpen model
         (compiledSpliceSourceOpen target targetSplice
           (presentation.targetBoundary sourceBoundary)
           (presentation.targetBoundary_root sourceBoundary sourceRoot))
@@ -2469,19 +2454,19 @@ theorem compiledSpliceSourceOpen_entails_at_attachments
     subst rootDirection
     exact presentation.compiledSpliceSourceOpen_entails_of_root sourceSplice
       targetSplice sourceBoundary sourceRoot hsite sourceZero targetZero
-      siteDirection model named localLaw allowed args
+      siteDirection model  localLaw allowed args
   · exact presentation.compiledSpliceSourceOpen_entails_of_nested sourceSplice
       targetSplice sourceBoundary sourceRoot hsite sourceZero targetZero
-      siteDirection rootDirection model named localLaw allowed args
+      siteDirection rootDirection model  localLaw allowed args
 
 /-- Backward-compatible arbitrary-boundary form. Arbitrary laws specialize to
 the actual quotient valuations used by the authoritative splice semantics. -/
 theorem compiledSpliceSourceOpen_entails
-    {signature : List Nat} {source target : Input signature}
+    {source target : Input }
     (presentation : TwoInputPresentation source target)
-    {sourceResult targetResult : CheckedDiagram signature}
-    (sourceSplice : spliceChecked signature source = .ok sourceResult)
-    (targetSplice : spliceChecked signature target = .ok targetResult)
+    {sourceResult targetResult : CheckedDiagram }
+    (sourceSplice : spliceChecked  source = .ok sourceResult)
+    (targetSplice : spliceChecked  target = .ok targetResult)
     (sourceBoundary : List (Fin source.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (source.frame.val.wires wire).scope = source.frame.val.root)
@@ -2490,18 +2475,17 @@ theorem compiledSpliceSourceOpen_entails
     (siteDirection rootDirection :
       ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    (localLaw : presentation.LocalLaw siteDirection model named)
+    (localLaw : presentation.LocalLaw siteDirection model )
     (allowed : presentation.Allowed siteDirection rootDirection
       source.plugLayout.plugRaw.root)
     (args : Fin sourceBoundary.length → model.Carrier) :
     rootDirection.Entails
-      (denoteOpen model named
+      (denoteOpen model
         (compiledSpliceSourceOpen source sourceSplice sourceBoundary sourceRoot)
         (args ∘ Fin.cast (by simp [compiledSpliceSourceOpen,
           PlugLayout.checkedCoalescedOpenRoot,
           PlugLayout.coalescedOpenRoot])))
-      (denoteOpen model named
+      (denoteOpen model
         (compiledSpliceSourceOpen target targetSplice
           (presentation.targetBoundary sourceBoundary)
           (presentation.targetBoundary_root sourceBoundary sourceRoot))
@@ -2510,8 +2494,8 @@ theorem compiledSpliceSourceOpen_entails
           PlugLayout.coalescedOpenRoot, targetBoundary]))) := by
   exact presentation.compiledSpliceSourceOpen_entails_at_attachments
     sourceSplice targetSplice sourceBoundary sourceRoot sourceZero targetZero
-    siteDirection rootDirection model named
-    (localLaw.toAttachmentLocalLaw presentation siteDirection model named)
+    siteDirection rootDirection model
+    (localLaw.toAttachmentLocalLaw presentation siteDirection model )
     allowed args
 
 end TwoInputPresentation

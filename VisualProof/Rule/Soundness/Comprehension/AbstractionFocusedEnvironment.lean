@@ -12,7 +12,7 @@ anchor.  Deleted source-local wires are unconstrained by the target context
 and are subsequently filled by the occurrence-family witness. -/
 theorem survivorEnvironmentSelection
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (targetWellFormed : trace.diagram.WellFormed signature)
+    (targetWellFormed : trace.diagram.WellFormed )
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext trace.diagram)

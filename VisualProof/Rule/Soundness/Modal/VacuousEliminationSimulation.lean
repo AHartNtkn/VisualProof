@@ -9,7 +9,7 @@ open VisualProof.Rule.DoubleCutElimTrace
 
 theorem regularTargetEnvironment_outer
     (trace : VacuousElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
@@ -58,7 +58,7 @@ theorem regularTargetEnvironment_outer
 
 theorem regularTargetEnvironment_local
     (trace : VacuousElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
@@ -124,13 +124,12 @@ theorem regularTargetEnvironment_local
 
 noncomputable def semanticSimulation
     (trace : VacuousElimTrace input outer raw)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
-    (targetWellFormed : input.WellFormed signature)
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
+    (targetWellFormed : input.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (freshForward : FreshRelationSelector trace targetWellFormed model) :
-    ConcreteElaboration.ConcreteSemanticSimulation signature
-      trace.sourceDiagram input model named where
+    ConcreteElaboration.ConcreteSemanticSimulation
+      trace.sourceDiagram input model  where
   source_wellFormed := sourceWellFormed
   target_wellFormed := targetWellFormed
   regionMap := trace.origin
@@ -220,7 +219,7 @@ noncomputable def semanticSimulation
     let extended := promoted.extendRegular targetWellFormed region regular
     apply ConcreteElaboration.directionalLocalTransport_of_agreement
       direction sourceContext targetContext region (trace.origin region)
-      promoted.indexRelation extended.indexRelation model named
+      promoted.indexRelation extended.indexRelation model
       (sourceItems.renameRelations binderWitness.relationMap) targetItems
     · intro sourceOuter targetOuter outerAgreement
       cases direction with
@@ -318,11 +317,9 @@ noncomputable def semanticSimulation
           | .identity owner arity =>
               .identity (trace.origin owner) arity
           | .atom owner binder =>
-              .atom (trace.origin owner) (trace.origin binder)
-          | .named owner definition arity =>
-              .named (trace.origin owner) definition arity := by
+              .atom (trace.origin owner) (trace.origin binder) := by
         simpa [PromoteDiagramTrace.diagram, promotedNode] using shape
-      exact trace.compileNode_itemSimulation targetWellFormed model named
+      exact trace.compileNode_itemSimulation targetWellFormed model
         direction sourceContext targetContext sourceBinders targetBinders
         binderWitness sourceNode trace.origin sourceShape sourceItem targetItem
         sourceCompiled targetCompiled
@@ -340,14 +337,14 @@ noncomputable def semanticSimulation
         targetBinders.Covers trace.parent →
         ConcreteElaboration.BinderContext.Enumeration input targetBinders
           trace.parent →
-        ∀ targetItems : ItemSeq signature
+        ∀ targetItems : ItemSeq
             (targetContext.extend trace.parent).length targetRels,
-        ConcreteElaboration.compileOccurrencesWith? signature input
-            (ConcreteElaboration.compileRegion? signature input fuelTarget)
+        ConcreteElaboration.compileOccurrencesWith?  input
+            (ConcreteElaboration.compileRegion?  input fuelTarget)
             (targetContext.extend trace.parent) targetBinders
             (ConcreteElaboration.localOccurrences input trace.parent) =
           some targetItems →
-        ConcreteElaboration.RegionSimulation model named direction
+        ConcreteElaboration.RegionSimulation model  direction
           context.down.indexRelation
           ((ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
             (trace.targetIndex targetWellFormed) sourceItems).renameRelations
@@ -357,7 +354,7 @@ noncomputable def semanticSimulation
       intro targetExact targetBindersCover targetEnumeration targetItems
         targetCompiled
       exact trace.focusedItems_regionSimulation sourceWellFormed targetWellFormed
-        model named direction fuelSource fuelTarget sourceContext targetContext
+        model  direction fuelSource fuelTarget sourceContext targetContext
         context.down sourceBinders targetBinders binderWitness sourceExact
         freshForward
         targetExact sourceBindersCover targetBindersCover sourceEnumeration

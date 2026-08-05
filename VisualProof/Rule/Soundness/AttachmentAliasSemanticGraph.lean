@@ -13,7 +13,7 @@ namespace Semantic
 
 /-- Collapse every materialized wire to the source identity whose value it
 represents. Old identities are fixed; an alias identity collapses to the
-intrinsic boundary wire named by its ordered alias origin. -/
+intrinsic boundary wire  by its ordered alias origin. -/
 def collapseWire (pattern : OpenConcreteDiagram)
     (attachment : Fin pattern.boundary.length → Host) :
     Fin (pattern.diagram.wireCount + aliasCount pattern attachment) →
@@ -71,7 +71,7 @@ theorem materialized_encloses_iff (pattern : OpenConcreteDiagram)
   simp [materializedDiagram, aliasWire]
 
 theorem source_alias_scope
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -86,7 +86,7 @@ theorem source_alias_scope
       (aliasOrigin pattern.val attachment aliasIndex))
 
 theorem materialized_scope_collapse
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -115,7 +115,7 @@ theorem materialized_scope_collapse
 context, while retaining a canonical target occurrence for every old source
 wire. -/
 structure ContextCollapse
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (expanded : ConcreteElaboration.WireContext
@@ -133,7 +133,7 @@ structure ContextCollapse
 namespace ContextCollapse
 
 noncomputable def ofExact
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -205,8 +205,7 @@ noncomputable def ofExact
   }
 
 theorem indexMap_oldIndex
-    {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+    {pattern : CheckedOpenDiagram }
     {attachment : Fin pattern.val.boundary.length → Host}
     {spine : BinderSpine pattern.val.diagram}
     {expanded : ConcreteElaboration.WireContext

@@ -54,7 +54,7 @@ private theorem climb_cancel_prefix {d : ConcreteDiagram}
                 hfirstTail hsecondTail
 
 private theorem selectsRegion_downward {d : ConcreteDiagram}
-    (hwf : d.WellFormed signature) {request : SelectionRequest d}
+    (hwf : d.WellFormed ) {request : SelectionRequest d}
     {ancestor descendant : Fin d.regionCount}
     (hselected : request.SelectsRegion ancestor)
     (hencloses : d.Encloses ancestor descendant) :
@@ -144,14 +144,13 @@ theorem mem_externalBinders_uses (selection : CheckedSelection d)
 
 /-- Every genuinely external selected-atom binder encloses the selection anchor. -/
 theorem usesExternalBinder_encloses_anchor
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val) {binder : Fin host.val.regionCount}
     (huses : selection.UsesExternalBinder binder) :
     host.val.Encloses binder selection.val.anchor := by
   obtain ⟨hnotSelected, node, hselectedNode, hatom⟩ := huses
   cases hnode : host.val.nodes node with
   | identity region arity => simp [hnode] at hatom
-  | named region definition arity => simp [hnode] at hatom
   | atom region candidate =>
       simp only [hnode] at hatom
       subst candidate
@@ -180,7 +179,7 @@ theorem usesExternalBinder_encloses_anchor
 
 /-- The generated target list contains exactly the external binders actually used. -/
 theorem mem_externalBinders_iff_uses
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (binder : Fin host.val.regionCount) :
     binder ∈ selection.externalBinders ↔
@@ -196,7 +195,7 @@ theorem mem_externalBinders_iff_uses
 
 /-- External binder targets form one lexical ancestry chain. -/
 theorem externalBinders_comparable
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     {first second : Fin host.val.regionCount}
     (hfirst : first ∈ selection.externalBinders)
@@ -544,9 +543,6 @@ private def fragmentNode (d : ConcreteDiagram)
       .atom (fragmentParent layout region) (fragmentBinder layout binder)
   | .identity region arity =>
       .identity (fragmentParent layout region) arity
-  | .named region definition arity =>
-      .named (fragmentParent layout region) definition arity
-
 private def fragmentEndpoint? (selection : CheckedSelection d)
     (endpoint : CEndpoint d.nodeCount) :
     Option (CEndpoint selection.selectedNodes.length) :=
@@ -595,7 +591,7 @@ def fragmentWireOrigin (selection : CheckedSelection d)
 /-- Every extracted boundary wire comes from a host wire visible at the
 selection anchor. -/
 theorem touchingWire_scope_encloses_anchor
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (index : Fin selection.touchingWires.length) :
     host.val.Encloses
@@ -765,7 +761,7 @@ theorem fragmentBinder_selectedRegion
 
 /-- An external binder is renamed to its unique aligned proxy. -/
 theorem fragmentBinder_externalBinder
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     (index : Fin layout.proxyCount) :
@@ -825,20 +821,6 @@ theorem extractDiagramRaw_node_identity
   rw [hnode]
   rfl
 
-theorem extractDiagramRaw_node_named
-    (d : ConcreteDiagram) (selection : CheckedSelection d)
-    (layout : FragmentLayout d selection) (index : Fin layout.nodeCount)
-    (region : Fin d.regionCount) (definition : Nat) (arity : Nat)
-    (hnode : d.nodes (selection.selectedNodes.get index) =
-      .named region definition arity) :
-    (d.extractDiagramRaw selection layout).nodes index =
-      .named (d.fragmentParent layout region) definition arity := by
-  rw [d.extractDiagramRaw_node selection layout index]
-  change d.fragmentNode selection layout index = _
-  unfold fragmentNode
-  rw [hnode]
-  rfl
-
 theorem extractDiagramRaw_node_region
     (d : ConcreteDiagram) (selection : CheckedSelection d)
     (layout : FragmentLayout d selection) (index : Fin layout.nodeCount) :
@@ -850,7 +832,7 @@ theorem extractDiagramRaw_node_region
   split <;> rename_i hnode <;> rw [hnode] <;> rfl
 
 theorem extractDiagramRaw_atom_binder_bubble
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     (index : Fin layout.nodeCount)
@@ -906,7 +888,7 @@ theorem extractDiagramRaw_atom_binder_bubble
     rfl
 
 theorem extractDiagramRaw_requiresPort_iff
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     (node : Fin layout.nodeCount) (port : CPort) :
@@ -914,9 +896,6 @@ theorem extractDiagramRaw_requiresPort_iff
       host.val.RequiresPort (selection.selectedNodes.get node) port := by
   cases hnode : host.val.nodes (selection.selectedNodes.get node) with
   | identity region arity =>
-      unfold ConcreteDiagram.RequiresPort
-      simp only [extractDiagramRaw_node, fragmentNode, hnode]
-  | named region definition arity =>
       unfold ConcreteDiagram.RequiresPort
       simp only [extractDiagramRaw_node, fragmentNode, hnode]
   | atom region binder =>
@@ -1097,7 +1076,7 @@ private theorem filterMap_nodup_of_some_injective
           · exact ih htail
 
 theorem extractDiagramRaw_endpoints_are_nodup
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection) :
     (host.val.extractDiagramRaw selection layout).EndpointsAreNodup := by
@@ -1110,7 +1089,7 @@ theorem extractDiagramRaw_endpoints_are_nodup
       fragmentEndpoint?_some_injective selection hfirst hsecond)
 
 theorem extractDiagramRaw_wire_endpoints_are_disjoint
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection) :
     (host.val.extractDiagramRaw selection layout).WireEndpointsAreDisjoint := by
@@ -1143,7 +1122,7 @@ theorem extractDiagramRaw_wire_endpoints_are_disjoint
   exact hdisjoint hsecondMember
 
 theorem extractDiagramRaw_endpoints_are_valid
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection) :
     (host.val.extractDiagramRaw selection layout).EndpointsAreValid := by
@@ -1159,7 +1138,7 @@ theorem extractDiagramRaw_endpoints_are_valid
     endpoint.node endpoint.port).2 hvalid
 
 theorem extractDiagramRaw_endpointOccurs_of_selected
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     {wire : Fin host.val.wireCount} (node : Fin layout.nodeCount)
@@ -1215,7 +1194,7 @@ theorem extractDiagramRaw_endpointOccurs_of_selected
 
 /-- Selected atoms using external binders point to exactly the aligned proxy. -/
 theorem extractDiagramRaw_externalAtom
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     (node : Fin layout.nodeCount) (proxy : Fin layout.proxyCount)
@@ -1301,7 +1280,7 @@ theorem extractDiagramRaw_region_cases
         exact hproxy ⟨index, heq⟩⟩)
 
 private theorem selectedRegion_ne_root
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     {region : Fin host.val.regionCount}
     (hselected : region ∈ selection.selectedRegions) :
@@ -1317,7 +1296,7 @@ private theorem selectedRegion_ne_root
   contradiction
 
 private theorem anchor_not_mem_selectedRegions
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val) :
     selection.val.anchor ∉ selection.selectedRegions := by
   intro hselected
@@ -1333,7 +1312,7 @@ theorem fragmentParent_anchor
   simp [fragmentParent]
 
 theorem fragmentParent_selectedRegion
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     {region : Fin host.val.regionCount}
@@ -1351,7 +1330,7 @@ theorem fragmentParent_selectedRegion
   simp [hneAnchor, hindex]
 
 theorem extractDiagramRaw_materialRegion_parent_exact
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     (index : Fin layout.materialRegionCount)
@@ -1379,7 +1358,7 @@ theorem extractDiagramRaw_materialRegion_parent_exact
     rfl
 
 theorem extractDiagramRaw_climb_selected
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     {finish : Fin host.val.regionCount}
@@ -1450,7 +1429,7 @@ theorem extractDiagramRaw_climb_selected
           exact hfragmentClimb
 
 theorem extractDiagramRaw_climb_selected_steps_lt_materialRegionCount
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     {finish : Fin host.val.regionCount}
@@ -1660,7 +1639,7 @@ theorem extractDiagramRaw_bodyContainer_climb
       _ = some layout.root := hclimb
 
 theorem extractDiagramRaw_all_regions_reach_root
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection) :
     (host.val.extractDiagramRaw selection layout).AllRegionsReachRoot := by
@@ -1714,7 +1693,7 @@ theorem extractDiagramRaw_all_regions_reach_root
     exact hmaterialRoot
 
 theorem extractDiagramRaw_encloses_selected
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     (ancestor descendant : Fin layout.materialRegionCount)
@@ -1741,7 +1720,7 @@ theorem extractDiagramRaw_encloses_selected
     omega⟩, hfragmentClimb⟩
 
 theorem extractDiagramRaw_bodyContainer_encloses_materialRegion
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     (index : Fin layout.materialRegionCount) :
@@ -1780,7 +1759,7 @@ theorem extractDiagramRaw_bodyContainer_encloses_materialRegion
   exact ConcreteElaboration.climb_add hmaterialClimb hchildBody
 
 theorem extractDiagramRaw_proxy_encloses_materialRegion
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     (proxy : Fin layout.proxyCount)
@@ -1840,7 +1819,7 @@ theorem extractDiagramRaw_proxy_encloses_materialRegion
   exact ConcreteElaboration.climb_add hmaterialBody hbodyProxy
 
 theorem extractDiagramRaw_atom_binders_are_bubbles
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection) :
     (host.val.extractDiagramRaw selection layout).AtomBindersAreBubbles := by
@@ -1848,10 +1827,6 @@ theorem extractDiagramRaw_atom_binders_are_bubbles
   rw [host.val.extractDiagramRaw_node selection layout node]
   cases hnode : host.val.nodes (selection.selectedNodes.get node) with
   | identity region arity =>
-      unfold fragmentNode
-      rw [hnode]
-      trivial
-  | named region definition arity =>
       unfold fragmentNode
       rw [hnode]
       trivial
@@ -1863,33 +1838,8 @@ theorem extractDiagramRaw_atom_binders_are_bubbles
       simp only
       exact ⟨extractedParent, arity, hextracted⟩
 
-theorem extractDiagramRaw_named_references_resolve
-    (host : CheckedDiagram signature)
-    (selection : CheckedSelection host.val)
-    (layout : FragmentLayout host.val selection) :
-    (host.val.extractDiagramRaw selection layout).NamedReferencesResolve
-      signature := by
-  intro node
-  rw [host.val.extractDiagramRaw_node selection layout node]
-  cases hnode : host.val.nodes (selection.selectedNodes.get node) with
-  | atom region binder =>
-      unfold fragmentNode
-      rw [hnode]
-      trivial
-  | identity region arity =>
-      unfold fragmentNode
-      rw [hnode]
-      trivial
-  | named region definition arity =>
-      have hresolve := host.property.named_references_resolve
-        (selection.selectedNodes.get node)
-      simp only [hnode] at hresolve
-      unfold fragmentNode
-      rw [hnode]
-      exact hresolve
-
 theorem extractDiagramRaw_atom_binders_enclose
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection) :
     (host.val.extractDiagramRaw selection layout).AtomBindersEnclose := by
@@ -1897,10 +1847,6 @@ theorem extractDiagramRaw_atom_binders_enclose
   rw [host.val.extractDiagramRaw_node selection layout node]
   cases hnode : host.val.nodes (selection.selectedNodes.get node) with
   | identity region arity =>
-      unfold fragmentNode
-      rw [hnode]
-      trivial
-  | named region definition arity =>
       unfold fragmentNode
       rw [hnode]
       trivial
@@ -1971,7 +1917,7 @@ theorem extractDiagramRaw_atom_binders_enclose
             selection layout proxy regionIndex
 
 theorem extractDiagramRaw_required_ports_are_covered
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection) :
     (host.val.extractDiagramRaw selection layout).RequiredPortsAreCovered := by
@@ -1979,17 +1925,6 @@ theorem extractDiagramRaw_required_ports_are_covered
   rw [host.val.extractDiagramRaw_node selection layout node]
   cases hnode : host.val.nodes (selection.selectedNodes.get node) with
   | identity region arity =>
-      have hcovered := host.property.required_ports_are_covered
-        (selection.selectedNodes.get node)
-      simp only [hnode] at hcovered
-      unfold fragmentNode
-      rw [hnode]
-      simp only
-      intro port
-      obtain ⟨wire, hwire⟩ := hcovered port
-      exact extractDiagramRaw_endpointOccurs_of_selected host selection layout
-        node (.arg port) hwire
-  | named region definition arity =>
       have hcovered := host.property.required_ports_are_covered
         (selection.selectedNodes.get node)
       simp only [hnode] at hcovered
@@ -2018,7 +1953,7 @@ theorem extractDiagramRaw_required_ports_are_covered
         node (.arg port) hwire
 
 theorem extractDiagramRaw_wire_scopes_enclose
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection) :
     (host.val.extractDiagramRaw selection layout).WireScopesEnclose := by
@@ -2095,7 +2030,7 @@ theorem extractDiagramRaw_wire_scopes_enclose
     exact extractDiagramRaw_all_regions_reach_root host selection layout
       ((host.val.extractDiagramRaw selection layout).nodes endpoint.node).region
 theorem extractDiagramRaw_only_root_is_sheet
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection) :
     (host.val.extractDiagramRaw selection layout).OnlyRootIsSheet := by
@@ -2405,7 +2340,7 @@ theorem extractDiagramRaw_nonterminalProxy_has_no_nonboundaryWires
 
 /-- Every generated proxy arity is copied from its aligned external host binder. -/
 theorem extractedBinderSpine_target_region
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection)
     (index : Fin layout.proxyCount) :
@@ -2423,8 +2358,6 @@ theorem extractedBinderSpine_target_region
     selection.mem_externalBinders_uses hmemberSelection
   cases hnode : host.val.nodes node with
   | identity region arity =>
-      simp [hnode] at hatom
-  | named region definition arity =>
       simp [hnode] at hatom
   | atom region binder =>
       simp only [hnode] at hatom
@@ -2509,10 +2442,10 @@ theorem extractedBinderSpine_terminalBodyContract
 
 /-- Extraction preserves every concrete well-formedness clause. -/
 theorem extractDiagramRaw_wellFormed
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection) :
-    (host.val.extractDiagramRaw selection layout).WellFormed signature where
+    (host.val.extractDiagramRaw selection layout).WellFormed  where
   root_is_sheet := host.val.extractDiagramRaw_root_region selection layout
   only_root_is_sheet :=
     extractDiagramRaw_only_root_is_sheet host selection layout
@@ -2522,8 +2455,6 @@ theorem extractDiagramRaw_wellFormed
     extractDiagramRaw_atom_binders_are_bubbles host selection layout
   atom_binders_enclose :=
     extractDiagramRaw_atom_binders_enclose host selection layout
-  named_references_resolve :=
-    extractDiagramRaw_named_references_resolve host selection layout
   endpoints_are_valid :=
     extractDiagramRaw_endpoints_are_valid host selection layout
   endpoints_are_nodup :=
@@ -2536,10 +2467,10 @@ theorem extractDiagramRaw_wellFormed
     extractDiagramRaw_wire_scopes_enclose host selection layout
 
 theorem extractOpenRaw_wellFormed
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (layout : FragmentLayout host.val selection) :
-    (host.val.extractOpenRaw selection layout).WellFormed signature where
+    (host.val.extractOpenRaw selection layout).WellFormed  where
   diagram_well_formed :=
     extractDiagramRaw_wellFormed host selection layout
   boundary_is_root_scoped :=
@@ -2557,19 +2488,19 @@ structure RawExtraction (host : ConcreteDiagram)
   attachments_exact : attachments = selection.touchingWires := by rfl
 
 /-- A successfully validated extraction with its administrative interface data. -/
-structure CheckedExtraction (signature : List Nat) (host : CheckedDiagram signature)
+structure CheckedExtraction (host : CheckedDiagram )
     (selection : CheckedSelection host.val) where
   raw : RawExtraction host.val selection
-  fragment : CheckedOpenDiagram signature
+  fragment : CheckedOpenDiagram
   fragment_eq : fragment.val = raw.fragment
 
 namespace RawExtraction
 
-def check {signature : List Nat} {host : CheckedDiagram signature}
+def check {host : CheckedDiagram }
     {selection : CheckedSelection host.val}
     (raw : RawExtraction host.val selection) :
-    Except WFError (CheckedExtraction signature host selection) :=
-  match hcheck : checkWellFormed signature raw.fragment.diagram with
+    Except WFError (CheckedExtraction  host selection) :=
+  match hcheck : checkWellFormed  raw.fragment.diagram with
   | .error error => .error error
   | .ok checked =>
       .ok {
@@ -2586,12 +2517,11 @@ def check {signature : List Nat} {host : CheckedDiagram signature}
         fragment_eq := rfl
       }
 
-theorem check_complete {signature : List Nat}
-    {host : CheckedDiagram signature}
+theorem check_complete {host : CheckedDiagram }
     {selection : CheckedSelection host.val}
     (raw : RawExtraction host.val selection) :
     ∃ extraction, raw.check = .ok extraction := by
-  have hwf : raw.fragment.diagram.WellFormed signature := by
+  have hwf : raw.fragment.diagram.WellFormed  := by
     rw [raw.fragment_exact]
     exact ConcreteDiagram.extractDiagramRaw_wellFormed host selection raw.layout
   unfold check
@@ -2604,20 +2534,20 @@ theorem check_complete {signature : List Nat}
 end RawExtraction
 
 /-- Compute extraction and validate it through the sole concrete validator. -/
-def extractChecked (signature : List Nat) (host : CheckedDiagram signature)
+def extractChecked (host : CheckedDiagram )
     (selection : CheckedSelection host.val) :
-    Except WFError (CheckedExtraction signature host selection) :=
+    Except WFError (CheckedExtraction  host selection) :=
   RawExtraction.check ({} : RawExtraction host.val selection)
 
 theorem extractChecked_sound
-    (_h : extractChecked signature host selection = .ok extraction) :
-    extraction.fragment.val.WellFormed signature :=
+    (_h : extractChecked  host selection = .ok extraction) :
+    extraction.fragment.val.WellFormed  :=
   extraction.fragment.property
 
 theorem extractChecked_complete
-    (signature : List Nat) (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val) :
-    ∃ extraction, extractChecked signature host selection = .ok extraction := by
+    ∃ extraction, extractChecked  host selection = .ok extraction := by
   exact RawExtraction.check_complete
     ({} : RawExtraction host.val selection)
 

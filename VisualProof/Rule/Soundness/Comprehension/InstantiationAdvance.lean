@@ -8,23 +8,22 @@ open VisualProof.Diagram
 /-- The checked splice exposed by one trace step returns exactly the next
 executor diagram, including the proof-irrelevant well-formedness package. -/
 theorem advanceInstantiationState_spliceChecked
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
     (tail : List (Fin state.diagram.val.nodeCount))
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
-    (checkedInput : Splice.Input.CheckedInput signature)
+    (checkedInput : Splice.Input.CheckedInput )
     (hinput : Splice.Input.checkInput
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments) = .ok checkedInput) :
@@ -33,7 +32,7 @@ theorem advanceInstantiationState_spliceChecked
     let hadmissible := (Splice.Input.checkInput_sound hinput).2
     let next := advanceInstantiationState comprehension attachments binders
       payload state atom tail site arguments hadmissible
-    Splice.Input.spliceChecked signature spliceInput = .ok next.diagram := by
+    Splice.Input.spliceChecked  spliceInput = .ok next.diagram := by
   dsimp only
   unfold Splice.Input.spliceChecked
   rw [hinput]
@@ -42,21 +41,20 @@ theorem advanceInstantiationState_spliceChecked
   let layout := spliceInput.plugLayout
   let hadmissible := (Splice.Input.checkInput_sound hinput).2
   rw [checkWellFormed_complete
-    (Splice.Input.PlugLayout.plugRaw_wellFormed signature spliceInput layout
+    (Splice.Input.PlugLayout.plugRaw_wellFormed  spliceInput layout
       hadmissible)]
   rfl
 
 @[simp] theorem advanceInstantiationState_diagram
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -72,16 +70,15 @@ theorem advanceInstantiationState_spliceChecked
   rfl
 
 @[simp] theorem advanceInstantiationState_interface
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -98,16 +95,15 @@ theorem advanceInstantiationState_spliceChecked
   rfl
 
 @[simp] theorem advanceInstantiationState_provenance
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)

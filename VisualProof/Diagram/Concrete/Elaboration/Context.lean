@@ -119,7 +119,7 @@ theorem climb_add {d : ConcreteDiagram}
             ih htail
 
 theorem checked_encloses_trans {d : ConcreteDiagram}
-    (hwf : d.WellFormed signature)
+    (hwf : d.WellFormed )
     {ancestor middle descendant : Fin d.regionCount}
     (hfirst : d.Encloses ancestor middle)
     (hsecond : d.Encloses middle descendant) :
@@ -142,7 +142,7 @@ theorem checked_encloses_trans {d : ConcreteDiagram}
 chosen ancestor.  This is the parent-tree decomposition used when a partial
 occurrence is reconstructed as a checked selection. -/
 theorem exists_direct_child_enclosing {d : ConcreteDiagram}
-    (hwf : d.WellFormed signature)
+    (hwf : d.WellFormed )
     {ancestor descendant : Fin d.regionCount}
     (hne : descendant ≠ ancestor)
     (hencloses : d.Encloses ancestor descendant) :
@@ -175,7 +175,7 @@ theorem exists_direct_child_enclosing {d : ConcreteDiagram}
 
 /-- Enclosure in a checked parent tree is antisymmetric. -/
 theorem checked_encloses_antisymm {d : ConcreteDiagram}
-    (hwf : d.WellFormed signature)
+    (hwf : d.WellFormed )
     {first second : Fin d.regionCount}
     (hfirst : d.Encloses first second)
     (hsecond : d.Encloses second first) : first = second := by
@@ -194,7 +194,7 @@ theorem checked_encloses_antisymm {d : ConcreteDiagram}
   exact this.symm
 
 theorem checked_direct_child_not_encloses_parent
-    {d : ConcreteDiagram} (hwf : d.WellFormed signature)
+    {d : ConcreteDiagram} (hwf : d.WellFormed )
     {child parent : Fin d.regionCount}
     (hparent : (d.regions child).parent? = some parent) :
     ¬ d.Encloses child parent := by
@@ -240,7 +240,7 @@ theorem encloses_sheet_eq {d : ConcreteDiagram}
 
 namespace WireContext
 
-theorem root_exact {d : ConcreteDiagram} (hwf : d.WellFormed signature) :
+theorem root_exact {d : ConcreteDiagram} (hwf : d.WellFormed ) :
     Exact (WireContext.extend ([] : WireContext d) d.root) d.root := by
   constructor
   · simpa [extend] using exactScopeWires_nodup d d.root
@@ -256,7 +256,7 @@ theorem root_exact {d : ConcreteDiagram} (hwf : d.WellFormed signature) :
 theorem Exact.extend_child {d : ConcreteDiagram}
     {context : WireContext d} {parent : Fin d.regionCount}
     (hexact : Exact context parent)
-    (hwf : d.WellFormed signature)
+    (hwf : d.WellFormed )
     {child : Fin d.regionCount}
     (hparent : (d.regions child).parent? = some parent) :
     Exact (context.extend child) child := by
@@ -343,7 +343,7 @@ theorem push_other (context : BinderContext d rels)
         ⟨relation.1, liftVar arity relation.2⟩) := by
   simp [push, hne]
 
-theorem empty_covers_root {d : ConcreteDiagram} (hwf : d.WellFormed signature) :
+theorem empty_covers_root {d : ConcreteDiagram} (hwf : d.WellFormed ) :
     (empty : BinderContext d []).Covers d.root := by
   intro binder parent arity hbinder hencloses
   have heq : binder = d.root :=
@@ -390,7 +390,7 @@ theorem push_covers_bubble_child {context : BinderContext d rels}
       rfl⟩
 
 theorem checked_atom_binder_is_bubble {d : ConcreteDiagram}
-    (hwf : d.WellFormed signature)
+    (hwf : d.WellFormed )
     {node : Fin d.nodeCount} {region binder : Fin d.regionCount}
     (hnode : d.nodes node = .atom region binder) :
     exists parent arity, d.regions binder = .bubble parent arity := by
@@ -398,7 +398,7 @@ theorem checked_atom_binder_is_bubble {d : ConcreteDiagram}
     using hwf.atom_binders_are_bubbles node
 
 theorem checked_atom_binder_available {d : ConcreteDiagram}
-    (hwf : d.WellFormed signature)
+    (hwf : d.WellFormed )
     {context : BinderContext d rels} {node : Fin d.nodeCount}
     {region binder parent : Fin d.regionCount} {arity : Nat}
     (hcovers : context.Covers region)
@@ -446,7 +446,7 @@ def Enumeration.empty
 
 def Enumeration.cutChild
     (enumeration : Enumeration diagram context parent)
-    (hwf : diagram.WellFormed signature)
+    (hwf : diagram.WellFormed )
     (hchild : diagram.regions child = .cut parent) :
     Enumeration diagram context child where
   binder := enumeration.binder
@@ -466,7 +466,7 @@ def Enumeration.cutChild
 
 def Enumeration.bubbleChild
     (enumeration : Enumeration diagram context parent)
-    (hwf : diagram.WellFormed signature)
+    (hwf : diagram.WellFormed )
     (hchild : diagram.regions child = .bubble parent arity) :
     Enumeration diagram (context.push child arity) child where
   binder := Fin.cases child enumeration.binder
@@ -705,14 +705,7 @@ theorem required_port_is_covered {d : ConcreteDiagram}
         at hrequired
       obtain ⟨index, rfl⟩ := hrequired
       exact hcovered index
-  | named region definition arity =>
-      simp only [hnode] at hcovered
-      rw [ConcreteDiagram.requiresPort_named_iff d node port region definition arity hnode]
-        at hrequired
-      obtain ⟨index, rfl⟩ := hrequired
-      exact hcovered index
-
-theorem checked_resolvePort?_complete (hwf : d.WellFormed signature)
+theorem checked_resolvePort?_complete (hwf : d.WellFormed )
     {context : WireContext d} {region : Fin d.regionCount}
     (hcovers : context.Covers region)
     {node : Fin d.nodeCount} (hregion : (d.nodes node).region = region)
@@ -721,7 +714,7 @@ theorem checked_resolvePort?_complete (hwf : d.WellFormed signature)
   resolvePort?_complete hcovers hwf.wire_scopes_enclose hregion
     (required_port_is_covered hwf.required_ports_are_covered hrequired)
 
-theorem checked_resolvePorts?_complete (hwf : d.WellFormed signature)
+theorem checked_resolvePorts?_complete (hwf : d.WellFormed )
     {context : WireContext d} {region : Fin d.regionCount}
     (hcovers : context.Covers region)
     {node : Fin d.nodeCount} (hregion : (d.nodes node).region = region)
@@ -733,52 +726,5 @@ theorem checked_resolvePorts?_complete (hwf : d.WellFormed signature)
   rw [sequenceFin_isSome_iff]
   intro index
   exact checked_resolvePort?_complete hwf hcovers hregion (hrequired index)
-
-/-! Exact signature-index resolution. -/
-
-def namedRel? (signature : List Nat) (definition arity : Nat) :
-    Option (NamedRel signature arity) :=
-  if hdefinition : definition < signature.length then
-    if harity : signature.get ⟨definition, hdefinition⟩ = arity then
-      some ⟨⟨definition, hdefinition⟩, harity⟩
-    else none
-  else none
-
-theorem namedRel?_sound {signature : List Nat} {definition arity : Nat}
-    {relation : NamedRel signature arity}
-    (h : namedRel? signature definition arity = some relation) :
-    relation.index.val = definition /\ signature[definition]? = some arity := by
-  unfold namedRel? at h
-  split at h
-  · rename_i hdefinition
-    split at h
-    · rename_i harity
-      cases h
-      constructor
-      · rfl
-      · apply List.getElem?_eq_some_iff.mpr
-        exact ⟨hdefinition, by simpa [List.get_eq_getElem] using harity⟩
-    · simp at h
-  · simp at h
-
-theorem namedRel?_complete {signature : List Nat} {definition arity : Nat}
-    (h : signature[definition]? = some arity) :
-    exists relation, namedRel? signature definition arity = some relation := by
-  obtain ⟨hdefinition, hvalue⟩ := List.getElem?_eq_some_iff.mp h
-  have harity : signature.get ⟨definition, hdefinition⟩ = arity := by
-    simpa [List.get_eq_getElem] using hvalue
-  unfold namedRel?
-  rw [dif_pos hdefinition, dif_pos harity]
-  exact ⟨_, rfl⟩
-
-theorem checked_namedRel?_complete {d : ConcreteDiagram}
-    (hwf : d.WellFormed signature)
-    {node : Fin d.nodeCount} {region : Fin d.regionCount}
-    {definition arity : Nat}
-    (hnode : d.nodes node = .named region definition arity) :
-    exists relation, namedRel? signature definition arity = some relation := by
-  apply namedRel?_complete
-  simpa [ConcreteDiagram.NamedReferencesResolve, hnode]
-    using hwf.named_references_resolve node
 
 end VisualProof.Diagram.ConcreteElaboration

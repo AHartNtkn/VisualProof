@@ -13,17 +13,16 @@ namespace AbstractionRawTrace
 under the fixed comprehension relation.  Occurrence anchors may appear at
 either cut polarity; all other material follows the survivor compiler map. -/
 theorem fixedRegionSimulation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
-    (targetWellFormed : trace.diagram.WellFormed signature)
+    (targetWellFormed : trace.diagram.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
+    :
     ∀ (direction : ConcreteElaboration.SimulationDirection)
       (sourceFuel targetFuel : Nat)
       (region : Fin input.val.regionCount),
@@ -31,7 +30,7 @@ theorem fixedRegionSimulation
       region ≠ wrap.val.anchor →
       region ∈ wrap.selectedRegions →
       AbstractionAllowed input.val wrap.val.anchor direction region →
-      FixedRegionSimulation trace model named direction sourceFuel targetFuel
+      FixedRegionSimulation trace model  direction sourceFuel targetFuel
         region := by
   intro direction sourceFuel
   induction sourceFuel generalizing direction with
@@ -66,8 +65,8 @@ theorem fixedRegionSimulation
           let sourceExtended := sourceContext.extend region
           let targetExtended := targetContext.extend (trace.regionMap region)
           cases sourceItemsResult : ConcreteElaboration.compileOccurrencesWith?
-              signature input.val
-              (ConcreteElaboration.compileRegion? signature input.val sourceFuel)
+               input.val
+              (ConcreteElaboration.compileRegion?  input.val sourceFuel)
               sourceExtended sourceBinders
               (ConcreteElaboration.localOccurrences input.val region) with
           | none =>
@@ -76,9 +75,9 @@ theorem fixedRegionSimulation
               simp [sourceExtended, sourceItemsResult] at sourceCompiled
               subst sourceBody
               cases targetItemsResult :
-                  ConcreteElaboration.compileOccurrencesWith? signature
+                  ConcreteElaboration.compileOccurrencesWith?
                     trace.diagram
-                    (ConcreteElaboration.compileRegion? signature trace.diagram
+                    (ConcreteElaboration.compileRegion?  trace.diagram
                       targetFuel)
                     targetExtended targetBinders
                     (ConcreteElaboration.localOccurrences trace.diagram
@@ -92,16 +91,16 @@ theorem fixedRegionSimulation
                       (child : Fin input.val.regionCount) →
                       (childContext : ConcreteElaboration.WireContext input.val) →
                       ConcreteElaboration.BinderContext input.val rels →
-                      Option (Region signature childContext.length rels) :=
-                    fun {rels} => ConcreteElaboration.compileRegion? signature
+                      Option (Region  childContext.length rels) :=
+                    fun {rels} => ConcreteElaboration.compileRegion?
                       input.val sourceFuel
                   let targetRecurse : ∀ {rels : RelCtx},
                       (child : Fin trace.diagram.regionCount) →
                       (childContext : ConcreteElaboration.WireContext
                         trace.diagram) →
                       ConcreteElaboration.BinderContext trace.diagram rels →
-                      Option (Region signature childContext.length rels) :=
-                    fun {rels} => ConcreteElaboration.compileRegion? signature
+                      Option (Region  childContext.length rels) :=
+                    fun {rels} => ConcreteElaboration.compileRegion?
                       trace.diagram targetFuel
                   let sourceSurvivors := trace.survivingSources
                     (ConcreteElaboration.localOccurrences input.val region)
@@ -160,9 +159,9 @@ theorem fixedRegionSimulation
                       targetRecurse targetExtended targetBinders targetSurvivors
                       targetAtoms targetPartitionItems targetPartitionCompiled
                   have sourceBlockExists : ∀ index, index ∈ indices →
-                      ∃ items : ItemSeq signature sourceExtended.length
+                      ∃ items : ItemSeq  sourceExtended.length
                           sourceRels,
-                        ConcreteElaboration.compileOccurrencesWith? signature
+                        ConcreteElaboration.compileOccurrencesWith?
                           input.val sourceRecurse sourceExtended sourceBinders
                           (ModalSoundness.selectedOccurrences input.val
                             (occurrences.get index).selection) = some items := by
@@ -176,12 +175,12 @@ theorem fixedRegionSimulation
                       ⟨index, (mem_anchorIndices occurrences region index).1
                         indexMember, occurrenceMember⟩
                   let sourceFamilyItems : Fin occurrences.length →
-                      ItemSeq signature sourceExtended.length sourceRels :=
+                      ItemSeq  sourceExtended.length sourceRels :=
                     fun index => if member : index ∈ indices then
                       Classical.choose (sourceBlockExists index member)
                     else .nil
                   have sourceFamilyCompiled : ∀ index, index ∈ indices →
-                      ConcreteElaboration.compileOccurrencesWith? signature
+                      ConcreteElaboration.compileOccurrencesWith?
                         input.val sourceRecurse sourceExtended sourceBinders
                         (ModalSoundness.selectedOccurrences input.val
                           (occurrences.get index).selection) =
@@ -204,8 +203,8 @@ theorem fixedRegionSimulation
                       simpa [sourceSelected, selectedAt, indices] using
                         sourceSelectedCompiled)
                   have targetAtomExists : ∀ index, index ∈ indices →
-                      ∃ item : Item signature targetExtended.length targetRels,
-                        ConcreteElaboration.compileNode? signature trace.diagram
+                      ∃ item : Item  targetExtended.length targetRels,
+                        ConcreteElaboration.compileNode?  trace.diagram
                           targetExtended targetBinders (trace.targetAtom index) =
                             some item := by
                     intro index indexMember
@@ -218,12 +217,12 @@ theorem fixedRegionSimulation
                       simpa [ConcreteElaboration.compileOccurrenceWith?] using
                         compiled⟩
                   let targetFamilyItems : Fin occurrences.length →
-                      Item signature targetExtended.length targetRels :=
+                      Item  targetExtended.length targetRels :=
                     fun index => if member : index ∈ indices then
                       Classical.choose (targetAtomExists index member)
                     else .cut (.mk 0 .nil)
                   have targetFamilyCompiled : ∀ index, index ∈ indices →
-                      ConcreteElaboration.compileNode? signature trace.diagram
+                      ConcreteElaboration.compileNode?  trace.diagram
                         targetExtended targetBinders (trace.targetAtom index) =
                           some (targetFamilyItems index) := by
                     intro index member
@@ -246,14 +245,14 @@ theorem fixedRegionSimulation
                     exact targetFamilyAggregateCompiled.symm.trans (by
                       simpa [targetAtoms] using targetAtomCompiled)
                   have sourceCanonicalCompiled :
-                      ConcreteElaboration.compileOccurrencesWith? signature
+                      ConcreteElaboration.compileOccurrencesWith?
                         input.val sourceRecurse sourceExtended sourceBinders
                         (sourceSurvivors ++ sourceSelected) =
                           some (sourceSurvivorItems.append sourceSelectedItems) := by
                     rw [← sourcePartitionEq]
                     exact sourcePartitionCompiled
                   have targetCanonicalCompiled :
-                      ConcreteElaboration.compileOccurrencesWith? signature
+                      ConcreteElaboration.compileOccurrencesWith?
                         trace.diagram targetRecurse targetExtended targetBinders
                         (targetSurvivors ++ targetAtoms) =
                           some (targetSurvivorItems.append targetAtomItems) := by
@@ -293,7 +292,7 @@ theorem fixedRegionSimulation
                       child ≠ wrap.val.anchor →
                       AbstractionAllowed input.val wrap.val.anchor
                         childDirection child →
-                      FixedRegionSimulation trace model named childDirection
+                      FixedRegionSimulation trace model  childDirection
                         sourceFuel targetFuel child := by
                     intro childDirection child childSelected childSurvives
                       childNotWrap childAllowed
@@ -301,7 +300,7 @@ theorem fixedRegionSimulation
                       childNotWrap childSelected childAllowed
                   have survivorSemantic :=
                     trace.focusedSurvivingSources_semantic targetWellFormed model
-                      named direction sourceFuel targetFuel region regionSurvives
+                       direction sourceFuel targetFuel region regionSurvives
                       notWrap regionSelected sourceExtended targetExtended
                       (context.extend region regionSurvives) sourceBinders
                       targetBinders binderWitness sourceExact targetExact
@@ -329,7 +328,7 @@ theorem fixedRegionSimulation
                         (DoubleCutElimTrace.finishRegion_denote_iff input.val
                           sourceContext region
                           (sourceItems.renameRelations binderWitness.relationMap)
-                          model named sourceEnvironment targetRelations).1
+                          model  sourceEnvironment targetRelations).1
                             sourceDenotes
                       obtain ⟨targetLocal, extendedAgreement⟩ :=
                         trace.survivorEnvironmentSelection targetWellFormed
@@ -342,9 +341,9 @@ theorem fixedRegionSimulation
                       let targetLocalEnvironment :=
                         ConcreteElaboration.extendedEnvironment targetContext
                           (trace.regionMap region) targetEnvironment targetLocal
-                      have sourceRawDenote : denoteItemSeq model named
+                      have sourceRawDenote : denoteItemSeq model
                           sourceLocalEnvironment sourceRelations sourceItems :=
-                        (denoteItemSeq_renameRelations model named
+                        (denoteItemSeq_renameRelations model
                           binderWitness.relationMap sourceRelations
                           targetRelations relationAgreement
                           sourceLocalEnvironment sourceItems).1 sourceItemsDenote
@@ -354,19 +353,19 @@ theorem fixedRegionSimulation
                           sourcePartition sourceCanonicalNodup
                           (ConcreteElaboration.localOccurrences_nodup input.val
                             region)
-                          sourceCanonicalCompiled sourceItemsResult model named
+                          sourceCanonicalCompiled sourceItemsResult model
                           sourceLocalEnvironment sourceRelations
                       have sourceCanonicalDenote :=
                         sourcePermutation.mpr sourceRawDenote
                       have sourceParts :=
-                        (denoteItemSeq_append model named sourceLocalEnvironment
+                        (denoteItemSeq_append model  sourceLocalEnvironment
                           sourceRelations sourceSurvivorItems
                           sourceSelectedItems).1 sourceCanonicalDenote
-                      have sourceSurvivorRenamed : denoteItemSeq model named
+                      have sourceSurvivorRenamed : denoteItemSeq model
                           sourceLocalEnvironment targetRelations
                           (sourceSurvivorItems.renameRelations
                             binderWitness.relationMap) :=
-                        (denoteItemSeq_renameRelations model named
+                        (denoteItemSeq_renameRelations model
                           binderWitness.relationMap sourceRelations
                           targetRelations relationAgreement
                           sourceLocalEnvironment sourceSurvivorItems).2
@@ -375,13 +374,13 @@ theorem fixedRegionSimulation
                         sourceLocalEnvironment targetLocalEnvironment
                         targetRelations extendedAgreement fixed
                         sourceSurvivorRenamed
-                      have sourceFamilyDenote : denoteItemSeq model named
+                      have sourceFamilyDenote : denoteItemSeq model
                           sourceLocalEnvironment sourceRelations
                           (occurrenceFamilyItems sourceFamilyItems indices) := by
                         rw [sourceFamilyEq]
                         exact sourceParts.2
                       have targetFamilyDenote := trace.occurrenceFamily_forward
-                        payload model named sourceFuel region indices anchored
+                        payload model  sourceFuel region indices anchored
                         sourceExtended targetExtended
                         (context.extend region regionSurvives) sourceBinders
                         targetBinders sourceCover sourceEnumeration sourceExact
@@ -389,10 +388,10 @@ theorem fixedRegionSimulation
                         targetFamilyCompiled sourceLocalEnvironment
                         targetLocalEnvironment sourceRelations targetRelations
                         fixed extendedAgreement sourceFamilyDenote
-                      have targetCanonicalDenote : denoteItemSeq model named
+                      have targetCanonicalDenote : denoteItemSeq model
                           targetLocalEnvironment targetRelations
                           (targetSurvivorItems.append targetAtomItems) := by
-                        apply (denoteItemSeq_append model named
+                        apply (denoteItemSeq_append model
                           targetLocalEnvironment targetRelations
                           targetSurvivorItems targetAtomItems).2
                         refine ⟨targetSurvivorDenote, ?_⟩
@@ -405,13 +404,13 @@ theorem fixedRegionSimulation
                           (ConcreteElaboration.localOccurrences_nodup
                             trace.diagram (trace.regionMap region))
                           targetCanonicalNodup targetItemsResult
-                          targetCanonicalCompiled model named
+                          targetCanonicalCompiled model
                           targetLocalEnvironment targetRelations
                       have targetItemsDenote :=
                         targetPermutation.mpr targetCanonicalDenote
                       apply (DoubleCutElimTrace.finishRegion_denote_iff
                         trace.diagram targetContext (trace.regionMap region)
-                        targetItems model named targetEnvironment
+                        targetItems model  targetEnvironment
                         targetRelations).2
                       exact ⟨targetLocal, targetItemsDenote⟩
                   | backward =>
@@ -419,7 +418,7 @@ theorem fixedRegionSimulation
                       obtain ⟨targetLocal, targetItemsDenote⟩ :=
                         (DoubleCutElimTrace.finishRegion_denote_iff trace.diagram
                           targetContext (trace.regionMap region) targetItems model
-                          named targetEnvironment targetRelations).1 targetDenotes
+                           targetEnvironment targetRelations).1 targetDenotes
                       let targetLocalEnvironment :=
                         ConcreteElaboration.extendedEnvironment targetContext
                           (trace.regionMap region) targetEnvironment targetLocal
@@ -430,12 +429,12 @@ theorem fixedRegionSimulation
                           (ConcreteElaboration.localOccurrences_nodup
                             trace.diagram (trace.regionMap region))
                           targetCanonicalNodup targetItemsResult
-                          targetCanonicalCompiled model named
+                          targetCanonicalCompiled model
                           targetLocalEnvironment targetRelations
                       have targetCanonicalDenote :=
                         targetPermutation.mp targetItemsDenote
                       have targetParts :=
-                        (denoteItemSeq_append model named targetLocalEnvironment
+                        (denoteItemSeq_append model  targetLocalEnvironment
                           targetRelations targetSurvivorItems targetAtomItems).1
                             targetCanonicalDenote
                       obtain ⟨baseSourceLocal, baseAgreement⟩ :=
@@ -446,14 +445,14 @@ theorem fixedRegionSimulation
                       let baseSourceEnvironment :=
                         ConcreteElaboration.extendedEnvironment sourceContext
                           region sourceEnvironment baseSourceLocal
-                      have targetFamilyDenote : denoteItemSeq model named
+                      have targetFamilyDenote : denoteItemSeq model
                           targetLocalEnvironment targetRelations
                           (occurrenceFamilyAtomItems targetFamilyItems indices) := by
                         rw [targetFamilyEq]
                         exact targetParts.2
                       obtain ⟨chosenSourceEnvironment, chosenAgreement,
                           sourceFamilyDenote, sourcePreserves⟩ :=
-                        trace.occurrenceFamily_backward payload model named
+                        trace.occurrenceFamily_backward payload model
                           sourceFuel region indices anchored sourceExtended
                           targetExtended (context.extend region regionSurvives)
                           sourceBinders targetBinders sourceCover
@@ -465,18 +464,18 @@ theorem fixedRegionSimulation
                       have sourceSurvivorRenamed := survivorSemantic
                         chosenSourceEnvironment targetLocalEnvironment
                         targetRelations chosenAgreement fixed targetParts.1
-                      have sourceSurvivorRaw : denoteItemSeq model named
+                      have sourceSurvivorRaw : denoteItemSeq model
                           chosenSourceEnvironment sourceRelations
                           sourceSurvivorItems :=
-                        (denoteItemSeq_renameRelations model named
+                        (denoteItemSeq_renameRelations model
                           binderWitness.relationMap sourceRelations
                           targetRelations relationAgreement
                           chosenSourceEnvironment sourceSurvivorItems).1
                             sourceSurvivorRenamed
-                      have sourceCanonicalDenote : denoteItemSeq model named
+                      have sourceCanonicalDenote : denoteItemSeq model
                           chosenSourceEnvironment sourceRelations
                           (sourceSurvivorItems.append sourceSelectedItems) := by
-                        apply (denoteItemSeq_append model named
+                        apply (denoteItemSeq_append model
                           chosenSourceEnvironment sourceRelations
                           sourceSurvivorItems sourceSelectedItems).2
                         refine ⟨sourceSurvivorRaw, ?_⟩
@@ -488,15 +487,15 @@ theorem fixedRegionSimulation
                           sourcePartition sourceCanonicalNodup
                           (ConcreteElaboration.localOccurrences_nodup input.val
                             region)
-                          sourceCanonicalCompiled sourceItemsResult model named
+                          sourceCanonicalCompiled sourceItemsResult model
                           chosenSourceEnvironment sourceRelations
                       have sourceRawDenote :=
                         sourcePermutation.mp sourceCanonicalDenote
-                      have sourceRenamedDenote : denoteItemSeq model named
+                      have sourceRenamedDenote : denoteItemSeq model
                           chosenSourceEnvironment targetRelations
                           (sourceItems.renameRelations
                             binderWitness.relationMap) :=
-                        (denoteItemSeq_renameRelations model named
+                        (denoteItemSeq_renameRelations model
                           binderWitness.relationMap sourceRelations
                           targetRelations relationAgreement
                           chosenSourceEnvironment sourceItems).2 sourceRawDenote
@@ -534,7 +533,7 @@ theorem fixedRegionSimulation
                       apply (DoubleCutElimTrace.finishRegion_denote_iff input.val
                         sourceContext region
                         (sourceItems.renameRelations binderWitness.relationMap)
-                        model named sourceEnvironment targetRelations).2
+                        model  sourceEnvironment targetRelations).2
                       refine ⟨chosenSourceLocal, ?_⟩
                       rw [chosenEnvironmentEq]
                       exact sourceRenamedDenote

@@ -108,7 +108,7 @@ theorem materialized_exactScopeWires_length_of_ne_root
   exact List.length_map _
 
 noncomputable def extendCollapse
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -125,7 +125,7 @@ noncomputable def extendCollapse
     (expanded.extend region) (original.extend region) expandedExact originalExact
 
 theorem extendCollapse_index_inherited
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -158,7 +158,7 @@ theorem extendCollapse_index_inherited
     exact (mapped.trans (collapse.get index).symm).trans originalGet.symm)
 
 theorem extendCollapse_index_local
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -229,7 +229,7 @@ theorem extendCollapse_index_local
     exact mapped.trans originalGet.symm)
 
 theorem extendCollapse_oldIndex_inherited
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -262,7 +262,7 @@ theorem extendCollapse_oldIndex_inherited
     exact oldGet.trans ((collapse.old_get index).symm.trans expandedGet.symm))
 
 theorem extendCollapse_oldIndex_local
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -366,7 +366,7 @@ theorem extendedEnv_outer
   exact Fin.addCases_left index
 
 noncomputable def targetLocal
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -391,7 +391,7 @@ noncomputable def targetLocal
           (Fin.natAdd expanded.length index)))
 
 theorem extendedEnv_collapse
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -433,7 +433,7 @@ theorem extendedEnv_collapse
       extendWireEnv, Function.comp_def]
 
 def sourceLocal
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (region : Fin pattern.val.diagram.regionCount)
@@ -447,7 +447,7 @@ def sourceLocal
       spine.bodyContainer region hne).symm
 
 theorem extendedEnv_uncollapse
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -504,7 +504,7 @@ theorem extendedEnv_uncollapse
 /-- The canonical lifted-old indices transport an arbitrary target local
 valuation back to the source without imposing any equality on fresh aliases. -/
 theorem extendedEnv_oldIndex
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -568,7 +568,7 @@ theorem extendedEnv_oldIndex
 indices of the extended collapse. Unlike `sourceLocal`, this formulation also
 works at the root, where materialization adds root-scoped alias wires. -/
 noncomputable def oldIndexLocal
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -594,7 +594,7 @@ noncomputable def oldIndexLocal
           (Fin.natAdd original.length index)))
 
 theorem extendedEnv_oldIndex_general
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -637,7 +637,7 @@ theorem extendedEnv_oldIndex_general
       Function.comp_def]
 
 def targetLocalOldIndex
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (region : Fin pattern.val.diagram.regionCount)
@@ -652,7 +652,7 @@ def targetLocalOldIndex
       spine.bodyContainer region hne)
 
 theorem extendedEnv_oldIndex_lift
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)

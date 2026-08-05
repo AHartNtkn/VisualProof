@@ -9,11 +9,10 @@ open VisualProof.Theory
 /-- Node compiler simulation parameterized only by the two recursive
 invariants: exact wire-context membership and binder lookup provenance. -/
 theorem extractionCompileNode_itemSimulationOfMembership
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fragmentContext : ConcreteElaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
@@ -35,20 +34,20 @@ theorem extractionCompileNode_itemSimulationOfMembership
       fragmentBinders binder = some ⟨arity, fragmentRelation⟩ →
       hostBinders (extractionBinderOrigin input selection layout binder) =
         some ⟨arity, relationMap fragmentRelation⟩)
-    (fragmentItem : Item signature fragmentContext.length fragmentRels)
-    (hostItem : Item signature hostContext.length hostRels)
-    (fragmentCompiled : ConcreteElaboration.compileNode? signature
+    (fragmentItem : Item  fragmentContext.length fragmentRels)
+    (hostItem : Item  hostContext.length hostRels)
+    (fragmentCompiled : ConcreteElaboration.compileNode?
       (input.val.extractDiagramRaw selection layout) fragmentContext
       fragmentBinders node = some fragmentItem)
-    (hostCompiled : ConcreteElaboration.compileNode? signature input.val
+    (hostCompiled : ConcreteElaboration.compileNode?  input.val
       hostContext hostBinders (selection.selectedNodes.get node) =
         some hostItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
       (fragmentItem.renameRelations relationMap) hostItem := by
   apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
-    model named direction fragmentContext hostContext
+    model  direction fragmentContext hostContext
     (extractionContextRelation input selection layout fragmentContext
       hostContext)
     fragmentBinders hostBinders relationMap node
@@ -61,12 +60,6 @@ theorem extractionCompileNode_itemSimulationOfMembership
     | identity region arity =>
         rw [input.val.extractDiagramRaw_node_identity selection layout node region
           arity hnode]
-        simp only
-        simp only [hnode, CNode.region] at howner
-        rw [howner]
-    | named region definition arity =>
-        rw [input.val.extractDiagramRaw_node_named selection layout node region
-          definition arity hnode]
         simp only
         simp only [hnode, CNode.region] at howner
         rw [howner]

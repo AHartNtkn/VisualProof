@@ -49,11 +49,11 @@ def doubleCutIntroRawOpen
   rfl
 
 theorem doubleCutIntroRawOpen_wellFormed
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (selection : CheckedSelection source.val.diagram)
     (targetWellFormed :
-      (doubleCutIntroRaw source.val.diagram selection).WellFormed signature) :
-    (doubleCutIntroRawOpen source.val selection).WellFormed signature := by
+      (doubleCutIntroRaw source.val.diagram selection).WellFormed ) :
+    (doubleCutIntroRawOpen source.val selection).WellFormed  := by
   refine {
     diagram_well_formed := targetWellFormed
     boundary_is_root_scoped := ?_
@@ -64,26 +64,25 @@ theorem doubleCutIntroRawOpen_wellFormed
     doubleCutIntroRaw_root, liftCWireRegions, sourceScoped]
 
 noncomputable def doubleCutIntroRootContext
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (selection : CheckedSelection source.val.diagram)
     (targetWellFormed :
-      (doubleCutIntroRaw source.val.diagram selection).WellFormed signature)
+      (doubleCutIntroRaw source.val.diagram selection).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection) :
     let simulation := doubleCutIntroSimulation
       ⟨source.val.diagram, source.property.diagram_well_formed⟩ selection
-      targetWellFormed model named
+      targetWellFormed model
     ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
       simulation direction
       source.val.exposedWires source.val.hiddenWires
       (doubleCutIntroRawOpen source.val selection).exposedWires
       (doubleCutIntroRawOpen source.val selection).hiddenWires := by
-  let input : CheckedDiagram signature :=
+  let input : CheckedDiagram  :=
     ⟨source.val.diagram, source.property.diagram_well_formed⟩
   let simulation := doubleCutIntroSimulation input selection targetWellFormed
-    model named
-  let target : CheckedOpenDiagram signature :=
+    model
+  let target : CheckedOpenDiagram  :=
     ⟨doubleCutIntroRawOpen source.val selection,
       doubleCutIntroRawOpen_wellFormed source selection targetWellFormed⟩
   change ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
@@ -120,7 +119,7 @@ noncomputable def doubleCutIntroRootContext
     apply ConcreteElaboration.directionalRootTransport_of_agreement
       direction source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires outerRelation
-      combinedContext.indexRelation model named
+      combinedContext.indexRelation model
       (sourceItems.renameRelations
         (simulation.relationMap simulation.binders_empty))
       targetItems
@@ -202,7 +201,7 @@ noncomputable def doubleCutIntroRootContext
           target
     change input.val.root = selection.val.anchor at focused
     have itemSimulation :=
-      doubleCutIntroFocusedItems input selection targetWellFormed model named
+      doubleCutIntroFocusedItems input selection targetWellFormed model
         direction input.val.regionCount
         (doubleCutIntroRaw input.val selection).regionCount
         (source.val.exposedWires ++ source.val.hiddenWires)
@@ -233,9 +232,9 @@ noncomputable def doubleCutIntroRootContext
         (by simpa only [← focused] using sourceCompiled)
         (by
           change
-            ConcreteElaboration.compileOccurrencesWith? signature
+            ConcreteElaboration.compileOccurrencesWith?
               (doubleCutIntroRaw input.val selection)
-              (ConcreteElaboration.compileRegion? signature
+              (ConcreteElaboration.compileRegion?
                 (doubleCutIntroRaw input.val selection)
                 (doubleCutIntroRaw input.val selection).regionCount)
               (target.val.exposedWires ++ target.val.hiddenWires)
@@ -256,11 +255,11 @@ noncomputable def doubleCutIntroRootContext
     rw [relationMapEq, Region.renameRelations_id]
     apply ConcreteElaboration.finishRoot_denote direction
       source.val.exposedWires source.val.hiddenWires
-      target.val.exposedWires target.val.hiddenWires outerRelation model named
+      target.val.exposedWires target.val.hiddenWires outerRelation model
     apply ConcreteElaboration.directionalRootTransport_of_agreement
       direction source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires outerRelation
-      combinedContext.indexRelation model named sourceItems targetItems
+      combinedContext.indexRelation model  sourceItems targetItems
     · intro sourceOuter targetOuter outerAgrees
       cases exposedEq
       have outerEq : sourceOuter = targetOuter := by
@@ -328,23 +327,22 @@ noncomputable def doubleCutIntroRootContext
       exact itemSimulation
 
 theorem doubleCutIntroBoundaryWitness
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (selection : CheckedSelection source.val.diagram)
     (targetWellFormed :
-      (doubleCutIntroRaw source.val.diagram selection).WellFormed signature)
+      (doubleCutIntroRaw source.val.diagram selection).WellFormed )
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin source.val.boundary.length → model.Carrier) :
-    let target : CheckedOpenDiagram signature :=
+    let target : CheckedOpenDiagram  :=
       ⟨doubleCutIntroRawOpen source.val selection,
         doubleCutIntroRawOpen_wellFormed source selection targetWellFormed⟩
     ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       direction source.elaborate target.elaborate
-      (doubleCutIntroRootContext source selection targetWellFormed model named
+      (doubleCutIntroRootContext source selection targetWellFormed model
         direction).outer
-      model named args args := by
-  let target : CheckedOpenDiagram signature :=
+      model  args args := by
+  let target : CheckedOpenDiagram  :=
     ⟨doubleCutIntroRawOpen source.val selection,
       doubleCutIntroRawOpen_wellFormed source selection targetWellFormed⟩
   dsimp only

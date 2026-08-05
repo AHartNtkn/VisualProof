@@ -12,10 +12,9 @@ Every original wire in the target context has its certified final image in the
 source context.  The source may additionally contain executor-created focus
 wires, which remain locally existential. -/
 structure FinalContextWitness
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -38,10 +37,9 @@ structure FinalContextWitness
 namespace FinalContextWitness
 
 def empty
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -111,10 +109,9 @@ theorem targetEnvironment_agrees
   rfl
 
 noncomputable def localSourceIndex
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -129,7 +126,7 @@ noncomputable def localSourceIndex
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
@@ -151,10 +148,9 @@ noncomputable def localSourceIndex
         mappedRegion))
 
 theorem localSourceIndex_lookup
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -169,7 +165,7 @@ theorem localSourceIndex_lookup
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
@@ -195,10 +191,9 @@ theorem localSourceIndex_lookup
       targetScope, mappedRegion]))
 
 theorem localSourceIndex_get
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -213,7 +208,7 @@ theorem localSourceIndex_get
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
@@ -232,10 +227,9 @@ theorem localSourceIndex_get
       originalRegion mappedRegion targetIndex)
 
 theorem localSourceIndex_injective
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -250,7 +244,7 @@ theorem localSourceIndex_injective
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
@@ -286,10 +280,9 @@ theorem localSourceIndex_injective
   exact firstEq.trans secondEq.symm
 
 def extendMapped
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -304,7 +297,7 @@ def extendMapped
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     {sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input.val}
@@ -331,10 +324,9 @@ def extendMapped
         mappedRegion
 
 def extendRegular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -349,7 +341,7 @@ def extendRegular
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     {sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input.val}
@@ -368,10 +360,9 @@ def extendRegular
       finalRegion regular)
 
 def extendFocused
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -386,7 +377,7 @@ def extendFocused
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     {sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input.val}
@@ -403,10 +394,9 @@ def extendFocused
 selected bubble-local wires have their certified final images in the single
 source focus context. -/
 def extendSelected
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -421,7 +411,7 @@ def extendSelected
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     {sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input.val}

@@ -11,8 +11,7 @@ namespace InstantiationSemantic
 parents from a frame region stays in the frame block and therefore cannot
 reach a material region. -/
 theorem material_not_encloses_frame
-    {signature : List Nat}
-    {input : Splice.Input signature}
+    {input : Splice.Input }
     (layout : Splice.Input.PlugLayout input)
     (material : Fin input.pattern.val.diagram.regionCount)
     (hmaterial : input.binderSpine.IsMaterialRegion material)
@@ -55,16 +54,15 @@ theorem material_not_encloses_frame
 /-- Every inserted material subtree is clean for the next survivor compiler.
 The executor records processed atoms solely as retained-frame node images. -/
 theorem advance_material_clean
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -112,16 +110,15 @@ theorem advance_material_clean
 /-- On every inserted material subtree, the next survivor compiler is exactly
 the authoritative ordered compiler. -/
 theorem advance_compileSurvivorRegion_eq_material
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -145,9 +142,9 @@ theorem advance_compileSurvivorRegion_eq_material
     let layout := spliceInput.plugLayout
     let next := advanceInstantiationState comprehension attachments binders
       payload state atom tail site arguments hadmissible
-    compileSurvivorRegion? signature next fuel (layout.bodyRegion material)
+    compileSurvivorRegion?  next fuel (layout.bodyRegion material)
         context relBinders =
-      ConcreteElaboration.compileRegion? signature next.diagram.val fuel
+      ConcreteElaboration.compileRegion?  next.diagram.val fuel
         (layout.bodyRegion material) context relBinders := by
   dsimp only
   apply compileSurvivorRegion_eq_of_clean_subtree

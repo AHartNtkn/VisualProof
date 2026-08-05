@@ -12,16 +12,15 @@ namespace InstantiationSemantic
 supplies exactly the fiber equality needed to push its complete lexical
 valuation through the executor's attachment quotient. -/
 theorem coalesced_site_items_denote_forward
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -36,7 +35,6 @@ theorem coalesced_site_items_denote_forward
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -44,9 +42,9 @@ theorem coalesced_site_items_denote_forward
     (nonemptyRelationEq : ∀ hnonempty :
       payload.binderSpine.proxyCount ≠ 0,
       relationValue = terminalRelationOfParameterValues payload state site
-        arguments hnonempty model named parameterValues values)
+        arguments hnonempty model  parameterValues values)
     (emptyRelationEq : ∀ _hzero : payload.binderSpine.proxyCount = 0,
-      relationValue = payload.interpretedRelation model named parameterValues)
+      relationValue = payload.interpretedRelation model  parameterValues)
     (fuel : Nat)
     (sourceOuter : ConcreteElaboration.WireContext state.diagram.val)
     (targetOuter : ConcreteElaboration.WireContext
@@ -73,25 +71,25 @@ theorem coalesced_site_items_denote_forward
       sourceOuterEnvironment parameterValues)
     (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
       state.diagram.val site).length → model.Carrier)
-    (sourceItems : ItemSeq signature (sourceOuter.extend site).length rels)
-    (targetItems : ItemSeq signature (targetOuter.extend site).length rels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
-      state.diagram.val (compileSurvivorRegion? signature state fuel)
+    (sourceItems : ItemSeq  (sourceOuter.extend site).length rels)
+    (targetItems : ItemSeq  (targetOuter.extend site).length rels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith?
+      state.diagram.val (compileSurvivorRegion?  state fuel)
       (sourceOuter.extend site) binderContext
       ((ConcreteElaboration.localOccurrences state.diagram.val site).filter
         (dropOccurrenceSurvives state)) = some sourceItems)
-    (itemSemantics : ConcreteElaboration.ItemSeqSimulation model named .forward
+    (itemSemantics : ConcreteElaboration.ItemSeqSimulation model  .forward
       (ConcreteElaboration.ContextIndexRelation.forwardMap
         (siteQuotientIndexMap
           (instantiateSpliceInput comprehension attachments binders payload
             state site arguments)
           hadmissible (sourceOuter.extend site) (targetOuter.extend site)
           sourceExact targetExact)) sourceItems targetItems)
-    (sourceDenotes : denoteItemSeq model named
+    (sourceDenotes : denoteItemSeq model
       (ConcreteElaboration.extendedEnvironment sourceOuter site
         sourceOuterEnvironment sourceLocal) relEnv sourceItems) :
     ∃ targetLocal,
-      denoteItemSeq model named
+      denoteItemSeq model
         (ConcreteElaboration.extendedEnvironment targetOuter site
           targetOuterEnvironment targetLocal) relEnv targetItems := by
   let spliceInput := instantiateSpliceInput comprehension attachments binders
@@ -113,7 +111,7 @@ theorem coalesced_site_items_denote_forward
       sourceComplete left = sourceComplete right :=
     site_sourceEnvironment_fiberConstant comprehension attachments binders
       payload state atom tail site arguments node_eq arguments_eq pending_eq
-      ownedNodup hadmissible model named relationValue values parameterValues
+      ownedNodup hadmissible model  relationValue values parameterValues
       nonemptyRelationEq emptyRelationEq fuel (sourceOuter.extend site)
       (targetOuter.extend site) sourceExact targetExact binderContext relEnv
       fixed relation lookup sourceComplete sourceParameters sourceItems
@@ -131,10 +129,9 @@ theorem coalesced_site_items_denote_forward
 /-- In the reverse direction no semantic equality premise is needed: every
 quotient-host valuation pulls back to all of its original wire positions. -/
 theorem coalesced_site_items_denote_backward
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceOuter : ConcreteElaboration.WireContext input.frame.val)
     (targetOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
     (sourceExact : (sourceOuter.extend input.site).Exact input.site)
@@ -150,20 +147,20 @@ theorem coalesced_site_items_denote_backward
     (targetLocal : Fin (ConcreteElaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
-    (sourceItems : ItemSeq signature
+    (sourceItems : ItemSeq
       (sourceOuter.extend input.site).length rels)
-    (targetItems : ItemSeq signature
+    (targetItems : ItemSeq
       (targetOuter.extend input.site).length rels)
-    (itemSemantics : ConcreteElaboration.ItemSeqSimulation model named .backward
+    (itemSemantics : ConcreteElaboration.ItemSeqSimulation model  .backward
       (ConcreteElaboration.ContextIndexRelation.forwardMap
         (siteQuotientIndexMap input hadmissible
           (sourceOuter.extend input.site) (targetOuter.extend input.site)
           sourceExact targetExact)) sourceItems targetItems)
-    (targetDenotes : denoteItemSeq model named
+    (targetDenotes : denoteItemSeq model
       (ConcreteElaboration.extendedEnvironment targetOuter input.site
         targetOuterEnvironment targetLocal) relEnv targetItems) :
     ∃ sourceLocal,
-      denoteItemSeq model named
+      denoteItemSeq model
         (ConcreteElaboration.extendedEnvironment sourceOuter input.site
           sourceOuterEnvironment sourceLocal) relEnv sourceItems := by
   obtain ⟨sourceLocal, completeAgrees⟩ := site_sourceLocal_exists input

@@ -215,14 +215,14 @@ theorem spawnNodeRawOpen_exposedWires
   exact eraseDups_map_injective (Fin.castAdd portCount) hinjective _
 
 theorem spawnNodeRawOpen_wellFormed
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (node : CNode source.val.diagram.regionCount)
     (scope : Fin source.val.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
     (htarget : (spawnNodeRaw source.val.diagram node scope portCount port).WellFormed
-      signature) :
+      ) :
     (spawnNodeRawOpen source.val node scope portCount port).WellFormed
-      signature where
+       where
   diagram_well_formed := htarget
   boundary_is_root_scoped := by
     intro targetWire hmem
@@ -527,18 +527,16 @@ theorem spawnNodeRaw_compileNode?_old
     (targetDisjoint :
       (spawnNodeRaw input node scope portCount port).WireEndpointsAreDisjoint)
     (old : Fin input.nodeCount) :
-    ConcreteElaboration.compileNode? signature
+    ConcreteElaboration.compileNode?
         (spawnNodeRaw input node scope portCount port) target binders old.castSucc =
-      (ConcreteElaboration.compileNode? signature input source binders old).map
+      (ConcreteElaboration.compileNode?  input source binders old).map
         (Item.renameWires embedding.index) := by
   let spawned := spawnNodeRaw input node scope portCount port
   have hnode : spawned.nodes old.castSucc =
       match input.nodes old with
       | .atom region binder => .atom (id region) (id binder)
       | .identity region arity =>
-          .identity (id region) arity
-      | .named region definition arity =>
-          .named (id region) definition arity := by
+          .identity (id region) arity := by
     rw [spawnNodeRaw_oldNode]
     cases input.nodes old <;> rfl
   have hports : ∀ endpointPort,
@@ -564,7 +562,7 @@ theorem spawnNodeRaw_compileNode?_old
     intro region binder _
     simp
   have hmap := ConcreteElaboration.compileNode?_map
-    (signature := signature) source target binders binders old old.castSucc
+     source target binders binders old old.castSucc
     id id embedding.index (fun relation => relation) hnode hports hbinders
   simpa only [Item.renameRelations_id] using hmap
 
@@ -703,7 +701,7 @@ theorem spawnNodeRawOpen_rootWires
   split <;> simp only [List.append_assoc, List.append_nil] <;> rfl
 
 theorem OpenConcreteDiagram.rootWires_exact
-    (source : OpenConcreteDiagram) (hwf : source.WellFormed signature) :
+    (source : OpenConcreteDiagram) (hwf : source.WellFormed ) :
     ConcreteElaboration.WireContext.Exact source.rootWires
       source.diagram.root := by
   constructor
@@ -1670,14 +1668,14 @@ theorem spawnNodeRaw_compileOccurrenceWith?_old
       (region : Fin input.regionCount) →
       (context : ConcreteElaboration.WireContext input) →
       ConcreteElaboration.BinderContext input rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (targetRecurse : ∀ {rels : RelCtx},
       (region : Fin input.regionCount) →
       (context : ConcreteElaboration.WireContext
         (spawnNodeRaw input node scope portCount port)) →
       ConcreteElaboration.BinderContext
         (spawnNodeRaw input node scope portCount port) rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (binders : ConcreteElaboration.BinderContext input rels)
     (occurrence : ConcreteElaboration.LocalOccurrence input.regionCount
       input.nodeCount)
@@ -1691,10 +1689,10 @@ theorem spawnNodeRaw_compileOccurrenceWith?_old
       targetRecurse child target childBinders =
         (sourceRecurse child source childBinders).map
           (Region.renameWires embedding.index)) :
-    ConcreteElaboration.compileOccurrenceWith? signature
+    ConcreteElaboration.compileOccurrenceWith?
         (spawnNodeRaw input node scope portCount port) targetRecurse target
         binders (spawnNodeRaw_oldOccurrence input occurrence) =
-      (ConcreteElaboration.compileOccurrenceWith? signature input sourceRecurse
+      (ConcreteElaboration.compileOccurrenceWith?  input sourceRecurse
         source binders occurrence).map (Item.renameWires embedding.index) := by
   cases occurrence with
   | node old =>
@@ -1779,8 +1777,8 @@ theorem spawnNodeRaw_compileOccurrenceWith?_old
 private theorem region_mk_eq_of_local_eq
     {outer leftLocal rightLocal : Nat}
     (hlocal : leftLocal = rightLocal)
-    (left : ItemSeq signature (outer + leftLocal) rels)
-    (right : ItemSeq signature (outer + rightLocal) rels)
+    (left : ItemSeq  (outer + leftLocal) rels)
+    (right : ItemSeq  (outer + rightLocal) rels)
     (hitems : left.castWiresEq
       (congrArg (fun localCount => outer + localCount) hlocal) = right) :
     Region.mk leftLocal left = Region.mk rightLocal right := by
@@ -1800,7 +1798,7 @@ theorem spawnNodeRaw_finishRegion_old_of_ne
     (embedding : SpawnContextEmbedding input node scope portCount port
       source target)
     (hne : region ≠ scope)
-    (items : ItemSeq signature (source.extend region).length rels) :
+    (items : ItemSeq  (source.extend region).length rels) :
     ConcreteElaboration.finishRegion
         (spawnNodeRaw input node scope portCount port) target region
         (items.renameWires
@@ -1833,7 +1831,7 @@ private theorem direct_child_encloses
 /-- A concrete route records an actual ancestor chain. -/
 theorem regionRoute_encloses
     (input : ConcreteDiagram)
-    (hinput : input.WellFormed signature)
+    (hinput : input.WellFormed )
     {start target : Fin input.regionCount} {path : List Nat}
     (route : Diagram.Splice.RegionRoute input start target path) :
     input.Encloses start target := by
@@ -1848,7 +1846,7 @@ descendant.  This is the tree fact needed to classify every non-focused
 compiler occurrence as an unaffected side branch. -/
 private theorem checked_sibling_not_encloses_descendant
     (input : ConcreteDiagram)
-    (hinput : input.WellFormed signature)
+    (hinput : input.WellFormed )
     {parent selected other descendant : Fin input.regionCount}
     (hselected : (input.regions selected).parent? = some parent)
     (hother : (input.regions other).parent? = some parent)
@@ -1891,8 +1889,8 @@ theorem spawnNodeRaw_compileRegion?_old_of_not_encloses_node
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (scopeEnclosesNode : input.Encloses scope node.region) :
     ∀ {rels : RelCtx} (fuel : Nat) (region : Fin input.regionCount)
       (source : ConcreteElaboration.WireContext input)
@@ -1904,10 +1902,10 @@ theorem spawnNodeRaw_compileRegion?_old_of_not_encloses_node
       ¬ input.Encloses region node.region →
       (source.extend region).Exact region →
       (target.extend region).Exact region →
-      ConcreteElaboration.compileRegion? signature
+      ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port) fuel region target
           binders =
-        (ConcreteElaboration.compileRegion? signature input fuel region source
+        (ConcreteElaboration.compileRegion?  input fuel region source
           binders).map (Region.renameWires embedding.index) := by
   intro rels fuel
   induction fuel generalizing rels with
@@ -1932,21 +1930,21 @@ theorem spawnNodeRaw_compileRegion?_old_of_not_encloses_node
       let extendedEmbedding := embedding.extend region
       have hoccurrence : ∀ occurrence,
           occurrence ∈ ConcreteElaboration.localOccurrences input region →
-          ConcreteElaboration.compileOccurrenceWith? signature
+          ConcreteElaboration.compileOccurrenceWith?
               (spawnNodeRaw input node scope portCount port)
-              (ConcreteElaboration.compileRegion? signature
+              (ConcreteElaboration.compileRegion?
                 (spawnNodeRaw input node scope portCount port) fuel)
               targetExtended binders
               (spawnNodeRaw_oldOccurrence input occurrence) =
-            (ConcreteElaboration.compileOccurrenceWith? signature input
-              (ConcreteElaboration.compileRegion? signature input fuel)
+            (ConcreteElaboration.compileOccurrenceWith?  input
+              (ConcreteElaboration.compileRegion?  input fuel)
               sourceExtended binders occurrence).map
                 (Item.renameWires extendedEmbedding.index) := by
         intro occurrence hmem
         apply spawnNodeRaw_compileOccurrenceWith?_old input node scope portCount
           port sourceExtended targetExtended extendedEmbedding
-          (ConcreteElaboration.compileRegion? signature input fuel)
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?  input fuel)
+          (ConcreteElaboration.compileRegion?
             (spawnNodeRaw input node scope portCount port) fuel)
           binders occurrence htargetExact.nodup
           htarget.wire_endpoints_are_disjoint
@@ -1966,37 +1964,37 @@ theorem spawnNodeRaw_compileRegion?_old_of_not_encloses_node
         exact ih child sourceExtended targetExtended extendedEmbedding
           childBinders hchildNotAbove hsourceChild htargetChild
       have hsequence := ConcreteElaboration.compileOccurrencesWith?_map
-        (ConcreteElaboration.compileRegion? signature input fuel)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?  input fuel)
+        (ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port) fuel)
         sourceExtended targetExtended binders binders
         (spawnNodeRaw_oldOccurrence input) extendedEmbedding.index
         (ConcreteElaboration.localOccurrences input region) hoccurrence
       have hsequence' :
-          ConcreteElaboration.compileOccurrencesWith? signature
+          ConcreteElaboration.compileOccurrencesWith?
               (spawnNodeRaw input node scope portCount port)
-              (ConcreteElaboration.compileRegion? signature
+              (ConcreteElaboration.compileRegion?
                 (spawnNodeRaw input node scope portCount port) fuel)
               (target.extend region) binders
               ((ConcreteElaboration.localOccurrences input region).map
                 (spawnNodeRaw_oldOccurrence input)) =
-            (ConcreteElaboration.compileOccurrencesWith? signature input
-              (ConcreteElaboration.compileRegion? signature input fuel)
+            (ConcreteElaboration.compileOccurrencesWith?  input
+              (ConcreteElaboration.compileRegion?  input fuel)
               (source.extend region) binders
               (ConcreteElaboration.localOccurrences input region)).map
                 (ItemSeq.renameWires extendedEmbedding.index) := by
         simpa only [sourceExtended, targetExtended] using hsequence
-      cases hsourceItems : ConcreteElaboration.compileOccurrencesWith? signature
-          input (ConcreteElaboration.compileRegion? signature input fuel)
+      cases hsourceItems : ConcreteElaboration.compileOccurrencesWith?
+          input (ConcreteElaboration.compileRegion?  input fuel)
           sourceExtended binders
           (ConcreteElaboration.localOccurrences input region) with
       | none =>
           have htargetItems := hsequence'
           rw [hsourceItems] at htargetItems
           simp only [Option.map_none] at htargetItems
-          change (ConcreteElaboration.compileOccurrencesWith? signature
+          change (ConcreteElaboration.compileOccurrencesWith?
             (spawnNodeRaw input node scope portCount port)
-            (ConcreteElaboration.compileRegion? signature
+            (ConcreteElaboration.compileRegion?
               (spawnNodeRaw input node scope portCount port) fuel)
             (target.extend region) binders
             ((ConcreteElaboration.localOccurrences input region).map
@@ -2010,9 +2008,9 @@ theorem spawnNodeRaw_compileRegion?_old_of_not_encloses_node
           have htargetItems := hsequence'
           rw [hsourceItems] at htargetItems
           simp only [Option.map_some] at htargetItems
-          change (ConcreteElaboration.compileOccurrencesWith? signature
+          change (ConcreteElaboration.compileOccurrencesWith?
             (spawnNodeRaw input node scope portCount port)
-            (ConcreteElaboration.compileRegion? signature
+            (ConcreteElaboration.compileRegion?
               (spawnNodeRaw input node scope portCount port) fuel)
             (target.extend region) binders
             ((ConcreteElaboration.localOccurrences input region).map
@@ -2042,8 +2040,8 @@ theorem spawnNodeRaw_compileRegion?_old_of_not_encloses
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (hnode : node.region = scope) :
     ∀ {rels : RelCtx} (fuel : Nat) (region : Fin input.regionCount)
       (source : ConcreteElaboration.WireContext input)
@@ -2055,10 +2053,10 @@ theorem spawnNodeRaw_compileRegion?_old_of_not_encloses
       ¬ input.Encloses region scope →
       (source.extend region).Exact region →
       (target.extend region).Exact region →
-      ConcreteElaboration.compileRegion? signature
+      ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port) fuel region target
           binders =
-        (ConcreteElaboration.compileRegion? signature input fuel region source
+        (ConcreteElaboration.compileRegion?  input fuel region source
           binders).map (Region.renameWires embedding.index) := by
   intro rels fuel
   induction fuel generalizing rels with
@@ -2079,21 +2077,21 @@ theorem spawnNodeRaw_compileRegion?_old_of_not_encloses
       let extendedEmbedding := embedding.extend region
       have hoccurrence : ∀ occurrence,
           occurrence ∈ ConcreteElaboration.localOccurrences input region →
-          ConcreteElaboration.compileOccurrenceWith? signature
+          ConcreteElaboration.compileOccurrenceWith?
               (spawnNodeRaw input node scope portCount port)
-              (ConcreteElaboration.compileRegion? signature
+              (ConcreteElaboration.compileRegion?
                 (spawnNodeRaw input node scope portCount port) fuel)
               targetExtended binders
               (spawnNodeRaw_oldOccurrence input occurrence) =
-            (ConcreteElaboration.compileOccurrenceWith? signature input
-              (ConcreteElaboration.compileRegion? signature input fuel)
+            (ConcreteElaboration.compileOccurrenceWith?  input
+              (ConcreteElaboration.compileRegion?  input fuel)
               sourceExtended binders occurrence).map
                 (Item.renameWires extendedEmbedding.index) := by
         intro occurrence hmem
         apply spawnNodeRaw_compileOccurrenceWith?_old input node scope portCount
           port sourceExtended targetExtended extendedEmbedding
-          (ConcreteElaboration.compileRegion? signature input fuel)
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?  input fuel)
+          (ConcreteElaboration.compileRegion?
             (spawnNodeRaw input node scope portCount port) fuel)
           binders occurrence htargetExact.nodup
           htarget.wire_endpoints_are_disjoint
@@ -2113,37 +2111,37 @@ theorem spawnNodeRaw_compileRegion?_old_of_not_encloses
         exact ih child sourceExtended targetExtended extendedEmbedding
           childBinders hchildNotAbove hsourceChild htargetChild
       have hsequence := ConcreteElaboration.compileOccurrencesWith?_map
-        (ConcreteElaboration.compileRegion? signature input fuel)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?  input fuel)
+        (ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port) fuel)
         sourceExtended targetExtended binders binders
         (spawnNodeRaw_oldOccurrence input) extendedEmbedding.index
         (ConcreteElaboration.localOccurrences input region) hoccurrence
       have hsequence' :
-          ConcreteElaboration.compileOccurrencesWith? signature
+          ConcreteElaboration.compileOccurrencesWith?
               (spawnNodeRaw input node scope portCount port)
-              (ConcreteElaboration.compileRegion? signature
+              (ConcreteElaboration.compileRegion?
                 (spawnNodeRaw input node scope portCount port) fuel)
               (target.extend region) binders
               ((ConcreteElaboration.localOccurrences input region).map
                 (spawnNodeRaw_oldOccurrence input)) =
-            (ConcreteElaboration.compileOccurrencesWith? signature input
-              (ConcreteElaboration.compileRegion? signature input fuel)
+            (ConcreteElaboration.compileOccurrencesWith?  input
+              (ConcreteElaboration.compileRegion?  input fuel)
               (source.extend region) binders
               (ConcreteElaboration.localOccurrences input region)).map
                 (ItemSeq.renameWires extendedEmbedding.index) := by
         simpa only [sourceExtended, targetExtended] using hsequence
-      cases hsourceItems : ConcreteElaboration.compileOccurrencesWith? signature
-          input (ConcreteElaboration.compileRegion? signature input fuel)
+      cases hsourceItems : ConcreteElaboration.compileOccurrencesWith?
+          input (ConcreteElaboration.compileRegion?  input fuel)
           sourceExtended binders
           (ConcreteElaboration.localOccurrences input region) with
       | none =>
           have htargetItems := hsequence'
           rw [hsourceItems] at htargetItems
           simp only [Option.map_none] at htargetItems
-          change (ConcreteElaboration.compileOccurrencesWith? signature
+          change (ConcreteElaboration.compileOccurrencesWith?
             (spawnNodeRaw input node scope portCount port)
-            (ConcreteElaboration.compileRegion? signature
+            (ConcreteElaboration.compileRegion?
               (spawnNodeRaw input node scope portCount port) fuel)
             (target.extend region) binders
             ((ConcreteElaboration.localOccurrences input region).map
@@ -2157,9 +2155,9 @@ theorem spawnNodeRaw_compileRegion?_old_of_not_encloses
           have htargetItems := hsequence'
           rw [hsourceItems] at htargetItems
           simp only [Option.map_some] at htargetItems
-          change (ConcreteElaboration.compileOccurrencesWith? signature
+          change (ConcreteElaboration.compileOccurrencesWith?
             (spawnNodeRaw input node scope portCount port)
-            (ConcreteElaboration.compileRegion? signature
+            (ConcreteElaboration.compileRegion?
               (spawnNodeRaw input node scope portCount port) fuel)
             (target.extend region) binders
             ((ConcreteElaboration.localOccurrences input region).map
@@ -2228,8 +2226,8 @@ theorem spawnNodeRaw_compileOccurrencesAway
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope parent selected : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (hnode : node.region = scope)
     (hparent : (input.regions selected).parent? = some parent)
     {rest : List Nat}
@@ -2248,22 +2246,22 @@ theorem spawnNodeRaw_compileOccurrencesAway
     (hlocal : ∀ occurrence, occurrence ∈ occurrences →
       occurrence ∈ ConcreteElaboration.localOccurrences input parent)
     (haway : ConcreteElaboration.LocalOccurrence.child selected ∉ occurrences) :
-    ConcreteElaboration.compileOccurrencesWith? signature
+    ConcreteElaboration.compileOccurrencesWith?
         (spawnNodeRaw input node scope portCount port)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port) fuel)
         (target.extend parent) binders
         (occurrences.map (spawnNodeRaw_oldOccurrence input)) =
-      (ConcreteElaboration.compileOccurrencesWith? signature input
-        (ConcreteElaboration.compileRegion? signature input fuel)
+      (ConcreteElaboration.compileOccurrencesWith?  input
+        (ConcreteElaboration.compileRegion?  input fuel)
         (source.extend parent) binders occurrences).map
           (ItemSeq.renameWires (embedding.extend parent).index) := by
   apply ConcreteElaboration.compileOccurrencesWith?_map
   intro occurrence hmem
   apply spawnNodeRaw_compileOccurrenceWith?_old input node scope portCount port
     (source.extend parent) (target.extend parent) (embedding.extend parent)
-    (ConcreteElaboration.compileRegion? signature input fuel)
-    (ConcreteElaboration.compileRegion? signature
+    (ConcreteElaboration.compileRegion?  input fuel)
+    (ConcreteElaboration.compileRegion?
       (spawnNodeRaw input node scope portCount port) fuel)
     binders occurrence htargetExact.nodup
     htarget.wire_endpoints_are_disjoint
@@ -2292,8 +2290,8 @@ theorem spawnNodeRaw_compileRootOccurrencesAway
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope selected : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (hnode : node.region = scope)
     (hparent : (input.regions selected).parent? = some input.root)
     {rest : List Nat}
@@ -2311,22 +2309,22 @@ theorem spawnNodeRaw_compileRootOccurrencesAway
     (hlocal : ∀ occurrence, occurrence ∈ occurrences →
       occurrence ∈ ConcreteElaboration.localOccurrences input input.root)
     (haway : ConcreteElaboration.LocalOccurrence.child selected ∉ occurrences) :
-    ConcreteElaboration.compileOccurrencesWith? signature
+    ConcreteElaboration.compileOccurrencesWith?
         (spawnNodeRaw input node scope portCount port)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port) fuel)
         target ConcreteElaboration.BinderContext.empty
         (occurrences.map (spawnNodeRaw_oldOccurrence input)) =
-      (ConcreteElaboration.compileOccurrencesWith? signature input
-        (ConcreteElaboration.compileRegion? signature input fuel)
+      (ConcreteElaboration.compileOccurrencesWith?  input
+        (ConcreteElaboration.compileRegion?  input fuel)
         source ConcreteElaboration.BinderContext.empty occurrences).map
           (ItemSeq.renameWires embedding.index) := by
   apply ConcreteElaboration.compileOccurrencesWith?_map
   intro occurrence hmem
   apply spawnNodeRaw_compileOccurrenceWith?_old input node scope portCount port
     source target embedding
-    (ConcreteElaboration.compileRegion? signature input fuel)
-    (ConcreteElaboration.compileRegion? signature
+    (ConcreteElaboration.compileRegion?  input fuel)
+    (ConcreteElaboration.compileRegion?
       (spawnNodeRaw input node scope portCount port) fuel)
     ConcreteElaboration.BinderContext.empty occurrence htargetExact.nodup
     htarget.wire_endpoints_are_disjoint
@@ -2354,8 +2352,8 @@ theorem spawnNodeRaw_compileRegion?_positional_unaffected
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (hnode : node.region = scope)
     (fuel : Nat) (region : Fin input.regionCount)
     (source : ConcreteElaboration.WireContext input)
@@ -2367,10 +2365,10 @@ theorem spawnNodeRaw_compileRegion?_positional_unaffected
         (d := spawnNodeRaw input node scope portCount port)
         (SpawnContextEmbedding.mapOldContext input portCount source)
         region).Exact region) :
-    ConcreteElaboration.compileRegion? signature
+    ConcreteElaboration.compileRegion?
         (spawnNodeRaw input node scope portCount port) fuel region
         (SpawnContextEmbedding.mapOldContext input portCount source) binders =
-      (ConcreteElaboration.compileRegion? signature input fuel region source
+      (ConcreteElaboration.compileRegion?  input fuel region source
         binders).map
           (Region.castWiresEq
             (SpawnContextEmbedding.mapOldContext_length input portCount
@@ -2387,7 +2385,7 @@ theorem spawnNodeRaw_compileRegion?_positional_unaffected
         source).symm := by
     rfl
   rw [hwire] at h
-  cases hsource : ConcreteElaboration.compileRegion? signature input fuel
+  cases hsource : ConcreteElaboration.compileRegion?  input fuel
       region source binders with
   | none => simpa [hsource] using h
   | some body =>
@@ -2402,8 +2400,8 @@ theorem spawnNodeRaw_compileOldOccurrencesAtSite
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (hnode : node.region = scope)
     (fuel : Nat)
     (source : ConcreteElaboration.WireContext input)
@@ -2414,15 +2412,15 @@ theorem spawnNodeRaw_compileOldOccurrencesAtSite
     (binders : ConcreteElaboration.BinderContext input rels)
     (hsource : (source.extend scope).Exact scope)
     (htargetExact : (target.extend scope).Exact scope) :
-    ConcreteElaboration.compileOccurrencesWith? signature
+    ConcreteElaboration.compileOccurrencesWith?
         (spawnNodeRaw input node scope portCount port)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port) fuel)
         (target.extend scope) binders
         ((ConcreteElaboration.localOccurrences input scope).map
           (spawnNodeRaw_oldOccurrence input)) =
-      (ConcreteElaboration.compileOccurrencesWith? signature input
-        (ConcreteElaboration.compileRegion? signature input fuel)
+      (ConcreteElaboration.compileOccurrencesWith?  input
+        (ConcreteElaboration.compileRegion?  input fuel)
         (source.extend scope) binders
         (ConcreteElaboration.localOccurrences input scope)).map
           (ItemSeq.renameWires (embedding.extend scope).index) := by
@@ -2430,8 +2428,8 @@ theorem spawnNodeRaw_compileOldOccurrencesAtSite
   intro occurrence hmem
   apply spawnNodeRaw_compileOccurrenceWith?_old input node scope portCount port
     (source.extend scope) (target.extend scope) (embedding.extend scope)
-    (ConcreteElaboration.compileRegion? signature input fuel)
-    (ConcreteElaboration.compileRegion? signature
+    (ConcreteElaboration.compileRegion?  input fuel)
+    (ConcreteElaboration.compileRegion?
       (spawnNodeRaw input node scope portCount port) fuel)
     binders occurrence htargetExact.nodup htarget.wire_endpoints_are_disjoint
   intro childRels child childBinders heq
@@ -2454,8 +2452,8 @@ theorem spawnNodeRaw_compileOldOccurrencesAtNodeSite
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (scopeEnclosesNode : input.Encloses scope node.region)
     (fuel : Nat)
     (source : ConcreteElaboration.WireContext input)
@@ -2466,15 +2464,15 @@ theorem spawnNodeRaw_compileOldOccurrencesAtNodeSite
     (binders : ConcreteElaboration.BinderContext input rels)
     (hsource : (source.extend node.region).Exact node.region)
     (htargetExact : (target.extend node.region).Exact node.region) :
-    ConcreteElaboration.compileOccurrencesWith? signature
+    ConcreteElaboration.compileOccurrencesWith?
         (spawnNodeRaw input node scope portCount port)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port) fuel)
         (target.extend node.region) binders
         ((ConcreteElaboration.localOccurrences input node.region).map
           (spawnNodeRaw_oldOccurrence input)) =
-      (ConcreteElaboration.compileOccurrencesWith? signature input
-        (ConcreteElaboration.compileRegion? signature input fuel)
+      (ConcreteElaboration.compileOccurrencesWith?  input
+        (ConcreteElaboration.compileRegion?  input fuel)
         (source.extend node.region) binders
         (ConcreteElaboration.localOccurrences input node.region)).map
           (ItemSeq.renameWires (embedding.extend node.region).index) := by
@@ -2483,8 +2481,8 @@ theorem spawnNodeRaw_compileOldOccurrencesAtNodeSite
   apply spawnNodeRaw_compileOccurrenceWith?_old input node scope portCount port
     (source.extend node.region) (target.extend node.region)
     (embedding.extend node.region)
-    (ConcreteElaboration.compileRegion? signature input fuel)
-    (ConcreteElaboration.compileRegion? signature
+    (ConcreteElaboration.compileRegion?  input fuel)
+    (ConcreteElaboration.compileRegion?
       (spawnNodeRaw input node scope portCount port) fuel)
     binders occurrence htargetExact.nodup htarget.wire_endpoints_are_disjoint
   intro childRels child childBinders heq
@@ -2507,8 +2505,8 @@ theorem spawnNodeRaw_compileOccurrencesAwayFromNode
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope parent selected : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (scopeEnclosesNode : input.Encloses scope node.region)
     (hparent : (input.regions selected).parent? = some parent)
     {rest : List Nat}
@@ -2527,22 +2525,22 @@ theorem spawnNodeRaw_compileOccurrencesAwayFromNode
     (hlocal : ∀ occurrence, occurrence ∈ occurrences →
       occurrence ∈ ConcreteElaboration.localOccurrences input parent)
     (haway : ConcreteElaboration.LocalOccurrence.child selected ∉ occurrences) :
-    ConcreteElaboration.compileOccurrencesWith? signature
+    ConcreteElaboration.compileOccurrencesWith?
         (spawnNodeRaw input node scope portCount port)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port) fuel)
         (target.extend parent) binders
         (occurrences.map (spawnNodeRaw_oldOccurrence input)) =
-      (ConcreteElaboration.compileOccurrencesWith? signature input
-        (ConcreteElaboration.compileRegion? signature input fuel)
+      (ConcreteElaboration.compileOccurrencesWith?  input
+        (ConcreteElaboration.compileRegion?  input fuel)
         (source.extend parent) binders occurrences).map
           (ItemSeq.renameWires (embedding.extend parent).index) := by
   apply ConcreteElaboration.compileOccurrencesWith?_map
   intro occurrence hmem
   apply spawnNodeRaw_compileOccurrenceWith?_old input node scope portCount port
     (source.extend parent) (target.extend parent) (embedding.extend parent)
-    (ConcreteElaboration.compileRegion? signature input fuel)
-    (ConcreteElaboration.compileRegion? signature
+    (ConcreteElaboration.compileRegion?  input fuel)
+    (ConcreteElaboration.compileRegion?
       (spawnNodeRaw input node scope portCount port) fuel)
     binders occurrence htargetExact.nodup
     htarget.wire_endpoints_are_disjoint
@@ -2570,8 +2568,8 @@ theorem spawnNodeRaw_compileRootOccurrencesAwayFromNode
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope selected : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (scopeEnclosesNode : input.Encloses scope node.region)
     (hparent : (input.regions selected).parent? = some input.root)
     {rest : List Nat}
@@ -2589,22 +2587,22 @@ theorem spawnNodeRaw_compileRootOccurrencesAwayFromNode
     (hlocal : ∀ occurrence, occurrence ∈ occurrences →
       occurrence ∈ ConcreteElaboration.localOccurrences input input.root)
     (haway : ConcreteElaboration.LocalOccurrence.child selected ∉ occurrences) :
-    ConcreteElaboration.compileOccurrencesWith? signature
+    ConcreteElaboration.compileOccurrencesWith?
         (spawnNodeRaw input node scope portCount port)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port) fuel)
         target ConcreteElaboration.BinderContext.empty
         (occurrences.map (spawnNodeRaw_oldOccurrence input)) =
-      (ConcreteElaboration.compileOccurrencesWith? signature input
-        (ConcreteElaboration.compileRegion? signature input fuel)
+      (ConcreteElaboration.compileOccurrencesWith?  input
+        (ConcreteElaboration.compileRegion?  input fuel)
         source ConcreteElaboration.BinderContext.empty occurrences).map
           (ItemSeq.renameWires embedding.index) := by
   apply ConcreteElaboration.compileOccurrencesWith?_map
   intro occurrence hmem
   apply spawnNodeRaw_compileOccurrenceWith?_old input node scope portCount port
     source target embedding
-    (ConcreteElaboration.compileRegion? signature input fuel)
-    (ConcreteElaboration.compileRegion? signature
+    (ConcreteElaboration.compileRegion?  input fuel)
+    (ConcreteElaboration.compileRegion?
       (spawnNodeRaw input node scope portCount port) fuel)
     ConcreteElaboration.BinderContext.empty occurrence htargetExact.nodup
     htarget.wire_endpoints_are_disjoint
@@ -2633,8 +2631,8 @@ theorem spawnNodeRaw_compileOldOccurrencesAtRoot
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hinput : input.WellFormed signature)
-    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hinput : input.WellFormed )
+    (htarget : (spawnNodeRaw input node scope portCount port).WellFormed )
     (hnode : node.region = scope)
     (hroot : input.root = scope)
     (fuel : Nat)
@@ -2646,15 +2644,15 @@ theorem spawnNodeRaw_compileOldOccurrencesAtRoot
     (binders : ConcreteElaboration.BinderContext input rels)
     (hsource : source.Exact input.root)
     (htargetExact : target.Exact input.root) :
-    ConcreteElaboration.compileOccurrencesWith? signature
+    ConcreteElaboration.compileOccurrencesWith?
         (spawnNodeRaw input node scope portCount port)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (spawnNodeRaw input node scope portCount port) fuel)
         target binders
         ((ConcreteElaboration.localOccurrences input input.root).map
           (spawnNodeRaw_oldOccurrence input)) =
-      (ConcreteElaboration.compileOccurrencesWith? signature input
-        (ConcreteElaboration.compileRegion? signature input fuel)
+      (ConcreteElaboration.compileOccurrencesWith?  input
+        (ConcreteElaboration.compileRegion?  input fuel)
         source binders
         (ConcreteElaboration.localOccurrences input input.root)).map
           (ItemSeq.renameWires embedding.index) := by
@@ -2662,8 +2660,8 @@ theorem spawnNodeRaw_compileOldOccurrencesAtRoot
   intro occurrence hmem
   apply spawnNodeRaw_compileOccurrenceWith?_old input node scope portCount port
     source target embedding
-    (ConcreteElaboration.compileRegion? signature input fuel)
-    (ConcreteElaboration.compileRegion? signature
+    (ConcreteElaboration.compileRegion?  input fuel)
+    (ConcreteElaboration.compileRegion?
       (spawnNodeRaw input node scope portCount port) fuel)
     binders occurrence htargetExact.nodup htarget.wire_endpoints_are_disjoint
   intro childRels child childBinders heq

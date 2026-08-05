@@ -183,7 +183,7 @@ def regionPathAux (d : ConcreteDiagram) :
               (.child region)
             pure (prior ++ [position.val])
 
-def regionPath? (checked : CheckedDiagram signature)
+def regionPath? (checked : CheckedDiagram )
     (region : Fin checked.val.regionCount) : Option (List Nat) :=
   regionPathAux checked.val checked.val.regionCount region
 
@@ -300,7 +300,7 @@ inductive RegionRoute.HasCutDepth {d : ConcreteDiagram} :
 
 theorem RegionRoute.hasCutDepth_exists
     (route : RegionRoute d start target path)
-    (wellFormed : d.WellFormed signature) :
+    (wellFormed : d.WellFormed ) :
     ∃ depth, route.HasCutDepth depth := by
   induction route with
   | here =>
@@ -410,7 +410,7 @@ theorem regionPathAux_complete
                   .child priorPath hparent position hposition⟩
                 simp [regionPathAux, hregion, hparent, hprior, hposition]
 
-theorem regionPath?_complete (checked : CheckedDiagram signature)
+theorem regionPath?_complete (checked : CheckedDiagram )
     (region : Fin checked.val.regionCount) :
     ∃ path, regionPath? checked region = some path := by
   obtain ⟨steps, hsteps⟩ := checked.property.all_regions_reach_root region
@@ -418,7 +418,7 @@ theorem regionPath?_complete (checked : CheckedDiagram signature)
     (Nat.le_of_lt_succ steps.isLt) hsteps
   exact ⟨path, hpath⟩
 
-theorem regionPath?_sound (checked : CheckedDiagram signature)
+theorem regionPath?_sound (checked : CheckedDiagram )
     (region : Fin checked.val.regionCount)
     (hpath : regionPath? checked region = some path) :
     RegionPath checked.val checked.val.root region path := by
@@ -430,7 +430,7 @@ theorem regionPath?_sound (checked : CheckedDiagram signature)
   cases hfound
   exact hwitness
 
-theorem regionPath?_route (checked : CheckedDiagram signature)
+theorem regionPath?_route (checked : CheckedDiagram )
     (region : Fin checked.val.regionCount)
     (hpath : regionPath? checked region = some path) :
     RegionRoute checked.val checked.val.root region path :=
@@ -442,20 +442,20 @@ theorem compiledOccurrence_focus
       (region : Fin d.regionCount) →
       (context : ConcreteElaboration.WireContext d) →
       ConcreteElaboration.BinderContext d rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (context : ConcreteElaboration.WireContext d)
     (rels : Theory.RelCtx)
     (binders : ConcreteElaboration.BinderContext d rels)
     (occurrences : List
       (ConcreteElaboration.LocalOccurrence d.regionCount d.nodeCount))
-    (items : ItemSeq signature context.length rels)
+    (items : ItemSeq  context.length rels)
     (occurrence : ConcreteElaboration.LocalOccurrence d.regionCount d.nodeCount)
     (position : Fin occurrences.length)
-    (hitems : ConcreteElaboration.compileOccurrencesWith? signature d recurse
+    (hitems : ConcreteElaboration.compileOccurrencesWith?  d recurse
       context binders occurrences = some items)
     (hposition : indexOf? occurrences occurrence = some position) :
     ∃ focus, items.focusAt? position.val = some focus ∧
-      ConcreteElaboration.compileOccurrenceWith? signature d recurse
+      ConcreteElaboration.compileOccurrenceWith?  d recurse
         context binders occurrence = some focus.item := by
   let itemPosition : Fin items.length := Fin.cast
     (ConcreteElaboration.compileOccurrencesWith?_length recurse context binders
@@ -479,18 +479,18 @@ structure Region.ContextPath.CompilerLeaf
     (diagram : ConcreteDiagram)
     (target : Fin diagram.regionCount)
     {outer : Nat} {rels : Theory.RelCtx}
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     (witness : Region.ContextPath body path) where
   inheritedWires : ConcreteElaboration.WireContext diagram
   inheritedLength : inheritedWires.length = witness.toFocus.holeWires
   binders : ConcreteElaboration.BinderContext diagram
     witness.toFocus.holeRels
-  items : ItemSeq signature (inheritedWires.extend target).length
+  items : ItemSeq  (inheritedWires.extend target).length
     witness.toFocus.holeRels
   fuel : Nat
   itemsComputation :
-    ConcreteElaboration.compileOccurrencesWith? signature diagram
-        (ConcreteElaboration.compileRegion? signature diagram fuel)
+    ConcreteElaboration.compileOccurrencesWith?  diagram
+        (ConcreteElaboration.compileRegion?  diagram fuel)
         (inheritedWires.extend target) binders
         (ConcreteElaboration.localOccurrences diagram target) = some items
   wiresExact : (inheritedWires.extend target).Exact target
@@ -506,7 +506,7 @@ forgets only the enclosing intrinsic path; all authoritative lexical and
 compilation evidence is retained definitionally. -/
 def Region.ContextPath.CompilerLeaf.atFocus
     {diagram : ConcreteDiagram} {target : Fin diagram.regionCount}
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     {witness : Region.ContextPath body path}
     (leaf : Region.ContextPath.CompilerLeaf diagram target witness) :
     Region.ContextPath.CompilerLeaf diagram target
@@ -526,7 +526,7 @@ def Region.ContextPath.CompilerLeaf.atFocus
 body presentation. -/
 def Region.ContextPath.CompilerLeaf.castHereBodyEq
     {diagram : ConcreteDiagram} {target : Fin diagram.regionCount}
-    {sourceBody targetBody : Region signature outer rels}
+    {sourceBody targetBody : Region  outer rels}
     (leaf : Region.ContextPath.CompilerLeaf diagram target
       (.here sourceBody))
     (equality : sourceBody = targetBody) :
@@ -536,7 +536,7 @@ def Region.ContextPath.CompilerLeaf.castHereBodyEq
 
 @[simp] theorem Region.ContextPath.CompilerLeaf.castHereBodyEq_inheritedWires
     {diagram : ConcreteDiagram} {target : Fin diagram.regionCount}
-    {sourceBody targetBody : Region signature outer rels}
+    {sourceBody targetBody : Region  outer rels}
     (leaf : Region.ContextPath.CompilerLeaf diagram target
       (.here sourceBody))
     (equality : sourceBody = targetBody) :
@@ -546,7 +546,7 @@ def Region.ContextPath.CompilerLeaf.castHereBodyEq
 
 @[simp] theorem Region.ContextPath.CompilerLeaf.castHereBodyEq_binders
     {diagram : ConcreteDiagram} {target : Fin diagram.regionCount}
-    {sourceBody targetBody : Region signature outer rels}
+    {sourceBody targetBody : Region  outer rels}
     (leaf : Region.ContextPath.CompilerLeaf diagram target
       (.here sourceBody))
     (equality : sourceBody = targetBody) :
@@ -563,10 +563,10 @@ def Region.ContextPath.CompilerLeaf.hereOfItemsComputation
     (inheritedWires : ConcreteElaboration.WireContext diagram)
     (binders : ConcreteElaboration.BinderContext diagram rels)
     (fuel : Nat)
-    (items : ItemSeq signature (inheritedWires.extend target).length rels)
+    (items : ItemSeq  (inheritedWires.extend target).length rels)
     (itemsComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature diagram
-        (ConcreteElaboration.compileRegion? signature diagram fuel)
+      ConcreteElaboration.compileOccurrencesWith?  diagram
+        (ConcreteElaboration.compileRegion?  diagram fuel)
         (inheritedWires.extend target) binders
         (ConcreteElaboration.localOccurrences diagram target) = some items)
     (wiresExact : (inheritedWires.extend target).Exact target)
@@ -590,7 +590,7 @@ def Region.ContextPath.CompilerLeaf.hereOfItemsComputation
 /-- Canonical compiler index of any concrete wire visible at the focused
 region. -/
 noncomputable def Region.ContextPath.CompilerLeaf.siteWireIndex
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     (witness : Region.ContextPath body path)
     (leaf : Region.ContextPath.CompilerLeaf diagram site witness)
     (wire : Fin diagram.wireCount)
@@ -601,7 +601,7 @@ noncomputable def Region.ContextPath.CompilerLeaf.siteWireIndex
       ((leaf.wiresExact.mem_iff wire).2 visible))
 
 theorem Region.ContextPath.CompilerLeaf.siteWireIndex_spec
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     (witness : Region.ContextPath body path)
     (leaf : Region.ContextPath.CompilerLeaf diagram site witness)
     (wire : Fin diagram.wireCount)
@@ -617,7 +617,7 @@ theorem Region.ContextPath.CompilerLeaf.siteWireIndex_spec
 whose binders lie strictly outside the focused region.  The local portion is
 the complementary exact-scope fiber. -/
 theorem Region.ContextPath.CompilerLeaf.inherited_mem_iff
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     (witness : Region.ContextPath body path)
     (leaf : Region.ContextPath.CompilerLeaf diagram site witness)
     (wire : Fin diagram.wireCount) :
@@ -645,7 +645,7 @@ theorem Region.ContextPath.CompilerLeaf.inherited_mem_iff
         hlocal)
 
 def Region.ContextPath.CompilerLeaf.castWiresEq
-    {region : Region signature source rels} {path : List Nat}
+    {region : Region  source rels} {path : List Nat}
     (witness : Region.ContextPath region path)
     (equality : source = targetWires)
     (leaf : Region.ContextPath.CompilerLeaf diagram site witness) :
@@ -660,10 +660,10 @@ compiler context to an addition, then from the inherited compiler length to
 the intrinsic outer-wire count. -/
 def Region.ContextPath.CompilerLeaf.canonicalBodyItems
     {outer localWires : Nat} {rels : Theory.RelCtx}
-    {items : ItemSeq signature (outer + localWires) rels}
+    {items : ItemSeq  (outer + localWires) rels}
     (state : Region.ContextPath.CompilerLeaf diagram site
       (.here (.mk localWires items))) :
-    ItemSeq signature
+    ItemSeq
       (outer + (ConcreteElaboration.exactScopeWires diagram site).length)
       rels :=
   (state.items.castWiresEq
@@ -677,17 +677,17 @@ def Region.ContextPath.CompilerLeaf.canonicalBodyItems
 /-- Open-root compilation uses `finishRoot` at the sheet and `finishRegion`
 below it.  The indices retain which of those two kernels produced the leaf. -/
 inductive Region.ContextPath.OpenCompilerLeaf
-    (checked : CheckedOpenDiagram signature) :
+    (checked : CheckedOpenDiagram ) :
     (target : Fin checked.val.diagram.regionCount) →
-      {body : Region signature checked.val.exposedWires.length []} →
+      {body : Region  checked.val.exposedWires.length []} →
       {path : List Nat} → Region.ContextPath body path → Type
   | root
-      (items : ItemSeq signature
+      (items : ItemSeq
         (checked.val.exposedWires ++ checked.val.hiddenWires).length [])
       (itemsComputation :
-        ConcreteElaboration.compileOccurrencesWith? signature
+        ConcreteElaboration.compileOccurrencesWith?
           checked.val.diagram
-          (ConcreteElaboration.compileRegion? signature checked.val.diagram
+          (ConcreteElaboration.compileRegion?  checked.val.diagram
             checked.val.diagram.regionCount)
           (checked.val.exposedWires ++ checked.val.hiddenWires)
           ConcreteElaboration.BinderContext.empty
@@ -702,7 +702,7 @@ inductive Region.ContextPath.OpenCompilerLeaf
 
 theorem Region.ContextPath.OpenCompilerLeaf.root_or_nested
     {target : Fin checked.val.diagram.regionCount}
-    {body : Region signature checked.val.exposedWires.length []}
+    {body : Region  checked.val.exposedWires.length []}
     {path : List Nat} {witness : Region.ContextPath body path}
     (leaf : Region.ContextPath.OpenCompilerLeaf checked target witness) :
     target = checked.val.diagram.root ∨
@@ -716,7 +716,7 @@ theorem Region.ContextPath.OpenCompilerLeaf.root_or_nested
 directly; no second witness choice is required. -/
 noncomputable def Region.ContextPath.OpenCompilerLeaf.nestedOfNe
     {target : Fin checked.val.diagram.regionCount}
-    {body : Region signature checked.val.exposedWires.length []}
+    {body : Region  checked.val.exposedWires.length []}
     {path : List Nat} {witness : Region.ContextPath body path}
     (leaf : Region.ContextPath.OpenCompilerLeaf checked target witness)
     (hne : target ≠ checked.val.diagram.root) :
@@ -728,16 +728,16 @@ noncomputable def Region.ContextPath.OpenCompilerLeaf.nestedOfNe
 /-- Every compiler frame retained along one concrete route. `state` is the
 authoritative compiler state for the current intrinsic region; each recursive
 constructor records the exact state transition used by compilation. -/
-inductive CompilerTrace (signature : List Nat) (diagram : ConcreteDiagram) :
+inductive CompilerTrace (diagram : ConcreteDiagram) :
     {start target : Fin diagram.regionCount} → {path : List Nat} →
     {outer : Nat} → {rels : Theory.RelCtx} →
-    {body : Region signature outer rels} →
+    {body : Region  outer rels} →
     (route : RegionRoute diagram start target path) →
     (witness : Region.ContextPath body path) →
     (state : Region.ContextPath.CompilerLeaf diagram start (.here body)) → Type
   | here
       (state : Region.ContextPath.CompilerLeaf diagram region (.here body)) :
-      CompilerTrace signature diagram (.here region) (.here body) state
+      CompilerTrace  diagram (.here region) (.here body) state
   | cut
       {start child target : Fin diagram.regionCount} {rest : List Nat}
       {hparent : (diagram.regions child).parent? = some start}
@@ -748,8 +748,8 @@ inductive CompilerTrace (signature : List Nat) (diagram : ConcreteDiagram) :
           some position}
       {tail : RegionRoute diagram child target rest}
       {outer localWires : Nat} {rels : Theory.RelCtx}
-      {items : ItemSeq signature (outer + localWires) rels}
-      {focus : ItemSeq.Focus items} {childBody : Region signature
+      {items : ItemSeq  (outer + localWires) rels}
+      {focus : ItemSeq.Focus items} {childBody : Region
         (outer + localWires) rels}
       {atIndex : items.focusAt? position.val = some focus}
       {isCut : focus.item = .cut childBody}
@@ -766,8 +766,8 @@ inductive CompilerTrace (signature : List Nat) (diagram : ConcreteDiagram) :
         state.inheritedWires.extend start)
       (binders : childState.binders = state.binders)
       (fuel : childState.fuel + 1 = state.fuel)
-      (tailTrace : CompilerTrace signature diagram tail nested childState) :
-      CompilerTrace signature diagram
+      (tailTrace : CompilerTrace  diagram tail nested childState) :
+      CompilerTrace  diagram
         (.step hparent position hposition tail)
         (.cut focus atIndex isCut nested) state
   | bubble
@@ -780,8 +780,8 @@ inductive CompilerTrace (signature : List Nat) (diagram : ConcreteDiagram) :
           some position}
       {tail : RegionRoute diagram child target rest}
       {outer localWires arity : Nat} {rels : Theory.RelCtx}
-      {items : ItemSeq signature (outer + localWires) rels}
-      {focus : ItemSeq.Focus items} {childBody : Region signature
+      {items : ItemSeq  (outer + localWires) rels}
+      {focus : ItemSeq.Focus items} {childBody : Region
         (outer + localWires) (arity :: rels)}
       {atIndex : items.focusAt? position.val = some focus}
       {isBubble : focus.item = .bubble arity childBody}
@@ -798,15 +798,15 @@ inductive CompilerTrace (signature : List Nat) (diagram : ConcreteDiagram) :
         state.inheritedWires.extend start)
       (binders : childState.binders = state.binders.push child arity)
       (fuel : childState.fuel + 1 = state.fuel)
-      (tailTrace : CompilerTrace signature diagram tail nested childState) :
-      CompilerTrace signature diagram
+      (tailTrace : CompilerTrace  diagram tail nested childState) :
+      CompilerTrace  diagram
         (.step hparent position hposition tail)
         (.bubble focus atIndex isBubble nested) state
 
 def compilerLeafHereCastWiresEq
     {diagram : ConcreteDiagram} {start : Fin diagram.regionCount}
     {source targetWires : Nat} {rels : Theory.RelCtx}
-    {body : Region signature source rels}
+    {body : Region  source rels}
     (state : Region.ContextPath.CompilerLeaf diagram start (.here body))
     (equality : source = targetWires) :
     Region.ContextPath.CompilerLeaf diagram start
@@ -817,7 +817,7 @@ def compilerLeafHereCastWiresEq
 @[simp] theorem compilerLeafHereCastWiresEq_inheritedWires
     {diagram : ConcreteDiagram} {start : Fin diagram.regionCount}
     {source targetWires : Nat} {rels : Theory.RelCtx}
-    {body : Region signature source rels}
+    {body : Region  source rels}
     (state : Region.ContextPath.CompilerLeaf diagram start (.here body))
     (equality : source = targetWires) :
     (compilerLeafHereCastWiresEq state equality).inheritedWires =
@@ -828,7 +828,7 @@ def compilerLeafHereCastWiresEq
 @[simp] theorem compilerLeafHereCastWiresEq_binders
     {diagram : ConcreteDiagram} {start : Fin diagram.regionCount}
     {source targetWires : Nat} {rels : Theory.RelCtx}
-    {body : Region signature source rels}
+    {body : Region  source rels}
     (state : Region.ContextPath.CompilerLeaf diagram start (.here body))
     (equality : source = targetWires) :
     (compilerLeafHereCastWiresEq state equality).binders = state.binders := by
@@ -838,7 +838,7 @@ def compilerLeafHereCastWiresEq
 @[simp] theorem compilerLeafHereCastWiresEq_fuel
     {diagram : ConcreteDiagram} {start : Fin diagram.regionCount}
     {source targetWires : Nat} {rels : Theory.RelCtx}
-    {body : Region signature source rels}
+    {body : Region  source rels}
     (state : Region.ContextPath.CompilerLeaf diagram start (.here body))
     (equality : source = targetWires) :
     (compilerLeafHereCastWiresEq state equality).fuel = state.fuel := by
@@ -851,13 +851,13 @@ def CompilerTrace.castWiresEq
     {diagram : ConcreteDiagram}
     {start target : Fin diagram.regionCount} {path : List Nat}
     {source targetWires : Nat} {rels : Theory.RelCtx}
-    {body : Region signature source rels}
+    {body : Region  source rels}
     (route : RegionRoute diagram start target path)
     (witness : Region.ContextPath body path)
     (state : Region.ContextPath.CompilerLeaf diagram start (.here body))
-    (trace : CompilerTrace signature diagram route witness state)
+    (trace : CompilerTrace  diagram route witness state)
     (equality : source = targetWires) :
-    CompilerTrace signature diagram route (witness.castWiresEq equality)
+    CompilerTrace  diagram route (witness.castWiresEq equality)
       (compilerLeafHereCastWiresEq state equality) := by
   subst targetWires
   exact trace
@@ -867,11 +867,11 @@ noncomputable def CompilerTrace.leaf
     {diagram : ConcreteDiagram}
     {start target : Fin diagram.regionCount} {path : List Nat}
     {outer : Nat} {rels : Theory.RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     {route : RegionRoute diagram start target path}
     {witness : Region.ContextPath body path}
     {state : Region.ContextPath.CompilerLeaf diagram start (.here body)}
-    (trace : CompilerTrace signature diagram route witness state) :
+    (trace : CompilerTrace  diagram route witness state) :
     Region.ContextPath.CompilerLeaf diagram target witness := by
   induction trace with
   | here state => exact state
@@ -911,16 +911,16 @@ noncomputable def CompilerTrace.trans
     {start middle target : Fin diagram.regionCount}
     {firstPath secondPath : List Nat}
     {outer : Nat} {rels : Theory.RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     {firstRoute : RegionRoute diagram start middle firstPath}
     {secondRoute : RegionRoute diagram middle target secondPath}
     {firstWitness : Region.ContextPath body firstPath}
     {state : Region.ContextPath.CompilerLeaf diagram start (.here body)}
-    (first : CompilerTrace signature diagram firstRoute firstWitness state)
+    (first : CompilerTrace  diagram firstRoute firstWitness state)
     {secondWitness : Region.ContextPath firstWitness.toFocus.body secondPath}
-    (second : CompilerTrace signature diagram secondRoute secondWitness
+    (second : CompilerTrace  diagram secondRoute secondWitness
       first.leaf.atFocus) :
-    CompilerTrace signature diagram (firstRoute.trans secondRoute)
+    CompilerTrace  diagram (firstRoute.trans secondRoute)
       (firstWitness.nest secondWitness) state := by
   induction first with
   | here state => simpa using second
@@ -947,11 +947,11 @@ noncomputable def CompilerTrace.inheritedIndex
     {diagram : ConcreteDiagram}
     {start target : Fin diagram.regionCount} {path : List Nat}
     {outer : Nat} {rels : Theory.RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     {route : RegionRoute diagram start target path}
     {witness : Region.ContextPath body path}
     {state : Region.ContextPath.CompilerLeaf diagram start (.here body)}
-    (trace : CompilerTrace signature diagram route witness state) :
+    (trace : CompilerTrace  diagram route witness state) :
     Fin state.inheritedWires.length →
       Fin trace.leaf.inheritedWires.length := by
   induction trace with
@@ -984,11 +984,11 @@ theorem CompilerTrace.inheritedIndex_get
     {diagram : ConcreteDiagram}
     {start target : Fin diagram.regionCount} {path : List Nat}
     {outer : Nat} {rels : Theory.RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     {route : RegionRoute diagram start target path}
     {witness : Region.ContextPath body path}
     {state : Region.ContextPath.CompilerLeaf diagram start (.here body)}
-    (trace : CompilerTrace signature diagram route witness state)
+    (trace : CompilerTrace  diagram route witness state)
     (index : Fin state.inheritedWires.length) :
     trace.leaf.inheritedWires.get (trace.inheritedIndex index) =
       state.inheritedWires.get index := by
@@ -1060,11 +1060,11 @@ theorem CompilerTrace.inheritedIndex_intrinsic
     {diagram : ConcreteDiagram}
     {start target : Fin diagram.regionCount} {path : List Nat}
     {outer : Nat} {rels : Theory.RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     {route : RegionRoute diagram start target path}
     {witness : Region.ContextPath body path}
     {state : Region.ContextPath.CompilerLeaf diagram start (.here body)}
-    (trace : CompilerTrace signature diagram route witness state)
+    (trace : CompilerTrace  diagram route witness state)
     (index : Fin state.inheritedWires.length) :
     Fin.cast trace.leaf.inheritedLength (trace.inheritedIndex index) =
       witness.toFocus.context.outerWire
@@ -1133,14 +1133,14 @@ looked up at the terminal leaf under the intrinsic context's canonical
 outer-relation embedding. -/
 theorem CompilerTrace.binder_lookup_outerRelation
     {diagram : ConcreteDiagram}
-    (wellFormed : diagram.WellFormed signature)
+    (wellFormed : diagram.WellFormed )
     {start target : Fin diagram.regionCount} {path : List Nat}
     {outer : Nat} {rels : Theory.RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     {route : RegionRoute diagram start target path}
     {witness : Region.ContextPath body path}
     {state : Region.ContextPath.CompilerLeaf diagram start (.here body)}
-    (trace : CompilerTrace signature diagram route witness state)
+    (trace : CompilerTrace  diagram route witness state)
     {arity : Nat} (relation : Theory.RelVar rels arity) :
     trace.leaf.binders (state.binderEnumeration.binder relation.index) =
       some ⟨arity, witness.toFocus.context.outerRelation relation⟩ := by
@@ -1195,9 +1195,9 @@ extended. -/
 def Region.ContextPath.CompilerLeaf.underCut
     {diagram : ConcreteDiagram} {target : Fin diagram.regionCount}
     {outer localWires : Nat} {rels : Theory.RelCtx}
-    {items : ItemSeq signature (outer + localWires) rels}
+    {items : ItemSeq  (outer + localWires) rels}
     {focus : ItemSeq.Focus items}
-    {childBody : Region signature (outer + localWires) rels}
+    {childBody : Region  (outer + localWires) rels}
     {atIndex : items.focusAt? position = some focus}
     {isCut : focus.item = .cut childBody}
     {path : List Nat} {nested : Region.ContextPath childBody path}
@@ -1220,9 +1220,9 @@ def Region.ContextPath.CompilerLeaf.underCut
 def Region.ContextPath.CompilerLeaf.underBubble
     {diagram : ConcreteDiagram} {target : Fin diagram.regionCount}
     {outer localWires arity : Nat} {rels : Theory.RelCtx}
-    {items : ItemSeq signature (outer + localWires) rels}
+    {items : ItemSeq  (outer + localWires) rels}
     {focus : ItemSeq.Focus items}
-    {childBody : Region signature (outer + localWires) (arity :: rels)}
+    {childBody : Region  (outer + localWires) (arity :: rels)}
     {atIndex : items.focusAt? position = some focus}
     {isBubble : focus.item = .bubble arity childBody}
     {path : List Nat} {nested : Region.ContextPath childBody path}
@@ -1246,11 +1246,11 @@ def CompilerTrace.cutDepth
     {diagram : ConcreteDiagram}
     {start target : Fin diagram.regionCount} {path : List Nat}
     {outer : Nat} {rels : Theory.RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     {route : RegionRoute diagram start target path}
     {witness : Region.ContextPath body path}
     {state : Region.ContextPath.CompilerLeaf diagram start (.here body)}
-    (trace : CompilerTrace signature diagram route witness state) :
+    (trace : CompilerTrace  diagram route witness state) :
     route.HasCutDepth witness.toFocus.context.cutDepth := by
   induction trace with
   | here state => exact .here _
@@ -1264,12 +1264,12 @@ def CompilerTrace.cutDepth
         childKind ih
 
 /-- The compiler state at an open sheet root. -/
-structure OpenRootCompilerState (checked : CheckedOpenDiagram signature)
-    (body : Region signature checked.val.exposedWires.length []) where
-  items : ItemSeq signature checked.val.rootWires.length []
+structure OpenRootCompilerState (checked : CheckedOpenDiagram )
+    (body : Region  checked.val.exposedWires.length []) where
+  items : ItemSeq  checked.val.rootWires.length []
   itemsComputation :
-    ConcreteElaboration.compileOccurrencesWith? signature checked.val.diagram
-      (ConcreteElaboration.compileRegion? signature checked.val.diagram
+    ConcreteElaboration.compileOccurrencesWith?  checked.val.diagram
+      (ConcreteElaboration.compileRegion?  checked.val.diagram
         checked.val.diagram.regionCount)
       checked.val.rootWires ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences checked.val.diagram
@@ -1282,17 +1282,17 @@ structure OpenRootCompilerState (checked : CheckedOpenDiagram signature)
 compiler state. -/
 def OpenRootCompilerState.canonicalBodyItems
     {localWires : Nat}
-    {items : ItemSeq signature
+    {items : ItemSeq
       (checked.val.exposedWires.length + localWires) []}
     (state : OpenRootCompilerState checked (.mk localWires items)) :
-    ItemSeq signature
+    ItemSeq
       (checked.val.exposedWires.length + checked.val.hiddenWires.length) [] :=
   state.items.castWiresEq (by simp [OpenConcreteDiagram.rootWires])
 
 /-- The retained open-root state followed by the ordinary route trace. -/
-inductive OpenCompilerTrace (checked : CheckedOpenDiagram signature) :
+inductive OpenCompilerTrace (checked : CheckedOpenDiagram ) :
     {target : Fin checked.val.diagram.regionCount} → {path : List Nat} →
-    {body : Region signature checked.val.exposedWires.length []} →
+    {body : Region  checked.val.exposedWires.length []} →
     (route : RegionRoute checked.val.diagram checked.val.diagram.root target
       path) →
     (witness : Region.ContextPath body path) →
@@ -1312,10 +1312,10 @@ inductive OpenCompilerTrace (checked : CheckedOpenDiagram signature) :
           some position}
       {tail : RegionRoute checked.val.diagram child target rest}
       {localWires : Nat}
-      {items : ItemSeq signature
+      {items : ItemSeq
         (checked.val.exposedWires.length + localWires) []}
       {focus : ItemSeq.Focus items}
-      {childBody : Region signature
+      {childBody : Region
         (checked.val.exposedWires.length + localWires) []}
       {atIndex : items.focusAt? position.val = some focus}
       {isCut : focus.item = .cut childBody}
@@ -1331,7 +1331,7 @@ inductive OpenCompilerTrace (checked : CheckedOpenDiagram signature) :
       (binders : childState.binders =
         ConcreteElaboration.BinderContext.empty)
       (fuel : childState.fuel + 1 = checked.val.diagram.regionCount)
-      (tailTrace : CompilerTrace signature checked.val.diagram tail nested
+      (tailTrace : CompilerTrace  checked.val.diagram tail nested
         childState) :
       OpenCompilerTrace checked
         (.step hparent position hposition tail)
@@ -1347,10 +1347,10 @@ inductive OpenCompilerTrace (checked : CheckedOpenDiagram signature) :
           some position}
       {tail : RegionRoute checked.val.diagram child target rest}
       {localWires arity : Nat}
-      {items : ItemSeq signature
+      {items : ItemSeq
         (checked.val.exposedWires.length + localWires) []}
       {focus : ItemSeq.Focus items}
-      {childBody : Region signature
+      {childBody : Region
         (checked.val.exposedWires.length + localWires) (arity :: [])}
       {atIndex : items.focusAt? position.val = some focus}
       {isBubble : focus.item = .bubble arity childBody}
@@ -1366,16 +1366,16 @@ inductive OpenCompilerTrace (checked : CheckedOpenDiagram signature) :
       (binders : childState.binders =
         ConcreteElaboration.BinderContext.empty.push child arity)
       (fuel : childState.fuel + 1 = checked.val.diagram.regionCount)
-      (tailTrace : CompilerTrace signature checked.val.diagram tail nested
+      (tailTrace : CompilerTrace  checked.val.diagram tail nested
         childState) :
       OpenCompilerTrace checked
         (.step hparent position hposition tail)
         (.bubble focus atIndex isBubble nested) state
 
 noncomputable def OpenCompilerTrace.leaf
-    {checked : CheckedOpenDiagram signature}
+    {checked : CheckedOpenDiagram }
     {target : Fin checked.val.diagram.regionCount} {path : List Nat}
-    {body : Region signature checked.val.exposedWires.length []}
+    {body : Region  checked.val.exposedWires.length []}
     {route : RegionRoute checked.val.diagram checked.val.diagram.root target
       path}
     {witness : Region.ContextPath body path}
@@ -1394,9 +1394,9 @@ noncomputable def OpenCompilerTrace.leaf
       exact .nested tailTrace.leaf.underBubble
 
 def OpenCompilerTrace.cutDepth
-    {checked : CheckedOpenDiagram signature}
+    {checked : CheckedOpenDiagram }
     {target : Fin checked.val.diagram.regionCount} {path : List Nat}
-    {body : Region signature checked.val.exposedWires.length []}
+    {body : Region  checked.val.exposedWires.length []}
     {route : RegionRoute checked.val.diagram checked.val.diagram.root target
       path}
     {witness : Region.ContextPath body path}
@@ -1416,40 +1416,40 @@ def OpenCompilerTrace.cutDepth
 
 /-- Complete retained result of an ordinary route compilation. -/
 structure CompilerTraceResult
-    (checked : CheckedDiagram signature)
+    (checked : CheckedDiagram )
     {start target : Fin checked.val.regionCount} {path : List Nat}
     (route : RegionRoute checked.val start target path)
     {rels : Theory.RelCtx}
     (context : ConcreteElaboration.WireContext checked.val)
     (binders : ConcreteElaboration.BinderContext checked.val rels)
-    (fuel : Nat) (body : Region signature context.length rels) where
+    (fuel : Nat) (body : Region  context.length rels) where
   witness : Region.ContextPath body path
   state : Region.ContextPath.CompilerLeaf checked.val start (.here body)
   inherited_eq : state.inheritedWires = context
   binders_eq : state.binders = binders
   fuel_eq : state.fuel + 1 = fuel
-  trace : CompilerTrace signature checked.val route witness state
+  trace : CompilerTrace  checked.val route witness state
 
 /-- Complete retained result of open-root route compilation. -/
 structure OpenCompilerTraceResult
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     {target : Fin checked.val.diagram.regionCount} {path : List Nat}
     (route : RegionRoute checked.val.diagram checked.val.diagram.root target
       path)
-    (body : Region signature checked.val.exposedWires.length []) where
+    (body : Region  checked.val.exposedWires.length []) where
   witness : Region.ContextPath body path
   state : OpenRootCompilerState checked body
   trace : OpenCompilerTrace checked route witness state
 
 theorem compileRegion_route_context_complete
-    (checked : CheckedDiagram signature)
+    (checked : CheckedDiagram )
     {start target : Fin checked.val.regionCount} {path : List Nat}
     (route : RegionRoute checked.val start target path)
     {fuel : Nat} {rels : Theory.RelCtx}
     {context : ConcreteElaboration.WireContext checked.val}
     {binders : ConcreteElaboration.BinderContext checked.val rels}
-    {body : Region signature context.length rels}
-    (hcompile : ConcreteElaboration.compileRegion? signature checked.val fuel
+    {body : Region  context.length rels}
+    (hcompile : ConcreteElaboration.compileRegion?  checked.val fuel
       start context binders = some body)
     (wiresExact : (context.extend start).Exact start)
     (bindersCover : binders.Covers start)
@@ -1462,8 +1462,8 @@ theorem compileRegion_route_context_complete
       | zero => simp [ConcreteElaboration.compileRegion?] at hcompile
       | succ fuel =>
           simp only [ConcreteElaboration.compileRegion?] at hcompile
-          cases hitems : ConcreteElaboration.compileOccurrencesWith? signature
-              checked.val (ConcreteElaboration.compileRegion? signature
+          cases hitems : ConcreteElaboration.compileOccurrencesWith?
+              checked.val (ConcreteElaboration.compileRegion?
                 checked.val fuel)
               (context.extend region) binders
               (ConcreteElaboration.localOccurrences checked.val region) with
@@ -1498,8 +1498,8 @@ theorem compileRegion_route_context_complete
       | zero => simp [ConcreteElaboration.compileRegion?] at hcompile
       | succ fuel =>
           simp only [ConcreteElaboration.compileRegion?] at hcompile
-          cases hitems : ConcreteElaboration.compileOccurrencesWith? signature
-              checked.val (ConcreteElaboration.compileRegion? signature
+          cases hitems : ConcreteElaboration.compileOccurrencesWith?
+              checked.val (ConcreteElaboration.compileRegion?
                 checked.val fuel)
               (context.extend start) binders
               (ConcreteElaboration.localOccurrences checked.val start) with
@@ -1509,7 +1509,7 @@ theorem compileRegion_route_context_complete
               subst body
               obtain ⟨itemFocus, hitemFocus, hitemCompiled⟩ :=
                 compiledOccurrence_focus checked.val
-                  (ConcreteElaboration.compileRegion? signature checked.val fuel)
+                  (ConcreteElaboration.compileRegion?  checked.val fuel)
                   (context.extend start) rels binders
                   (ConcreteElaboration.localOccurrences checked.val start) items
                   (.child child) position hitems hposition
@@ -1546,7 +1546,7 @@ theorem compileRegion_route_context_complete
                   subst parent
                   simp only [ConcreteElaboration.compileOccurrenceWith?, hchild]
                     at hitemCompiled
-                  cases hchildBody : ConcreteElaboration.compileRegion? signature
+                  cases hchildBody : ConcreteElaboration.compileRegion?
                       checked.val fuel child (context.extend start) binders with
                   | none => simp [hchildBody] at hitemCompiled
                   | some childBody =>
@@ -1605,7 +1605,7 @@ theorem compileRegion_route_context_complete
                   subst parent
                   simp only [ConcreteElaboration.compileOccurrenceWith?, hchild]
                     at hitemCompiled
-                  cases hchildBody : ConcreteElaboration.compileRegion? signature
+                  cases hchildBody : ConcreteElaboration.compileRegion?
                       checked.val fuel child (context.extend start)
                       (binders.push child arity) with
                   | none => simp [hchildBody] at hitemCompiled
@@ -1663,7 +1663,7 @@ theorem compileRegion_route_context_complete
                       }⟩
 
 theorem openRootWires_exact
-    (checked : CheckedOpenDiagram signature) :
+    (checked : CheckedOpenDiagram ) :
     ConcreteElaboration.WireContext.Exact
       (checked.val.exposedWires ++ checked.val.hiddenWires)
       checked.val.diagram.root := by
@@ -1686,19 +1686,19 @@ theorem openRootWires_exact
         checked.val checked.property wire).mpr hscope
 
 theorem compileOpenRoot_route_context_complete
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     {target : Fin checked.val.diagram.regionCount} {path : List Nat}
     (route : RegionRoute checked.val.diagram checked.val.diagram.root target path)
-    {body : Region signature checked.val.exposedWires.length []}
-    (hcompile : ConcreteElaboration.compileRoot? signature checked.val.diagram
+    {body : Region  checked.val.exposedWires.length []}
+    (hcompile : ConcreteElaboration.compileRoot?  checked.val.diagram
       checked.val.exposedWires checked.val.hiddenWires = some body) :
     Nonempty (OpenCompilerTraceResult checked route body) := by
   cases route with
   | here =>
       simp only [ConcreteElaboration.compileRoot?] at hcompile
-      cases hitems : ConcreteElaboration.compileOccurrencesWith? signature
+      cases hitems : ConcreteElaboration.compileOccurrencesWith?
           checked.val.diagram
-          (ConcreteElaboration.compileRegion? signature checked.val.diagram
+          (ConcreteElaboration.compileRegion?  checked.val.diagram
             checked.val.diagram.regionCount)
           (checked.val.exposedWires ++ checked.val.hiddenWires)
           ConcreteElaboration.BinderContext.empty
@@ -1722,9 +1722,9 @@ theorem compileOpenRoot_route_context_complete
           }⟩
   | @step start child target rest hparent position hposition tail =>
       simp only [ConcreteElaboration.compileRoot?] at hcompile
-      cases hitems : ConcreteElaboration.compileOccurrencesWith? signature
+      cases hitems : ConcreteElaboration.compileOccurrencesWith?
           checked.val.diagram
-          (ConcreteElaboration.compileRegion? signature checked.val.diagram
+          (ConcreteElaboration.compileRegion?  checked.val.diagram
             checked.val.diagram.regionCount)
           (checked.val.exposedWires ++ checked.val.hiddenWires)
           ConcreteElaboration.BinderContext.empty
@@ -1736,7 +1736,7 @@ theorem compileOpenRoot_route_context_complete
           subst body
           obtain ⟨itemFocus, hitemFocus, hitemCompiled⟩ :=
             compiledOccurrence_focus checked.val.diagram
-              (ConcreteElaboration.compileRegion? signature checked.val.diagram
+              (ConcreteElaboration.compileRegion?  checked.val.diagram
                 checked.val.diagram.regionCount)
               (checked.val.exposedWires ++ checked.val.hiddenWires) []
               ConcreteElaboration.BinderContext.empty
@@ -1763,7 +1763,7 @@ theorem compileOpenRoot_route_context_complete
             itemsComputation := hitems
             bodyComputation := rfl
           }
-          let closed : CheckedDiagram signature :=
+          let closed : CheckedDiagram  :=
             ⟨checked.val.diagram, checked.property.diagram_well_formed⟩
           cases hchild : checked.val.diagram.regions child with
           | sheet => simp [hchild, CRegion.parent?] at hparent
@@ -1773,7 +1773,7 @@ theorem compileOpenRoot_route_context_complete
               subst parent
               simp only [ConcreteElaboration.compileOccurrenceWith?, hchild]
                 at hitemCompiled
-              cases hchildBody : ConcreteElaboration.compileRegion? signature
+              cases hchildBody : ConcreteElaboration.compileRegion?
                   checked.val.diagram checked.val.diagram.regionCount child
                   (checked.val.exposedWires ++ checked.val.hiddenWires)
                   ConcreteElaboration.BinderContext.empty with
@@ -1839,7 +1839,7 @@ theorem compileOpenRoot_route_context_complete
               subst parent
               simp only [ConcreteElaboration.compileOccurrenceWith?, hchild]
                 at hitemCompiled
-              cases hchildBody : ConcreteElaboration.compileRegion? signature
+              cases hchildBody : ConcreteElaboration.compileRegion?
                   checked.val.diagram checked.val.diagram.regionCount child
                   (checked.val.exposedWires ++ checked.val.hiddenWires)
                   (ConcreteElaboration.BinderContext.empty.push child arity) with
@@ -1900,7 +1900,7 @@ theorem compileOpenRoot_route_context_complete
                       castInherited castBinders castFuel castTrace
                   }⟩
 
-theorem contextPathAtRegion_complete (checked : CheckedDiagram signature)
+theorem contextPathAtRegion_complete (checked : CheckedDiagram )
     (region : Fin checked.val.regionCount) :
     ∃ path, regionPath? checked region = some path ∧
       Nonempty (Region.ContextPath checked.elaborate path) := by
@@ -1909,7 +1909,7 @@ theorem contextPathAtRegion_complete (checked : CheckedDiagram signature)
   obtain ⟨body, hroot, helaborate⟩ :=
     CheckedDiagram.elaborate_computation checked
   have hcompile :
-      ConcreteElaboration.compileRegion? signature checked.val
+      ConcreteElaboration.compileRegion?  checked.val
           (checked.val.regionCount + 1) checked.val.root []
           ConcreteElaboration.BinderContext.empty = some body := by
     rw [← ConcreteElaboration.compileRoot?_closed_eq_compileRegion?]
@@ -1928,7 +1928,7 @@ intrinsic occurrence in the checked elaboration.  Semantic proofs consume this
 record instead of comparing dependent proof fields returned by the executable
 lookup.
 -/
-structure SiteView (checked : CheckedDiagram signature)
+structure SiteView (checked : CheckedDiagram )
     (site : Fin checked.val.regionCount) where
   path : List Nat
   concretePath : regionPath? checked site = some path
@@ -1958,14 +1958,14 @@ theorem SiteView.rebuild (view : SiteView checked site) :
     view.focus.context.fill view.focus.body = checked.elaborate :=
   view.focus.rebuild
 
-theorem siteView_complete (checked : CheckedDiagram signature)
+theorem siteView_complete (checked : CheckedDiagram )
     (site : Fin checked.val.regionCount) : Nonempty (SiteView checked site) := by
   obtain ⟨path, concretePath⟩ := regionPath?_complete checked site
   let route := regionPath?_route checked site concretePath
   obtain ⟨body, rootComputation, elaborates⟩ :=
     CheckedDiagram.elaborate_computation checked
   have regionComputation :
-      ConcreteElaboration.compileRegion? signature checked.val
+      ConcreteElaboration.compileRegion?  checked.val
           (checked.val.regionCount + 1) checked.val.root []
           ConcreteElaboration.BinderContext.empty = some body := by
     rw [← ConcreteElaboration.compileRoot?_closed_eq_compileRegion?]
@@ -1983,12 +1983,12 @@ theorem siteView_complete (checked : CheckedDiagram signature)
     result
   }⟩
 
-private def checkedBodyDiagram (checked : CheckedOpenDiagram signature) :
-    CheckedDiagram signature :=
+private def checkedBodyDiagram (checked : CheckedOpenDiagram ) :
+    CheckedDiagram  :=
   ⟨checked.val.diagram, checked.property.diagram_well_formed⟩
 
 /-- An intrinsic context view inside the body of an open concrete diagram. -/
-structure OpenSiteView (checked : CheckedOpenDiagram signature)
+structure OpenSiteView (checked : CheckedOpenDiagram )
     (site : Fin checked.val.diagram.regionCount) where
   path : List Nat
   concretePath : regionPath? (checkedBodyDiagram checked) site = some path
@@ -2016,7 +2016,7 @@ theorem OpenSiteView.rebuild (view : OpenSiteView checked site) :
     view.focus.context.fill view.focus.body = checked.elaborate.body :=
   view.focus.rebuild
 
-theorem openSiteView_complete (checked : CheckedOpenDiagram signature)
+theorem openSiteView_complete (checked : CheckedOpenDiagram )
     (site : Fin checked.val.diagram.regionCount) :
     Nonempty (OpenSiteView checked site) := by
   obtain ⟨path, concretePath⟩ :=
@@ -2036,12 +2036,12 @@ theorem openSiteView_complete (checked : CheckedOpenDiagram signature)
 
 /-- The checked closed-root compiler exposes its item sequence directly.
 This is the witness-elimination entry point used by checked-success wrappers. -/
-theorem checkedRootItems_complete (checked : CheckedDiagram signature) :
-    ∃ items : ItemSeq signature
+theorem checkedRootItems_complete (checked : CheckedDiagram ) :
+    ∃ items : ItemSeq
         (ConcreteElaboration.exactScopeWires checked.val
           checked.val.root).length [],
-      ConcreteElaboration.compileOccurrencesWith? signature checked.val
-        (ConcreteElaboration.compileRegion? signature checked.val
+      ConcreteElaboration.compileOccurrencesWith?  checked.val
+        (ConcreteElaboration.compileRegion?  checked.val
           checked.val.regionCount)
         (ConcreteElaboration.exactScopeWires checked.val checked.val.root)
         ConcreteElaboration.BinderContext.empty
@@ -2049,9 +2049,9 @@ theorem checkedRootItems_complete (checked : CheckedDiagram signature) :
           some items := by
   obtain ⟨body, hroot, _⟩ := CheckedDiagram.elaborate_computation checked
   simp only [ConcreteElaboration.compileRoot?] at hroot
-  cases hitems : ConcreteElaboration.compileOccurrencesWith? signature
+  cases hitems : ConcreteElaboration.compileOccurrencesWith?
       checked.val
-      (ConcreteElaboration.compileRegion? signature checked.val
+      (ConcreteElaboration.compileRegion?  checked.val
         checked.val.regionCount)
       (ConcreteElaboration.exactScopeWires checked.val checked.val.root)
       ConcreteElaboration.BinderContext.empty
@@ -2061,11 +2061,11 @@ theorem checkedRootItems_complete (checked : CheckedDiagram signature) :
 
 /-- Open-root counterpart of `checkedRootItems_complete`. -/
 theorem checkedOpenRootItems_complete
-    (checked : CheckedOpenDiagram signature) :
-    ∃ items : ItemSeq signature checked.val.rootWires.length [],
-      ConcreteElaboration.compileOccurrencesWith? signature
+    (checked : CheckedOpenDiagram ) :
+    ∃ items : ItemSeq  checked.val.rootWires.length [],
+      ConcreteElaboration.compileOccurrencesWith?
         checked.val.diagram
-        (ConcreteElaboration.compileRegion? signature checked.val.diagram
+        (ConcreteElaboration.compileRegion?  checked.val.diagram
           checked.val.diagram.regionCount)
         checked.val.rootWires ConcreteElaboration.BinderContext.empty
         (ConcreteElaboration.localOccurrences checked.val.diagram
@@ -2073,9 +2073,9 @@ theorem checkedOpenRootItems_complete
   obtain ⟨body, hroot, _⟩ :=
     CheckedOpenDiagram.elaborate_body_computation checked
   simp only [ConcreteElaboration.compileRoot?] at hroot
-  cases hitems : ConcreteElaboration.compileOccurrencesWith? signature
+  cases hitems : ConcreteElaboration.compileOccurrencesWith?
       checked.val.diagram
-      (ConcreteElaboration.compileRegion? signature checked.val.diagram
+      (ConcreteElaboration.compileRegion?  checked.val.diagram
         checked.val.diagram.regionCount)
       (checked.val.exposedWires ++ checked.val.hiddenWires)
       ConcreteElaboration.BinderContext.empty
@@ -2086,7 +2086,7 @@ theorem checkedOpenRootItems_complete
       refine ⟨items, ?_⟩
       simpa only [OpenConcreteDiagram.rootWires] using hitems
 
-theorem contextFocusAtRegion_complete (checked : CheckedDiagram signature)
+theorem contextFocusAtRegion_complete (checked : CheckedDiagram )
     (region : Fin checked.val.regionCount) :
     ∃ path, regionPath? checked region = some path ∧
       Nonempty (Region.ContextFocus checked.elaborate) := by
@@ -2101,22 +2101,21 @@ whole-root splice/compiler commuting theorems below. -/
 theorem regionIso_fill_denotation
     {sourceWires targetWires outerWires : Nat}
     {rels outerRels : Theory.RelCtx}
-    {source : Region signature sourceWires rels}
-    {target : Region signature targetWires rels}
+    {source : Region  sourceWires rels}
+    {target : Region  targetWires rels}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    (hiso : RegionIso signature wire rels source target)
-    (context : DiagramContext signature outerWires targetWires outerRels rels)
+    (hiso : RegionIso  wire rels source target)
+    (context : DiagramContext  outerWires targetWires outerRels rels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (relEnv : RelEnv model.Carrier outerRels) :
-    denoteRegion model named env relEnv
+    denoteRegion model  env relEnv
         (context.fill (source.renameWires wire)) ↔
-      denoteRegion model named env relEnv (context.fill target) := by
+      denoteRegion model  env relEnv (context.fill target) := by
   apply DiagramContext.fill_equiv
   intro holeEnv holeRelEnv
   rw [denoteRegion_renameWires]
-  exact hiso.denotation model named (holeEnv ∘ wire) holeEnv holeRelEnv
+  exact hiso.denotation model  (holeEnv ∘ wire) holeEnv holeRelEnv
     (fun _ => rfl)
 
 /-- Version of `RegionIso.fill_denotation` where the compiler records the
@@ -2124,33 +2123,32 @@ target region on a propositionally equal wire carrier. -/
 theorem regionIso_fill_denotation_cast
     {sourceWires targetWires holeWires outerWires : Nat}
     {rels outerRels : Theory.RelCtx}
-    {source : Region signature sourceWires rels}
-    {target : Region signature targetWires rels}
+    {source : Region  sourceWires rels}
+    {target : Region  targetWires rels}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    (hiso : RegionIso signature wire rels source target)
+    (hiso : RegionIso  wire rels source target)
     (targetWiresEq : targetWires = holeWires)
-    (context : DiagramContext signature outerWires holeWires outerRels rels)
+    (context : DiagramContext  outerWires holeWires outerRels rels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (relEnv : RelEnv model.Carrier outerRels) :
-    denoteRegion model named env relEnv
+    denoteRegion model  env relEnv
         (context.fill
           (source.renameWires
             (wire.trans (FiniteEquiv.finCast targetWiresEq)))) ↔
-      denoteRegion model named env relEnv
+      denoteRegion model  env relEnv
         (context.fill (target.castWiresEq targetWiresEq)) := by
   have hcast := RegionIso.renameWiresEquiv target
     (FiniteEquiv.finCast targetWiresEq)
   have hcomposed := hiso.trans hcast
   simpa only [Region.castWiresEq_eq_renameWires] using
-    regionIso_fill_denotation hcomposed context model named env relEnv
+    regionIso_fill_denotation hcomposed context model  env relEnv
 
 /-- Replace only the body of an open diagram, retaining its external carrier
 and its ordered (possibly repeated) boundary-class map definitionally. -/
-def replaceOpenBody (diagram : OpenDiagram signature arity)
-    (body : Region signature diagram.externalClasses []) :
-    OpenDiagram signature arity where
+def replaceOpenBody (diagram : OpenDiagram  arity)
+    (body : Region  diagram.externalClasses []) :
+    OpenDiagram  arity where
   externalClasses := diagram.externalClasses
   boundary := diagram.boundary
   boundary_surjective := diagram.boundary_surjective
@@ -2160,16 +2158,15 @@ def replaceOpenBody (diagram : OpenDiagram signature arity)
 The external carrier and ordered boundary map are definitionally shared, so
 repeated aliases retain exactly the same argument-equality obligations. -/
 theorem denote_replaceOpenBody_mono
-    (diagram : OpenDiagram signature arity)
-    (before after : Region signature diagram.externalClasses [])
+    (diagram : OpenDiagram  arity)
+    (before after : Region  diagram.externalClasses [])
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin arity → model.Carrier)
     (entails : ∀ env : Fin diagram.externalClasses → model.Carrier,
-      denoteRegion (relCtx := []) model named env PUnit.unit before →
-        denoteRegion (relCtx := []) model named env PUnit.unit after) :
-    denoteOpen model named (replaceOpenBody diagram before) args →
-      denoteOpen model named (replaceOpenBody diagram after) args := by
+      denoteRegion (relCtx := []) model  env PUnit.unit before →
+        denoteRegion (relCtx := []) model  env PUnit.unit after) :
+    denoteOpen model  (replaceOpenBody diagram before) args →
+      denoteOpen model  (replaceOpenBody diagram after) args := by
   rintro ⟨sourceAssignment, hargs, hbody⟩
   let targetAssignment : BoundaryAssignment
       (replaceOpenBody diagram after) model.Carrier := {
@@ -2183,16 +2180,15 @@ theorem denote_replaceOpenBody_mono
 ordered boundary interface.  In particular repeated boundary aliases are
 preserved because both assignments use the same class and argument maps. -/
 theorem denote_replaceOpenBody_iff
-    (diagram : OpenDiagram signature arity)
-    (body : Region signature diagram.externalClasses [])
+    (diagram : OpenDiagram  arity)
+    (body : Region  diagram.externalClasses [])
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin arity → model.Carrier)
     (hequiv : ∀ env : Fin diagram.externalClasses → model.Carrier,
-      denoteRegion (relCtx := []) model named env PUnit.unit body ↔
-        denoteRegion (relCtx := []) model named env PUnit.unit diagram.body) :
-    denoteOpen model named (replaceOpenBody diagram body) args ↔
-      denoteOpen model named diagram args := by
+      denoteRegion (relCtx := []) model  env PUnit.unit body ↔
+        denoteRegion (relCtx := []) model  env PUnit.unit diagram.body) :
+    denoteOpen model  (replaceOpenBody diagram body) args ↔
+      denoteOpen model  diagram args := by
   constructor
   · rintro ⟨sourceAssignment, hargs, hbody⟩
     let targetAssignment : BoundaryAssignment diagram model.Carrier := {
@@ -2212,7 +2208,7 @@ theorem denote_replaceOpenBody_iff
     refine ⟨sourceAssignment, hargs, ?_⟩
     exact (hequiv targetAssignment.classes).mpr hbody
 
-def contextAtRegion? (checked : CheckedDiagram signature)
+def contextAtRegion? (checked : CheckedDiagram )
     (region : Fin checked.val.regionCount) :
     Option (Region.ContextFocus checked.elaborate) := do
   let path ← regionPath? checked region
@@ -2303,7 +2299,7 @@ theorem BinderSpine.TerminalBodyContract.nonterminal_exactScopeWires_eq_nil
       wire hboundary scope
 
 theorem BinderSpine.enclosing_proxy_aux
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     (spine : BinderSpine checked.val.diagram) :
     ∀ (value : Nat) (bound : value < spine.proxyCount)
       {ancestor : Fin checked.val.diagram.regionCount},
@@ -2345,7 +2341,7 @@ theorem BinderSpine.enclosing_proxy_aux
 /-- The only regions enclosing a proxy are the sheet and its earlier proxy
 prefix. This turns the stored spine into a complete lexical-scope fact. -/
 theorem BinderSpine.enclosing_proxy_is_root_or_proxy
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     (spine : BinderSpine checked.val.diagram)
     (index : Fin spine.proxyCount)
     {ancestor : Fin checked.val.diagram.regionCount}
@@ -2359,11 +2355,11 @@ theorem BinderSpine.enclosing_proxy_is_root_or_proxy
 the open pattern's exposed identities. This is the wire half of the lexical
 interface needed by capture-avoiding splice elaboration. -/
 theorem Region.ContextPath.CompilerLeaf.inherited_mem_iff_exposed
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     (spine : BinderSpine checked.val.diagram)
     (contract : spine.TerminalBodyContract checked.val)
     (hnonempty : spine.proxyCount ≠ 0)
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     (witness : Region.ContextPath body path)
     (terminal : Fin spine.proxyCount)
     (terminal_is_last : terminal.val = spine.proxyCount - 1)
@@ -2436,11 +2432,11 @@ theorem Region.ContextPath.CompilerLeaf.inherited_mem_iff_exposed
 /-- Canonical finite reindexing between the compiler's terminal inherited
 context and the pattern's exposed-wire carrier. -/
 def Region.ContextPath.CompilerLeaf.inheritedExposedEquiv
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     (spine : BinderSpine checked.val.diagram)
     (contract : spine.TerminalBodyContract checked.val)
     (hnonempty : spine.proxyCount ≠ 0)
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     (witness : Region.ContextPath body path)
     (terminal : Fin spine.proxyCount)
     (terminal_is_last : terminal.val = spine.proxyCount - 1)
@@ -2461,11 +2457,11 @@ def Region.ContextPath.CompilerLeaf.inheritedExposedEquiv
       hnonempty witness terminal terminal_is_last wire).symm)
 
 theorem Region.ContextPath.CompilerLeaf.inheritedExposedEquiv_spec
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     (spine : BinderSpine checked.val.diagram)
     (contract : spine.TerminalBodyContract checked.val)
     (hnonempty : spine.proxyCount ≠ 0)
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     (witness : Region.ContextPath body path)
     (terminal : Fin spine.proxyCount)
     (terminal_is_last : terminal.val = spine.proxyCount - 1)
@@ -2485,9 +2481,9 @@ of the designated proxy bubbles.  This is the relation half of the terminal
 lexical interface; the sheet alternative is impossible because enumeration
 binders are bubbles. -/
 theorem Region.ContextPath.CompilerLeaf.binder_is_proxy
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     (spine : BinderSpine checked.val.diagram)
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     (witness : Region.ContextPath body path)
     (terminal : Fin spine.proxyCount)
     (leaf : Region.ContextPath.CompilerLeaf checked.val.diagram
@@ -2508,10 +2504,10 @@ theorem Region.ContextPath.CompilerLeaf.binder_is_proxy
 /-- A terminal relation variable and its owning proxy carry definitionally
 the same arity. -/
 theorem Region.ContextPath.CompilerLeaf.binder_proxy_arity
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     (spine : BinderSpine checked.val.diagram)
     {site : Fin checked.val.diagram.regionCount}
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     (witness : Region.ContextPath body path)
     (leaf : Region.ContextPath.CompilerLeaf checked.val.diagram site witness)
     (index : Fin witness.toFocus.holeRels.length)

@@ -9,10 +9,9 @@ open VisualProof.Rule.DoubleCutElimTrace
 
 theorem focusedOccurrence_itemSimulation
     (trace : VacuousElimTrace input bubble raw)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
-    (targetWellFormed : input.WellFormed signature)
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
+    (targetWellFormed : input.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
     (targetParent : Fin input.regionCount)
@@ -65,39 +64,39 @@ theorem focusedOccurrence_itemSimulation
       (childSourceContext.extend child).Exact child →
       (childTargetContext.extend (trace.origin child)).Exact
         (trace.origin child) →
-      ∀ (sourceBody : Region signature childSourceContext.length
+      ∀ (sourceBody : Region  childSourceContext.length
           childSourceRels)
-        (targetBody : Region signature childTargetContext.length
+        (targetBody : Region  childTargetContext.length
           childTargetRels),
-      ConcreteElaboration.compileRegion? signature trace.sourceDiagram
+      ConcreteElaboration.compileRegion?  trace.sourceDiagram
           fuelSource child childSourceContext childSourceBinders =
         some sourceBody →
-      ConcreteElaboration.compileRegion? signature input childFuelTarget
+      ConcreteElaboration.compileRegion?  input childFuelTarget
           (trace.origin child) childTargetContext childTargetBinders =
         some targetBody →
-      ConcreteElaboration.RegionSimulation model named childDirection
+      ConcreteElaboration.RegionSimulation model  childDirection
         childContext.indexRelation
         (sourceBody.renameRelations childBinderWitness.relationMap)
         targetBody)
     (member : occurrence ∈ ConcreteElaboration.localOccurrences
       trace.sourceDiagram (trace.targetIndex targetWellFormed))
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrenceWith? signature trace.sourceDiagram
-        (ConcreteElaboration.compileRegion? signature trace.sourceDiagram
+      ConcreteElaboration.compileOccurrenceWith?  trace.sourceDiagram
+        (ConcreteElaboration.compileRegion?  trace.sourceDiagram
           fuelSource)
         sourceContext sourceBinders occurrence = some sourceItem)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrenceWith? signature input
-        (ConcreteElaboration.compileRegion? signature input fuelTarget)
+      ConcreteElaboration.compileOccurrenceWith?  input
+        (ConcreteElaboration.compileRegion?  input fuelTarget)
         targetContext targetBinders (trace.occurrenceMap occurrence) =
           some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       contextWitness.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   apply trace.compileOccurrence_itemSimulation sourceWellFormed
-    targetWellFormed model named direction fuelSource fuelTarget
+    targetWellFormed model  direction fuelSource fuelTarget
     (trace.targetIndex targetWellFormed) targetParent sourceContext
     targetContext contextWitness sourceBinders targetBinders binderWitness
     sourceExact targetExact sourceBindersCover targetBindersCover
@@ -123,10 +122,9 @@ theorem focusedOccurrence_itemSimulation
 
 theorem focusedItems_regionSimulation
     (trace : VacuousElimTrace input bubble raw)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
-    (targetWellFormed : input.WellFormed signature)
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
+    (targetWellFormed : input.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     {sourceRels targetRels : RelCtx}
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
@@ -177,41 +175,41 @@ theorem focusedItems_regionSimulation
       (childSourceContext.extend child).Exact child →
       (childTargetContext.extend (trace.origin child)).Exact
         (trace.origin child) →
-      ∀ (sourceBody : Region signature childSourceContext.length
+      ∀ (sourceBody : Region  childSourceContext.length
           childSourceRels)
-        (targetBody : Region signature childTargetContext.length
+        (targetBody : Region  childTargetContext.length
           childTargetRels),
-      ConcreteElaboration.compileRegion? signature trace.sourceDiagram
+      ConcreteElaboration.compileRegion?  trace.sourceDiagram
           fuelSource child childSourceContext childSourceBinders =
         some sourceBody →
-      ConcreteElaboration.compileRegion? signature input childFuelTarget
+      ConcreteElaboration.compileRegion?  input childFuelTarget
           (trace.origin child) childTargetContext childTargetBinders =
         some targetBody →
-      ConcreteElaboration.RegionSimulation model named childDirection
+      ConcreteElaboration.RegionSimulation model  childDirection
         childContext.indexRelation
         (sourceBody.renameRelations childBinderWitness.relationMap)
         targetBody)
-    (sourceItems : ItemSeq signature
+    (sourceItems : ItemSeq
       (sourceContext.extend (trace.targetIndex targetWellFormed)).length
       sourceRels)
-    (targetItems : ItemSeq signature
+    (targetItems : ItemSeq
       (targetContext.extend trace.parent).length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         trace.sourceDiagram
-        (ConcreteElaboration.compileRegion? signature trace.sourceDiagram
+        (ConcreteElaboration.compileRegion?  trace.sourceDiagram
           fuelSource)
         (sourceContext.extend (trace.targetIndex targetWellFormed))
         sourceBinders
         (ConcreteElaboration.localOccurrences trace.sourceDiagram
           (trace.targetIndex targetWellFormed)) = some sourceItems)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input
-        (ConcreteElaboration.compileRegion? signature input fuelTarget)
+      ConcreteElaboration.compileOccurrencesWith?  input
+        (ConcreteElaboration.compileRegion?  input fuelTarget)
         (targetContext.extend trace.parent) targetBinders
         (ConcreteElaboration.localOccurrences input trace.parent) =
           some targetItems) :
-    ConcreteElaboration.RegionSimulation model named direction
+    ConcreteElaboration.RegionSimulation model  direction
       context.indexRelation
       ((ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
         (trace.targetIndex targetWellFormed) sourceItems).renameRelations
@@ -222,15 +220,15 @@ theorem focusedItems_regionSimulation
       (region : Fin trace.sourceDiagram.regionCount) →
       (context : ConcreteElaboration.WireContext trace.sourceDiagram) →
       ConcreteElaboration.BinderContext trace.sourceDiagram rels →
-      Option (Region signature context.length rels) :=
-    fun {rels} => ConcreteElaboration.compileRegion? signature
+      Option (Region  context.length rels) :=
+    fun {rels} => ConcreteElaboration.compileRegion?
       trace.sourceDiagram fuelSource
   let targetRecurse : ∀ {rels : RelCtx},
       (region : Fin input.regionCount) →
       (context : ConcreteElaboration.WireContext input) →
       ConcreteElaboration.BinderContext input rels →
-      Option (Region signature context.length rels) :=
-    fun {rels} => ConcreteElaboration.compileRegion? signature input fuelTarget
+      Option (Region  context.length rels) :=
+    fun {rels} => ConcreteElaboration.compileRegion?  input fuelTarget
   obtain ⟨sourcePartitionItems, sourcePartitionCompiled⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_complete sourceRecurse
       (sourceContext.extend (trace.targetIndex targetWellFormed))
@@ -275,7 +273,7 @@ theorem focusedItems_regionSimulation
   dsimp only [targetRecurse] at targetBubbleCompiled
   simp only [ConcreteElaboration.compileOccurrenceWith?, trace.bubble_eq]
     at targetBubbleCompiled
-  cases bubbleResult : ConcreteElaboration.compileRegion? signature input
+  cases bubbleResult : ConcreteElaboration.compileRegion?  input
       fuelTarget bubble (targetContext.extend trace.parent)
       (targetBinders.push bubble trace.arity) with
   | none => simp [bubbleResult] at targetBubbleCompiled
@@ -310,22 +308,22 @@ theorem focusedItems_regionSimulation
           have keptPointwise : ∀ occurrence,
               occurrence ∈ trace.keptOccurrences targetWellFormed →
               ∀ sourceItem targetItem,
-              ConcreteElaboration.compileOccurrenceWith? signature
+              ConcreteElaboration.compileOccurrenceWith?
                   trace.sourceDiagram sourceRecurse
                   (sourceContext.extend (trace.targetIndex targetWellFormed))
                   sourceBinders occurrence = some sourceItem →
-              ConcreteElaboration.compileOccurrenceWith? signature input
+              ConcreteElaboration.compileOccurrenceWith?  input
                   targetRecurse (targetContext.extend trace.parent)
                   targetBinders (trace.occurrenceMap occurrence) =
                     some targetItem →
-              ConcreteElaboration.ItemSimulation model named direction
+              ConcreteElaboration.ItemSimulation model  direction
                 focusedContext.indexRelation
                 (sourceItem.renameRelations binderWitness.relationMap)
                 targetItem := by
             intro occurrence member sourceItem targetItem
               sourceOccurrence targetOccurrence
             apply trace.focusedOccurrence_itemSimulation sourceWellFormed
-              targetWellFormed model named direction fuelSource
+              targetWellFormed model  direction fuelSource
               (bubbleFuel + 1) trace.parent
               (sourceContext.extend (trace.targetIndex targetWellFormed))
               (targetContext.extend trace.parent) focusedContext
@@ -345,24 +343,24 @@ theorem focusedItems_regionSimulation
           have selectedPointwise : ∀ occurrence,
               occurrence ∈ trace.selectedOccurrences targetWellFormed →
               ∀ sourceItem targetItem,
-              ConcreteElaboration.compileOccurrenceWith? signature
+              ConcreteElaboration.compileOccurrenceWith?
                   trace.sourceDiagram sourceRecurse
                   (sourceContext.extend (trace.targetIndex targetWellFormed))
                   sourceBinders occurrence = some sourceItem →
-              ConcreteElaboration.compileOccurrenceWith? signature input
-                  (ConcreteElaboration.compileRegion? signature input
+              ConcreteElaboration.compileOccurrenceWith?  input
+                  (ConcreteElaboration.compileRegion?  input
                     bubbleFuel)
                   ((targetContext.extend trace.parent).extend bubble)
                   (targetBinders.push bubble trace.arity)
                   (trace.occurrenceMap occurrence) = some targetItem →
-              ConcreteElaboration.ItemSimulation model named direction
+              ConcreteElaboration.ItemSimulation model  direction
                 selectedContext.indexRelation
                 (sourceItem.renameRelations bubbleBinderWitness.relationMap)
                 targetItem := by
             intro occurrence member sourceItem targetItem
               sourceOccurrence targetOccurrence
             apply trace.focusedOccurrence_itemSimulation sourceWellFormed
-              targetWellFormed model named direction fuelSource bubbleFuel
+              targetWellFormed model  direction fuelSource bubbleFuel
               bubble
               (sourceContext.extend (trace.targetIndex targetWellFormed))
               ((targetContext.extend trace.parent).extend bubble)
@@ -383,7 +381,7 @@ theorem focusedItems_regionSimulation
             · exact targetOccurrence
           have keptSimulation :=
             ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
-              model named direction sourceRecurse targetRecurse
+              model  direction sourceRecurse targetRecurse
               (sourceContext.extend (trace.targetIndex targetWellFormed))
               (targetContext.extend trace.parent) sourceBinders targetBinders
               focusedContext.indexRelation binderWitness.relationMap
@@ -392,8 +390,8 @@ theorem focusedItems_regionSimulation
               targetKeptCompiled
           have selectedSimulation :=
             ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
-              model named direction sourceRecurse
-              (ConcreteElaboration.compileRegion? signature input bubbleFuel)
+              model  direction sourceRecurse
+              (ConcreteElaboration.compileRegion?  input bubbleFuel)
               (sourceContext.extend (trace.targetIndex targetWellFormed))
               ((targetContext.extend trace.parent).extend bubble)
               sourceBinders (targetBinders.push bubble trace.arity)
@@ -403,7 +401,7 @@ theorem focusedItems_regionSimulation
               sourceSelectedCompiled targetSelectedCompiled
           have partitionSimulation :=
             trace.focusedPartition_regionSimulation targetWellFormed model
-              named direction sourceContext targetContext context sourceExact
+               direction sourceContext targetContext context sourceExact
               (fun sourceEnvironment targetEnvironment sourceRelations
                   targetRelations =>
                 freshForward
@@ -425,28 +423,28 @@ theorem focusedItems_regionSimulation
                 targetRelations :=
             RelEnv.pullback_agrees binderWitness.relationMap targetRelations
           have sourceOriginalRename :
-              denoteRegion model named sourceEnvironment targetRelations
+              denoteRegion model  sourceEnvironment targetRelations
                   ((ConcreteElaboration.finishRegion trace.sourceDiagram
                     sourceContext (trace.targetIndex targetWellFormed)
                     sourceItems).renameRelations binderWitness.relationMap) ↔
-                denoteRegion model named sourceEnvironment sourceRelations
+                denoteRegion model  sourceEnvironment sourceRelations
                   (ConcreteElaboration.finishRegion trace.sourceDiagram
                     sourceContext (trace.targetIndex targetWellFormed)
                     sourceItems) :=
-            denoteRegion_renameRelations model named binderWitness.relationMap
+            denoteRegion_renameRelations model  binderWitness.relationMap
               sourceRelations targetRelations relationAgreement
               sourceEnvironment _
           have sourcePartitionRename :
-              denoteRegion model named sourceEnvironment targetRelations
+              denoteRegion model  sourceEnvironment targetRelations
                   ((ConcreteElaboration.finishRegion trace.sourceDiagram
                     sourceContext (trace.targetIndex targetWellFormed)
                     sourcePartitionItems).renameRelations
                       binderWitness.relationMap) ↔
-                denoteRegion model named sourceEnvironment sourceRelations
+                denoteRegion model  sourceEnvironment sourceRelations
                   (ConcreteElaboration.finishRegion trace.sourceDiagram
                     sourceContext (trace.targetIndex targetWellFormed)
                     sourcePartitionItems) :=
-            denoteRegion_renameRelations model named binderWitness.relationMap
+            denoteRegion_renameRelations model  binderWitness.relationMap
               sourceRelations targetRelations relationAgreement
               sourceEnvironment _
           have sourcePermutation :=
@@ -455,26 +453,26 @@ theorem focusedItems_regionSimulation
               (sourceContext.extend (trace.targetIndex targetWellFormed))
               sourceBinders
               (trace.focusOccurrences_perm_partition targetWellFormed).symm
-              sourceCompiled sourcePartitionCompiled model named
+              sourceCompiled sourcePartitionCompiled model
           have targetPermutation :=
             VisualProof.Rule.ModalSoundness.compileOccurrences_denote_perm
               input targetRecurse (targetContext.extend trace.parent)
               targetBinders
               (trace.targetFocusOccurrences_perm targetWellFormed).symm
-              targetCompiled targetPartitionCompiled model named
+              targetCompiled targetPartitionCompiled model
           rw [← sourcePartitionEq, ← targetPartitionEq] at partitionSimulation
           cases direction with
           | forward =>
               intro sourceDenotation
               obtain ⟨sourceLocal, sourceItemsDenote⟩ :=
                 (finishRegion_denote_iff trace.sourceDiagram sourceContext
-                  (trace.targetIndex targetWellFormed) sourceItems model named
+                  (trace.targetIndex targetWellFormed) sourceItems model
                   sourceEnvironment sourceRelations).mp
                   (sourceOriginalRename.mp sourceDenotation)
               have sourcePartitionRaw :=
                 (finishRegion_denote_iff trace.sourceDiagram sourceContext
                   (trace.targetIndex targetWellFormed) sourcePartitionItems
-                  model named sourceEnvironment sourceRelations).mpr
+                  model  sourceEnvironment sourceRelations).mpr
                   ⟨sourceLocal,
                     (sourcePermutation
                       (ConcreteElaboration.extendedEnvironment sourceContext
@@ -486,10 +484,10 @@ theorem focusedItems_regionSimulation
                 (sourcePartitionRename.mpr sourcePartitionRaw)
               obtain ⟨targetLocal, targetPartitionItemsDenote⟩ :=
                 (finishRegion_denote_iff input targetContext trace.parent
-                  targetPartitionItems model named targetEnvironment
+                  targetPartitionItems model  targetEnvironment
                   targetRelations).mp targetPartitionDenote
               apply (finishRegion_denote_iff input targetContext trace.parent
-                targetItems model named targetEnvironment targetRelations).mpr
+                targetItems model  targetEnvironment targetRelations).mpr
               exact ⟨targetLocal,
                 (targetPermutation
                   (ConcreteElaboration.extendedEnvironment targetContext
@@ -499,7 +497,7 @@ theorem focusedItems_regionSimulation
               intro targetDenotation
               obtain ⟨targetLocal, targetItemsDenote⟩ :=
                 (finishRegion_denote_iff input targetContext trace.parent
-                  targetItems model named targetEnvironment targetRelations).mp
+                  targetItems model  targetEnvironment targetRelations).mp
                   targetDenotation
               have targetPartitionItemsDenote :=
                 (targetPermutation
@@ -509,7 +507,7 @@ theorem focusedItems_regionSimulation
               have sourcePartitionDenote := partitionSimulation
                 sourceEnvironment targetEnvironment targetRelations agreement
                 ((finishRegion_denote_iff input targetContext trace.parent
-                  targetPartitionItems model named targetEnvironment
+                  targetPartitionItems model  targetEnvironment
                   targetRelations).mpr
                   ⟨targetLocal, targetPartitionItemsDenote⟩)
               have sourcePartitionRaw :=
@@ -517,11 +515,11 @@ theorem focusedItems_regionSimulation
               obtain ⟨sourceLocal, sourcePartitionItemsDenote⟩ :=
                 (finishRegion_denote_iff trace.sourceDiagram sourceContext
                   (trace.targetIndex targetWellFormed) sourcePartitionItems
-                  model named sourceEnvironment sourceRelations).mp
+                  model  sourceEnvironment sourceRelations).mp
                   sourcePartitionRaw
               apply sourceOriginalRename.mpr
               apply (finishRegion_denote_iff trace.sourceDiagram sourceContext
-                (trace.targetIndex targetWellFormed) sourceItems model named
+                (trace.targetIndex targetWellFormed) sourceItems model
                 sourceEnvironment sourceRelations).mpr
               exact ⟨sourceLocal,
                 (sourcePermutation

@@ -10,7 +10,7 @@ namespace DiagramContext
 /-- Canonical embedding of the relations visible outside a context into the
 relation environment visible at its hole. -/
 def outerRelation :
-    DiagramContext signature outerWires holeWires outerRels holeRels →
+    DiagramContext  outerWires holeWires outerRels holeRels →
       RelationRenaming outerRels holeRels
   | .hole => fun relation => relation
   | .cut _ _ _ child => child.outerRelation
@@ -21,7 +21,7 @@ def outerRelation :
 surrounding region.  Unlike an unconstrained hole valuation, inherited wire
 and relation values are tied to the outer valuation. -/
 def Reachable
-    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
+    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
     (outerEnv : Fin outerWires → D) (outerRelEnv : RelEnv D outerRels)
     (holeEnv : Fin holeWires → D) (holeRelEnv : RelEnv D holeRels) : Prop :=
   match ctx with
@@ -37,7 +37,7 @@ def Reachable
 
 /-- Every reachable hole valuation retains all outer wire values. -/
 theorem Reachable.outerWire
-    {ctx : DiagramContext signature outerWires holeWires outerRels holeRels}
+    {ctx : DiagramContext  outerWires holeWires outerRels holeRels}
     {outerEnv : Fin outerWires → D} {outerRelEnv : RelEnv D outerRels}
     {holeEnv : Fin holeWires → D} {holeRelEnv : RelEnv D holeRels}
     (reachable : ctx.Reachable outerEnv outerRelEnv holeEnv holeRelEnv) :
@@ -69,7 +69,7 @@ theorem Reachable.outerWire
 
 /-- Every reachable hole relation valuation retains all outer relations. -/
 theorem Reachable.outerRelation
-    {ctx : DiagramContext signature outerWires holeWires outerRels holeRels}
+    {ctx : DiagramContext  outerWires holeWires outerRels holeRels}
     {outerEnv : Fin outerWires → D} {outerRelEnv : RelEnv D outerRels}
     {holeEnv : Fin holeWires → D} {holeRelEnv : RelEnv D holeRels}
     (reachable : ctx.Reachable outerEnv outerRelEnv holeEnv holeRelEnv) :
@@ -92,18 +92,17 @@ theorem Reachable.outerRelation
 /-- A local equivalence need only hold at valuations that can actually reach
 the hole; it then lifts through the surrounding context. -/
 theorem fill_equiv_of_reachable
-    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
-    (first second : Region signature holeWires holeRels)
+    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
+    (first second : Region  holeWires holeRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin outerWires → model.Carrier)
     (outerRelEnv : RelEnv model.Carrier outerRels)
     (holeEquiv : ∀ holeEnv holeRelEnv,
       ctx.Reachable outerEnv outerRelEnv holeEnv holeRelEnv →
-        (denoteRegion model named holeEnv holeRelEnv first ↔
-          denoteRegion model named holeEnv holeRelEnv second)) :
-    denoteRegion model named outerEnv outerRelEnv (ctx.fill first) ↔
-      denoteRegion model named outerEnv outerRelEnv (ctx.fill second) := by
+        (denoteRegion model  holeEnv holeRelEnv first ↔
+          denoteRegion model  holeEnv holeRelEnv second)) :
+    denoteRegion model  outerEnv outerRelEnv (ctx.fill first) ↔
+      denoteRegion model  outerEnv outerRelEnv (ctx.fill second) := by
   induction ctx with
   | hole =>
       exact holeEquiv outerEnv outerRelEnv ⟨rfl, rfl⟩
@@ -111,10 +110,10 @@ theorem fill_equiv_of_reachable
       constructor
       · rintro ⟨localEnv, items⟩
         obtain ⟨beforeDenotes, childNot, afterDenotes⟩ :=
-          (denoteItemSeq_frame model named
+          (denoteItemSeq_frame model
             (extendWireEnv outerEnv localEnv) outerRelEnv before after
             (.cut (child.fill first))).mp items
-        refine ⟨localEnv, (denoteItemSeq_frame model named
+        refine ⟨localEnv, (denoteItemSeq_frame model
           (extendWireEnv outerEnv localEnv) outerRelEnv before after
           (.cut (child.fill second))).mpr
             ⟨beforeDenotes, ?_, afterDenotes⟩⟩
@@ -127,10 +126,10 @@ theorem fill_equiv_of_reachable
           secondDenotes
       · rintro ⟨localEnv, items⟩
         obtain ⟨beforeDenotes, childNot, afterDenotes⟩ :=
-          (denoteItemSeq_frame model named
+          (denoteItemSeq_frame model
             (extendWireEnv outerEnv localEnv) outerRelEnv before after
             (.cut (child.fill second))).mp items
-        refine ⟨localEnv, (denoteItemSeq_frame model named
+        refine ⟨localEnv, (denoteItemSeq_frame model
           (extendWireEnv outerEnv localEnv) outerRelEnv before after
           (.cut (child.fill first))).mpr
             ⟨beforeDenotes, ?_, afterDenotes⟩⟩
@@ -146,10 +145,10 @@ theorem fill_equiv_of_reachable
       · rintro ⟨localEnv, items⟩
         obtain ⟨beforeDenotes, ⟨relationValue, childDenotes⟩,
             afterDenotes⟩ :=
-          (denoteItemSeq_frame model named
+          (denoteItemSeq_frame model
             (extendWireEnv outerEnv localEnv) outerRelEnv before after
             (.bubble arity (child.fill first))).mp items
-        refine ⟨localEnv, (denoteItemSeq_frame model named
+        refine ⟨localEnv, (denoteItemSeq_frame model
           (extendWireEnv outerEnv localEnv) outerRelEnv before after
           (.bubble arity (child.fill second))).mpr
             ⟨beforeDenotes, ⟨relationValue, ?_⟩, afterDenotes⟩⟩
@@ -162,10 +161,10 @@ theorem fill_equiv_of_reachable
       · rintro ⟨localEnv, items⟩
         obtain ⟨beforeDenotes, ⟨relationValue, childDenotes⟩,
             afterDenotes⟩ :=
-          (denoteItemSeq_frame model named
+          (denoteItemSeq_frame model
             (extendWireEnv outerEnv localEnv) outerRelEnv before after
             (.bubble arity (child.fill second))).mp items
-        refine ⟨localEnv, (denoteItemSeq_frame model named
+        refine ⟨localEnv, (denoteItemSeq_frame model
           (extendWireEnv outerEnv localEnv) outerRelEnv before after
           (.bubble arity (child.fill first))).mpr
             ⟨beforeDenotes, ⟨relationValue, ?_⟩, afterDenotes⟩⟩

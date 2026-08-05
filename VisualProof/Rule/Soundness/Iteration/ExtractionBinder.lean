@@ -11,7 +11,7 @@ one of extraction's aligned external-binder proxies.  Material bubbles lie
 strictly below the terminal body and therefore cannot occur in this binder
 context. -/
 theorem extractionTerminalBinder_is_proxy
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {rels : RelCtx}
@@ -46,7 +46,7 @@ theorem extractionTerminalBinder_is_proxy
 
 /-- The host binder represented by one terminal relation coordinate. -/
 noncomputable def extractionTerminalHostBinder
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {rels : RelCtx}
@@ -61,7 +61,7 @@ noncomputable def extractionTerminalHostBinder
       enumeration index))
 
 theorem extractionTerminalHostBinder_proxy
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {rels : RelCtx}
@@ -79,7 +79,7 @@ theorem extractionTerminalHostBinder_proxy
       enumeration index)
 
 theorem extractionTerminalHostBinder_bubble
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {rels : RelCtx}
@@ -117,7 +117,7 @@ theorem extractionTerminalHostBinder_bubble
   rwa [arityEq] at hostBubble
 
 theorem extractionTerminalHostBinder_encloses_anchor
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {rels : RelCtx}
@@ -147,7 +147,7 @@ theorem extractionTerminalHostBinder_encloses_anchor
 /-- Relation-variable transport selected by the host compiler context at the
 same concrete external binder represented by the extracted proxy. -/
 noncomputable def extractionTerminalRelationRenaming
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {sourceRels hostRels : RelCtx}
@@ -178,7 +178,7 @@ noncomputable def extractionTerminalRelationRenaming
     exact Classical.choose (hostCover binder parent arity bubble' encloses)
 
 theorem extractionTerminalRelationRenaming_lookup
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {sourceRels hostRels : RelCtx}

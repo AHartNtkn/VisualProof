@@ -13,7 +13,7 @@ private theorem finCount_eq_of_equiv
   · exact fin_card_le_of_injective equiv.symm equiv.symm.injective
 
 private theorem deiterationMapFrameRegion_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (region : CRegion (deiterationRemoved input selection).val.regionCount) :
@@ -27,7 +27,7 @@ private theorem deiterationMapFrameRegion_eq
       CRegion.rename, deiterationOutputRegionEquiv_frame] <;> rfl
 
 theorem deiterationMapPatternRegion_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (region : CRegion
@@ -54,7 +54,7 @@ theorem deiterationMapPatternRegion_eq
       rfl
 
 theorem deiterationOutputRegion_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (region : Fin
@@ -111,7 +111,7 @@ theorem deiterationOutputRegion_eq
             (sourceLayout.materialRegions.origin material))
 
 private theorem deiterationMapFrameNode_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (node : CNode (deiterationRemoved input selection).val.regionCount) :
@@ -125,7 +125,7 @@ private theorem deiterationMapFrameNode_eq
       deiterationOutputRegionEquiv_frame] <;> rfl
 
 private noncomputable def deiterationMapPatternNode_corresponds
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     {sourceNode : CNode
@@ -161,14 +161,8 @@ private noncomputable def deiterationMapPatternNode_corresponds
           (congrArg targetLayout.bodyRegion regionEq))
         ((deiterationOutputRegionEquiv_binder input selection witness sourceBinder).trans
           (congrArg targetLayout.binderRegion binderEq))
-  | named sourceRegion targetRegion definition arity regionEq =>
-      exact .named (sourceLayout.bodyRegion sourceRegion)
-        (targetLayout.bodyRegion targetRegion) definition arity
-        ((deiterationOutputRegionEquiv_body input selection witness sourceRegion).trans
-          (congrArg targetLayout.bodyRegion regionEq))
-
 noncomputable def deiterationOutputNode_correspond
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (node : Fin
@@ -213,7 +207,7 @@ noncomputable def deiterationOutputNode_correspond
       (occurrence.diagram.nodes_correspond patternNode)
 
 theorem deiterationCoalescedScope_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (quotient :
@@ -231,7 +225,7 @@ theorem deiterationCoalescedScope_eq
   rfl
 
 theorem deiterationCoalescedEndpoints_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (quotient :
@@ -249,7 +243,7 @@ theorem deiterationCoalescedEndpoints_eq
   rfl
 
 theorem deiterationMapFrameEndpoint_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (endpoint : CEndpoint (deiterationRemoved input selection).val.nodeCount) :
@@ -265,7 +259,7 @@ theorem deiterationMapFrameEndpoint_eq
   rfl
 
 theorem deiterationMapPatternEndpoint_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (endpoint : CEndpoint
@@ -284,7 +278,7 @@ theorem deiterationMapPatternEndpoint_eq
   rfl
 
 theorem deiterationMapPatternWire_scope_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire : Fin
@@ -309,7 +303,7 @@ theorem deiterationMapPatternWire_scope_eq
     ((deiterationPatternOccurrenceEquiv input selection witness).diagram.wire_scope_eq wire)
 
 theorem deiterationReinsertInput_pattern
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationReinsertInput input selection witness).pattern =
@@ -318,7 +312,7 @@ theorem deiterationReinsertInput_pattern
   rfl
 
 theorem deiterationOriginalFragmentInput_pattern
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) :
     (Splice.Decomposition.originalFragmentInput
       (deiterationDecomposition input selection)).pattern =
@@ -326,7 +320,7 @@ theorem deiterationOriginalFragmentInput_pattern
   rfl
 
 theorem deiterationMapPatternWire_endpoints_perm
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire : Fin
@@ -381,7 +375,7 @@ theorem deiterationMapPatternWire_endpoints_perm
   exact mapped
 
 theorem deiterationAttachment_alignment
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (position : Fin
@@ -431,7 +425,7 @@ theorem deiterationAttachment_alignment
   simpa only [List.get_eq_getElem, Fin.val_cast] using transported
 
 @[simp] theorem deiterationQuotientEquiv_quotientWire
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire : Fin (deiterationRemoved input selection).val.wireCount) :
@@ -449,7 +443,7 @@ theorem deiterationAttachment_alignment
     (deiterationReinsertTarget input selection) wire
 
 theorem deiterationExposedAttachment_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (sourceExternal : Fin
@@ -509,7 +503,7 @@ theorem deiterationExposedAttachment_eq
   exact congrArg target.attachment positionEq
 
 theorem deiterationMappedBoundaryEndpoints_mem_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (quotient :
@@ -635,7 +629,7 @@ private theorem deiterationPerm_of_nodup_and_mem_iff
     simp [member, otherNotMember]
 
 theorem deiterationBoundaryEndpoints_perm
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (quotient :
@@ -664,7 +658,7 @@ theorem deiterationBoundaryEndpoints_perm
   · exact deiterationMappedBoundaryEndpoints_mem_iff input selection witness quotient
 
 theorem deiterationMappedCoalescedEndpoints_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (quotient :
@@ -702,7 +696,7 @@ theorem deiterationMappedCoalescedEndpoints_eq
       rfl
 
 theorem deiterationOutputWire_scope_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire : Fin
@@ -756,7 +750,7 @@ theorem deiterationOutputWire_scope_eq
       (sourceLayout.internalWires.origin internal)
 
 theorem deiterationOutputWire_endpoints_perm
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire : Fin
@@ -848,7 +842,7 @@ theorem deiterationOutputWire_endpoints_perm
       (sourceLayout.internalWires.origin internal)
 
 noncomputable def deiterationOutputOccurrenceEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     ConcreteOccurrenceEquiv
@@ -881,7 +875,7 @@ noncomputable def deiterationOutputOccurrenceEquiv
     deiterationOutputWire_endpoints_perm input selection witness
 
 theorem deiterationOutputBoundary_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (sourceBoundary : List
@@ -919,7 +913,7 @@ theorem deiterationOutputBoundary_eq
       rfl
 
 noncomputable def deiterationOutputOpenOccurrenceEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (sourceBoundary : List

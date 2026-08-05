@@ -7,10 +7,9 @@ open VisualProof.Diagram
 
 namespace InstantiationTrace
 
-variable {signature : List Nat}
-  {input : CheckedDiagram signature}
+variable {input : CheckedDiagram }
   {bubble : Fin input.val.regionCount}
-  {comprehension : CheckedOpenDiagram signature}
+  {comprehension : CheckedOpenDiagram }
   {attachments : List (Fin input.val.wireCount)}
   {binders : List
     (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -55,7 +54,7 @@ def finalSourceOpen
   diagram := elimTrace.sourceDiagram
   boundary := boundary.map (copyTrace.finalWireMap elimTrace)
 
-def finalTargetOpen (input : CheckedDiagram signature)
+def finalTargetOpen (input : CheckedDiagram )
     (boundary : List (Fin input.val.wireCount)) : OpenConcreteDiagram where
   diagram := input.val
   boundary := boundary
@@ -135,11 +134,11 @@ theorem finalOuter_sourceIndex_boundaryClass
         (target.boundaryClass_sound position).symm
 
 theorem finalTargetOpen_wellFormed
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root) :
-    (finalTargetOpen input boundary).WellFormed signature :=
+    (finalTargetOpen input boundary).WellFormed  :=
   ⟨input.property, boundaryRoot⟩
 
 theorem finalSourceOpen_wellFormed
@@ -147,13 +146,13 @@ theorem finalSourceOpen_wellFormed
       fuel (initialInstantiationState payload) result)
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
+    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed )
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root) :
-    (copyTrace.finalSourceOpen elimTrace boundary).WellFormed signature := by
+    (copyTrace.finalSourceOpen elimTrace boundary).WellFormed  := by
   refine ⟨sourceWellFormed, ?_⟩
   intro mapped member
   obtain ⟨wire, wireMember, rfl⟩ := List.mem_map.mp member
@@ -173,19 +172,19 @@ def finalRootContextWitness
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature) :
+    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed ) :
     FinalContextWitness copyTrace elimTrace
       (copyTrace.finalSourceOpen elimTrace boundary).rootWires
       (finalTargetOpen input boundary).rootWires := by
-  let source : CheckedOpenDiagram signature :=
+  let source : CheckedOpenDiagram  :=
     ⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
         finalWellFormed boundary boundaryRoot⟩
-  let target : CheckedOpenDiagram signature :=
+  let target : CheckedOpenDiagram  :=
     ⟨finalTargetOpen input boundary,
       finalTargetOpen_wellFormed input boundary boundaryRoot⟩
   refine ⟨?_⟩

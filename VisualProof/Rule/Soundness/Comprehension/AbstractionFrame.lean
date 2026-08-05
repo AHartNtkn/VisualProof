@@ -80,7 +80,7 @@ theorem targetRegion_ne_bubble
   omega
 
 theorem selectedRegion_parent_cases
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     {region parent : Fin input.val.regionCount}
     (selected : region ∈ selection.selectedRegions)
@@ -100,7 +100,7 @@ theorem selectedRegion_parent_cases
       ⟨root, direct, parentSelected⟩
 
 theorem selection_root_not_selected
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) :
     input.val.root ∉ selection.selectedRegions := by
   intro selected
@@ -200,9 +200,6 @@ def mapNodeShape (regionMap : Fin sourceRegions → Fin targetRegions) :
     CNode sourceRegions → CNode targetRegions
   | .identity owner arity => .identity (regionMap owner) arity
   | .atom owner binder => .atom (regionMap owner) (regionMap binder)
-  | .named owner definition arity =>
-      .named (regionMap owner) definition arity
-
 /-- Every source node directly owned by a regular frame region retains its
 constructor, owner, and binder through the compact target maps. -/
 theorem node_shape_of_regular
@@ -245,17 +242,6 @@ theorem node_shape_of_regular
       rw [trace.regionMap_of_survives parent regular.1,
         trace.regionMap_of_survives binder binderSurvives]
       simpa only [targetRegion] using (Option.some.inj result).symm
-  | named owner definition arity =>
-      have ownerEq : owner = parent := by
-        simpa [sourceShape] using nodeRegion
-      subst owner
-      simp only [sourceShape, nodeNotDirect, if_false,
-        trace.domains.regions.index?_index parent regular.1,
-        Option.map_some] at result
-      simp only [mapNodeShape]
-      rw [trace.regionMap_of_survives parent regular.1]
-      simpa only [targetRegion] using (Option.some.inj result).symm
-
 /-- The complete constructor of every direct child in the regular frame is
 preserved, with its parent mapped through `regionMap`. -/
 theorem region_shape_of_regular

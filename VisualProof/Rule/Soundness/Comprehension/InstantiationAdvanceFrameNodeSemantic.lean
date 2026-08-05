@@ -12,8 +12,7 @@ namespace InstantiationSemantic
 compiled to the exact wire/relation renaming of its source item, so its
 denotation is equivalent in both simulation directions. -/
 theorem frameNode_simulation_of_mapped
-    {signature : List Nat}
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (region : Fin input.coalesceFrameRaw.regionCount)
     (sourceContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
@@ -40,19 +39,18 @@ theorem frameNode_simulation_of_mapped
     (node : Fin input.coalesceFrameRaw.nodeCount)
     (nodeRegion : (input.coalesceFrameRaw.nodes node).region = region)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileNode? signature
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileNode?
       input.coalesceFrameRaw sourceContext sourceBinders node = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode? signature
+    (targetCompiled : ConcreteElaboration.compileNode?
       input.plugLayout.plugRaw targetContext targetBinders
         (input.plugLayout.frameNode node) = some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       (ConcreteElaboration.ContextIndexRelation.forwardMap wireMap)
       (sourceItem.renameRelations relationMap) targetItem := by
-  have mapped := input.plugLayout.compileFrameNode_at_region_of_maps signature
+  have mapped := input.plugLayout.compileFrameNode_at_region_of_maps
     input hadmissible region sourceContext targetContext sourceExact targetExact
     sourceBinders targetBinders sourceCover sourceEnumeration wireMap wireSpec
     relationMap relationSpec node nodeRegion
@@ -65,14 +63,14 @@ theorem frameNode_simulation_of_mapped
   intro sourceEnv targetEnv targetRelEnv environments
   have environmentEq : sourceEnv = targetEnv ∘ wireMap := by
     simpa using environments
-  have sourceRelationDenotation := denoteItem_renameRelations model named
+  have sourceRelationDenotation := denoteItem_renameRelations model
     relationMap (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
     (RelEnv.pullback_agrees relationMap targetRelEnv) sourceEnv sourceItem
-  have relationDenotation := denoteItem_renameRelations model named relationMap
+  have relationDenotation := denoteItem_renameRelations model  relationMap
     (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
     (RelEnv.pullback_agrees relationMap targetRelEnv) targetEnv
     (sourceItem.renameWires wireMap)
-  have wireDenotation := denoteItem_renameWires model named wireMap targetEnv
+  have wireDenotation := denoteItem_renameWires model  wireMap targetEnv
     (RelEnv.pullback relationMap targetRelEnv) sourceItem
   rw [sourceRelationDenotation, relationDenotation, wireDenotation,
     ← environmentEq]
@@ -83,8 +81,7 @@ splice compiler's exact quotient/frame wire map and binder renaming directly,
 so it remains valid at the distinguished site where the local wire carriers
 need not be related by the off-site finite equivalence. -/
 theorem frameNode_denotes_of_mapped
-    {signature : List Nat}
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (region : Fin input.coalesceFrameRaw.regionCount)
     (sourceContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
@@ -111,23 +108,22 @@ theorem frameNode_denotes_of_mapped
     (node : Fin input.coalesceFrameRaw.nodeCount)
     (nodeRegion : (input.coalesceFrameRaw.nodes node).region = region)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin sourceContext.length → model.Carrier)
     (targetEnv : Fin targetContext.length → model.Carrier)
     (environmentEq : sourceEnv = targetEnv ∘ wireMap)
     (sourceRelEnv : RelEnv model.Carrier sourceRels)
     (targetRelEnv : RelEnv model.Carrier targetRels)
     (relationsAgree : RelEnv.Agrees relationMap sourceRelEnv targetRelEnv)
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileNode? signature
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileNode?
       input.coalesceFrameRaw sourceContext sourceBinders node = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode? signature
+    (targetCompiled : ConcreteElaboration.compileNode?
       input.plugLayout.plugRaw targetContext targetBinders
         (input.plugLayout.frameNode node) = some targetItem)
-    (targetDenotes : denoteItem model named targetEnv targetRelEnv targetItem) :
-    denoteItem model named sourceEnv sourceRelEnv sourceItem := by
-  have mapped := input.plugLayout.compileFrameNode_at_region_of_maps signature
+    (targetDenotes : denoteItem model  targetEnv targetRelEnv targetItem) :
+    denoteItem model  sourceEnv sourceRelEnv sourceItem := by
+  have mapped := input.plugLayout.compileFrameNode_at_region_of_maps
     input hadmissible region sourceContext targetContext sourceExact targetExact
     sourceBinders targetBinders sourceCover sourceEnumeration wireMap wireSpec
     relationMap relationSpec node nodeRegion
@@ -137,13 +133,13 @@ theorem frameNode_denotes_of_mapped
         targetItem := by
     exact Option.some.inj (by simpa only [Option.map_some] using mapped.symm)
   rw [← itemEq] at targetDenotes
-  have wireRenamedDenotes : denoteItem model named targetEnv sourceRelEnv
+  have wireRenamedDenotes : denoteItem model  targetEnv sourceRelEnv
       (sourceItem.renameWires wireMap) :=
-    (denoteItem_renameRelations model named relationMap sourceRelEnv
+    (denoteItem_renameRelations model  relationMap sourceRelEnv
       targetRelEnv relationsAgree targetEnv
       (sourceItem.renameWires wireMap)).mp targetDenotes
   have sourceDenotes :=
-    (denoteItem_renameWires model named wireMap targetEnv sourceRelEnv
+    (denoteItem_renameWires model  wireMap targetEnv sourceRelEnv
       sourceItem).mp wireRenamedDenotes
   simpa only [environmentEq] using sourceDenotes
 

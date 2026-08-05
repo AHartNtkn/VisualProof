@@ -10,7 +10,7 @@ open VisualProof.Diagram
 extraction.  Keeping this equality separate lets the independently checked
 justifier-to-selected certificates remain the only beta-eta authority. -/
 theorem deiterationRetainedOccurrence_nodes_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (node : Fin
@@ -39,7 +39,7 @@ theorem deiterationRetainedOccurrence_nodes_eq
 selection.  The exact extraction transport is composed without manufacturing
 a certificate; the witness certificates are reused verbatim. -/
 def deiterationPatternOccurrenceEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     OpenOccurrenceEquiv
@@ -54,7 +54,7 @@ def deiterationPatternOccurrenceEquiv
     (deiterationRetainedOccurrence_nodes_eq input selection witness)
 
 theorem deiterationPattern_proxyCount_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationReinsertInput input selection witness).binderSpine.proxyCount =
@@ -68,7 +68,7 @@ theorem deiterationPattern_proxyCount_eq
 /-- The composed occurrence sends every survivor proxy to the corresponding
 selected proxy in the same ordered external-binder position. -/
 theorem deiterationPattern_proxy_alignment
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin
@@ -96,7 +96,7 @@ theorem deiterationPattern_proxy_alignment
   exact second
 
 theorem deiterationPattern_bodyContainer_alignment
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationPatternOccurrenceEquiv input selection witness).diagram.regions

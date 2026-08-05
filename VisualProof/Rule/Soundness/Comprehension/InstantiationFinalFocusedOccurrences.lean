@@ -8,10 +8,9 @@ open VisualProof.Diagram
 namespace InstantiationTrace
 
 def droppedParentForwardMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -30,10 +29,9 @@ def droppedParentForwardMap
     (payload_bubble_not_encloses_parent payload)
 
 def DroppedParentPreimage
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -52,10 +50,9 @@ def DroppedParentPreimage
       copyTrace.droppedParentForwardMap original = dropped
 
 noncomputable def droppedParentReverseMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -77,10 +74,9 @@ noncomputable def droppedParentReverseMap
   else .child payload.parent
 
 private theorem droppedParentForwardMap_injective_on_local
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -148,10 +144,9 @@ private theorem droppedParentForwardMap_injective_on_local
             (copyTrace.regionMap_injective childEq)
 
 @[simp] theorem droppedParentReverseMap_forward_of_mem
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -178,10 +173,9 @@ private theorem droppedParentForwardMap_injective_on_local
     member chosenSpec.2
 
 theorem droppedParent_localOccurrences_map_reverse
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -219,10 +213,9 @@ theorem droppedParent_localOccurrences_map_reverse
           rw [induction]
 
 @[simp] theorem droppedParentReverseMap_resultBubble
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -251,10 +244,9 @@ theorem droppedParent_localOccurrences_map_reverse
 
 /-- Total final-focus occurrence map used for the kept frame partition. -/
 noncomputable def finalFocusOccurrenceMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -277,10 +269,9 @@ noncomputable def finalFocusOccurrenceMap
 /-- Every retained occurrence at the promoted focus has an exact original
 parent occurrence whose forward image is its vacuous-elimination origin. -/
 theorem keptOccurrence_original_preimage
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -295,7 +286,7 @@ theorem keptOccurrence_original_preimage
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (occurrence : ConcreteElaboration.LocalOccurrence
       elimTrace.sourceDiagram.regionCount elimTrace.sourceDiagram.nodeCount)
     (member : occurrence ∈ elimTrace.keptOccurrences finalWellFormed) :
@@ -332,10 +323,9 @@ theorem keptOccurrence_original_preimage
   exact copyTrace.droppedParentReverseMap_forward_of_mem original originalMember
 
 theorem keptNode_original
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -350,7 +340,7 @@ theorem keptNode_original
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (node : Fin elimTrace.sourceDiagram.nodeCount)
     (member : ConcreteElaboration.LocalOccurrence.node node ∈
       elimTrace.keptOccurrences finalWellFormed) :
@@ -382,10 +372,9 @@ theorem keptNode_original
       cases forwardEq
 
 theorem keptChild_original
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -400,7 +389,7 @@ theorem keptChild_original
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (child : Fin elimTrace.sourceDiagram.regionCount)
     (member : ConcreteElaboration.LocalOccurrence.child child ∈
       elimTrace.keptOccurrences finalWellFormed) :
@@ -424,10 +413,9 @@ theorem keptChild_original
         payload.parent originalChild).1 originalMember
 
 theorem keptChild_finalFocus_eq_reverse
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -442,7 +430,7 @@ theorem keptChild_finalFocus_eq_reverse
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (child : Fin elimTrace.sourceDiagram.regionCount)
     (member : ConcreteElaboration.LocalOccurrence.child child ∈
       elimTrace.keptOccurrences finalWellFormed) :
@@ -501,10 +489,9 @@ theorem keptChild_finalFocus_eq_reverse
 /-- The final focus partitions into retained original-parent occurrences and
 the selected block represented by the one original quantified-bubble child. -/
 theorem finalFocusOccurrences_perm
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -519,7 +506,7 @@ theorem finalFocusOccurrences_perm
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature) :
+      (dropInstantiationAtomsRaw result).WellFormed ) :
     List.Perm
       ((elimTrace.keptOccurrences finalWellFormed).map
           (copyTrace.finalFocusOccurrenceMap elimTrace) ++

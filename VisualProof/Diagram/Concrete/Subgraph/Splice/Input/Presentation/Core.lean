@@ -346,76 +346,76 @@ theorem PlugLayout.localOccurrences_bodyRegion
   rfl
 
 theorem checkedDiagram_regions_eq
-    (left right : CheckedDiagram signature) (h : left = right)
+    (left right : CheckedDiagram ) (h : left = right)
     (region : Fin left.val.regionCount) :
     left.val.regions region =
       cast (congrArg CRegion
-        (congrArg (fun checked : CheckedDiagram signature =>
+        (congrArg (fun checked : CheckedDiagram  =>
           checked.val.regionCount) h).symm)
         (right.val.regions (Fin.cast
-          (congrArg (fun checked : CheckedDiagram signature =>
+          (congrArg (fun checked : CheckedDiagram  =>
             checked.val.regionCount) h) region)) := by
   subst right
   rfl
 
 theorem checkedDiagram_regions_rename_eq
-    (left right : CheckedDiagram signature) (h : left = right)
+    (left right : CheckedDiagram ) (h : left = right)
     (region : Fin left.val.regionCount) :
     right.val.regions (Fin.cast (congrArg
-      (fun checked : CheckedDiagram signature => checked.val.regionCount) h)
+      (fun checked : CheckedDiagram  => checked.val.regionCount) h)
       region) =
       (left.val.regions region).rename
         (FiniteEquiv.finCast (congrArg
-          (fun checked : CheckedDiagram signature => checked.val.regionCount) h)) := by
+          (fun checked : CheckedDiagram  => checked.val.regionCount) h)) := by
   cases h
   cases hregion : left.val.regions region <;>
     simp [hregion, FiniteEquiv.finCast, CRegion.rename]
 
 theorem checkedDiagram_nodes_eq
-    (left right : CheckedDiagram signature) (h : left = right)
+    (left right : CheckedDiagram ) (h : left = right)
     (node : Fin left.val.nodeCount) :
     left.val.nodes node =
       cast (congrArg CNode
-        (congrArg (fun checked : CheckedDiagram signature =>
+        (congrArg (fun checked : CheckedDiagram  =>
           checked.val.regionCount) h).symm)
         (right.val.nodes (Fin.cast
-          (congrArg (fun checked : CheckedDiagram signature =>
+          (congrArg (fun checked : CheckedDiagram  =>
             checked.val.nodeCount) h) node)) := by
   subst right
   rfl
 
 theorem checkedDiagram_nodes_rename_eq
-    (left right : CheckedDiagram signature) (h : left = right)
+    (left right : CheckedDiagram ) (h : left = right)
     (node : Fin left.val.nodeCount) :
     right.val.nodes (Fin.cast (congrArg
-      (fun checked : CheckedDiagram signature => checked.val.nodeCount) h)
+      (fun checked : CheckedDiagram  => checked.val.nodeCount) h)
       node) =
       (left.val.nodes node).rename
         (FiniteEquiv.finCast (congrArg
-          (fun checked : CheckedDiagram signature =>
+          (fun checked : CheckedDiagram  =>
             checked.val.regionCount) h)) := by
   cases h
   cases hnode : left.val.nodes node <;>
     simp [hnode, FiniteEquiv.finCast, CNode.rename]
 
 theorem checkedDiagram_endpointOccurs_eq
-    (left right : CheckedDiagram signature) (h : left = right)
+    (left right : CheckedDiagram ) (h : left = right)
     (wire : Fin left.val.wireCount)
     (endpoint : CEndpoint left.val.nodeCount) :
     left.val.EndpointOccurs wire endpoint ↔
       right.val.EndpointOccurs
         (Fin.cast (congrArg
-          (fun checked : CheckedDiagram signature => checked.val.wireCount) h)
+          (fun checked : CheckedDiagram  => checked.val.wireCount) h)
           wire)
         { node := Fin.cast (congrArg
-            (fun checked : CheckedDiagram signature => checked.val.nodeCount) h)
+            (fun checked : CheckedDiagram  => checked.val.nodeCount) h)
             endpoint.node
           port := endpoint.port } := by
   cases h
   rfl
 
 def castLocalOccurrence
-    (left right : CheckedDiagram signature)
+    (left right : CheckedDiagram )
     (regionEq : left.val.regionCount = right.val.regionCount)
     (nodeEq : left.val.nodeCount = right.val.nodeCount) :
     ConcreteElaboration.LocalOccurrence left.val.regionCount left.val.nodeCount →
@@ -425,23 +425,23 @@ def castLocalOccurrence
   | .child region => .child (Fin.cast regionEq region)
 
 theorem checkedDiagram_localOccurrences_eq
-    (left right : CheckedDiagram signature) (h : left = right)
+    (left right : CheckedDiagram ) (h : left = right)
     (region : Fin left.val.regionCount) :
     ConcreteElaboration.localOccurrences right.val
         (Fin.cast (congrArg
-          (fun checked : CheckedDiagram signature => checked.val.regionCount) h)
+          (fun checked : CheckedDiagram  => checked.val.regionCount) h)
           region) =
       (ConcreteElaboration.localOccurrences left.val region).map
         (castLocalOccurrence
           left right
           (congrArg
-            (fun checked : CheckedDiagram signature => checked.val.regionCount) h)
+            (fun checked : CheckedDiagram  => checked.val.regionCount) h)
           (congrArg
-            (fun checked : CheckedDiagram signature => checked.val.nodeCount) h)) := by
+            (fun checked : CheckedDiagram  => checked.val.nodeCount) h)) := by
   cases h
   have regionCast :
       (Fin.cast (congrArg
-        (fun checked : CheckedDiagram signature => checked.val.regionCount)
+        (fun checked : CheckedDiagram  => checked.val.regionCount)
           (Eq.refl left)) : Fin left.val.regionCount → Fin left.val.regionCount) =
         id := by
     funext index
@@ -449,7 +449,7 @@ theorem checkedDiagram_localOccurrences_eq
     rfl
   have nodeCast :
       (Fin.cast (congrArg
-        (fun checked : CheckedDiagram signature => checked.val.nodeCount)
+        (fun checked : CheckedDiagram  => checked.val.nodeCount)
           (Eq.refl left)) : Fin left.val.nodeCount → Fin left.val.nodeCount) =
         id := by
     funext index
@@ -459,10 +459,10 @@ theorem checkedDiagram_localOccurrences_eq
   have occurrenceCast :
       castLocalOccurrence left left
           (congrArg
-            (fun checked : CheckedDiagram signature => checked.val.regionCount)
+            (fun checked : CheckedDiagram  => checked.val.regionCount)
             (Eq.refl left))
           (congrArg
-            (fun checked : CheckedDiagram signature => checked.val.nodeCount)
+            (fun checked : CheckedDiagram  => checked.val.nodeCount)
             (Eq.refl left)) = id := by
     funext occurrence
     cases occurrence <;>
@@ -483,31 +483,31 @@ def frameNodeCountEq (presentation : TwoInputPresentation source target) :
   congrArg (fun checked => checked.val.nodeCount) presentation.frame_eq
 
 theorem checkedDiagram_root_eq
-    (left right : CheckedDiagram signature) (h : left = right) :
-    Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+    (left right : CheckedDiagram ) (h : left = right) :
+    Fin.cast (congrArg (fun checked : CheckedDiagram  =>
       checked.val.regionCount) h) left.val.root = right.val.root := by
   subst right
   rfl
 
 theorem checkedDiagram_wire_scope_eq
-    (left right : CheckedDiagram signature) (h : left = right)
+    (left right : CheckedDiagram ) (h : left = right)
     (wire : Fin left.val.wireCount) :
-    Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+    Fin.cast (congrArg (fun checked : CheckedDiagram  =>
       checked.val.regionCount) h) (left.val.wires wire).scope =
       (right.val.wires (Fin.cast (congrArg
-        (fun checked : CheckedDiagram signature => checked.val.wireCount) h)
+        (fun checked : CheckedDiagram  => checked.val.wireCount) h)
         wire)).scope := by
   subst right
   rfl
 
 private theorem checkedDiagram_encloses_eq
-    (left right : CheckedDiagram signature) (h : left = right)
+    (left right : CheckedDiagram ) (h : left = right)
     (ancestor descendant : Fin left.val.regionCount) :
     left.val.Encloses ancestor descendant ↔
       right.val.Encloses
-        (Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+        (Fin.cast (congrArg (fun checked : CheckedDiagram  =>
           checked.val.regionCount) h) ancestor)
-        (Fin.cast (congrArg (fun checked : CheckedDiagram signature =>
+        (Fin.cast (congrArg (fun checked : CheckedDiagram  =>
           checked.val.regionCount) h) descendant) := by
   subst right
   rfl

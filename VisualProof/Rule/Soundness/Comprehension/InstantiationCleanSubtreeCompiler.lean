@@ -12,7 +12,6 @@ namespace InstantiationSemantic
 authoritative compiler.  The proof follows the actual ordered occurrence
 compiler and propagates cleanliness only through certified direct children. -/
 theorem compileSurvivorRegion_eq_of_clean_subtree
-    {signature : List Nat}
     (state : InstantiationState origin parameterCount proxyCount) :
     ∀ {rels : RelCtx} (fuel : Nat)
       (region : Fin state.diagram.val.regionCount)
@@ -21,8 +20,8 @@ theorem compileSurvivorRegion_eq_of_clean_subtree
       (∀ node, node ∈ state.processedAtoms →
         ¬ state.diagram.val.Encloses region
           (state.diagram.val.nodes node).region) →
-      compileSurvivorRegion? signature state fuel region context binders =
-        ConcreteElaboration.compileRegion? signature state.diagram.val fuel
+      compileSurvivorRegion?  state fuel region context binders =
+        ConcreteElaboration.compileRegion?  state.diagram.val fuel
           region context binders := by
   intro rels fuel
   induction fuel generalizing rels with
@@ -53,12 +52,12 @@ theorem compileSurvivorRegion_eq_of_clean_subtree
           (items : List (ConcreteElaboration.LocalOccurrence
             state.diagram.val.regionCount state.diagram.val.nodeCount)),
           (∀ occurrence, occurrence ∈ items → occurrence ∈ occurrences) →
-          ConcreteElaboration.compileOccurrencesWith? signature
-              state.diagram.val (compileSurvivorRegion? signature state fuel)
+          ConcreteElaboration.compileOccurrencesWith?
+              state.diagram.val (compileSurvivorRegion?  state fuel)
               (context.extend region) binders items =
-            ConcreteElaboration.compileOccurrencesWith? signature
+            ConcreteElaboration.compileOccurrencesWith?
               state.diagram.val
-              (ConcreteElaboration.compileRegion? signature state.diagram.val
+              (ConcreteElaboration.compileRegion?  state.diagram.val
                 fuel)
               (context.extend region) binders items := by
         intro items subset
@@ -73,13 +72,13 @@ theorem compileSurvivorRegion_eq_of_clean_subtree
               exact subset current (by simp [currentMember])
             have tailEq := induction tailSubset
             have headEq :
-                ConcreteElaboration.compileOccurrenceWith? signature
+                ConcreteElaboration.compileOccurrenceWith?
                     state.diagram.val
-                    (compileSurvivorRegion? signature state fuel)
+                    (compileSurvivorRegion?  state fuel)
                     (context.extend region) binders occurrence =
-                  ConcreteElaboration.compileOccurrenceWith? signature
+                  ConcreteElaboration.compileOccurrenceWith?
                     state.diagram.val
-                    (ConcreteElaboration.compileRegion? signature
+                    (ConcreteElaboration.compileRegion?
                       state.diagram.val fuel)
                     (context.extend region) binders occurrence := by
               cases occurrence with

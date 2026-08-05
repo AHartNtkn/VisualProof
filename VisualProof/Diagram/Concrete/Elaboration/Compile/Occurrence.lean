@@ -11,8 +11,8 @@ namespace OpenOccurrenceEquiv
 /-- Certified ordered occurrence equivalence commutes with elaboration. -/
 def elaborate_equivalent {source target : OpenConcreteDiagram}
     (equiv : OpenOccurrenceEquiv source target)
-    (hsource : source.WellFormed signature)
-    (htarget : target.WellFormed signature) :
+    (hsource : source.WellFormed )
+    (htarget : target.WellFormed ) :
     OpenDiagramIso (source.elaborate hsource)
       ((target.elaborate htarget).castArity
         equiv.boundary_length_eq.symm) := by
@@ -27,14 +27,14 @@ def elaborate_equivalent {source target : OpenConcreteDiagram}
       (target.exposedWires ++ target.hiddenWires) target.diagram.root := by
     simpa only [OpenConcreteDiagram.rootWires] using
       ConcreteElaboration.openRootWires_exact htarget
-  have hbody : RegionIso signature equiv.exposedWiresEquiv []
+  have hbody : RegionIso  equiv.exposedWiresEquiv []
       (source.elaborate hsource).body (target.elaborate htarget).body := by
     obtain ⟨sourceBody, hsourceKernel, hsourceElaborate⟩ :=
       CheckedOpenDiagram.elaborate_body_computation
-        (show CheckedOpenDiagram signature from ⟨source, hsource⟩)
+        (show CheckedOpenDiagram  from ⟨source, hsource⟩)
     obtain ⟨targetBody, htargetKernel, htargetElaborate⟩ :=
       CheckedOpenDiagram.elaborate_body_computation
-        (show CheckedOpenDiagram signature from ⟨target, htarget⟩)
+        (show CheckedOpenDiagram  from ⟨target, htarget⟩)
     change (source.elaborate hsource).body = sourceBody at hsourceElaborate
     change (target.elaborate htarget).body = targetBody at htargetElaborate
     rw [hsourceElaborate, htargetElaborate]
@@ -51,16 +51,15 @@ def elaborate_equivalent {source target : OpenConcreteDiagram}
 /-- Public ordered-open semantic contract for a certified occurrence. -/
 theorem denote_iff {source target : OpenConcreteDiagram}
     (equiv : OpenOccurrenceEquiv source target)
-    (hsource : source.WellFormed signature)
-    (htarget : target.WellFormed signature)
+    (hsource : source.WellFormed )
+    (htarget : target.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin source.boundary.length → model.Carrier) :
-    denoteOpen model named (source.elaborate hsource) args ↔
-      denoteOpen model named
+    denoteOpen model  (source.elaborate hsource) args ↔
+      denoteOpen model
         ((target.elaborate htarget).castArity
           equiv.boundary_length_eq.symm) args :=
-  (equiv.elaborate_equivalent hsource htarget).denoteOpen_iff model named args
+  (equiv.elaborate_equivalent hsource htarget).denoteOpen_iff model  args
 
 end OpenOccurrenceEquiv
 

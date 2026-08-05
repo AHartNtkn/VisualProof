@@ -11,16 +11,15 @@ namespace InstantiationSemantic
 /-- The semantic obligation for one source frame region and its exact target
 frame image under a single accepted instantiation splice. -/
 def AdvanceRegionSimulation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -30,7 +29,6 @@ def AdvanceRegionSimulation
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
     (region : Fin state.diagram.val.regionCount) : Prop :=
@@ -76,20 +74,20 @@ def AdvanceRegionSimulation
             state site arguments).plugLayout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (sourceBody : Region signature sourceOuter.length sourceRels)
-    (targetBody : Region signature targetOuter.length targetRels),
-    compileSurvivorRegion? signature
+    (sourceBody : Region  sourceOuter.length sourceRels)
+    (targetBody : Region  targetOuter.length targetRels),
+    compileSurvivorRegion?
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible)
         sourceFuel region sourceOuter sourceBinders = some sourceBody →
-    compileSurvivorRegion? signature
+    compileSurvivorRegion?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible)
         targetFuel
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion region)
         targetOuter targetBinders = some targetBody →
-    ConcreteElaboration.RegionSimulation model named direction
+    ConcreteElaboration.RegionSimulation model  direction
       (ConcreteElaboration.ContextIndexRelation.forwardMap outerMap)
       (sourceBody.renameRelations relationMap) targetBody
 
@@ -97,16 +95,15 @@ def AdvanceRegionSimulation
 through every other frame region is forced: cuts flip direction, bubbles
 preserve it, and retained nodes use the exact quotient/frame compiler map. -/
 theorem advance_region_simulation_of_site
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -117,14 +114,13 @@ theorem advance_region_simulation_of_site
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (siteCase : ∀ direction sourceFuel targetFuel,
       AdvanceRegionSimulation comprehension attachments binders payload state
-        atom tail site arguments hadmissible model named direction sourceFuel
+        atom tail site arguments hadmissible model  direction sourceFuel
         targetFuel site) :
     ∀ direction sourceFuel targetFuel region,
       AdvanceRegionSimulation comprehension attachments binders payload state
-        atom tail site arguments hadmissible model named direction sourceFuel
+        atom tail site arguments hadmissible model  direction sourceFuel
         targetFuel region := by
   intro direction sourceFuel
   induction sourceFuel generalizing direction with
@@ -170,18 +166,18 @@ theorem advance_region_simulation_of_site
             let targetContext := targetOuter.extend (layout.frameRegion region)
             let extendedMap := layout.frameExtendedWireMap region atSite
               sourceOuter targetOuter outerMap
-            change (ConcreteElaboration.compileOccurrencesWith? signature
+            change (ConcreteElaboration.compileOccurrencesWith?
                 coalesced.diagram.val
-                (compileSurvivorRegion? signature coalesced sourceFuel)
+                (compileSurvivorRegion?  coalesced sourceFuel)
                 sourceContext sourceBinders
                 ((ConcreteElaboration.localOccurrences coalesced.diagram.val
                   region).filter (dropOccurrenceSurvives coalesced))).bind
                   (fun items => some (ConcreteElaboration.finishRegion
                     coalesced.diagram.val sourceOuter region items)) =
               some sourceBody at sourceCompiled
-            change (ConcreteElaboration.compileOccurrencesWith? signature
+            change (ConcreteElaboration.compileOccurrencesWith?
                 next.diagram.val
-                (compileSurvivorRegion? signature next targetFuel)
+                (compileSurvivorRegion?  next targetFuel)
                 targetContext targetBinders
                 ((ConcreteElaboration.localOccurrences next.diagram.val
                   (layout.frameRegion region)).filter
@@ -190,9 +186,9 @@ theorem advance_region_simulation_of_site
                     next.diagram.val targetOuter (layout.frameRegion region)
                     items)) = some targetBody at targetCompiled
             cases sourceItemsResult :
-                ConcreteElaboration.compileOccurrencesWith? signature
+                ConcreteElaboration.compileOccurrencesWith?
                   coalesced.diagram.val
-                  (compileSurvivorRegion? signature coalesced sourceFuel)
+                  (compileSurvivorRegion?  coalesced sourceFuel)
                   sourceContext sourceBinders
                   ((ConcreteElaboration.localOccurrences coalesced.diagram.val
                     region).filter (dropOccurrenceSurvives coalesced)) with
@@ -205,9 +201,9 @@ theorem advance_region_simulation_of_site
                 have sourceBodyEq := Option.some.inj sourceCompiled
                 subst sourceBody
                 cases targetItemsResult :
-                    ConcreteElaboration.compileOccurrencesWith? signature
+                    ConcreteElaboration.compileOccurrencesWith?
                       next.diagram.val
-                      (compileSurvivorRegion? signature next targetFuel)
+                      (compileSurvivorRegion?  next targetFuel)
                       targetContext targetBinders
                       ((ConcreteElaboration.localOccurrences next.diagram.val
                         (layout.frameRegion region)).filter
@@ -227,7 +223,7 @@ theorem advance_region_simulation_of_site
                       node_eq hadmissible region atSite sourceFuel targetFuel
                       sourceContext targetContext sourceExact targetExact
                       sourceBinders targetBinders sourceCover sourceEnumeration
-                      extendedMap extendedSpec relationMap relationSpec model named
+                      extendedMap extendedSpec relationMap relationSpec model
                       direction sourceItems targetItems sourceItemsResult
                       targetItemsResult (by
                         intro child member sourceItem targetItem sourceAt targetAt
@@ -265,12 +261,12 @@ theorem advance_region_simulation_of_site
                             dsimp only [layout, spliceInput] at targetKindExplicit
                             simp [ConcreteElaboration.compileOccurrenceWith?,
                               frameKind] at sourceAt
-                            change (compileSurvivorRegion? signature coalesced
+                            change (compileSurvivorRegion?  coalesced
                                 sourceFuel child sourceContext sourceBinders).bind
                                 (fun body => some (.cut body)) = some sourceItem
                               at sourceAt
                             cases sourceChildResult :
-                                compileSurvivorRegion? signature coalesced
+                                compileSurvivorRegion?  coalesced
                                   sourceFuel child sourceContext sourceBinders with
                             | none =>
                                 rw [sourceChildResult] at sourceAt
@@ -284,13 +280,13 @@ theorem advance_region_simulation_of_site
                                   Splice.Input.PlugLayout.mapFrameOccurrence,
                                   ConcreteElaboration.compileOccurrenceWith?,
                                   targetKindExplicit] at targetAt
-                                change (compileSurvivorRegion? signature next
+                                change (compileSurvivorRegion?  next
                                     targetFuel (layout.frameRegion child)
                                     targetContext targetBinders).bind
                                     (fun body => some (.cut body)) =
                                   some targetItem at targetAt
                                 cases targetChildResult :
-                                    compileSurvivorRegion? signature next
+                                    compileSurvivorRegion?  next
                                       targetFuel (layout.frameRegion child)
                                       targetContext targetBinders with
                                 | none =>
@@ -307,7 +303,7 @@ theorem advance_region_simulation_of_site
                                         (spliceInput.coalesceFrameRaw_wellFormed
                                           hadmissible) childParent)
                                       (targetExact.extend_child
-                                        (layout.plugRaw_wellFormed signature
+                                        (layout.plugRaw_wellFormed
                                           spliceInput hadmissible) (by
                                             simpa [CRegion.parent?] using
                                               congrArg CRegion.parent?
@@ -321,7 +317,7 @@ theorem advance_region_simulation_of_site
                                         (spliceInput.coalesceFrameRaw_wellFormed
                                           hadmissible) childKind)
                                       (targetEnumeration.cutChild
-                                        (layout.plugRaw_wellFormed signature
+                                        (layout.plugRaw_wellFormed
                                           spliceInput hadmissible) targetKind)
                                       extendedMap extendedSpec relationMap
                                       (layout.frameRelationLookup_cutChild
@@ -365,12 +361,12 @@ theorem advance_region_simulation_of_site
                               (layout.frameRegion child) arity
                             simp [ConcreteElaboration.compileOccurrenceWith?,
                               frameKind, sourcePushed] at sourceAt
-                            change (compileSurvivorRegion? signature coalesced
+                            change (compileSurvivorRegion?  coalesced
                                 sourceFuel child sourceContext sourcePushed).bind
                                 (fun body => some (.bubble arity body)) =
                               some sourceItem at sourceAt
                             cases sourceChildResult :
-                                compileSurvivorRegion? signature coalesced
+                                compileSurvivorRegion?  coalesced
                                   sourceFuel child sourceContext sourcePushed with
                             | none =>
                                 rw [sourceChildResult] at sourceAt
@@ -384,13 +380,13 @@ theorem advance_region_simulation_of_site
                                   Splice.Input.PlugLayout.mapFrameOccurrence,
                                   ConcreteElaboration.compileOccurrenceWith?,
                                   targetKindExplicit, targetPushed] at targetAt
-                                change (compileSurvivorRegion? signature next
+                                change (compileSurvivorRegion?  next
                                     targetFuel (layout.frameRegion child)
                                     targetContext targetPushed).bind
                                     (fun body => some (.bubble arity body)) =
                                   some targetItem at targetAt
                                 cases targetChildResult :
-                                    compileSurvivorRegion? signature next
+                                    compileSurvivorRegion?  next
                                       targetFuel (layout.frameRegion child)
                                       targetContext targetPushed with
                                 | none =>
@@ -407,7 +403,7 @@ theorem advance_region_simulation_of_site
                                         (spliceInput.coalesceFrameRaw_wellFormed
                                           hadmissible) childParent)
                                       (targetExact.extend_child
-                                        (layout.plugRaw_wellFormed signature
+                                        (layout.plugRaw_wellFormed
                                           spliceInput hadmissible) (by
                                             simpa [CRegion.parent?] using
                                               congrArg CRegion.parent?
@@ -421,7 +417,7 @@ theorem advance_region_simulation_of_site
                                         (spliceInput.coalesceFrameRaw_wellFormed
                                           hadmissible) childKind)
                                       (targetEnumeration.bubbleChild
-                                        (layout.plugRaw_wellFormed signature
+                                        (layout.plugRaw_wellFormed
                                           spliceInput hadmissible) targetKind)
                                       extendedMap extendedSpec
                                       (RelationRenaming.lift relationMap arity)
@@ -454,7 +450,7 @@ theorem advance_region_simulation_of_site
                     apply ConcreteElaboration.finishRegion_denote direction
                       sourceOuter targetOuter region (layout.frameRegion region)
                       (ConcreteElaboration.ContextIndexRelation.forwardMap
-                        outerMap) model named
+                        outerMap) model
                       (sourceItems.renameRelations relationMap) targetItems
                     apply ConcreteElaboration.directionalLocalTransport_of_agreement
                       direction sourceOuter targetOuter region
@@ -463,7 +459,7 @@ theorem advance_region_simulation_of_site
                         outerMap)
                       (ConcreteElaboration.ContextIndexRelation.forwardMap
                         extendedMap)
-                      model named (sourceItems.renameRelations relationMap)
+                      model  (sourceItems.renameRelations relationMap)
                       targetItems
                     · intro sourceOuterEnv targetOuterEnv outerAgrees
                       have outerEq : sourceOuterEnv =

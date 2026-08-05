@@ -57,7 +57,7 @@ private theorem directParent_encloses
 
 theorem outer_ne_inner
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     outer ≠ trace.inner := by
   intro equality
   apply ConcreteElaboration.checked_direct_child_not_encloses_parent
@@ -67,7 +67,7 @@ theorem outer_ne_inner
 
 theorem outer_ne_target
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     outer ≠ trace.target := by
   intro equality
   apply ConcreteElaboration.checked_direct_child_not_encloses_parent
@@ -77,7 +77,7 @@ theorem outer_ne_target
 
 theorem inner_ne_target
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     trace.inner ≠ trace.target := by
   intro equality
   apply ConcreteElaboration.checked_direct_child_not_encloses_parent
@@ -145,7 +145,7 @@ theorem wire_scope_ne_outer
 
 @[simp] theorem domain_target
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     (doubleCutRegionDomain input outer trace.inner).survives trace.target =
       true := by
   have targetNeOuter : trace.target ≠ outer :=
@@ -156,14 +156,14 @@ theorem wire_scope_ne_outer
 
 def targetIndex
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     Fin (doubleCutRegionDomain input outer trace.inner).count :=
   (doubleCutRegionDomain input outer trace.inner).index trace.target
     (trace.domain_target wellFormed)
 
 @[simp] theorem targetIndex_origin
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     (doubleCutRegionDomain input outer trace.inner).origin
         (trace.targetIndex wellFormed) =
       trace.target := by
@@ -211,7 +211,7 @@ theorem regionMap_root
 
 private theorem mappedOwner_eq_targetIndex_iff
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (owner : Fin input.regionCount)
     (mapped :
       Fin (doubleCutRegionDomain input outer trace.inner).count)
@@ -268,7 +268,7 @@ private theorem mappedOwner_eq_region_iff
 
 private theorem chosenOwner_eq_origin_regular_iff
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (owner : Fin input.regionCount)
     (region :
       Fin (doubleCutRegionDomain input outer trace.inner).count)
@@ -305,7 +305,7 @@ private theorem chosenOwner_eq_origin_regular_iff
 
 theorem promotedNode_region_eq_targetIndex_iff
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (node : Fin input.nodeCount) :
     (trace.promotion.nodes node).region = trace.targetIndex wellFormed ↔
       (input.nodes node).region = trace.target ∨
@@ -346,22 +346,9 @@ theorem promotedNode_region_eq_targetIndex_iff
       rw [← regionResult]
       exact mappedOwner_eq_targetIndex_iff trace wellFormed owner mappedOwner
         ownerResult
-  | named owner definition arity =>
-      rw [nodeShape] at result
-      simp only [promoteNode?] at result
-      rw [Option.map_eq_some_iff] at result
-      obtain ⟨mapped, mappedResult, nodeResult⟩ := result
-      change (trace.promotion.nodes node).region =
-          trace.targetIndex wellFormed ↔
-        owner = trace.target ∨ owner = trace.inner
-      have regionResult := congrArg CNode.region nodeResult
-      rw [← regionResult]
-      exact mappedOwner_eq_targetIndex_iff trace wellFormed owner mapped
-        mappedResult
-
 theorem promotedNode_region_eq_regular_iff
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (node : Fin input.nodeCount)
     (region :
       Fin (doubleCutRegionDomain input outer trace.inner).count)
@@ -409,24 +396,9 @@ theorem promotedNode_region_eq_regular_iff
         ownerResult).trans
           (trace.chosenOwner_eq_origin_regular_iff wellFormed owner region
             regular)
-  | named owner definition arity =>
-      rw [nodeShape] at result
-      simp only [promoteNode?] at result
-      rw [Option.map_eq_some_iff] at result
-      obtain ⟨mapped, mappedResult, nodeResult⟩ := result
-      change (trace.promotion.nodes node).region = region ↔
-        owner =
-          (doubleCutRegionDomain input outer trace.inner).origin region
-      have regionResult := congrArg CNode.region nodeResult
-      rw [← regionResult]
-      exact (mappedOwner_eq_region_iff trace owner mapped region
-        mappedResult).trans
-          (trace.chosenOwner_eq_origin_regular_iff wellFormed owner region
-            regular)
-
 theorem regular_nodeShape
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region :
       Fin (doubleCutRegionDomain input outer trace.inner).count)
     (regular : region ≠ trace.targetIndex wellFormed)
@@ -441,11 +413,7 @@ theorem regular_nodeShape
       | .atom owner binder =>
           .atom
             ((doubleCutRegionDomain input outer trace.inner).origin owner)
-            ((doubleCutRegionDomain input outer trace.inner).origin binder)
-      | .named owner definition arity =>
-          .named
-            ((doubleCutRegionDomain input outer trace.inner).origin owner)
-            definition arity := by
+            ((doubleCutRegionDomain input outer trace.inner).origin binder) := by
   have result := trace.promotion.node_result node
   have ownerEq :=
     (trace.promotedNode_region_eq_regular_iff
@@ -483,16 +451,6 @@ theorem regular_nodeShape
           binder mappedBinder).1 binderResult
       rw [← Option.some.inj nodeResult]
       simp [ownerEq, mappedOwnerEq, binderEq.symm]
-  | named owner definition arity =>
-      rw [originalShape] at result ownerEq
-      simp only [CNode.region, promoteNode?] at result ownerEq
-      rw [Option.map_eq_some_iff] at result
-      obtain ⟨mapped, mappedResult, nodeResult⟩ := result
-      have mappedEq : mapped = region :=
-        (congrArg CNode.region nodeResult).trans nodeRegion
-      rw [← nodeResult]
-      simp [originalShape, ownerEq, mappedEq]
-
 theorem focused_nodeShape
     (trace : DoubleCutElimTrace input outer raw)
     (node : Fin input.nodeCount) (owner : Fin input.regionCount)
@@ -502,8 +460,7 @@ theorem focused_nodeShape
       | .identity _ arity => .identity owner arity
       | .atom _ binder =>
           .atom owner
-            ((doubleCutRegionDomain input outer trace.inner).origin binder)
-      | .named _ definition arity => .named owner definition arity := by
+            ((doubleCutRegionDomain input outer trace.inner).origin binder) := by
   have result := trace.promotion.node_result node
   cases originalShape : input.nodes node with
   | identity originalOwner arity =>
@@ -535,17 +492,9 @@ theorem focused_nodeShape
           binder mappedBinder).1 binderResult
       rw [← Option.some.inj nodeResult]
       simp [ownerEq, binderEq.symm]
-  | named originalOwner definition arity =>
-      rw [originalShape] at result ownerEq
-      simp only [CNode.region, promoteNode?] at result ownerEq
-      rw [Option.map_eq_some_iff] at result
-      obtain ⟨mapped, mappedResult, nodeResult⟩ := result
-      rw [← nodeResult]
-      simp [ownerEq]
-
 theorem promotedWire_scope_eq_targetIndex_iff
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount) :
     (trace.promotion.wires wire).scope = trace.targetIndex wellFormed ↔
       (input.wires wire).scope = trace.target ∨
@@ -575,7 +524,7 @@ theorem promotedWire_scope_eq_targetIndex_iff
 
 theorem promotedWire_scope_eq_regular_iff
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount)
     (region :
       Fin (doubleCutRegionDomain input outer trace.inner).count)
@@ -629,7 +578,7 @@ theorem promotedWire_scope_eq_regular_iff
 
 theorem regular_exactScopeWires
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region :
       Fin (doubleCutRegionDomain input outer trace.inner).count)
     (regular : region ≠ trace.targetIndex wellFormed) :
@@ -669,7 +618,7 @@ theorem promotedWire_endpoints
 
 theorem promotedRegion_parent_eq_targetIndex_iff
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region :
       Fin (doubleCutRegionDomain input outer trace.inner).count) :
     (trace.promotion.regions region).parent? =
@@ -756,7 +705,7 @@ theorem promotedRegion_parent_eq_targetIndex_iff
 
 theorem promotedRegion_parent_eq_regular_iff
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (child region :
       Fin (doubleCutRegionDomain input outer trace.inner).count)
     (regular : region ≠ trace.targetIndex wellFormed) :
@@ -836,7 +785,7 @@ theorem promotedRegion_parent_eq_regular_iff
 
 theorem regular_regionShape
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (parent :
       Fin (doubleCutRegionDomain input outer trace.inner).count)
     (regular : parent ≠ trace.targetIndex wellFormed)
@@ -1116,7 +1065,7 @@ def extendRegular
     {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input}
     (witness : PromotedContextWitness trace sourceContext targetContext)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region : Fin trace.sourceDiagram.regionCount)
     (regular : region ≠ trace.targetIndex wellFormed) :
     PromotedContextWitness trace
@@ -1250,7 +1199,7 @@ private theorem promoted_endpointOccurs
 
 theorem resolvedPorts_related
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input)
     (node : Fin input.nodeCount) (port : CPort)
@@ -1327,7 +1276,7 @@ def occurrenceSelected
 
 def selectedOccurrences
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     List (ConcreteElaboration.LocalOccurrence
       trace.sourceDiagram.regionCount trace.sourceDiagram.nodeCount) :=
   (ConcreteElaboration.localOccurrences trace.sourceDiagram
@@ -1335,7 +1284,7 @@ def selectedOccurrences
 
 def keptOccurrences
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     List (ConcreteElaboration.LocalOccurrence
       trace.sourceDiagram.regionCount trace.sourceDiagram.nodeCount) :=
   (ConcreteElaboration.localOccurrences trace.sourceDiagram
@@ -1344,7 +1293,7 @@ def keptOccurrences
 
 theorem kept_node_region
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (node : Fin input.nodeCount)
     (member : ConcreteElaboration.LocalOccurrence.node node ∈
       trace.keptOccurrences wellFormed) :
@@ -1362,7 +1311,7 @@ theorem kept_node_region
 
 theorem selected_node_region
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (node : Fin input.nodeCount)
     (member : ConcreteElaboration.LocalOccurrence.node node ∈
       trace.selectedOccurrences wellFormed) :
@@ -1371,7 +1320,7 @@ theorem selected_node_region
 
 theorem kept_child_parent
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (child : Fin trace.sourceDiagram.regionCount)
     (member : ConcreteElaboration.LocalOccurrence.child child ∈
       trace.keptOccurrences wellFormed) :
@@ -1390,7 +1339,7 @@ theorem kept_child_parent
 
 theorem selected_child_parent
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (child : Fin trace.sourceDiagram.regionCount)
     (member : ConcreteElaboration.LocalOccurrence.child child ∈
       trace.selectedOccurrences wellFormed) :
@@ -1400,7 +1349,7 @@ theorem selected_child_parent
 
 theorem focusOccurrences_perm_partition
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     List.Perm
       (trace.keptOccurrences wellFormed ++
         trace.selectedOccurrences wellFormed)
@@ -1460,7 +1409,7 @@ private def canonicalTargetKeptOccurrences
 
 private theorem selectedOccurrences_eq_canonical
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     trace.selectedOccurrences wellFormed =
       trace.canonicalSelectedOccurrences := by
   unfold selectedOccurrences canonicalSelectedOccurrences
@@ -1502,7 +1451,7 @@ private theorem selectedOccurrences_eq_canonical
 
 private theorem keptOccurrences_eq_canonical
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     trace.keptOccurrences wellFormed = trace.canonicalKeptOccurrences := by
   unfold keptOccurrences canonicalKeptOccurrences
     ConcreteElaboration.localOccurrences occurrenceSelected filterFin
@@ -1597,7 +1546,7 @@ private theorem allFin_map_domain_origin
 
 theorem child_of_inner_survives
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (child : Fin input.regionCount)
     (parentEq : (input.regions child).parent? = some trace.inner) :
     (doubleCutRegionDomain input outer trace.inner).survives child = true := by
@@ -1617,7 +1566,7 @@ theorem child_of_inner_survives
 
 theorem child_of_regular_survives
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region :
       Fin (doubleCutRegionDomain input outer trace.inner).count)
     (regular : region ≠ trace.targetIndex wellFormed)
@@ -1659,7 +1608,7 @@ theorem child_of_regular_survives
 
 theorem child_of_target_ne_outer_survives
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (child : Fin input.regionCount)
     (parentEq : (input.regions child).parent? = some trace.target)
     (childNeOuter : child ≠ outer) :
@@ -1674,7 +1623,7 @@ theorem child_of_target_ne_outer_survives
 
 theorem targetKeptOccurrences_eq_mapped
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     trace.targetKeptOccurrences =
       (trace.keptOccurrences wellFormed).map trace.occurrenceMap := by
   rw [trace.targetKeptOccurrences_eq_canonical,
@@ -1780,7 +1729,7 @@ theorem targetOuterComplement
 
 theorem targetFocusOccurrences_perm
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     List.Perm
       ((trace.keptOccurrences wellFormed).map trace.occurrenceMap ++
         [ConcreteElaboration.LocalOccurrence.child outer])
@@ -1820,7 +1769,7 @@ theorem outer_exactScopeWires
 
 theorem targetWire_mem_focusExact
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount)
     (member : wire ∈
       ConcreteElaboration.exactScopeWires input trace.target) :
@@ -1837,7 +1786,7 @@ theorem targetWire_mem_focusExact
 
 theorem innerWire_mem_focusExact
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount)
     (member : wire ∈
       ConcreteElaboration.exactScopeWires input trace.inner) :
@@ -1859,7 +1808,7 @@ def PromotedContextWitness.extendFocused
     {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input}
     (witness : PromotedContextWitness trace sourceContext targetContext)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     PromotedContextWitness trace
       (sourceContext.extend (trace.targetIndex wellFormed))
       (targetContext.extend trace.target) := by
@@ -1893,7 +1842,7 @@ def PromotedContextWitness.extendSelected
     {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input}
     (witness : PromotedContextWitness trace sourceContext targetContext)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     PromotedContextWitness trace
       (sourceContext.extend (trace.targetIndex wellFormed))
       (((targetContext.extend trace.target).extend outer).extend trace.inner) := by
@@ -1935,7 +1884,7 @@ theorem PromotedContextWitness.extendSelected_source_subset_target
     {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
     {targetContext : ConcreteElaboration.WireContext input}
     (witness : PromotedContextWitness trace sourceContext targetContext)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     ∀ wire,
       wire ∈ sourceContext.extend (trace.targetIndex wellFormed) →
       wire ∈ (((targetContext.extend trace.target).extend outer).extend
@@ -1949,7 +1898,7 @@ theorem PromotedContextWitness.extendSelected_source_subset_target
 
 theorem inner_localOccurrences
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     ConcreteElaboration.localOccurrences input trace.inner =
       (trace.selectedOccurrences wellFormed).map trace.occurrenceMap := by
   rw [trace.selectedOccurrences_eq_canonical wellFormed]
@@ -2037,7 +1986,7 @@ theorem inner_localOccurrences
 
 theorem regular_localOccurrences
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region :
       Fin (doubleCutRegionDomain input outer trace.inner).count)
     (regular : region ≠ trace.targetIndex wellFormed) :
@@ -2131,9 +2080,8 @@ theorem regular_localOccurrences
 
 theorem compileNode_itemSimulation
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input)
@@ -2151,23 +2099,21 @@ theorem compileNode_itemSimulation
           .identity (regionMap owner) arity
       | .atom owner binder =>
           .atom (regionMap owner)
-            ((doubleCutRegionDomain input outer trace.inner).origin binder)
-      | .named owner definition arity =>
-          .named (regionMap owner) definition arity)
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
+            ((doubleCutRegionDomain input outer trace.inner).origin binder))
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileNode? signature trace.sourceDiagram
+      ConcreteElaboration.compileNode?  trace.sourceDiagram
         sourceContext sourceBinders node = some sourceItem)
     (targetCompiled :
-      ConcreteElaboration.compileNode? signature input targetContext
+      ConcreteElaboration.compileNode?  input targetContext
         targetBinders node = some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       (trace.wireIdentityRelation sourceContext targetContext)
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
     (source := trace.sourceDiagram) (target := input)
-    model named direction sourceContext targetContext
+    model  direction sourceContext targetContext
     (trace.wireIdentityRelation sourceContext targetContext)
     sourceBinders targetBinders binderWitness.relationMap node node
     regionMap (doubleCutRegionDomain input outer trace.inner).origin

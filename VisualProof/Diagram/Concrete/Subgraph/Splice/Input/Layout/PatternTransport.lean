@@ -14,12 +14,12 @@ namespace PlugLayout
 noncomputable def patternSiteWireIndexMap
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -39,12 +39,12 @@ noncomputable def patternSiteWireIndexMap
 theorem patternSiteWireIndexMap_spec
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -64,12 +64,12 @@ theorem patternSiteWireIndexMap_spec
 theorem patternPlugWire_mem_outputSiteContext_iff
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -97,12 +97,12 @@ theorem patternPlugWire_mem_outputSiteContext_iff
 private theorem patternRelationTarget_exists
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -149,12 +149,12 @@ binder ownership and the admissible proxy-to-host assignment. -/
 noncomputable def patternRelationRenaming
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -168,12 +168,12 @@ noncomputable def patternRelationRenaming
 theorem patternRelationRenaming_lookup
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -192,7 +192,7 @@ theorem patternRelationRenaming_lookup
 
 theorem terminalBodyBinder_is_proxy
     (layout : PlugLayout input)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
@@ -221,7 +221,7 @@ theorem terminalBodyBinder_is_proxy
 
 theorem terminalBody_inherited_mem_iff_exposed
     (layout : PlugLayout input)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
@@ -311,7 +311,7 @@ noncomputable def bodyTerminalWireRenaming
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
@@ -330,7 +330,7 @@ theorem bodyTerminalWireRenaming_spec
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
@@ -349,7 +349,7 @@ theorem bodyTerminalWireRenaming_spec
 
 theorem patternPlugWire_terminal_inherited
     (layout : PlugLayout input)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
@@ -406,11 +406,11 @@ theorem patternPlugWire_terminal_local
     _ = layout.internalWire internal := rfl
 
 noncomputable def siteCombinedWireEquivOfNonempty
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -431,7 +431,7 @@ noncomputable def siteCombinedWireEquivOfNonempty
     (layout.siteLocalWireEquivOfNonempty hnonempty)
 
 noncomputable def hostSeamPreparedWireOfNonempty
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site) :
@@ -452,11 +452,11 @@ noncomputable def hostSeamPreparedWireOfNonempty
           host.compilerLeaf.inheritedWires input.site) index)
 
 noncomputable def hostSeamWireMapOfNonempty
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -474,11 +474,11 @@ noncomputable def hostSeamWireMapOfNonempty
         (layout.hostSeamPreparedWireOfNonempty hadmissible host index))
 
 theorem hostSeamWireMapOfNonempty_spec
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -624,11 +624,11 @@ theorem hostSeamWireMapOfNonempty_spec
       layout.siteLocalWireEquivOfNonempty_host_spec hnonempty localIndex
 
 theorem hostSeamWireMapOfNonempty_eq
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -649,11 +649,11 @@ theorem hostSeamWireMapOfNonempty_eq
   simpa only [List.get_eq_getElem] using hvalues
 
 noncomputable def patternSeamPreparedWireOfNonempty
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
@@ -691,16 +691,16 @@ noncomputable def patternSeamPreparedWireOfNonempty
             index)))
 
 noncomputable def patternSeamWireMapOfNonempty
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -720,16 +720,16 @@ noncomputable def patternSeamWireMapOfNonempty
           patternWitness patternLeaf hnonempty index))
 
 theorem patternSeamWireMapOfNonempty_spec
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -894,16 +894,16 @@ theorem patternSeamWireMapOfNonempty_spec
       (layout.patternPlugWire_terminal_local hnonempty localIndex).symm
 
 theorem patternSeamWireMapOfNonempty_eq
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -925,7 +925,7 @@ theorem patternSeamWireMapOfNonempty_eq
 
 noncomputable def terminalBinderTarget
     (layout : PlugLayout input)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
@@ -939,7 +939,7 @@ noncomputable def terminalBinderTarget
 
 theorem terminalBinderTarget_spec
     (layout : PlugLayout input)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
@@ -963,12 +963,12 @@ theorem terminalBinderTarget_spec
 private theorem coalescedTerminalRelationTarget_exists
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
@@ -1007,12 +1007,12 @@ identity, so the map is independent of de Bruijn enumeration choices. -/
 noncomputable def coalescedTerminalRelationRenaming
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
@@ -1027,12 +1027,12 @@ noncomputable def coalescedTerminalRelationRenaming
 theorem coalescedTerminalRelationRenaming_lookup
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
@@ -1052,17 +1052,17 @@ theorem coalescedTerminalRelationRenaming_lookup
 theorem terminalRelationRenaming_factor
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
       input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -1129,7 +1129,7 @@ noncomputable def patternRootWireIndexMap
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (hzero : input.binderSpine.proxyCount = 0)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -1151,7 +1151,7 @@ theorem patternRootWireIndexMap_spec
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (hzero : input.binderSpine.proxyCount = 0)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -1172,7 +1172,7 @@ theorem patternPlugWire_mem_outputRootContext_iff
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (hzero : input.binderSpine.proxyCount = 0)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -1208,11 +1208,11 @@ def emptyRelationRenaming (target : Theory.RelCtx) :
 /-- The complete inherited/local wire equivalence at an empty-spine splice.
 The material-local block is the open pattern's hidden root wires. -/
 noncomputable def siteCombinedWireEquivOfEmpty
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -1231,7 +1231,7 @@ noncomputable def siteCombinedWireEquivOfEmpty
     (layout.siteLocalWireEquivOfEmpty hzero)
 
 noncomputable def hostSeamPreparedWireOfEmpty
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site) :
@@ -1248,11 +1248,11 @@ noncomputable def hostSeamPreparedWireOfEmpty
           host.compilerLeaf.inheritedWires input.site) index)
 
 noncomputable def hostSeamWireMapOfEmpty
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -1270,11 +1270,11 @@ noncomputable def hostSeamWireMapOfEmpty
         (layout.hostSeamPreparedWireOfEmpty hadmissible host index))
 
 theorem hostSeamWireMapOfEmpty_spec
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -1396,11 +1396,11 @@ theorem hostSeamWireMapOfEmpty_spec
       layout.siteLocalWireEquivOfEmpty_host_spec hzero localIndex
 
 theorem hostSeamWireMapOfEmpty_eq
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -1421,7 +1421,7 @@ theorem hostSeamWireMapOfEmpty_eq
   simpa only [List.get_eq_getElem] using hvalues
 
 noncomputable def patternRootSeamPreparedWireOfEmpty
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site) :
@@ -1443,11 +1443,11 @@ noncomputable def patternRootSeamPreparedWireOfEmpty
         (by simp) index)
 
 noncomputable def patternRootSeamWireMapOfEmpty
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -1466,11 +1466,11 @@ noncomputable def patternRootSeamWireMapOfEmpty
         (layout.patternRootSeamPreparedWireOfEmpty hadmissible host index))
 
 theorem patternRootSeamWireMapOfEmpty_spec
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -1584,11 +1584,11 @@ theorem patternRootSeamWireMapOfEmpty_spec
         (layout.internalWires.origin_index _ _).symm
 
 theorem patternRootSeamWireMapOfEmpty_eq
-    {signature : List Nat} {input : Input signature}
+    {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -2213,15 +2213,14 @@ theorem frameRelationLookup_bubbleChild
       relationSpec sourceRelation]
     rfl
 
-theorem plugRaw_endpoint_wire_unique (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+theorem plugRaw_endpoint_wire_unique (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible) :
     ∀ (first second : Fin layout.plugRaw.wireCount)
       (endpoint : CEndpoint layout.plugRaw.nodeCount),
       layout.plugRaw.EndpointOccurs first endpoint →
       layout.plugRaw.EndpointOccurs second endpoint →
       first = second := by
-  let checkedPattern : CheckedDiagram signature :=
+  let checkedPattern : CheckedDiagram  :=
     ⟨input.pattern.val.diagram,
       input.pattern.property.diagram_well_formed⟩
   intro first
@@ -2234,12 +2233,12 @@ theorem plugRaw_endpoint_wire_unique (signature : List Nat)
       (fun secondQuotient => ?_) (fun secondInternal => ?_) second
     · intro endpoint hfirst hsecond
       change CEndpoint layout.nodeCount at endpoint
-      rcases quotient_endpoint_provenance signature input layout
+      rcases quotient_endpoint_provenance  input layout
           firstQuotient endpoint hfirst with
         ⟨firstFrame, hfirstOccurs, hfirstMap⟩ |
           ⟨firstExternal, hfirstAttachment, firstPattern,
             hfirstOccurs, hfirstMap⟩
-      · rcases quotient_endpoint_provenance signature input layout
+      · rcases quotient_endpoint_provenance  input layout
             secondQuotient endpoint hsecond with
           ⟨secondFrame, hsecondOccurs, hsecondMap⟩ |
             ⟨secondExternal, hsecondAttachment, secondPattern,
@@ -2255,7 +2254,7 @@ theorem plugRaw_endpoint_wire_unique (signature : List Nat)
         · exact False.elim
             (layout.mapFrameEndpoint_ne_mapPatternEndpoint
               firstFrame secondPattern (hfirstMap.trans hsecondMap.symm))
-      · rcases quotient_endpoint_provenance signature input layout
+      · rcases quotient_endpoint_provenance  input layout
             secondQuotient endpoint hsecond with
           ⟨secondFrame, hsecondOccurs, hsecondMap⟩ |
             ⟨secondExternal, hsecondAttachment, secondPattern,
@@ -2276,18 +2275,18 @@ theorem plugRaw_endpoint_wire_unique (signature : List Nat)
           exact congrArg layout.quotientBlockWire hquotient
     · intro endpoint hfirst hsecond
       change CEndpoint layout.nodeCount at endpoint
-      rcases quotient_endpoint_provenance signature input layout
+      rcases quotient_endpoint_provenance  input layout
           firstQuotient endpoint hfirst with
         ⟨firstFrame, _, hfirstMap⟩ |
           ⟨firstExternal, _, firstPattern, hfirstOccurs, hfirstMap⟩
       · obtain ⟨secondPattern, _, hsecondMap⟩ :=
-          internal_endpoint_provenance signature input layout
+          internal_endpoint_provenance  input layout
             secondInternal endpoint hsecond
         exact False.elim
           (layout.mapFrameEndpoint_ne_mapPatternEndpoint
             firstFrame secondPattern (hfirstMap.trans hsecondMap.symm))
       · obtain ⟨secondPattern, hsecondOccurs, hsecondMap⟩ :=
-          internal_endpoint_provenance signature input layout
+          internal_endpoint_provenance  input layout
             secondInternal endpoint hsecond
         have horiginal := layout.mapPatternEndpoint_injective
           (hfirstMap.trans hsecondMap.symm)
@@ -2310,9 +2309,9 @@ theorem plugRaw_endpoint_wire_unique (signature : List Nat)
     · intro endpoint hfirst hsecond
       change CEndpoint layout.nodeCount at endpoint
       obtain ⟨firstPattern, hfirstOccurs, hfirstMap⟩ :=
-        internal_endpoint_provenance signature input layout
+        internal_endpoint_provenance  input layout
           firstInternal endpoint hfirst
-      rcases quotient_endpoint_provenance signature input layout
+      rcases quotient_endpoint_provenance  input layout
           secondQuotient endpoint hsecond with
         ⟨secondFrame, _, hsecondMap⟩ |
           ⟨secondExternal, _, secondPattern, hsecondOccurs, hsecondMap⟩
@@ -2336,10 +2335,10 @@ theorem plugRaw_endpoint_wire_unique (signature : List Nat)
     · intro endpoint hfirst hsecond
       change CEndpoint layout.nodeCount at endpoint
       obtain ⟨firstPattern, hfirstOccurs, hfirstMap⟩ :=
-        internal_endpoint_provenance signature input layout
+        internal_endpoint_provenance  input layout
           firstInternal endpoint hfirst
       obtain ⟨secondPattern, hsecondOccurs, hsecondMap⟩ :=
-        internal_endpoint_provenance signature input layout
+        internal_endpoint_provenance  input layout
           secondInternal endpoint hsecond
       have horiginal := layout.mapPatternEndpoint_injective
         (hfirstMap.trans hsecondMap.symm)
@@ -2351,13 +2350,12 @@ theorem plugRaw_endpoint_wire_unique (signature : List Nat)
       have hinternal := layout.internalWires.origin_injective hwire
       exact congrArg layout.internalBlockWire hinternal
 
-theorem plugRaw_wire_endpoints_are_disjoint (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+theorem plugRaw_wire_endpoints_are_disjoint (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible) :
     layout.plugRaw.WireEndpointsAreDisjoint := by
   intro first second hne endpoint hfirst
   by_cases hsecond : layout.plugRaw.EndpointOccurs second endpoint
-  · have heq := layout.plugRaw_endpoint_wire_unique signature input
+  · have heq := layout.plugRaw_endpoint_wire_unique  input
       hadmissible first second endpoint hfirst hsecond
     subst second
     change (!decide (first = first)) = true at hne
@@ -2367,24 +2365,21 @@ theorem plugRaw_wire_endpoints_are_disjoint (signature : List Nat)
     rfl
 
 /-- Plugging preserves every concrete well-formedness clause directly. -/
-theorem plugRaw_wellFormed (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+theorem plugRaw_wellFormed (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible) :
-    layout.plugRaw.WellFormed signature where
+    layout.plugRaw.WellFormed  where
   root_is_sheet := layout.plugRaw_root_is_sheet
   only_root_is_sheet := layout.plugRaw_only_root_is_sheet
   all_regions_reach_root := layout.plugRaw_all_regions_reach_root
   atom_binders_are_bubbles :=
     layout.plugRaw_atom_binders_are_bubbles hadmissible
   atom_binders_enclose := layout.plugRaw_atom_binders_enclose hadmissible
-  named_references_resolve :=
-    plugRaw_named_references_resolve signature input layout
   endpoints_are_valid := layout.plugRaw_endpoints_are_valid hadmissible
   endpoints_are_nodup := layout.plugRaw_endpoints_are_nodup
   wire_endpoints_are_disjoint :=
-    plugRaw_wire_endpoints_are_disjoint signature input layout hadmissible
+    plugRaw_wire_endpoints_are_disjoint  input layout hadmissible
   required_ports_are_covered :=
-    plugRaw_required_ports_are_covered signature input layout hadmissible
+    plugRaw_required_ports_are_covered  input layout hadmissible
   wire_scopes_enclose := layout.plugRaw_wire_scopes_enclose hadmissible
 
 end PlugLayout

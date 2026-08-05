@@ -33,7 +33,7 @@ theorem toRaw_ofEmbedding (embedding : OpenOccurrenceEmbedding problem) :
 
 end CandidateMaps
 
-inductive CandidateEvaluation (problem : OccurrenceProblem signature)
+inductive CandidateEvaluation (problem : OccurrenceProblem )
   | matched (embedding : OpenOccurrenceEmbedding problem)
   | rejected
 
@@ -72,13 +72,13 @@ def searchFrontier (frontier : Frontier problem) : MatchResult problem where
 
 /-- Bounded exhaustive search. `exhausted` reports an unprocessed structural
 frontier; it never turns missing work into a negative conclusion. -/
-def findOccurrences (problem : OccurrenceProblem signature)
+def findOccurrences (problem : OccurrenceProblem )
     (fuel : Nat) : MatchResult problem :=
   searchFrontier (frontier problem fuel)
 
 /-- Returned matches are valid independently of search status. -/
 theorem findOccurrences_sound
-    (problem : OccurrenceProblem signature) (fuel : Nat)
+    (problem : OccurrenceProblem ) (fuel : Nat)
     (embedding : OpenOccurrenceEmbedding problem)
     (_member : embedding ∈ (findOccurrences problem fuel).found) :
     embedding.raw.Valid :=
@@ -86,7 +86,7 @@ theorem findOccurrences_sound
 
 /-- If the structural frontier is complete, every valid embedding is returned. -/
 theorem findOccurrences_completeFor
-    (problem : OccurrenceProblem signature) (fuel : Nat)
+    (problem : OccurrenceProblem ) (fuel : Nat)
     (embedding : OpenOccurrenceEmbedding problem)
     (status : (findOccurrences problem fuel).status = SearchStatus.complete) :
     embedding ∈ (findOccurrences problem fuel).found := by

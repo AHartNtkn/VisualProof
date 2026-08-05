@@ -132,7 +132,7 @@ theorem wireJoin_extended_fiber_constant
 wire quotient exactly when the retained and absorbed wire values agree. -/
 theorem wireJoin_site_forward_selection
     (input : ConcreteDiagram)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (outer inner : Fin input.wireCount)
     (distinct : outer ≠ inner)
     (ordered :
@@ -287,7 +287,7 @@ theorem rootEnvironment_rootLocalEnvironmentOfComplete
       extendWireEnv]
 
 theorem wireJoin_root_forward_selection
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered :
@@ -295,7 +295,7 @@ theorem wireJoin_root_forward_selection
         (source.val.diagram.wires inner).scope)
     (targetWellFormed :
       (WireJoinSoundness.Target source.val.diagram outer inner).WellFormed
-        signature)
+        )
     (sourceOuter : Fin source.val.exposedWires.length → D)
     (targetOuter :
       Fin ((WireJoinSoundness.targetOpenRaw source.val outer inner distinct).exposedWires.length) →
@@ -404,25 +404,24 @@ theorem wireJoin_root_forward_selection
   exact completeAgrees
 
 theorem open_body_denote_root_items
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin checked.val.exposedWires.length → model.Carrier)
     (bodyDenotes :
-      denoteRegion (relCtx := []) model named outerEnv
+      denoteRegion (relCtx := []) model  outerEnv
         (PUnit.unit : RelEnv model.Carrier []) checked.elaborate.body) :
-    ∃ items : ItemSeq signature checked.val.rootWires.length [],
+    ∃ items : ItemSeq  checked.val.rootWires.length [],
       ∃ hiddenEnv : Fin checked.val.hiddenWires.length → model.Carrier,
-        Diagram.ConcreteElaboration.compileOccurrencesWith? signature
+        Diagram.ConcreteElaboration.compileOccurrencesWith?
             checked.val.diagram
-            (Diagram.ConcreteElaboration.compileRegion? signature
+            (Diagram.ConcreteElaboration.compileRegion?
               checked.val.diagram checked.val.diagram.regionCount)
             checked.val.rootWires
             Diagram.ConcreteElaboration.BinderContext.empty
             (Diagram.ConcreteElaboration.localOccurrences checked.val.diagram
               checked.val.diagram.root) =
           some items ∧
-        denoteItemSeq (relCtx := []) model named
+        denoteItemSeq (relCtx := []) model
           (Diagram.ConcreteElaboration.rootEnvironment
             checked.val.exposedWires checked.val.hiddenWires outerEnv hiddenEnv)
           (PUnit.unit : RelEnv model.Carrier []) items := by
@@ -431,9 +430,9 @@ theorem open_body_denote_root_items
   rw [bodyEq] at bodyDenotes
   simp only [Diagram.ConcreteElaboration.compileRoot?] at rootCompiled
   cases itemsCompiled :
-      Diagram.ConcreteElaboration.compileOccurrencesWith? signature
+      Diagram.ConcreteElaboration.compileOccurrencesWith?
         checked.val.diagram
-        (Diagram.ConcreteElaboration.compileRegion? signature
+        (Diagram.ConcreteElaboration.compileRegion?
           checked.val.diagram checked.val.diagram.regionCount)
         (checked.val.exposedWires ++ checked.val.hiddenWires)
         Diagram.ConcreteElaboration.BinderContext.empty
@@ -450,14 +449,14 @@ theorem open_body_denote_root_items
       obtain ⟨hiddenEnv, renamedDenotes⟩ := bodyDenotes
       refine ⟨items, hiddenEnv, ?_, ?_⟩
       · simpa only [OpenConcreteDiagram.rootWires] using itemsCompiled
-      · exact (denoteItemSeq_renameWires (relCtx := []) model named
+      · exact (denoteItemSeq_renameWires (relCtx := []) model
           (Fin.cast (by simp))
           (extendWireEnv outerEnv hiddenEnv)
           (PUnit.unit : RelEnv model.Carrier []) items).mp
           renamedDenotes
 
 theorem exposedMap_fiber_constant_of_joined_values
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (classes : Fin source.val.exposedWires.length → D)
@@ -522,7 +521,7 @@ theorem exposedMap_fiber_constant_of_joined_values
 only.  This is the concrete criterion used by congruence payloads to expose
 their term equations at the joined output scope. -/
 theorem route_cutDepth_zero_of_equal
-    (checked : CheckedDiagram signature)
+    (checked : CheckedDiagram )
     {start target : Fin checked.val.regionCount} {path : List Nat}
     (route : Diagram.Splice.RegionRoute checked.val start target path)
     (depth : Nat) (routeDepth : route.HasCutDepth depth)
@@ -563,7 +562,7 @@ theorem route_cutDepth_zero_of_equal
 bubble-only compiler route.  The returned trace is the authoritative trace
 generated from the caller's existing compiler computation. -/
 theorem compiled_descendant_denotes_of_zero_route
-    (checked : CheckedDiagram signature)
+    (checked : CheckedDiagram )
     {start target : Fin checked.val.regionCount} {path : List Nat}
     (route : Diagram.Splice.RegionRoute checked.val start target path)
     (routeZero : route.HasCutDepth 0)
@@ -571,10 +570,10 @@ theorem compiled_descendant_denotes_of_zero_route
     (context : Diagram.ConcreteElaboration.WireContext checked.val)
     (binders : Diagram.ConcreteElaboration.BinderContext checked.val rels)
     (fuel : Nat)
-    (items : ItemSeq signature (context.extend start).length rels)
+    (items : ItemSeq  (context.extend start).length rels)
     (compiled :
-      Diagram.ConcreteElaboration.compileOccurrencesWith? signature checked.val
-        (Diagram.ConcreteElaboration.compileRegion? signature checked.val fuel)
+      Diagram.ConcreteElaboration.compileOccurrencesWith?  checked.val
+        (Diagram.ConcreteElaboration.compileRegion?  checked.val fuel)
         (context.extend start) binders
         (Diagram.ConcreteElaboration.localOccurrences checked.val start) =
           some items)
@@ -584,14 +583,13 @@ theorem compiled_descendant_denotes_of_zero_route
       Diagram.ConcreteElaboration.BinderContext.Enumeration
         checked.val binders start)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin context.length → model.Carrier)
     (localEnv :
       Fin (Diagram.ConcreteElaboration.exactScopeWires
         checked.val start).length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
     (denotes :
-      denoteItemSeq model named
+      denoteItemSeq model
         (Diagram.ConcreteElaboration.extendedEnvironment context start
           outerEnv localEnv)
         relEnv items) :
@@ -602,10 +600,10 @@ theorem compiled_descendant_denotes_of_zero_route
       ∃ holeEnv : Fin result.witness.toFocus.holeWires → model.Carrier,
         ∃ holeRelEnv :
             RelEnv model.Carrier result.witness.toFocus.holeRels,
-          denoteRegion model named holeEnv holeRelEnv
+          denoteRegion model  holeEnv holeRelEnv
             result.witness.toFocus.body := by
   have regionCompiled :
-      Diagram.ConcreteElaboration.compileRegion? signature checked.val
+      Diagram.ConcreteElaboration.compileRegion?  checked.val
           (fuel + 1) start context binders =
         some (Diagram.ConcreteElaboration.finishRegion checked.val context
           start items) := by
@@ -614,18 +612,18 @@ theorem compiled_descendant_denotes_of_zero_route
     Diagram.Splice.compileRegion_route_context_complete checked route
       regionCompiled wiresExact bindersCover binderEnumeration
   have startDenotes :
-      denoteRegion model named outerEnv relEnv
+      denoteRegion model  outerEnv relEnv
         (Diagram.ConcreteElaboration.finishRegion checked.val context start
           items) := by
     unfold Diagram.ConcreteElaboration.finishRegion
     simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
     refine ⟨localEnv, ?_⟩
-    exact (denoteItemSeq_renameWires model named
+    exact (denoteItemSeq_renameWires model
       (Fin.cast
         (Diagram.ConcreteElaboration.WireContext.length_extend context start))
       (extendWireEnv outerEnv localEnv) relEnv items).mpr denotes
   have filledDenotes :
-      denoteRegion model named outerEnv relEnv
+      denoteRegion model  outerEnv relEnv
         (result.witness.toFocus.context.fill
           result.witness.toFocus.body) := by
     rw [result.witness.toFocus.rebuild]
@@ -633,29 +631,28 @@ theorem compiled_descendant_denotes_of_zero_route
   have focusZero : result.witness.toFocus.context.cutDepth = 0 :=
     regionRoute_cutDepth_unique result.trace.cutDepth routeZero
   exact ⟨result,
-    result.witness.toFocus.context.denote_hole_of_cutDepth_zero model named
+    result.witness.toFocus.context.denote_hole_of_cutDepth_zero model
       outerEnv relEnv result.witness.toFocus.body focusZero filledDenotes⟩
 
 /-- Recover the actual compiled item-sequence denotation from the terminal
 body recorded by a compiler leaf. -/
 theorem compilerLeaf_items_denote
-    {checked : CheckedDiagram signature}
+    {checked : CheckedDiagram }
     {target : Fin checked.val.regionCount}
     {outer : Nat} {outerRels : RelCtx}
-    {body : Region signature outer outerRels} {path : List Nat}
+    {body : Region  outer outerRels} {path : List Nat}
     {witness : VisualProof.Diagram.Region.ContextPath body path}
     (leaf : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
       checked.val target witness)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (holeEnv : Fin witness.toFocus.holeWires → model.Carrier)
     (holeRelEnv : RelEnv model.Carrier witness.toFocus.holeRels)
     (bodyDenotes :
-      denoteRegion model named holeEnv holeRelEnv witness.toFocus.body) :
+      denoteRegion model  holeEnv holeRelEnv witness.toFocus.body) :
     ∃ localEnv :
         Fin (Diagram.ConcreteElaboration.exactScopeWires
           checked.val target).length → model.Carrier,
-      denoteItemSeq model named
+      denoteItemSeq model
         (Diagram.ConcreteElaboration.extendedEnvironment
           leaf.inheritedWires target
           (holeEnv ∘ Fin.cast leaf.inheritedLength)
@@ -663,7 +660,7 @@ theorem compilerLeaf_items_denote
         holeRelEnv leaf.items := by
   rw [leaf.bodyComputation, Region.castWiresEq_eq_renameWires] at bodyDenotes
   have finishDenotes :=
-    (denoteRegion_renameWires model named
+    (denoteRegion_renameWires model
       (Fin.cast leaf.inheritedLength)
       holeEnv holeRelEnv
       (Diagram.ConcreteElaboration.finishRegion checked.val
@@ -672,7 +669,7 @@ theorem compilerLeaf_items_denote
   simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires] at finishDenotes
   obtain ⟨localEnv, renamedItemsDenote⟩ := finishDenotes
   refine ⟨localEnv, ?_⟩
-  exact (denoteItemSeq_renameWires model named
+  exact (denoteItemSeq_renameWires model
     (Fin.cast
       (Diagram.ConcreteElaboration.WireContext.length_extend
         leaf.inheritedWires target))
@@ -683,23 +680,22 @@ theorem compilerLeaf_items_denote
 inherited at the start and exposes a denotation of the terminal compiled
 items. -/
 theorem trace_leaf_items_denote_preserving_inherited
-    {checked : CheckedDiagram signature}
+    {checked : CheckedDiagram }
     {start target : Fin checked.val.regionCount} {path : List Nat}
     {outer : Nat} {rels : RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     {route : Diagram.Splice.RegionRoute checked.val start target path}
     {witness : VisualProof.Diagram.Region.ContextPath body path}
     {state : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
       checked.val start (.here body)}
-    (trace : Diagram.Splice.CompilerTrace signature checked.val route witness
+    (trace : Diagram.Splice.CompilerTrace  checked.val route witness
       state)
     (routeZero : route.HasCutDepth 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin state.inheritedWires.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
     (bodyDenotes :
-      denoteRegion model named
+      denoteRegion model
         (outerEnv ∘ Fin.cast state.inheritedLength.symm) relEnv body) :
     ∃ leafOuter : Fin trace.leaf.inheritedWires.length → model.Carrier,
       ∃ leafLocal :
@@ -708,12 +704,12 @@ theorem trace_leaf_items_denote_preserving_inherited
         ∃ leafRelEnv :
             RelEnv model.Carrier witness.toFocus.holeRels,
           leafOuter ∘ trace.inheritedIndex = outerEnv ∧
-            denoteItemSeq model named
+            denoteItemSeq model
               (Diagram.ConcreteElaboration.extendedEnvironment
                 trace.leaf.inheritedWires target leafOuter leafLocal)
               leafRelEnv trace.leaf.items := by
   have filledDenotes :
-      denoteRegion model named
+      denoteRegion model
         (outerEnv ∘ Fin.cast state.inheritedLength.symm) relEnv
         (witness.toFocus.context.fill witness.toFocus.body) := by
     rw [witness.toFocus.rebuild]
@@ -722,10 +718,10 @@ theorem trace_leaf_items_denote_preserving_inherited
     regionRoute_cutDepth_unique trace.cutDepth routeZero
   obtain ⟨holeEnv, holeRelEnv, outerAgrees, holeDenotes⟩ :=
     witness.toFocus.context.denote_hole_of_cutDepth_zero_with_outer
-      model named (outerEnv ∘ Fin.cast state.inheritedLength.symm)
+      model  (outerEnv ∘ Fin.cast state.inheritedLength.symm)
       relEnv witness.toFocus.body focusZero filledDenotes
   obtain ⟨leafLocal, leafItemsDenote⟩ :=
-    compilerLeaf_items_denote trace.leaf model named holeEnv holeRelEnv
+    compilerLeaf_items_denote trace.leaf model  holeEnv holeRelEnv
       holeDenotes
   let leafOuter : Fin trace.leaf.inheritedWires.length → model.Carrier :=
     holeEnv ∘ Fin.cast trace.leaf.inheritedLength
@@ -744,15 +740,15 @@ theorem trace_leaf_items_denote_preserving_inherited
 /-- The terminal complete environment agrees with the starting inherited
 environment at every pair of compiler indices naming the same concrete wire. -/
 theorem trace_complete_environment_agrees
-    {checked : CheckedDiagram signature}
+    {checked : CheckedDiagram }
     {start target : Fin checked.val.regionCount} {path : List Nat}
     {outer : Nat} {rels : RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     {route : Diagram.Splice.RegionRoute checked.val start target path}
     {witness : VisualProof.Diagram.Region.ContextPath body path}
     {state : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
       checked.val start (.here body)}
-    (trace : Diagram.Splice.CompilerTrace signature checked.val route witness
+    (trace : Diagram.Splice.CompilerTrace  checked.val route witness
       state)
     (outerEnv : Fin state.inheritedWires.length → D)
     (leafOuter : Fin trace.leaf.inheritedWires.length → D)
@@ -802,15 +798,14 @@ theorem trace_complete_environment_agrees
 /-- A denoted compiler leaf together with exact agreement against the complete
 wire environment at the ancestor site from which it was reached. -/
 structure DenotedDescendantLeaf
-    (checked : CheckedDiagram signature)
+    (checked : CheckedDiagram )
     (target : Fin checked.val.regionCount)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceContext : Diagram.ConcreteElaboration.WireContext checked.val)
     (sourceEnv : Fin sourceContext.length → model.Carrier) where
   outer : Nat
   rels : RelCtx
-  body : Region signature outer rels
+  body : Region  outer rels
   path : List Nat
   witness : VisualProof.Diagram.Region.ContextPath body path
   leaf : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
@@ -821,7 +816,7 @@ structure DenotedDescendantLeaf
       checked.val target).length → model.Carrier
   relEnv : RelEnv model.Carrier witness.toFocus.holeRels
   itemsDenote :
-    denoteItemSeq model named
+    denoteItemSeq model
       (Diagram.ConcreteElaboration.extendedEnvironment
         leaf.inheritedWires target outerEnv localEnv)
       relEnv leaf.items
@@ -836,7 +831,7 @@ structure DenotedDescendantLeaf
 route, retaining both the descendant item semantics and exact wire-value
 agreement with the complete ancestor-site environment. -/
 theorem denoted_descendant_leaf
-    (checked : CheckedDiagram signature)
+    (checked : CheckedDiagram )
     {start target : Fin checked.val.regionCount} {path : List Nat}
     (route : Diagram.Splice.RegionRoute checked.val start target path)
     (routeZero : route.HasCutDepth 0)
@@ -844,10 +839,10 @@ theorem denoted_descendant_leaf
     (context : Diagram.ConcreteElaboration.WireContext checked.val)
     (binders : Diagram.ConcreteElaboration.BinderContext checked.val rels)
     (fuel : Nat)
-    (items : ItemSeq signature (context.extend start).length rels)
+    (items : ItemSeq  (context.extend start).length rels)
     (compiled :
-      Diagram.ConcreteElaboration.compileOccurrencesWith? signature checked.val
-        (Diagram.ConcreteElaboration.compileRegion? signature checked.val fuel)
+      Diagram.ConcreteElaboration.compileOccurrencesWith?  checked.val
+        (Diagram.ConcreteElaboration.compileRegion?  checked.val fuel)
         (context.extend start) binders
         (Diagram.ConcreteElaboration.localOccurrences checked.val start) =
           some items)
@@ -857,18 +852,17 @@ theorem denoted_descendant_leaf
       Diagram.ConcreteElaboration.BinderContext.Enumeration
         checked.val binders start)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin context.length → model.Carrier)
     (localEnv :
       Fin (Diagram.ConcreteElaboration.exactScopeWires
         checked.val start).length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
     (itemsDenote :
-      denoteItemSeq model named
+      denoteItemSeq model
         (Diagram.ConcreteElaboration.extendedEnvironment context start
           outerEnv localEnv)
         relEnv items) :
-    Nonempty (DenotedDescendantLeaf checked target model named
+    Nonempty (DenotedDescendantLeaf checked target model
       (context.extend start)
       (Diagram.ConcreteElaboration.extendedEnvironment context start
         outerEnv localEnv)) := by
@@ -904,13 +898,13 @@ theorem denoted_descendant_leaf
           let itemPosition : Fin items.length :=
             Fin.cast
               (Diagram.ConcreteElaboration.compileOccurrencesWith?_length
-                (Diagram.ConcreteElaboration.compileRegion? signature
+                (Diagram.ConcreteElaboration.compileRegion?
                   checked.val fuel)
                 (context.extend start) binders compiled).symm
               position
           have compiledOccurrence :=
             Diagram.ConcreteElaboration.compileOccurrencesWith?_get
-              (Diagram.ConcreteElaboration.compileRegion? signature
+              (Diagram.ConcreteElaboration.compileRegion?
                 checked.val fuel)
               (context.extend start) binders compiled position
           have occurrenceGet :
@@ -921,7 +915,7 @@ theorem denoted_descendant_leaf
           simp only [Diagram.ConcreteElaboration.compileOccurrenceWith?,
             childKind] at compiledOccurrence
           cases childCompiled :
-              Diagram.ConcreteElaboration.compileRegion? signature checked.val
+              Diagram.ConcreteElaboration.compileRegion?  checked.val
                 fuel child (context.extend start)
                   (binders.push child arity) with
           | none =>
@@ -932,7 +926,7 @@ theorem denoted_descendant_leaf
                 simpa [itemPosition, childCompiled] using
                   compiledOccurrence.symm
               have itemDenote :=
-                (denoteItemSeq_iff_get model named
+                (denoteItemSeq_iff_get model
                   (Diagram.ConcreteElaboration.extendedEnvironment context
                     start outerEnv localEnv)
                   relEnv items).mp itemsDenote itemPosition
@@ -960,7 +954,7 @@ theorem denoted_descendant_leaf
               let childRelEnv : RelEnv model.Carrier (arity :: rels) :=
                 (relation, relEnv)
               have childBodyDenotes' :
-                  denoteRegion model named
+                  denoteRegion model
                     (stateOuter ∘
                       Fin.cast result.state.inheritedLength.symm)
                     childRelEnv childBody := by
@@ -969,7 +963,7 @@ theorem denoted_descendant_leaf
               obtain ⟨leafOuter, leafLocal, leafRelEnv, inheritedAgrees,
                   leafItemsDenote⟩ :=
                 trace_leaf_items_denote_preserving_inherited result.trace
-                  tailZero model named stateOuter childRelEnv
+                  tailZero model  stateOuter childRelEnv
                   childBodyDenotes'
               refine ⟨{
                 outer := (context.extend start).length

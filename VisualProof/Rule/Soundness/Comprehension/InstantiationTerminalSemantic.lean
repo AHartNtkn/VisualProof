@@ -11,16 +11,15 @@ namespace InstantiationSemantic
 /-- A native terminal relation environment realizes one target-indexed family
 of the host relations certified by the binder spine. -/
 def TerminalRelationsMatch
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -72,16 +71,15 @@ private theorem relEnv_eq_of_lookup
 relation environment.  In particular, a relation witness cannot choose a
 second interpretation for any terminal binder. -/
 theorem terminalRelationsMatch_unique
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -118,16 +116,15 @@ private theorem relationLookup_cast_back
 /-- The relation environment recovered from the actual output compiler leaf
 matches the same proxy values seen through the coalesced host compiler leaf. -/
 theorem terminalOutputRelations_match
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -138,7 +135,7 @@ theorem terminalOutputRelations_match
     {model : Model}
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
@@ -230,23 +227,21 @@ theorem terminalOutputRelations_match
 /-- The nonempty-spine comprehension witness determined by one fixed family of
 certified host relation values. -/
 noncomputable def terminalRelationOfValues
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index)) :
@@ -262,7 +257,7 @@ noncomputable def terminalRelationOfValues
         ∃ relEnv : RelEnv model.Carrier pattern.witness.toFocus.holeRels,
           TerminalRelationsMatch payload state site arguments hnonempty values
               relEnv ∧
-            denoteRegion model named
+            denoteRegion model
               (terminalInheritedEnvironment payload state site arguments
                 hnonempty assignment)
               relEnv
@@ -275,16 +270,15 @@ The state, occurrence site, and ordered argument wires only select where that
 relation is applied; its value depends solely on the transported parameter
 values and the fixed family of enclosing proxy relations. -/
 theorem terminalRelationOfValues_eq
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (left right : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (leftSite : Fin left.diagram.val.regionCount)
@@ -293,7 +287,6 @@ theorem terminalRelationOfValues_eq
     (rightArguments : Fin payload.arity → Fin right.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (leftWire : Fin left.diagram.val.wireCount → model.Carrier)
     (rightWire : Fin right.diagram.val.wireCount → model.Carrier)
     (values : ∀ index,
@@ -301,9 +294,9 @@ theorem terminalRelationOfValues_eq
     (parameters : leftWire ∘ left.parameters =
       rightWire ∘ right.parameters) :
     terminalRelationOfValues payload left leftSite leftArguments hnonempty
-        model named leftWire values =
+        model  leftWire values =
       terminalRelationOfValues payload right rightSite rightArguments hnonempty
-        model named rightWire values := by
+        model  rightWire values := by
   funext relationArguments
   apply propext
   simp only [terminalRelationOfValues]
@@ -313,16 +306,15 @@ theorem terminalRelationOfValues_eq
 /-- A denoting actual splice output establishes the target-indexed terminal
 relation at the executor-recorded argument wires. -/
 theorem terminalRelationOfValues_of_output
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -331,10 +323,9 @@ theorem terminalRelationOfValues_of_output
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
@@ -347,7 +338,7 @@ theorem terminalRelationOfValues_of_output
         site arguments).plugLayout.frameRegion site)).length → model.Carrier)
     (outputRelEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
     (fallback : model.Carrier)
-    (denotes : denoteItemSeq model named env outputRelEnv outputLeaf.items)
+    (denotes : denoteItemSeq model  env outputRelEnv outputLeaf.items)
     (fixed :
       let spliceInput := instantiateSpliceInput comprehension attachments binders
         payload state site arguments
@@ -366,7 +357,7 @@ theorem terminalRelationOfValues_of_output
       outputLeaf.wiresExact env fallback
     let wireValue : Fin state.diagram.val.wireCount → model.Carrier :=
       fun wire => quotientValues (spliceInput.quotientWire wire)
-    terminalRelationOfValues payload state site arguments hnonempty model named
+    terminalRelationOfValues payload state site arguments hnonempty model
       wireValue values (wireValue ∘ arguments) := by
   dsimp only
   let spliceInput := instantiateSpliceInput comprehension attachments binders
@@ -397,7 +388,7 @@ theorem terminalRelationOfValues_of_output
       ∃ relEnv : RelEnv model.Carrier pattern.witness.toFocus.holeRels,
         TerminalRelationsMatch payload state site arguments hnonempty values
             relEnv ∧
-          denoteRegion model named
+          denoteRegion model
             (terminalInheritedEnvironment payload state site arguments hnonempty
               assignment)
             relEnv
@@ -423,7 +414,7 @@ theorem terminalRelationOfValues_of_output
       hadmissible values outputWitness outputLeaf outputRelEnv fixed
   · have recovered := patternTerminalRegion_denotes_of_output spliceInput
       hadmissible host pattern.witness pattern.leaf outputWitness outputLeaf
-      hnonempty model named env outputRelEnv fallback denotes
+      hnonempty model  env outputRelEnv fallback denotes
     simpa [terminalRelEnv, terminalRelations, terminalInheritedEnvironment,
       assignment, quotientValues, context, pattern, layout, Function.comp_def]
       using recovered

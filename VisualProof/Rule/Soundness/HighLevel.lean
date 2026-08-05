@@ -34,8 +34,8 @@ private def InterfaceTransport.castSource
 position.  The relation is intentionally many-to-many: unequal alias
 partitions may relate several fine classes to one coarse class. -/
 def orderedBoundaryRelation
-    (source : OpenDiagram signature sourceArity)
-    (target : OpenDiagram signature targetArity)
+    (source : OpenDiagram  sourceArity)
+    (target : OpenDiagram  targetArity)
     (sameArity : sourceArity = targetArity) :
     Diagram.ConcreteElaboration.ContextIndexRelation
       source.externalClasses target.externalClasses where
@@ -47,18 +47,17 @@ def orderedBoundaryRelation
 /-- Construct the coarse-or-fine target boundary assignment only after the
 active source denotation has produced it through the local implication. -/
 theorem proofDependentBoundaryWitness_forward
-    (source : OpenDiagram signature sourceArity)
-    (target : OpenDiagram signature targetArity)
+    (source : OpenDiagram  sourceArity)
+    (target : OpenDiagram  targetArity)
     (sameArity : sourceArity = targetArity)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceArgs : Fin sourceArity → model.Carrier)
-    (localLaw : denoteOpen model named source sourceArgs →
-      denoteOpen model named target
+    (localLaw : denoteOpen model  source sourceArgs →
+      denoteOpen model  target
         (sourceArgs ∘ Fin.cast sameArity.symm)) :
     Diagram.ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       .forward source target (orderedBoundaryRelation source target sameArity)
-      model named sourceArgs (sourceArgs ∘ Fin.cast sameArity.symm) := by
+      model  sourceArgs (sourceArgs ∘ Fin.cast sameArity.symm) := by
   intro sourceAssignment sourceArgsEq sourceBody
   obtain ⟨targetAssignment, targetArgsEq, targetBody⟩ :=
     localLaw ⟨sourceAssignment, sourceArgsEq, sourceBody⟩
@@ -81,18 +80,17 @@ theorem proofDependentBoundaryWitness_forward
 /-- Backward simulation is the exact active-target dual: the source
 assignment is chosen only after target denotation has justified it. -/
 theorem proofDependentBoundaryWitness_backward
-    (source : OpenDiagram signature sourceArity)
-    (target : OpenDiagram signature targetArity)
+    (source : OpenDiagram  sourceArity)
+    (target : OpenDiagram  targetArity)
     (sameArity : sourceArity = targetArity)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceArgs : Fin sourceArity → model.Carrier)
-    (localLaw : denoteOpen model named target
+    (localLaw : denoteOpen model  target
         (sourceArgs ∘ Fin.cast sameArity.symm) →
-      denoteOpen model named source sourceArgs) :
+      denoteOpen model  source sourceArgs) :
     Diagram.ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       .backward source target (orderedBoundaryRelation source target sameArity)
-      model named sourceArgs (sourceArgs ∘ Fin.cast sameArity.symm) := by
+      model  sourceArgs (sourceArgs ∘ Fin.cast sameArity.symm) := by
   intro targetAssignment targetArgsEq targetBody
   obtain ⟨sourceAssignment, sourceArgsEq, sourceBody⟩ :=
     localLaw ⟨targetAssignment, targetArgsEq, targetBody⟩
@@ -133,19 +131,19 @@ paired splice compiler.  The proof uses the compiler's aligned coalesced-frame
 and output traces, so the operational cut depth and the semantic cut depth have
 one authority. -/
 private theorem theoremCitationAllowed
-    {input : Diagram.CheckedDiagram signature}
+    {input : Diagram.CheckedDiagram }
     {selection : Diagram.CheckedSelection input.val}
-    {pattern : Diagram.CheckedOpenDiagram signature}
+    {pattern : Diagram.CheckedOpenDiagram }
     {hostArgs : List (Fin input.val.wireCount)}
     (occurrence : PinnedOccurrence input selection pattern hostArgs)
-    (decomposition : Diagram.Decomposition signature input selection)
-    (replacement : Diagram.CheckedOpenDiagram signature)
+    (decomposition : Diagram.Decomposition  input selection)
+    (replacement : Diagram.CheckedOpenDiagram )
     (sameArity : pattern.val.boundary.length =
       replacement.val.boundary.length)
     (locality : occurrence.ReplacementQuotientsLocal decomposition replacement
       sameArity)
-    {sourceResult : Diagram.CheckedDiagram signature}
-    (sourceSplice : Diagram.Splice.Input.spliceChecked signature
+    {sourceResult : Diagram.CheckedDiagram }
+    (sourceSplice : Diagram.Splice.Input.spliceChecked
       (occurrence.reassemblyInput decomposition) = .ok sourceResult)
     (sourceBoundary : List
       (Fin (occurrence.reassemblyInput decomposition).frame.val.wireCount))
@@ -178,7 +176,7 @@ private theorem theoremCitationAllowed
         rw [← openSiteView_concreteCutDepth_eq outputView, hplugSite]
         exact concreteCutDepth_root_eq_zero
           ⟨layout.plugRaw,
-            layout.plugRaw_wellFormed signature sourceInput hadmissible⟩
+            layout.plugRaw_wellFormed  sourceInput hadmissible⟩
       have hhostZero :
           concreteCutDepth input.val selection.val.anchor = 0 := by
         rw [← Diagram.Splice.Decomposition.originalSite_concreteCutDepth_eq
@@ -217,7 +215,7 @@ private theorem theoremCitationAllowed
   intro path depth route routeDepth
   have pathEq : path = outputView.path :=
     Diagram.Splice.Input.RegionRoute.path_unique
-      (layout.plugRaw_wellFormed signature sourceInput hadmissible)
+      (layout.plugRaw_wellFormed  sourceInput hadmissible)
       route outputView.route
   subst path
   have routeEq : route = outputView.route := Subsingleton.elim _ _
@@ -236,14 +234,13 @@ serialized value equalities, so no second theorem-validity authority is
 introduced. -/
 theorem theoremPayload_forward_local
     (model : Model)
-    (schema : TheoremSchema signature)
+    (schema : TheoremSchema )
     (payload : TheoremPayload input selection hostArgs)
     (registered : theoremSidesMatch schema .forward payload)
-    (named : NamedEnv model.Carrier signature)
-    (valid : schema.Valid model named)
+    (valid : schema.Valid model )
     (args : Fin payload.source.val.boundary.length → model.Carrier) :
-    payload.source.denote model named args →
-      payload.target.denote model named
+    payload.source.denote model  args →
+      payload.target.denote model
         (args ∘ Fin.cast payload.sameBoundaryArity.symm) := by
   rcases payload with ⟨source, target, payloadArity, occurrence⟩
   rcases schema with ⟨left, right, schemaArity⟩
@@ -260,14 +257,13 @@ is the entailed right side.  Context polarity later supplies the operational
 direction. -/
 theorem theoremPayload_backward_local
     (model : Model)
-    (schema : TheoremSchema signature)
+    (schema : TheoremSchema )
     (payload : TheoremPayload input selection hostArgs)
     (registered : theoremSidesMatch schema .reverse payload)
-    (named : NamedEnv model.Carrier signature)
-    (valid : schema.Valid model named)
+    (valid : schema.Valid model )
     (args : Fin payload.target.val.boundary.length → model.Carrier) :
-    payload.target.denote model named args →
-      payload.source.denote model named
+    payload.target.denote model  args →
+      payload.source.denote model
         (args ∘ Fin.cast payload.sameBoundaryArity) := by
   rcases payload with ⟨source, target, payloadArity, occurrence⟩
   rcases schema with ⟨left, right, schemaArity⟩
@@ -285,21 +281,20 @@ implication must be proved.  `citationPolarity` is precisely the condition
 that makes those choices agree with cut contravariance. -/
 theorem contextualizeCitation
     (orientation : Orientation) (direction : Direction)
-    (context : DiagramContext signature outerWires siteWires outerRels hostRels)
+    (context : DiagramContext  outerWires siteWires outerRels hostRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (hostLocal : Nat)
-    (hostItems : ItemSeq signature (siteWires + hostLocal) hostRels)
-    (left right : Region signature patternWires patternRels)
+    (hostItems : ItemSeq  (siteWires + hostLocal) hostRels)
+    (left right : Region  patternWires patternRels)
     (wireMap : Fin patternWires → Fin (siteWires + hostLocal))
     (relationMap : RelationRenaming patternRels hostRels)
     (polarity : citationPolarity orientation direction context.cutDepth)
     (localLaw : ∀ holeRelEnv patternEnv,
-      denoteRegion model named patternEnv
+      denoteRegion model  patternEnv
           (RelEnv.pullback relationMap holeRelEnv) left →
-        denoteRegion model named patternEnv
+        denoteRegion model  patternEnv
           (RelEnv.pullback relationMap holeRelEnv) right) :
     let before := match direction with
       | .forward => context.fill
@@ -312,17 +307,17 @@ theorem contextualizeCitation
       | .reverse => context.fill
           (Region.spliceAt hostLocal hostItems left wireMap relationMap)
     DirectedImplication orientation
-      (denoteRegion model named env rels before)
-      (denoteRegion model named env rels after) := by
+      (denoteRegion model  env rels before)
+      (denoteRegion model  env rels after) := by
   cases orientation <;> cases direction <;>
     simp only [citationPolarity, DirectedImplication] at polarity ⊢
-  · exact context.fill_spliceAt_mono_even model named env rels hostLocal
+  · exact context.fill_spliceAt_mono_even model  env rels hostLocal
       hostItems left right wireMap relationMap polarity localLaw
-  · exact context.fill_spliceAt_mono_odd model named env rels hostLocal
+  · exact context.fill_spliceAt_mono_odd model  env rels hostLocal
       hostItems left right wireMap relationMap polarity localLaw
-  · exact context.fill_spliceAt_mono_odd model named env rels hostLocal
+  · exact context.fill_spliceAt_mono_odd model  env rels hostLocal
       hostItems left right wireMap relationMap polarity localLaw
-  · exact context.fill_spliceAt_mono_even model named env rels hostLocal
+  · exact context.fill_spliceAt_mono_even model  env rels hostLocal
       hostItems left right wireMap relationMap polarity localLaw
 
 /-- A local equivalence induces an equivalence between the paired canonical
@@ -330,22 +325,22 @@ splice compiler sources. Cut parity selects which local implication proves
 each whole-root direction. -/
 private theorem equivalentPinnedReplacement_compiled
     (model : Model)
-    (context : ProofContext signature)
-    (input : Diagram.CheckedDiagram signature)
+    (context : ProofContext )
+    (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
-    (pattern : Diagram.CheckedOpenDiagram signature)
+    (pattern : Diagram.CheckedOpenDiagram )
     (hostArgs : List (Fin input.val.wireCount))
     (occurrence : PinnedOccurrence input selection pattern hostArgs)
-    (decomposition : Diagram.Decomposition signature input selection)
-    (replacement : Diagram.CheckedOpenDiagram signature)
+    (decomposition : Diagram.Decomposition  input selection)
+    (replacement : Diagram.CheckedOpenDiagram )
     (sameArity : pattern.val.boundary.length =
       replacement.val.boundary.length)
     (locality : occurrence.ReplacementQuotientsLocal decomposition replacement
       sameArity)
-    {sourceResult targetResult : Diagram.CheckedDiagram signature}
-    (sourceSplice : Diagram.Splice.Input.spliceChecked signature
+    {sourceResult targetResult : Diagram.CheckedDiagram }
+    (sourceSplice : Diagram.Splice.Input.spliceChecked
       (occurrence.reassemblyInput decomposition) = .ok sourceResult)
-    (targetSplice : Diagram.Splice.Input.spliceChecked signature
+    (targetSplice : Diagram.Splice.Input.spliceChecked
       (occurrence.replacementInput decomposition replacement sameArity) =
         .ok targetResult)
     (frameBoundary : List
@@ -355,15 +350,12 @@ private theorem equivalentPinnedReplacement_compiled
         (occurrence.reassemblyInput decomposition).frame.val.root)
     (localForward :
       (occurrence.reassemblyTwoInputPresentation decomposition replacement
-        sameArity locality).AttachmentLocalLaw .forward model
-          (Theory.interpretDefinitions model context.definitions))
+        sameArity locality).AttachmentLocalLaw .forward model)
     (localBackward :
       (occurrence.reassemblyTwoInputPresentation decomposition replacement
-        sameArity locality).AttachmentLocalLaw .backward model
-          (Theory.interpretDefinitions model context.definitions))
+        sameArity locality).AttachmentLocalLaw .backward model)
     (proofArgs : Fin frameBoundary.length → model.Carrier) :
     denoteOpen model
-        (Theory.interpretDefinitions model context.definitions)
         (Diagram.Splice.Input.compiledSpliceSourceOpen
           (occurrence.reassemblyInput decomposition) sourceSplice
           frameBoundary frameRoot)
@@ -372,7 +364,6 @@ private theorem equivalentPinnedReplacement_compiled
             Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot,
             Diagram.Splice.Input.PlugLayout.coalescedOpenRoot])) ↔
       denoteOpen model
-        (Theory.interpretDefinitions model context.definitions)
         (Diagram.Splice.Input.compiledSpliceSourceOpen
           (occurrence.replacementInput decomposition replacement sameArity)
           targetSplice
@@ -411,13 +402,11 @@ private theorem equivalentPinnedReplacement_compiled
     constructor
     · exact presentation.compiledSpliceSourceOpen_entails_at_attachments sourceSplice
         targetSplice frameBoundary frameRoot rfl rfl .forward .forward
-        model
-        (Theory.interpretDefinitions model context.definitions) localForward
+        model localForward
         forwardAllowed proofArgs
     · exact presentation.compiledSpliceSourceOpen_entails_at_attachments sourceSplice
         targetSplice frameBoundary frameRoot rfl rfl .backward .backward
-        model
-        (Theory.interpretDefinitions model context.definitions) localBackward
+        model localBackward
         backwardAllowed proofArgs
   · have hodd :
         concreteCutDepth input.val selection.val.anchor % 2 = 1 := by
@@ -439,13 +428,11 @@ private theorem equivalentPinnedReplacement_compiled
     constructor
     · exact presentation.compiledSpliceSourceOpen_entails_at_attachments sourceSplice
         targetSplice frameBoundary frameRoot rfl rfl .backward .forward
-        model
-        (Theory.interpretDefinitions model context.definitions) localBackward
+        model localBackward
         forwardAllowed proofArgs
     · exact presentation.compiledSpliceSourceOpen_entails_at_attachments sourceSplice
         targetSplice frameBoundary frameRoot rfl rfl .forward .backward
-        model
-        (Theory.interpretDefinitions model context.definitions) localForward
+        model localForward
         backwardAllowed proofArgs
 
 /-- Normalize a canonical pinned replacement to a boundary-parametric receipt
@@ -454,22 +441,22 @@ entailment.  This theorem owns remove/splice boundary factorization, literal
 source reassembly, result-boundary normalization, and every dependent arity
 cast; individual rule families supply only their local semantic transport. -/
 private theorem pinnedReplacementReceipt_sound_core
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : Diagram.CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
-    (pattern : Diagram.CheckedOpenDiagram signature)
+    (pattern : Diagram.CheckedOpenDiagram )
     (hostArgs : List (Fin input.val.wireCount))
     (occurrence : PinnedOccurrence input selection pattern hostArgs)
-    (decomposition : Diagram.Decomposition signature input selection)
-    (replacement : Diagram.CheckedOpenDiagram signature)
+    (decomposition : Diagram.Decomposition  input selection)
+    (replacement : Diagram.CheckedOpenDiagram )
     (sameArity : pattern.val.boundary.length =
       replacement.val.boundary.length)
     (locality : occurrence.ReplacementQuotientsLocal decomposition replacement
       sameArity)
     (step : Step context input)
     (receipt : StepReceipt input)
-    (targetResult : Diagram.CheckedDiagram signature)
-    (targetSplice : Diagram.Splice.Input.spliceChecked signature
+    (targetResult : Diagram.CheckedDiagram )
+    (targetSplice : Diagram.Splice.Input.spliceChecked
       (occurrence.replacementInput decomposition replacement sameArity) =
         .ok targetResult)
     (realizes : receipt.Realizes
@@ -484,8 +471,8 @@ private theorem pinnedReplacementReceipt_sound_core
         (spliceFrameInterfaceTransport
           (occurrence.replacementInput decomposition replacement sameArity))))
     (pairedEntails :
-      ∀ (model : Model) {sourceResult : Diagram.CheckedDiagram signature}
-        (sourceSplice : Diagram.Splice.Input.spliceChecked signature
+      ∀ (model : Model) {sourceResult : Diagram.CheckedDiagram }
+        (sourceSplice : Diagram.Splice.Input.spliceChecked
           (occurrence.reassemblyInput decomposition) = .ok sourceResult)
         (frameBoundary : List
           (Fin (occurrence.reassemblyInput decomposition).frame.val.wireCount))
@@ -497,7 +484,6 @@ private theorem pinnedReplacementReceipt_sound_core
         (proofArgs : Fin frameBoundary.length → model.Carrier),
         DirectedEntailment step.tag orientation
           (denoteOpen model
-            (Theory.interpretDefinitions model context.definitions)
             (Diagram.Splice.Input.compiledSpliceSourceOpen
               (occurrence.reassemblyInput decomposition) sourceSplice
               frameBoundary frameRoot)
@@ -506,7 +492,6 @@ private theorem pinnedReplacementReceipt_sound_core
                 Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot,
                 Diagram.Splice.Input.PlugLayout.coalescedOpenRoot])))
           (denoteOpen model
-            (Theory.interpretDefinitions model context.definitions)
             (Diagram.Splice.Input.compiledSpliceSourceOpen
               (occurrence.replacementInput decomposition replacement sameArity)
               targetSplice
@@ -529,7 +514,7 @@ private theorem pinnedReplacementReceipt_sound_core
       (occurrence.reassemblyPattern decomposition)
       (occurrence.reassemblyPattern_boundary_length decomposition).symm
   have sourceSplice' :
-      Diagram.Splice.Input.spliceChecked signature sourceInput =
+      Diagram.Splice.Input.spliceChecked  sourceInput =
         .ok sourceResult := by
     simpa [sourceInput, PinnedOccurrence.reassemblyInput] using sourceSplice
   let presentation :=
@@ -567,7 +552,6 @@ private theorem pinnedReplacementReceipt_sound_core
   have paired :
       DirectedEntailment step.tag orientation
         (denoteOpen model
-          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.compiledSpliceSourceOpen sourceInput
             sourceSplice' frameBoundary frameRoot)
           (pairedArgs ∘ Fin.cast (by
@@ -576,7 +560,6 @@ private theorem pinnedReplacementReceipt_sound_core
             exact List.length_map (as := frameBoundary)
               sourceInput.quotientWire)))
         (denoteOpen model
-          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.compiledSpliceSourceOpen targetInput
             targetSplice (presentation.targetBoundary frameBoundary)
             (presentation.targetBoundary_root frameBoundary frameRoot))
@@ -605,7 +588,7 @@ private theorem pinnedReplacementReceipt_sound_core
     Diagram.Splice.Input.PlugLayout.checkedOutputOpenRoot targetInput
       targetInput.plugLayout targetAdmissible targetFrameBoundary
       targetFrameRoot
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
@@ -704,29 +687,23 @@ private theorem pinnedReplacementReceipt_sound_core
     simp
   have sourceCompilerOutput :=
     Diagram.Splice.Input.spliceChecked_open_denotation_iff sourceInput
-      sourceSplice' frameBoundary frameRoot model
-      (Theory.interpretDefinitions model context.definitions) sourceCompilerArgs
+      sourceSplice' frameBoundary frameRoot model sourceCompilerArgs
   have targetCompilerOutput :=
     Diagram.Splice.Input.spliceChecked_open_denotation_iff targetInput
-      targetSplice targetFrameBoundary targetFrameRoot model
-      (Theory.interpretDefinitions model context.definitions) targetCompilerArgs
+      targetSplice targetFrameBoundary targetFrameRoot model targetCompilerArgs
   have sourceOutputHost := sourceHostIso.denote_iff sourceOutput.property
     source.asCheckedOpen.property model
-    (Theory.interpretDefinitions model context.definitions)
     (sourceCompilerArgs ∘ Fin.cast sourceArityEq.symm)
   have targetOutputRaw := targetRawIso.denote_iff targetOutput.property
     (realizes.rawResultOpen_wellFormed sourceRoot htransport)
     model
-    (Theory.interpretDefinitions model context.definitions)
     (targetCompilerArgs ∘ Fin.cast targetArityEq.symm)
   have paired' :
       DirectedEntailment step.tag orientation
         (denoteOpen model
-          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.compiledSpliceSourceOpen sourceInput
             sourceSplice' frameBoundary frameRoot) sourceCompilerArgs)
         (denoteOpen model
-          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.compiledSpliceSourceOpen targetInput
             targetSplice targetFrameBoundary targetFrameRoot)
           targetCompilerArgs) := by
@@ -734,22 +711,18 @@ private theorem pinnedReplacementReceipt_sound_core
       targetFrameBoundary] using paired
   have sourceCompilerOutput' :
       denoteOpen model
-          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.compiledSpliceSourceOpen sourceInput
             sourceSplice' frameBoundary frameRoot) sourceCompilerArgs ↔
         sourceOutput.denote model
-          (Theory.interpretDefinitions model context.definitions)
           (sourceCompilerArgs ∘ Fin.cast sourceArityEq.symm) := by
     simpa [sourceOutput, sourceArityEq, CheckedOpenDiagram.denote,
       denoteOpen_castArity] using sourceCompilerOutput
   have targetCompilerOutput' :
       denoteOpen model
-          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.compiledSpliceSourceOpen targetInput
             targetSplice targetFrameBoundary targetFrameRoot)
           targetCompilerArgs ↔
         targetOutput.denote model
-          (Theory.interpretDefinitions model context.definitions)
           (targetCompilerArgs ∘ Fin.cast targetArityEq.symm) := by
     simpa [targetOutput, targetArityEq, CheckedOpenDiagram.denote,
       denoteOpen_castArity] using targetCompilerOutput
@@ -763,10 +736,8 @@ private theorem pinnedReplacementReceipt_sound_core
     rfl
   have sourceOutputHost' :
       sourceOutput.denote model
-          (Theory.interpretDefinitions model context.definitions)
           (sourceCompilerArgs ∘ Fin.cast sourceArityEq.symm) ↔
-        source.denote model
-          (Theory.interpretDefinitions model context.definitions) proofArgs := by
+        source.denote model proofArgs := by
     simpa [CheckedOpenDiagram.denote, OpenProofState.denote, sourceArgsEq]
       using sourceOutputHost
   let operationalArgs :=
@@ -785,10 +756,8 @@ private theorem pinnedReplacementReceipt_sound_core
     rfl
   have targetOutputRaw' :
       targetOutput.denote model
-          (Theory.interpretDefinitions model context.definitions)
           (targetCompilerArgs ∘ Fin.cast targetArityEq.symm) ↔
         denoteOpen model
-          (Theory.interpretDefinitions model context.definitions)
           ((realizes.rawResultOpen mapped).elaborate
             (realizes.rawResultOpen_wellFormed sourceRoot htransport))
           operationalArgs := by
@@ -819,22 +788,22 @@ private theorem pinnedReplacementReceipt_sound_core
 retain the original callback surface as a wrapper around the validity-aware
 receipt core used by registered theorem citation. -/
 private theorem pinnedReplacementReceipt_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : Diagram.CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
-    (pattern : Diagram.CheckedOpenDiagram signature)
+    (pattern : Diagram.CheckedOpenDiagram )
     (hostArgs : List (Fin input.val.wireCount))
     (occurrence : PinnedOccurrence input selection pattern hostArgs)
-    (decomposition : Diagram.Decomposition signature input selection)
-    (replacement : Diagram.CheckedOpenDiagram signature)
+    (decomposition : Diagram.Decomposition  input selection)
+    (replacement : Diagram.CheckedOpenDiagram )
     (sameArity : pattern.val.boundary.length =
       replacement.val.boundary.length)
     (locality : occurrence.ReplacementQuotientsLocal decomposition replacement
       sameArity)
     (step : Step context input)
     (receipt : StepReceipt input)
-    (targetResult : Diagram.CheckedDiagram signature)
-    (targetSplice : Diagram.Splice.Input.spliceChecked signature
+    (targetResult : Diagram.CheckedDiagram )
+    (targetSplice : Diagram.Splice.Input.spliceChecked
       (occurrence.replacementInput decomposition replacement sameArity) =
         .ok targetResult)
     (realizes : receipt.Realizes
@@ -849,8 +818,8 @@ private theorem pinnedReplacementReceipt_sound
         (spliceFrameInterfaceTransport
           (occurrence.replacementInput decomposition replacement sameArity))))
     (pairedEntails :
-      ∀ (model : Model) {sourceResult : Diagram.CheckedDiagram signature}
-        (sourceSplice : Diagram.Splice.Input.spliceChecked signature
+      ∀ (model : Model) {sourceResult : Diagram.CheckedDiagram }
+        (sourceSplice : Diagram.Splice.Input.spliceChecked
           (occurrence.reassemblyInput decomposition) = .ok sourceResult)
         (frameBoundary : List
           (Fin (occurrence.reassemblyInput decomposition).frame.val.wireCount))
@@ -861,7 +830,6 @@ private theorem pinnedReplacementReceipt_sound
         (proofArgs : Fin frameBoundary.length → model.Carrier),
         DirectedEntailment step.tag orientation
           (denoteOpen model
-            (Theory.interpretDefinitions model context.definitions)
             (Diagram.Splice.Input.compiledSpliceSourceOpen
               (occurrence.reassemblyInput decomposition) sourceSplice
               frameBoundary frameRoot)
@@ -870,7 +838,6 @@ private theorem pinnedReplacementReceipt_sound
                 Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot,
                 Diagram.Splice.Input.PlugLayout.coalescedOpenRoot])))
           (denoteOpen model
-            (Theory.interpretDefinitions model context.definitions)
             (Diagram.Splice.Input.compiledSpliceSourceOpen
               (occurrence.replacementInput decomposition replacement sameArity)
               targetSplice
@@ -893,10 +860,10 @@ private theorem pinnedReplacementReceipt_sound
 
 /-- Every successful comprehension-instantiation receipt is sound. -/
 theorem applyComprehensionInstantiate_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : Diagram.CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : Diagram.CheckedDiagram )
     (bubble : Fin input.val.regionCount)
-    (comprehension : Diagram.CheckedOpenDiagram signature)
+    (comprehension : Diagram.CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
@@ -915,12 +882,12 @@ theorem applyComprehensionInstantiate_sound
     payload initial.pendingAtoms.length initial copied hcopy
   let elimTrace := vacuousElimTrace hraw
   have finalWellFormed :
-      (dropInstantiationAtomsRaw copied).WellFormed signature :=
+      (dropInstantiationAtomsRaw copied).WellFormed  :=
     InstantiationDrop.raw_wellFormed copied
-  have rawWellFormed : raw.WellFormed signature := by
+  have rawWellFormed : raw.WellFormed  := by
     exact realizes.result_eq ▸ receipt.result.property
-  have sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature := by
-    exact Eq.mp (congrArg (fun diagram => diagram.WellFormed signature)
+  have sourceWellFormed : elimTrace.sourceDiagram.WellFormed  := by
+    exact Eq.mp (congrArg (fun diagram => diagram.WellFormed )
       elimTrace.promotion.raw_eq_diagram) rawWellFormed
   let expectedInterface :=
     (copied.interface.compose
@@ -936,7 +903,7 @@ theorem applyComprehensionInstantiate_sound
         some _mapped) =>
     (⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
-        finalWellFormed boundary sourceRoot⟩ : CheckedOpenDiagram signature)
+        finalWellFormed boundary sourceRoot⟩ : CheckedOpenDiagram )
   let operationalIso := fun
       (boundary : List (Fin input.val.wireCount))
       (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -981,7 +948,7 @@ theorem applyComprehensionInstantiate_sound
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := operationalOpen) (operationalIso := operationalIso)
   intro model boundary sourceRoot mapped htransport valid args
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
@@ -1002,8 +969,7 @@ theorem applyComprehensionInstantiate_sound
       finalWellFormed direction allowedDepth
   have semantic := copyTrace.finalOpen_denote elimTrace sourceWellFormed
     finalWellFormed boundary sourceRoot direction allowed
-    model
-    (Theory.interpretDefinitions model context.definitions) args
+    model args
   let iso := operationalIso boundary sourceRoot mapped htransport
   have operationalArgsEq :
       args ∘ Fin.cast (iso.boundary_length_eq.trans
@@ -1038,12 +1004,12 @@ attachment-sensitive executor contract is implemented.
     operationalPayload initial.pendingAtoms.length initial copied hcopy
   let elimTrace := vacuousElimTrace hraw
   have finalWellFormed :
-      (dropInstantiationAtomsRaw copied).WellFormed signature :=
+      (dropInstantiationAtomsRaw copied).WellFormed  :=
     InstantiationDrop.raw_wellFormed copied
-  have rawWellFormed : raw.WellFormed signature := by
+  have rawWellFormed : raw.WellFormed  := by
     exact realizes.result_eq ▸ receipt.result.property
-  have sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature := by
-    exact Eq.mp (congrArg (fun diagram => diagram.WellFormed signature)
+  have sourceWellFormed : elimTrace.sourceDiagram.WellFormed  := by
+    exact Eq.mp (congrArg (fun diagram => diagram.WellFormed )
       elimTrace.promotion.raw_eq_diagram) rawWellFormed
   have boundaryNodup : operational.val.boundary.Nodup :=
     materialization.boundary_nodup
@@ -1062,7 +1028,7 @@ attachment-sensitive executor contract is implemented.
     (⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
         finalWellFormed boundaryNodup boundary sourceRoot⟩ :
-      CheckedOpenDiagram signature)
+      CheckedOpenDiagram )
   let operationalIso := fun
       (boundary : List (Fin input.val.wireCount))
       (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -1107,7 +1073,7 @@ attachment-sensitive executor contract is implemented.
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := operationalOpen) (operationalIso := operationalIso)
   intro model boundary sourceRoot mapped htransport valid args
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
@@ -1129,8 +1095,7 @@ attachment-sensitive executor contract is implemented.
       finalWellFormed direction allowedDepth route routeDepth
   have semantic := copyTrace.finalOpen_denote elimTrace sourceWellFormed
     finalWellFormed boundaryNodup boundary sourceRoot direction allowed
-    model
-    (Theory.interpretDefinitions model context.definitions) args
+    model args
   let iso := operationalIso boundary sourceRoot mapped htransport
   have operationalArgsEq :
       args ∘ Fin.cast (iso.boundary_length_eq.trans
@@ -1155,10 +1120,10 @@ attachment-sensitive executor contract is implemented.
 
 /-- Every successful comprehension-abstraction receipt is sound. -/
 theorem applyComprehensionAbstract_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : Diagram.CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : Diagram.CheckedDiagram )
     (wrap : Diagram.CheckedSelection input.val)
-    (comprehension : Diagram.CheckedOpenDiagram signature)
+    (comprehension : Diagram.CheckedOpenDiagram )
     (occurrences : List (AbstractionOccurrence input))
     (payload : ComprehensionAbstractPayload input wrap comprehension
       occurrences)
@@ -1171,10 +1136,10 @@ theorem applyComprehensionAbstract_sound
   obtain ⟨polarity, raw, hraw, realizes⟩ :=
     applyComprehensionAbstract_realizes happly
   let trace := Classical.choice (comprehensionAbstractRaw?_trace hraw)
-  have rawWellFormed : raw.WellFormed signature :=
+  have rawWellFormed : raw.WellFormed  :=
     realizes.result_eq ▸ receipt.result.property
-  have targetWellFormed : trace.diagram.WellFormed signature :=
-    Eq.mp (congrArg (fun diagram => diagram.WellFormed signature)
+  have targetWellFormed : trace.diagram.WellFormed  :=
+    Eq.mp (congrArg (fun diagram => diagram.WellFormed )
       trace.raw_eq_diagram) rawWellFormed
   let operational := fun
       (boundary : List (Fin input.val.wireCount))
@@ -1187,7 +1152,7 @@ theorem applyComprehensionAbstract_sound
     let expected := realizes.transportBoundary_expected htransport
     (⟨trace.targetOpen hraw boundary rawMapped expected,
       trace.targetOpen_wellFormed payload targetWellFormed hraw boundary
-        sourceRoot rawMapped expected⟩ : CheckedOpenDiagram signature)
+        sourceRoot rawMapped expected⟩ : CheckedOpenDiagram )
   let operationalIso := fun
       (boundary : List (Fin input.val.wireCount))
       (_sourceRoot : ∀ wire, wire ∈ boundary →
@@ -1202,7 +1167,7 @@ theorem applyComprehensionAbstract_sound
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := operational) (operationalIso := operationalIso)
   intro model boundary sourceRoot mapped htransport valid args
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
@@ -1225,8 +1190,7 @@ theorem applyComprehensionAbstract_sound
       wrap.val.anchor direction input.val.root :=
     AbstractionRawTrace.allowed_root input wrap.val.anchor direction allowedDepth
   have semantic := trace.open_denote payload targetWellFormed hraw boundary
-    sourceRoot rawMapped expected direction allowed model
-    (Theory.interpretDefinitions model context.definitions) args
+    sourceRoot rawMapped expected direction allowed model args
   let iso := operationalIso boundary sourceRoot mapped htransport
   have operationalArgsEq :
       args ∘ Fin.cast (iso.boundary_length_eq.trans
@@ -1250,8 +1214,8 @@ theorem applyComprehensionAbstract_sound
 
 /-- Every successful registered-theorem replacement receipt is sound. -/
 theorem applyTheorem_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : Diagram.CheckedDiagram signature)
+    (context : ProofContext ) (orientation : Orientation)
+    (input : Diagram.CheckedDiagram )
     (theoremIndex : Fin context.theorems.length)
     (selection : Diagram.CheckedSelection input.val)
     (args : List (Fin input.val.wireCount)) (direction : Direction)
@@ -1278,7 +1242,7 @@ theorem applyTheorem_sound
     exact payload.occurrence.materialized_spliceInput_eq_replacementInput
       decomposition payload.target payload.sameBoundaryArity materialized
   have targetSplice' :
-      Diagram.Splice.Input.spliceChecked signature
+      Diagram.Splice.Input.spliceChecked
           (payload.occurrence.replacementInput decomposition replacement
             materializedArity) = .ok targetResult := by
     rw [← targetInputEq]
@@ -1298,7 +1262,7 @@ theorem applyTheorem_sound
             (payload.occurrence.replacementInput decomposition replacement
               materializedArity))) := by
     let frame := input.val.removeRaw selection decomposition.frameDomains
-    let Target := { candidate : Splice.Input signature //
+    let Target := { candidate : Splice.Input  //
       candidate.frame.val = frame }
     let actual : Target := ⟨materialized.spliceInput, rfl⟩
     let canonical : Target :=
@@ -1349,17 +1313,13 @@ theorem applyTheorem_sound
       match citationSimulationDirection direction with
       | .forward => ∀ sourceArgs,
           (payload.occurrence.reassemblyInput decomposition).pattern.denote
-              model
-              (Theory.interpretDefinitions model context.definitions) sourceArgs →
+              model sourceArgs →
             replacement.denote model
-              (Theory.interpretDefinitions model context.definitions)
               (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm)
       | .backward => ∀ targetArgs,
-          replacement.denote model
-              (Theory.interpretDefinitions model context.definitions) targetArgs →
+          replacement.denote model targetArgs →
             (payload.occurrence.reassemblyInput decomposition).pattern.denote
               model
-              (Theory.interpretDefinitions model context.definitions)
               (targetArgs ∘ Fin.cast presentation.boundary_arity_eq) := by
     cases direction with
     | forward =>
@@ -1368,23 +1328,19 @@ theorem applyTheorem_sound
           payload.occurrence.reassemblyPatternIso decomposition
         have sourcePatternDenotes :
             payload.source.denote model
-              (Theory.interpretDefinitions model context.definitions)
               (sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm) :=
           (sourceIso.denote_iff
             (payload.occurrence.reassemblyPattern decomposition).property
-            payload.source.property model
-            (Theory.interpretDefinitions model context.definitions) sourceArgs).mp
+            payload.source.property model sourceArgs).mp
             sourceDenotes
         have targetDenotes :=
           theoremPayload_forward_local
             model (context.theorems.get theoremIndex) payload registered
-            (Theory.interpretDefinitions model context.definitions)
             (valid.theorems theoremIndex)
             (sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm)
             sourcePatternDenotes
         have materializedDenotes :=
           (materialized.certificate.denote_iff model
-            (Theory.interpretDefinitions model context.definitions)
             (sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm ∘
               Fin.cast payload.sameBoundaryArity.symm)).mpr targetDenotes
         have materializedArgsEq :
@@ -1403,10 +1359,8 @@ theorem applyTheorem_sound
           targetArgs ∘ Fin.cast materialized.certificate.boundary_length.symm
         have payloadTargetDenotes :
             payload.target.denote model
-              (Theory.interpretDefinitions model context.definitions)
               payloadTargetArgs :=
           (materialized.certificate.denote_iff model
-            (Theory.interpretDefinitions model context.definitions)
             payloadTargetArgs).mp (by
               have targetArgsEq :
                   payloadTargetArgs ∘
@@ -1420,7 +1374,6 @@ theorem applyTheorem_sound
         have sourcePatternDenotes :=
           theoremPayload_backward_local
             model (context.theorems.get theoremIndex) payload registered
-            (Theory.interpretDefinitions model context.definitions)
             (valid.theorems theoremIndex) payloadTargetArgs
             payloadTargetDenotes
         let sourceIso :=
@@ -1431,12 +1384,10 @@ theorem applyTheorem_sound
         have reassemblyDenotes :
             (payload.occurrence.reassemblyInput decomposition).pattern.denote
               model
-              (Theory.interpretDefinitions model context.definitions)
               reassemblyArgs :=
           (sourceIso.denote_iff
             (payload.occurrence.reassemblyPattern decomposition).property
             payload.source.property model
-            (Theory.interpretDefinitions model context.definitions)
             reassemblyArgs).mpr (by
               have reassemblyArgsEq :
                 reassemblyArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm =
@@ -1463,7 +1414,6 @@ theorem applyTheorem_sound
       (citationSimulationDirection direction)
       (replaySimulationDirection orientation)
       model
-      (Theory.interpretDefinitions model context.definitions)
       localLaw allowed proofArgs
   cases orientation <;> cases direction <;>
     simpa [DirectedEntailment, Step.tag, StepTag.semanticMode,
@@ -1481,7 +1431,7 @@ attachment-sensitive executor contract is implemented.
       (payload.occurrence.reassemblyPattern decomposition)
       (payload.occurrence.reassemblyPattern_boundary_length decomposition).symm
   have sourceSplice' :
-      Diagram.Splice.Input.spliceChecked signature sourceInput =
+      Diagram.Splice.Input.spliceChecked  sourceInput =
         .ok sourceResult := by
     simpa [sourceInput, PinnedOccurrence.reassemblyInput] using sourceSplice
   let presentation :=
@@ -1531,7 +1481,6 @@ attachment-sensitive executor contract is implemented.
       (citationSimulationDirection direction)
       (replaySimulationDirection orientation)
       model
-      (Theory.interpretDefinitions model context.definitions)
       (by
         cases direction with
         | forward =>
@@ -1542,12 +1491,10 @@ attachment-sensitive executor contract is implemented.
               (sourceIso.denote_iff
                 (payload.occurrence.reassemblyPattern decomposition).property
                 payload.source.property model
-                (Theory.interpretDefinitions model context.definitions)
                 sourceArgs).mp sourceDenotes
             have targetDenotes :=
               theoremPayload_forward_local
                 model (context.theorems.get theoremIndex) payload registered
-                (Theory.interpretDefinitions model context.definitions)
                 (valid.theorems theoremIndex) _ patternDenotes
             simpa [presentation, sourceInput, targetInput,
               PinnedOccurrence.reassemblyInput,
@@ -1559,12 +1506,10 @@ attachment-sensitive executor contract is implemented.
             have patternDenotes :=
               theoremPayload_backward_local
                 model (context.theorems.get theoremIndex) payload registered
-                (Theory.interpretDefinitions model context.definitions)
                 (valid.theorems theoremIndex) targetArgs targetDenotes
             apply (sourceIso.denote_iff
               (payload.occurrence.reassemblyPattern decomposition).property
-              payload.source.property model
-              (Theory.interpretDefinitions model context.definitions) _).mpr
+              payload.source.property model _).mpr
             simpa [presentation, sourceInput, targetInput,
               PinnedOccurrence.reassemblyInput,
               PinnedOccurrence.replacementInput] using patternDenotes)
@@ -1586,7 +1531,7 @@ attachment-sensitive executor contract is implemented.
     Diagram.Splice.Input.PlugLayout.checkedOutputOpenRoot targetInput
       targetInput.plugLayout targetAdmissible targetFrameBoundary
       targetFrameRoot
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
@@ -1685,29 +1630,23 @@ attachment-sensitive executor contract is implemented.
     simp
   have sourceCompilerOutput :=
     Diagram.Splice.Input.spliceChecked_open_denotation_iff sourceInput
-      sourceSplice' frameBoundary frameRoot model
-      (Theory.interpretDefinitions model context.definitions) sourceCompilerArgs
+      sourceSplice' frameBoundary frameRoot model sourceCompilerArgs
   have targetCompilerOutput :=
     Diagram.Splice.Input.spliceChecked_open_denotation_iff targetInput
-      targetSplice targetFrameBoundary targetFrameRoot model
-      (Theory.interpretDefinitions model context.definitions) targetCompilerArgs
+      targetSplice targetFrameBoundary targetFrameRoot model targetCompilerArgs
   have sourceOutputHost := sourceHostIso.denote_iff sourceOutput.property
     source.asCheckedOpen.property model
-    (Theory.interpretDefinitions model context.definitions)
     (sourceCompilerArgs ∘ Fin.cast sourceArityEq.symm)
   have targetOutputRaw := targetRawIso.denote_iff targetOutput.property
     (realizes.rawResultOpen_wellFormed sourceRoot htransport)
     model
-    (Theory.interpretDefinitions model context.definitions)
     (targetCompilerArgs ∘ Fin.cast targetArityEq.symm)
   have paired' :
       (replaySimulationDirection orientation).Entails
         (denoteOpen model
-          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.compiledSpliceSourceOpen sourceInput
             sourceSplice' frameBoundary frameRoot) sourceCompilerArgs)
         (denoteOpen model
-          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.compiledSpliceSourceOpen targetInput
             targetSplice targetFrameBoundary targetFrameRoot)
           targetCompilerArgs) := by
@@ -1715,22 +1654,18 @@ attachment-sensitive executor contract is implemented.
       targetFrameBoundary] using paired
   have sourceCompilerOutput' :
       denoteOpen model
-          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.compiledSpliceSourceOpen sourceInput
             sourceSplice' frameBoundary frameRoot) sourceCompilerArgs ↔
         sourceOutput.denote model
-          (Theory.interpretDefinitions model context.definitions)
           (sourceCompilerArgs ∘ Fin.cast sourceArityEq.symm) := by
     simpa [sourceOutput, sourceArityEq, CheckedOpenDiagram.denote,
       denoteOpen_castArity] using sourceCompilerOutput
   have targetCompilerOutput' :
       denoteOpen model
-          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.compiledSpliceSourceOpen targetInput
             targetSplice targetFrameBoundary targetFrameRoot)
           targetCompilerArgs ↔
         targetOutput.denote model
-          (Theory.interpretDefinitions model context.definitions)
           (targetCompilerArgs ∘ Fin.cast targetArityEq.symm) := by
     simpa [targetOutput, targetArityEq, CheckedOpenDiagram.denote,
       denoteOpen_castArity] using targetCompilerOutput
@@ -1744,10 +1679,8 @@ attachment-sensitive executor contract is implemented.
     rfl
   have sourceOutputHost' :
       sourceOutput.denote model
-          (Theory.interpretDefinitions model context.definitions)
           (sourceCompilerArgs ∘ Fin.cast sourceArityEq.symm) ↔
-        source.denote model
-          (Theory.interpretDefinitions model context.definitions) proofArgs := by
+        source.denote model proofArgs := by
     simpa [CheckedOpenDiagram.denote, OpenProofState.denote, sourceArgsEq]
       using sourceOutputHost
   let operationalArgs :=
@@ -1766,10 +1699,8 @@ attachment-sensitive executor contract is implemented.
     rfl
   have targetOutputRaw' :
       targetOutput.denote model
-          (Theory.interpretDefinitions model context.definitions)
           (targetCompilerArgs ∘ Fin.cast targetArityEq.symm) ↔
         denoteOpen model
-          (Theory.interpretDefinitions model context.definitions)
           ((realizes.rawResultOpen mapped).elaborate
             (realizes.rawResultOpen_wellFormed sourceRoot htransport))
           operationalArgs := by
@@ -1791,531 +1722,5 @@ attachment-sensitive executor contract is implemented.
       exact sourceCompilerHost.mp
         (paired' (targetCompilerRaw.mpr targetDenotes))
 -/
-
-/-- Every successful relation-unfolding receipt is sound. -/
-theorem applyRelUnfold_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : Diagram.CheckedDiagram signature)
-    (node : Fin input.val.nodeCount) (definition : Fin signature.length)
-    (payload : RelUnfoldPayload input node definition)
-    (body_eq :
-      payload.body.val = (context.definitionEntry definition).body.val)
-    (receipt : StepReceipt input)
-    (happly : applyRelUnfold input node definition payload
-      (relUnfold_body_arity context definition payload body_eq) =
-        .ok receipt) :
-    SuccessfulReceiptSound context orientation input
-      (.relUnfold node definition payload body_eq)
-      receipt := by
-  let sameArity :=
-    relUnfold_body_arity context definition payload body_eq
-  have happly' :
-      applyRelUnfold input node definition payload sameArity =
-        .ok receipt := by
-    simpa [sameArity] using happly
-  obtain ⟨decomposition, hdecomposition, materialized, hmaterialized,
-      targetResult, targetSplice, realizes⟩ :=
-    applyRelUnfold_realizes happly'
-  let replacement := materialized.certificate.result
-  let materializedArity :=
-    sameArity.trans materialized.certificate.boundary_length.symm
-  have targetInputEq :
-      materialized.spliceInput =
-        payload.occurrence.replacementInput decomposition replacement
-          materializedArity := by
-    exact payload.occurrence.materialized_spliceInput_eq_replacementInput
-      decomposition payload.body sameArity materialized
-  have targetSplice' :
-      Diagram.Splice.Input.spliceChecked signature
-          (payload.occurrence.replacementInput decomposition replacement
-            materializedArity) = .ok targetResult := by
-    rw [← targetInputEq]
-    exact targetSplice
-  have realizes' :
-      receipt.Realizes
-        (payload.occurrence.replacementInput decomposition replacement
-          materializedArity).plugLayout.plugRaw
-        ((removeWireProvenance input payload.selection
-            decomposition.frameDomains).compose
-          (spliceFrameWireProvenance
-            (payload.occurrence.replacementInput decomposition replacement
-              materializedArity)))
-        ((removeWireInterfaceTransport input payload.selection
-            decomposition.frameDomains).compose
-          (spliceFrameInterfaceTransport
-            (payload.occurrence.replacementInput decomposition replacement
-              materializedArity))) := by
-    let frame := input.val.removeRaw payload.selection
-      decomposition.frameDomains
-    let Target := { candidate : Splice.Input signature //
-      candidate.frame.val = frame }
-    let actual : Target := ⟨materialized.spliceInput, rfl⟩
-    let canonical : Target :=
-      ⟨payload.occurrence.replacementInput decomposition replacement
-        materializedArity, rfl⟩
-    have targetEq : actual = canonical := by
-      apply Subtype.ext
-      exact targetInputEq
-    let family := fun candidate : Target =>
-      receipt.Realizes candidate.val.plugLayout.plugRaw
-        ((removeWireProvenance input payload.selection
-            decomposition.frameDomains).compose
-          ((spliceFrameWireProvenance candidate.val).castSource
-            candidate.property))
-        ((removeWireInterfaceTransport input payload.selection
-            decomposition.frameDomains).compose
-          ((spliceFrameInterfaceTransport candidate.val).castSource
-            candidate.property))
-    have actualRealizes : family actual := by
-      simpa [family, actual, WireProvenance.castSource,
-        InterfaceTransport.castSource] using realizes
-    have canonicalRealizes : family canonical := targetEq ▸ actualRealizes
-    simpa [family, canonical, WireProvenance.castSource,
-      InterfaceTransport.castSource] using canonicalRealizes
-  have locality :
-      payload.occurrence.ReplacementQuotientsLocal decomposition replacement
-        materializedArity := by
-    exact materialized.local
-  let source := wiredNamedReferencePattern signature definition payload.wiring
-  apply pinnedReplacementReceipt_sound context orientation input
-    payload.selection source payload.args payload.occurrence decomposition
-    replacement materializedArity locality
-    (.relUnfold node definition payload body_eq) receipt targetResult
-    targetSplice' realizes'
-  intro model sourceResult sourceSplice frameBoundary frameRoot proofArgs
-  let presentation :=
-    payload.occurrence.reassemblyTwoInputPresentation decomposition replacement
-      materializedArity locality
-  have localForward : ∀ sourceArgs,
-      (payload.occurrence.reassemblyInput decomposition).pattern.denote
-          model
-          (Theory.interpretDefinitions model context.definitions) sourceArgs →
-        replacement.denote model
-          (Theory.interpretDefinitions model context.definitions)
-          (sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm) := by
-    intro sourceArgs sourceDenotes
-    let sourceIso :=
-      payload.occurrence.reassemblyPatternIso decomposition
-    let namedArgs :=
-      sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm
-    have sourcePatternDenotes :
-        source.denote model
-          (Theory.interpretDefinitions model context.definitions) namedArgs :=
-      (sourceIso.denote_iff
-        (payload.occurrence.reassemblyPattern decomposition).property
-        source.property model
-        (Theory.interpretDefinitions model context.definitions) sourceArgs).mp
-        sourceDenotes
-    let entryNamedEq :
-        (context.definitionEntry definition).body.val.boundary.length =
-          source.val.boundary.length :=
-      (context.definitionEntry definition).body_arity.trans
-        (wiredNamedReferencePattern_boundary_length signature definition
-          payload.wiring).symm
-    let entryArgs :=
-      namedArgs ∘ Fin.cast entryNamedEq
-    have sourceArgsEq :
-        ((entryArgs ∘
-            Fin.cast
-              (context.definitionEntry definition).body_arity.symm) ∘
-          Fin.cast
-            (wiredNamedReferencePattern_boundary_length signature definition
-              payload.wiring)) =
-          namedArgs := by
-      funext position
-      apply congrArg namedArgs
-      apply Fin.ext
-      rfl
-    have namedDenotes :=
-      (wiredNamedReferencePattern_denote_entry
-        (context.definitionEntry definition) payload.wiring
-        model
-        (Theory.interpretDefinitions model context.definitions) entryArgs).mp (by
-          simpa [source, sourceArgsEq] using sourcePatternDenotes)
-    have entryDenotes :=
-      (relUnfold_equiv model context.definitions definition entryArgs).mp
-        namedDenotes.2
-    let bodyIso : Diagram.OpenConcreteIso payload.body.val
-        (context.definitionEntry definition).body.val :=
-      Diagram.OpenConcreteIso.ofEq body_eq
-    let bodyArgs :=
-      entryArgs ∘ Fin.cast bodyIso.boundary_length_eq
-    have entryArgsEq :
-        bodyArgs ∘ Fin.cast bodyIso.boundary_length_eq.symm =
-          entryArgs := by
-      funext position
-      apply congrArg entryArgs
-      apply Fin.ext
-      rfl
-    have bodyDenotes :
-        payload.body.denote model
-          (Theory.interpretDefinitions model context.definitions) bodyArgs :=
-      (bodyIso.denote_iff payload.body.property
-        (context.definitionEntry definition).body.property
-        model
-        (Theory.interpretDefinitions model context.definitions) bodyArgs).mpr (by
-          simpa [entryArgsEq] using entryDenotes)
-    have materializedDenotes :=
-      (materialized.certificate.denote_iff model
-        (Theory.interpretDefinitions model context.definitions) bodyArgs).mpr
-        bodyDenotes
-    have bodyArgsEq :
-        bodyArgs ∘ Fin.cast materialized.certificate.boundary_length =
-          sourceArgs ∘ Fin.cast presentation.boundary_arity_eq.symm := by
-      funext position
-      apply congrArg sourceArgs
-      apply Fin.ext
-      rfl
-    simpa [replacement, bodyArgsEq] using materializedDenotes
-  have localBackward : presentation.AttachmentLocalLaw .backward
-      model
-      (Theory.interpretDefinitions model context.definitions) := by
-    intro targetValues targetDenotes
-    let targetInput :=
-      payload.occurrence.replacementInput decomposition replacement
-        materializedArity
-    let targetArgs := fun position =>
-      targetValues (targetInput.quotientWire (targetInput.attachment position))
-    change replacement.denote model
-      (Theory.interpretDefinitions model context.definitions) targetArgs at targetDenotes
-    change (payload.occurrence.reassemblyInput decomposition).pattern.denote
-      model
-      (Theory.interpretDefinitions model context.definitions)
-      (targetArgs ∘ Fin.cast presentation.boundary_arity_eq)
-    let bodyArgs :=
-      targetArgs ∘ Fin.cast materialized.certificate.boundary_length.symm
-    have materializedArgsEq :
-        bodyArgs ∘ Fin.cast materialized.certificate.boundary_length =
-          targetArgs := by
-      funext position
-      apply congrArg targetArgs
-      apply Fin.ext
-      rfl
-    have bodyDenotes :
-        payload.body.denote model
-          (Theory.interpretDefinitions model context.definitions) bodyArgs :=
-      (materialized.certificate.denote_iff model
-        (Theory.interpretDefinitions model context.definitions) bodyArgs).mp (by
-          simpa [replacement, materializedArgsEq] using targetDenotes)
-    let bodyIso : Diagram.OpenConcreteIso payload.body.val
-        (context.definitionEntry definition).body.val :=
-      Diagram.OpenConcreteIso.ofEq body_eq
-    let entryArgs :=
-      bodyArgs ∘ Fin.cast bodyIso.boundary_length_eq.symm
-    have entryDenotes :
-        (context.definitionEntry definition).body.denote
-          model
-          (Theory.interpretDefinitions model context.definitions) entryArgs :=
-      (bodyIso.denote_iff payload.body.property
-        (context.definitionEntry definition).body.property
-        model
-        (Theory.interpretDefinitions model context.definitions) bodyArgs).mp
-        bodyDenotes
-    have namedDenotes :=
-      (relUnfold_equiv model context.definitions definition entryArgs).mpr
-        entryDenotes
-    have sourcePatternDenotes :=
-      (wiredNamedReferencePattern_denote_entry
-        (context.definitionEntry definition) payload.wiring
-        model
-        (Theory.interpretDefinitions model context.definitions) entryArgs).mpr
-        ⟨by
-          intro left right hwiring
-          have hboundary :
-              (wiredNamedReferencePattern signature definition
-                  payload.wiring).val.boundary.get
-                    (Fin.cast
-                      (wiredNamedReferencePattern_boundary_length signature
-                        definition payload.wiring).symm left) =
-                (wiredNamedReferencePattern signature definition
-                  payload.wiring).val.boundary.get
-                    (Fin.cast
-                      (wiredNamedReferencePattern_boundary_length signature
-                        definition payload.wiring).symm right) := by
-            simpa [wiredNamedReferencePattern,
-              wiredNamedReferencePatternRaw] using hwiring
-          have hpositions :=
-            payload.occurrence.position_eq_of_pattern_boundary_eq
-              decomposition hboundary
-          dsimp only [entryArgs, bodyArgs, targetArgs, Function.comp_apply]
-          apply congrArg targetValues
-          apply congrArg targetInput.quotientWire
-          dsimp only [targetInput, PinnedOccurrence.replacementInput,
-            PinnedOccurrence.replacementAttachment]
-          apply congrArg
-            (Splice.Decomposition.originalFragmentInput decomposition).attachment
-          apply Fin.ext
-          simpa using congrArg Fin.val hpositions,
-          namedDenotes⟩
-    let sourceIso :=
-      payload.occurrence.reassemblyPatternIso decomposition
-    let sourceArgs :=
-      (((entryArgs ∘
-          Fin.cast
-            (context.definitionEntry definition).body_arity.symm) ∘
-        Fin.cast
-          (wiredNamedReferencePattern_boundary_length signature definition
-            payload.wiring)) ∘
-        Fin.cast sourceIso.boundary_length_eq)
-    have sourceTargetArgsEq :
-        sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm =
-          ((entryArgs ∘
-              Fin.cast
-                (context.definitionEntry definition).body_arity.symm) ∘
-            Fin.cast
-              (wiredNamedReferencePattern_boundary_length signature definition
-                payload.wiring)) := by
-      funext position
-      apply congrArg
-        ((entryArgs ∘
-            Fin.cast
-              (context.definitionEntry definition).body_arity.symm) ∘
-          Fin.cast
-            (wiredNamedReferencePattern_boundary_length signature definition
-              payload.wiring))
-      apply Fin.ext
-      rfl
-    have sourceDenotes :
-        (payload.occurrence.reassemblyInput decomposition).pattern.denote
-          model
-          (Theory.interpretDefinitions model context.definitions) sourceArgs :=
-      (sourceIso.denote_iff
-        (payload.occurrence.reassemblyPattern decomposition).property
-        (wiredNamedReferencePattern signature definition payload.wiring).property
-        model
-        (Theory.interpretDefinitions model context.definitions) sourceArgs).mpr (by
-          simpa [sourceTargetArgsEq] using sourcePatternDenotes)
-    have sourceArgsEq :
-        sourceArgs =
-          targetArgs ∘ Fin.cast presentation.boundary_arity_eq := by
-      funext position
-      apply congrArg targetArgs
-      apply Fin.ext
-      rfl
-    simpa [sourceArgsEq] using sourceDenotes
-  have equivalence :=
-    let localForward' :=
-      Diagram.Splice.Input.TwoInputPresentation.LocalLaw.toAttachmentLocalLaw
-        presentation .forward model
-        (Theory.interpretDefinitions model context.definitions) localForward
-    equivalentPinnedReplacement_compiled model context input payload.selection
-      source payload.args payload.occurrence decomposition replacement
-      materializedArity locality sourceSplice targetSplice' frameBoundary
-      frameRoot localForward' localBackward proofArgs
-  simpa [DirectedEntailment, Step.tag, StepTag.semanticMode] using equivalence
-
-
-/-- Every successful relation-folding receipt is sound. -/
-theorem applyRelFold_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : Diagram.CheckedDiagram signature)
-    (selection : Diagram.CheckedSelection input.val)
-    (definition : Fin signature.length)
-    (args : List (Fin input.val.wireCount))
-    (payload : RelFoldPayload input selection definition.val args)
-    (body_eq :
-      payload.body.val = (context.definitionEntry definition).body.val)
-    (receipt : StepReceipt input)
-    (happly : applyRelFold input selection definition args payload
-      (relFold_namedReference_arity context definition payload body_eq) =
-        .ok receipt) :
-    SuccessfulReceiptSound context orientation input
-      (.relFold selection definition args payload body_eq) receipt := by
-  let sameArity :=
-    relFold_namedReference_arity context definition payload body_eq
-  have happly' :
-      applyRelFold input selection definition args payload sameArity =
-        .ok receipt := by
-    simpa [sameArity] using happly
-  obtain ⟨decomposition, hdecomposition, targetResult, targetSplice,
-      realizes⟩ := applyRelFold_realizes happly'
-  let replacement := namedReferencePattern signature definition
-  have locality :
-      payload.occurrence.ReplacementQuotientsLocal decomposition replacement
-        sameArity :=
-    payload.occurrence.namedReferenceReplacement_local decomposition
-      definition sameArity
-  apply pinnedReplacementReceipt_sound context orientation input selection
-    payload.body args payload.occurrence decomposition replacement sameArity
-    locality (.relFold selection definition args payload body_eq) receipt
-    targetResult targetSplice realizes
-  intro model sourceResult sourceSplice frameBoundary frameRoot proofArgs
-  have localForward : ∀ sourceArgs,
-      (payload.occurrence.reassemblyInput decomposition).pattern.denote
-          model
-          (Theory.interpretDefinitions model context.definitions) sourceArgs →
-        replacement.denote model
-          (Theory.interpretDefinitions model context.definitions)
-          (sourceArgs ∘ Fin.cast
-            (payload.occurrence.reassemblyTwoInputPresentation decomposition
-              replacement sameArity locality).boundary_arity_eq.symm) := by
-    intro sourceArgs sourceDenotes
-    let sourceIso :=
-      payload.occurrence.reassemblyPatternIso decomposition
-    let bodyArgs :=
-      sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm
-    have bodyDenotes :
-        payload.body.denote model
-          (Theory.interpretDefinitions model context.definitions) bodyArgs :=
-      (sourceIso.denote_iff
-        (payload.occurrence.reassemblyPattern decomposition).property
-        payload.body.property model
-        (Theory.interpretDefinitions model context.definitions) sourceArgs).mp
-        sourceDenotes
-    let bodyIso : Diagram.OpenConcreteIso payload.body.val
-        (context.definitionEntry definition).body.val :=
-      Diagram.OpenConcreteIso.ofEq body_eq
-    let entryArgs :=
-      bodyArgs ∘ Fin.cast bodyIso.boundary_length_eq.symm
-    have entryDenotes :
-        (context.definitionEntry definition).body.denote
-          model
-          (Theory.interpretDefinitions model context.definitions) entryArgs :=
-      (bodyIso.denote_iff payload.body.property
-        (context.definitionEntry definition).body.property
-        model
-        (Theory.interpretDefinitions model context.definitions) bodyArgs).mp
-        bodyDenotes
-    have namedDenotes :=
-      (relFold_equiv model context.definitions definition entryArgs).mp
-        entryDenotes
-    have replacementDenotes :=
-      (namedReferencePattern_denote_entry
-        (context.definitionEntry definition) model
-        (Theory.interpretDefinitions model context.definitions) entryArgs).mpr
-        namedDenotes
-    have argsEq :
-        ((entryArgs ∘
-            Fin.cast
-              (context.definitionEntry definition).body_arity.symm) ∘
-          Fin.cast
-            (namedReferencePattern_boundary_length signature definition)) =
-          sourceArgs ∘ Fin.cast
-            (payload.occurrence.reassemblyTwoInputPresentation decomposition
-              replacement sameArity locality).boundary_arity_eq.symm := by
-      funext position
-      apply congrArg sourceArgs
-      apply Fin.ext
-      rfl
-    simpa [replacement, argsEq] using replacementDenotes
-  have localBackward : ∀ targetArgs,
-      replacement.denote model
-          (Theory.interpretDefinitions model context.definitions) targetArgs →
-        (payload.occurrence.reassemblyInput decomposition).pattern.denote
-          model
-          (Theory.interpretDefinitions model context.definitions)
-          (targetArgs ∘ Fin.cast
-            (payload.occurrence.reassemblyTwoInputPresentation decomposition
-              replacement sameArity locality).boundary_arity_eq) := by
-    intro targetArgs targetDenotes
-    let entryReplacementEq :
-        (context.definitionEntry definition).body.val.boundary.length =
-          replacement.val.boundary.length :=
-      (context.definitionEntry definition).body_arity.trans
-        (namedReferencePattern_boundary_length signature definition).symm
-    let entryArgs :=
-      targetArgs ∘ Fin.cast entryReplacementEq
-    have targetArgsEq :
-        ((entryArgs ∘
-            Fin.cast
-              (context.definitionEntry definition).body_arity.symm) ∘
-          Fin.cast
-            (namedReferencePattern_boundary_length signature definition)) =
-          targetArgs := by
-      funext position
-      apply congrArg targetArgs
-      apply Fin.ext
-      rfl
-    have replacementDenotes :
-        (namedReferencePattern signature definition).denote
-          model
-          (Theory.interpretDefinitions model context.definitions)
-          ((entryArgs ∘
-              Fin.cast
-                (context.definitionEntry definition).body_arity.symm) ∘
-            Fin.cast
-              (namedReferencePattern_boundary_length signature definition)) := by
-      simpa [replacement, targetArgsEq] using targetDenotes
-    have namedDenotes :=
-      (namedReferencePattern_denote_entry
-        (context.definitionEntry definition) model
-        (Theory.interpretDefinitions model context.definitions) entryArgs).mp
-        replacementDenotes
-    have entryDenotes :=
-      (relFold_equiv model context.definitions definition entryArgs).mpr
-        namedDenotes
-    let bodyIso : Diagram.OpenConcreteIso payload.body.val
-        (context.definitionEntry definition).body.val :=
-      Diagram.OpenConcreteIso.ofEq body_eq
-    let bodyArgs :=
-      entryArgs ∘ Fin.cast bodyIso.boundary_length_eq
-    have entryArgsEq :
-        bodyArgs ∘ Fin.cast bodyIso.boundary_length_eq.symm =
-          entryArgs := by
-      funext position
-      apply congrArg entryArgs
-      apply Fin.ext
-      rfl
-    have bodyDenotes :
-        payload.body.denote model
-          (Theory.interpretDefinitions model context.definitions) bodyArgs :=
-      (bodyIso.denote_iff payload.body.property
-        (context.definitionEntry definition).body.property
-        model
-        (Theory.interpretDefinitions model context.definitions) bodyArgs).mpr (by
-          simpa [entryArgsEq] using entryDenotes)
-    let sourceIso :=
-      payload.occurrence.reassemblyPatternIso decomposition
-    let sourceArgs :=
-      bodyArgs ∘ Fin.cast sourceIso.boundary_length_eq
-    have bodyArgsEq :
-        sourceArgs ∘ Fin.cast sourceIso.boundary_length_eq.symm =
-          bodyArgs := by
-      funext position
-      apply congrArg bodyArgs
-      apply Fin.ext
-      rfl
-    have sourceDenotes :
-        (payload.occurrence.reassemblyInput decomposition).pattern.denote
-          model
-          (Theory.interpretDefinitions model context.definitions) sourceArgs :=
-      (sourceIso.denote_iff
-        (payload.occurrence.reassemblyPattern decomposition).property
-        payload.body.property model
-        (Theory.interpretDefinitions model context.definitions) sourceArgs).mpr (by
-          simpa [bodyArgsEq] using bodyDenotes)
-    have sourceArgsEq :
-        sourceArgs =
-          targetArgs ∘ Fin.cast
-            (payload.occurrence.reassemblyTwoInputPresentation decomposition
-              replacement sameArity locality).boundary_arity_eq := by
-      funext position
-      apply congrArg targetArgs
-      apply Fin.ext
-      rfl
-    simpa [sourceArgsEq] using sourceDenotes
-  let presentation :=
-    payload.occurrence.reassemblyTwoInputPresentation decomposition replacement
-      sameArity locality
-  have localForward' : presentation.AttachmentLocalLaw .forward
-      model
-      (Theory.interpretDefinitions model context.definitions) :=
-    Diagram.Splice.Input.TwoInputPresentation.LocalLaw.toAttachmentLocalLaw
-      presentation .forward
-      model
-      (Theory.interpretDefinitions model context.definitions) localForward
-  have localBackward' : presentation.AttachmentLocalLaw .backward
-      model
-      (Theory.interpretDefinitions model context.definitions) :=
-    Diagram.Splice.Input.TwoInputPresentation.LocalLaw.toAttachmentLocalLaw
-      presentation .backward
-      model
-      (Theory.interpretDefinitions model context.definitions) localBackward
-  have equivalence :=
-    equivalentPinnedReplacement_compiled model context input selection payload.body
-      args payload.occurrence decomposition replacement sameArity locality
-      sourceSplice targetSplice frameBoundary frameRoot localForward'
-      localBackward' proofArgs
-  simpa [DirectedEntailment, Step.tag, StepTag.semanticMode] using equivalence
 
 end VisualProof.Rule

@@ -634,8 +634,7 @@ theorem aliasWire_mem_raw_boundary (pattern : OpenConcreteDiagram)
   exact ⟨origin, by simp [rawBoundaryWire, hindex]⟩
 
 /-- Regions are unchanged, so a source binder spine transports definitionally. -/
-def binderSpine {signature : List Nat}
-    (pattern : CheckedOpenDiagram signature)
+def binderSpine (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram) :
     BinderSpine (raw pattern.val attachment spine.bodyContainer).diagram where
@@ -649,8 +648,7 @@ def binderSpine {signature : List Nat}
   body_eq_terminal_of_nonempty := spine.body_eq_terminal_of_nonempty
   proxy_region := spine.proxy_region
 
-theorem terminalBody {signature : List Nat}
-    (pattern : CheckedOpenDiagram signature)
+theorem terminalBody (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val) :
@@ -743,33 +741,29 @@ theorem terminalBody {signature : List Nat}
         simp [raw, materializedDiagram, aliasWire]
 
 /-- Proof-bearing checked normalization, locked to the exact raw graph. -/
-structure Certificate {signature : List Nat}
-    (pattern : CheckedOpenDiagram signature)
+structure Certificate (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram) : Type where
-  wellFormed : (raw pattern.val attachment spine.bodyContainer).WellFormed signature
+  wellFormed : (raw pattern.val attachment spine.bodyContainer).WellFormed
   sourceTerminalBody : spine.TerminalBodyContract pattern.val
 
 namespace Certificate
 
-def result {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+def result {pattern : CheckedOpenDiagram }
     {attachment : Fin pattern.val.boundary.length → Host}
     {originalSpine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern attachment originalSpine) :
-    CheckedOpenDiagram signature :=
+    CheckedOpenDiagram  :=
   ⟨raw pattern.val attachment originalSpine.bodyContainer, certificate.wellFormed⟩
 
-def spine {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+def spine {pattern : CheckedOpenDiagram }
     {attachment : Fin pattern.val.boundary.length → Host}
     {originalSpine : BinderSpine pattern.val.diagram}
     (_certificate : Certificate pattern attachment originalSpine) :
     BinderSpine (raw pattern.val attachment originalSpine.bodyContainer).diagram :=
   binderSpine pattern attachment originalSpine
 
-theorem terminalBody {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+theorem terminalBody {pattern : CheckedOpenDiagram }
     {attachment : Fin pattern.val.boundary.length → Host}
     {originalSpine : BinderSpine pattern.val.diagram}
     (_certificate : Certificate pattern attachment originalSpine)
@@ -779,16 +773,14 @@ theorem terminalBody {signature : List Nat}
   AttachmentAliasMaterialization.terminalBody pattern attachment originalSpine
     contract
 
-@[simp] theorem boundary_length {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+@[simp] theorem boundary_length {pattern : CheckedOpenDiagram }
     {attachment : Fin pattern.val.boundary.length → Host}
     {originalSpine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern attachment originalSpine) :
     certificate.result.val.boundary.length = pattern.val.boundary.length :=
   raw_boundary_length pattern.val attachment originalSpine.bodyContainer
 
-@[simp] theorem nodeCount {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+@[simp] theorem nodeCount {pattern : CheckedOpenDiagram }
     {attachment : Fin pattern.val.boundary.length → Host}
     {originalSpine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern attachment originalSpine) :
@@ -799,19 +791,18 @@ end Certificate
 
 /-- Uses the authoritative diagram checker for exactly the graph returned by
 `raw`; structural open/binder obligations are transported from the source. -/
-def check {signature : List Nat}
-    (pattern : CheckedOpenDiagram signature)
+def check (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val) :
     Except WFError (Certificate pattern attachment spine) :=
-  match hcheck : checkWellFormed signature
+  match hcheck : checkWellFormed
       (materializedDiagram pattern.val attachment spine.bodyContainer) with
   | .error error => .error error
   | .ok checked =>
       let diagramWellFormed :
           (materializedDiagram pattern.val attachment
-            spine.bodyContainer).WellFormed signature :=
+            spine.bodyContainer).WellFormed  :=
         checkWellFormed_iff.mp ⟨checked, hcheck,
           checkWellFormed_preserves_input hcheck⟩
       .ok {
@@ -823,8 +814,7 @@ def check {signature : List Nat}
         sourceTerminalBody := contract
       }
 
-theorem check_success {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+theorem check_success {pattern : CheckedOpenDiagram }
     {attachment : Fin pattern.val.boundary.length → Host}
     {spine : BinderSpine pattern.val.diagram}
     {contract : spine.TerminalBodyContract pattern.val}

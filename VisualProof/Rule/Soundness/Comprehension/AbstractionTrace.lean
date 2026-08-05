@@ -8,7 +8,7 @@ open Diagram
 
 namespace AbstractionRawTrace
 
-abbrev Domains (input : CheckedDiagram signature)
+abbrev Domains (input : CheckedDiagram )
     (occurrences : List (AbstractionOccurrence input)) :=
   abstractionDomains input occurrences
 

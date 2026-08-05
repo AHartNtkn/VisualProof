@@ -13,16 +13,15 @@ namespace InstantiationSemantic
 /-- The executor's retained binder targets, stated at the quantified bubble
 where its relation witness is chosen. -/
 structure BinderTargetsAtBubble
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount) : Prop where
   target_shape : ∀ index, ∃ parent,
@@ -35,16 +34,15 @@ structure BinderTargetsAtBubble
 /-- The terminal compiler variable and the proxy binder that produced it have
 the same arity. -/
 theorem terminalRelation_proxy_arity
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -89,23 +87,22 @@ theorem terminalRelation_proxy_arity
 /-- A terminal compiler relation variable resolves to the relation owned by
 its certified host binder target at the quantified bubble. -/
 theorem terminalTargetRelation_exists
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (targets : BinderTargetsAtBubble payload state)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
@@ -163,23 +160,22 @@ theorem terminalTargetRelation_exists
 /-- Capture-avoiding renaming of the canonical terminal compiler relation
 context into the quantified bubble's current lexical relation context. -/
 noncomputable def terminalRelationRenamingAtBubble
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (targets : BinderTargetsAtBubble payload state)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
@@ -194,23 +190,22 @@ noncomputable def terminalRelationRenamingAtBubble
       targets hostWitness hostLeaf relation)
 
 theorem terminalRelationRenamingAtBubble_lookup
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (targets : BinderTargetsAtBubble payload state)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
@@ -238,16 +233,15 @@ theorem terminalRelationRenamingAtBubble_lookup
 /-- The terminal body's inherited compiler environment is the open pattern's
 distinct exposed-wire environment, preserving the boundary's alias quotient. -/
 noncomputable def terminalInheritedEnvironment
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -273,16 +267,15 @@ noncomputable def terminalInheritedEnvironment
 relations are the current certified host relations, while its ordered object
 boundary is supplied by relation arguments followed by fixed parameters. -/
 noncomputable def terminalRelationOfNonempty
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -290,9 +283,8 @@ noncomputable def terminalRelationOfNonempty
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (targets : BinderTargetsAtBubble payload state)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
@@ -307,7 +299,7 @@ noncomputable def terminalRelationOfNonempty
       assignment.args =
           Fin.addCases relationArguments (wireValue ∘ state.parameters) ∘
             Fin.cast payload.boundarySplit ∧
-        denoteRegion model named
+        denoteRegion model
           (terminalInheritedEnvironment payload state site arguments hnonempty
             assignment)
           relEnv
@@ -318,16 +310,15 @@ noncomputable def terminalRelationOfNonempty
               hnonempty targets hostWitness hostLeaf))
 
 theorem terminalRelationOfNonempty_apply
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -335,9 +326,8 @@ theorem terminalRelationOfNonempty_apply
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (targets : BinderTargetsAtBubble payload state)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
@@ -345,12 +335,12 @@ theorem terminalRelationOfNonempty_apply
     (relEnv : RelEnv model.Carrier hostWitness.toFocus.holeRels)
     (relationArguments : Fin payload.arity → model.Carrier) :
     terminalRelationOfNonempty payload state site arguments hnonempty targets
-        model named wireValue hostWitness hostLeaf relEnv relationArguments ↔
+        model  wireValue hostWitness hostLeaf relEnv relationArguments ↔
       ∃ assignment : BoundaryAssignment comprehension.elaborate model.Carrier,
         assignment.args =
             Fin.addCases relationArguments (wireValue ∘ state.parameters) ∘
               Fin.cast payload.boundarySplit ∧
-          denoteRegion model named
+          denoteRegion model
             (terminalInheritedEnvironment payload state site arguments
               hnonempty assignment)
             relEnv

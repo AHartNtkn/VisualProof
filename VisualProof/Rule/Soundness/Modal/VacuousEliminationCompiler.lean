@@ -8,10 +8,9 @@ open VisualProof.Diagram
 
 theorem compileOccurrence_itemSimulation
     (trace : VacuousElimTrace input bubble raw)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
-    (targetWellFormed : input.WellFormed signature)
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
+    (targetWellFormed : input.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
     (sourceParent : Fin trace.sourceDiagram.regionCount)
@@ -41,9 +40,7 @@ theorem compileOccurrence_itemSimulation
       input.nodes node =
         match trace.sourceDiagram.nodes node with
         | .identity owner arity => .identity (regionMap owner) arity
-        | .atom owner binder => .atom (regionMap owner) (trace.origin binder)
-        | .named owner definition arity =>
-            .named (regionMap owner) definition arity)
+        | .atom owner binder => .atom (regionMap owner) (trace.origin binder))
     (regionShape : ∀ child, occurrence = .child child →
       (trace.sourceDiagram.regions child).parent? = some sourceParent →
       input.regions (trace.origin child) =
@@ -76,40 +73,40 @@ theorem compileOccurrence_itemSimulation
       (childSourceContext.extend child).Exact child →
       (childTargetContext.extend (trace.origin child)).Exact
         (trace.origin child) →
-      ∀ (sourceBody : Region signature childSourceContext.length
+      ∀ (sourceBody : Region  childSourceContext.length
           childSourceRels)
-        (targetBody : Region signature childTargetContext.length
+        (targetBody : Region  childTargetContext.length
           childTargetRels),
-      ConcreteElaboration.compileRegion? signature trace.sourceDiagram
+      ConcreteElaboration.compileRegion?  trace.sourceDiagram
           fuelSource child childSourceContext childSourceBinders =
         some sourceBody →
-      ConcreteElaboration.compileRegion? signature input childFuelTarget
+      ConcreteElaboration.compileRegion?  input childFuelTarget
           (trace.origin child) childTargetContext childTargetBinders =
         some targetBody →
-      ConcreteElaboration.RegionSimulation model named childDirection
+      ConcreteElaboration.RegionSimulation model  childDirection
         childContext.indexRelation
         (sourceBody.renameRelations childBinderWitness.relationMap)
         targetBody)
     (member : occurrence ∈
       ConcreteElaboration.localOccurrences trace.sourceDiagram sourceParent)
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrenceWith? signature trace.sourceDiagram
-        (ConcreteElaboration.compileRegion? signature trace.sourceDiagram
+      ConcreteElaboration.compileOccurrenceWith?  trace.sourceDiagram
+        (ConcreteElaboration.compileRegion?  trace.sourceDiagram
           fuelSource)
         sourceContext sourceBinders occurrence = some sourceItem)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrenceWith? signature input
-        (ConcreteElaboration.compileRegion? signature input fuelTarget)
+      ConcreteElaboration.compileOccurrenceWith?  input
+        (ConcreteElaboration.compileRegion?  input fuelTarget)
         targetContext targetBinders (trace.occurrenceMap occurrence) =
           some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       contextWitness.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   cases occurrence with
   | node node =>
-      exact trace.compileNode_itemSimulation targetWellFormed model named
+      exact trace.compileNode_itemSimulation targetWellFormed model
         direction sourceContext targetContext sourceBinders targetBinders
         binderWitness node regionMap (nodeShape node rfl) sourceItem targetItem
         sourceCompiled targetCompiled
@@ -119,8 +116,8 @@ theorem compileOccurrence_itemSimulation
           sourceParent child).mp member
       have targetKind := regionShape child rfl sourceParentEq
       change
-        ConcreteElaboration.compileOccurrenceWith? signature input
-            (ConcreteElaboration.compileRegion? signature input fuelTarget)
+        ConcreteElaboration.compileOccurrenceWith?  input
+            (ConcreteElaboration.compileRegion?  input fuelTarget)
             targetContext targetBinders (.child (trace.origin child)) =
           some targetItem at targetCompiled
       cases sourceKind : trace.sourceDiagram.regions child with
@@ -134,7 +131,7 @@ theorem compileOccurrence_itemSimulation
           subst actualParent
           simp only [sourceKind] at targetKind
           cases sourceResult :
-              ConcreteElaboration.compileRegion? signature trace.sourceDiagram
+              ConcreteElaboration.compileRegion?  trace.sourceDiagram
                 fuelSource child sourceContext sourceBinders with
           | none =>
               simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
@@ -144,7 +141,7 @@ theorem compileOccurrence_itemSimulation
                 sourceResult] at sourceCompiled
               subst sourceItem
               cases targetResult :
-                  ConcreteElaboration.compileRegion? signature input fuelTarget
+                  ConcreteElaboration.compileRegion?  input fuelTarget
                     (trace.origin child) targetContext targetBinders with
               | none =>
                   simp [ConcreteElaboration.compileOccurrenceWith?,
@@ -190,7 +187,7 @@ theorem compileOccurrence_itemSimulation
           let sourcePushed := sourceBinders.push child arity
           let targetPushed := targetBinders.push (trace.origin child) arity
           cases sourceResult :
-              ConcreteElaboration.compileRegion? signature trace.sourceDiagram
+              ConcreteElaboration.compileRegion?  trace.sourceDiagram
                 fuelSource child sourceContext sourcePushed with
           | none =>
               simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
@@ -200,7 +197,7 @@ theorem compileOccurrence_itemSimulation
                 sourcePushed, sourceResult] at sourceCompiled
               subst sourceItem
               cases targetResult :
-                  ConcreteElaboration.compileRegion? signature input fuelTarget
+                  ConcreteElaboration.compileRegion?  input fuelTarget
                     (trace.origin child) targetContext targetPushed with
               | none =>
                   simp [ConcreteElaboration.compileOccurrenceWith?,

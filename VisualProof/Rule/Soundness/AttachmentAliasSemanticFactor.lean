@@ -27,18 +27,17 @@ theorem compiledAliases_value_eq
         (materializedDiagram pattern attachment bodyContainer)) →
       ConcreteElaboration.BinderContext
         (materializedDiagram pattern attachment bodyContainer) currentRels →
-      Option (Region signature currentContext.length currentRels))
+      Option (Region  currentContext.length currentRels))
     (aliases : List (Fin (aliasCount pattern attachment)))
-    (items : ItemSeq signature context.length rels)
-    (compiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (items : ItemSeq  context.length rels)
+    (compiled : ConcreteElaboration.compileOccurrencesWith?
       (materializedDiagram pattern attachment bodyContainer) recurse context
       binders (aliases.map fun aliasIndex =>
         .node (aliasNode pattern attachment aliasIndex)) = some items)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
-    (denotes : denoteItemSeq model named env relEnv items) :
+    (denotes : denoteItemSeq model  env relEnv items) :
     ∀ aliasIndex, aliasIndex ∈ aliases → ∀ output input,
       ConcreteElaboration.resolvePort?
           (materializedDiagram pattern attachment bodyContainer) context
@@ -52,7 +51,7 @@ theorem compiledAliases_value_eq
   | cons head tail induction =>
       simp only [List.map_cons,
         ConcreteElaboration.compileOccurrencesWith?] at compiled
-      cases headResult : ConcreteElaboration.compileOccurrenceWith? signature
+      cases headResult : ConcreteElaboration.compileOccurrenceWith?
           (materializedDiagram pattern attachment bodyContainer) recurse context
           binders (.node (aliasNode pattern attachment head)) with
       | none =>
@@ -60,7 +59,7 @@ theorem compiledAliases_value_eq
           simp at compiled
       | some headItem =>
           cases tailResult : ConcreteElaboration.compileOccurrencesWith?
-              signature (materializedDiagram pattern attachment bodyContainer)
+               (materializedDiagram pattern attachment bodyContainer)
               recurse context binders
               (tail.map fun aliasIndex =>
                 .node (aliasNode pattern attachment aliasIndex)) with
@@ -76,7 +75,7 @@ theorem compiledAliases_value_eq
               by_cases current : aliasIndex = head
               · subst aliasIndex
                 have singletonCompiled :
-                    ConcreteElaboration.compileOccurrencesWith? signature
+                    ConcreteElaboration.compileOccurrencesWith?
                       (materializedDiagram pattern attachment bodyContainer)
                       recurse context binders
                       [.node (aliasNode pattern attachment head)] =
@@ -86,7 +85,7 @@ theorem compiledAliases_value_eq
                     rfl
                 exact (aliasOccurrence_denotes_iff pattern attachment
                   bodyContainer context binders recurse head
-                  (.cons headItem .nil) singletonCompiled model named env
+                  (.cons headItem .nil) singletonCompiled model  env
                   relEnv).1 (by
                     simpa only [denoteItemSeq_cons, denoteItemSeq_nil,
                       and_true] using denotes.1)
@@ -97,8 +96,7 @@ theorem compiledAliases_value_eq
                   output input outputResult inputResult
 
 noncomputable def factoredSourceEnv
-    {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+    {pattern : CheckedOpenDiagram }
     {attachment : Fin pattern.val.boundary.length → Host}
     {spine : BinderSpine pattern.val.diagram}
     {targetContext : ConcreteElaboration.WireContext
@@ -114,12 +112,12 @@ noncomputable def factoredSourceEnv
 /-- The inserted equations are complete for the collapse: once their block
 denotes, every target context value factors through the source context. -/
 theorem aliasOccurrences_factor_collapse
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
-        signature)
+        )
     (targetContext : ConcreteElaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
     (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)
@@ -135,22 +133,21 @@ theorem aliasOccurrences_factor_collapse
       ConcreteElaboration.BinderContext
         (materializedDiagram pattern.val attachment spine.bodyContainer)
           currentRels →
-      Option (Region signature currentContext.length currentRels))
-    (items : ItemSeq signature targetContext.length rels)
-    (compiled : ConcreteElaboration.compileOccurrencesWith? signature
+      Option (Region  currentContext.length currentRels))
+    (items : ItemSeq  targetContext.length rels)
+    (compiled : ConcreteElaboration.compileOccurrencesWith?
       (materializedDiagram pattern.val attachment spine.bodyContainer) recurse
       targetContext binders (aliasOccurrences pattern.val attachment) = some items)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (targetEnv : Fin targetContext.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
-    (denotes : denoteItemSeq model named targetEnv relEnv items) :
+    (denotes : denoteItemSeq model  targetEnv relEnv items) :
     targetEnv = factoredSourceEnv collapse targetEnv ∘ collapse.indexMap := by
   have aliasEquations := compiledAliases_value_eq pattern.val attachment
     spine.bodyContainer targetContext binders recurse
     (allFin (aliasCount pattern.val attachment)) items (by
       simpa only [aliasOccurrences] using compiled)
-    model named targetEnv relEnv denotes
+    model  targetEnv relEnv denotes
   funext targetIndex
   let targetWire := targetContext.get targetIndex
   refine Fin.addCases (motive := fun wire => targetWire = wire →

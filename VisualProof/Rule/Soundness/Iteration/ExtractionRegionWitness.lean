@@ -10,7 +10,7 @@ open VisualProof.Theory
 simulation.  It records lookup transport and the host ancestry needed to push
 the invariant through a direct bubble child. -/
 structure ExtractionBinderWitness
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentRegion : Fin layout.regionCount)
@@ -34,7 +34,7 @@ structure ExtractionBinderWitness
       hostRegion
 
 noncomputable def ExtractionBinderWitness.terminal
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {fragmentRels hostRels : RelCtx}

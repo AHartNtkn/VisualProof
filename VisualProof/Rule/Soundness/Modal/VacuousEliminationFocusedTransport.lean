@@ -9,9 +9,8 @@ open VisualProof.Rule.DoubleCutElimTrace
 
 theorem focusedPartition_regionSimulation
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     {sourceRels targetRels : RelCtx}
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
@@ -30,23 +29,23 @@ theorem focusedPartition_regionSimulation
     (targetSelectedNodup :
       ((targetContext.extend trace.parent).extend bubble).Nodup)
     (relationMap : RelationRenaming sourceRels targetRels)
-    (sourceKept sourceSelected : ItemSeq signature
+    (sourceKept sourceSelected : ItemSeq
       (sourceContext.extend (trace.targetIndex wellFormed)).length sourceRels)
-    (targetKept : ItemSeq signature
+    (targetKept : ItemSeq
       (targetContext.extend trace.parent).length targetRels)
-    (targetSelected : ItemSeq signature
+    (targetSelected : ItemSeq
       ((targetContext.extend trace.parent).extend bubble).length
       (trace.arity :: targetRels))
-    (keptSimulation : ConcreteElaboration.ItemSeqSimulation model named
+    (keptSimulation : ConcreteElaboration.ItemSeqSimulation model
       direction (context.extendFocused wellFormed).indexRelation
       (sourceKept.renameRelations relationMap) targetKept)
-    (selectedSimulation : ConcreteElaboration.ItemSeqSimulation model named
+    (selectedSimulation : ConcreteElaboration.ItemSeqSimulation model
       direction (context.extendSelected wellFormed).indexRelation
       (sourceSelected.renameRelations (fun relation =>
         ConcreteElaboration.BinderContext.liftVar trace.arity
           (relationMap relation)))
       targetSelected) :
-    ConcreteElaboration.RegionSimulation model named direction
+    ConcreteElaboration.RegionSimulation model  direction
       context.indexRelation
       ((ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
         (trace.targetIndex wellFormed)
@@ -73,22 +72,22 @@ theorem focusedPartition_regionSimulation
     intro binderArity relation
     exact baseAgrees binderArity relation
   have sourceRename :
-      denoteRegion model named sourceOuter targetRelations
+      denoteRegion model  sourceOuter targetRelations
           ((ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
             (trace.targetIndex wellFormed)
             (sourceKept.append sourceSelected)).renameRelations relationMap) ↔
-        denoteRegion model named sourceOuter sourceRelations
+        denoteRegion model  sourceOuter sourceRelations
           (ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
             (trace.targetIndex wellFormed)
             (sourceKept.append sourceSelected)) :=
-    denoteRegion_renameRelations model named relationMap sourceRelations
+    denoteRegion_renameRelations model  relationMap sourceRelations
       targetRelations baseAgrees sourceOuter _
   cases direction with
   | forward =>
       intro sourceDenotation
       obtain ⟨sourceLocal, sourceKeptDenotation,
           sourceSelectedDenotation⟩ :=
-        (trace.sourceFocused_partition_denote_iff wellFormed model named
+        (trace.sourceFocused_partition_denote_iff wellFormed model
           sourceContext sourceKept sourceSelected sourceOuter
           sourceRelations).mp (sourceRename.mp sourceDenotation)
       let sourceEnvironment :=
@@ -110,9 +109,9 @@ theorem focusedPartition_regionSimulation
             targetFocusPulled :=
         focused.targetEnvironment_agrees sourceExact.nodup sourceEnvironment
       have sourceKeptRenamed :
-          denoteItemSeq model named sourceEnvironment targetRelations
+          denoteItemSeq model  sourceEnvironment targetRelations
             (sourceKept.renameRelations relationMap) :=
-        (denoteItemSeq_renameRelations model named relationMap sourceRelations
+        (denoteItemSeq_renameRelations model  relationMap sourceRelations
           targetRelations baseAgrees sourceEnvironment sourceKept).mpr
           sourceKeptDenotation
       have targetKeptDenotation := keptSimulation sourceEnvironment
@@ -136,16 +135,16 @@ theorem focusedPartition_regionSimulation
         freshForward sourceEnvironment targetFocusPulled sourceRelations
           targetRelations
       have sourceSelectedRenamed :
-          denoteItemSeq (relCtx := trace.arity :: targetRels) model named
+          denoteItemSeq (relCtx := trace.arity :: targetRels) model
             sourceEnvironment (fresh, targetRelations)
             (sourceSelected.renameRelations bubbleMap) :=
-        (denoteItemSeq_renameRelations model named bubbleMap sourceRelations
+        (denoteItemSeq_renameRelations model  bubbleMap sourceRelations
           (fresh, targetRelations) (bubbleAgrees fresh) sourceEnvironment
           sourceSelected).mpr sourceSelectedDenotation
       have targetSelectedDenotation := selectedSimulation sourceEnvironment
         targetSelectedPulled (fresh, targetRelations) selectedAgreement
         sourceSelectedRenamed
-      apply (trace.targetFocused_bubble_denote_iff model named targetContext
+      apply (trace.targetFocused_bubble_denote_iff model  targetContext
         targetKept targetSelected targetOuter targetRelations).mpr
       refine ⟨targetLocal, ?_, fresh, bubbleLocal, ?_⟩
       · rw [targetFocusEq]
@@ -156,7 +155,7 @@ theorem focusedPartition_regionSimulation
       intro targetDenotation
       obtain ⟨targetLocal, targetKeptDenotation, fresh, bubbleLocal,
           targetSelectedDenotation⟩ :=
-        (trace.targetFocused_bubble_denote_iff model named targetContext
+        (trace.targetFocused_bubble_denote_iff model  targetContext
           targetKept targetSelected targetOuter targetRelations).mp
           targetDenotation
       let targetFocusEnvironment :=
@@ -190,9 +189,9 @@ theorem focusedPartition_regionSimulation
         targetSelectedEnvironment (fresh, targetRelations) selectedAgreement
         targetSelectedDenotation
       have sourceSelectedDenotation :
-          denoteItemSeq model named sourceEnvironment sourceRelations
+          denoteItemSeq model  sourceEnvironment sourceRelations
             sourceSelected :=
-        (denoteItemSeq_renameRelations model named bubbleMap sourceRelations
+        (denoteItemSeq_renameRelations model  bubbleMap sourceRelations
           (fresh, targetRelations) (bubbleAgrees fresh) sourceEnvironment
           sourceSelected).mp sourceSelectedRenamed
       have focusedAgreement :
@@ -212,13 +211,13 @@ theorem focusedPartition_regionSimulation
         targetFocusEnvironment targetRelations focusedAgreement
         targetKeptDenotation
       have sourceKeptDenotation :
-          denoteItemSeq model named sourceEnvironment sourceRelations
+          denoteItemSeq model  sourceEnvironment sourceRelations
             sourceKept :=
-        (denoteItemSeq_renameRelations model named relationMap sourceRelations
+        (denoteItemSeq_renameRelations model  relationMap sourceRelations
           targetRelations baseAgrees sourceEnvironment sourceKept).mp
           sourceKeptRenamed
       apply sourceRename.mpr
-      apply (trace.sourceFocused_partition_denote_iff wellFormed model named
+      apply (trace.sourceFocused_partition_denote_iff wellFormed model
         sourceContext sourceKept sourceSelected sourceOuter
         sourceRelations).mpr
       refine ⟨sourceLocal, ?_, ?_⟩

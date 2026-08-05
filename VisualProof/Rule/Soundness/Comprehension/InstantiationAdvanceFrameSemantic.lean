@@ -13,16 +13,15 @@ namespace InstantiationSemantic
 replaced occurs in the next survivor traversal at its exact frame image.  The
 statement covers both the splice site and every off-site compiler frame. -/
 theorem advance_mapFrameOccurrence_mem_survivors
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -75,16 +74,15 @@ theorem advance_mapFrameOccurrence_mem_survivors
 /-- A denoting next-state survivor block therefore supplies the compiled item
 at the exact frame image of any retained non-current source occurrence. -/
 theorem advance_mapped_frame_item_denotes
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -114,14 +112,13 @@ theorem advance_mapped_frame_item_denotes
       (advanceInstantiationState comprehension attachments binders payload state
         atom tail site arguments hadmissible).diagram.val rels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
-    (survivorItems : ItemSeq signature context.length rels)
-    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (survivorItems : ItemSeq  context.length rels)
+    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload state
         atom tail site arguments hadmissible).diagram.val
-      (compileSurvivorRegion? signature
+      (compileSurvivorRegion?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible) fuel)
       context relBinders
@@ -133,19 +130,19 @@ theorem advance_mapped_frame_item_denotes
         (dropOccurrenceSurvives
           (advanceInstantiationState comprehension attachments binders payload
             state atom tail site arguments hadmissible))) = some survivorItems)
-    (survivorDenotes : denoteItemSeq model named env relEnv survivorItems) :
+    (survivorDenotes : denoteItemSeq model  env relEnv survivorItems) :
     let layout := (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).plugLayout
-    ∃ targetItem : Item signature context.length rels,
-      ConcreteElaboration.compileOccurrenceWith? signature
+    ∃ targetItem : Item  context.length rels,
+      ConcreteElaboration.compileOccurrenceWith?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible).diagram.val
-        (compileSurvivorRegion? signature
+        (compileSurvivorRegion?
           (advanceInstantiationState comprehension attachments binders payload
             state atom tail site arguments hadmissible) fuel)
         context relBinders (layout.mapFrameOccurrence occurrence) =
           some targetItem ∧
-      denoteItem model named env relEnv targetItem := by
+      denoteItem model  env relEnv targetItem := by
   dsimp only
   let layout := (instantiateSpliceInput comprehension attachments binders
     payload state site arguments).plugLayout
@@ -165,14 +162,14 @@ theorem advance_mapped_frame_item_denotes
     indexOf?_sound occurrenceIndexEq
   let itemIndex := Fin.cast
     (ConcreteElaboration.compileOccurrencesWith?_length
-      (compileSurvivorRegion? signature next fuel) context relBinders
+      (compileSurvivorRegion?  next fuel) context relBinders
       survivorCompiled).symm occurrenceIndex
   have targetCompiled := ConcreteElaboration.compileOccurrencesWith?_get
-    (compileSurvivorRegion? signature next fuel) context relBinders
+    (compileSurvivorRegion?  next fuel) context relBinders
     survivorCompiled occurrenceIndex
   rw [occurrenceEq] at targetCompiled
   refine ⟨survivorItems.get itemIndex, targetCompiled, ?_⟩
-  exact (denoteItemSeq_iff_get model named env relEnv survivorItems).mp
+  exact (denoteItemSeq_iff_get model  env relEnv survivorItems).mp
     survivorDenotes itemIndex
 
 end InstantiationSemantic

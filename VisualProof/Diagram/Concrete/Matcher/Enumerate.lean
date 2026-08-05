@@ -7,7 +7,7 @@ open VisualProof.Diagram
 
 /-- Exhaustive finite enumeration of anchors and every region, node, and wire
 function. No color/orbit or canonical-prefix pruning occurs here. -/
-def enumerateCandidateMaps (problem : OccurrenceProblem signature) :
+def enumerateCandidateMaps (problem : OccurrenceProblem ) :
     List (CandidateMaps problem) :=
   (allFin problem.host.val.regionCount).flatMap fun anchor =>
     (enumerateFinFunctions (filterFin problem.contentRegionBool).length
@@ -19,7 +19,7 @@ def enumerateCandidateMaps (problem : OccurrenceProblem signature) :
           { anchor, regionMap, nodeMap, wireMap }
 
 theorem enumerateCandidateMaps_complete
-    (problem : OccurrenceProblem signature)
+    (problem : OccurrenceProblem )
     (candidate : CandidateMaps problem) :
     candidate ∈ enumerateCandidateMaps problem := by
   simp only [enumerateCandidateMaps, List.mem_flatMap, List.mem_map]
@@ -32,16 +32,16 @@ theorem enumerateCandidateMaps_complete
 
 /-- The structurally processed prefix and unprocessed frontier for a finite
 exploration budget. -/
-structure Frontier (problem : OccurrenceProblem signature) where
+structure Frontier (problem : OccurrenceProblem ) where
   processed : List (CandidateMaps problem)
   remaining : List (CandidateMaps problem)
 
-def frontier (problem : OccurrenceProblem signature) (fuel : Nat) :
+def frontier (problem : OccurrenceProblem ) (fuel : Nat) :
     Frontier problem where
   processed := (enumerateCandidateMaps problem).take fuel
   remaining := (enumerateCandidateMaps problem).drop fuel
 
-theorem frontier_partition (problem : OccurrenceProblem signature)
+theorem frontier_partition (problem : OccurrenceProblem )
     (fuel : Nat) :
     (frontier problem fuel).processed ++ (frontier problem fuel).remaining =
       enumerateCandidateMaps problem := by

@@ -15,16 +15,15 @@ comprehension; every other retained frame occurrence is recovered from its
 exact frame image in the denoting target survivor block.  Inserted target
 conjuncts need no inverse image. -/
 theorem advance_site_items_denote
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -67,19 +66,18 @@ theorem advance_site_items_denote
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin sourceContext.length → model.Carrier)
     (targetEnv : Fin targetContext.length → model.Carrier)
     (sourceRelEnv : RelEnv model.Carrier sourceRels)
     (targetRelEnv : RelEnv model.Carrier targetRels)
     (environmentEq : sourceEnv = targetEnv ∘ wireMap)
     (relationsAgree : RelEnv.Agrees relationMap sourceRelEnv targetRelEnv)
-    (sourceItems : ItemSeq signature sourceContext.length sourceRels)
-    (targetItems : ItemSeq signature targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (sourceItems : ItemSeq  sourceContext.length sourceRels)
+    (targetItems : ItemSeq  targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw
-      (compileSurvivorRegion? signature
+      (compileSurvivorRegion?
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible) sourceFuel)
       sourceContext sourceBinders
@@ -89,10 +87,10 @@ theorem advance_site_items_denote
         (dropOccurrenceSurvives
           (coalescedInstantiationState comprehension attachments binders payload
             state site arguments hadmissible))) = some sourceItems)
-    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
-      (compileSurvivorRegion? signature
+      (compileSurvivorRegion?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible) targetFuel)
       targetContext targetBinders
@@ -104,13 +102,13 @@ theorem advance_site_items_denote
         (dropOccurrenceSurvives
           (advanceInstantiationState comprehension attachments binders payload
             state atom tail site arguments hadmissible))) = some targetItems)
-    (targetDenotes : denoteItemSeq model named targetEnv targetRelEnv targetItems)
+    (targetDenotes : denoteItemSeq model  targetEnv targetRelEnv targetItems)
     (currentDenotes : ∀ sourceItem,
-      ConcreteElaboration.compileNode? signature
+      ConcreteElaboration.compileNode?
           (instantiateSpliceInput comprehension attachments binders payload state
             site arguments).coalesceFrameRaw
           sourceContext sourceBinders atom = some sourceItem →
-      denoteItem model named sourceEnv sourceRelEnv sourceItem)
+      denoteItem model  sourceEnv sourceRelEnv sourceItem)
     (childDenotes : ∀
       (child : Fin state.diagram.val.regionCount)
       (member : ConcreteElaboration.LocalOccurrence.child child ∈
@@ -120,28 +118,28 @@ theorem advance_site_items_denote
           (dropOccurrenceSurvives
             (coalescedInstantiationState comprehension attachments binders
               payload state site arguments hadmissible)))
-      (sourceItem : Item signature sourceContext.length sourceRels)
-      (targetItem : Item signature targetContext.length targetRels),
-      ConcreteElaboration.compileOccurrenceWith? signature
+      (sourceItem : Item  sourceContext.length sourceRels)
+      (targetItem : Item  targetContext.length targetRels),
+      ConcreteElaboration.compileOccurrenceWith?
           (instantiateSpliceInput comprehension attachments binders payload state
             site arguments).coalesceFrameRaw
-          (compileSurvivorRegion? signature
+          (compileSurvivorRegion?
             (coalescedInstantiationState comprehension attachments binders
               payload state site arguments hadmissible) sourceFuel)
           sourceContext sourceBinders (.child child) = some sourceItem →
-      ConcreteElaboration.compileOccurrenceWith? signature
+      ConcreteElaboration.compileOccurrenceWith?
           (advanceInstantiationState comprehension attachments binders payload
             state atom tail site arguments hadmissible).diagram.val
-          (compileSurvivorRegion? signature
+          (compileSurvivorRegion?
             (advanceInstantiationState comprehension attachments binders payload
               state atom tail site arguments hadmissible) targetFuel)
           targetContext targetBinders
           ((instantiateSpliceInput comprehension attachments binders payload
             state site arguments).plugLayout.mapFrameOccurrence (.child child)) =
             some targetItem →
-      denoteItem model named targetEnv targetRelEnv targetItem →
-      denoteItem model named sourceEnv sourceRelEnv sourceItem) :
-    denoteItemSeq model named sourceEnv sourceRelEnv sourceItems := by
+      denoteItem model  targetEnv targetRelEnv targetItem →
+      denoteItem model  sourceEnv sourceRelEnv sourceItem) :
+    denoteItemSeq model  sourceEnv sourceRelEnv sourceItems := by
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
   let layout := spliceInput.plugLayout
@@ -150,22 +148,22 @@ theorem advance_site_items_denote
   let sourceOccurrences :=
     (ConcreteElaboration.localOccurrences coalesced.diagram.val site).filter
       (dropOccurrenceSurvives coalesced)
-  apply (denoteItemSeq_iff_get model named sourceEnv sourceRelEnv sourceItems).2
+  apply (denoteItemSeq_iff_get model  sourceEnv sourceRelEnv sourceItems).2
   intro sourceItemIndex
   let sourceOccurrenceIndex := Fin.cast
     (ConcreteElaboration.compileOccurrencesWith?_length
-      (compileSurvivorRegion? signature coalesced sourceFuel) sourceContext
+      (compileSurvivorRegion?  coalesced sourceFuel) sourceContext
       sourceBinders sourceCompiled) sourceItemIndex
   generalize occurrenceEq : sourceOccurrences.get sourceOccurrenceIndex =
     occurrence
   have occurrenceMember : occurrence ∈ sourceOccurrences :=
     occurrenceEq ▸ List.get_mem sourceOccurrences sourceOccurrenceIndex
   have sourceAt := ConcreteElaboration.compileOccurrencesWith?_get
-    (compileSurvivorRegion? signature coalesced sourceFuel) sourceContext
+    (compileSurvivorRegion?  coalesced sourceFuel) sourceContext
     sourceBinders sourceCompiled sourceOccurrenceIndex
-  have sourceAt' : ConcreteElaboration.compileOccurrenceWith? signature
+  have sourceAt' : ConcreteElaboration.compileOccurrenceWith?
       spliceInput.coalesceFrameRaw
-      (compileSurvivorRegion? signature coalesced sourceFuel)
+      (compileSurvivorRegion?  coalesced sourceFuel)
       sourceContext sourceBinders occurrence =
         some (sourceItems.get sourceItemIndex) := by
     rw [← occurrenceEq]
@@ -181,7 +179,7 @@ theorem advance_site_items_denote
           advance_mapped_frame_item_denotes comprehension attachments binders
             payload state atom tail site arguments node_eq hadmissible site
             (.node node) occurrenceMember (by simpa using current) targetFuel
-            targetContext targetBinders model named targetEnv targetRelEnv
+            targetContext targetBinders model  targetEnv targetRelEnv
             targetItems targetCompiled targetDenotes
         have nodeLocal := (List.mem_filter.mp occurrenceMember).1
         have nodeRegion :=
@@ -189,7 +187,7 @@ theorem advance_site_items_denote
         apply frameNode_denotes_of_mapped spliceInput hadmissible site
           sourceContext targetContext sourceExact targetExact sourceBinders
           targetBinders sourceCover sourceEnumeration wireMap wireSpec
-          relationMap relationSpec node nodeRegion model named sourceEnv targetEnv
+          relationMap relationSpec node nodeRegion model  sourceEnv targetEnv
           environmentEq sourceRelEnv targetRelEnv relationsAgree
           (sourceItems.get sourceItemIndex) targetItem
         · simpa [ConcreteElaboration.compileOccurrenceWith?] using sourceAt'
@@ -201,7 +199,7 @@ theorem advance_site_items_denote
         advance_mapped_frame_item_denotes comprehension attachments binders
           payload state atom tail site arguments node_eq hadmissible site
           (.child child) occurrenceMember (by simp) targetFuel targetContext
-          targetBinders model named targetEnv targetRelEnv targetItems
+          targetBinders model  targetEnv targetRelEnv targetItems
           targetCompiled targetDenotes
       exact childDenotes child occurrenceMember (sourceItems.get sourceItemIndex)
         targetItem sourceAt' targetAt targetItemDenotes

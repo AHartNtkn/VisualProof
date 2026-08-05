@@ -26,7 +26,7 @@ def targetOpen (input : ConcreteDiagram)
 
 theorem targetRoot_scope_promoted
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount)
     (scope : (input.wires wire).scope = input.root) :
     (trace.sourceDiagram.wires wire).scope = trace.sourceDiagram.root := by
@@ -48,7 +48,7 @@ theorem targetRoot_scope_promoted
 
 theorem promotedRoot_scope_target_or_inner
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount)
     (scope :
       (trace.sourceDiagram.wires wire).scope = trace.sourceDiagram.root) :
@@ -74,12 +74,12 @@ theorem promotedRoot_scope_target_or_inner
 
 theorem sourceOpen_wellFormed
     (trace : DoubleCutElimTrace input outer raw)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
-    (targetWellFormed : input.WellFormed signature)
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
+    (targetWellFormed : input.WellFormed )
     (boundary : List (Fin input.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.wires wire).scope = input.root) :
-    (trace.sourceOpen boundary).WellFormed signature := by
+    (trace.sourceOpen boundary).WellFormed  := by
   refine {
     diagram_well_formed := sourceWellFormed
     boundary_is_root_scoped := ?_
@@ -89,28 +89,28 @@ theorem sourceOpen_wellFormed
     (boundaryRoot wire member)
 
 theorem targetOpen_wellFormed
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (boundary : List (Fin input.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.wires wire).scope = input.root) :
-    (targetOpen input boundary).WellFormed signature :=
+    (targetOpen input boundary).WellFormed  :=
   ⟨wellFormed, boundaryRoot⟩
 
 def rootContextWitness
     (trace : DoubleCutElimTrace input outer raw)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
-    (targetWellFormed : input.WellFormed signature)
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
+    (targetWellFormed : input.WellFormed )
     (boundary : List (Fin input.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.wires wire).scope = input.root) :
     PromotedContextWitness trace
       (trace.sourceOpen boundary).rootWires
       (targetOpen input boundary).rootWires := by
-  let source : CheckedOpenDiagram signature :=
+  let source : CheckedOpenDiagram  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed sourceWellFormed targetWellFormed boundary
         boundaryRoot⟩
-  let target : CheckedOpenDiagram signature :=
+  let target : CheckedOpenDiagram  :=
     ⟨targetOpen input boundary,
       targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
   refine ⟨?_, ?_⟩
@@ -135,7 +135,7 @@ def rootContextWitness
 
 theorem sourceOpen_hiddenWires_eq_of_regular
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (boundary : List (Fin input.wireCount))
     (regular : trace.sourceDiagram.root ≠ trace.targetIndex wellFormed) :
     (trace.sourceOpen boundary).hiddenWires =
@@ -228,7 +228,7 @@ theorem rootEnvironment_of_parts
 
 def PromotedContextWitness.extendRootSelected
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
@@ -258,7 +258,7 @@ def PromotedContextWitness.extendRootSelected
 
 theorem PromotedContextWitness.extendRootSelected_source_subset_target
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
@@ -272,7 +272,7 @@ theorem PromotedContextWitness.extendRootSelected_source_subset_target
 
 theorem targetRootSelected_exact
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (targetContext : ConcreteElaboration.WireContext input)
     (targetExact : targetContext.Exact trace.target) :
     ((targetContext.extend outer).extend trace.inner).Exact trace.inner := by

@@ -13,9 +13,9 @@ structure RegionIso.ContextPathAlignment
     {sourceWires targetWires : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
-    {source : Region signature sourceWires rels}
-    {target : Region signature targetWires rels}
-    (iso : RegionIso signature wire rels source target)
+    {source : Region  sourceWires rels}
+    {target : Region  targetWires rels}
+    (iso : RegionIso  wire rels source target)
     {sourcePath : List Nat}
     (sourceWitness : Region.ContextPath source sourcePath) where
   targetPath : List Nat
@@ -24,10 +24,10 @@ structure RegionIso.ContextPathAlignment
     sourceWitness.toFocus.holeRels
   holeWire : FiniteEquiv (Fin sourceWitness.toFocus.holeWires)
     (Fin targetWitness.toFocus.holeWires)
-  context : DiagramContextIso signature wire holeWire rels
+  context : DiagramContextIso  wire holeWire rels
     sourceWitness.toFocus.holeRels sourceWitness.toFocus.context
     (holeRelsEq ▸ targetWitness.toFocus.context)
-  body : RegionIso signature holeWire sourceWitness.toFocus.holeRels
+  body : RegionIso  holeWire sourceWitness.toFocus.holeRels
     sourceWitness.toFocus.body
     (holeRelsEq ▸ targetWitness.toFocus.body)
 
@@ -36,9 +36,9 @@ same relation-context equality does not change the reconstructed region. -/
 theorem DiagramContext.fill_castHoleRels
     {targetHoleRels sourceHoleRels : RelCtx}
     (equality : targetHoleRels = sourceHoleRels)
-    (context : DiagramContext signature outerWires holeWires outerRels
+    (context : DiagramContext  outerWires holeWires outerRels
       targetHoleRels)
-    (body : Region signature holeWires targetHoleRels) :
+    (body : Region  holeWires targetHoleRels) :
     (equality ▸ context).fill (equality ▸ body) = context.fill body := by
   cases equality
   rfl
@@ -49,7 +49,7 @@ eliminate a proof field from the alignment record. -/
 theorem Region.castRels_symm_cast
     {sourceRels targetRels : RelCtx}
     (equality : targetRels = sourceRels)
-    (region : Region signature wires sourceRels) :
+    (region : Region  wires sourceRels) :
     equality ▸ (equality.symm ▸ region) = region := by
   cases equality
   rfl
@@ -60,21 +60,21 @@ theorem RegionIso.ContextPathAlignment.fill
     {sourceWires targetWires : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
-    {source : Region signature sourceWires rels}
-    {target : Region signature targetWires rels}
-    {iso : RegionIso signature wire rels source target}
+    {source : Region  sourceWires rels}
+    {target : Region  targetWires rels}
+    {iso : RegionIso  wire rels source target}
     {sourcePath : List Nat}
     {sourceWitness : Region.ContextPath source sourcePath}
     (alignment : RegionIso.ContextPathAlignment iso sourceWitness)
-    (sourceReplacement : Region signature
+    (sourceReplacement : Region
       sourceWitness.toFocus.holeWires sourceWitness.toFocus.holeRels)
-    (targetReplacement : Region signature
+    (targetReplacement : Region
       alignment.targetWitness.toFocus.holeWires
       alignment.targetWitness.toFocus.holeRels)
-    (replacement : RegionIso signature alignment.holeWire
+    (replacement : RegionIso  alignment.holeWire
       sourceWitness.toFocus.holeRels sourceReplacement
       (alignment.holeRelsEq ▸ targetReplacement)) :
-    RegionIso signature wire rels
+    RegionIso  wire rels
       (sourceWitness.toFocus.context.fill sourceReplacement)
       (alignment.targetWitness.toFocus.context.fill targetReplacement) := by
   have lifted := alignment.context.fill replacement
@@ -84,7 +84,7 @@ theorem RegionIso.ContextPathAlignment.fill
   exact targetFill ▸ lifted
 
 theorem ItemSeq.focusAt?_item
-    (items : ItemSeq signature wires rels) (index : Nat)
+    (items : ItemSeq  wires rels) (index : Nat)
     (focus : ItemSeq.Focus items)
     (hfocus : items.focusAt? index = some focus) :
     focus.item = items.get ⟨index,
@@ -99,29 +99,29 @@ theorem ItemSeq.focusAt?_item
 
 private theorem ItemIso.target_of_cut
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    {sourceBody : Region signature sourceWires rels}
-    {targetItem : Item signature targetWires rels}
-    (iso : ItemIso signature wire rels (.cut sourceBody) targetItem) :
+    {sourceBody : Region  sourceWires rels}
+    {targetItem : Item  targetWires rels}
+    (iso : ItemIso  wire rels (.cut sourceBody) targetItem) :
     ∃ targetBody, targetItem = .cut targetBody ∧
-      RegionIso signature wire rels sourceBody targetBody := by
+      RegionIso  wire rels sourceBody targetBody := by
   cases iso with
   | cut body => exact ⟨_, rfl, body⟩
 
 private theorem ItemIso.target_of_bubble
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    {sourceBody : Region signature sourceWires (arity :: rels)}
-    {targetItem : Item signature targetWires rels}
-    (iso : ItemIso signature wire rels
+    {sourceBody : Region  sourceWires (arity :: rels)}
+    {targetItem : Item  targetWires rels}
+    (iso : ItemIso  wire rels
       (.bubble arity sourceBody) targetItem) :
     ∃ targetBody, targetItem = .bubble arity targetBody ∧
-      RegionIso signature wire (arity :: rels) sourceBody targetBody := by
+      RegionIso  wire (arity :: rels) sourceBody targetBody := by
   cases iso with
   | bubble body => exact ⟨_, rfl, body⟩
 
 theorem DiagramContext.castHoleRels_cut
     (equality : targetHoleRels = sourceHoleRels)
-    (before after : ItemSeq signature (outerWires + localWires) outerRels)
-    (child : DiagramContext signature (outerWires + localWires) holeWires
+    (before after : ItemSeq  (outerWires + localWires) outerRels)
+    (child : DiagramContext  (outerWires + localWires) holeWires
       outerRels targetHoleRels) :
     equality ▸ (DiagramContext.cut localWires before after child) =
       DiagramContext.cut localWires before after (equality ▸ child) := by
@@ -130,8 +130,8 @@ theorem DiagramContext.castHoleRels_cut
 
 theorem DiagramContext.castHoleRels_bubble
     (equality : targetHoleRels = sourceHoleRels)
-    (before after : ItemSeq signature (outerWires + localWires) outerRels)
-    (child : DiagramContext signature (outerWires + localWires) holeWires
+    (before after : ItemSeq  (outerWires + localWires) outerRels)
+    (child : DiagramContext  (outerWires + localWires) holeWires
       (arity :: outerRels) targetHoleRels) :
     equality ▸ (DiagramContext.bubble localWires before after arity child) =
       DiagramContext.bubble localWires before after arity
@@ -142,9 +142,9 @@ theorem DiagramContext.castHoleRels_bubble
 /-- Extend the sibling suffix of a successful focus without changing the
 focused position or item. -/
 def ItemSeq.Focus.appendAfter
-    {items : ItemSeq signature wires rels}
+    {items : ItemSeq  wires rels}
     (focus : ItemSeq.Focus items)
-    (suffix : ItemSeq signature wires rels) :
+    (suffix : ItemSeq  wires rels) :
     ItemSeq.Focus (items.append suffix) where
   before := focus.before
   item := focus.item
@@ -156,7 +156,7 @@ def ItemSeq.Focus.appendAfter
     rw [← ItemSeq.append_assoc, focus.rebuild]
 
 theorem ItemSeq.focusAt?_append_left
-    (items suffix : ItemSeq signature wires rels) (index : Nat)
+    (items suffix : ItemSeq  wires rels) (index : Nat)
     (focus : ItemSeq.Focus items)
     (hfocus : items.focusAt? index = some focus) :
     (items.append suffix).focusAt? index =
@@ -186,10 +186,10 @@ decreasing_by simp_all [ItemSeq.length]
 /-- A non-root context path in an item block survives appending arbitrary
 root siblings on the right. -/
 def Region.ContextPath.appendRootItemsRight
-    {items : ItemSeq signature wires rels}
+    {items : ItemSeq  wires rels}
     {index : Nat} {rest : List Nat} :
     (witness : Region.ContextPath (Region.mk 0 items) (index :: rest)) →
-    (suffix : ItemSeq signature wires rels) →
+    (suffix : ItemSeq  wires rels) →
     Region.ContextPath (Region.mk 0 (items.append suffix)) (index :: rest)
   | .cut focus atIndex isCut nested, suffix =>
       .cut (focus.appendAfter suffix)
@@ -203,12 +203,12 @@ def Region.ContextPath.appendRootItemsRight
 /-- Reindex a replacement along the definitionally unchanged terminal type
 of `appendRootItemsRight`. -/
 def Region.ContextPath.appendRootItemsRightReplacement
-    {items suffix : ItemSeq signature wires rels}
+    {items suffix : ItemSeq  wires rels}
     {index : Nat} {rest : List Nat} :
     (witness : Region.ContextPath (Region.mk 0 items) (index :: rest)) →
-    (replacement : Region signature witness.toFocus.holeWires
+    (replacement : Region  witness.toFocus.holeWires
       witness.toFocus.holeRels) →
-    Region signature
+    Region
       (witness.appendRootItemsRight suffix).toFocus.holeWires
       (witness.appendRootItemsRight suffix).toFocus.holeRels
   | .cut _ _ _ _, replacement => replacement
@@ -216,7 +216,7 @@ def Region.ContextPath.appendRootItemsRightReplacement
 
 /-- Appending root siblings preserves the terminal relation context. -/
 def Region.ContextPath.appendRootItemsRightHoleRelsEq
-    {items suffix : ItemSeq signature wires rels}
+    {items suffix : ItemSeq  wires rels}
     {index : Nat} {rest : List Nat} :
     (witness : Region.ContextPath (Region.mk 0 items) (index :: rest)) →
     (witness.appendRootItemsRight suffix).toFocus.holeRels =
@@ -226,7 +226,7 @@ def Region.ContextPath.appendRootItemsRightHoleRelsEq
 
 /-- Appending root siblings preserves the terminal wire carrier. -/
 def Region.ContextPath.appendRootItemsRightHoleWire
-    {items suffix : ItemSeq signature wires rels}
+    {items suffix : ItemSeq  wires rels}
     {index : Nat} {rest : List Nat} :
     (witness : Region.ContextPath (Region.mk 0 items) (index :: rest)) →
     FiniteEquiv
@@ -239,11 +239,11 @@ def Region.ContextPath.appendRootItemsRightHoleWire
 region.  Nonemptiness excludes the `here` case and keeps the original root
 wire carrier unchanged. -/
 noncomputable def Region.ContextPath.filledRootItems
-    {items : ItemSeq signature wires rels} {path : List Nat}
+    {items : ItemSeq  wires rels} {path : List Nat}
     (witness : Region.ContextPath (Region.mk 0 items) path)
     (proper : path ≠ [])
-    (replacement : Region signature witness.toFocus.holeWires
-      witness.toFocus.holeRels) : ItemSeq signature wires rels := by
+    (replacement : Region  witness.toFocus.holeWires
+      witness.toFocus.holeRels) : ItemSeq  wires rels := by
   cases witness with
   | here => exact False.elim (proper rfl)
   | cut focus atIndex isCut nested =>
@@ -257,10 +257,10 @@ noncomputable def Region.ContextPath.filledRootItems
 /-- Filling a proper path in a zero-local region changes only its root item
 block. -/
 theorem Region.ContextPath.fill_eq_mk_filledRootItems
-    {items : ItemSeq signature wires rels} {path : List Nat}
+    {items : ItemSeq  wires rels} {path : List Nat}
     (witness : Region.ContextPath (Region.mk 0 items) path)
     (proper : path ≠ [])
-    (replacement : Region signature witness.toFocus.holeWires
+    (replacement : Region  witness.toFocus.holeWires
       witness.toFocus.holeRels) :
     witness.toFocus.context.fill replacement =
       Region.mk 0 (witness.filledRootItems proper replacement) := by
@@ -271,18 +271,17 @@ theorem Region.ContextPath.fill_eq_mk_filledRootItems
 
 /-- Semantic form of `fill_eq_mk_filledRootItems`. -/
 theorem Region.ContextPath.denote_fill_iff_filledRootItems
-    {items : ItemSeq signature wires rels} {path : List Nat}
+    {items : ItemSeq  wires rels} {path : List Nat}
     (witness : Region.ContextPath (Region.mk 0 items) path)
     (proper : path ≠ [])
-    (replacement : Region signature witness.toFocus.holeWires
+    (replacement : Region  witness.toFocus.holeWires
       witness.toFocus.holeRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (environment : Fin wires → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
-    denoteRegion model named environment relEnv
+    denoteRegion model  environment relEnv
         (witness.toFocus.context.fill replacement) ↔
-      denoteItemSeq model named environment relEnv
+      denoteItemSeq model  environment relEnv
         (witness.filledRootItems proper replacement) := by
   rw [witness.fill_eq_mk_filledRootItems proper replacement]
   simp only [denoteRegion_mk, extendWireEnv_zero]
@@ -296,19 +295,18 @@ theorem Region.ContextPath.denote_fill_iff_filledRootItems
 siblings.  This semantic form is insensitive to the compiler's chosen sibling
 order and retains all local witnesses of the focused replacement. -/
 theorem Region.ContextPath.appendRootItemsRight_fill_equiv
-    {items suffix : ItemSeq signature wires rels}
+    {items suffix : ItemSeq  wires rels}
     {index : Nat} {rest : List Nat}
     (witness : Region.ContextPath (Region.mk 0 items) (index :: rest))
-    (replacement : Region signature witness.toFocus.holeWires
+    (replacement : Region  witness.toFocus.holeWires
       witness.toFocus.holeRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
-    denoteRegion model named env relEnv
+    denoteRegion model  env relEnv
         ((Region.mk 0 suffix).conjoin
           (witness.toFocus.context.fill replacement)) ↔
-      denoteRegion model named env relEnv
+      denoteRegion model  env relEnv
         ((witness.appendRootItemsRight suffix).toFocus.context.fill
           (witness.appendRootItemsRightReplacement replacement)) := by
   cases witness with
@@ -367,9 +365,9 @@ theorem RegionIso.alignContextPath
     {sourceWires targetWires : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
-    {source : Region signature sourceWires rels}
-    {target : Region signature targetWires rels}
-    (iso : RegionIso signature wire rels source target)
+    {source : Region  sourceWires rels}
+    {target : Region  targetWires rels}
+    (iso : RegionIso  wire rels source target)
     {sourcePath : List Nat}
     (sourceWitness : Region.ContextPath source sourcePath) :
     Nonempty (RegionIso.ContextPathAlignment iso sourceWitness) := by
@@ -479,7 +477,7 @@ region up to an arbitrary automorphism.  This proof-relevant form is needed
 when a compiler permutation changes only an enclosing occurrence block while
 the distinguished child route itself is retained verbatim. -/
 theorem Region.ContextPath.identityAlignment
-    {region : Region signature wires rels}
+    {region : Region  wires rels}
     {path : List Nat}
     (witness : Region.ContextPath region path) :
     ∃ alignment : RegionIso.ContextPathAlignment
@@ -533,7 +531,7 @@ theorem Region.ContextPath.identityAlignment
         context := by
           simp only [targetWitness, Region.ContextPath.toFocus]
           rw [DiagramContext.castHoleRels_cut]
-          have childContext : DiagramContextIso signature
+          have childContext : DiagramContextIso
               (extendWireEquiv (FiniteEquiv.refl (Fin outerWires))
                 (FiniteEquiv.refl (Fin localWires))) child.holeWire rels
               nested.toFocus.holeRels nested.toFocus.context
@@ -591,7 +589,7 @@ theorem Region.ContextPath.identityAlignment
         context := by
           simp only [targetWitness, Region.ContextPath.toFocus]
           rw [DiagramContext.castHoleRels_bubble]
-          have childContext : DiagramContextIso signature
+          have childContext : DiagramContextIso
               (extendWireEquiv (FiniteEquiv.refl (Fin outerWires))
                 (FiniteEquiv.refl (Fin localWires))) child.holeWire
               (arity :: rels) nested.toFocus.holeRels
@@ -618,32 +616,30 @@ theorem Region.ContextPath.identityAlignment
 isomorphisms of both endpoints. -/
 theorem RegionIso.transport_equivalence
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    {sourceBefore sourceAfter : Region signature sourceWires rels}
-    {targetBefore targetAfter : Region signature targetWires rels}
-    (beforeIso : RegionIso signature wire rels sourceBefore targetBefore)
-    (afterIso : RegionIso signature wire rels sourceAfter targetAfter)
+    {sourceBefore sourceAfter : Region  sourceWires rels}
+    {targetBefore targetAfter : Region  targetWires rels}
+    (beforeIso : RegionIso  wire rels sourceBefore targetBefore)
+    (afterIso : RegionIso  wire rels sourceAfter targetAfter)
     (sourceEquivalent :
       ∀ (model : Model)
-        (named : NamedEnv model.Carrier signature)
         (env : Fin sourceWires → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
-        denoteRegion model named env relEnv sourceBefore ↔
-          denoteRegion model named env relEnv sourceAfter)
+        denoteRegion model  env relEnv sourceBefore ↔
+          denoteRegion model  env relEnv sourceAfter)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (targetEnv : Fin targetWires → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
-    denoteRegion model named targetEnv relEnv targetBefore ↔
-      denoteRegion model named targetEnv relEnv targetAfter := by
+    denoteRegion model  targetEnv relEnv targetBefore ↔
+      denoteRegion model  targetEnv relEnv targetAfter := by
   let sourceEnv : Fin sourceWires → model.Carrier :=
     fun index => targetEnv (wire index)
   have environments : EnvironmentsAgree wire sourceEnv targetEnv := by
     intro index
     rfl
-  exact (beforeIso.denotation model named sourceEnv targetEnv relEnv
+  exact (beforeIso.denotation model  sourceEnv targetEnv relEnv
     environments).symm.trans
-      ((sourceEquivalent model named sourceEnv relEnv).trans
-        (afterIso.denotation model named sourceEnv targetEnv relEnv
+      ((sourceEquivalent model  sourceEnv relEnv).trans
+        (afterIso.denotation model  sourceEnv targetEnv relEnv
           environments))
 
 end VisualProof.Diagram

@@ -45,7 +45,7 @@ theorem touchingWire_not_internal
 /-- Every extracted fragment wire originates in exactly the internal-or-
 touching closure of its certified host occurrence. -/
 theorem occurrenceFragmentWire_origin_mem_closure
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (occurrence : AbstractionOccurrence input)
     (wire : Fin (occurrenceLayout input occurrence).wireCount) :
     input.val.fragmentWireOrigin occurrence.selection
@@ -108,7 +108,7 @@ theorem survivingSources_map_survivor
 /-- Assemble independently chosen occurrence valuations.  Disjoint internal
 wire certificates make the selected valuation unique at every host wire. -/
 noncomputable def occurrenceFamilyEnvironment
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (occurrences : List (AbstractionOccurrence input))
     (indices : List (Fin occurrences.length))
     (context : ConcreteElaboration.WireContext input.val)
@@ -160,7 +160,7 @@ theorem occurrenceFamilyEnvironment_eq_member
   rw [chosenEq]
 
 theorem occurrenceFamilyEnvironment_eq_fallback
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (occurrences : List (AbstractionOccurrence input))
     (indices : List (Fin occurrences.length))
     (context : ConcreteElaboration.WireContext input.val)

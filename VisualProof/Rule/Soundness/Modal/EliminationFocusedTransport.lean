@@ -8,9 +8,8 @@ open VisualProof.Diagram
 
 theorem focusedPartition_regionSimulation
     (trace : DoubleCutElimTrace input outer raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input)
@@ -21,20 +20,20 @@ theorem focusedPartition_regionSimulation
     (targetSelectedNodup :
       (((targetContext.extend trace.target).extend outer).extend
         trace.inner).Nodup)
-    (sourceKept sourceSelected : ItemSeq signature
+    (sourceKept sourceSelected : ItemSeq
       (sourceContext.extend (trace.targetIndex wellFormed)).length rels)
-    (targetKept : ItemSeq signature
+    (targetKept : ItemSeq
       (targetContext.extend trace.target).length rels)
-    (targetSelected : ItemSeq signature
+    (targetSelected : ItemSeq
       (((targetContext.extend trace.target).extend outer).extend
         trace.inner).length rels)
-    (keptSimulation : ConcreteElaboration.ItemSeqSimulation model named
+    (keptSimulation : ConcreteElaboration.ItemSeqSimulation model
       direction (context.extendFocused wellFormed).indexRelation
       sourceKept targetKept)
-    (selectedSimulation : ConcreteElaboration.ItemSeqSimulation model named
+    (selectedSimulation : ConcreteElaboration.ItemSeqSimulation model
       direction (context.extendSelected wellFormed).indexRelation
       sourceSelected targetSelected) :
-    ConcreteElaboration.RegionSimulation model named direction
+    ConcreteElaboration.RegionSimulation model  direction
       context.indexRelation
       (ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
         (trace.targetIndex wellFormed)
@@ -60,7 +59,7 @@ theorem focusedPartition_regionSimulation
       intro sourceDenotation
       obtain ⟨sourceLocal, sourceKeptDenotation,
           sourceSelectedDenotation⟩ :=
-        (trace.sourceFocused_partition_denote_iff wellFormed model named
+        (trace.sourceFocused_partition_denote_iff wellFormed model
           sourceContext sourceKept sourceSelected sourceOuter relations).mp
           sourceDenotation
       let sourceEnvironment :=
@@ -109,7 +108,7 @@ theorem focusedPartition_regionSimulation
       have targetSelectedDenotation := selectedSimulation sourceEnvironment
         targetSelectedPulled relations selectedAgreement
         sourceSelectedDenotation
-      apply (trace.targetFocused_doubleCut_denote_iff model named targetContext
+      apply (trace.targetFocused_doubleCut_denote_iff model  targetContext
         targetKept targetSelected targetOuter relations).mpr
       refine ⟨targetLocal, ?_, innerLocal, ?_⟩
       · rw [targetFocusEq]
@@ -120,7 +119,7 @@ theorem focusedPartition_regionSimulation
       intro targetDenotation
       obtain ⟨targetLocal, targetKeptDenotation, innerLocal,
           targetSelectedDenotation⟩ :=
-        (trace.targetFocused_doubleCut_denote_iff model named targetContext
+        (trace.targetFocused_doubleCut_denote_iff model  targetContext
           targetKept targetSelected targetOuter relations).mp targetDenotation
       let targetFocusEnvironment :=
         ConcreteElaboration.extendedEnvironment targetContext trace.target
@@ -183,7 +182,7 @@ theorem focusedPartition_regionSimulation
           targetSelectedIndex, targetOuterIndex] using agreement
       have sourceKeptDenotation := keptSimulation sourceEnvironment
         targetFocusEnvironment relations focusedAgreement targetKeptDenotation
-      apply (trace.sourceFocused_partition_denote_iff wellFormed model named
+      apply (trace.sourceFocused_partition_denote_iff wellFormed model
         sourceContext sourceKept sourceSelected sourceOuter relations).mpr
       refine ⟨sourceLocal, ?_, ?_⟩
       · rw [sourceEnvironmentEq]

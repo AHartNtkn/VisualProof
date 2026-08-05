@@ -113,7 +113,7 @@ focused survivor must itself survive. A deleted child maps to the target root,
 whose checked sheet shape cannot have a parent. -/
 theorem reachable_child_of_focus
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (targetWellFormed : trace.diagram.WellFormed signature)
+    (targetWellFormed : trace.diagram.WellFormed )
     (parent child : Fin input.val.regionCount)
     (_parentReachable : trace.Reachable parent)
     (targetParent : (trace.diagram.regions (trace.regionMap child)).parent? =

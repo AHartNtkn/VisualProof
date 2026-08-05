@@ -9,9 +9,9 @@ open ConcreteElaboration
 A checked finite occurrence problem.  The binder spine is explicit data: graph
 shape alone does not turn an ordinary bubble into an external-binder proxy.
 -/
-structure OccurrenceProblem (signature : List Nat) where
-  host : CheckedDiagram signature
-  pattern : CheckedOpenDiagram signature
+structure OccurrenceProblem where
+  host : CheckedDiagram
+  pattern : CheckedOpenDiagram
   binderSpine : BinderSpine pattern.val.diagram
   terminalBody : binderSpine.TerminalBodyContract pattern.val
   binderTarget : Fin binderSpine.proxyCount → Fin host.val.regionCount
@@ -21,91 +21,91 @@ structure OccurrenceProblem (signature : List Nat) where
 
 namespace OccurrenceProblem
 
-abbrev HostRegion (problem : OccurrenceProblem signature) :=
+abbrev HostRegion (problem : OccurrenceProblem ) :=
   Fin problem.host.val.regionCount
 
-abbrev PatternRegion (problem : OccurrenceProblem signature) :=
+abbrev PatternRegion (problem : OccurrenceProblem ) :=
   Fin problem.pattern.val.diagram.regionCount
 
-abbrev HostNode (problem : OccurrenceProblem signature) :=
+abbrev HostNode (problem : OccurrenceProblem ) :=
   Fin problem.host.val.nodeCount
 
-abbrev PatternNode (problem : OccurrenceProblem signature) :=
+abbrev PatternNode (problem : OccurrenceProblem ) :=
   Fin problem.pattern.val.diagram.nodeCount
 
-abbrev HostWire (problem : OccurrenceProblem signature) :=
+abbrev HostWire (problem : OccurrenceProblem ) :=
   Fin problem.host.val.wireCount
 
-abbrev PatternWire (problem : OccurrenceProblem signature) :=
+abbrev PatternWire (problem : OccurrenceProblem ) :=
   Fin problem.pattern.val.diagram.wireCount
 
 /--
 The effective content root and all material descendants below it.  Administrative
 sheet/proxy regions above the terminal body are deliberately absent.
 -/
-def IsContentRegion (problem : OccurrenceProblem signature)
+def IsContentRegion (problem : OccurrenceProblem )
     (region : problem.PatternRegion) : Prop :=
   region = problem.binderSpine.bodyContainer ∨
     (problem.binderSpine.IsMaterialRegion region ∧
       problem.pattern.val.diagram.Encloses
         problem.binderSpine.bodyContainer region)
 
-instance (problem : OccurrenceProblem signature)
+instance (problem : OccurrenceProblem )
     (region : problem.PatternRegion) :
     Decidable (problem.IsContentRegion region) := by
   unfold IsContentRegion
   infer_instance
 
-def contentRegionBool (problem : OccurrenceProblem signature)
+def contentRegionBool (problem : OccurrenceProblem )
     (region : problem.PatternRegion) : Bool :=
   decide (problem.IsContentRegion region)
 
 /-- The dense intrinsic carrier of pattern content regions. -/
-abbrev ContentRegion (problem : OccurrenceProblem signature) :=
+abbrev ContentRegion (problem : OccurrenceProblem ) :=
   FilteredFiber problem.contentRegionBool
 
-def ContentRegion.origin (problem : OccurrenceProblem signature)
+def ContentRegion.origin (problem : OccurrenceProblem )
     (region : problem.ContentRegion) : problem.PatternRegion :=
   FilteredFiber.origin problem.contentRegionBool region
 
 @[simp] theorem ContentRegion.origin_is_content
-    (problem : OccurrenceProblem signature)
+    (problem : OccurrenceProblem )
     (region : problem.ContentRegion) :
     problem.IsContentRegion (region.origin problem) := by
   exact of_decide_eq_true
     (FilteredFiber.origin_survives problem.contentRegionBool region)
 
-def contentNodeBool (problem : OccurrenceProblem signature)
+def contentNodeBool (problem : OccurrenceProblem )
     (node : problem.PatternNode) : Bool :=
   problem.contentRegionBool (problem.pattern.val.diagram.nodes node).region
 
 /-- The dense intrinsic carrier of nodes owned by content regions. -/
-abbrev ContentNode (problem : OccurrenceProblem signature) :=
+abbrev ContentNode (problem : OccurrenceProblem ) :=
   FilteredFiber problem.contentNodeBool
 
-def ContentNode.origin (problem : OccurrenceProblem signature)
+def ContentNode.origin (problem : OccurrenceProblem )
     (node : problem.ContentNode) : problem.PatternNode :=
   FilteredFiber.origin problem.contentNodeBool node
 
-def boundaryWireBool (problem : OccurrenceProblem signature)
+def boundaryWireBool (problem : OccurrenceProblem )
     (wire : problem.PatternWire) : Bool :=
   decide (wire ∈ problem.pattern.val.boundary)
 
-abbrev BoundaryWire (problem : OccurrenceProblem signature) :=
+abbrev BoundaryWire (problem : OccurrenceProblem ) :=
   FilteredFiber problem.boundaryWireBool
 
-def BoundaryWire.origin (problem : OccurrenceProblem signature)
+def BoundaryWire.origin (problem : OccurrenceProblem )
     (wire : problem.BoundaryWire) : problem.PatternWire :=
   FilteredFiber.origin problem.boundaryWireBool wire
 
-def internalWireBool (problem : OccurrenceProblem signature)
+def internalWireBool (problem : OccurrenceProblem )
     (wire : problem.PatternWire) : Bool :=
   !problem.boundaryWireBool wire
 
-abbrev InternalWire (problem : OccurrenceProblem signature) :=
+abbrev InternalWire (problem : OccurrenceProblem ) :=
   FilteredFiber problem.internalWireBool
 
-def InternalWire.origin (problem : OccurrenceProblem signature)
+def InternalWire.origin (problem : OccurrenceProblem )
     (wire : problem.InternalWire) : problem.PatternWire :=
   FilteredFiber.origin problem.internalWireBool wire
 
@@ -116,7 +116,7 @@ Unchecked finite occurrence data.  All maps are total exactly on their intended
 intrinsic domains.  External binder targets intentionally carry no injectivity
 field, and boundary-wire images may alias.
 -/
-structure RawOccurrenceCertificate (problem : OccurrenceProblem signature) where
+structure RawOccurrenceCertificate (problem : OccurrenceProblem ) where
   anchor : problem.HostRegion
   regionMap : problem.ContentRegion → problem.HostRegion
   nodeMap : problem.ContentNode → problem.HostNode
@@ -125,7 +125,7 @@ structure RawOccurrenceCertificate (problem : OccurrenceProblem signature) where
 
 namespace RawOccurrenceCertificate
 
-variable {problem : OccurrenceProblem signature}
+variable {problem : OccurrenceProblem }
 
 def regionImage? (raw : RawOccurrenceCertificate problem)
     (region : problem.PatternRegion) : Option problem.HostRegion :=
@@ -268,14 +268,11 @@ def NodeValid (raw : RawOccurrenceCertificate problem)
         raw.AtomBinderValid sourceBinder targetBinder
     | .identity _ sourceArity, .identity _ targetArity =>
         sourceArity = targetArity
-    | .named _ sourceDefinition sourceArity,
-        .named _ targetDefinition targetArity =>
-        sourceDefinition = targetDefinition ∧ sourceArity = targetArity
     | _, _ => False
 
 namespace NodeValid
 
-variable {problem : OccurrenceProblem signature}
+variable {problem : OccurrenceProblem }
   {raw : RawOccurrenceCertificate problem}
   {node : problem.ContentNode}
 
@@ -306,18 +303,6 @@ theorem identity_elim
       .identity targetRegion targetArity) :
     raw.mappedRegionOwner? sourceRegion = some targetRegion ∧
       sourceArity = targetArity := by
-  unfold NodeValid at valid
-  simpa only [source_eq, target_eq, CNode.region] using valid
-
-/-- Public proof-relevant elimination for a validated named-node image. -/
-theorem named_elim
-    (valid : raw.NodeValid node)
-    (source_eq : problem.pattern.val.diagram.nodes (node.origin problem) =
-      .named sourceRegion sourceDefinition sourceArity)
-    (target_eq : problem.host.val.nodes (raw.nodeMap node) =
-      .named targetRegion targetDefinition targetArity) :
-    raw.mappedRegionOwner? sourceRegion = some targetRegion ∧
-      sourceDefinition = targetDefinition ∧ sourceArity = targetArity := by
   unfold NodeValid at valid
   simpa only [source_eq, target_eq, CNode.region] using valid
 
@@ -697,7 +682,7 @@ A diagnostic snapshot of raw map images.  This is deliberately not the matcher
 footprint: observational equality is defined later by reconstructed checked
 selection together with ordered attachments.
 -/
-structure MapImageSummary (problem : OccurrenceProblem signature) where
+structure MapImageSummary (problem : OccurrenceProblem ) where
   anchor : problem.HostRegion
   regions : List problem.HostRegion
   nodes : List problem.HostNode
@@ -724,7 +709,7 @@ theorem check_iff_valid (raw : RawOccurrenceCertificate problem) :
 end RawOccurrenceCertificate
 
 /-- A raw finite map package paired with the authoritative validity proof. -/
-structure OpenOccurrenceEmbedding (problem : OccurrenceProblem signature) where
+structure OpenOccurrenceEmbedding (problem : OccurrenceProblem ) where
   raw : RawOccurrenceCertificate problem
   valid : raw.Valid
 

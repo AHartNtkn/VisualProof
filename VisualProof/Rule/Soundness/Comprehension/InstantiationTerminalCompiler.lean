@@ -11,28 +11,26 @@ namespace InstantiationSemantic
 /-- A denoting focused compiler block after a nonempty-spine splice contains
 the terminal pattern block prepared by the authoritative splice compiler. -/
 theorem terminalPrepared_denotes_of_output
-    {signature : List Nat}
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (layout : Splice.Input.PlugLayout input)
     (hadmissible : input.Admissible)
     (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
-    (denotes : denoteItemSeq model named env relEnv outputLeaf.items) :
+    (denotes : denoteItemSeq model  env relEnv outputLeaf.items) :
     let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
       outputWitness outputLeaf hnonempty
     let targetEq := ConcreteElaboration.WireContext.length_extend
@@ -56,7 +54,7 @@ theorem terminalPrepared_denotes_of_output
         (layout.patternSeamPreparedWireOfNonempty hadmissible host
           patternWitness patternLeaf hnonempty)).renameRelations
         terminalRelations
-    denoteItemSeq model named sourceEnv relEnv patternPrepared := by
+    denoteItemSeq model  sourceEnv relEnv patternPrepared := by
   dsimp only
   let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
     outputWitness outputLeaf hnonempty
@@ -85,17 +83,17 @@ theorem terminalPrepared_denotes_of_output
     (patternLeaf.items.renameWires
       (layout.patternSeamPreparedWireOfNonempty hadmissible host
         patternWitness patternLeaf hnonempty)).renameRelations terminalRelations
-  have targetDenotes : denoteItemSeq model named targetEnv relEnv
+  have targetDenotes : denoteItemSeq model  targetEnv relEnv
       (outputLeaf.items.castWiresEq targetEq) := by
     rw [ItemSeq.castWiresEq_eq_renameWires,
       denoteItemSeq_renameWires]
     simpa [targetEnv, targetEq, Function.comp_def] using denotes
-  have itemsIso := layout.compiledSiteItemsIsoOfNonempty signature input
+  have itemsIso := layout.compiledSiteItemsIsoOfNonempty  input
     hadmissible host patternWitness patternLeaf outputWitness outputLeaf
     hnonempty
-  have preparedDenotes : denoteItemSeq model named sourceEnv relEnv
+  have preparedDenotes : denoteItemSeq model  sourceEnv relEnv
       (hostPrepared.append patternPrepared) := by
-    apply (itemsIso.denotation model named sourceEnv targetEnv relEnv ?_).mpr
+    apply (itemsIso.denotation model  sourceEnv targetEnv relEnv ?_).mpr
     · exact targetDenotes
     · intro index
       rfl
@@ -108,24 +106,22 @@ single prepared seam environment, the authoritative post-splice compiler
 block denotes.  This is the constructive half needed when replaying an
 instantiation trace forward beneath an intervening cut. -/
 theorem output_denotes_of_host_and_terminalPrepared
-    {signature : List Nat}
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (layout : Splice.Input.PlugLayout input)
     (hadmissible : input.Admissible)
     (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
@@ -146,7 +142,7 @@ theorem output_denotes_of_host_and_terminalPrepared
           |>.renameRelations
             (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
               outputWitness outputLeaf)
-      denoteItemSeq model named sourceEnv relEnv hostPrepared)
+      denoteItemSeq model  sourceEnv relEnv hostPrepared)
     (terminalDenotes :
       let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
         outputWitness outputLeaf hnonempty
@@ -171,8 +167,8 @@ theorem output_denotes_of_host_and_terminalPrepared
           (layout.patternSeamPreparedWireOfNonempty hadmissible host
             patternWitness patternLeaf hnonempty)).renameRelations
           terminalRelations
-      denoteItemSeq model named sourceEnv relEnv patternPrepared) :
-    denoteItemSeq model named env relEnv outputLeaf.items := by
+      denoteItemSeq model  sourceEnv relEnv patternPrepared) :
+    denoteItemSeq model  env relEnv outputLeaf.items := by
   dsimp only at hostDenotes terminalDenotes
   let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
     outputWitness outputLeaf hnonempty
@@ -201,16 +197,16 @@ theorem output_denotes_of_host_and_terminalPrepared
     (patternLeaf.items.renameWires
       (layout.patternSeamPreparedWireOfNonempty hadmissible host
         patternWitness patternLeaf hnonempty)).renameRelations terminalRelations
-  have preparedDenotes : denoteItemSeq model named sourceEnv relEnv
+  have preparedDenotes : denoteItemSeq model  sourceEnv relEnv
       (hostPrepared.append patternPrepared) := by
     rw [denoteItemSeq_append]
     exact ⟨hostDenotes, terminalDenotes⟩
-  have itemsIso := layout.compiledSiteItemsIsoOfNonempty signature input
+  have itemsIso := layout.compiledSiteItemsIsoOfNonempty  input
     hadmissible host patternWitness patternLeaf outputWitness outputLeaf
     hnonempty
-  have targetCastDenotes : denoteItemSeq model named targetEnv relEnv
+  have targetCastDenotes : denoteItemSeq model  targetEnv relEnv
       (outputLeaf.items.castWiresEq targetEq) := by
-    exact (itemsIso.denotation model named sourceEnv targetEnv relEnv
+    exact (itemsIso.denotation model  sourceEnv targetEnv relEnv
       (fun _ => rfl)).mp preparedDenotes
   rw [ItemSeq.castWiresEq_eq_renameWires,
     denoteItemSeq_renameWires] at targetCastDenotes
@@ -219,28 +215,26 @@ theorem output_denotes_of_host_and_terminalPrepared
 /-- Native-context form of `terminalPrepared_denotes_of_output`: both seam
 renamings are interpreted by environment pullback. -/
 theorem terminalItems_denotes_of_output
-    {signature : List Nat}
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (layout : Splice.Input.PlugLayout input)
     (hadmissible : input.Admissible)
     (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
-    (denotes : denoteItemSeq model named env relEnv outputLeaf.items) :
+    (denotes : denoteItemSeq model  env relEnv outputLeaf.items) :
     let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
       outputWitness outputLeaf hnonempty
     let targetEq := ConcreteElaboration.WireContext.length_extend
@@ -259,7 +253,7 @@ theorem terminalItems_denotes_of_output
           (layout.coalescedTerminalRelationRenaming hadmissible
             host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
             hnonempty relation)
-    denoteItemSeq model named
+    denoteItemSeq model
       (sourceEnv ∘ layout.patternSeamPreparedWireOfNonempty hadmissible host
         patternWitness patternLeaf hnonempty)
       (RelEnv.pullback terminalRelations relEnv) patternLeaf.items := by
@@ -284,13 +278,13 @@ theorem terminalItems_denotes_of_output
           hnonempty relation)
   have prepared := terminalPrepared_denotes_of_output input layout hadmissible
     host patternWitness patternLeaf outputWitness outputLeaf hnonempty model
-    named env relEnv denotes
-  change denoteItemSeq model named sourceEnv relEnv
+     env relEnv denotes
+  change denoteItemSeq model  sourceEnv relEnv
       ((patternLeaf.items.renameWires
         (layout.patternSeamPreparedWireOfNonempty hadmissible host
           patternWitness patternLeaf hnonempty)).renameRelations
         terminalRelations) at prepared
-  rw [denoteItemSeq_renameRelations model named terminalRelations
+  rw [denoteItemSeq_renameRelations model  terminalRelations
     (RelEnv.pullback terminalRelations relEnv) relEnv
     (RelEnv.pullback_agrees terminalRelations relEnv)] at prepared
   rw [denoteItemSeq_renameWires] at prepared

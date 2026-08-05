@@ -34,7 +34,7 @@ theorem RelEnv.eq_of_lookup
 /-- Along the retained route, pulling a terminal relation valuation back by
 the route's lexical embedding gives exactly the anchor relation valuation. -/
 theorem reachable_pullback_outerRelation
-    (context : DiagramContext signature outerWires holeWires outerRels holeRels)
+    (context : DiagramContext  outerWires holeWires outerRels holeRels)
     (outerEnv : Fin outerWires → D) (outerRelEnv : RelEnv D outerRels)
     (holeEnv : Fin holeWires → D) (holeRelEnv : RelEnv D holeRels)
     (reachable : context.Reachable outerEnv outerRelEnv holeEnv holeRelEnv) :
@@ -48,7 +48,7 @@ theorem reachable_pullback_outerRelation
 /-- Every wire inherited by the extracted terminal body occurs in the full
 selection-anchor context. -/
 theorem iterationTerminalAnchorMember
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -92,7 +92,7 @@ theorem iterationTerminalAnchorMember
 /-- Canonical anchor-context index of a wire inherited by the extracted
 terminal body. -/
 noncomputable def iterationTerminalAnchorIndex
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -109,7 +109,7 @@ noncomputable def iterationTerminalAnchorIndex
       hnonempty index))
 
 theorem iterationTerminalAnchorIndex_get
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -135,7 +135,7 @@ theorem iterationTerminalAnchorIndex_get
       hnonempty index)))
 
 theorem iterationTerminalAnchorIndex_related
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -160,7 +160,7 @@ theorem iterationTerminalAnchorIndex_related
 /-- Every exposed wire of an empty-spine extracted root occurs in the full
 selection-anchor context. -/
 theorem iterationRootAnchorMember
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -202,7 +202,7 @@ theorem iterationRootAnchorMember
 /-- Canonical anchor-context index of an exposed wire of the empty-spine
 extracted root. -/
 noncomputable def iterationRootAnchorIndex
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -217,7 +217,7 @@ noncomputable def iterationRootAnchorIndex
     (iterationRootAnchorMember input selection target hadmissible hzero index))
 
 theorem iterationRootAnchorIndex_get
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -240,7 +240,7 @@ theorem iterationRootAnchorIndex_get
     (iterationRootAnchorMember input selection target hadmissible hzero index)))
 
 theorem iterationRootAnchorIndex_related
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -263,21 +263,21 @@ theorem iterationRootAnchorIndex_related
 /-- Empty-spine counterpart of `partitionedRoute_copyTransport`: the selected
 anchor supplies the extracted open root at every route-reachable valuation. -/
 theorem partitionedRoute_rootCopyTransport
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount =
       0)
-    {selectedItems : ItemSeq signature
+    {selectedItems : ItemSeq
       ((iterationCoalescedAnchorView input selection target hadmissible)
         |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
       (iterationCoalescedAnchorView input selection target hadmissible
         ).focus.holeRels}
     (selectedCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
           (iterationInput input selection target).coalesceFrameRaw
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (iterationInput input selection target).coalesceFrameRaw
             (iterationCoalescedAnchorView input selection target hadmissible
               ).compilerLeaf.fuel)
@@ -286,7 +286,7 @@ theorem partitionedRoute_rootCopyTransport
           (iterationCoalescedAnchorView input selection target hadmissible
             ).compilerLeaf.binders
           (selectedOccurrences input.val selection) = some selectedItems)
-    {keptItems : ItemSeq signature
+    {keptItems : ItemSeq
       ((iterationCoalescedAnchorView input selection target hadmissible)
         |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
       (iterationCoalescedAnchorView input selection target hadmissible
@@ -320,7 +320,7 @@ theorem partitionedRoute_rootCopyTransport
           ).compilerLeaf.binderEnumeration)
       keptItems route compiledPath witness)
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
+    :
     let spliceInput := iterationInput input selection target
     let layout : FragmentLayout input.val selection := {}
     let anchorView := iterationCoalescedAnchorView input selection target
@@ -343,13 +343,13 @@ theorem partitionedRoute_rootCopyTransport
       Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
     ∀ (sourceEnv : Fin sourceContext.length → model.Carrier)
       (sourceRelEnv : RelEnv model.Carrier anchorView.focus.holeRels),
-      denoteRegion model named sourceEnv sourceRelEnv
+      denoteRegion model  sourceEnv sourceRelEnv
           (Region.mk 0 selectedItems) →
         ∀ (holeEnv : Fin witness.toFocus.holeWires → model.Carrier)
           (holeRelEnv : RelEnv model.Carrier witness.toFocus.holeRels),
           witness.toFocus.context.Reachable sourceEnv sourceRelEnv
               holeEnv holeRelEnv →
-            denoteRegion model named (holeEnv ∘ routeWire)
+            denoteRegion model  (holeEnv ∘ routeWire)
               (RelEnv.pullback routeRelation holeRelEnv)
               (ConcreteElaboration.finishRoot
                 spliceInput.pattern.val.exposedWires
@@ -407,14 +407,14 @@ theorem partitionedRoute_rootCopyTransport
     have retained := congrFun outerValues
       (wireEquiv.symm (hostIndex patternIndex))
     exact (congrArg holeEnv intrinsic).trans retained
-  have renamedMaterial := selectedSemantic model named sourceEnv sourceRelEnv
+  have renamedMaterial := selectedSemantic model  sourceEnv sourceRelEnv
     (holeEnv ∘ routeWire) environments
-    ((denoteRegion_mk_zero_iff model named sourceEnv sourceRelEnv
+    ((denoteRegion_mk_zero_iff model  sourceEnv sourceRelEnv
       selectedItems).1 selectedDenotes)
   let anchorRelation : RelationRenaming [] anchorView.focus.holeRels :=
     Splice.Input.PlugLayout.emptyRelationRenaming anchorView.focus.holeRels
   have rawMaterial :=
-    (denoteRegion_renameRelations model named anchorRelation
+    (denoteRegion_renameRelations model  anchorRelation
       (RelEnv.pullback anchorRelation sourceRelEnv) sourceRelEnv
       (RelEnv.pullback_agrees anchorRelation sourceRelEnv)
       (holeEnv ∘ routeWire)
@@ -431,21 +431,21 @@ theorem partitionedRoute_rootCopyTransport
 material is the compiled open root, with exposed wires mapped into the route
 hole and hidden root wires left existential. -/
 theorem partitionedRoute_rootSplice_equiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount =
       0)
-    {selectedItems keptItems : ItemSeq signature
+    {selectedItems keptItems : ItemSeq
       ((iterationCoalescedAnchorView input selection target hadmissible)
         |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
       (iterationCoalescedAnchorView input selection target hadmissible
         ).focus.holeRels}
     (selectedCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
           (iterationInput input selection target).coalesceFrameRaw
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (iterationInput input selection target).coalesceFrameRaw
             (iterationCoalescedAnchorView input selection target hadmissible
               ).compilerLeaf.fuel)
@@ -483,10 +483,9 @@ theorem partitionedRoute_rootSplice_equiv
           ).compilerLeaf.binderEnumeration)
       keptItems route compiledPath witness)
     {hostLocal : Nat}
-    {hostItems : ItemSeq signature (witness.toFocus.holeWires + hostLocal)
+    {hostItems : ItemSeq  (witness.toFocus.holeWires + hostLocal)
       witness.toFocus.holeRels}
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin ((iterationCoalescedAnchorView input selection target
       hadmissible).compilerLeaf.inheritedWires.extend
         selection.val.anchor).length → model.Carrier)
@@ -518,10 +517,10 @@ theorem partitionedRoute_rootSplice_equiv
     let material := ConcreteElaboration.finishRoot
       spliceInput.pattern.val.exposedWires spliceInput.pattern.val.hiddenWires
       pattern.items
-    denoteRegion model named sourceEnv sourceRelEnv
+    denoteRegion model  sourceEnv sourceRelEnv
         ((Region.mk 0 selectedItems).conjoin
           (witness.toFocus.context.fill (Region.mk hostLocal hostItems))) ↔
-      denoteRegion model named sourceEnv sourceRelEnv
+      denoteRegion model  sourceEnv sourceRelEnv
         ((Region.mk 0 selectedItems).conjoin
           (witness.toFocus.context.fill
             (Region.spliceAt hostLocal hostItems material wireMap
@@ -553,12 +552,12 @@ theorem partitionedRoute_rootSplice_equiv
     spliceInput.pattern.val.exposedWires spliceInput.pattern.val.hiddenWires
     pattern.items
   have copyTransport := partitionedRoute_rootCopyTransport input selection
-    target hadmissible hzero selectedCompiled route terminal model named
+    target hadmissible hzero selectedCompiled route terminal model
   have contraction := ancestorSpliceCopy_sound
-    (.hole : DiagramContext signature sourceContext.length
+    (.hole : DiagramContext  sourceContext.length
       sourceContext.length anchorView.focus.holeRels anchorView.focus.holeRels)
     witness.toFocus.context (Region.mk 0 selectedItems) hostLocal hostItems
-    material wireMap relationMap model named sourceEnv sourceRelEnv
+    material wireMap relationMap model  sourceEnv sourceRelEnv
     (by
       intro ancestorEnv ancestorRelEnv ancestorDenotes holeEnv holeRelEnv
         reachable hostEnv hostDenotes
@@ -569,7 +568,7 @@ theorem partitionedRoute_rootSplice_equiv
         funext index
         simp [wireMap, extendWireEnv]
       rw [envEq]
-      change denoteRegion model named (holeEnv ∘ routeWire)
+      change denoteRegion model  (holeEnv ∘ routeWire)
         (RelEnv.pullback relationMap holeRelEnv) material
       exact supplied)
   exact contraction
@@ -579,21 +578,21 @@ every valuation reachable through the retained route.  The wire and relation
 maps in the conclusion are the route-native factors later identified with the
 maps used by the executable splice compiler. -/
 theorem partitionedRoute_copyTransport
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    {selectedItems : ItemSeq signature
+    {selectedItems : ItemSeq
       ((iterationCoalescedAnchorView input selection target hadmissible)
         |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
       (iterationCoalescedAnchorView input selection target hadmissible
         ).focus.holeRels}
     (selectedCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
           (iterationInput input selection target).coalesceFrameRaw
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (iterationInput input selection target).coalesceFrameRaw
             (iterationCoalescedAnchorView input selection target hadmissible
               ).compilerLeaf.fuel)
@@ -602,7 +601,7 @@ theorem partitionedRoute_copyTransport
           (iterationCoalescedAnchorView input selection target hadmissible
             ).compilerLeaf.binders
           (selectedOccurrences input.val selection) = some selectedItems)
-    {keptItems : ItemSeq signature
+    {keptItems : ItemSeq
       ((iterationCoalescedAnchorView input selection target hadmissible)
         |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
       (iterationCoalescedAnchorView input selection target hadmissible
@@ -636,7 +635,7 @@ theorem partitionedRoute_copyTransport
           ).compilerLeaf.binderEnumeration)
       keptItems route compiledPath witness)
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
+    :
     let spliceInput := iterationInput input selection target
     let layout : FragmentLayout input.val selection := {}
     let anchorView := iterationCoalescedAnchorView input selection target
@@ -668,13 +667,13 @@ theorem partitionedRoute_copyTransport
         (binderWitness.relationMap relation)
     ∀ (sourceEnv : Fin sourceContext.length → model.Carrier)
       (sourceRelEnv : RelEnv model.Carrier anchorView.focus.holeRels),
-      denoteRegion model named sourceEnv sourceRelEnv
+      denoteRegion model  sourceEnv sourceRelEnv
           (Region.mk 0 selectedItems) →
         ∀ (holeEnv : Fin witness.toFocus.holeWires → model.Carrier)
           (holeRelEnv : RelEnv model.Carrier witness.toFocus.holeRels),
           witness.toFocus.context.Reachable sourceEnv sourceRelEnv
               holeEnv holeRelEnv →
-            denoteRegion model named (holeEnv ∘ routeWire)
+            denoteRegion model  (holeEnv ∘ routeWire)
               (RelEnv.pullback routeRelation holeRelEnv)
               (ConcreteElaboration.finishRegion spliceInput.pattern.val.diagram
                 pattern.leaf.inheritedWires spliceInput.binderSpine.bodyContainer
@@ -745,9 +744,9 @@ theorem partitionedRoute_copyTransport
     have retained := congrFun outerValues
       (wireEquiv.symm (hostIndex patternIndex))
     exact (congrArg holeEnv intrinsic).trans retained
-  have renamedMaterial := selectedSemantic model named sourceEnv sourceRelEnv
+  have renamedMaterial := selectedSemantic model  sourceEnv sourceRelEnv
     (holeEnv ∘ routeWire) environments
-    ((denoteRegion_mk_zero_iff model named sourceEnv sourceRelEnv
+    ((denoteRegion_mk_zero_iff model  sourceEnv sourceRelEnv
       selectedItems).1 selectedDenotes)
   have anchorPulled : RelEnv.pullback binderWitness.relationMap sourceRelEnv =
       RelEnv.pullback routeRelation holeRelEnv := by
@@ -761,7 +760,7 @@ theorem partitionedRoute_copyTransport
       (binderWitness.relationMap relation)
     exact binderPull.trans (retained.trans routePull.symm)
   have rawMaterial :=
-    (denoteRegion_renameRelations model named binderWitness.relationMap
+    (denoteRegion_renameRelations model  binderWitness.relationMap
       (RelEnv.pullback binderWitness.relationMap sourceRelEnv) sourceRelEnv
       (RelEnv.pullback_agrees binderWitness.relationMap sourceRelEnv)
       (holeEnv ∘ routeWire)
@@ -775,21 +774,21 @@ semantic iteration law before the final compiler-presentation isomorphism:
 the selected ancestor remains present while an identical extracted copy is
 inserted at the descendant. -/
 theorem partitionedRoute_splice_equiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    {selectedItems keptItems : ItemSeq signature
+    {selectedItems keptItems : ItemSeq
       ((iterationCoalescedAnchorView input selection target hadmissible)
         |>.compilerLeaf.inheritedWires.extend selection.val.anchor).length
       (iterationCoalescedAnchorView input selection target hadmissible
         ).focus.holeRels}
     (selectedCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
           (iterationInput input selection target).coalesceFrameRaw
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (iterationInput input selection target).coalesceFrameRaw
             (iterationCoalescedAnchorView input selection target hadmissible
               ).compilerLeaf.fuel)
@@ -827,10 +826,9 @@ theorem partitionedRoute_splice_equiv
           ).compilerLeaf.binderEnumeration)
       keptItems route compiledPath witness)
     {hostLocal : Nat}
-    {hostItems : ItemSeq signature (witness.toFocus.holeWires + hostLocal)
+    {hostItems : ItemSeq  (witness.toFocus.holeWires + hostLocal)
       witness.toFocus.holeRels}
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin ((iterationCoalescedAnchorView input selection target
       hadmissible).compilerLeaf.inheritedWires.extend
         selection.val.anchor).length → model.Carrier)
@@ -873,10 +871,10 @@ theorem partitionedRoute_splice_equiv
     let material := ConcreteElaboration.finishRegion
       spliceInput.pattern.val.diagram pattern.leaf.inheritedWires
       spliceInput.binderSpine.bodyContainer pattern.leaf.items
-    denoteRegion model named sourceEnv sourceRelEnv
+    denoteRegion model  sourceEnv sourceRelEnv
         ((Region.mk 0 selectedItems).conjoin
           (witness.toFocus.context.fill (Region.mk hostLocal hostItems))) ↔
-      denoteRegion model named sourceEnv sourceRelEnv
+      denoteRegion model  sourceEnv sourceRelEnv
         ((Region.mk 0 selectedItems).conjoin
           (witness.toFocus.context.fill
             (Region.spliceAt hostLocal hostItems material wireMap
@@ -923,12 +921,12 @@ theorem partitionedRoute_splice_equiv
     spliceInput.pattern.val.diagram pattern.leaf.inheritedWires
     spliceInput.binderSpine.bodyContainer pattern.leaf.items
   have copyTransport := partitionedRoute_copyTransport input selection target
-    hadmissible hnonempty selectedCompiled route terminal model named
+    hadmissible hnonempty selectedCompiled route terminal model
   have contraction := ancestorSpliceCopy_sound
-    (.hole : DiagramContext signature sourceContext.length
+    (.hole : DiagramContext  sourceContext.length
       sourceContext.length anchorView.focus.holeRels anchorView.focus.holeRels)
     witness.toFocus.context (Region.mk 0 selectedItems) hostLocal hostItems
-    material wireMap relationMap model named sourceEnv sourceRelEnv
+    material wireMap relationMap model  sourceEnv sourceRelEnv
     (by
       intro ancestorEnv ancestorRelEnv ancestorDenotes holeEnv holeRelEnv
         reachable hostEnv hostDenotes
@@ -939,7 +937,7 @@ theorem partitionedRoute_splice_equiv
         funext index
         simp [wireMap, extendWireEnv]
       rw [envEq]
-      change denoteRegion model named (holeEnv ∘ routeWire)
+      change denoteRegion model  (holeEnv ∘ routeWire)
         (RelEnv.pullback relationMap holeRelEnv) material
       exact supplied)
   exact contraction

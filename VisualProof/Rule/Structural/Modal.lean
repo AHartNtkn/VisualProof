@@ -45,10 +45,10 @@ def doubleCutIntroInterfaceTransport (input : ConcreteDiagram)
     InterfaceTransport input (doubleCutIntroRaw input selection) :=
   InterfaceTransport.byWireCount input (doubleCutIntroRaw input selection) rfl
 
-def applyDoubleCutIntro (input : CheckedDiagram signature)
+def applyDoubleCutIntro (input : CheckedDiagram )
     (selection : CheckedSelection input.val) :
     Except StepError (StepReceipt input) :=
-  match hcheck : checkWellFormed signature
+  match hcheck : checkWellFormed
       (doubleCutIntroRaw input.val selection) with
   | .error error => .error (.resultNotWellFormed error)
   | .ok result => .ok (StepReceipt.ofChecked input
@@ -104,10 +104,6 @@ def promoteNode? (domain : SurvivorDomain regions)
       let mappedOwner ← domain.index? owner
       let mappedBinder ← domain.index? binder
       pure (.atom mappedOwner mappedBinder)
-  | .named region definition arity =>
-      let owner := if region = inner then target else region
-      (domain.index? owner).map fun mapped => .named mapped definition arity
-
 def promoteWire? (domain : SurvivorDomain regions)
     (inner target : Fin regions) (wire : CWire regions nodes) :
     Option (CWire domain.count nodes) := do
@@ -439,13 +435,13 @@ def doubleCutElimInterfaceTransport
   InterfaceTransport.byWireCount input raw
     (doubleCutElimRaw?_wireCount hraw).symm
 
-def applyDoubleCutElim (input : CheckedDiagram signature)
+def applyDoubleCutElim (input : CheckedDiagram )
     (outer : Fin input.val.regionCount) :
     Except StepError (StepReceipt input) :=
   match hraw : doubleCutElimRaw? input.val outer with
   | none => .error .operationRejected
   | some raw =>
-      match hcheck : checkWellFormed signature raw with
+      match hcheck : checkWellFormed  raw with
       | .error error => .error (.resultNotWellFormed error)
       | .ok result => .ok (StepReceipt.ofChecked input raw
           (doubleCutElimWireProvenance hraw)
@@ -511,10 +507,10 @@ def vacuousIntroInterfaceTransport (input : ConcreteDiagram)
   InterfaceTransport.byWireCount input
     (vacuousIntroRaw input selection arity) rfl
 
-def applyVacuousIntro (input : CheckedDiagram signature)
+def applyVacuousIntro (input : CheckedDiagram )
     (selection : CheckedSelection input.val) (arity : Nat) :
     Except StepError (StepReceipt input) :=
-  match hcheck : checkWellFormed signature
+  match hcheck : checkWellFormed
       (vacuousIntroRaw input.val selection arity) with
   | .error error => .error (.resultNotWellFormed error)
   | .ok result => .ok (StepReceipt.ofChecked input
@@ -625,7 +621,7 @@ theorem VacuousElimTrace.origin_ne_bubble
 
 theorem VacuousElimTrace.parent_ne_bubble
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     trace.parent ≠ bubble := by
   intro equality
   have parent :
@@ -641,7 +637,7 @@ theorem VacuousElimTrace.parent_ne_bubble
 
 theorem VacuousElimTrace.parent_survives
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     (vacuousRegionDomain input bubble).survives trace.parent = true := by
   exact (vacuousRegionDomain_survives input bubble trace.parent).2
     (trace.parent_ne_bubble wellFormed)
@@ -691,13 +687,13 @@ def vacuousElimInterfaceTransport
   InterfaceTransport.byWireCount input raw
     (vacuousElimRaw?_wireCount hraw).symm
 
-def applyVacuousElim (input : CheckedDiagram signature)
+def applyVacuousElim (input : CheckedDiagram )
     (bubble : Fin input.val.regionCount) :
     Except StepError (StepReceipt input) :=
   match hraw : vacuousElimRaw? input.val bubble with
   | none => .error .nonVacuousBinder
   | some raw =>
-      match hcheck : checkWellFormed signature raw with
+      match hcheck : checkWellFormed  raw with
       | .error error => .error (.resultNotWellFormed error)
       | .ok result => .ok (StepReceipt.ofChecked input raw
           (vacuousElimWireProvenance hraw)

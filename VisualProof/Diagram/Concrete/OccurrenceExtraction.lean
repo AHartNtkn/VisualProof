@@ -10,19 +10,19 @@ namespace OccurrenceProblem
 /-- Proper content regions are the material part of an extracted occurrence;
 the effective body container is administrative and is handled with the root
 and proxy prefix. -/
-def properContentRegionBool (problem : OccurrenceProblem signature)
+def properContentRegionBool (problem : OccurrenceProblem )
     (region : problem.ContentRegion) : Bool :=
   decide (region.origin problem ≠ problem.binderSpine.bodyContainer)
 
-abbrev ProperContentRegion (problem : OccurrenceProblem signature) :=
+abbrev ProperContentRegion (problem : OccurrenceProblem ) :=
   FilteredFiber problem.properContentRegionBool
 
-def ProperContentRegion.content (problem : OccurrenceProblem signature)
+def ProperContentRegion.content (problem : OccurrenceProblem )
     (region : problem.ProperContentRegion) : problem.ContentRegion :=
   FilteredFiber.origin problem.properContentRegionBool region
 
 @[simp] theorem ProperContentRegion.isProper
-    (problem : OccurrenceProblem signature)
+    (problem : OccurrenceProblem )
     (region : problem.ProperContentRegion) :
     (region.content problem).origin problem ≠
       problem.binderSpine.bodyContainer := by
@@ -33,7 +33,7 @@ end OccurrenceProblem
 
 namespace OpenOccurrenceEmbedding
 
-variable {problem : OccurrenceProblem signature}
+variable {problem : OccurrenceProblem }
 
 /-- The image of one proper content region in the occurrence host. -/
 def properRegionImage (embedding : OpenOccurrenceEmbedding problem)
@@ -1231,13 +1231,6 @@ private noncomputable def nodes_correspond
               regionValid
           · exact specialization.regionForward_fragmentBinder_of_atomValid
               sourceBubble binderValid
-      | named hostRegion definition arity =>
-          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
-              .named hostRegion definition arity := by
-            rw [hostIndex]; exact hostKindSelected
-          exact False.elim (by
-            unfold RawOccurrenceCertificate.NodeValid at valid
-            simp [patternKind, hostKind] at valid)
       | identity hostRegion hostArity =>
           have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
               .identity hostRegion hostArity := by
@@ -1274,51 +1267,6 @@ private noncomputable def nodes_correspond
           apply CNode.CertifiedCorresponds.identity
           exact specialization.regionForward_fragmentParent_of_mappedOwner
             regionValid
-      | named hostRegion definition arity =>
-          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
-              .named hostRegion definition arity := by
-            rw [hostIndex]; exact hostKindSelected
-          exact False.elim (by
-            unfold RawOccurrenceCertificate.NodeValid at valid
-            simp [patternKind, hostKind] at valid)
-  | named patternRegion patternDefinition patternArity =>
-      cases hostKindSelected : problem.host.val.nodes
-          (embedding.selection.selectedNodes.get index) with
-      | atom hostRegion hostBinder =>
-          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
-              .atom hostRegion hostBinder := by rw [hostIndex]; exact hostKindSelected
-          exact False.elim (by
-            unfold RawOccurrenceCertificate.NodeValid at valid
-            simp [patternKind, hostKind] at valid)
-      | identity hostRegion hostArity =>
-          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
-              .identity hostRegion hostArity := by
-            rw [hostIndex]; exact hostKindSelected
-          exact False.elim (by
-            unfold RawOccurrenceCertificate.NodeValid at valid
-            simp [patternKind, hostKind] at valid)
-      | named hostRegion hostDefinition hostArity =>
-          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
-              .named hostRegion hostDefinition hostArity := by
-            rw [hostIndex]; exact hostKindSelected
-          obtain ⟨regionValid, definitionEq, arityEq⟩ :=
-            valid.named_elim patternKind hostKind
-          subst hostDefinition
-          subst hostArity
-          have sourceNode : specialization.occurrenceFragment.diagram.nodes
-              index = .named
-                (problem.host.val.fragmentParent
-                  specialization.occurrenceLayout hostRegion)
-                patternDefinition patternArity := by
-            change (problem.host.val.extractDiagramRaw embedding.selection
-              specialization.occurrenceLayout).nodes index = _
-            apply problem.host.val.extractDiagramRaw_node_named
-            exact hostKindSelected
-          rw [sourceNode, targetIndex, patternKind]
-          apply CNode.CertifiedCorresponds.named
-          exact specialization.regionForward_fragmentParent_of_mappedOwner
-            regionValid
-
 /-- Canonical total wire map from the occurrence-derived extraction to the
 pattern: selected internal wires use the certified occurrence image inverse;
 touching wires use their unique ordered boundary position. -/
@@ -1721,13 +1669,6 @@ private theorem required_port_is_covered
         arity nodeKind] at required
       obtain ⟨index, rfl⟩ := required
       exact covered index
-  | named region definition arity =>
-      simp only [nodeKind] at covered
-      rw [ConcreteDiagram.requiresPort_named_iff diagram node port region
-        definition arity nodeKind] at required
-      obtain ⟨index, rfl⟩ := required
-      exact covered index
-
 private theorem perm_of_nodup_and_mem_iff
     {values other : List α} [BEq α] [LawfulBEq α]
     (valuesNodup : values.Nodup) (otherNodup : other.Nodup)
@@ -1972,8 +1913,6 @@ private theorem requiresPort_transport
       (specialization.nodesTotalEquiv node) = targetNode at corresponds ⊢
   cases corresponds with
   | identity sourceRegion targetRegion arity regionEq =>
-      exact required
-  | named sourceRegion targetRegion definition arity regionEq =>
       exact required
   | atom sourceRegion sourceBinder targetRegion targetBinder regionEq binderEq =>
       have binderRegion := specialization.regionsEquiv_regions_eq sourceBinder

@@ -11,11 +11,10 @@ namespace AbstractionRawTrace
 /-- A compiled selected occurrence depends on its anchor valuation only
 through the occurrence's internal and touching wires. -/
 theorem selectedOccurrence_denote_congr
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (occurrence : AbstractionOccurrence input)
     (witness : AbstractionWitness input comprehension occurrence)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (hostFuel : Nat)
     (hostContext : ConcreteElaboration.WireContext input.val)
     (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
@@ -23,10 +22,10 @@ theorem selectedOccurrence_denote_congr
       input.val hostBinders occurrence.selection.val.anchor)
     (hostCover : hostBinders.Covers occurrence.selection.val.anchor)
     (hostExact : hostContext.Exact occurrence.selection.val.anchor)
-    (hostItems : ItemSeq signature hostContext.length hostRels)
+    (hostItems : ItemSeq  hostContext.length hostRels)
     (hostCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-        (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+        (ConcreteElaboration.compileRegion?  input.val hostFuel)
         hostContext hostBinders
         (ModalSoundness.selectedOccurrences input.val occurrence.selection) =
           some hostItems)
@@ -36,11 +35,11 @@ theorem selectedOccurrence_denote_congr
       hostContext.get index ∈ occurrence.selection.internalWires ∨
         hostContext.get index ∈ occurrence.selection.touchingWires →
       first index = second index) :
-    denoteItemSeq model named first relations hostItems ↔
-      denoteItemSeq model named second relations hostItems := by
+    denoteItemSeq model  first relations hostItems ↔
+      denoteItemSeq model  second relations hostItems := by
   let layout := occurrenceLayout input occurrence
   let fragment := input.val.extractOpenRaw occurrence.selection layout
-  let checkedFragment : CheckedOpenDiagram signature :=
+  let checkedFragment : CheckedOpenDiagram  :=
     ⟨fragment, occurrenceFragment_wellFormed input occurrence⟩
   let compiled := Splice.Input.compiledSpliceOpenRootItems checkedFragment
   have bodyEq : layout.bodyContainer = fragment.diagram.root :=
@@ -57,21 +56,21 @@ theorem selectedOccurrence_denote_congr
     exact ConcreteElaboration.openRootWires_exact
       (occurrenceFragment_wellFormed input occurrence)
   have fragmentCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature fragment.diagram
-        (ConcreteElaboration.compileRegion? signature fragment.diagram
+      ConcreteElaboration.compileOccurrencesWith?  fragment.diagram
+        (ConcreteElaboration.compileRegion?  fragment.diagram
           fragment.diagram.regionCount)
         fragment.rootWires ConcreteElaboration.BinderContext.empty
         (ConcreteElaboration.localOccurrences fragment.diagram
           layout.bodyContainer) = some compiled.items := by
     simpa [fragment, checkedFragment, bodyEq] using compiled.computation
   have backward := IterationSoundness.extractionCompileSelectedItems_denote
-    input occurrence.selection layout model named .backward
+    input occurrence.selection layout model  .backward
     fragment.diagram.regionCount hostFuel fragment.rootWires hostContext
     ConcreteElaboration.BinderContext.empty hostBinders fragmentEnumeration
     hostEnumeration hostCover fragmentExact hostExact compiled.items hostItems
     fragmentCompiled hostCompiled
   have forward := IterationSoundness.extractionCompileSelectedItems_denote
-    input occurrence.selection layout model named .forward
+    input occurrence.selection layout model  .forward
     fragment.diagram.regionCount hostFuel fragment.rootWires hostContext
     ConcreteElaboration.BinderContext.empty hostBinders fragmentEnumeration
     hostEnumeration hostCover fragmentExact hostExact compiled.items hostItems

@@ -67,7 +67,7 @@ theorem compileOccurrencesWith?_perm_iso
       (region : Fin diagram.regionCount) →
       (context : ConcreteElaboration.WireContext diagram) →
       ConcreteElaboration.BinderContext diagram rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (context : ConcreteElaboration.WireContext diagram)
     (binders : ConcreteElaboration.BinderContext diagram rels)
     {sourceOccurrences targetOccurrences : List
@@ -76,14 +76,14 @@ theorem compileOccurrencesWith?_perm_iso
     (permutation : sourceOccurrences.Perm targetOccurrences)
     (sourceNodup : sourceOccurrences.Nodup)
     (targetNodup : targetOccurrences.Nodup)
-    {sourceItems targetItems : ItemSeq signature context.length rels}
+    {sourceItems targetItems : ItemSeq  context.length rels}
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature diagram recurse
+      ConcreteElaboration.compileOccurrencesWith?  diagram recurse
         context binders sourceOccurrences = some sourceItems)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature diagram recurse
+      ConcreteElaboration.compileOccurrencesWith?  diagram recurse
         context binders targetOccurrences = some targetItems) :
-    ItemSeqIso signature (FiniteEquiv.refl (Fin context.length)) rels
+    ItemSeqIso  (FiniteEquiv.refl (Fin context.length)) rels
       sourceItems targetItems := by
   let positions := permIndexEquiv sourceOccurrences targetOccurrences
     permutation sourceNodup targetNodup
@@ -118,19 +118,19 @@ theorem compileOccurrencesWith?_append
       (region : Fin diagram.regionCount) →
       (context : ConcreteElaboration.WireContext diagram) →
       ConcreteElaboration.BinderContext diagram rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (context : ConcreteElaboration.WireContext diagram)
     (binders : ConcreteElaboration.BinderContext diagram rels)
     (first second : List (ConcreteElaboration.LocalOccurrence
       diagram.regionCount diagram.nodeCount))
-    {firstItems secondItems : ItemSeq signature context.length rels}
+    {firstItems secondItems : ItemSeq  context.length rels}
     (firstCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature diagram recurse
+      ConcreteElaboration.compileOccurrencesWith?  diagram recurse
         context binders first = some firstItems)
     (secondCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature diagram recurse
+      ConcreteElaboration.compileOccurrencesWith?  diagram recurse
         context binders second = some secondItems) :
-    ConcreteElaboration.compileOccurrencesWith? signature diagram recurse
+    ConcreteElaboration.compileOccurrencesWith?  diagram recurse
         context binders (first ++ second) =
       some (firstItems.append secondItems) := by
   induction first generalizing firstItems with
@@ -140,12 +140,12 @@ theorem compileOccurrencesWith?_append
       simpa using secondCompiled
   | cons head tail induction =>
       simp only [ConcreteElaboration.compileOccurrencesWith?] at firstCompiled ⊢
-      cases headResult : ConcreteElaboration.compileOccurrenceWith? signature
+      cases headResult : ConcreteElaboration.compileOccurrenceWith?
           diagram recurse context binders head with
       | none => simp [headResult] at firstCompiled
       | some headItem =>
           cases tailResult : ConcreteElaboration.compileOccurrencesWith?
-              signature diagram recurse context binders tail with
+               diagram recurse context binders tail with
           | none => simp [headResult, tailResult] at firstCompiled
           | some tailItems =>
               simp [headResult, tailResult] at firstCompiled
@@ -157,38 +157,37 @@ theorem compileOccurrencesWith?_append
 /-- The semantic selection partition also retains the exact intrinsic
 occurrence permutation used by the compiler. -/
 theorem compilerLeaf_partition_iso
-    {signature : List Nat}
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (anchor : Fin input.val.regionCount)
     {outer : Nat} {rels : RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     (leaf : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
       input.val anchor (.here body))
     (kept selected : List (ConcreteElaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount))
     (partition : (kept ++ selected).Perm
       (ConcreteElaboration.localOccurrences input.val anchor))
-    {keptItems selectedItems : ItemSeq signature
+    {keptItems selectedItems : ItemSeq
       (leaf.inheritedWires.extend anchor).length rels}
     (keptCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+          (ConcreteElaboration.compileRegion?  input.val leaf.fuel)
           (leaf.inheritedWires.extend anchor) leaf.binders kept =
         some keptItems)
     (selectedCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+          (ConcreteElaboration.compileRegion?  input.val leaf.fuel)
           (leaf.inheritedWires.extend anchor) leaf.binders selected =
         some selectedItems) :
-    ItemSeqIso signature
+    ItemSeqIso
       (FiniteEquiv.refl (Fin (leaf.inheritedWires.extend anchor).length)) rels
       (keptItems.append selectedItems) leaf.items := by
   let recurse : ∀ {rels : RelCtx},
       (region : Fin input.val.regionCount) →
       (context : ConcreteElaboration.WireContext input.val) →
       ConcreteElaboration.BinderContext input.val rels →
-      Option (Region signature context.length rels) :=
-    fun {rels} => ConcreteElaboration.compileRegion? signature input.val
+      Option (Region  context.length rels) :=
+    fun {rels} => ConcreteElaboration.compileRegion?  input.val
       leaf.fuel
   have sourceCompiled := compileOccurrencesWith?_append input.val recurse
     (leaf.inheritedWires.extend anchor) leaf.binders kept selected
@@ -205,33 +204,32 @@ theorem compilerLeaf_partition_iso
 then follows the compiler's authoritative occurrence permutation to the
 corresponding focus in the complete leaf. -/
 theorem compilerLeaf_partition_alignRetainedPath
-    {signature : List Nat}
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (anchor : Fin input.val.regionCount)
     {outer : Nat} {rels : RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     (leaf : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
       input.val anchor (.here body))
     (kept selected : List (ConcreteElaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount))
     (partition : (kept ++ selected).Perm
       (ConcreteElaboration.localOccurrences input.val anchor))
-    {keptItems selectedItems : ItemSeq signature
+    {keptItems selectedItems : ItemSeq
       (leaf.inheritedWires.extend anchor).length rels}
     (keptCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+          (ConcreteElaboration.compileRegion?  input.val leaf.fuel)
           (leaf.inheritedWires.extend anchor) leaf.binders kept =
         some keptItems)
     (selectedCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+          (ConcreteElaboration.compileRegion?  input.val leaf.fuel)
           (leaf.inheritedWires.extend anchor) leaf.binders selected =
         some selectedItems)
     {index : Nat} {rest : List Nat}
     (retained : Region.ContextPath (Region.mk 0 keptItems) (index :: rest)) :
     let extended := retained.appendRootItemsRight selectedItems
-    ∃ iso : RegionIso signature
+    ∃ iso : RegionIso
         (FiniteEquiv.refl
           (Fin (leaf.inheritedWires.extend anchor).length)) rels
         (Region.mk 0 (keptItems.append selectedItems))
@@ -252,7 +250,7 @@ theorem compilerLeaf_partition_alignRetainedPath
     refine Fin.addCases (fun index => ?_) (fun index => ?_) wire
     · simp only [extendWireEquiv_outer, FiniteEquiv.refl_apply]
     · exact Fin.elim0 index
-  let iso : RegionIso signature
+  let iso : RegionIso
       (FiniteEquiv.refl
         (Fin (leaf.inheritedWires.extend anchor).length)) rels
       (Region.mk 0 (keptItems.append selectedItems))
@@ -268,27 +266,26 @@ the compiler permutation to the concrete authoritative position, so the
 resulting target path is the route path rather than merely some isomorphic
 focus. -/
 theorem compilerLeaf_partition_alignRetainedOccurrence
-    {signature : List Nat}
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (anchor : Fin input.val.regionCount)
     {outer : Nat} {rels : RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     (leaf : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
       input.val anchor (.here body))
     (kept selected : List (ConcreteElaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount))
     (partition : (kept ++ selected).Perm
       (ConcreteElaboration.localOccurrences input.val anchor))
-    {keptItems selectedItems : ItemSeq signature
+    {keptItems selectedItems : ItemSeq
       (leaf.inheritedWires.extend anchor).length rels}
     (keptCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+          (ConcreteElaboration.compileRegion?  input.val leaf.fuel)
           (leaf.inheritedWires.extend anchor) leaf.binders kept =
         some keptItems)
     (selectedCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+          (ConcreteElaboration.compileRegion?  input.val leaf.fuel)
           (leaf.inheritedWires.extend anchor) leaf.binders selected =
         some selectedItems)
     (occurrence : ConcreteElaboration.LocalOccurrence
@@ -304,7 +301,7 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
     (retained : Region.ContextPath (Region.mk 0 keptItems)
       (keptPosition.val :: rest)) :
     let extended := retained.appendRootItemsRight selectedItems
-    ∃ (iso : RegionIso signature
+    ∃ (iso : RegionIso
         (FiniteEquiv.refl
           (Fin (leaf.inheritedWires.extend anchor).length)) rels
         (Region.mk 0 (keptItems.append selectedItems))
@@ -317,8 +314,8 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
       (region : Fin input.val.regionCount) →
       (context : ConcreteElaboration.WireContext input.val) →
       ConcreteElaboration.BinderContext input.val rels →
-      Option (Region signature context.length rels) :=
-    fun {rels} => ConcreteElaboration.compileRegion? signature input.val
+      Option (Region  context.length rels) :=
+    fun {rels} => ConcreteElaboration.compileRegion?  input.val
       leaf.fuel
   have sourceCompiled := compileOccurrencesWith?_append input.val recurse
     (leaf.inheritedWires.extend anchor) leaf.binders kept selected
@@ -399,7 +396,7 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
     have unique := Option.some.inj targetGet
     simpa [itemPositions, occurrenceIndex] using unique.symm
   have itemIsos : ∀ sourceIndex,
-      ItemIso signature
+      ItemIso
         (FiniteEquiv.refl
           (Fin (leaf.inheritedWires.extend anchor).length)) rels
         ((keptItems.append selectedItems).get sourceIndex)
@@ -419,12 +416,12 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
     refine Fin.addCases (fun index => ?_) (fun index => ?_) wire
     · simp only [extendWireEquiv_outer, FiniteEquiv.refl_apply]
     · exact Fin.elim0 index
-  let itemSeqIso : ItemSeqIso signature
+  let itemSeqIso : ItemSeqIso
       (FiniteEquiv.refl
         (Fin (leaf.inheritedWires.extend anchor).length)) rels
       (keptItems.append selectedItems) leaf.items :=
     .permute itemPositions itemIsos
-  let iso : RegionIso signature
+  let iso : RegionIso
       (FiniteEquiv.refl
         (Fin (leaf.inheritedWires.extend anchor).length)) rels
       (Region.mk 0 (keptItems.append selectedItems))
@@ -482,7 +479,7 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
         holeRelsEq := holeRelsEq
         holeWire := child.holeWire
         context := by
-          have childContext : DiagramContextIso signature
+          have childContext : DiagramContextIso
               (extendWireEquiv
                 (FiniteEquiv.refl
                   (Fin (leaf.inheritedWires.extend anchor).length))
@@ -501,7 +498,7 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
           have proofEq : holeRelsEq = child.holeRelsEq :=
             Subsingleton.elim _ _
           rw [proofEq]
-          change DiagramContextIso signature _ child.holeWire rels
+          change DiagramContextIso  _ child.holeWire rels
             nested.toFocus.holeRels
             (DiagramContext.cut 0 sourceFocus.before sourceFocus.after
               nested.toFocus.context)
@@ -566,7 +563,7 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
         holeRelsEq := holeRelsEq
         holeWire := child.holeWire
         context := by
-          have childContext : DiagramContextIso signature
+          have childContext : DiagramContextIso
               (extendWireEquiv
                 (FiniteEquiv.refl
                   (Fin (leaf.inheritedWires.extend anchor).length))
@@ -585,7 +582,7 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
           have proofEq : holeRelsEq = child.holeRelsEq :=
             Subsingleton.elim _ _
           rw [proofEq]
-          change DiagramContextIso signature _ child.holeWire rels
+          change DiagramContextIso  _ child.holeWire rels
             nested.toFocus.holeRels
             (DiagramContext.bubble 0 sourceFocus.before sourceFocus.after _
               nested.toFocus.context)
@@ -606,44 +603,42 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
 /-- A compiler leaf factors along any proved partition of its direct
 occurrences.  This is the diagram-generic kernel behind selection factoring. -/
 theorem compilerLeaf_partition_of_perm
-    {signature : List Nat}
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (anchor : Fin input.val.regionCount)
     {outer : Nat} {rels : RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     (leaf : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
       input.val anchor (.here body))
     (kept selected : List (ConcreteElaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount))
     (partition : (kept ++ selected).Perm
       (ConcreteElaboration.localOccurrences input.val anchor)) :
-    ∃ (keptItems selectedItems : ItemSeq signature
+    ∃ (keptItems selectedItems : ItemSeq
         (leaf.inheritedWires.extend anchor).length rels),
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+          (ConcreteElaboration.compileRegion?  input.val leaf.fuel)
           (leaf.inheritedWires.extend anchor) leaf.binders kept =
             some keptItems ∧
-        ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
+        ConcreteElaboration.compileOccurrencesWith?  input.val
+          (ConcreteElaboration.compileRegion?  input.val leaf.fuel)
           (leaf.inheritedWires.extend anchor) leaf.binders selected =
             some selectedItems ∧
         ∀ (model : Model)
-          (named : NamedEnv model.Carrier signature)
           (env : Fin (leaf.inheritedWires.extend anchor).length →
             model.Carrier)
           (relEnv : RelEnv model.Carrier rels),
-          denoteItemSeq model named env relEnv leaf.items ↔
-            denoteItemSeq model named env relEnv
+          denoteItemSeq model  env relEnv leaf.items ↔
+            denoteItemSeq model  env relEnv
               (keptItems.append selectedItems) := by
   let recurse : ∀ {rels : RelCtx},
       (region : Fin input.val.regionCount) →
       (context : ConcreteElaboration.WireContext input.val) →
       ConcreteElaboration.BinderContext input.val rels →
-      Option (Region signature context.length rels) :=
-    fun {rels} => ConcreteElaboration.compileRegion? signature input.val
+      Option (Region  context.length rels) :=
+    fun {rels} => ConcreteElaboration.compileRegion?  input.val
       leaf.fuel
   have allCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val recurse
+      ConcreteElaboration.compileOccurrencesWith?  input.val recurse
           (leaf.inheritedWires.extend anchor) leaf.binders
           (ConcreteElaboration.localOccurrences input.val anchor) =
             some leaf.items := by
@@ -651,7 +646,7 @@ theorem compilerLeaf_partition_of_perm
   have eachPartitioned : ∀ occurrence,
       occurrence ∈ kept ++ selected →
       ∃ item,
-        ConcreteElaboration.compileOccurrenceWith? signature input.val recurse
+        ConcreteElaboration.compileOccurrenceWith?  input.val recurse
           (leaf.inheritedWires.extend anchor) leaf.binders occurrence =
             some item := by
     intro occurrence member
@@ -670,10 +665,10 @@ theorem compilerLeaf_partition_of_perm
   refine ⟨keptItems, selectedItems, ?_, ?_, ?_⟩
   · simpa [recurse] using keptCompiled
   · simpa [recurse] using selectedCompiled
-  · intro model named env relEnv
+  · intro model  env relEnv
     have permuted := compileOccurrences_denote_perm input.val recurse
       (leaf.inheritedWires.extend anchor) leaf.binders partition.symm
-      allCompiled partitionCompiled model named env relEnv
+      allCompiled partitionCompiled model  env relEnv
     rw [partitionEq] at permuted
     exact permuted
 
@@ -682,30 +677,28 @@ selected occurrence blocks.  This is a semantic partition, not a second
 elaboration: both blocks are compiled by the same recursive compiler, wire
 context, binder context, and fuel retained by the authoritative leaf. -/
 theorem compilerLeaf_selection_partition
-    {signature : List Nat}
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     {outer : Nat} {rels : RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     (leaf : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
       input.val selection.val.anchor (.here body)) :
-    ∃ (keptItems selectedItems : ItemSeq signature
+    ∃ (keptItems selectedItems : ItemSeq
         (leaf.inheritedWires.extend selection.val.anchor).length rels),
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+          (ConcreteElaboration.compileRegion?  input.val leaf.fuel)
           (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
           (keptOccurrences input.val selection) = some keptItems ∧
-        ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
+        ConcreteElaboration.compileOccurrencesWith?  input.val
+          (ConcreteElaboration.compileRegion?  input.val leaf.fuel)
           (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
           (selectedOccurrences input.val selection) = some selectedItems ∧
         ∀ (model : Model)
-          (named : NamedEnv model.Carrier signature)
           (env : Fin (leaf.inheritedWires.extend
             selection.val.anchor).length → model.Carrier)
           (relEnv : RelEnv model.Carrier rels),
-          denoteItemSeq model named env relEnv leaf.items ↔
-          denoteItemSeq model named env relEnv
+          denoteItemSeq model  env relEnv leaf.items ↔
+          denoteItemSeq model  env relEnv
               (keptItems.append selectedItems) :=
   compilerLeaf_partition_of_perm input selection.val.anchor leaf
     (keptOccurrences input.val selection)

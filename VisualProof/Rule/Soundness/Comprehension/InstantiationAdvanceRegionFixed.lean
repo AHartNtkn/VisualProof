@@ -13,17 +13,16 @@ private theorem finishRegion_denote_iff
     (diagram : ConcreteDiagram)
     (context : ConcreteElaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
-    (items : ItemSeq signature (context.extend region).length rels)
+    (items : ItemSeq  (context.extend region).length rels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (environment : Fin context.length → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
-    denoteRegion model named environment relations
+    denoteRegion model  environment relations
         (ConcreteElaboration.finishRegion diagram context region items) ↔
       ∃ localEnvironment :
           Fin (ConcreteElaboration.exactScopeWires diagram region).length →
             model.Carrier,
-        denoteItemSeq model named
+        denoteItemSeq model
           (ConcreteElaboration.extendedEnvironment context region environment
             localEnvironment)
           relations items := by
@@ -32,20 +31,19 @@ private theorem finishRegion_denote_iff
   constructor
   · rintro ⟨localEnvironment, denotation⟩
     exact ⟨localEnvironment,
-      (denoteItemSeq_renameWires model named
+      (denoteItemSeq_renameWires model
         (Fin.cast (ConcreteElaboration.WireContext.length_extend context region))
         (extendWireEnv environment localEnvironment) relations items).mp
           denotation⟩
   · rintro ⟨localEnvironment, denotation⟩
     exact ⟨localEnvironment,
-      (denoteItemSeq_renameWires model named
+      (denoteItemSeq_renameWires model
         (Fin.cast (ConcreteElaboration.WireContext.length_extend context region))
         (extendWireEnv environment localEnvironment) relations items).mpr
           denotation⟩
 
 private theorem full_items_exists_of_survivor
-    {signature : List Nat}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin parameterCount proxyCount)
     (fuel : Nat)
     (region : Fin state.diagram.val.regionCount)
@@ -53,12 +51,12 @@ private theorem full_items_exists_of_survivor
     (binders : ConcreteElaboration.BinderContext state.diagram.val rels)
     (exact : (context.extend region).Exact region)
     (cover : binders.Covers region)
-    (survivorBody : Region signature context.length rels)
-    (survivorCompiled : compileSurvivorRegion? signature state (fuel + 1)
+    (survivorBody : Region  context.length rels)
+    (survivorCompiled : compileSurvivorRegion?  state (fuel + 1)
       region context binders = some survivorBody) :
-    ∃ fullItems : ItemSeq signature (context.extend region).length rels,
-      ConcreteElaboration.compileOccurrencesWith? signature state.diagram.val
-        (ConcreteElaboration.compileRegion? signature state.diagram.val fuel)
+    ∃ fullItems : ItemSeq  (context.extend region).length rels,
+      ConcreteElaboration.compileOccurrencesWith?  state.diagram.val
+        (ConcreteElaboration.compileRegion?  state.diagram.val fuel)
         (context.extend region) binders
         (ConcreteElaboration.localOccurrences state.diagram.val region) =
           some fullItems := by
@@ -68,8 +66,8 @@ private theorem full_items_exists_of_survivor
   unfold ConcreteElaboration.compileRegion? at fullCompiled
   dsimp only at fullCompiled
   cases fullItemsCompiled : ConcreteElaboration.compileOccurrencesWith?
-      signature state.diagram.val
-      (ConcreteElaboration.compileRegion? signature state.diagram.val fuel)
+       state.diagram.val
+      (ConcreteElaboration.compileRegion?  state.diagram.val fuel)
       (context.extend region) binders
       (ConcreteElaboration.localOccurrences state.diagram.val region) with
   | none => simp [fullItemsCompiled] at fullCompiled
@@ -79,16 +77,15 @@ private theorem full_items_exists_of_survivor
 both semantic directions under the trace's fixed relation, proxy family, and
 ordered parameter valuation. -/
 theorem advance_site_region_simulation_fixed
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -105,7 +102,6 @@ theorem advance_site_region_simulation_fixed
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -113,20 +109,20 @@ theorem advance_site_region_simulation_fixed
     (nonemptyRelationEq : ∀ hnonempty :
       payload.binderSpine.proxyCount ≠ 0,
       relationValue = terminalRelationOfParameterValues payload state site
-        arguments hnonempty model named parameterValues values)
+        arguments hnonempty model  parameterValues values)
     (emptyRelationEq : ∀ _hzero :
       payload.binderSpine.proxyCount = 0,
-      relationValue = payload.interpretedRelation model named parameterValues)
+      relationValue = payload.interpretedRelation model  parameterValues)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
     (childSimulation : ∀ direction
       (child : Fin state.diagram.val.regionCount),
       state.diagram.val.Encloses state.bubble child →
       FixedAdvanceRegionSimulation comprehension attachments binders payload
-        state atom tail site arguments hadmissible model named relationValue
+        state atom tail site arguments hadmissible model  relationValue
         values parameterValues direction sourceFuel targetFuel child) :
     FixedAdvanceRegionSimulation comprehension attachments binders payload
-      state atom tail site arguments hadmissible model named relationValue
+      state atom tail site arguments hadmissible model  relationValue
       values parameterValues direction (sourceFuel + 1) (targetFuel + 1) site := by
           unfold FixedAdvanceRegionSimulation
           intro sourceRels targetRels sourceOuter targetOuter sourceExact
@@ -142,18 +138,18 @@ theorem advance_site_region_simulation_fixed
             binders payload state site arguments hadmissible
           let next := advanceInstantiationState comprehension attachments binders
             payload state atom tail site arguments hadmissible
-          change (ConcreteElaboration.compileOccurrencesWith? signature
+          change (ConcreteElaboration.compileOccurrencesWith?
               coalesced.diagram.val
-              (compileSurvivorRegion? signature coalesced sourceFuel)
+              (compileSurvivorRegion?  coalesced sourceFuel)
               (sourceOuter.extend site) sourceBinders
               ((ConcreteElaboration.localOccurrences coalesced.diagram.val
                 site).filter (dropOccurrenceSurvives coalesced))).bind
                 (fun items => some (ConcreteElaboration.finishRegion
                   coalesced.diagram.val sourceOuter site items)) =
             some sourceBody at sourceCompiled
-          change (ConcreteElaboration.compileOccurrencesWith? signature
+          change (ConcreteElaboration.compileOccurrencesWith?
               next.diagram.val
-              (compileSurvivorRegion? signature next targetFuel)
+              (compileSurvivorRegion?  next targetFuel)
               (targetOuter.extend (layout.frameRegion site)) targetBinders
               ((ConcreteElaboration.localOccurrences next.diagram.val
                 (layout.frameRegion site)).filter
@@ -162,8 +158,8 @@ theorem advance_site_region_simulation_fixed
                   next.diagram.val targetOuter (layout.frameRegion site)
                     items)) = some targetBody at targetCompiled
           cases sourceItemsResult : ConcreteElaboration.compileOccurrencesWith?
-              signature coalesced.diagram.val
-              (compileSurvivorRegion? signature coalesced sourceFuel)
+               coalesced.diagram.val
+              (compileSurvivorRegion?  coalesced sourceFuel)
               (sourceOuter.extend site) sourceBinders
               ((ConcreteElaboration.localOccurrences coalesced.diagram.val
                 site).filter (dropOccurrenceSurvives coalesced)) with
@@ -174,9 +170,9 @@ theorem advance_site_region_simulation_fixed
               have sourceBodyEq := Option.some.inj sourceCompiled
               subst sourceBody
               cases targetItemsResult :
-                  ConcreteElaboration.compileOccurrencesWith? signature
+                  ConcreteElaboration.compileOccurrencesWith?
                     next.diagram.val
-                    (compileSurvivorRegion? signature next targetFuel)
+                    (compileSurvivorRegion?  next targetFuel)
                     (targetOuter.extend (layout.frameRegion site)) targetBinders
                     ((ConcreteElaboration.localOccurrences next.diagram.val
                       (layout.frameRegion site)).filter
@@ -197,8 +193,8 @@ theorem advance_site_region_simulation_fixed
                         targetOuter (layout.frameRegion site) targetItems)
                       (by
                         change (ConcreteElaboration.compileOccurrencesWith?
-                            signature next.diagram.val
-                            (compileSurvivorRegion? signature next targetFuel)
+                             next.diagram.val
+                            (compileSurvivorRegion?  next targetFuel)
                             (targetOuter.extend (layout.frameRegion site))
                             targetBinders
                             ((ConcreteElaboration.localOccurrences
@@ -226,7 +222,7 @@ theorem advance_site_region_simulation_fixed
                   cases direction with
                   | forward =>
                       intro sourceDenotes
-                      have sourceDenotes' : denoteRegion model named
+                      have sourceDenotes' : denoteRegion model
                           sourceOuterEnv targetRelEnv
                           (ConcreteElaboration.finishRegion coalesced.diagram.val
                             sourceOuter site
@@ -235,10 +231,10 @@ theorem advance_site_region_simulation_fixed
                       obtain ⟨sourceLocal, sourceItemsDenote⟩ :=
                         (finishRegion_denote_iff coalesced.diagram.val
                           sourceOuter site
-                          (sourceItems.renameRelations relationMap) model named
+                          (sourceItems.renameRelations relationMap) model
                           sourceOuterEnv targetRelEnv).mp sourceDenotes'
                       have sourceItemsNative :=
-                        (denoteItemSeq_renameRelations model named relationMap
+                        (denoteItemSeq_renameRelations model  relationMap
                           (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
                           (RelEnv.pullback_agrees relationMap targetRelEnv)
                           (ConcreteElaboration.extendedEnvironment sourceOuter
@@ -254,7 +250,7 @@ theorem advance_site_region_simulation_fixed
                             targetOuter sourceExact targetExact sourceBinders
                             targetBinders sourceCover targetCover sourceEnumeration
                             targetEnumeration outerMap outerSpec relationMap
-                            relationSpec model named relationValue values
+                            relationSpec model  relationValue values
                             parameterValues sourceOuterEnv targetOuterEnv
                             targetRelEnv outerAgrees
                             sourceLocal sourceItems targetItems fullItems
@@ -265,7 +261,7 @@ theorem advance_site_region_simulation_fixed
                               childSimulation direction child encloses)
                         exact (finishRegion_denote_iff
                           next.diagram.val targetOuter (layout.frameRegion site)
-                          targetItems model named targetOuterEnv targetRelEnv).mpr
+                          targetItems model  targetOuterEnv targetRelEnv).mpr
                             ⟨targetLocal, targetItemsDenote⟩
                       · obtain ⟨targetLocal, targetItemsDenote⟩ :=
                           advance_site_items_denote_nonempty_fixed_forward
@@ -276,7 +272,7 @@ theorem advance_site_region_simulation_fixed
                             targetOuter sourceExact targetExact sourceBinders
                             targetBinders sourceCover targetCover sourceEnumeration
                             targetEnumeration outerMap outerSpec relationMap
-                            relationSpec model named relationValue values
+                            relationSpec model  relationValue values
                             parameterValues sourceOuterEnv targetOuterEnv
                             targetRelEnv outerAgrees sourceLocal sourceItems
                             targetItems fullItems sourceItemsResult
@@ -287,14 +283,14 @@ theorem advance_site_region_simulation_fixed
                               childSimulation direction child encloses)
                         exact (finishRegion_denote_iff
                           next.diagram.val targetOuter (layout.frameRegion site)
-                          targetItems model named targetOuterEnv targetRelEnv).mpr
+                          targetItems model  targetOuterEnv targetRelEnv).mpr
                             ⟨targetLocal, targetItemsDenote⟩
                   | backward =>
                       intro targetDenotes
                       obtain ⟨targetLocal, targetItemsDenote⟩ :=
                         (finishRegion_denote_iff
                           next.diagram.val targetOuter (layout.frameRegion site)
-                          targetItems model named targetOuterEnv targetRelEnv).mp
+                          targetItems model  targetOuterEnv targetRelEnv).mp
                             targetDenotes
                       let fallback : model.Carrier :=
                         Classical.choice model.nonempty
@@ -306,7 +302,7 @@ theorem advance_site_region_simulation_fixed
                           sourceExact targetExact sourceBinders targetBinders
                           sourceCover targetCover sourceEnumeration
                           targetEnumeration outerMap outerSpec relationMap
-                          relationSpec model named relationValue values
+                          relationSpec model  relationValue values
                           parameterValues sourceOuterEnv targetOuterEnv
                           targetRelEnv outerAgrees targetLocal fallback sourceItems
                           targetItems fullItems sourceItemsResult targetItemsResult
@@ -315,7 +311,7 @@ theorem advance_site_region_simulation_fixed
                           emptyRelationEq (fun direction child encloses =>
                             childSimulation direction child encloses)
                       have sourceItemsPrepared :=
-                        (denoteItemSeq_renameRelations model named relationMap
+                        (denoteItemSeq_renameRelations model  relationMap
                           (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
                           (RelEnv.pullback_agrees relationMap targetRelEnv)
                           (ConcreteElaboration.extendedEnvironment sourceOuter
@@ -324,7 +320,7 @@ theorem advance_site_region_simulation_fixed
                       have preparedRegion :=
                         (finishRegion_denote_iff coalesced.diagram.val
                         sourceOuter site (sourceItems.renameRelations relationMap)
-                        model named sourceOuterEnv targetRelEnv).mpr
+                        model  sourceOuterEnv targetRelEnv).mpr
                           ⟨sourceLocal, sourceItemsPrepared⟩
                       exact sourceFinishRename.symm ▸ preparedRegion
 
@@ -332,16 +328,15 @@ theorem advance_site_region_simulation_fixed
 inside the moving quantified bubble.  Direct children remain in that bubble,
 so each recursive call carries an explicit enclosure witness. -/
 theorem advance_enclosed_region_simulation_fixed
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -358,7 +353,6 @@ theorem advance_enclosed_region_simulation_fixed
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -366,15 +360,15 @@ theorem advance_enclosed_region_simulation_fixed
     (nonemptyRelationEq : ∀ hnonempty :
       payload.binderSpine.proxyCount ≠ 0,
       relationValue = terminalRelationOfParameterValues payload state site
-        arguments hnonempty model named parameterValues values)
+        arguments hnonempty model  parameterValues values)
     (emptyRelationEq : ∀ _hzero :
       payload.binderSpine.proxyCount = 0,
-      relationValue = payload.interpretedRelation model named parameterValues) :
+      relationValue = payload.interpretedRelation model  parameterValues) :
     ∀ direction sourceFuel targetFuel
       (region : Fin state.diagram.val.regionCount),
       state.diagram.val.Encloses state.bubble region →
       FixedAdvanceRegionSimulation comprehension attachments binders payload
-        state atom tail site arguments hadmissible model named relationValue
+        state atom tail site arguments hadmissible model  relationValue
         values parameterValues direction sourceFuel targetFuel region := by
   intro direction sourceFuel
   induction sourceFuel generalizing direction with
@@ -401,7 +395,7 @@ theorem advance_enclosed_region_simulation_fixed
           · subst region
             exact advance_site_region_simulation_fixed comprehension attachments
               binders payload state atom tail site arguments node_eq arguments_eq
-              pending_eq ownedNodup shape targets hadmissible model named
+              pending_eq ownedNodup shape targets hadmissible model
               relationValue values parameterValues nonemptyRelationEq
               emptyRelationEq direction sourceFuel targetFuel
               (fun childDirection child childEncloses =>
@@ -423,18 +417,18 @@ theorem advance_enclosed_region_simulation_fixed
             let targetContext := targetOuter.extend (layout.frameRegion region)
             let extendedMap := layout.frameExtendedWireMap region atSite
               sourceOuter targetOuter outerMap
-            change (ConcreteElaboration.compileOccurrencesWith? signature
+            change (ConcreteElaboration.compileOccurrencesWith?
                 coalesced.diagram.val
-                (compileSurvivorRegion? signature coalesced sourceFuel)
+                (compileSurvivorRegion?  coalesced sourceFuel)
                 sourceContext sourceBinders
                 ((ConcreteElaboration.localOccurrences coalesced.diagram.val
                   region).filter (dropOccurrenceSurvives coalesced))).bind
                     (fun items => some (ConcreteElaboration.finishRegion
                       coalesced.diagram.val sourceOuter region items)) =
               some sourceBody at sourceCompiled
-            change (ConcreteElaboration.compileOccurrencesWith? signature
+            change (ConcreteElaboration.compileOccurrencesWith?
                 next.diagram.val
-                (compileSurvivorRegion? signature next targetFuel)
+                (compileSurvivorRegion?  next targetFuel)
                 targetContext targetBinders
                 ((ConcreteElaboration.localOccurrences next.diagram.val
                   (layout.frameRegion region)).filter
@@ -443,9 +437,9 @@ theorem advance_enclosed_region_simulation_fixed
                         next.diagram.val targetOuter (layout.frameRegion region)
                           items)) = some targetBody at targetCompiled
             cases sourceItemsResult :
-                ConcreteElaboration.compileOccurrencesWith? signature
+                ConcreteElaboration.compileOccurrencesWith?
                   coalesced.diagram.val
-                  (compileSurvivorRegion? signature coalesced sourceFuel)
+                  (compileSurvivorRegion?  coalesced sourceFuel)
                   sourceContext sourceBinders
                   ((ConcreteElaboration.localOccurrences coalesced.diagram.val
                     region).filter (dropOccurrenceSurvives coalesced)) with
@@ -455,9 +449,9 @@ theorem advance_enclosed_region_simulation_fixed
                 have sourceBodyEq := Option.some.inj sourceCompiled
                 subst sourceBody
                 cases targetItemsResult :
-                    ConcreteElaboration.compileOccurrencesWith? signature
+                    ConcreteElaboration.compileOccurrencesWith?
                       next.diagram.val
-                      (compileSurvivorRegion? signature next targetFuel)
+                      (compileSurvivorRegion?  next targetFuel)
                       targetContext targetBinders
                       ((ConcreteElaboration.localOccurrences next.diagram.val
                         (layout.frameRegion region)).filter
@@ -482,7 +476,7 @@ theorem advance_enclosed_region_simulation_fixed
                     cases direction with
                     | forward =>
                         intro sourceDenotes
-                        have sourceDenotes' : denoteRegion model named
+                        have sourceDenotes' : denoteRegion model
                             sourceOuterEnv targetRelEnv
                             (ConcreteElaboration.finishRegion
                               coalesced.diagram.val sourceOuter region
@@ -491,10 +485,10 @@ theorem advance_enclosed_region_simulation_fixed
                         obtain ⟨sourceLocal, sourceItemsPrepared⟩ :=
                           (finishRegion_denote_iff coalesced.diagram.val
                             sourceOuter region
-                            (sourceItems.renameRelations relationMap) model named
+                            (sourceItems.renameRelations relationMap) model
                             sourceOuterEnv targetRelEnv).mp sourceDenotes'
                         have sourceItemsDenote :=
-                          (denoteItemSeq_renameRelations model named relationMap
+                          (denoteItemSeq_renameRelations model  relationMap
                             (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
                             (RelEnv.pullback_agrees relationMap targetRelEnv)
                             (ConcreteElaboration.extendedEnvironment sourceOuter
@@ -544,7 +538,7 @@ theorem advance_enclosed_region_simulation_fixed
                             targetContext sourceExact targetExact sourceBinders
                             targetBinders sourceCover targetCover sourceEnumeration
                             targetEnumeration extendedMap extendedSpec relationMap
-                            relationSpec model named relationValue values
+                            relationSpec model  relationValue values
                             parameterValues sourceEnv targetEnv targetRelEnv
                             environmentEq targetFixed targetProxies
                             targetExtendedParameters
@@ -554,13 +548,13 @@ theorem advance_enclosed_region_simulation_fixed
                             targetItemsResult sourceItemsDenote
                         exact (finishRegion_denote_iff next.diagram.val
                           targetOuter (layout.frameRegion region) targetItems
-                          model named targetOuterEnv targetRelEnv).mpr
+                          model  targetOuterEnv targetRelEnv).mpr
                             ⟨targetLocal, targetItemsDenote⟩
                     | backward =>
                         intro targetDenotes
                         obtain ⟨targetLocal, targetItemsDenote⟩ :=
                           (finishRegion_denote_iff next.diagram.val targetOuter
-                            (layout.frameRegion region) targetItems model named
+                            (layout.frameRegion region) targetItems model
                             targetOuterEnv targetRelEnv).mp targetDenotes
                         let sourceLocal := targetLocal ∘
                           layout.frameLocalWireEquiv region atSite
@@ -603,7 +597,7 @@ theorem advance_enclosed_region_simulation_fixed
                             targetContext sourceExact targetExact sourceBinders
                             targetBinders sourceCover targetCover sourceEnumeration
                             targetEnumeration extendedMap extendedSpec relationMap
-                            relationSpec model named relationValue values
+                            relationSpec model  relationValue values
                             parameterValues sourceEnv targetEnv targetRelEnv
                             environmentEq targetFixed targetProxies
                             targetExtendedParameters
@@ -612,14 +606,14 @@ theorem advance_enclosed_region_simulation_fixed
                             sourceItems targetItems sourceItemsResult
                             targetItemsResult targetItemsDenote
                         have sourceItemsPrepared :=
-                          (denoteItemSeq_renameRelations model named relationMap
+                          (denoteItemSeq_renameRelations model  relationMap
                             (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
                             (RelEnv.pullback_agrees relationMap targetRelEnv)
                             sourceEnv sourceItems).mpr sourceItemsDenote
                         have preparedRegion :=
                           (finishRegion_denote_iff coalesced.diagram.val
                             sourceOuter region
-                            (sourceItems.renameRelations relationMap) model named
+                            (sourceItems.renameRelations relationMap) model
                             sourceOuterEnv targetRelEnv).mpr
                               ⟨sourceLocal, sourceItemsPrepared⟩
                         exact sourceFinishRename.symm ▸ preparedRegion

@@ -7,7 +7,7 @@ open VisualProof.Data.Finite
 namespace OccurrenceProblem
 
 /-- Content-region indices which are direct children of the effective root. -/
-def rootChildren (problem : OccurrenceProblem signature) :
+def rootChildren (problem : OccurrenceProblem ) :
     List problem.ContentRegion :=
   filterFin fun region => decide
     ((problem.pattern.val.diagram.regions
@@ -15,7 +15,7 @@ def rootChildren (problem : OccurrenceProblem signature) :
       some problem.binderSpine.bodyContainer)
 
 /-- Content-node indices owned directly by the effective root. -/
-def rootNodes (problem : OccurrenceProblem signature) :
+def rootNodes (problem : OccurrenceProblem ) :
     List problem.ContentNode :=
   filterFin fun node => decide
     ((problem.pattern.val.diagram.nodes
@@ -23,14 +23,14 @@ def rootNodes (problem : OccurrenceProblem signature) :
       problem.binderSpine.bodyContainer)
 
 /-- Internal-wire indices scoped directly at the effective root. -/
-def rootInternalWires (problem : OccurrenceProblem signature) :
+def rootInternalWires (problem : OccurrenceProblem ) :
     List problem.InternalWire :=
   filterFin fun wire => decide
     ((problem.pattern.val.diagram.wires
       (InternalWire.origin problem wire)).scope =
       problem.binderSpine.bodyContainer)
 
-@[simp] theorem mem_rootChildren (problem : OccurrenceProblem signature)
+@[simp] theorem mem_rootChildren (problem : OccurrenceProblem )
     (region : problem.ContentRegion) :
     region ∈ problem.rootChildren ↔
       (problem.pattern.val.diagram.regions
@@ -38,7 +38,7 @@ def rootInternalWires (problem : OccurrenceProblem signature) :
         some problem.binderSpine.bodyContainer := by
   simp [rootChildren]
 
-@[simp] theorem mem_rootNodes (problem : OccurrenceProblem signature)
+@[simp] theorem mem_rootNodes (problem : OccurrenceProblem )
     (node : problem.ContentNode) :
     node ∈ problem.rootNodes ↔
       (problem.pattern.val.diagram.nodes
@@ -46,7 +46,7 @@ def rootInternalWires (problem : OccurrenceProblem signature) :
         problem.binderSpine.bodyContainer := by
   simp [rootNodes]
 
-@[simp] theorem mem_rootInternalWires (problem : OccurrenceProblem signature)
+@[simp] theorem mem_rootInternalWires (problem : OccurrenceProblem )
     (wire : problem.InternalWire) :
     wire ∈ problem.rootInternalWires ↔
       (problem.pattern.val.diagram.wires
@@ -55,7 +55,7 @@ def rootInternalWires (problem : OccurrenceProblem signature) :
   simp [rootInternalWires]
 
 theorem ContentRegion.body_encloses
-    (problem : OccurrenceProblem signature)
+    (problem : OccurrenceProblem )
     (region : problem.ContentRegion) :
     problem.pattern.val.diagram.Encloses problem.binderSpine.bodyContainer
       (region.origin problem) := by
@@ -66,7 +66,7 @@ theorem ContentRegion.body_encloses
 
 /-- Every direct child of the effective body is material rather than an
 administrative sheet or binder proxy. -/
-theorem directChildOfBody_material (problem : OccurrenceProblem signature)
+theorem directChildOfBody_material (problem : OccurrenceProblem )
     (region : problem.PatternRegion)
     (parent :
       (problem.pattern.val.diagram.regions region).parent? =
@@ -107,7 +107,7 @@ theorem directChildOfBody_material (problem : OccurrenceProblem signature)
     have := index.isLt
     omega
 
-theorem directChild_contentIndex (problem : OccurrenceProblem signature)
+theorem directChild_contentIndex (problem : OccurrenceProblem )
     (region : problem.PatternRegion)
     (parent :
       (problem.pattern.val.diagram.regions region).parent? =
@@ -129,9 +129,9 @@ end OccurrenceProblem
 
 namespace RawOccurrenceCertificate
 
-variable {problem : OccurrenceProblem signature}
+variable {problem : OccurrenceProblem }
 
-/-- Host child roots named by the occurrence, with defensive duplicate erasure. -/
+/-- Host child roots  by the occurrence, with defensive duplicate erasure. -/
 def selectedChildRoots (raw : RawOccurrenceCertificate problem) :
     List problem.HostRegion :=
   (problem.rootChildren.map raw.regionMap).eraseDups
@@ -194,7 +194,7 @@ end RawOccurrenceCertificate
 
 namespace OpenOccurrenceEmbedding
 
-variable {problem : OccurrenceProblem signature}
+variable {problem : OccurrenceProblem }
 
 theorem rootSubset (embedding : OpenOccurrenceEmbedding problem) :
     embedding.raw.RootSubset :=

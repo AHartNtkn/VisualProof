@@ -8,17 +8,14 @@ open Diagram
 
 /-- Every successful branch of the sole checked dispatcher preserves
 denotation at every transported ordered boundary.  The proof is exhaustive:
-each constructor is discharged by its named rule-family obligation. -/
+each constructor is discharged by its  rule-family obligation. -/
 theorem applyStep_sound
-    {context : ProofContext signature} {orientation : Orientation}
-    {input : Diagram.CheckedDiagram signature} {step : Step context input}
+    {context : ProofContext } {orientation : Orientation}
+    {input : Diagram.CheckedDiagram } {step : Step context input}
     {receipt : StepReceipt input}
     (happly : applyStep context orientation input step = .ok receipt) :
     SuccessfulReceiptSound context orientation input step receipt := by
   cases step with
-  | relationSpawn region definition arity =>
-      exact applyRelationSpawn_sound context orientation input region definition
-        arity receipt happly
   | boundRelationSpawn region binder arity =>
       exact applyBoundRelationSpawn_sound context orientation input region binder
         arity receipt happly
@@ -56,11 +53,4 @@ theorem applyStep_sound
         receipt happly
   | vacuousElim region =>
       exact applyVacuousElim_sound context orientation input region receipt happly
-  | relUnfold node definition payload body_eq =>
-      exact applyRelUnfold_sound context orientation input node definition
-        payload body_eq receipt happly
-  | relFold selection definition args payload body_eq =>
-      exact applyRelFold_sound context orientation input selection definition
-        args payload body_eq receipt happly
-
 end VisualProof.Rule

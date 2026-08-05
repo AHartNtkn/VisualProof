@@ -46,12 +46,12 @@ def vacuousIntroRawOpen
   rfl
 
 theorem vacuousIntroRawOpen_wellFormed
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (selection : CheckedSelection source.val.diagram) (arity : Nat)
     (targetWellFormed :
       (vacuousIntroRaw source.val.diagram selection arity).WellFormed
-        signature) :
-    (vacuousIntroRawOpen source.val selection arity).WellFormed signature := by
+        ) :
+    (vacuousIntroRawOpen source.val selection arity).WellFormed  := by
   refine {
     diagram_well_formed := targetWellFormed
     boundary_is_root_scoped := ?_
@@ -66,17 +66,16 @@ theorem vacuousIntroRawOpen_wellFormed
     sourceScoped
 
 theorem rootTransport_of_itemSimulation
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (selection : CheckedSelection source.val.diagram) (arity : Nat)
     (targetWellFormed :
-      (vacuousIntroRaw source.val.diagram selection arity).WellFormed signature)
+      (vacuousIntroRaw source.val.diagram selection arity).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
-    (sourceItems : ItemSeq signature source.val.rootWires.length [])
-    (targetItems : ItemSeq signature
+    (sourceItems : ItemSeq  source.val.rootWires.length [])
+    (targetItems : ItemSeq
       (vacuousIntroRawOpen source.val selection arity).rootWires.length [])
-    (itemSimulation : ConcreteElaboration.ItemSeqSimulation model named
+    (itemSimulation : ConcreteElaboration.ItemSeqSimulation model
       direction
       (LiftedContextWitness.indexRelation
         (⟨by
@@ -90,8 +89,8 @@ theorem rootTransport_of_itemSimulation
       (vacuousIntroRawOpen source.val selection arity).exposedWires
       (vacuousIntroRawOpen source.val selection arity).hiddenWires
       (ConcreteElaboration.ContextIndexRelation.forwardMap id)
-      model named sourceItems targetItems := by
-  let target : CheckedOpenDiagram signature :=
+      model  sourceItems targetItems := by
+  let target : CheckedOpenDiagram  :=
     ⟨vacuousIntroRawOpen source.val selection arity,
       vacuousIntroRawOpen_wellFormed source selection arity targetWellFormed⟩
   have exposedEq : target.val.exposedWires = source.val.exposedWires :=
@@ -106,7 +105,7 @@ theorem rootTransport_of_itemSimulation
     direction source.val.exposedWires source.val.hiddenWires
     target.val.exposedWires target.val.hiddenWires
     (ConcreteElaboration.ContextIndexRelation.forwardMap id)
-    combinedContext.indexRelation model named sourceItems targetItems
+    combinedContext.indexRelation model  sourceItems targetItems
   · intro sourceOuter targetOuter outerAgrees
     have outerEq : sourceOuter = targetOuter := by
       simpa only [
@@ -157,26 +156,25 @@ theorem rootTransport_of_itemSimulation
   · simpa [combinedContext, target] using itemSimulation
 
 noncomputable def vacuousIntroRootContext
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (selection : CheckedSelection source.val.diagram) (arity : Nat)
     (targetWellFormed :
-      (vacuousIntroRaw source.val.diagram selection arity).WellFormed signature)
+      (vacuousIntroRaw source.val.diagram selection arity).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection) :
-    let input : CheckedDiagram signature :=
+    let input : CheckedDiagram  :=
       ⟨source.val.diagram, source.property.diagram_well_formed⟩
     let simulation := vacuousIntroSimulation input selection arity
-      targetWellFormed model named
+      targetWellFormed model
     ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
       simulation direction source.val.exposedWires source.val.hiddenWires
       (vacuousIntroRawOpen source.val selection arity).exposedWires
       (vacuousIntroRawOpen source.val selection arity).hiddenWires := by
-  let input : CheckedDiagram signature :=
+  let input : CheckedDiagram  :=
     ⟨source.val.diagram, source.property.diagram_well_formed⟩
   let simulation := vacuousIntroSimulation input selection arity
-    targetWellFormed model named
-  let target : CheckedOpenDiagram signature :=
+    targetWellFormed model
+  let target : CheckedOpenDiagram  :=
     ⟨vacuousIntroRawOpen source.val selection arity,
       vacuousIntroRawOpen_wellFormed source selection arity targetWellFormed⟩
   change ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
@@ -206,7 +204,7 @@ noncomputable def vacuousIntroRootContext
   · intro regular allowed sourceItems targetItems sourceCompiled targetCompiled
       itemSemantics
     exact rootTransport_of_itemSimulation source selection arity
-      targetWellFormed model named direction
+      targetWellFormed model  direction
       (sourceItems.renameRelations
         (simulation.relationMap simulation.binders_empty))
       targetItems itemSemantics
@@ -226,7 +224,7 @@ noncomputable def vacuousIntroRootContext
           target
     change input.val.root = selection.val.anchor at focused
     have itemSimulation := focusedItems input selection arity targetWellFormed
-      model named direction input.val.regionCount
+      model  direction input.val.regionCount
       (vacuousIntroRaw input.val selection arity).regionCount
       source.val.rootWires target.val.rootWires combinedContext
       ConcreteElaboration.BinderContext.empty
@@ -252,9 +250,9 @@ noncomputable def vacuousIntroRootContext
       recurseAt sourceItems targetItems
       (by simpa only [← focused] using sourceCompiled)
       (by
-        change ConcreteElaboration.compileOccurrencesWith? signature
+        change ConcreteElaboration.compileOccurrencesWith?
           (vacuousIntroRaw input.val selection arity)
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (vacuousIntroRaw input.val selection arity)
             (vacuousIntroRaw input.val selection arity).regionCount)
           target.val.rootWires ConcreteElaboration.BinderContext.empty
@@ -274,8 +272,8 @@ noncomputable def vacuousIntroRootContext
     rw [relationMapEq, Region.renameRelations_id]
     apply ConcreteElaboration.finishRoot_denote direction
       source.val.exposedWires source.val.hiddenWires
-      target.val.exposedWires target.val.hiddenWires outerRelation model named
-    change ConcreteElaboration.ItemSeqSimulation model named direction
+      target.val.exposedWires target.val.hiddenWires outerRelation model
+    change ConcreteElaboration.ItemSeqSimulation model  direction
       combinedContext.indexRelation
       (sourceItems.renameRelations simulation.binders_empty.relationMap)
       targetItems at itemSimulation
@@ -285,30 +283,29 @@ noncomputable def vacuousIntroRootContext
             relation) := relationMapEq
     rw [emptyMapEq, ItemSeq.renameRelations_id] at itemSimulation
     exact rootTransport_of_itemSimulation source selection arity
-      targetWellFormed model named direction sourceItems targetItems
+      targetWellFormed model  direction sourceItems targetItems
       itemSimulation
 
 theorem vacuousIntroBoundaryWitness
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (selection : CheckedSelection source.val.diagram) (arity : Nat)
     (targetWellFormed :
-      (vacuousIntroRaw source.val.diagram selection arity).WellFormed signature)
+      (vacuousIntroRaw source.val.diagram selection arity).WellFormed )
     (direction : ConcreteElaboration.SimulationDirection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin source.val.boundary.length → model.Carrier) :
-    let input : CheckedDiagram signature :=
+    let input : CheckedDiagram  :=
       ⟨source.val.diagram, source.property.diagram_well_formed⟩
     let simulation := vacuousIntroSimulation input selection arity
-      targetWellFormed model named
-    let target : CheckedOpenDiagram signature :=
+      targetWellFormed model
+    let target : CheckedOpenDiagram  :=
       ⟨vacuousIntroRawOpen source.val selection arity,
         vacuousIntroRawOpen_wellFormed source selection arity targetWellFormed⟩
     ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       direction source.elaborate target.elaborate
       (vacuousIntroRootContext source selection arity targetWellFormed model
-        named direction).outer model named args args := by
-  let target : CheckedOpenDiagram signature :=
+         direction).outer model  args args := by
+  let target : CheckedOpenDiagram  :=
     ⟨vacuousIntroRawOpen source.val selection arity,
       vacuousIntroRawOpen_wellFormed source selection arity targetWellFormed⟩
   dsimp only

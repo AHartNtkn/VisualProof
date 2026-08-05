@@ -12,10 +12,9 @@ namespace AbstractionRawTrace
 /-- The original owner of a fresh abstraction-atom argument is exactly the
 executor-recorded ordered occurrence argument at that position. -/
 theorem targetAtom_endpoint_origin
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
@@ -82,10 +81,9 @@ theorem targetAtom_endpoint_origin
 /-- Resolved compiler arguments for a fresh abstraction atom retain the exact
 ordered source wire vector, including repeated aliases. -/
 theorem resolvedTargetAtom_origin
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
@@ -116,10 +114,9 @@ theorem resolvedTargetAtom_origin
 /-- The authoritative target compiler emits the fresh head relation at the
 same source-wire valuation certified for the selected occurrence. -/
 theorem compiledTargetAtom_denote_iff_relation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
@@ -127,7 +124,6 @@ theorem compiledTargetAtom_denote_iff_relation
       occurrences)
     (occurrenceIndex : Fin occurrences.length)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext trace.diagram)
     (contextWitness : ContextWitness trace sourceContext targetContext)
@@ -139,18 +135,18 @@ theorem compiledTargetAtom_denote_iff_relation
       sourceEnvironment targetEnvironment)
     (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
     (targetRelationEnvironment : RelEnv model.Carrier targetRels)
-    (item : Item signature targetContext.length
+    (item : Item  targetContext.length
       (comprehension.val.boundary.length :: targetRels))
-    (compiled : ConcreteElaboration.compileNode? signature trace.diagram
+    (compiled : ConcreteElaboration.compileNode?  trace.diagram
       targetContext
       (targetBinders.push trace.bubble comprehension.val.boundary.length)
       (trace.targetAtom occurrenceIndex) = some item) :
     denoteItem (relCtx := comprehension.val.boundary.length :: targetRels)
-        model named targetEnvironment
+        model  targetEnvironment
         ((fun arguments : Fin comprehension.val.boundary.length → model.Carrier =>
-          comprehension.denote model named arguments),
+          comprehension.denote model  arguments),
           targetRelationEnvironment) item ↔
-      comprehension.denote model named
+      comprehension.denote model
         (fun index : Fin comprehension.val.boundary.length =>
           touchingEnvironment input (occurrences.get occurrenceIndex)
             sourceContext sourceExact sourceEnvironment
@@ -175,12 +171,12 @@ theorem compiledTargetAtom_denote_iff_relation
   have itemEq : item = .atom ⟨0, rfl⟩ resolved :=
     (Option.some.inj compiled).symm
   subst item
-  change comprehension.denote model named (targetEnvironment ∘ resolved) ↔
-    comprehension.denote model named _
+  change comprehension.denote model  (targetEnvironment ∘ resolved) ↔
+    comprehension.denote model  _
   apply iff_of_eq
   apply congrArg
     (fun arguments : Fin comprehension.val.boundary.length → model.Carrier =>
-      comprehension.denote model named arguments)
+      comprehension.denote model  arguments)
   funext index
   have origin := trace.resolvedTargetAtom_origin occurrenceIndex witness
     targetContext resolved (by simpa only [targetAtom] using resolvedEq) index

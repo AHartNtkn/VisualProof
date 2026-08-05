@@ -9,36 +9,35 @@ open Diagram
 
 /-- Reverse semantic obligation when the spawn site is the open root sheet. -/
 def SpawnRootSiteReflection
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (node : CNode source.val.diagram.regionCount)
     (scope : Fin source.val.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort) : Prop :=
-  ∀ (sourceBody : Region signature source.val.exposedWires.length [])
-    (targetBody : Region signature
+  ∀ (sourceBody : Region  source.val.exposedWires.length [])
+    (targetBody : Region
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length
       []),
-    ConcreteElaboration.compileRoot? signature source.val.diagram
+    ConcreteElaboration.compileRoot?  source.val.diagram
         source.val.exposedWires source.val.hiddenWires = some sourceBody →
-      ConcreteElaboration.compileRoot? signature
+      ConcreteElaboration.compileRoot?
           (spawnNodeRaw source.val.diagram node scope portCount port)
           (spawnNodeRawOpen source.val node scope portCount port).exposedWires
           (spawnNodeRawOpen source.val node scope portCount port).hiddenWires =
             some targetBody →
       ∀ (model : Model)
-        (named : NamedEnv model.Carrier signature)
         (outerEnv : Fin
           (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length
             → model.Carrier),
-        denoteRegion (relCtx := []) model named
+        denoteRegion (relCtx := []) model
             (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
               portCount port) PUnit.unit sourceBody →
-          denoteRegion (relCtx := []) model named outerEnv PUnit.unit targetBody
+          denoteRegion (relCtx := []) model  outerEnv PUnit.unit targetBody
 
 /-- A root-site callback is needed only when the spawn site is the root.
 Keeping that condition opaque lets descendant-route induction avoid carrying
 an irrelevant impossible root obligation. -/
 def SpawnRootSiteReflectionAtRoot
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (node : CNode source.val.diagram.regionCount)
     (scope : Fin source.val.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort) : Prop :=
@@ -47,70 +46,66 @@ def SpawnRootSiteReflectionAtRoot
 
 /-- Shared root compiler split for projection and optional reflection. -/
 private theorem spawnNodeRaw_compileRoot_route_kernel
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (node : CNode source.val.diagram.regionCount)
     (scope : Fin source.val.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
     (hnode : node.region = scope)
     (htarget : (spawnNodeRaw source.val.diagram node scope portCount port).WellFormed
-      signature)
+      )
     {path : List Nat}
     (route : Diagram.Splice.RegionRoute source.val.diagram
       source.val.diagram.root scope path)
     {depth : Nat} (hdepth : route.HasCutDepth depth)
-    (sourceBody : Region signature source.val.exposedWires.length [])
-    (targetBody : Region signature
+    (sourceBody : Region  source.val.exposedWires.length [])
+    (targetBody : Region
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length
       [])
-    (hsourceBody : ConcreteElaboration.compileRoot? signature
+    (hsourceBody : ConcreteElaboration.compileRoot?
       source.val.diagram source.val.exposedWires source.val.hiddenWires =
         some sourceBody)
-    (htargetBody : ConcreteElaboration.compileRoot? signature
+    (htargetBody : ConcreteElaboration.compileRoot?
       (spawnNodeRaw source.val.diagram node scope portCount port)
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires
       (spawnNodeRawOpen source.val node scope portCount port).hiddenWires =
         some targetBody) :
     ((∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
           model.Carrier),
       depth % 2 = 0 →
-      denoteRegion (relCtx := []) model named outerEnv PUnit.unit targetBody →
-        denoteRegion (relCtx := []) model named
+      denoteRegion (relCtx := []) model  outerEnv PUnit.unit targetBody →
+        denoteRegion (relCtx := []) model
           (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
             portCount port) PUnit.unit sourceBody) ∧
     (∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
           model.Carrier),
       depth % 2 = 1 →
-      denoteRegion (relCtx := []) model named
+      denoteRegion (relCtx := []) model
           (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
             portCount port) PUnit.unit sourceBody →
-        denoteRegion (relCtx := []) model named outerEnv PUnit.unit targetBody)) ∧
+        denoteRegion (relCtx := []) model  outerEnv PUnit.unit targetBody)) ∧
     ((SpawnRootSiteReflectionAtRoot source node scope portCount port ∧
-        SpawnRegionSiteReflection (signature := signature) source.val.diagram node
+        SpawnRegionSiteReflection  source.val.diagram node
           scope portCount port) →
       ((∀ (model : Model)
-        (named : NamedEnv model.Carrier signature)
         (outerEnv : Fin
           (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
             model.Carrier),
         depth % 2 = 0 →
-        denoteRegion (relCtx := []) model named
+        denoteRegion (relCtx := []) model
             (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
               portCount port) PUnit.unit sourceBody →
-          denoteRegion (relCtx := []) model named outerEnv PUnit.unit targetBody) ∧
+          denoteRegion (relCtx := []) model  outerEnv PUnit.unit targetBody) ∧
       (∀ (model : Model)
-        (named : NamedEnv model.Carrier signature)
         (outerEnv : Fin
           (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
             model.Carrier),
         depth % 2 = 1 →
-        denoteRegion (relCtx := []) model named outerEnv PUnit.unit targetBody →
-          denoteRegion (relCtx := []) model named
+        denoteRegion (relCtx := []) model  outerEnv PUnit.unit targetBody →
+          denoteRegion (relCtx := []) model
             (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
               portCount port) PUnit.unit sourceBody))) := by
   let input := source.val.diagram
@@ -121,18 +116,18 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
       cases hdepth
       constructor
       · constructor
-        · intro model named outerEnv _ hdenotes
+        · intro model  outerEnv _ hdenotes
           exact spawnNodeRaw_compileRoot_site_projects source node spawnScope
             portCount port hnode rfl htarget sourceBody targetBody hsourceBody
-            htargetBody model named outerEnv hdenotes
-        · intro _ _ _ hodd
+            htargetBody model  outerEnv hdenotes
+        · intro _ _ hodd
           simp at hodd
       · rintro ⟨hrootReflect, _⟩
         constructor
-        · intro model named outerEnv _ hdenotes
+        · intro model  outerEnv _ hdenotes
           exact hrootReflect rfl sourceBody targetBody hsourceBody htargetBody model
-            named outerEnv hdenotes
-        · intro _ _ _ hodd
+             outerEnv hdenotes
+        · intro _ _ hodd
           simp at hodd
   | @step _ child _ rest hparent position hposition tail =>
       have hne : input.root ≠ spawnScope := by
@@ -144,31 +139,31 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
         exact (ConcreteElaboration.checked_direct_child_not_encloses_parent
           source.property.diagram_well_formed hparent)
           htailEncloses
-      change ConcreteElaboration.compileRoot? signature input
+      change ConcreteElaboration.compileRoot?  input
           source.val.exposedWires source.val.hiddenWires = some sourceBody
         at hsourceBody
-      change ConcreteElaboration.compileRoot? signature targetOpen.diagram
+      change ConcreteElaboration.compileRoot?  targetOpen.diagram
           targetOpen.exposedWires targetOpen.hiddenWires = some targetBody
         at htargetBody
       simp only [ConcreteElaboration.compileRoot?] at hsourceBody htargetBody
-      change (ConcreteElaboration.compileOccurrencesWith? signature input
-        (ConcreteElaboration.compileRegion? signature input input.regionCount)
+      change (ConcreteElaboration.compileOccurrencesWith?  input
+        (ConcreteElaboration.compileRegion?  input input.regionCount)
         source.val.rootWires ConcreteElaboration.BinderContext.empty
         (ConcreteElaboration.localOccurrences input input.root)).bind
           (fun items => some (ConcreteElaboration.finishRoot
             source.val.exposedWires source.val.hiddenWires items)) =
         some sourceBody at hsourceBody
-      change (ConcreteElaboration.compileOccurrencesWith? signature
+      change (ConcreteElaboration.compileOccurrencesWith?
         targetOpen.diagram
-        (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+        (ConcreteElaboration.compileRegion?  targetOpen.diagram
           input.regionCount) targetOpen.rootWires
         ConcreteElaboration.BinderContext.empty
         (ConcreteElaboration.localOccurrences targetOpen.diagram input.root)).bind
           (fun items => some (ConcreteElaboration.finishRoot
             targetOpen.exposedWires targetOpen.hiddenWires items)) =
         some targetBody at htargetBody
-      cases hsourceItems : ConcreteElaboration.compileOccurrencesWith? signature
-          input (ConcreteElaboration.compileRegion? signature input
+      cases hsourceItems : ConcreteElaboration.compileOccurrencesWith?
+          input (ConcreteElaboration.compileRegion?  input
             input.regionCount) source.val.rootWires
           ConcreteElaboration.BinderContext.empty
           (ConcreteElaboration.localOccurrences input input.root) with
@@ -177,9 +172,9 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
         simp only [hsourceItems, Option.bind_some, Option.some.injEq]
           at hsourceBody
         cases hsourceBody
-        cases htargetItems : ConcreteElaboration.compileOccurrencesWith? signature
+        cases htargetItems : ConcreteElaboration.compileOccurrencesWith?
             targetOpen.diagram
-            (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+            (ConcreteElaboration.compileRegion?  targetOpen.diagram
               input.regionCount) targetOpen.rootWires
             ConcreteElaboration.BinderContext.empty
             (ConcreteElaboration.localOccurrences targetOpen.diagram input.root) with
@@ -204,14 +199,14 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
           obtain ⟨sourceBefore, sourceFocus, sourceAfter, hsourceBefore,
               hsourceFocus, hsourceAfter, hsourceItemsEq⟩ :=
             compileOccurrencesWith?_frame_split
-              (ConcreteElaboration.compileRegion? signature input
+              (ConcreteElaboration.compileRegion?  input
                 input.regionCount) source.val.rootWires
               ConcreteElaboration.BinderContext.empty before after (.child child)
               sourceItems hsourceFramed
           have htargetFramed :
-              ConcreteElaboration.compileOccurrencesWith? signature
+              ConcreteElaboration.compileOccurrencesWith?
                 targetOpen.diagram
-                (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+                (ConcreteElaboration.compileRegion?  targetOpen.diagram
                   input.regionCount) targetOpen.rootWires
                 ConcreteElaboration.BinderContext.empty
                 (before.map (spawnNodeRaw_oldOccurrence input) ++
@@ -223,7 +218,7 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
           obtain ⟨targetBefore, targetFocus, targetAfter, htargetBefore,
               htargetFocus, htargetAfter, htargetItemsEq⟩ :=
             compileOccurrencesWith?_frame_split
-              (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+              (ConcreteElaboration.compileRegion?  targetOpen.diagram
                 input.regionCount) targetOpen.rootWires
               ConcreteElaboration.BinderContext.empty
               (before.map (spawnNodeRaw_oldOccurrence input))
@@ -251,9 +246,9 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
                 intro occurrence hmem
                 rw [hlocal]
                 simp [hmem]) hbeforeAway
-            change ConcreteElaboration.compileOccurrencesWith? signature
+            change ConcreteElaboration.compileOccurrencesWith?
                 targetOpen.diagram
-                (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+                (ConcreteElaboration.compileRegion?  targetOpen.diagram
                   input.regionCount) targetOpen.rootWires
                 ConcreteElaboration.BinderContext.empty
                 (before.map (spawnNodeRaw_oldOccurrence input)) = _
@@ -269,9 +264,9 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
                 intro occurrence hmem
                 rw [hlocal]
                 simp [hmem]) hafterAway
-            change ConcreteElaboration.compileOccurrencesWith? signature
+            change ConcreteElaboration.compileOccurrencesWith?
                 targetOpen.diagram
-                (ConcreteElaboration.compileRegion? signature targetOpen.diagram
+                (ConcreteElaboration.compileRegion?  targetOpen.diagram
                   input.regionCount) targetOpen.rootWires
                 ConcreteElaboration.BinderContext.empty
                 (after.map (spawnNodeRaw_oldOccurrence input)) = _
@@ -307,20 +302,20 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
               rw [show targetOpen.diagram.regions child = input.regions child
                 by rfl, childRegion] at htargetFocus
               simp only at htargetFocus
-              change (ConcreteElaboration.compileRegion? signature
+              change (ConcreteElaboration.compileRegion?
                 targetOpen.diagram input.regionCount child targetOpen.rootWires
                 ConcreteElaboration.BinderContext.empty).bind
                   (fun body => some (Item.cut body)) = some targetFocus
                 at htargetFocus
               rw [hcount] at hsourceFocus htargetFocus
-              cases hsourceChild : ConcreteElaboration.compileRegion? signature
+              cases hsourceChild : ConcreteElaboration.compileRegion?
                   input (childFuel + 1) child source.val.rootWires
                   ConcreteElaboration.BinderContext.empty with
               | none => simp [hsourceChild] at hsourceFocus
               | some sourceChild =>
                 simp [hsourceChild] at hsourceFocus
                 subst sourceFocus
-                cases htargetChild : ConcreteElaboration.compileRegion? signature
+                cases htargetChild : ConcreteElaboration.compileRegion?
                     targetOpen.diagram (childFuel + 1) child targetOpen.rootWires
                     ConcreteElaboration.BinderContext.empty with
                 | none => simp [htargetChild] at htargetFocus
@@ -338,12 +333,12 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
                     sourceChild targetChild hsourceChild htargetChild
                   constructor
                   · constructor
-                    · intro model named outerEnv heven hdenotes
+                    · intro model  outerEnv heven hdenotes
                       have htailOdd : tailDepth % 2 = 1 := by omega
                       apply spawnNodeRaw_finishRoot_away_projects source.val node
                         spawnScope portCount port hne sourceItems targetItems _
-                        model named outerEnv hdenotes
-                      intro currentModel currentNamed rawEnv hitems
+                        model  outerEnv hdenotes
+                      intro currentModel currentNamed hitems
                       rw [htargetItemsEq, hbeforeEq, hafterEq,
                         denoteItemSeq_frame] at hitems
                       rw [hsourceItemsEq, ItemSeq.renameWires_append,
@@ -352,16 +347,16 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
                       refine ⟨hb, ?_, ha⟩
                       intro hs
                       have hs' := (denoteRegion_renameWires (relCtx := [])
-                        currentModel currentNamed embedding.index rawEnv
+                        currentModel embedding.index currentNamed
                         PUnit.unit sourceChild).1 hs
-                      exact hf (hchild.2 currentModel currentNamed rawEnv
+                      exact hf (hchild.2 currentModel currentNamed
                         PUnit.unit htailOdd hs')
-                    · intro model named outerEnv hodd hdenotes
+                    · intro model  outerEnv hodd hdenotes
                       have htailEven : tailDepth % 2 = 0 := by omega
                       apply spawnNodeRaw_finishRoot_away_reflects source.val node
                         spawnScope portCount port hne sourceItems targetItems _
-                        model named outerEnv hdenotes
-                      intro currentModel currentNamed rawEnv hitems
+                        model  outerEnv hdenotes
+                      intro currentModel currentNamed hitems
                       rw [hsourceItemsEq, ItemSeq.renameWires_append,
                         ItemSeq.renameWires, denoteItemSeq_frame] at hitems
                       rw [htargetItemsEq, hbeforeEq, hafterEq,
@@ -369,10 +364,10 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
                       rcases hitems with ⟨hb, hf, ha⟩
                       refine ⟨hb, ?_, ha⟩
                       intro ht
-                      have hs := hchild.1 currentModel currentNamed rawEnv
+                      have hs := hchild.1 currentModel currentNamed
                         PUnit.unit htailEven ht
                       exact hf ((denoteRegion_renameWires (relCtx := [])
-                        currentModel currentNamed embedding.index rawEnv
+                        currentModel embedding.index currentNamed
                         PUnit.unit sourceChild).2 hs)
                   · rintro ⟨_, hregionReflect⟩
                     have hchildReverse :=
@@ -387,12 +382,12 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
                         (htargetExact.extend_child htarget hparent)
                         sourceChild targetChild hsourceChild htargetChild
                     constructor
-                    · intro model named outerEnv heven hdenotes
+                    · intro model  outerEnv heven hdenotes
                       have htailOdd : tailDepth % 2 = 1 := by omega
                       apply spawnNodeRaw_finishRoot_away_reflects source.val node
                         spawnScope portCount port hne sourceItems targetItems _
-                        model named outerEnv hdenotes
-                      intro currentModel currentNamed rawEnv hitems
+                        model  outerEnv hdenotes
+                      intro currentModel currentNamed hitems
                       rw [hsourceItemsEq, ItemSeq.renameWires_append,
                         ItemSeq.renameWires, denoteItemSeq_frame] at hitems
                       rw [htargetItemsEq, hbeforeEq, hafterEq,
@@ -400,17 +395,17 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
                       rcases hitems with ⟨hb, hf, ha⟩
                       refine ⟨hb, ?_, ha⟩
                       intro ht
-                      have hs := hchildReverse.2 currentModel currentNamed rawEnv
+                      have hs := hchildReverse.2 currentModel currentNamed
                         PUnit.unit htailOdd ht
                       exact hf ((denoteRegion_renameWires (relCtx := [])
-                        currentModel currentNamed embedding.index rawEnv
+                        currentModel embedding.index currentNamed
                         PUnit.unit sourceChild).2 hs)
-                    · intro model named outerEnv hodd hdenotes
+                    · intro model  outerEnv hodd hdenotes
                       have htailEven : tailDepth % 2 = 0 := by omega
                       apply spawnNodeRaw_finishRoot_away_projects source.val node
                         spawnScope portCount port hne sourceItems targetItems _
-                        model named outerEnv hdenotes
-                      intro currentModel currentNamed rawEnv hitems
+                        model  outerEnv hdenotes
+                      intro currentModel currentNamed hitems
                       rw [htargetItemsEq, hbeforeEq, hafterEq,
                         denoteItemSeq_frame] at hitems
                       rw [hsourceItemsEq, ItemSeq.renameWires_append,
@@ -419,9 +414,9 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
                       refine ⟨hb, ?_, ha⟩
                       intro hs
                       have hs' := (denoteRegion_renameWires (relCtx := [])
-                        currentModel currentNamed embedding.index rawEnv
+                        currentModel embedding.index currentNamed
                         PUnit.unit sourceChild).1 hs
-                      exact hf (hchildReverse.1 currentModel currentNamed rawEnv
+                      exact hf (hchildReverse.1 currentModel currentNamed
                         PUnit.unit htailEven hs')
             | bubble parent arity =>
               have hparentEq : parent = input.root := by
@@ -443,20 +438,20 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
               rw [show targetOpen.diagram.regions child = input.regions child
                 by rfl, childRegion] at htargetFocus
               simp only at htargetFocus
-              change (ConcreteElaboration.compileRegion? signature
+              change (ConcreteElaboration.compileRegion?
                 targetOpen.diagram input.regionCount child targetOpen.rootWires
                 (ConcreteElaboration.BinderContext.empty.push child _)).bind
                   (fun body => some (Item.bubble _ body)) = some targetFocus
                 at htargetFocus
               rw [hcount] at hsourceFocus htargetFocus
-              cases hsourceChild : ConcreteElaboration.compileRegion? signature
+              cases hsourceChild : ConcreteElaboration.compileRegion?
                   input (childFuel + 1) child source.val.rootWires
                   (ConcreteElaboration.BinderContext.empty.push child arity) with
               | none => simp [hsourceChild] at hsourceFocus
               | some sourceChild =>
                 simp [hsourceChild] at hsourceFocus
                 subst sourceFocus
-                cases htargetChild : ConcreteElaboration.compileRegion? signature
+                cases htargetChild : ConcreteElaboration.compileRegion?
                     targetOpen.diagram (childFuel + 1) child targetOpen.rootWires
                     (ConcreteElaboration.BinderContext.empty.push child arity) with
                 | none => simp [htargetChild] at htargetFocus
@@ -474,27 +469,27 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
                     sourceChild targetChild hsourceChild htargetChild
                   constructor
                   · constructor
-                    · intro model named outerEnv heven hdenotes
+                    · intro model  outerEnv heven hdenotes
                       apply spawnNodeRaw_finishRoot_away_projects source.val node
                         spawnScope portCount port hne sourceItems targetItems _
-                        model named outerEnv hdenotes
-                      intro currentModel currentNamed rawEnv hitems
+                        model  outerEnv hdenotes
+                      intro currentModel currentNamed hitems
                       rw [htargetItemsEq, hbeforeEq, hafterEq,
                         denoteItemSeq_frame] at hitems
                       rw [hsourceItemsEq, ItemSeq.renameWires_append,
                         ItemSeq.renameWires, denoteItemSeq_frame]
                       rcases hitems with ⟨hb, ⟨relation, hf⟩, ha⟩
                       refine ⟨hb, ⟨relation, ?_⟩, ha⟩
-                      have hs := hchild.1 currentModel currentNamed rawEnv
+                      have hs := hchild.1 currentModel currentNamed
                         (relation, PUnit.unit) (by omega) hf
                       exact (denoteRegion_renameWires (relCtx := [arity])
-                        currentModel currentNamed embedding.index rawEnv
+                        currentModel embedding.index currentNamed
                         (relation, PUnit.unit) sourceChild).2 hs
-                    · intro model named outerEnv hodd hdenotes
+                    · intro model  outerEnv hodd hdenotes
                       apply spawnNodeRaw_finishRoot_away_reflects source.val node
                         spawnScope portCount port hne sourceItems targetItems _
-                        model named outerEnv hdenotes
-                      intro currentModel currentNamed rawEnv hitems
+                        model  outerEnv hdenotes
+                      intro currentModel currentNamed hitems
                       rw [hsourceItemsEq, ItemSeq.renameWires_append,
                         ItemSeq.renameWires, denoteItemSeq_frame] at hitems
                       rw [htargetItemsEq, hbeforeEq, hafterEq,
@@ -502,9 +497,9 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
                       rcases hitems with ⟨hb, ⟨relation, hf⟩, ha⟩
                       refine ⟨hb, ⟨relation, ?_⟩, ha⟩
                       have hs := (denoteRegion_renameWires (relCtx := [arity])
-                        currentModel currentNamed embedding.index rawEnv
+                        currentModel embedding.index currentNamed
                         (relation, PUnit.unit) sourceChild).1 hf
-                      exact hchild.2 currentModel currentNamed rawEnv
+                      exact hchild.2 currentModel currentNamed
                         (relation, PUnit.unit) (by omega) hs
                   · rintro ⟨_, hregionReflect⟩
                     have hchildReverse :=
@@ -519,11 +514,11 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
                         (htargetExact.extend_child htarget hparent)
                         sourceChild targetChild hsourceChild htargetChild
                     constructor
-                    · intro model named outerEnv heven hdenotes
+                    · intro model  outerEnv heven hdenotes
                       apply spawnNodeRaw_finishRoot_away_reflects source.val node
                         spawnScope portCount port hne sourceItems targetItems _
-                        model named outerEnv hdenotes
-                      intro currentModel currentNamed rawEnv hitems
+                        model  outerEnv hdenotes
+                      intro currentModel currentNamed hitems
                       rw [hsourceItemsEq, ItemSeq.renameWires_append,
                         ItemSeq.renameWires, denoteItemSeq_frame] at hitems
                       rw [htargetItemsEq, hbeforeEq, hafterEq,
@@ -531,122 +526,118 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
                       rcases hitems with ⟨hb, ⟨relation, hf⟩, ha⟩
                       refine ⟨hb, ⟨relation, ?_⟩, ha⟩
                       have hs := (denoteRegion_renameWires (relCtx := [arity])
-                        currentModel currentNamed embedding.index rawEnv
+                        currentModel embedding.index currentNamed
                         (relation, PUnit.unit) sourceChild).1 hf
-                      exact hchildReverse.1 currentModel currentNamed rawEnv
+                      exact hchildReverse.1 currentModel currentNamed
                         (relation, PUnit.unit) (by omega) hs
-                    · intro model named outerEnv hodd hdenotes
+                    · intro model  outerEnv hodd hdenotes
                       apply spawnNodeRaw_finishRoot_away_projects source.val node
                         spawnScope portCount port hne sourceItems targetItems _
-                        model named outerEnv hdenotes
-                      intro currentModel currentNamed rawEnv hitems
+                        model  outerEnv hdenotes
+                      intro currentModel currentNamed hitems
                       rw [htargetItemsEq, hbeforeEq, hafterEq,
                         denoteItemSeq_frame] at hitems
                       rw [hsourceItemsEq, ItemSeq.renameWires_append,
                         ItemSeq.renameWires, denoteItemSeq_frame]
                       rcases hitems with ⟨hb, ⟨relation, hf⟩, ha⟩
                       refine ⟨hb, ⟨relation, ?_⟩, ha⟩
-                      have hs := hchildReverse.2 currentModel currentNamed rawEnv
+                      have hs := hchildReverse.2 currentModel currentNamed
                         (relation, PUnit.unit) (by omega) hf
                       exact (denoteRegion_renameWires (relCtx := [arity])
-                        currentModel currentNamed embedding.index rawEnv
+                        currentModel embedding.index currentNamed
                         (relation, PUnit.unit) sourceChild).2 hs
 
 /-- The route projection lifted through the open sheet compiler. -/
 theorem spawnNodeRaw_compileRoot_route_projects
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (node : CNode source.val.diagram.regionCount)
     (scope : Fin source.val.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
     (hnode : node.region = scope)
     (htarget : (spawnNodeRaw source.val.diagram node scope portCount port).WellFormed
-      signature)
+      )
     {path : List Nat}
     (route : Diagram.Splice.RegionRoute source.val.diagram
       source.val.diagram.root scope path)
     {depth : Nat} (hdepth : route.HasCutDepth depth)
-    (sourceBody : Region signature source.val.exposedWires.length [])
-    (targetBody : Region signature
+    (sourceBody : Region  source.val.exposedWires.length [])
+    (targetBody : Region
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length
       [])
-    (hsourceBody : ConcreteElaboration.compileRoot? signature
+    (hsourceBody : ConcreteElaboration.compileRoot?
       source.val.diagram source.val.exposedWires source.val.hiddenWires =
         some sourceBody)
-    (htargetBody : ConcreteElaboration.compileRoot? signature
+    (htargetBody : ConcreteElaboration.compileRoot?
       (spawnNodeRaw source.val.diagram node scope portCount port)
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires
       (spawnNodeRawOpen source.val node scope portCount port).hiddenWires =
         some targetBody) :
     (∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
           model.Carrier),
       depth % 2 = 0 →
-      denoteRegion (relCtx := []) model named outerEnv PUnit.unit targetBody →
-        denoteRegion (relCtx := []) model named
+      denoteRegion (relCtx := []) model  outerEnv PUnit.unit targetBody →
+        denoteRegion (relCtx := []) model
           (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
             portCount port) PUnit.unit sourceBody) ∧
     (∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
           model.Carrier),
       depth % 2 = 1 →
-      denoteRegion (relCtx := []) model named
+      denoteRegion (relCtx := []) model
           (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
             portCount port) PUnit.unit sourceBody →
-        denoteRegion (relCtx := []) model named outerEnv PUnit.unit targetBody) :=
+        denoteRegion (relCtx := []) model  outerEnv PUnit.unit targetBody) :=
   (spawnNodeRaw_compileRoot_route_kernel source node scope portCount port hnode
     htarget route hdepth sourceBody targetBody hsourceBody htargetBody).1
 
 /-- Reverse transport through the open root compiler, sharing both the root
 split and the descendant route kernel with ordinary spawn projection. -/
 theorem spawnNodeRaw_compileRoot_route_reflects
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (node : CNode source.val.diagram.regionCount)
     (scope : Fin source.val.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
     (hnode : node.region = scope)
     (htarget : (spawnNodeRaw source.val.diagram node scope portCount port).WellFormed
-      signature)
+      )
     (hrootReflect : SpawnRootSiteReflectionAtRoot source node scope portCount port)
-    (hregionReflect : SpawnRegionSiteReflection (signature := signature)
+    (hregionReflect : SpawnRegionSiteReflection
       source.val.diagram node scope portCount port)
     {path : List Nat}
     (route : Diagram.Splice.RegionRoute source.val.diagram
       source.val.diagram.root scope path)
     {depth : Nat} (hdepth : route.HasCutDepth depth)
-    (sourceBody : Region signature source.val.exposedWires.length [])
-    (targetBody : Region signature
+    (sourceBody : Region  source.val.exposedWires.length [])
+    (targetBody : Region
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length
       [])
-    (hsourceBody : ConcreteElaboration.compileRoot? signature
+    (hsourceBody : ConcreteElaboration.compileRoot?
       source.val.diagram source.val.exposedWires source.val.hiddenWires =
         some sourceBody)
-    (htargetBody : ConcreteElaboration.compileRoot? signature
+    (htargetBody : ConcreteElaboration.compileRoot?
       (spawnNodeRaw source.val.diagram node scope portCount port)
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires
       (spawnNodeRawOpen source.val node scope portCount port).hiddenWires =
         some targetBody) :
     (∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
           model.Carrier),
       depth % 2 = 0 →
-      denoteRegion (relCtx := []) model named
+      denoteRegion (relCtx := []) model
           (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
             portCount port) PUnit.unit sourceBody →
-        denoteRegion (relCtx := []) model named outerEnv PUnit.unit targetBody) ∧
+        denoteRegion (relCtx := []) model  outerEnv PUnit.unit targetBody) ∧
     (∀ (model : Model)
-      (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
           model.Carrier),
       depth % 2 = 1 →
-      denoteRegion (relCtx := []) model named outerEnv PUnit.unit targetBody →
-        denoteRegion (relCtx := []) model named
+      denoteRegion (relCtx := []) model  outerEnv PUnit.unit targetBody →
+        denoteRegion (relCtx := []) model
           (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
             portCount port) PUnit.unit sourceBody) :=
   (spawnNodeRaw_compileRoot_route_kernel source node scope portCount port hnode
@@ -657,19 +648,18 @@ theorem spawnNodeRaw_compileRoot_route_reflects
 and repeated aliases are transported positionwise; the implication direction
 is exactly the route cut parity. -/
 theorem spawnNodeRawOpen_projects
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (node : CNode source.val.diagram.regionCount)
     (scope : Fin source.val.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
     (hnode : node.region = scope)
     (htarget : (spawnNodeRaw source.val.diagram node scope portCount port).WellFormed
-      signature)
+      )
     {path : List Nat}
     (route : Diagram.Splice.RegionRoute source.val.diagram
       source.val.diagram.root scope path)
     {depth : Nat} (hdepth : route.HasCutDepth depth)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin source.val.boundary.length → model.Carrier) :
     let targetOpen := spawnNodeRawOpen source.val node scope portCount port
     let targetWf := spawnNodeRawOpen_wellFormed source node scope portCount port
@@ -677,17 +667,17 @@ theorem spawnNodeRawOpen_projects
     let boundaryLength : targetOpen.boundary.length = source.val.boundary.length :=
       by simp [targetOpen, spawnNodeRawOpen]
     (depth % 2 = 0 →
-      targetOpen.denote targetWf model named (args ∘ Fin.cast boundaryLength) →
-        source.denote model named args) ∧
+      targetOpen.denote targetWf model  (args ∘ Fin.cast boundaryLength) →
+        source.denote model  args) ∧
     (depth % 2 = 1 →
-      source.denote model named args →
-        targetOpen.denote targetWf model named
+      source.denote model  args →
+        targetOpen.denote targetWf model
           (args ∘ Fin.cast boundaryLength)) := by
   dsimp only
   let targetOpen := spawnNodeRawOpen source.val node scope portCount port
   let targetWf := spawnNodeRawOpen_wellFormed source node scope portCount port
     htarget
-  let target : CheckedOpenDiagram signature := ⟨targetOpen, targetWf⟩
+  let target : CheckedOpenDiagram  := ⟨targetOpen, targetWf⟩
   let boundaryLength : targetOpen.boundary.length = source.val.boundary.length :=
     by simp [targetOpen, spawnNodeRawOpen]
   obtain ⟨sourceBody, hsourceCompile, hsourceElaborate⟩ :=
@@ -699,7 +689,7 @@ theorem spawnNodeRawOpen_projects
     hsourceCompile htargetCompile
   constructor
   · intro heven htargetDenotes
-    change denoteOpen model named target.elaborate
+    change denoteOpen model  target.elaborate
         (args ∘ Fin.cast boundaryLength) at htargetDenotes
     rcases htargetDenotes with ⟨targetAssignment, htargetArgs, htargetBody⟩
     rw [htargetElaborate] at htargetBody
@@ -724,9 +714,9 @@ theorem spawnNodeRawOpen_projects
     }
     refine ⟨sourceAssignment, rfl, ?_⟩
     rw [hsourceElaborate]
-    exact hroot.1 model named targetAssignment.classes heven htargetBody
+    exact hroot.1 model  targetAssignment.classes heven htargetBody
   · intro hodd hsourceDenotes
-    change denoteOpen model named source.elaborate args at hsourceDenotes
+    change denoteOpen model  source.elaborate args at hsourceDenotes
     rcases hsourceDenotes with ⟨sourceAssignment, hsourceArgs, hsourceBody⟩
     rw [hsourceElaborate] at hsourceBody
     let exposedLength : targetOpen.exposedWires.length =
@@ -779,7 +769,7 @@ theorem spawnNodeRawOpen_projects
     }
     refine ⟨targetAssignment, rfl, ?_⟩
     rw [htargetElaborate]
-    apply hroot.2 model named targetClasses hodd
+    apply hroot.2 model  targetClasses hodd
     rw [hsourceClasses]
     exact hsourceBody
 
@@ -787,38 +777,37 @@ theorem spawnNodeRawOpen_projects
 specializations.  Boundary positions and aliases use the same positional
 transport as projection; only the route implication is reversed. -/
 theorem spawnNodeRawOpen_reflects
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (node : CNode source.val.diagram.regionCount)
     (scope : Fin source.val.diagram.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
     (hnode : node.region = scope)
     (htarget : (spawnNodeRaw source.val.diagram node scope portCount port).WellFormed
-      signature)
+      )
     (hrootReflect : SpawnRootSiteReflectionAtRoot source node scope portCount port)
-    (hregionReflect : SpawnRegionSiteReflection (signature := signature)
+    (hregionReflect : SpawnRegionSiteReflection
       source.val.diagram node scope portCount port)
     {path : List Nat}
     (route : Diagram.Splice.RegionRoute source.val.diagram
       source.val.diagram.root scope path)
     {depth : Nat} (hdepth : route.HasCutDepth depth)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin source.val.boundary.length → model.Carrier) :
     let targetOpen := spawnNodeRawOpen source.val node scope portCount port
     let targetWf := spawnNodeRawOpen_wellFormed source node scope portCount port
       htarget
     let boundaryLength : targetOpen.boundary.length = source.val.boundary.length :=
       by simp [targetOpen, spawnNodeRawOpen]
-    (depth % 2 = 0 → source.denote model named args →
-      targetOpen.denote targetWf model named (args ∘ Fin.cast boundaryLength)) ∧
+    (depth % 2 = 0 → source.denote model  args →
+      targetOpen.denote targetWf model  (args ∘ Fin.cast boundaryLength)) ∧
     (depth % 2 = 1 →
-      targetOpen.denote targetWf model named (args ∘ Fin.cast boundaryLength) →
-        source.denote model named args) := by
+      targetOpen.denote targetWf model  (args ∘ Fin.cast boundaryLength) →
+        source.denote model  args) := by
   dsimp only
   let targetOpen := spawnNodeRawOpen source.val node scope portCount port
   let targetWf := spawnNodeRawOpen_wellFormed source node scope portCount port
     htarget
-  let target : CheckedOpenDiagram signature := ⟨targetOpen, targetWf⟩
+  let target : CheckedOpenDiagram  := ⟨targetOpen, targetWf⟩
   let boundaryLength : targetOpen.boundary.length = source.val.boundary.length :=
     by simp [targetOpen, spawnNodeRawOpen]
   obtain ⟨sourceBody, hsourceCompile, hsourceElaborate⟩ :=
@@ -830,7 +819,7 @@ theorem spawnNodeRawOpen_reflects
     sourceBody targetBody hsourceCompile htargetCompile
   constructor
   · intro heven hsourceDenotes
-    change denoteOpen model named source.elaborate args at hsourceDenotes
+    change denoteOpen model  source.elaborate args at hsourceDenotes
     rcases hsourceDenotes with ⟨sourceAssignment, hsourceArgs, hsourceBody⟩
     rw [hsourceElaborate] at hsourceBody
     let exposedLength : targetOpen.exposedWires.length =
@@ -882,11 +871,11 @@ theorem spawnNodeRawOpen_reflects
     }
     refine ⟨targetAssignment, rfl, ?_⟩
     rw [htargetElaborate]
-    apply hroot.1 model named targetClasses heven
+    apply hroot.1 model  targetClasses heven
     rw [hsourceClasses]
     exact hsourceBody
   · intro hodd htargetDenotes
-    change denoteOpen model named target.elaborate
+    change denoteOpen model  target.elaborate
         (args ∘ Fin.cast boundaryLength) at htargetDenotes
     rcases htargetDenotes with ⟨targetAssignment, htargetArgs, htargetBody⟩
     rw [htargetElaborate] at htargetBody
@@ -911,31 +900,30 @@ theorem spawnNodeRawOpen_reflects
     }
     refine ⟨sourceAssignment, rfl, ?_⟩
     rw [hsourceElaborate]
-    exact hroot.2 model named targetAssignment.classes hodd htargetBody
+    exact hroot.2 model  targetAssignment.classes hodd htargetBody
 
 /-- Spawn is locally a target-to-source projection.  Odd cut depth consumes
 that projection contravariantly for forward replay; even depth consumes it
 covariantly for backward replay. -/
 theorem spawn_context_sound
     (orientation : Orientation)
-    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
-    (source target : Region signature holeWires holeRels)
+    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
+    (source target : Region  holeWires holeRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (polarity : spawnPolarity orientation ctx.cutDepth)
     (localProjection : ∀ holeEnv holeRelEnv,
-      denoteRegion model named holeEnv holeRelEnv target →
-        denoteRegion model named holeEnv holeRelEnv source) :
+      denoteRegion model  holeEnv holeRelEnv target →
+        denoteRegion model  holeEnv holeRelEnv source) :
     DirectedImplication orientation
-      (denoteRegion model named env rels (ctx.fill source))
-      (denoteRegion model named env rels (ctx.fill target)) := by
+      (denoteRegion model  env rels (ctx.fill source))
+      (denoteRegion model  env rels (ctx.fill target)) := by
   cases orientation with
   | forward =>
-      exact context_anti model named env rels polarity localProjection
+      exact context_anti model  env rels polarity localProjection
   | backward =>
-      exact context_mono model named env rels polarity localProjection
+      exact context_mono model  env rels polarity localProjection
 
 /-- Reusable bidirectional semantic route lift.  A site equivalence is
 transported through an arbitrary intrinsic context without choosing a rule
@@ -943,28 +931,27 @@ orientation; cuts reverse both implications together and bubbles preserve
 them.  Closed-term spawn uses this theorem with the two site directions, so it
 does not require another semantic context induction. -/
 theorem context_equiv
-    (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
-    (source target : Region signature holeWires holeRels)
+    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
+    (source target : Region  holeWires holeRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (localEquiv : ∀ holeEnv holeRelEnv,
-      denoteRegion model named holeEnv holeRelEnv source ↔
-        denoteRegion model named holeEnv holeRelEnv target) :
-    denoteRegion model named env rels (ctx.fill source) ↔
-      denoteRegion model named env rels (ctx.fill target) := by
+      denoteRegion model  holeEnv holeRelEnv source ↔
+        denoteRegion model  holeEnv holeRelEnv target) :
+    denoteRegion model  env rels (ctx.fill source) ↔
+      denoteRegion model  env rels (ctx.fill target) := by
   by_cases heven : ctx.cutDepth % 2 = 0
   · constructor
-    · exact context_mono model named env rels heven
+    · exact context_mono model  env rels heven
         (fun holeEnv holeRelEnv => (localEquiv holeEnv holeRelEnv).mp)
-    · exact context_mono model named env rels heven
+    · exact context_mono model  env rels heven
         (fun holeEnv holeRelEnv => (localEquiv holeEnv holeRelEnv).mpr)
   · have hodd : ctx.cutDepth % 2 = 1 := by omega
     constructor
-    · exact context_anti model named env rels hodd
+    · exact context_anti model  env rels hodd
         (fun holeEnv holeRelEnv => (localEquiv holeEnv holeRelEnv).mpr)
-    · exact context_anti model named env rels hodd
+    · exact context_anti model  env rels hodd
         (fun holeEnv holeRelEnv => (localEquiv holeEnv holeRelEnv).mp)
 
 /-- The sole concrete compiler produces an intrinsic item for the appended
@@ -973,25 +960,25 @@ theorem spawnNodeRaw_compileNode?_complete
     (input : ConcreteDiagram) (node : CNode input.regionCount)
     (scope : Fin input.regionCount) (portCount : Nat)
     (port : Fin portCount → CPort)
-    (hwf : (spawnNodeRaw input node scope portCount port).WellFormed signature)
+    (hwf : (spawnNodeRaw input node scope portCount port).WellFormed )
     (context : ConcreteElaboration.WireContext
       (spawnNodeRaw input node scope portCount port))
     (binders : ConcreteElaboration.BinderContext
       (spawnNodeRaw input node scope portCount port) rels)
     (hwires : context.Covers scope) (hbinders : binders.Covers scope)
     (hregion : node.region = scope) :
-    ∃ item, ConcreteElaboration.compileNode? signature
+    ∃ item, ConcreteElaboration.compileNode?
       (spawnNodeRaw input node scope portCount port) context binders
       (Fin.last input.nodeCount) = some item := by
   apply ConcreteElaboration.compileNode?_complete hwf hwires hbinders
   rw [spawnNodeRaw_newNode]
   exact hregion
 
-private def checkRawReceipt (input : CheckedDiagram signature)
+private def checkRawReceipt (input : CheckedDiagram )
     (raw : ConcreteDiagram) (provenance : WireProvenance input.val raw)
     (interface : InterfaceTransport input.val raw) :
     Except StepError (StepReceipt input) :=
-  match hcheck : checkWellFormed signature raw with
+  match hcheck : checkWellFormed  raw with
   | .error error => .error (.resultNotWellFormed error)
   | .ok result => .ok (StepReceipt.ofChecked input raw provenance interface
       result hcheck)
@@ -1014,27 +1001,8 @@ theorem castTarget_interface_image_realizes
   subst raw
   simp [InterfaceTransport.castTarget]
 
-def applyRelationSpawn (orientation : Orientation)
-    (input : CheckedDiagram signature)
-    (region : Fin input.val.regionCount) (definition arity : Nat) :
-    Except StepError (StepReceipt input) :=
-  if spawnPolarity orientation
-      (concreteCutDepth input.val region) then
-    if signature[definition]? = some arity then
-      let raw := spawnNodeRaw input.val (.named region definition arity)
-        region arity (fun index => .arg index)
-      checkRawReceipt input raw
-        (spawnNodeWireProvenance input.val (.named region definition arity)
-          region arity (fun index => .arg index))
-        (spawnNodeInterfaceTransport input.val (.named region definition arity)
-          region arity (fun index => .arg index))
-    else
-      .error .unknownDefinition
-  else
-    .error .wrongPolarity
-
 def applyBoundRelationSpawn (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (region binder : Fin input.val.regionCount) (arity : Nat) :
     Except StepError (StepReceipt input) :=
   if spawnPolarity orientation
@@ -1055,21 +1023,6 @@ def applyBoundRelationSpawn (orientation : Orientation)
   else
     .error .wrongPolarity
 
-theorem applyRelationSpawn_preserves_raw
-    (happly : applyRelationSpawn orientation input region definition arity =
-      .ok result) :
-    result.result.val = spawnNodeRaw input.val (.named region definition arity)
-      region arity (fun index => .arg index) := by
-  unfold applyRelationSpawn at happly
-  split at happly <;> try contradiction
-  split at happly <;> try contradiction
-  dsimp only at happly
-  unfold checkRawReceipt at happly
-  split at happly <;> try contradiction
-  rename_i checked hcheck
-  cases happly
-  exact checkWellFormed_preserves_input hcheck
-
 theorem applyBoundRelationSpawn_preserves_raw
     (happly : applyBoundRelationSpawn orientation input region binder arity =
       .ok result) :
@@ -1085,26 +1038,6 @@ theorem applyBoundRelationSpawn_preserves_raw
   rename_i checked hcheck
   cases happly
   exact checkWellFormed_preserves_input hcheck
-
-theorem applyRelationSpawn_realizes
-    (happly : applyRelationSpawn orientation input region definition arity =
-      .ok result) :
-    result.Realizes
-      (spawnNodeRaw input.val (.named region definition arity) region arity
-        (fun index => .arg index))
-      (spawnNodeWireProvenance input.val (.named region definition arity)
-        region arity (fun index => .arg index))
-      (spawnNodeInterfaceTransport input.val (.named region definition arity)
-        region arity (fun index => .arg index)) := by
-  unfold applyRelationSpawn at happly
-  split at happly <;> try contradiction
-  split at happly <;> try contradiction
-  dsimp only at happly
-  unfold checkRawReceipt at happly
-  split at happly <;> try contradiction
-  rename_i checked hcheck
-  cases happly
-  exact StepReceipt.ofChecked_realizes _ _ _ _ checked hcheck
 
 theorem applyBoundRelationSpawn_realizes
     (happly : applyBoundRelationSpawn orientation input region binder arity =
@@ -1127,31 +1060,7 @@ theorem applyBoundRelationSpawn_realizes
   cases happly
   exact StepReceipt.ofChecked_realizes _ _ _ _ checked hcheck
 
-theorem applyRelationSpawn_success {signature : List Nat}
-    (orientation : Orientation) (input : CheckedDiagram signature)
-    (region : Fin input.val.regionCount) (definition arity : Nat)
-    (result : StepReceipt input)
-    (happly : applyRelationSpawn orientation input region definition arity =
-      .ok result) :
-    spawnPolarity orientation (concreteCutDepth input.val region) ∧
-      signature[definition]? = some arity ∧
-      result.result.val = spawnNodeRaw input.val
-        (.named region definition arity) region arity
-        (fun index => .arg index) := by
-  have hpolarity : spawnPolarity orientation
-      (concreteCutDepth input.val region) := by
-    by_cases h : spawnPolarity orientation
-        (concreteCutDepth input.val region)
-    · exact h
-    · simp [applyRelationSpawn, h] at happly
-  have hdefinition : signature[definition]? = some arity := by
-    by_cases h : signature[definition]? = some arity
-    · exact h
-    · simp [applyRelationSpawn, hpolarity, h] at happly
-  exact ⟨hpolarity, hdefinition, applyRelationSpawn_preserves_raw happly⟩
-
-theorem applyBoundRelationSpawn_success {signature : List Nat}
-    (orientation : Orientation) (input : CheckedDiagram signature)
+theorem applyBoundRelationSpawn_success (orientation : Orientation) (input : CheckedDiagram )
     (region binder : Fin input.val.regionCount) (arity : Nat)
     (result : StepReceipt input)
     (happly : applyBoundRelationSpawn orientation input region binder arity =

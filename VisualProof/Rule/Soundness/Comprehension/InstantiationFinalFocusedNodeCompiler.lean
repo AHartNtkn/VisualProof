@@ -9,10 +9,9 @@ open VisualProof.Theory
 namespace InstantiationTrace
 
 theorem reverseRegionMap_finalRegionMap_of_enclosing_parent
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -27,7 +26,7 @@ theorem reverseRegionMap_finalRegionMap_of_enclosing_parent
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount)
     (encloses : input.val.Encloses region payload.parent) :
     copyTrace.reverseRegionMap elimTrace finalWellFormed
@@ -47,10 +46,9 @@ theorem reverseRegionMap_finalRegionMap_of_enclosing_parent
       region regular
 
 theorem focusedKeptNode_shape
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -65,7 +63,7 @@ theorem focusedKeptNode_shape
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalNode : Fin elimTrace.sourceDiagram.nodeCount)
     (member : ConcreteElaboration.LocalOccurrence.node finalNode ∈
       elimTrace.keptOccurrences finalWellFormed)
@@ -81,10 +79,7 @@ theorem focusedKeptNode_shape
             arity
       | .atom owner binder =>
           .atom (copyTrace.reverseRegionMap elimTrace finalWellFormed owner)
-            (copyTrace.reverseRegionMap elimTrace finalWellFormed binder)
-      | .named owner definition arity =>
-          .named (copyTrace.reverseRegionMap elimTrace finalWellFormed owner)
-            definition arity := by
+            (copyTrace.reverseRegionMap elimTrace finalWellFormed binder) := by
   let outside := fun enclosed => payload_bubble_not_encloses_parent payload
     (originalRegion ▸ enclosed)
   have finalOwner :
@@ -139,19 +134,6 @@ theorem focusedKeptNode_shape
             exact finalShape
           rw [finalShapeDropped, droppedShape] at promotedShape
           cases promotedShape
-      | named finalOwner' finalDefinition finalArity =>
-          have finalOwnerEq : finalOwner' =
-              elimTrace.targetIndex finalWellFormed := by
-            simpa [finalShape, CNode.region] using finalOwner
-          subst finalOwner'
-          have finalShapeDropped : elimTrace.promotion.nodes
-              (copyTrace.droppedNodeMap originalNode outside) =
-                .named (elimTrace.targetIndex finalWellFormed) finalDefinition
-                  finalArity := by
-            rw [droppedEq]
-            exact finalShape
-          rw [finalShapeDropped, droppedShape] at promotedShape
-          cases promotedShape
   | atom owner binder =>
       have ownerEq : owner = payload.parent := by
         simpa [originalShape, CNode.region] using originalRegion
@@ -201,72 +183,10 @@ theorem focusedKeptNode_shape
             finalWellFormed, finalOwner,
             copyTrace.reverseRegionMap_finalRegionMap_of_enclosing_parent
               elimTrace finalWellFormed binder binderEncloses]
-      | named finalOwner' finalDefinition finalArity =>
-          have finalOwnerEq : finalOwner' =
-              elimTrace.targetIndex finalWellFormed := by
-            simpa [finalShape, CNode.region] using finalOwner
-          subst finalOwner'
-          have finalShapeDropped : elimTrace.promotion.nodes
-              (copyTrace.droppedNodeMap originalNode outside) =
-                .named (elimTrace.targetIndex finalWellFormed) finalDefinition
-                  finalArity := by
-            rw [droppedEq]
-            exact finalShape
-          rw [finalShapeDropped, droppedShape] at promotedShape
-          cases promotedShape
-  | named owner definition arity =>
-      have ownerEq : owner = payload.parent := by
-        simpa [originalShape, CNode.region] using originalRegion
-      subst owner
-      rw [originalShape] at droppedShape
-      simp only [mapNodeShape] at droppedShape
-      cases finalShape : elimTrace.sourceDiagram.nodes finalNode with
-      | identity finalOwner' finalArity =>
-          have finalOwnerEq : finalOwner' =
-              elimTrace.targetIndex finalWellFormed := by
-            simpa [finalShape, CNode.region] using finalOwner
-          subst finalOwner'
-          have finalShapeDropped : elimTrace.promotion.nodes
-              (copyTrace.droppedNodeMap originalNode outside) =
-                .identity (elimTrace.targetIndex finalWellFormed) finalArity := by
-            rw [droppedEq]
-            exact finalShape
-          rw [finalShapeDropped, droppedShape] at promotedShape
-          cases promotedShape
-      | atom finalOwner' finalBinder =>
-          have finalOwnerEq : finalOwner' =
-              elimTrace.targetIndex finalWellFormed := by
-            simpa [finalShape, CNode.region] using finalOwner
-          subst finalOwner'
-          have finalShapeDropped : elimTrace.promotion.nodes
-              (copyTrace.droppedNodeMap originalNode outside) =
-                .atom (elimTrace.targetIndex finalWellFormed) finalBinder := by
-            rw [droppedEq]
-            exact finalShape
-          rw [finalShapeDropped, droppedShape] at promotedShape
-          cases promotedShape
-      | named finalOwner' finalDefinition finalArity =>
-          have finalOwnerEq : finalOwner' =
-              elimTrace.targetIndex finalWellFormed := by
-            simpa [finalShape, CNode.region] using finalOwner
-          subst finalOwner'
-          have finalShapeDropped : elimTrace.promotion.nodes
-              (copyTrace.droppedNodeMap originalNode outside) =
-                .named (elimTrace.targetIndex finalWellFormed) finalDefinition
-                  finalArity := by
-            rw [droppedEq]
-            exact finalShape
-          simp only [CNode.region] at finalOwner
-          rw [finalShapeDropped, droppedShape] at promotedShape
-          cases promotedShape
-          simp [copyTrace.reverseRegionMap_targetIndex elimTrace
-            finalWellFormed, finalOwner]
-
 theorem focusedKeptChild_shape
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -281,7 +201,7 @@ theorem focusedKeptChild_shape
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (child : Fin elimTrace.sourceDiagram.regionCount)
     (member : ConcreteElaboration.LocalOccurrence.child child ∈
       elimTrace.keptOccurrences finalWellFormed) :
@@ -381,10 +301,9 @@ theorem focusedKeptChild_shape
               rfl
 
 theorem focusedKeptNode_endpointOccurs_iff
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -424,10 +343,9 @@ theorem focusedKeptNode_endpointOccurs_iff
   exact copyTrace.endpointOccurs_wireMap_nodeMap_iff wire originalNode port
 
 theorem focusedKeptNode_resolvedPorts_related
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -441,7 +359,7 @@ theorem focusedKeptNode_resolvedPorts_related
     {raw : ConcreteDiagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
+    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed )
     (sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input.val)
@@ -488,10 +406,9 @@ theorem focusedKeptNode_resolvedPorts_related
 /-- Every retained node at the promoted focus compiles to the corresponding
 original-parent item under the composite final context and binder maps. -/
 theorem focusedKeptNode_itemSimulation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -505,11 +422,10 @@ theorem focusedKeptNode_itemSimulation
     {raw : ConcreteDiagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
+    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed )
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram)
@@ -528,14 +444,14 @@ theorem focusedKeptNode_itemSimulation
     (targetNode : Fin input.val.nodeCount)
     (mapped : copyTrace.finalFocusOccurrenceMap elimTrace (.node finalNode) =
       .node targetNode)
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileNode? signature
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileNode?
       elimTrace.sourceDiagram sourceContext sourceBinders finalNode =
         some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode? signature input.val
+    (targetCompiled : ConcreteElaboration.compileNode?  input.val
       targetContext targetBinders targetNode = some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       context.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   obtain ⟨originalNode, originalRegion, reverseEq, droppedEq⟩ :=
@@ -545,7 +461,7 @@ theorem focusedKeptNode_itemSimulation
       (regions := input.val.regionCount) (mapped.symm.trans reverseEq)
   subst targetNode
   apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
-    model named direction sourceContext targetContext context.indexRelation
+    model  direction sourceContext targetContext context.indexRelation
     sourceBinders targetBinders binderWitness.relationMap finalNode originalNode
     (copyTrace.reverseRegionMap elimTrace finalWellFormed)
     (copyTrace.reverseRegionMap elimTrace finalWellFormed)

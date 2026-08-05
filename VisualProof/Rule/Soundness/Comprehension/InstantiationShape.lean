@@ -17,8 +17,6 @@ def mapNodeShape (map : Fin source → Fin target) :
     CNode source → CNode target
   | .atom region binder => .atom (map region) (map binder)
   | .identity region arity => .identity (map region) arity
-  | .named region definition arity => .named (map region) definition arity
-
 @[simp] theorem mapRegionShape_comp
     (first : Fin source → Fin middle)
     (second : Fin middle → Fin target)
@@ -36,8 +34,7 @@ def mapNodeShape (map : Fin source → Fin target) :
   cases node <;> rfl
 
 private theorem regionShape_transport
-    {signature : List Nat}
-    {source target : CheckedDiagram signature}
+    {source target : CheckedDiagram }
     (h : source = target)
     (region : Fin target.val.regionCount) :
     source.val.regions
@@ -51,8 +48,7 @@ private theorem regionShape_transport
   cases source.val.regions region <;> rfl
 
 private theorem nodeShape_transport
-    {signature : List Nat}
-    {source target : CheckedDiagram signature}
+    {source target : CheckedDiagram }
     (h : source = target)
     (node : Fin target.val.nodeCount) :
     source.val.nodes
@@ -66,16 +62,15 @@ private theorem nodeShape_transport
   cases source.val.nodes node <;> rfl
 
 theorem region_shape
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -92,9 +87,9 @@ theorem region_shape
       node_eq candidate_eq arguments_eq rest ih =>
       let spliceInput := plan.spliceInput
       let layout := spliceInput.plugLayout
-      let pluggedDiagram : CheckedDiagram signature :=
+      let pluggedDiagram : CheckedDiagram  :=
         ⟨layout.plugRaw,
-          Splice.Input.PlugLayout.plugRaw_wellFormed signature spliceInput layout
+          Splice.Input.PlugLayout.plugRaw_wellFormed  spliceInput layout
             (Splice.Input.checkInput_sound plan.checkedInputChecked).2⟩
       have nextDiagramEq : plan.next.diagram = pluggedDiagram := by
         rw [plan.next_eq]
@@ -121,16 +116,15 @@ theorem region_shape
           spliceInput, layout]
 
 theorem node_shape
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -147,9 +141,9 @@ theorem node_shape
       node_eq candidate_eq arguments_eq rest ih =>
       let spliceInput := plan.spliceInput
       let layout := spliceInput.plugLayout
-      let pluggedDiagram : CheckedDiagram signature :=
+      let pluggedDiagram : CheckedDiagram  :=
         ⟨layout.plugRaw,
-          Splice.Input.PlugLayout.plugRaw_wellFormed signature spliceInput layout
+          Splice.Input.PlugLayout.plugRaw_wellFormed  spliceInput layout
             (Splice.Input.checkInput_sound plan.checkedInputChecked).2⟩
       have nextDiagramEq : plan.next.diagram = pluggedDiagram := by
         rw [plan.next_eq]

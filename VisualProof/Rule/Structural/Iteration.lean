@@ -7,9 +7,9 @@ open VisualProof.Data.Finite
 open Theory
 open Diagram
 
-def iterationInput (input : CheckedDiagram signature)
+def iterationInput (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
-    (target : Fin input.val.regionCount) : Splice.Input signature :=
+    (target : Fin input.val.regionCount) : Splice.Input  :=
   let layout : FragmentLayout input.val selection := {}
   { frame := input
     pattern := ⟨input.val.extractOpenRaw selection layout,
@@ -23,21 +23,21 @@ def iterationInput (input : CheckedDiagram signature)
       input.val.extractedBinderSpine_terminalBodyContract selection layout
     binderTarget := fun index => layout.externalBinders.get index }
 
-def iterationWireProvenance (input : CheckedDiagram signature)
+def iterationWireProvenance (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount) :
     WireProvenance input.val
       (iterationInput input selection target).plugLayout.plugRaw :=
   spliceFrameWireProvenance (iterationInput input selection target)
 
-def iterationInterfaceTransport (input : CheckedDiagram signature)
+def iterationInterfaceTransport (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount) :
     InterfaceTransport input.val
       (iterationInput input selection target).plugLayout.plugRaw :=
   spliceFrameInterfaceTransport (iterationInput input selection target)
 
-def applyIteration (input : CheckedDiagram signature)
+def applyIteration (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount) :
     Except StepError (StepReceipt input) :=
@@ -45,7 +45,7 @@ def applyIteration (input : CheckedDiagram signature)
     if selection.val.SelectsRegion target then
       .error .invalidSelection
     else
-      match hsplice : Splice.Input.spliceChecked signature
+      match hsplice : Splice.Input.spliceChecked
           (iterationInput input selection target) with
       | .error _ => .error .binderEscape
       | .ok result => .ok {
@@ -61,12 +61,12 @@ def applyIteration (input : CheckedDiagram signature)
     .error .binderEscape
 
 theorem applyIteration_success_shape
-    {signature : List Nat} (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (result : StepReceipt input)
     (happly : applyIteration input selection target = .ok result) :
-    Splice.Input.spliceChecked signature
+    Splice.Input.spliceChecked
       (iterationInput input selection target) = .ok result.result := by
   unfold applyIteration at happly
   split at happly <;> try contradiction
@@ -97,14 +97,14 @@ theorem applyIteration_realizes
       (iterationInterfaceTransport input selection target) hvalue wire
 
 theorem applyIteration_success
-    {signature : List Nat} (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (result : StepReceipt input)
     (happly : applyIteration input selection target = .ok result) :
     input.val.Encloses selection.val.anchor target ∧
       ¬ selection.val.SelectsRegion target ∧
-      Splice.Input.spliceChecked signature
+      Splice.Input.spliceChecked
         (iterationInput input selection target) = .ok result.result := by
   unfold applyIteration at happly
   split at happly
@@ -121,11 +121,11 @@ theorem applyIteration_success
 Remove the selected occurrence once a declarative, disjoint ancestor occurrence
 certificate has been supplied. Search bounds are absent from the logical rule.
 -/
-def applyDeiteration (input : CheckedDiagram signature)
+def applyDeiteration (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (_witness : DeiterationWitness input selection) :
     Except StepError (StepReceipt input) :=
-  let result : CheckedDiagram signature :=
+  let result : CheckedDiagram  :=
     ⟨input.val.removeRaw selection {},
       ConcreteDiagram.removeRaw_wellFormed input selection {}⟩
   .ok {
@@ -135,7 +135,7 @@ def applyDeiteration (input : CheckedDiagram signature)
   }
 
 theorem applyDeiteration_success_shape
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (result : StepReceipt input)
@@ -146,7 +146,7 @@ theorem applyDeiteration_success_shape
   rfl
 
 theorem applyDeiteration_realizes
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (result : StepReceipt input)
@@ -160,12 +160,12 @@ theorem applyDeiteration_realizes
 
 /-- Checked concrete erasure, using the unique removal construction. -/
 def applyErasure (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) :
     Except StepError (StepReceipt input) :=
   if hpolarity : erasurePolarity orientation
       (concreteCutDepth input.val selection.val.anchor) then
-    let result : CheckedDiagram signature :=
+    let result : CheckedDiagram  :=
       ⟨input.val.removeRaw selection {},
         ConcreteDiagram.removeRaw_wellFormed input selection {}⟩
     .ok {
@@ -177,7 +177,7 @@ def applyErasure (orientation : Orientation)
     .error .wrongPolarity
 
 theorem applyErasure_complete (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (hpolarity : erasurePolarity orientation
       (concreteCutDepth input.val selection.val.anchor)) :
@@ -191,15 +191,14 @@ theorem applyErasure_complete (orientation : Orientation)
   simp [applyErasure, hpolarity]
 
 theorem applyErasure_wrongPolarity (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (hpolarity : ¬ erasurePolarity orientation
       (concreteCutDepth input.val selection.val.anchor)) :
     applyErasure orientation input selection = .error .wrongPolarity := by
   simp [applyErasure, hpolarity]
 
-theorem applyErasure_success {signature : List Nat}
-    (orientation : Orientation) (input : CheckedDiagram signature)
+theorem applyErasure_success (orientation : Orientation) (input : CheckedDiagram )
     (selection : CheckedSelection input.val) (result : StepReceipt input)
     (happly : applyErasure orientation input selection = .ok result) :
     erasurePolarity orientation
@@ -215,8 +214,7 @@ theorem applyErasure_success {signature : List Nat}
   cases happly
   exact ⟨hpolarity, rfl⟩
 
-theorem applyErasure_realizes {signature : List Nat}
-    (orientation : Orientation) (input : CheckedDiagram signature)
+theorem applyErasure_realizes (orientation : Orientation) (input : CheckedDiagram )
     (selection : CheckedSelection input.val) (result : StepReceipt input)
     (happly : applyErasure orientation input selection = .ok result) :
     result.Realizes (input.val.removeRaw selection {})

@@ -10,10 +10,9 @@ namespace InstantiationTrace
 /-- A final region is regular precisely when it has a pointwise-preserved
 source-frame preimage.  Copied material and the promoted focus have none. -/
 def FinalRegularPreimage
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -28,7 +27,7 @@ def FinalRegularPreimage
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount) : Prop :=
   ∃ originalRegion,
     FrameRegular payload originalRegion ∧
@@ -39,10 +38,9 @@ def FinalRegularPreimage
 regular final region chooses its unique frame origin; all opaque material is
 sent to the original parent focus. -/
 noncomputable def reverseRegionMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -57,7 +55,7 @@ noncomputable def reverseRegionMap
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount) :
     Fin input.val.regionCount := by
   classical
@@ -65,10 +63,9 @@ noncomputable def reverseRegionMap
       finalRegion then Classical.choose preimage else payload.parent
 
 theorem reverseRegionMap_spec
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -83,7 +80,7 @@ theorem reverseRegionMap_spec
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion) :
@@ -96,10 +93,9 @@ theorem reverseRegionMap_spec
   exact Classical.choose_spec regular
 
 theorem finalRegionMap_injective_of_frameRegular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -114,7 +110,7 @@ theorem finalRegionMap_injective_of_frameRegular
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     {first second : Fin input.val.regionCount}
     (firstRegular : FrameRegular payload first)
     (secondRegular : FrameRegular payload second)
@@ -137,10 +133,9 @@ theorem finalRegionMap_injective_of_frameRegular
   rw [← firstOrigin, ← secondOrigin, mapped]
 
 @[simp] theorem reverseRegionMap_finalRegionMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -155,7 +150,7 @@ theorem finalRegionMap_injective_of_frameRegular
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (originalRegion : Fin input.val.regionCount)
     (regular : FrameRegular payload originalRegion) :
     copyTrace.reverseRegionMap elimTrace finalWellFormed
@@ -171,10 +166,9 @@ theorem finalRegionMap_injective_of_frameRegular
     finalWellFormed chosen.1 regular chosen.2
 
 theorem finalRegionMap_reverseRegionMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -189,7 +183,7 @@ theorem finalRegionMap_reverseRegionMap
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion) :
@@ -203,10 +197,9 @@ theorem finalRegionMap_reverseRegionMap
 authoritative original root, including the case where the quantified parent
 itself is the root focus. -/
 theorem reverseRegionMap_root
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -221,7 +214,7 @@ theorem reverseRegionMap_root
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature) :
+      (dropInstantiationAtomsRaw result).WellFormed ) :
     copyTrace.reverseRegionMap elimTrace finalWellFormed
         elimTrace.sourceDiagram.root = input.val.root := by
   have mappedRoot := copyTrace.finalRegionMap_root elimTrace finalWellFormed
@@ -260,10 +253,9 @@ theorem reverseRegionMap_root
       input.val.root rootRegular
 
 @[simp] theorem reverseRegionMap_targetIndex
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -278,7 +270,7 @@ theorem reverseRegionMap_root
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature) :
+      (dropInstantiationAtomsRaw result).WellFormed ) :
     copyTrace.reverseRegionMap elimTrace finalWellFormed
         (elimTrace.targetIndex finalWellFormed) = payload.parent := by
   have noPreimage : ¬ copyTrace.FinalRegularPreimage elimTrace
@@ -294,10 +286,9 @@ theorem reverseRegionMap_root
   simp [reverseRegionMap, noPreimage]
 
 theorem reverseRegionMap_child_of_frameRegular_parent
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -314,7 +305,7 @@ theorem reverseRegionMap_child_of_frameRegular_parent
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (childParent : (input.val.regions child).parent? = some parent) :
     copyTrace.reverseRegionMap elimTrace finalWellFormed
         (copyTrace.finalRegionMap elimTrace finalWellFormed child) = child := by
@@ -353,10 +344,9 @@ theorem reverseRegionMap_child_of_frameRegular_parent
 forward and reverse region transport.  The original parent focus is handled
 by the opaque fallback; every other enclosing binder is itself regular. -/
 theorem reverseRegionMap_finalRegionMap_of_enclosing_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -371,7 +361,7 @@ theorem reverseRegionMap_finalRegionMap_of_enclosing_regular
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region)
     (binder : Fin input.val.regionCount)
@@ -403,10 +393,9 @@ theorem reverseRegionMap_finalRegionMap_of_enclosing_regular
       binder binderRegular
 
 theorem finalNodeMap_injective
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -440,10 +429,9 @@ theorem finalNodeMap_injective
 /-- A final node at a regular final region has a certified original frame
 node preimage. -/
 def FinalNodePreimage
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -458,7 +446,7 @@ def FinalNodePreimage
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion)
@@ -477,10 +465,9 @@ def FinalNodePreimage
 chosen only when certified; arbitrary off-region nodes use a harmless child
 fallback, while child occurrences always use the total reverse region map. -/
 noncomputable def reverseOccurrenceMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -495,7 +482,7 @@ noncomputable def reverseOccurrenceMap
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion) :
@@ -514,10 +501,9 @@ noncomputable def reverseOccurrenceMap
         .child (copyTrace.reverseRegionMap elimTrace finalWellFormed finalRegion)
 
 theorem finalNode_preimage_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -532,7 +518,7 @@ theorem finalNode_preimage_of_regular
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion)
@@ -576,10 +562,9 @@ theorem finalNode_preimage_of_regular
       simp [finalFrameOccurrenceMap] at mapped
 
 theorem reverseOccurrenceMap_node_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -594,7 +579,7 @@ theorem reverseOccurrenceMap_node_of_regular
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion)
@@ -611,10 +596,9 @@ theorem reverseOccurrenceMap_node_of_regular
 
 /-- The original node selected by the certified reverse occurrence map. -/
 noncomputable def reverseNodeMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -629,7 +613,7 @@ noncomputable def reverseNodeMap
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion)
@@ -640,10 +624,9 @@ noncomputable def reverseNodeMap
     finalWellFormed finalRegion regular finalNode nodeRegion)
 
 @[simp] theorem reverseOccurrenceMap_node_eq
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -658,7 +641,7 @@ noncomputable def reverseNodeMap
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion)
@@ -674,10 +657,9 @@ noncomputable def reverseNodeMap
   simp [reverseOccurrenceMap, reverseNodeMap, preimage]
 
 @[simp] theorem reverseOccurrenceMap_child
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -692,7 +674,7 @@ noncomputable def reverseNodeMap
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion)
@@ -703,10 +685,9 @@ noncomputable def reverseNodeMap
   rfl
 
 theorem reverseOccurrenceMap_finalFrameOccurrenceMap_of_mem
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -721,7 +702,7 @@ theorem reverseOccurrenceMap_finalFrameOccurrenceMap_of_mem
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (originalRegion : Fin input.val.regionCount)
     (originalRegular : FrameRegular payload originalRegion)
     (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
@@ -796,10 +777,9 @@ theorem reverseOccurrenceMap_finalFrameOccurrenceMap_of_mem
 /-- Reverse occurrence transport recovers the authoritative original ordered
 traversal at every regular final region. -/
 theorem reverse_localOccurrences
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -814,7 +794,7 @@ theorem reverse_localOccurrences
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion) :
@@ -891,10 +871,9 @@ theorem reverse_localOccurrences
 /-- Every final child of a regular frame region is the image of one original
 direct child, and the total reverse map recovers that same child. -/
 theorem finalChild_preimage_of_regular_parent
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -909,7 +888,7 @@ theorem finalChild_preimage_of_regular_parent
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalParent : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalParent)
@@ -964,10 +943,9 @@ theorem finalChild_preimage_of_regular_parent
 child wrapper exactly.  Distinguished children remain opaque wrappers while
 their interiors are intentionally outside this theorem. -/
 theorem reverse_region_shape_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -982,7 +960,7 @@ theorem reverse_region_shape_of_regular
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalParent : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalParent)
@@ -1037,10 +1015,9 @@ theorem reverse_region_shape_of_regular
 its selected original node.  Reversing the owner and atom binder therefore
 recovers the authoritative original constructor. -/
 theorem reverse_node_shape_of_regular
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -1055,7 +1032,7 @@ theorem reverse_node_shape_of_regular
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion)
@@ -1071,10 +1048,7 @@ theorem reverse_node_shape_of_regular
             arity
       | .atom owner binder =>
           .atom (copyTrace.reverseRegionMap elimTrace finalWellFormed owner)
-            (copyTrace.reverseRegionMap elimTrace finalWellFormed binder)
-      | .named owner definition arity =>
-          .named (copyTrace.reverseRegionMap elimTrace finalWellFormed owner)
-            definition arity := by
+            (copyTrace.reverseRegionMap elimTrace finalWellFormed binder) := by
   let preimage := copyTrace.finalNode_preimage_of_regular elimTrace
     finalWellFormed finalRegion regular finalNode nodeRegion
   let originalNode := Classical.choose preimage
@@ -1115,17 +1089,6 @@ theorem reverse_node_shape_of_regular
       rw [forwardShape]
       simp [copyTrace.reverseRegionMap_finalRegionMap elimTrace finalWellFormed
         originalRegion originalRegular, reverseBinder]
-  | named originalOwner definition arity =>
-      have ownerEq : originalOwner = originalRegion := by
-        have shapeRegion := congrArg CNode.region originalShape
-        exact shapeRegion.symm.trans originalSpec.1
-      subst originalOwner
-      rw [originalShape] at forwardShape
-      simp only at forwardShape
-      rw [forwardShape]
-      simp [copyTrace.reverseRegionMap_finalRegionMap elimTrace finalWellFormed
-        originalRegion originalRegular]
-
 end InstantiationTrace
 
 end VisualProof.Rule

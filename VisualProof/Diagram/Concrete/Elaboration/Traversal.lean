@@ -121,7 +121,7 @@ theorem climb_to_root_steps_le_regionCount (d : ConcreteDiagram)
   exact Nat.le_of_lt_succ boundedSteps.isLt
 
 theorem checked_climb_to_root_steps_le_regionCount
-    (checked : CheckedDiagram signature)
+    (checked : CheckedDiagram )
     {region : Fin checked.val.regionCount} {steps : Nat}
     (hsteps : checked.val.climb steps region = some checked.val.root) :
     steps ≤ checked.val.regionCount :=
@@ -130,7 +130,7 @@ theorem checked_climb_to_root_steps_le_regionCount
     checked.property.all_regions_reach_root hsteps
 
 theorem checked_child_chain_has_fuel
-    (checked : CheckedDiagram signature)
+    (checked : CheckedDiagram )
     {region : Fin checked.val.regionCount} {depth : Nat}
     (hdepth : checked.val.climb depth region = some checked.val.root) :
     0 < checked.val.regionCount + 1 - depth := by

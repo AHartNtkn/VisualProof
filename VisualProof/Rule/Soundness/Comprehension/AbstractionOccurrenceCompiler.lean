@@ -10,15 +10,15 @@ namespace AbstractionRawTrace
 
 /-- Ordered conjunction of the compiled selected block for each occurrence. -/
 def occurrenceFamilyItems
-    (items : ι → ItemSeq signature wireCount rels) :
-    List ι → ItemSeq signature wireCount rels
+    (items : ι → ItemSeq  wireCount rels) :
+    List ι → ItemSeq  wireCount rels
   | [] => .nil
   | index :: rest => (items index).append (occurrenceFamilyItems items rest)
 
 /-- Ordered conjunction of the one fresh atom compiled for each occurrence. -/
 def occurrenceFamilyAtomItems
-    (items : ι → Item signature wireCount rels) :
-    List ι → ItemSeq signature wireCount rels
+    (items : ι → Item  wireCount rels) :
+    List ι → ItemSeq  wireCount rels
   | [] => .nil
   | index :: rest => .cons (items index) (occurrenceFamilyAtomItems items rest)
 
@@ -27,17 +27,17 @@ theorem compileOccurrenceFamilyItems
       (region : Fin d.regionCount) →
       (context : ConcreteElaboration.WireContext d) →
       ConcreteElaboration.BinderContext d rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (context : ConcreteElaboration.WireContext d)
     (binders : ConcreteElaboration.BinderContext d rels)
     (indices : List ι)
     (occurrences : ι → List (ConcreteElaboration.LocalOccurrence
       d.regionCount d.nodeCount))
-    (items : ι → ItemSeq signature context.length rels)
+    (items : ι → ItemSeq  context.length rels)
     (compiled : ∀ index, index ∈ indices →
-      ConcreteElaboration.compileOccurrencesWith? signature d recurse
+      ConcreteElaboration.compileOccurrencesWith?  d recurse
         context binders (occurrences index) = some (items index)) :
-    ConcreteElaboration.compileOccurrencesWith? signature d recurse
+    ConcreteElaboration.compileOccurrencesWith?  d recurse
         context binders (indices.flatMap occurrences) =
       some (occurrenceFamilyItems items indices) := by
   induction indices with
@@ -56,17 +56,17 @@ theorem compileOccurrenceFamilyAtomItems
       (region : Fin d.regionCount) →
       (context : ConcreteElaboration.WireContext d) →
       ConcreteElaboration.BinderContext d rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (context : ConcreteElaboration.WireContext d)
     (binders : ConcreteElaboration.BinderContext d rels)
     (indices : List ι)
     (occurrences : ι → ConcreteElaboration.LocalOccurrence
       d.regionCount d.nodeCount)
-    (items : ι → Item signature context.length rels)
+    (items : ι → Item  context.length rels)
     (compiled : ∀ index, index ∈ indices →
-      ConcreteElaboration.compileOccurrenceWith? signature d recurse
+      ConcreteElaboration.compileOccurrenceWith?  d recurse
         context binders (occurrences index) = some (items index)) :
-    ConcreteElaboration.compileOccurrencesWith? signature d recurse
+    ConcreteElaboration.compileOccurrencesWith?  d recurse
         context binders (indices.map occurrences) =
       some (occurrenceFamilyAtomItems items indices) := by
   induction indices with
@@ -81,15 +81,14 @@ theorem compileOccurrenceFamilyAtomItems
 
 theorem occurrenceFamilyItems_denote_iff
     (indices : List ι)
-    (items : ι → ItemSeq signature wireCount rels)
+    (items : ι → ItemSeq  wireCount rels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (environment : Fin wireCount → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
-    denoteItemSeq model named environment relations
+    denoteItemSeq model  environment relations
         (occurrenceFamilyItems items indices) ↔
       ∀ index, index ∈ indices →
-        denoteItemSeq model named environment relations (items index) := by
+        denoteItemSeq model  environment relations (items index) := by
   induction indices with
   | nil => simp [occurrenceFamilyItems]
   | cons head tail ih =>
@@ -109,15 +108,14 @@ theorem occurrenceFamilyItems_denote_iff
 
 theorem occurrenceFamilyAtomItems_denote_iff
     (indices : List ι)
-    (items : ι → Item signature wireCount rels)
+    (items : ι → Item  wireCount rels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (environment : Fin wireCount → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
-    denoteItemSeq model named environment relations
+    denoteItemSeq model  environment relations
         (occurrenceFamilyAtomItems items indices) ↔
       ∀ index, index ∈ indices →
-        denoteItem model named environment relations (items index) := by
+        denoteItem model  environment relations (items index) := by
   induction indices with
   | nil => simp [occurrenceFamilyAtomItems]
   | cons head tail ih =>

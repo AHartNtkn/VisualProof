@@ -9,7 +9,7 @@ open Diagram
 namespace AbstractionRawTrace
 
 @[simp] theorem region_survives_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (occurrences : List (AbstractionOccurrence input))
     (region : Fin input.val.regionCount) :
     (Domains input occurrences).regions.survives region = true ↔
@@ -17,7 +17,7 @@ namespace AbstractionRawTrace
   simp [Domains, abstractionDomains, AbstractionDomains.regions_exact]
 
 @[simp] theorem node_survives_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (occurrences : List (AbstractionOccurrence input))
     (node : Fin input.val.nodeCount) :
     (Domains input occurrences).nodes.survives node = true ↔
@@ -25,7 +25,7 @@ namespace AbstractionRawTrace
   simp [Domains, abstractionDomains, AbstractionDomains.nodes_exact]
 
 @[simp] theorem wire_survives_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (occurrences : List (AbstractionOccurrence input))
     (wire : Fin input.val.wireCount) :
     (Domains input occurrences).wires.survives wire = true ↔
@@ -33,7 +33,7 @@ namespace AbstractionRawTrace
   simp [Domains, abstractionDomains, AbstractionDomains.wires_exact]
 
 theorem selection_anchor_not_selected
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) :
     selection.val.anchor ∉ selection.selectedRegions := by
   intro selected

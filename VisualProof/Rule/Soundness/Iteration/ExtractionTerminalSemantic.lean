@@ -11,7 +11,7 @@ open VisualProof.Rule.ModalSoundness
 /-- A copied direct cut in the extracted terminal body has the corresponding
 direct cut shape at the selection anchor. -/
 theorem extractionTerminalDirectChild_cut
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (child : Fin layout.regionCount)
@@ -52,7 +52,7 @@ theorem extractionTerminalDirectChild_cut
 /-- A copied direct bubble in the extracted terminal body has the corresponding
 direct bubble shape and arity at the selection anchor. -/
 theorem extractionTerminalDirectChild_bubble
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (child : Fin layout.regionCount)
@@ -95,7 +95,7 @@ theorem extractionTerminalDirectChild_bubble
 local witnesses of the extracted terminal body while preserving every given
 ambient value. -/
 theorem extractionTerminalExtendedEnvironmentsAgree_backward
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -159,11 +159,10 @@ occurrence block from any exact extracted context at the terminal container.
 Keeping this item-sequence kernel separate permits both the nested terminal
 presentation and the zero-spine open-root presentation to use one proof. -/
 theorem extractionCompileSelectedItems_denote
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     {fragmentRels hostRels : RelCtx}
     (fragmentFuel hostFuel : Nat)
@@ -181,25 +180,25 @@ theorem extractionCompileSelectedItems_denote
     (hostCover : hostBinders.Covers selection.val.anchor)
     (fragmentExact : fragmentContext.Exact layout.bodyContainer)
     (hostExact : hostContext.Exact selection.val.anchor)
-    (fragmentItems : ItemSeq signature fragmentContext.length fragmentRels)
-    (hostItems : ItemSeq signature hostContext.length hostRels)
+    (fragmentItems : ItemSeq  fragmentContext.length fragmentRels)
+    (hostItems : ItemSeq  hostContext.length hostRels)
     (fragmentCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         (input.val.extractDiagramRaw selection layout)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (input.val.extractDiagramRaw selection layout) fragmentFuel)
         fragmentContext fragmentBinders
         (ConcreteElaboration.localOccurrences
           (input.val.extractDiagramRaw selection layout) layout.bodyContainer) =
         some fragmentItems)
     (hostCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-        (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+        (ConcreteElaboration.compileRegion?  input.val hostFuel)
         hostContext hostBinders (selectedOccurrences input.val selection) =
         some hostItems) :
     let binderWitness := ExtractionBinderWitness.terminal input selection layout
       fragmentBinders fragmentEnumeration hostBinders hostCover
-    ConcreteElaboration.ItemSeqSimulation model named direction
+    ConcreteElaboration.ItemSeqSimulation model  direction
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
       (fragmentItems.renameRelations binderWitness.relationMap) hostItems := by
@@ -214,7 +213,7 @@ theorem extractionCompileSelectedItems_denote
       fragmentContext hostContext fragmentExact hostExact
   obtain ⟨mappedHostItems, mappedHostCompiled⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_complete
-      (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+      (ConcreteElaboration.compileRegion?  input.val hostFuel)
       hostContext hostBinders
       ((ConcreteElaboration.localOccurrences
         (input.val.extractDiagramRaw selection layout)
@@ -222,11 +221,11 @@ theorem extractionCompileSelectedItems_denote
       (by
         intro hostOccurrence hostMember
         apply ModalSoundness.compileOccurrence_success_of_mem input.val
-          (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+          (ConcreteElaboration.compileRegion?  input.val hostFuel)
           hostContext hostBinders hostCompiled
         exact (extractionHostOccurrenceMap_terminal_perm_selected input
           selection layout).mem_iff.mp hostMember)
-  have mappedSimulation : ConcreteElaboration.ItemSeqSimulation model named
+  have mappedSimulation : ConcreteElaboration.ItemSeqSimulation model
       direction
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
@@ -234,10 +233,10 @@ theorem extractionCompileSelectedItems_denote
       mappedHostItems := by
     apply
       ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
-        model named direction
-        (ConcreteElaboration.compileRegion? signature
+        model  direction
+        (ConcreteElaboration.compileRegion?
           (input.val.extractDiagramRaw selection layout) fragmentFuel)
-        (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+        (ConcreteElaboration.compileRegion?  input.val hostFuel)
         fragmentContext hostContext fragmentBinders hostBinders
         (extractionContextRelation input selection layout fragmentContext
           hostContext)
@@ -249,7 +248,7 @@ theorem extractionCompileSelectedItems_denote
       cases occurrence with
       | node node =>
           apply extractionCompileNode_itemSimulationOfMembership input selection
-            layout model named direction fragmentContext hostContext membership
+            layout model  direction fragmentContext hostContext membership
             hostExact.nodup fragmentBinders hostBinders
             binderWitness.relationMap node
           · intro region binder arity relation nodeShape lookup
@@ -267,16 +266,16 @@ theorem extractionCompileSelectedItems_denote
           subst child
           dsimp only [occurrenceMap] at hostOccurrenceCompiled
           have mappedChild := extractionHostOccurrenceMap_materialChild
-            (signature := signature) input selection layout childMaterial
+             input selection layout childMaterial
           have hostOccurrenceCompiled' :
-              ConcreteElaboration.compileOccurrenceWith? signature input.val
-                (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+              ConcreteElaboration.compileOccurrenceWith?  input.val
+                (ConcreteElaboration.compileRegion?  input.val hostFuel)
                 hostContext hostBinders
                 (.child (selection.selectedRegions.get childMaterial)) =
                   some hostItem := by
             exact (congrArg (fun occurrence =>
-              ConcreteElaboration.compileOccurrenceWith? signature input.val
-                (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+              ConcreteElaboration.compileOccurrenceWith?  input.val
+                (ConcreteElaboration.compileRegion?  input.val hostFuel)
                 hostContext hostBinders occurrence) mappedChild).symm.trans
               hostOccurrenceCompiled
           cases fragmentKind :
@@ -300,7 +299,7 @@ theorem extractionCompileSelectedItems_denote
               dsimp only at hostOccurrenceCompiled'
               rw [hostKind'] at hostOccurrenceCompiled'
               cases fragmentResult :
-                  ConcreteElaboration.compileRegion? signature
+                  ConcreteElaboration.compileRegion?
                     (input.val.extractDiagramRaw selection layout) fragmentFuel
                     (layout.materialRegion childMaterial) fragmentContext
                     fragmentBinders with
@@ -312,7 +311,7 @@ theorem extractionCompileSelectedItems_denote
                     fragmentResult] at fragmentOccurrenceCompiled
                   subst fragmentItem
                   cases hostResult :
-                      ConcreteElaboration.compileRegion? signature input.val
+                      ConcreteElaboration.compileRegion?  input.val
                         hostFuel (selection.selectedRegions.get childMaterial)
                         hostContext hostBinders with
                   | none =>
@@ -325,7 +324,7 @@ theorem extractionCompileSelectedItems_denote
                       simp [hostResult'] at hostOccurrenceCompiled'
                       subst hostItem
                       have bodies := extractionCompileRegion_material_denote
-                        input selection layout model named direction.flip fragmentFuel
+                        input selection layout model  direction.flip fragmentFuel
                         hostFuel childMaterial fragmentContext hostContext
                         membership fragmentBinders hostBinders
                         (fragmentEnumeration.cutChild
@@ -375,7 +374,7 @@ theorem extractionCompileSelectedItems_denote
               let hostPushed := hostBinders.push
                 (selection.selectedRegions.get childMaterial) arity
               cases fragmentResult :
-                  ConcreteElaboration.compileRegion? signature
+                  ConcreteElaboration.compileRegion?
                     (input.val.extractDiagramRaw selection layout) fragmentFuel
                     (layout.materialRegion childMaterial) fragmentContext
                     fragmentPushed with
@@ -387,7 +386,7 @@ theorem extractionCompileSelectedItems_denote
                     fragmentPushed, fragmentResult] at fragmentOccurrenceCompiled
                   subst fragmentItem
                   cases hostResult :
-                      ConcreteElaboration.compileRegion? signature input.val
+                      ConcreteElaboration.compileRegion?  input.val
                         hostFuel (selection.selectedRegions.get childMaterial)
                         hostContext hostPushed with
                   | none =>
@@ -404,7 +403,7 @@ theorem extractionCompileSelectedItems_denote
                       let childWitness := binderWitness.bubbleChild childMaterial
                         arity fragmentKind hostKind'
                       have bodies := extractionCompileRegion_material_denote
-                        input selection layout model named direction fragmentFuel
+                        input selection layout model  direction fragmentFuel
                         hostFuel childMaterial fragmentContext hostContext
                         membership fragmentPushed hostPushed
                         (fragmentEnumeration.bubbleChild
@@ -435,10 +434,10 @@ theorem extractionCompileSelectedItems_denote
     · exact mappedHostCompiled
   intro fragmentEnv hostEnv relEnv environments
   have permuted := ModalSoundness.compileOccurrences_denote_perm input.val
-    (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+    (ConcreteElaboration.compileRegion?  input.val hostFuel)
     hostContext hostBinders
     (extractionHostOccurrenceMap_terminal_perm_selected input selection layout)
-    mappedHostCompiled hostCompiled model named hostEnv relEnv
+    mappedHostCompiled hostCompiled model  hostEnv relEnv
   cases direction with
   | forward =>
       intro fragmentDenotes
@@ -452,11 +451,10 @@ theorem extractionCompileSelectedItems_denote
 /-- The selected anchor block entails the extracted terminal material.  This
 is the compiler-level copy law consumed by iteration contraction. -/
 theorem extractionCompileTerminal_selected_denote
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     {fragmentRels hostRels : RelCtx}
     (fragmentFuel hostFuel : Nat)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -474,26 +472,26 @@ theorem extractionCompileTerminal_selected_denote
     (fragmentExact :
       (fragmentContext.extend layout.bodyContainer).Exact layout.bodyContainer)
     (hostExact : hostContext.Exact selection.val.anchor)
-    (fragmentItems : ItemSeq signature
+    (fragmentItems : ItemSeq
       (fragmentContext.extend layout.bodyContainer).length fragmentRels)
-    (hostItems : ItemSeq signature hostContext.length hostRels)
+    (hostItems : ItemSeq  hostContext.length hostRels)
     (fragmentCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         (input.val.extractDiagramRaw selection layout)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (input.val.extractDiagramRaw selection layout) fragmentFuel)
         (fragmentContext.extend layout.bodyContainer) fragmentBinders
         (ConcreteElaboration.localOccurrences
           (input.val.extractDiagramRaw selection layout) layout.bodyContainer) =
         some fragmentItems)
     (hostCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-        (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+        (ConcreteElaboration.compileRegion?  input.val hostFuel)
         hostContext hostBinders (selectedOccurrences input.val selection) =
         some hostItems) :
     let binderWitness := ExtractionBinderWitness.terminal input selection layout
       fragmentBinders fragmentEnumeration hostBinders hostCover
-    ConcreteElaboration.RegionSimulation model named .backward
+    ConcreteElaboration.RegionSimulation model  .backward
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
       ((ConcreteElaboration.finishRegion
@@ -513,7 +511,7 @@ theorem extractionCompileTerminal_selected_denote
       fragmentExtended hostContext fragmentExact hostExact
   obtain ⟨mappedHostItems, mappedHostCompiled⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_complete
-      (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+      (ConcreteElaboration.compileRegion?  input.val hostFuel)
       hostContext hostBinders
       ((ConcreteElaboration.localOccurrences
         (input.val.extractDiagramRaw selection layout)
@@ -521,11 +519,11 @@ theorem extractionCompileTerminal_selected_denote
       (by
         intro hostOccurrence hostMember
         apply ModalSoundness.compileOccurrence_success_of_mem input.val
-          (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+          (ConcreteElaboration.compileRegion?  input.val hostFuel)
           hostContext hostBinders hostCompiled
         exact (extractionHostOccurrenceMap_terminal_perm_selected input
           selection layout).mem_iff.mp hostMember)
-  have mappedSimulation : ConcreteElaboration.ItemSeqSimulation model named
+  have mappedSimulation : ConcreteElaboration.ItemSeqSimulation model
       .backward
       (extractionContextRelation input selection layout fragmentExtended
         hostContext)
@@ -533,10 +531,10 @@ theorem extractionCompileTerminal_selected_denote
       mappedHostItems := by
     apply
       ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
-        model named .backward
-        (ConcreteElaboration.compileRegion? signature
+        model  .backward
+        (ConcreteElaboration.compileRegion?
           (input.val.extractDiagramRaw selection layout) fragmentFuel)
-        (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+        (ConcreteElaboration.compileRegion?  input.val hostFuel)
         fragmentExtended hostContext fragmentBinders hostBinders
         (extractionContextRelation input selection layout fragmentExtended
           hostContext)
@@ -548,7 +546,7 @@ theorem extractionCompileTerminal_selected_denote
       cases occurrence with
       | node node =>
           apply extractionCompileNode_itemSimulationOfMembership input selection
-            layout model named .backward fragmentExtended hostContext
+            layout model  .backward fragmentExtended hostContext
             fullMembership hostExact.nodup fragmentBinders hostBinders
             binderWitness.relationMap node
           · intro region binder arity relation nodeShape lookup
@@ -566,16 +564,16 @@ theorem extractionCompileTerminal_selected_denote
           subst child
           dsimp only [occurrenceMap] at hostOccurrenceCompiled
           have mappedChild := extractionHostOccurrenceMap_materialChild
-            (signature := signature) input selection layout childMaterial
+             input selection layout childMaterial
           have hostOccurrenceCompiled' :
-              ConcreteElaboration.compileOccurrenceWith? signature input.val
-                (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+              ConcreteElaboration.compileOccurrenceWith?  input.val
+                (ConcreteElaboration.compileRegion?  input.val hostFuel)
                 hostContext hostBinders
                 (.child (selection.selectedRegions.get childMaterial)) =
                   some hostItem := by
             exact (congrArg (fun occurrence =>
-              ConcreteElaboration.compileOccurrenceWith? signature input.val
-                (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+              ConcreteElaboration.compileOccurrenceWith?  input.val
+                (ConcreteElaboration.compileRegion?  input.val hostFuel)
                 hostContext hostBinders occurrence) mappedChild).symm.trans
               hostOccurrenceCompiled
           cases fragmentKind :
@@ -600,7 +598,7 @@ theorem extractionCompileTerminal_selected_denote
               dsimp only at hostOccurrenceCompiled'
               rw [hostKind'] at hostOccurrenceCompiled'
               cases fragmentResult :
-                  ConcreteElaboration.compileRegion? signature
+                  ConcreteElaboration.compileRegion?
                     (input.val.extractDiagramRaw selection layout) fragmentFuel
                     (layout.materialRegion childMaterial) fragmentExtended
                     fragmentBinders with
@@ -612,7 +610,7 @@ theorem extractionCompileTerminal_selected_denote
                     fragmentResult] at fragmentOccurrenceCompiled
                   subst fragmentItem
                   cases hostResult :
-                      ConcreteElaboration.compileRegion? signature input.val
+                      ConcreteElaboration.compileRegion?  input.val
                         hostFuel (selection.selectedRegions.get childMaterial)
                         hostContext hostBinders with
                   | none =>
@@ -625,7 +623,7 @@ theorem extractionCompileTerminal_selected_denote
                       simp [hostResult'] at hostOccurrenceCompiled'
                       subst hostItem
                       have bodies := extractionCompileRegion_material_denote
-                        input selection layout model named .forward fragmentFuel
+                        input selection layout model  .forward fragmentFuel
                         hostFuel childMaterial fragmentExtended hostContext
                         fullMembership fragmentBinders hostBinders
                         (fragmentEnumeration.cutChild
@@ -669,7 +667,7 @@ theorem extractionCompileTerminal_selected_denote
               let hostPushed := hostBinders.push
                 (selection.selectedRegions.get childMaterial) arity
               cases fragmentResult :
-                  ConcreteElaboration.compileRegion? signature
+                  ConcreteElaboration.compileRegion?
                     (input.val.extractDiagramRaw selection layout) fragmentFuel
                     (layout.materialRegion childMaterial) fragmentExtended
                     fragmentPushed with
@@ -681,7 +679,7 @@ theorem extractionCompileTerminal_selected_denote
                     fragmentPushed, fragmentResult] at fragmentOccurrenceCompiled
                   subst fragmentItem
                   cases hostResult :
-                      ConcreteElaboration.compileRegion? signature input.val
+                      ConcreteElaboration.compileRegion?  input.val
                         hostFuel (selection.selectedRegions.get childMaterial)
                         hostContext hostPushed with
                   | none =>
@@ -698,7 +696,7 @@ theorem extractionCompileTerminal_selected_denote
                       let childWitness := binderWitness.bubbleChild childMaterial
                         arity fragmentKind hostKind'
                       have bodies := extractionCompileRegion_material_denote
-                        input selection layout model named .backward fragmentFuel
+                        input selection layout model  .backward fragmentFuel
                         hostFuel childMaterial fragmentExtended hostContext
                         fullMembership fragmentPushed hostPushed
                         (fragmentEnumeration.bubbleChild
@@ -719,7 +717,7 @@ theorem extractionCompileTerminal_selected_denote
                         (relationValue, relEnv) environments hostDenotes⟩
     · exact fragmentCompiled
     · exact mappedHostCompiled
-  have selectedSimulation : ConcreteElaboration.ItemSeqSimulation model named
+  have selectedSimulation : ConcreteElaboration.ItemSeqSimulation model
       .backward
       (extractionContextRelation input selection layout fragmentExtended
         hostContext)
@@ -727,14 +725,14 @@ theorem extractionCompileTerminal_selected_denote
     intro fragmentEnv hostEnv relEnv environments hostDenotes
     apply mappedSimulation fragmentEnv hostEnv relEnv environments
     exact (ModalSoundness.compileOccurrences_denote_perm input.val
-      (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+      (ConcreteElaboration.compileRegion?  input.val hostFuel)
       hostContext hostBinders
       (extractionHostOccurrenceMap_terminal_perm_selected input selection layout)
-      mappedHostCompiled hostCompiled model named hostEnv relEnv).mpr hostDenotes
+      mappedHostCompiled hostCompiled model  hostEnv relEnv).mpr hostDenotes
   rw [ConcreteElaboration.finishRegion_renameRelations]
   intro fragmentOuter hostEnv relEnv outerAgrees hostDenotes
   have hostItemsDenote :=
-    (denoteRegion_mk_zero_iff model named hostEnv relEnv hostItems).1 hostDenotes
+    (denoteRegion_mk_zero_iff model  hostEnv relEnv hostItems).1 hostDenotes
   obtain ⟨fragmentLocal, fullAgrees⟩ :=
     extractionTerminalExtendedEnvironmentsAgree_backward input selection layout
       fragmentContext hostContext fragmentExact hostExact fragmentOuter hostEnv
@@ -746,7 +744,7 @@ theorem extractionCompileTerminal_selected_denote
   unfold ConcreteElaboration.finishRegion
   simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
   refine ⟨fragmentLocal, ?_⟩
-  exact (denoteItemSeq_renameWires model named
+  exact (denoteItemSeq_renameWires model
     (Fin.cast (ConcreteElaboration.WireContext.length_extend fragmentContext
       layout.bodyContainer))
     (extendWireEnv fragmentOuter fragmentLocal) relEnv
@@ -757,12 +755,11 @@ theorem extractionCompileTerminal_selected_denote
 ordered boundary remains ambient while its nonboundary root wires are chosen
 as existential witnesses from the exact host-anchor valuation. -/
 theorem extractionCompileRoot_selected_denote
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (hzero : layout.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (hostFuel : Nat)
     (hostContext : ConcreteElaboration.WireContext input.val)
     (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
@@ -770,13 +767,13 @@ theorem extractionCompileRoot_selected_denote
       input.val hostBinders selection.val.anchor)
     (hostCover : hostBinders.Covers selection.val.anchor)
     (hostExact : hostContext.Exact selection.val.anchor)
-    (fragmentItems : ItemSeq signature
+    (fragmentItems : ItemSeq
       (input.val.extractOpenRaw selection layout).rootWires.length [])
-    (hostItems : ItemSeq signature hostContext.length hostRels)
+    (hostItems : ItemSeq  hostContext.length hostRels)
     (fragmentCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         (input.val.extractDiagramRaw selection layout)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (input.val.extractDiagramRaw selection layout)
           (input.val.extractDiagramRaw selection layout).regionCount)
         (input.val.extractOpenRaw selection layout).rootWires
@@ -786,14 +783,14 @@ theorem extractionCompileRoot_selected_denote
           (input.val.extractDiagramRaw selection layout).root) =
         some fragmentItems)
     (hostCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-        (ConcreteElaboration.compileRegion? signature input.val hostFuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+        (ConcreteElaboration.compileRegion?  input.val hostFuel)
         hostContext hostBinders (selectedOccurrences input.val selection) =
         some hostItems) :
     let fragment := input.val.extractOpenRaw selection layout
     let relationMap : RelationRenaming [] hostRels :=
       Splice.Input.PlugLayout.emptyRelationRenaming hostRels
-    ConcreteElaboration.RegionSimulation model named .backward
+    ConcreteElaboration.RegionSimulation model  .backward
       (extractionContextRelation input selection layout fragment.exposedWires
         hostContext)
       ((ConcreteElaboration.finishRoot fragment.exposedWires
@@ -814,7 +811,7 @@ theorem extractionCompileRoot_selected_denote
     exact ConcreteElaboration.openRootWires_exact
       (ConcreteDiagram.extractOpenRaw_wellFormed input selection layout)
   have itemsSimulation := extractionCompileSelectedItems_denote input selection
-    layout model named .backward
+    layout model  .backward
     (input.val.extractDiagramRaw selection layout).regionCount hostFuel
     fragment.rootWires hostContext ConcreteElaboration.BinderContext.empty
     hostBinders fragmentEnumeration hostEnumeration hostCover fragmentExact
@@ -840,7 +837,7 @@ theorem extractionCompileRoot_selected_denote
       (bs := fragment.hiddenWires)).symm
   intro fragmentOuter hostEnv relEnv outerAgrees hostDenotes
   have hostItemsDenote :=
-    (denoteRegion_mk_zero_iff model named hostEnv relEnv hostItems).1
+    (denoteRegion_mk_zero_iff model  hostEnv relEnv hostItems).1
       hostDenotes
   let fragmentHidden : Fin fragment.hiddenWires.length → model.Carrier :=
     fun index => hostEnv (fullMap
@@ -908,14 +905,14 @@ theorem extractionCompileRoot_selected_denote
   simp only [Region.renameRelations, denoteRegion_mk,
     ItemSeq.castWiresEq_eq_renameWires]
   refine ⟨fragmentHidden, ?_⟩
-  have renamedDenote := (denoteItemSeq_renameWires model named
+  have renamedDenote := (denoteItemSeq_renameWires model
     (Fin.cast rootLengthEq.symm)
     (extendWireEnv fragmentOuter fragmentHidden) relEnv
     (fragmentItems.renameRelations
       (Splice.Input.PlugLayout.emptyRelationRenaming hostRels))).mpr
       (by simpa [fragmentFull, ConcreteElaboration.rootEnvironment] using
         fragmentItemsDenote)
-  change denoteItemSeq model named
+  change denoteItemSeq model
     (extendWireEnv fragmentOuter fragmentHidden) relEnv
     ((fragmentItems.renameWires (Fin.cast rootLengthEq.symm)).renameRelations
       (Splice.Input.PlugLayout.emptyRelationRenaming hostRels))

@@ -15,16 +15,15 @@ executor bookkeeping as the pre-splice state.  This is the source diagram
 actually consumed by the splice compiler; regions and nodes are unchanged,
 while wire identities are the authoritative attachment classes. -/
 def coalescedInstantiationState
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -49,16 +48,15 @@ def coalescedInstantiationState
   }
 
 @[simp] theorem coalescedInstantiationState_diagram
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -72,16 +70,15 @@ def coalescedInstantiationState
   rfl
 
 @[simp] theorem coalescedInstantiationState_processedAtoms
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -93,16 +90,15 @@ def coalescedInstantiationState
   rfl
 
 @[simp] theorem coalescedInstantiationState_pendingAtoms
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -114,16 +110,15 @@ def coalescedInstantiationState
   rfl
 
 @[simp] theorem coalescedInstantiationState_bubble
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -135,16 +130,15 @@ def coalescedInstantiationState
   rfl
 
 @[simp] theorem coalesced_dropOccurrenceSurvives
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -163,8 +157,7 @@ def coalescedInstantiationState
 well-formed coalesced frame has disjoint endpoint lists, so the quotient image
 is not merely an owner but the unique owner returned by the executor lookup. -/
 theorem coalesced_endpointOwner_eq
-    {signature : List Nat}
-    (spliceInput : Splice.Input signature)
+    (spliceInput : Splice.Input )
     (hadmissible : spliceInput.Admissible)
     (endpoint : CEndpoint spliceInput.frame.val.nodeCount)
     (wire : Fin spliceInput.frame.val.wireCount)
@@ -188,16 +181,15 @@ theorem coalesced_endpointOwner_eq
 /-- The executor's ordered argument vector is preserved pointwise by host
 wire coalescing.  Repeated argument positions remain repeated positions. -/
 theorem coalesced_instantiateArguments
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -236,16 +228,15 @@ theorem coalesced_instantiateArguments
 /-- A compiled current atom in the quotient host denotes the same fixed
 relation at the quotient images of the executor-recorded ordered arguments. -/
 theorem coalesced_compiled_atom_iff_fixedRelation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -257,7 +248,6 @@ theorem coalesced_compiled_atom_iff_fixedRelation
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (quotientWireValue : Fin
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw.wireCount → model.Carrier)
@@ -280,12 +270,12 @@ theorem coalesced_compiled_atom_iff_fixedRelation
     (environment : Fin context.length → model.Carrier)
     (environment_eq : ∀ index,
       environment index = quotientWireValue (context.get index))
-    (item : Item signature context.length rels)
-    (compiled : ConcreteElaboration.compileNode? signature
+    (item : Item  context.length rels)
+    (compiled : ConcreteElaboration.compileNode?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw context binderContext atom =
       some item) :
-    denoteItem model named environment relEnv item ↔
+    denoteItem model  environment relEnv item ↔
       relationValue (fun index => quotientWireValue
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).quotientWire (arguments index))) := by
@@ -305,7 +295,7 @@ theorem coalesced_compiled_atom_iff_fixedRelation
       coalesced_instantiateArguments comprehension attachments binders payload
         state atom site arguments arguments_eq hadmissible
   have main := compiled_atom_iff_fixedRelation payload coalesced atom site
-    mappedArguments coalescedNode coalescedArguments model named
+    mappedArguments coalescedNode coalescedArguments model
     quotientWireValue relationValue context binderContext relEnv fixed relation
     (by simpa [coalesced, coalescedInstantiationState] using lookup)
     environment environment_eq item compiled
@@ -314,16 +304,15 @@ theorem coalesced_compiled_atom_iff_fixedRelation
 /-- The nonzero-spine certificate extracted from the denoting inserted copy
 reconstructs the current atom in the coalesced source survivor. -/
 theorem coalesced_current_atom_denotes_of_terminal
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -336,7 +325,6 @@ theorem coalesced_current_atom_denotes_of_terminal
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (quotientWireValue : Fin
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw.wireCount → model.Carrier)
@@ -354,7 +342,7 @@ theorem coalesced_current_atom_denotes_of_terminal
       (coalescedInstantiationState comprehension attachments binders payload
         state site arguments hadmissible)
       (terminalRelationOfValues payload state site arguments hnonempty model
-        named
+
         (fun wire => quotientWireValue
           ((instantiateSpliceInput comprehension attachments binders payload
             state site arguments).quotientWire wire))
@@ -366,13 +354,13 @@ theorem coalesced_current_atom_denotes_of_terminal
     (environment : Fin context.length → model.Carrier)
     (environment_eq : ∀ index,
       environment index = quotientWireValue (context.get index))
-    (item : Item signature context.length rels)
-    (compiled : ConcreteElaboration.compileNode? signature
+    (item : Item  context.length rels)
+    (compiled : ConcreteElaboration.compileNode?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw context binderContext atom =
       some item)
     (terminal : terminalRelationOfValues payload state site arguments hnonempty
-      model named
+      model
       (fun wire => quotientWireValue
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).quotientWire wire))
@@ -380,11 +368,11 @@ theorem coalesced_current_atom_denotes_of_terminal
       (fun index => quotientWireValue
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).quotientWire (arguments index)))) :
-    denoteItem model named environment relEnv item := by
+    denoteItem model  environment relEnv item := by
   apply (coalesced_compiled_atom_iff_fixedRelation comprehension attachments
     binders payload state atom site arguments node_eq arguments_eq hadmissible
-    model named quotientWireValue
-    (terminalRelationOfValues payload state site arguments hnonempty model named
+    model  quotientWireValue
+    (terminalRelationOfValues payload state site arguments hnonempty model
       (fun wire => quotientWireValue
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).quotientWire wire)) values)
@@ -395,16 +383,15 @@ theorem coalesced_current_atom_denotes_of_terminal
 /-- Zero-spine copy extraction reconstructs the same current atom using the
 payload's authoritative interpreted open comprehension. -/
 theorem coalesced_current_atom_denotes_of_interpreted
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -416,7 +403,6 @@ theorem coalesced_current_atom_denotes_of_interpreted
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (quotientWireValue : Fin
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw.wireCount → model.Carrier)
@@ -431,7 +417,7 @@ theorem coalesced_current_atom_denotes_of_interpreted
     (fixed : FixedRelationAt payload
       (coalescedInstantiationState comprehension attachments binders payload
         state site arguments hadmissible)
-      (payload.interpretedRelation model named
+      (payload.interpretedRelation model
         (fun index => quotientWireValue
           ((instantiateSpliceInput comprehension attachments binders payload
             state site arguments).quotientWire (state.parameters index))))
@@ -442,23 +428,23 @@ theorem coalesced_current_atom_denotes_of_interpreted
     (environment : Fin context.length → model.Carrier)
     (environment_eq : ∀ index,
       environment index = quotientWireValue (context.get index))
-    (item : Item signature context.length rels)
-    (compiled : ConcreteElaboration.compileNode? signature
+    (item : Item  context.length rels)
+    (compiled : ConcreteElaboration.compileNode?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw context binderContext atom =
       some item)
-    (interpreted : payload.interpretedRelation model named
+    (interpreted : payload.interpretedRelation model
       (fun index => quotientWireValue
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).quotientWire (state.parameters index)))
       (fun index => quotientWireValue
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).quotientWire (arguments index)))) :
-    denoteItem model named environment relEnv item := by
+    denoteItem model  environment relEnv item := by
   apply (coalesced_compiled_atom_iff_fixedRelation comprehension attachments
     binders payload state atom site arguments node_eq arguments_eq hadmissible
-    model named quotientWireValue
-    (payload.interpretedRelation model named
+    model  quotientWireValue
+    (payload.interpretedRelation model
       (fun index => quotientWireValue
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).quotientWire (state.parameters index))))

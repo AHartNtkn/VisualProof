@@ -1057,9 +1057,7 @@ theorem doubleCutIntroRaw_regular_nodeShape
       | .atom owner binder =>
           .atom (Fin.castAdd 2 owner) (Fin.castAdd 2 binder)
       | .identity owner arity =>
-          .identity (Fin.castAdd 2 owner) arity
-      | .named owner definition arity =>
-          .named (Fin.castAdd 2 owner) definition arity := by
+          .identity (Fin.castAdd 2 owner) arity := by
   have nodeNotSelected : node ∉ selection.val.directNodes := by
     intro selected
     have atAnchor :=
@@ -1077,9 +1075,7 @@ theorem doubleCutIntroRaw_selected_nodeShape
       | .atom _ binder =>
           .atom (doubleCutInner input) (Fin.castAdd 2 binder)
       | .identity _ arity =>
-          .identity (doubleCutInner input) arity
-      | .named _ definition arity =>
-          .named (doubleCutInner input) definition arity := by
+          .identity (doubleCutInner input) arity := by
   rw [doubleCutIntroRaw_node, if_pos selected]
   cases input.nodes node <;> rfl
 
@@ -1092,9 +1088,7 @@ theorem doubleCutIntroRaw_unselected_nodeShape
       | .atom owner binder =>
           .atom (Fin.castAdd 2 owner) (Fin.castAdd 2 binder)
       | .identity owner arity =>
-          .identity (Fin.castAdd 2 owner) arity
-      | .named owner definition arity =>
-          .named (Fin.castAdd 2 owner) definition arity := by
+          .identity (Fin.castAdd 2 owner) arity := by
   rw [doubleCutIntroRaw_node, if_neg unselected]
   cases input.nodes node <;> rfl
 
@@ -1239,14 +1233,13 @@ theorem finishRegion_noWires_denote
     (region : Fin diagram.regionCount)
     (empty :
       ConcreteElaboration.exactScopeWires diagram region = [])
-    (items : ItemSeq signature (context.extend region).length rels)
+    (items : ItemSeq  (context.extend region).length rels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
-    denoteRegion model named env relEnv
+    denoteRegion model  env relEnv
         (ConcreteElaboration.finishRegion diagram context region items) ↔
-      denoteItemSeq model named env relEnv
+      denoteItemSeq model  env relEnv
         (items.castWiresEq
           (congrArg List.length (by
             unfold ConcreteElaboration.WireContext.extend
@@ -1306,7 +1299,6 @@ theorem finishRegion_noWires_denote
 private theorem doubleCutIntro_compileNode_itemSimulation
     (input : ConcreteDiagram) (selection : CheckedSelection input)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext input)
     (targetContext : ConcreteElaboration.WireContext
@@ -1327,19 +1319,17 @@ private theorem doubleCutIntro_compileNode_itemSimulation
         | .atom owner binder =>
             .atom (regionMap owner) (Fin.castAdd 2 binder)
         | .identity owner arity =>
-            .identity (regionMap owner) arity
-        | .named owner definition arity =>
-            .named (regionMap owner) definition arity)
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
+            .identity (regionMap owner) arity)
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileNode? signature input sourceContext
+      ConcreteElaboration.compileNode?  input sourceContext
         sourceBinders node = some sourceItem)
     (targetCompiled :
-      ConcreteElaboration.compileNode? signature
+      ConcreteElaboration.compileNode?
         (doubleCutIntroRaw input selection) targetContext targetBinders node =
           some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       contextWitness.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   rcases contextWitness with ⟨contextsEq⟩
@@ -1347,7 +1337,7 @@ private theorem doubleCutIntro_compileNode_itemSimulation
   apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
     (source := input)
     (target := doubleCutIntroRaw input selection)
-    model named direction sourceContext sourceContext
+    model  direction sourceContext sourceContext
     (ConcreteElaboration.ContextIndexRelation.forwardMap id)
     sourceBinders targetBinders binderWitness.relationMap
     node node regionMap (Fin.castAdd 2)
@@ -1368,11 +1358,10 @@ private theorem doubleCutIntro_compileNode_itemSimulation
 
 theorem doubleCutIntro_compileOccurrence_itemSimulation
     (input : ConcreteDiagram) (selection : CheckedSelection input)
-    (sourceWellFormed : input.WellFormed signature)
+    (sourceWellFormed : input.WellFormed )
     (targetWellFormed :
-      (doubleCutIntroRaw input selection).WellFormed signature)
+      (doubleCutIntroRaw input selection).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
     (sourceParent : Fin input.regionCount)
@@ -1408,9 +1397,7 @@ theorem doubleCutIntro_compileOccurrence_itemSimulation
         | .atom owner binder =>
             .atom (regionMap owner) (Fin.castAdd 2 binder)
         | .identity owner arity =>
-            .identity (regionMap owner) arity
-        | .named owner definition arity =>
-            .named (regionMap owner) definition arity)
+            .identity (regionMap owner) arity)
     (regionShape : ∀ child,
       occurrence = .child child →
       (input.regions child).parent? = some sourceParent →
@@ -1449,40 +1436,40 @@ theorem doubleCutIntro_compileOccurrence_itemSimulation
       (childTargetContext.extend (Fin.castAdd 2 child)).Exact
         (Fin.castAdd 2 child) →
       ∀ (sourceBody :
-          Region signature childSourceContext.length childSourceRels)
+          Region  childSourceContext.length childSourceRels)
         (targetBody :
-          Region signature childTargetContext.length childTargetRels),
-      ConcreteElaboration.compileRegion? signature input fuelSource child
+          Region  childTargetContext.length childTargetRels),
+      ConcreteElaboration.compileRegion?  input fuelSource child
           childSourceContext childSourceBinders = some sourceBody →
-      ConcreteElaboration.compileRegion? signature
+      ConcreteElaboration.compileRegion?
           (doubleCutIntroRaw input selection) childFuelTarget
           (Fin.castAdd 2 child) childTargetContext childTargetBinders =
         some targetBody →
-      ConcreteElaboration.RegionSimulation model named childDirection
+      ConcreteElaboration.RegionSimulation model  childDirection
         childContext.indexRelation
         (sourceBody.renameRelations childBinderWitness.relationMap)
         targetBody)
     (member :
       occurrence ∈ ConcreteElaboration.localOccurrences input sourceParent)
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrenceWith? signature input
-        (ConcreteElaboration.compileRegion? signature input fuelSource)
+      ConcreteElaboration.compileOccurrenceWith?  input
+        (ConcreteElaboration.compileRegion?  input fuelSource)
         sourceContext sourceBinders occurrence = some sourceItem)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrenceWith? signature
+      ConcreteElaboration.compileOccurrenceWith?
         (doubleCutIntroRaw input selection)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (doubleCutIntroRaw input selection) fuelTarget)
         targetContext targetBinders (liftOccurrence input occurrence) =
           some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       contextWitness.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   cases occurrence with
   | node node =>
-      exact doubleCutIntro_compileNode_itemSimulation input selection model named
+      exact doubleCutIntro_compileNode_itemSimulation input selection model
         direction sourceContext targetContext contextWitness sourceBinders
         targetBinders binderWitness node regionMap (nodeShape node rfl)
         sourceItem targetItem sourceCompiled targetCompiled
@@ -1501,7 +1488,7 @@ theorem doubleCutIntro_compileOccurrence_itemSimulation
           subst actualParent
           simp only [sourceKind] at targetKind
           cases sourceResult :
-              ConcreteElaboration.compileRegion? signature input fuelSource
+              ConcreteElaboration.compileRegion?  input fuelSource
                 child sourceContext sourceBinders with
           | none =>
               simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
@@ -1511,7 +1498,7 @@ theorem doubleCutIntro_compileOccurrence_itemSimulation
                 sourceResult] at sourceCompiled
               subst sourceItem
               cases targetResult :
-                  ConcreteElaboration.compileRegion? signature
+                  ConcreteElaboration.compileRegion?
                     (doubleCutIntroRaw input selection) fuelTarget
                     (Fin.castAdd 2 child) targetContext targetBinders with
               | none =>
@@ -1559,7 +1546,7 @@ theorem doubleCutIntro_compileOccurrence_itemSimulation
           let sourcePushed := sourceBinders.push child arity
           let targetPushed := targetBinders.push (Fin.castAdd 2 child) arity
           cases sourceResult :
-              ConcreteElaboration.compileRegion? signature input fuelSource
+              ConcreteElaboration.compileRegion?  input fuelSource
                 child sourceContext sourcePushed with
           | none =>
               simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
@@ -1569,7 +1556,7 @@ theorem doubleCutIntro_compileOccurrence_itemSimulation
                 sourcePushed, sourceResult] at sourceCompiled
               subst sourceItem
               cases targetResult :
-                  ConcreteElaboration.compileRegion? signature
+                  ConcreteElaboration.compileRegion?
                     (doubleCutIntroRaw input selection) fuelTarget
                     (Fin.castAdd 2 child) targetContext targetPushed with
               | none =>
@@ -1631,31 +1618,31 @@ theorem compileOccurrence_success_of_mem
       (region : Fin diagram.regionCount) →
       (context : ConcreteElaboration.WireContext diagram) →
       ConcreteElaboration.BinderContext diagram rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (context : ConcreteElaboration.WireContext diagram)
     (binders : ConcreteElaboration.BinderContext diagram rels)
     {occurrences : List
       (ConcreteElaboration.LocalOccurrence diagram.regionCount
         diagram.nodeCount)}
-    {items : ItemSeq signature context.length rels}
+    {items : ItemSeq  context.length rels}
     (compiled :
-      ConcreteElaboration.compileOccurrencesWith? signature diagram recurse
+      ConcreteElaboration.compileOccurrencesWith?  diagram recurse
         context binders occurrences = some items)
     {occurrence} (member : occurrence ∈ occurrences) :
     ∃ item,
-      ConcreteElaboration.compileOccurrenceWith? signature diagram recurse
+      ConcreteElaboration.compileOccurrenceWith?  diagram recurse
         context binders occurrence = some item := by
   induction occurrences generalizing items with
   | nil => simp at member
   | cons head tail induction =>
       simp only [ConcreteElaboration.compileOccurrencesWith?] at compiled
       cases headResult :
-          ConcreteElaboration.compileOccurrenceWith? signature diagram recurse
+          ConcreteElaboration.compileOccurrenceWith?  diagram recurse
             context binders head with
       | none => simp [headResult] at compiled
       | some headItem =>
           cases tailResult :
-              ConcreteElaboration.compileOccurrencesWith? signature diagram
+              ConcreteElaboration.compileOccurrencesWith?  diagram
                 recurse context binders tail with
           | none => simp [headResult, tailResult] at compiled
           | some tailItems =>
@@ -1671,26 +1658,25 @@ theorem compileOccurrences_denote_perm
       (region : Fin diagram.regionCount) →
       (context : ConcreteElaboration.WireContext diagram) →
       ConcreteElaboration.BinderContext diagram rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (context : ConcreteElaboration.WireContext diagram)
     (binders : ConcreteElaboration.BinderContext diagram rels)
     {sourceOccurrences targetOccurrences : List
       (ConcreteElaboration.LocalOccurrence diagram.regionCount
         diagram.nodeCount)}
     (permutation : List.Perm sourceOccurrences targetOccurrences)
-    {sourceItems targetItems : ItemSeq signature context.length rels}
+    {sourceItems targetItems : ItemSeq  context.length rels}
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature diagram recurse
+      ConcreteElaboration.compileOccurrencesWith?  diagram recurse
         context binders sourceOccurrences = some sourceItems)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature diagram recurse
+      ConcreteElaboration.compileOccurrencesWith?  diagram recurse
         context binders targetOccurrences = some targetItems)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
-    denoteItemSeq model named env relEnv sourceItems ↔
-      denoteItemSeq model named env relEnv targetItems := by
+    denoteItemSeq model  env relEnv sourceItems ↔
+      denoteItemSeq model  env relEnv targetItems := by
   induction permutation generalizing sourceItems targetItems with
   | nil =>
       simp only [ConcreteElaboration.compileOccurrencesWith?] at sourceCompiled targetCompiled
@@ -1700,17 +1686,17 @@ theorem compileOccurrences_denote_perm
   | @cons head sourceTailOccurrences targetTailOccurrences permutation induction =>
       simp only [ConcreteElaboration.compileOccurrencesWith?] at sourceCompiled targetCompiled
       cases headResult :
-          ConcreteElaboration.compileOccurrenceWith? signature diagram recurse
+          ConcreteElaboration.compileOccurrenceWith?  diagram recurse
             context binders head with
       | none => simp [headResult] at sourceCompiled
       | some headItem =>
           cases sourceTailResult :
-              ConcreteElaboration.compileOccurrencesWith? signature diagram
+              ConcreteElaboration.compileOccurrencesWith?  diagram
                 recurse context binders sourceTailOccurrences with
           | none => simp [headResult, sourceTailResult] at sourceCompiled
           | some sourceTail =>
               cases targetTailResult :
-                  ConcreteElaboration.compileOccurrencesWith? signature diagram
+                  ConcreteElaboration.compileOccurrencesWith?  diagram
                     recurse context binders targetTailOccurrences with
               | none => simp [headResult, targetTailResult] at targetCompiled
               | some targetTail =>
@@ -1731,17 +1717,17 @@ theorem compileOccurrences_denote_perm
   | swap first second tail =>
       simp only [ConcreteElaboration.compileOccurrencesWith?] at sourceCompiled targetCompiled
       cases firstResult :
-          ConcreteElaboration.compileOccurrenceWith? signature diagram recurse
+          ConcreteElaboration.compileOccurrenceWith?  diagram recurse
             context binders first with
       | none => simp [firstResult] at sourceCompiled
       | some firstItem =>
           cases secondResult :
-              ConcreteElaboration.compileOccurrenceWith? signature diagram
+              ConcreteElaboration.compileOccurrenceWith?  diagram
                 recurse context binders second with
           | none => simp [firstResult, secondResult] at sourceCompiled
           | some secondItem =>
               cases tailResult :
-                  ConcreteElaboration.compileOccurrencesWith? signature diagram
+                  ConcreteElaboration.compileOccurrencesWith?  diagram
                     recurse context binders tail with
               | none =>
                   simp [firstResult, secondResult, tailResult] at sourceCompiled
@@ -1770,14 +1756,14 @@ theorem compileOccurrences_denote_perm
       exact firstEquivalence.trans secondEquivalence
 
 noncomputable def doubleCutIntroSimulation
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (targetWellFormed :
-      (doubleCutIntroRaw input.val selection).WellFormed signature)
+      (doubleCutIntroRaw input.val selection).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
-    ConcreteElaboration.ConcreteSemanticSimulation signature input.val
-      (doubleCutIntroRaw input.val selection) model named where
+    :
+    ConcreteElaboration.ConcreteSemanticSimulation  input.val
+      (doubleCutIntroRaw input.val selection) model  where
   source_wellFormed := input.property
   target_wellFormed := targetWellFormed
   regionMap := Fin.castAdd 2
@@ -1862,12 +1848,12 @@ noncomputable def doubleCutIntroSimulation
         (target := doubleCutIntroRaw input.val selection)
         sourceContext sourceContext region (Fin.castAdd 2 region)
         (ConcreteElaboration.ContextIndexRelation.forwardMap id)
-        model named relEnv
+        model  relEnv
         (sourceItems.renameRelations
           (ConcreteElaboration.identityRelationRenaming sourceRels))
         targetItems
     rw [identityRelationRenamingEq, ItemSeq.renameRelations_id]
-    change ConcreteElaboration.ItemSeqSimulation model named direction
+    change ConcreteElaboration.ItemSeqSimulation model  direction
       (LiftedContextWitness.indexRelation extendedWitness)
       (sourceItems.renameRelations
         (ConcreteElaboration.identityRelationRenaming sourceRels))
@@ -1879,7 +1865,7 @@ noncomputable def doubleCutIntroSimulation
       direction sourceContext sourceContext region (Fin.castAdd 2 region)
       (ConcreteElaboration.ContextIndexRelation.forwardMap id)
       (LiftedContextWitness.indexRelation extendedWitness)
-      model named sourceItems targetItems
+      model  sourceItems targetItems
     · intro sourceOuter targetOuter outerAgrees
       have outerEq : sourceOuter = targetOuter := by
         simpa only [
@@ -1959,7 +1945,7 @@ noncomputable def doubleCutIntroSimulation
     apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
       (source := input.val)
       (target := doubleCutIntroRaw input.val selection)
-      model named direction sourceContext sourceContext
+      model  direction sourceContext sourceContext
       (ConcreteElaboration.ContextIndexRelation.forwardMap id)
       sourceBinders targetBinders
       (LiftedBinderWitness.relationMap binderWitness)
@@ -1994,9 +1980,9 @@ noncomputable def doubleCutIntroSimulation
         outerTargetCompiled, targetItemsEq⟩ :=
       ConcreteElaboration.compileOccurrencesWith?_append_split
         (d := doubleCutIntroRaw input.val selection)
-        (signature := signature)
+
         (fun {rels} =>
-          ConcreteElaboration.compileRegion? signature
+          ConcreteElaboration.compileRegion?
             (doubleCutIntroRaw input.val selection) fuelTarget)
         (targetContext.extend (Fin.castAdd 2 selection.val.anchor))
         targetBinders
@@ -2010,7 +1996,7 @@ noncomputable def doubleCutIntroSimulation
     simp only [ConcreteElaboration.compileOccurrenceWith?,
       doubleCutIntroRaw_outer] at outerTargetCompiled
     cases outerRegionResult :
-        ConcreteElaboration.compileRegion? signature
+        ConcreteElaboration.compileRegion?
           (doubleCutIntroRaw input.val selection) fuelTarget
           (doubleCutOuter input.val)
           (targetContext.extend (Fin.castAdd 2 selection.val.anchor))
@@ -2040,7 +2026,7 @@ noncomputable def doubleCutIntroSimulation
               ConcreteElaboration.compileOccurrenceWith?,
               doubleCutIntroRaw_inner] at outerItemsResult
             cases innerRegionResult :
-                ConcreteElaboration.compileRegion? signature
+                ConcreteElaboration.compileRegion?
                   (doubleCutIntroRaw input.val selection) outerFuel
                   (doubleCutInner input.val)
                   ((targetContext.extend
@@ -2078,9 +2064,9 @@ noncomputable def doubleCutIntroSimulation
                             ConcreteElaboration.WireContext input.val) →
                           ConcreteElaboration.BinderContext input.val rels →
                           Option
-                            (Region signature childContext.length rels) :=
+                            (Region  childContext.length rels) :=
                       fun {rels} =>
-                        ConcreteElaboration.compileRegion? signature input.val
+                        ConcreteElaboration.compileRegion?  input.val
                           fuelSource
                     obtain ⟨partitionSourceItems, partitionSourceCompiled⟩ :=
                       ConcreteElaboration.compileOccurrencesWith?_complete
@@ -2111,23 +2097,23 @@ noncomputable def doubleCutIntroSimulation
                         ∀ occurrence,
                           occurrence ∈ keptOccurrences input.val selection →
                           ∀ (sourceItem :
-                              Item signature
+                              Item
                                 (sourceContext.extend
                                   selection.val.anchor).length sourceRels)
                             (targetItem :
-                              Item signature
+                              Item
                                 (targetContext.extend
                                   (Fin.castAdd 2
                                     selection.val.anchor)).length sourceRels),
                           ConcreteElaboration.compileOccurrenceWith?
-                              signature input.val sourceRecurse
+                               input.val sourceRecurse
                               (sourceContext.extend selection.val.anchor)
                               sourceBinders occurrence =
                             some sourceItem →
                           ConcreteElaboration.compileOccurrenceWith?
-                              signature
+
                               (doubleCutIntroRaw input.val selection)
-                              (ConcreteElaboration.compileRegion? signature
+                              (ConcreteElaboration.compileRegion?
                                 (doubleCutIntroRaw input.val selection)
                                 (innerFuel + 1 + 1))
                               (targetContext.extend
@@ -2135,7 +2121,7 @@ noncomputable def doubleCutIntroSimulation
                               targetBinders
                               (liftOccurrence input.val occurrence) =
                             some targetItem →
-                          ConcreteElaboration.ItemSimulation model named
+                          ConcreteElaboration.ItemSimulation model
                             direction
                             (witness.extend
                               selection.val.anchor).indexRelation
@@ -2150,7 +2136,7 @@ noncomputable def doubleCutIntroSimulation
                         (List.mem_filter.mp filteredMember).1
                       apply doubleCutIntro_compileOccurrence_itemSimulation
                         input.val selection input.property targetWellFormed
-                        model named direction fuelSource
+                        model  direction fuelSource
                         (innerFuel + 1 + 1)
                         selection.val.anchor
                         (Fin.castAdd 2 selection.val.anchor)
@@ -2254,11 +2240,11 @@ noncomputable def doubleCutIntroSimulation
                         ∀ occurrence,
                           occurrence ∈ selectedOccurrences input.val selection →
                           ∀ (sourceItem :
-                              Item signature
+                              Item
                                 (sourceContext.extend
                                   selection.val.anchor).length sourceRels)
                             (targetItem :
-                              Item signature
+                              Item
                                 (((targetContext.extend
                                   (Fin.castAdd 2
                                     selection.val.anchor)).extend
@@ -2266,14 +2252,14 @@ noncomputable def doubleCutIntroSimulation
                                         (doubleCutInner input.val)).length
                                 sourceRels),
                           ConcreteElaboration.compileOccurrenceWith?
-                              signature input.val sourceRecurse
+                               input.val sourceRecurse
                               (sourceContext.extend selection.val.anchor)
                               sourceBinders occurrence =
                             some sourceItem →
                           ConcreteElaboration.compileOccurrenceWith?
-                              signature
+
                               (doubleCutIntroRaw input.val selection)
-                              (ConcreteElaboration.compileRegion? signature
+                              (ConcreteElaboration.compileRegion?
                                 (doubleCutIntroRaw input.val selection)
                                 innerFuel)
                               (((targetContext.extend
@@ -2284,7 +2270,7 @@ noncomputable def doubleCutIntroSimulation
                               targetBinders
                               (liftOccurrence input.val occurrence) =
                             some targetItem →
-                          ConcreteElaboration.ItemSimulation model named
+                          ConcreteElaboration.ItemSimulation model
                             direction selectedContextWitness.indexRelation
                             (sourceItem.renameRelations
                               binderWitness.relationMap)
@@ -2297,7 +2283,7 @@ noncomputable def doubleCutIntroSimulation
                         (List.mem_filter.mp filteredMember).1
                       apply doubleCutIntro_compileOccurrence_itemSimulation
                         input.val selection input.property targetWellFormed
-                        model named direction fuelSource innerFuel
+                        model  direction fuelSource innerFuel
                         selection.val.anchor (doubleCutInner input.val)
                         (sourceContext.extend selection.val.anchor)
                         (((targetContext.extend
@@ -2329,8 +2315,8 @@ noncomputable def doubleCutIntroSimulation
                       · exact targetOccurrenceCompiled
                     have keptSimulation :=
                       ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
-                        model named direction sourceRecurse
-                        (ConcreteElaboration.compileRegion? signature
+                        model  direction sourceRecurse
+                        (ConcreteElaboration.compileRegion?
                           (doubleCutIntroRaw input.val selection)
                           (innerFuel + 1 + 1))
                         (sourceContext.extend selection.val.anchor)
@@ -2345,8 +2331,8 @@ noncomputable def doubleCutIntroSimulation
                         keptSourceCompiled keptTargetCompiled
                     have selectedSimulation :=
                       ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
-                        model named direction sourceRecurse
-                        (ConcreteElaboration.compileRegion? signature
+                        model  direction sourceRecurse
+                        (ConcreteElaboration.compileRegion?
                           (doubleCutIntroRaw input.val selection) innerFuel)
                         (sourceContext.extend selection.val.anchor)
                         (((targetContext.extend
@@ -2368,7 +2354,7 @@ noncomputable def doubleCutIntroSimulation
                               selection.val.anchor)).length →
                             model.Carrier)
                         (relEnv : RelEnv model.Carrier sourceRels) :
-                        denoteItem model named targetEnv relEnv
+                        denoteItem model  targetEnv relEnv
                             (.cut
                               (ConcreteElaboration.finishRegion
                                 (doubleCutIntroRaw input.val selection)
@@ -2386,7 +2372,7 @@ noncomputable def doubleCutIntroSimulation
                                       (doubleCutInner input.val)
                                       selectedTargetItems))
                                   .nil))) ↔
-                          denoteItemSeq model named
+                          denoteItemSeq model
                             (fun index =>
                               targetEnv (Fin.cast
                                 (congrArg List.length
@@ -2417,7 +2403,7 @@ noncomputable def doubleCutIntroSimulation
                         denoteItemSeq_renameWires]
                       apply iff_of_eq
                       apply congrArg (fun environment =>
-                        denoteItemSeq model named environment relEnv
+                        denoteItemSeq model  environment relEnv
                           selectedTargetItems)
                       funext index
                       apply congrArg targetEnv
@@ -2432,7 +2418,7 @@ noncomputable def doubleCutIntroSimulation
                       rfl
                     rw [relationMapEq, ItemSeq.renameRelations_id] at keptSimulation selectedSimulation
                     have focusedItemsSimulation :
-                        ConcreteElaboration.ItemSeqSimulation model named
+                        ConcreteElaboration.ItemSeqSimulation model
                           direction
                           (witness.extend
                             selection.val.anchor).indexRelation
@@ -2466,7 +2452,7 @@ noncomputable def doubleCutIntroSimulation
                           (anchorOccurrences_perm_partition input.val
                             selection).symm
                           sourceCompiled partitionSourceCompiled
-                          model named sourceEnv relEnv
+                          model  sourceEnv relEnv
                       rw [partitionSourceItemsEq,
                         denoteItemSeq_append] at sourcePartition
                       have keptEntailment :=
@@ -2538,7 +2524,7 @@ noncomputable def doubleCutIntroSimulation
                       selection.val.anchor
                       (Fin.castAdd 2 selection.val.anchor)
                       (ConcreteElaboration.ContextIndexRelation.forwardMap id)
-                      model named
+                      model
                     intro relEnv
                     apply ConcreteElaboration.directionalLocalTransport_of_agreement
                       (source := input.val)
@@ -2548,7 +2534,7 @@ noncomputable def doubleCutIntroSimulation
                       (Fin.castAdd 2 selection.val.anchor)
                       (ConcreteElaboration.ContextIndexRelation.forwardMap id)
                       extendedWitness.indexRelation
-                      model named
+                      model
                     · intro sourceOuter targetOuter outerAgrees
                       have outerEq : sourceOuter = targetOuter := by
                         simpa only [

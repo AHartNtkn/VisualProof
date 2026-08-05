@@ -142,10 +142,9 @@ theorem castTarget_agrees
 /-- Extend the origin relation through a surviving source region. Exact local
 wires correspond by compact scope injectivity. -/
 def extend
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}

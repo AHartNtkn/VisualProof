@@ -12,10 +12,9 @@ namespace InstantiationTrace
 final-to-original simulation: preserved frame regions and the single promoted
 focus. -/
 def FinalAdmissible
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -30,16 +29,15 @@ def FinalAdmissible
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin elimTrace.sourceDiagram.regionCount) : Prop :=
   copyTrace.FinalRegularPreimage elimTrace finalWellFormed region ∨
     region = elimTrace.targetIndex finalWellFormed
 
 theorem reverseRegionMap_injective_of_admissible
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -54,7 +52,7 @@ theorem reverseRegionMap_injective_of_admissible
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     {first second : Fin elimTrace.sourceDiagram.regionCount}
     (firstAdmissible : copyTrace.FinalAdmissible elimTrace finalWellFormed
       first)
@@ -90,10 +88,9 @@ theorem reverseRegionMap_injective_of_admissible
     · exact secondFocus.symm
 
 theorem child_admissible_of_regular_parent
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -108,7 +105,7 @@ theorem child_admissible_of_regular_parent
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (parent child : Fin elimTrace.sourceDiagram.regionCount)
     (parentRegular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       parent)
@@ -145,10 +142,9 @@ theorem child_admissible_of_regular_parent
 section BinderWitness
 
 variable
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -165,7 +161,7 @@ def FinalBindersMapped
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (sourceBinders : ConcreteElaboration.BinderContext
       elimTrace.sourceDiagram sourceRels)
     (targetBinders : ConcreteElaboration.BinderContext input.val targetRels)
@@ -181,7 +177,7 @@ structure FinalBinderWitness
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     {sourceRels targetRels : RelCtx}
     (sourceBinders : ConcreteElaboration.BinderContext
       elimTrace.sourceDiagram sourceRels)
@@ -201,7 +197,7 @@ def pushAdmissible
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     {finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature}
+      (dropInstantiationAtomsRaw result).WellFormed }
     {sourceRels targetRels : RelCtx}
     {sourceBinders : ConcreteElaboration.BinderContext
       elimTrace.sourceDiagram sourceRels}
@@ -278,7 +274,7 @@ def empty
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature) :
+      (dropInstantiationAtomsRaw result).WellFormed ) :
     FinalBinderWitness copyTrace elimTrace finalWellFormed
       ConcreteElaboration.BinderContext.empty
       ConcreteElaboration.BinderContext.empty where
@@ -293,7 +289,7 @@ def push
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     {finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature}
+      (dropInstantiationAtomsRaw result).WellFormed }
     {sourceRels targetRels : RelCtx}
     {sourceBinders : ConcreteElaboration.BinderContext
       elimTrace.sourceDiagram sourceRels}

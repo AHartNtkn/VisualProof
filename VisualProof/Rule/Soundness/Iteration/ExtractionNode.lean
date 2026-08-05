@@ -12,7 +12,7 @@ open VisualProof.Theory
 container represents the anchor; copied material regions retain provenance.
 Other cases are total only so this can serve as the compiler's region map. -/
 def extractionRegionOrigin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
     Fin layout.regionCount → Fin input.val.regionCount :=
@@ -28,7 +28,7 @@ def extractionRegionOrigin
 
 /-- The host binder represented by an extracted region. -/
 def extractionBinderOrigin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
     Fin layout.regionCount → Fin input.val.regionCount :=
@@ -41,7 +41,7 @@ def extractionBinderOrigin
         omega) region)
 
 @[simp] theorem extractionBinderOrigin_proxy
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (proxy : Fin layout.proxyCount) :
@@ -52,7 +52,7 @@ def extractionBinderOrigin
   simp [FragmentLayout.proxyCount, FragmentLayout.materialRegionCount]
 
 @[simp] theorem extractionBinderOrigin_materialRegion
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount) :
@@ -64,7 +64,7 @@ def extractionBinderOrigin
   simp [FragmentLayout.proxyCount, FragmentLayout.materialRegionCount]
 
 theorem extractionRegionOrigin_bodyContainer
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
     extractionRegionOrigin input selection layout layout.bodyContainer =
@@ -72,7 +72,7 @@ theorem extractionRegionOrigin_bodyContainer
   simp [extractionRegionOrigin]
 
 @[simp] theorem extractionRegionOrigin_materialRegion
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount) :
@@ -91,7 +91,7 @@ theorem extractionRegionOrigin_bodyContainer
   simp [FragmentLayout.proxyCount, FragmentLayout.materialRegionCount]
 
 theorem extractionRegionOrigin_fragmentParent_of_selectedNode
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (node : Fin layout.nodeCount) :
@@ -116,7 +116,7 @@ theorem extractionRegionOrigin_fragmentParent_of_selectedNode
     rw [hmapped, extractionRegionOrigin_materialRegion, hget]
 
 theorem extractionBinderOrigin_fragmentBinder
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {binder : Fin input.val.regionCount}
@@ -162,7 +162,7 @@ theorem extractionBinderOrigin_fragmentBinder
 /-- Every copied node has exactly the host shape after applying extraction
 provenance to its owner and binder. -/
 theorem extractionNode_shape
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (node : Fin layout.nodeCount) :
@@ -173,22 +173,13 @@ theorem extractionNode_shape
             arity
       | .atom region binder =>
           .atom (extractionRegionOrigin input selection layout region)
-            (extractionBinderOrigin input selection layout binder)
-      | .named region definition arity =>
-          .named (extractionRegionOrigin input selection layout region)
-            definition arity := by
+            (extractionBinderOrigin input selection layout binder) := by
   have howner := extractionRegionOrigin_fragmentParent_of_selectedNode input
     selection layout node
   cases hnode : input.val.nodes (selection.selectedNodes.get node) with
   | identity region arity =>
       rw [input.val.extractDiagramRaw_node_identity selection layout node region
         arity hnode]
-      simp only
-      simp only [hnode, CNode.region] at howner
-      rw [howner]
-  | named region definition arity =>
-      rw [input.val.extractDiagramRaw_node_named selection layout node region
-        definition arity hnode]
       simp only
       simp only [hnode, CNode.region] at howner
       rw [howner]
@@ -212,7 +203,7 @@ theorem extractionNode_shape
       rw [howner, hbinderOrigin]
 
 theorem extractionBinderOrigin_terminalBinder
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {rels : RelCtx}
@@ -238,7 +229,7 @@ theorem extractionBinderOrigin_terminalBinder
 /-- Port lookup on a copied extraction node is exactly host lookup after the
 authoritative extraction wire-provenance map. -/
 theorem extractionResolvePort_map
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -287,7 +278,7 @@ theorem extractionResolvePort_map
 /-- The two port indices returned by successful extracted and host lookups are
 related by extraction's concrete context relation. -/
 theorem extractionResolvePort_related
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -318,11 +309,10 @@ theorem extractionResolvePort_related
 transported backward because iteration needs the retained host occurrence to
 entail the extracted pattern occurrence. -/
 theorem extractionCompileNode_itemSimulation
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (fragmentContext : ConcreteElaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
     (hostContext : ConcreteElaboration.WireContext input.val)
@@ -337,15 +327,15 @@ theorem extractionCompileNode_itemSimulation
     (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
     (hostCover : hostBinders.Covers selection.val.anchor)
     (node : Fin layout.nodeCount)
-    (fragmentItem : Item signature fragmentContext.length fragmentRels)
-    (hostItem : Item signature hostContext.length hostRels)
-    (fragmentCompiled : ConcreteElaboration.compileNode? signature
+    (fragmentItem : Item  fragmentContext.length fragmentRels)
+    (hostItem : Item  hostContext.length hostRels)
+    (fragmentCompiled : ConcreteElaboration.compileNode?
       (input.val.extractDiagramRaw selection layout) fragmentContext
       fragmentBinders node = some fragmentItem)
-    (hostCompiled : ConcreteElaboration.compileNode? signature input.val
+    (hostCompiled : ConcreteElaboration.compileNode?  input.val
       hostContext hostBinders (selection.selectedNodes.get node) =
         some hostItem) :
-    ConcreteElaboration.ItemSimulation model named .backward
+    ConcreteElaboration.ItemSimulation model  .backward
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
       (fragmentItem.renameRelations
@@ -353,7 +343,7 @@ theorem extractionCompileNode_itemSimulation
           fragmentBinders fragmentEnumeration hostBinders hostCover))
       hostItem := by
   apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
-    model named .backward fragmentContext hostContext
+    model  .backward fragmentContext hostContext
     (extractionContextRelation input selection layout fragmentContext
       hostContext)
     fragmentBinders hostBinders
@@ -368,12 +358,6 @@ theorem extractionCompileNode_itemSimulation
     | identity region arity =>
         rw [input.val.extractDiagramRaw_node_identity selection layout node region
           arity hnode]
-        simp only
-        simp only [hnode, CNode.region] at howner
-        rw [howner]
-    | named region definition arity =>
-        rw [input.val.extractDiagramRaw_node_named selection layout node region
-          definition arity hnode]
         simp only
         simp only [hnode, CNode.region] at howner
         rw [howner]

@@ -11,29 +11,27 @@ namespace InstantiationSemantic
 /-- The exact terminal compiler focus produced during vacuous reconstruction
 is a semantic presentation of the final moving bubble. -/
 noncomputable def finalBubblePresentation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
     (scopes : ParameterScopesAtBubble state)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     {rels : RelCtx}
     (outer : ConcreteElaboration.WireContext state.diagram.val)
     (outerExactDrop : @ConcreteElaboration.WireContext.Exact
       (dropInstantiationAtomsRaw state) (outer.extend state.bubble)
         state.bubble)
     (dropWellFormed :
-      (dropInstantiationAtomsRaw state).WellFormed signature)
+      (dropInstantiationAtomsRaw state).WellFormed )
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
     (parent : Fin state.diagram.val.regionCount)
     (bubbleShape : state.diagram.val.regions state.bubble =
@@ -44,11 +42,11 @@ noncomputable def finalBubblePresentation
       ConcreteElaboration.BinderContext.Enumeration
         (dropInstantiationAtomsRaw state) binderContext parent)
     (fuel : Nat)
-    (items : ItemSeq signature (outer.extend state.bubble).length
+    (items : ItemSeq  (outer.extend state.bubble).length
       (payload.arity :: rels))
-    (itemsCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (itemsCompiled : ConcreteElaboration.compileOccurrencesWith?
       (dropInstantiationAtomsRaw state)
-      (ConcreteElaboration.compileRegion? signature
+      (ConcreteElaboration.compileRegion?
         (dropInstantiationAtomsRaw state) fuel)
       (outer.extend state.bubble)
       (binderContext.push state.bubble payload.arity)
@@ -57,7 +55,7 @@ noncomputable def finalBubblePresentation
     (environment : Fin outer.length → model.Carrier)
     (relationEnvironment : RelEnv model.Carrier rels)
     (relationValue : Relation model.Carrier payload.arity)
-    (denotes : denoteRegion (relCtx := payload.arity :: rels) model named
+    (denotes : denoteRegion (relCtx := payload.arity :: rels) model
       environment
       (relationValue, relationEnvironment)
       (ConcreteElaboration.finishRegion state.diagram.val outer state.bubble
@@ -70,7 +68,7 @@ noncomputable def finalBubblePresentation
       binderContext parent bubbleShape
       (dropCover_to_state state binderContext parent binderCoverDrop)
       relationEnvironment
-    BubblePresentation payload state model named relationValue proxyValues
+    BubblePresentation payload state model  relationValue proxyValues
       parameterValues := by
   dsimp only
   let outerExact := dropExact_to_state state (outer.extend state.bubble)
@@ -85,16 +83,16 @@ noncomputable def finalBubblePresentation
       (dropInstantiationAtomsRaw state).regions state.bubble =
         .bubble parent payload.arity := by
     simpa only [InstantiationDrop.raw_regions] using bubbleShape
-  have droppedCompiled : ConcreteElaboration.compileRegion? signature
+  have droppedCompiled : ConcreteElaboration.compileRegion?
       (dropInstantiationAtomsRaw state) (fuel + 1) state.bubble outer
       (binderContext.push state.bubble payload.arity) =
         some (ConcreteElaboration.finishRegion state.diagram.val outer
           state.bubble items) := by
     unfold ConcreteElaboration.compileRegion?
     dsimp only
-    change (ConcreteElaboration.compileOccurrencesWith? signature
+    change (ConcreteElaboration.compileOccurrencesWith?
         (dropInstantiationAtomsRaw state)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (dropInstantiationAtomsRaw state) fuel)
         (outer.extend state.bubble)
         (binderContext.push state.bubble payload.arity)
@@ -142,10 +140,9 @@ noncomputable def finalBubblePresentation
 /-- The certified one-step simulations transport a final presentation back to
 the original quantified bubble under one trace-wide relation contract. -/
 noncomputable def initialBubblePresentationOfFinal
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -157,20 +154,19 @@ noncomputable def initialBubblePresentationOfFinal
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       (initialInstantiationState payload) result)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier)
-    (contract : TraceRelationContract payload input model named relationValue
+    (contract : TraceRelationContract payload input model  relationValue
       values parameterValues)
-    (finalPresentation : BubblePresentation payload result model named
+    (finalPresentation : BubblePresentation payload result model
       relationValue values parameterValues) :
-    BubblePresentation payload (initialInstantiationState payload) model named
+    BubblePresentation payload (initialInstantiationState payload) model
       relationValue values parameterValues :=
-  bubblePresentation_of_trace trace model named relationValue
+  bubblePresentation_of_trace trace model  relationValue
     values parameterValues
-    (initial_regionSimulationsEveryStep trace model named relationValue values
+    (initial_regionSimulationsEveryStep trace model  relationValue values
       parameterValues contract)
     finalPresentation
 
@@ -179,10 +175,9 @@ and immediately transport it back through the complete accepted copy trace.
 Keeping this composition at the focus preserves the executor-selected relation
 before the surrounding existential semantics hides its witness. -/
 noncomputable def initialBubblePresentationOfFinalFocus
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -196,14 +191,13 @@ noncomputable def initialBubblePresentationOfFinalFocus
     (targets : BinderTargetsAtBubble payload result)
     (scopes : ParameterScopesAtBubble result)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     {rels : RelCtx}
     (outer : ConcreteElaboration.WireContext result.diagram.val)
     (outerExactDrop : @ConcreteElaboration.WireContext.Exact
       (dropInstantiationAtomsRaw result) (outer.extend result.bubble)
         result.bubble)
     (dropWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (binderContext : ConcreteElaboration.BinderContext result.diagram.val rels)
     (parent : Fin result.diagram.val.regionCount)
     (bubbleShape : result.diagram.val.regions result.bubble =
@@ -214,11 +208,11 @@ noncomputable def initialBubblePresentationOfFinalFocus
       ConcreteElaboration.BinderContext.Enumeration
         (dropInstantiationAtomsRaw result) binderContext parent)
     (compilerFuel : Nat)
-    (items : ItemSeq signature (outer.extend result.bubble).length
+    (items : ItemSeq  (outer.extend result.bubble).length
       (payload.arity :: rels))
-    (itemsCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (itemsCompiled : ConcreteElaboration.compileOccurrencesWith?
       (dropInstantiationAtomsRaw result)
-      (ConcreteElaboration.compileRegion? signature
+      (ConcreteElaboration.compileRegion?
         (dropInstantiationAtomsRaw result) compilerFuel)
       (outer.extend result.bubble)
       (binderContext.push result.bubble payload.arity)
@@ -230,7 +224,7 @@ noncomputable def initialBubblePresentationOfFinalFocus
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier)
-    (contract : TraceRelationContract payload input model named relationValue
+    (contract : TraceRelationContract payload input model  relationValue
       values parameterValues)
     (parametersEq : parameterValuesOfExact result scopes outer
       (dropExact_to_state result (outer.extend result.bubble) result.bubble
@@ -239,20 +233,20 @@ noncomputable def initialBubblePresentationOfFinalFocus
       binderContext parent bubbleShape
       (dropCover_to_state result binderContext parent binderCoverDrop)
       relationEnvironment = values)
-    (denotes : denoteRegion (relCtx := payload.arity :: rels) model named
+    (denotes : denoteRegion (relCtx := payload.arity :: rels) model
       environment (relationValue, relationEnvironment)
       (ConcreteElaboration.finishRegion result.diagram.val outer result.bubble
         items)) :
-    BubblePresentation payload (initialInstantiationState payload) model named
+    BubblePresentation payload (initialInstantiationState payload) model
       relationValue values parameterValues := by
   let finalPresentation := finalBubblePresentation payload result targets scopes
-    model named outer outerExactDrop dropWellFormed binderContext parent
+    model  outer outerExactDrop dropWellFormed binderContext parent
     bubbleShape binderCoverDrop binderEnumerationDrop compilerFuel items
     itemsCompiled environment relationEnvironment relationValue denotes
-  have finalPresentation' : BubblePresentation payload result model named
+  have finalPresentation' : BubblePresentation payload result model
       relationValue values parameterValues := by
     simpa only [parametersEq, proxiesEq] using finalPresentation
-  exact initialBubblePresentationOfFinal trace model named
+  exact initialBubblePresentationOfFinal trace model
     relationValue values parameterValues contract finalPresentation'
 
 end InstantiationSemantic

@@ -23,13 +23,6 @@ inductive CertifiedCorresponds
       CertifiedCorresponds regions
         (.identity sourceRegion arity)
         (.identity targetRegion arity)
-  | named (sourceRegion : Fin sourceRegions)
-      (targetRegion : Fin targetRegions) (definition arity : Nat)
-      (region_eq : regions sourceRegion = targetRegion) :
-      CertifiedCorresponds regions
-        (.named sourceRegion definition arity)
-        (.named targetRegion definition arity)
-
 theorem CertifiedCorresponds.region_eq
     {source : CNode sourceRegions} {target : CNode targetRegions}
     (corresponds : CertifiedCorresponds regions source target) :
@@ -47,9 +40,6 @@ def CertifiedCorresponds.ofRenameEq
       exact .atom region binder (regions region) (regions binder) rfl rfl
   | identity region arity =>
       exact .identity region (regions region) arity rfl
-  | named region definition arity =>
-      exact .named region (regions region) definition arity rfl
-
 /-- Precompose certified node correspondence with an exact renaming.  This is
 the certificate-preserving composition needed when a concrete extraction is
 definitionally transported before an independently certified occurrence. -/
@@ -72,11 +62,6 @@ def CertifiedCorresponds.precomposeRenameEq
       cases certified with
       | identity _ targetRegion _ regionEq =>
           exact .identity sourceRegion targetRegion arity regionEq
-  | named sourceRegion definition arity =>
-      cases certified with
-      | named _ targetRegion _ _ regionEq =>
-          exact .named sourceRegion targetRegion definition arity regionEq
-
 end CNode
 
 /-- Concrete occurrence equivalence preserves the complete graph and ordered

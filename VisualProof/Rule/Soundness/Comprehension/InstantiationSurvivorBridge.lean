@@ -12,40 +12,38 @@ namespace InstantiationSemantic
 survivor compilers.  Removed nodes are reinserted only from explicit semantic
 certificates; the forward projections merely forget them. -/
 theorem survivor_simulation_of_authoritative
-    {signature : List Nat}
-    {sourceOrigin targetOrigin : CheckedDiagram signature}
+    {sourceOrigin targetOrigin : CheckedDiagram }
     (sourceState : InstantiationState sourceOrigin sourceParameters sourceProxies)
     (targetState : InstantiationState targetOrigin targetParameters targetProxies)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceRemoved : ∀ {rels : RelCtx}
       (region : Fin sourceState.diagram.val.regionCount)
       (context : ConcreteElaboration.WireContext sourceState.diagram.val)
       (binders : ConcreteElaboration.BinderContext sourceState.diagram.val rels)
       (node : Fin sourceState.diagram.val.nodeCount)
-      (item : Item signature context.length rels),
+      (item : Item  context.length rels),
       ConcreteElaboration.LocalOccurrence.node node ∈
           ConcreteElaboration.localOccurrences sourceState.diagram.val region →
       dropOccurrenceSurvives sourceState (.node node) = false →
-      ConcreteElaboration.compileNode? signature sourceState.diagram.val context
+      ConcreteElaboration.compileNode?  sourceState.diagram.val context
           binders node = some item →
       ∀ (env : Fin context.length → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
-        denoteItem model named env relEnv item)
+        denoteItem model  env relEnv item)
     (targetRemoved : ∀ {rels : RelCtx}
       (region : Fin targetState.diagram.val.regionCount)
       (context : ConcreteElaboration.WireContext targetState.diagram.val)
       (binders : ConcreteElaboration.BinderContext targetState.diagram.val rels)
       (node : Fin targetState.diagram.val.nodeCount)
-      (item : Item signature context.length rels),
+      (item : Item  context.length rels),
       ConcreteElaboration.LocalOccurrence.node node ∈
           ConcreteElaboration.localOccurrences targetState.diagram.val region →
       dropOccurrenceSurvives targetState (.node node) = false →
-      ConcreteElaboration.compileNode? signature targetState.diagram.val context
+      ConcreteElaboration.compileNode?  targetState.diagram.val context
           binders node = some item →
       ∀ (env : Fin context.length → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
-        denoteItem model named env relEnv item)
+        denoteItem model  env relEnv item)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
     (sourceRegion : Fin sourceState.diagram.val.regionCount)
@@ -63,20 +61,20 @@ theorem survivor_simulation_of_authoritative
     (outer : ConcreteElaboration.ContextIndexRelation sourceContext.length
       targetContext.length)
     (relationMap : RelationRenaming sourceRels targetRels)
-    (sourceSurvivor : Region signature sourceContext.length sourceRels)
-    (targetSurvivor : Region signature targetContext.length targetRels)
-    (sourceSurvivorCompiled : compileSurvivorRegion? signature sourceState
+    (sourceSurvivor : Region  sourceContext.length sourceRels)
+    (targetSurvivor : Region  targetContext.length targetRels)
+    (sourceSurvivorCompiled : compileSurvivorRegion?  sourceState
       sourceFuel sourceRegion sourceContext sourceBinders = some sourceSurvivor)
-    (targetSurvivorCompiled : compileSurvivorRegion? signature targetState
+    (targetSurvivorCompiled : compileSurvivorRegion?  targetState
       targetFuel targetRegion targetContext targetBinders = some targetSurvivor)
     (authoritative : ∀ sourceFull targetFull,
-      ConcreteElaboration.compileRegion? signature sourceState.diagram.val
+      ConcreteElaboration.compileRegion?  sourceState.diagram.val
           sourceFuel sourceRegion sourceContext sourceBinders = some sourceFull →
-      ConcreteElaboration.compileRegion? signature targetState.diagram.val
+      ConcreteElaboration.compileRegion?  targetState.diagram.val
           targetFuel targetRegion targetContext targetBinders = some targetFull →
-      ConcreteElaboration.RegionSimulation model named direction outer
+      ConcreteElaboration.RegionSimulation model  direction outer
         (sourceFull.renameRelations relationMap) targetFull) :
-    ConcreteElaboration.RegionSimulation model named direction outer
+    ConcreteElaboration.RegionSimulation model  direction outer
       (sourceSurvivor.renameRelations relationMap) targetSurvivor := by
   obtain ⟨sourceFull, sourceFullCompiled⟩ :=
     compileRegion?_exists_of_survivor sourceState sourceFuel sourceRegion
@@ -86,16 +84,16 @@ theorem survivor_simulation_of_authoritative
     compileRegion?_exists_of_survivor targetState targetFuel targetRegion
       targetContext targetBinders targetExact targetCover
       ⟨targetSurvivor, targetSurvivorCompiled⟩
-  have sourceForget := compileRegion_filter_simulation sourceState model named
+  have sourceForget := compileRegion_filter_simulation sourceState model
     sourceRemoved .forward sourceFuel sourceRegion sourceContext sourceBinders
     sourceFull sourceSurvivor sourceFullCompiled sourceSurvivorCompiled
-  have sourceReinsert := compileRegion_filter_simulation sourceState model named
+  have sourceReinsert := compileRegion_filter_simulation sourceState model
     sourceRemoved .backward sourceFuel sourceRegion sourceContext sourceBinders
     sourceFull sourceSurvivor sourceFullCompiled sourceSurvivorCompiled
-  have targetForget := compileRegion_filter_simulation targetState model named
+  have targetForget := compileRegion_filter_simulation targetState model
     targetRemoved .forward targetFuel targetRegion targetContext targetBinders
     targetFull targetSurvivor targetFullCompiled targetSurvivorCompiled
-  have targetReinsert := compileRegion_filter_simulation targetState model named
+  have targetReinsert := compileRegion_filter_simulation targetState model
     targetRemoved .backward targetFuel targetRegion targetContext targetBinders
     targetFull targetSurvivor targetFullCompiled targetSurvivorCompiled
   have fullSimulation := authoritative sourceFull targetFull sourceFullCompiled
@@ -104,9 +102,9 @@ theorem survivor_simulation_of_authoritative
   let sourceRelEnv := RelEnv.pullback relationMap targetRelEnv
   have relationAgreement : RelEnv.Agrees relationMap sourceRelEnv targetRelEnv :=
     RelEnv.pullback_agrees relationMap targetRelEnv
-  have sourceFullRename := denoteRegion_renameRelations model named relationMap
+  have sourceFullRename := denoteRegion_renameRelations model  relationMap
     sourceRelEnv targetRelEnv relationAgreement sourceEnv sourceFull
-  have sourceSurvivorRename := denoteRegion_renameRelations model named
+  have sourceSurvivorRename := denoteRegion_renameRelations model
     relationMap sourceRelEnv targetRelEnv relationAgreement sourceEnv
     sourceSurvivor
   have sourceIdentity :

@@ -13,18 +13,17 @@ pointwise item simulation to the complete ordered conjunction.  The
 logical conjunction is insensitive to the dense enumeration order, while the
 compiler receipts and `get` equations remain exact. -/
 theorem compileOccurrences_simulation_of_equiv
-    {signature : List Nat}
     {source target : ConcreteDiagram}
     (sourceRecurse : ∀ {rels : RelCtx},
       (region : Fin source.regionCount) →
       (context : ConcreteElaboration.WireContext source) →
       ConcreteElaboration.BinderContext source rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (targetRecurse : ∀ {rels : RelCtx},
       (region : Fin target.regionCount) →
       (context : ConcreteElaboration.WireContext target) →
       ConcreteElaboration.BinderContext target rels →
-      Option (Region signature context.length rels))
+      Option (Region  context.length rels))
     (sourceContext : ConcreteElaboration.WireContext source)
     (targetContext : ConcreteElaboration.WireContext target)
     (sourceBinders : ConcreteElaboration.BinderContext source sourceRels)
@@ -42,30 +41,29 @@ theorem compileOccurrences_simulation_of_equiv
       targetOccurrences.get (positions index) =
         mapOccurrence (sourceOccurrences.get index))
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (relation : ConcreteElaboration.ContextIndexRelation sourceContext.length
       targetContext.length)
     (relationMap : RelationRenaming sourceRels targetRels)
     (pointwise : ∀ occurrence, occurrence ∈ sourceOccurrences →
-      ∀ (sourceItem : Item signature sourceContext.length sourceRels)
-        (targetItem : Item signature targetContext.length targetRels),
-      ConcreteElaboration.compileOccurrenceWith? signature source sourceRecurse
+      ∀ (sourceItem : Item  sourceContext.length sourceRels)
+        (targetItem : Item  targetContext.length targetRels),
+      ConcreteElaboration.compileOccurrenceWith?  source sourceRecurse
           sourceContext sourceBinders occurrence = some sourceItem →
-      ConcreteElaboration.compileOccurrenceWith? signature target targetRecurse
+      ConcreteElaboration.compileOccurrenceWith?  target targetRecurse
           targetContext targetBinders (mapOccurrence occurrence) =
             some targetItem →
-      ConcreteElaboration.ItemSimulation model named direction relation
+      ConcreteElaboration.ItemSimulation model  direction relation
         (sourceItem.renameRelations relationMap) targetItem)
-    (sourceItems : ItemSeq signature sourceContext.length sourceRels)
-    (targetItems : ItemSeq signature targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (sourceItems : ItemSeq  sourceContext.length sourceRels)
+    (targetItems : ItemSeq  targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith?
       source sourceRecurse sourceContext sourceBinders sourceOccurrences =
         some sourceItems)
-    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith?
       target targetRecurse targetContext targetBinders targetOccurrences =
         some targetItems) :
-    ConcreteElaboration.ItemSeqSimulation model named direction relation
+    ConcreteElaboration.ItemSeqSimulation model  direction relation
       (sourceItems.renameRelations relationMap) targetItems := by
   have sourceLength := ConcreteElaboration.compileOccurrencesWith?_length
     sourceRecurse sourceContext sourceBinders sourceCompiled
@@ -75,7 +73,7 @@ theorem compileOccurrences_simulation_of_equiv
   cases direction with
   | forward =>
       intro sourceDenotes
-      apply (denoteItemSeq_iff_get model named targetEnv relEnv targetItems).2
+      apply (denoteItemSeq_iff_get model  targetEnv relEnv targetItems).2
       intro targetItemIndex
       let targetOccurrenceIndex := Fin.cast targetLength targetItemIndex
       let sourceOccurrenceIndex := positions.symm targetOccurrenceIndex
@@ -114,7 +112,7 @@ theorem compileOccurrences_simulation_of_equiv
         (sourceItems.get sourceItemIndex) (targetItems.get targetItemIndex)
         sourceAt targetAt
       have sourceItemDenotes :=
-        (denoteItemSeq_iff_get model named sourceEnv relEnv
+        (denoteItemSeq_iff_get model  sourceEnv relEnv
           (sourceItems.renameRelations relationMap)).1 sourceDenotes
           sourcePreparedIndex
       have sourcePreparedGet :
@@ -127,7 +125,7 @@ theorem compileOccurrences_simulation_of_equiv
         sourceItemDenotes
   | backward =>
       intro targetDenotes
-      apply (denoteItemSeq_iff_get model named sourceEnv relEnv
+      apply (denoteItemSeq_iff_get model  sourceEnv relEnv
         (sourceItems.renameRelations relationMap)).2
       intro sourcePreparedIndex
       let sourceItemIndex := Fin.cast
@@ -150,7 +148,7 @@ theorem compileOccurrences_simulation_of_equiv
         (sourceItems.get sourceItemIndex) (targetItems.get targetItemIndex)
         sourceAt targetAt
       have targetItemDenotes :=
-        (denoteItemSeq_iff_get model named targetEnv relEnv targetItems).1
+        (denoteItemSeq_iff_get model  targetEnv relEnv targetItems).1
           targetDenotes targetItemIndex
       have sourcePreparedIndexEq :
           Fin.cast (ItemSeq.renameRelations_length sourceItems relationMap).symm

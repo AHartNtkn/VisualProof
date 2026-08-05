@@ -56,7 +56,7 @@ private theorem climb_cancel_prefix {d : ConcreteDiagram}
 namespace SelectionRequest.SelectsRegion
 
 /-- Selecting an ancestor selects every region below it. -/
-theorem downward {d : ConcreteDiagram} (hwf : d.WellFormed signature)
+theorem downward {d : ConcreteDiagram} (hwf : d.WellFormed )
     {request : SelectionRequest d} {ancestor descendant : Fin d.regionCount}
     (hselected : request.SelectsRegion ancestor)
     (hencloses : d.Encloses ancestor descendant) :
@@ -133,7 +133,7 @@ def root (domains : FrameDomains d selection) : domains.regions.Carrier :=
   exact domains.regions.origin_index d.root domains.root_survives
 
 /-- Every parent of a surviving region also survives. -/
-theorem parent_survives (host : CheckedDiagram signature)
+theorem parent_survives (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {region parent : Fin host.val.regionCount}
@@ -173,7 +173,7 @@ theorem nodeRegion_survives (domains : FrameDomains d selection)
     exact ((domains.node_survives_iff node).1 hnode) hselectedNode
 
 /-- The binder of every surviving atom survives. -/
-theorem atomBinder_survives (host : CheckedDiagram signature)
+theorem atomBinder_survives (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {node : Fin host.val.nodeCount} {region binder : Fin host.val.regionCount}
@@ -211,7 +211,7 @@ theorem wireScope_survives (domains : FrameDomains d selection)
     exact ((domains.wire_survives_iff wire).1 hwire) hinternal
 
 /-- Any wire incident to a surviving node also survives. -/
-theorem incidentWire_survives (host : CheckedDiagram signature)
+theorem incidentWire_survives (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {wire : Fin host.val.wireCount} {endpoint : CEndpoint host.val.nodeCount}
@@ -239,7 +239,7 @@ namespace ConcreteDiagram
 
 private def fallbackNode (domains : FrameDomains d selection) :
     CNode domains.regions.count :=
-  .named domains.root 0 0
+  .identity domains.root 0
 
 private def frameRegion (d : ConcreteDiagram)
     (selection : CheckedSelection d) (domains : FrameDomains d selection)
@@ -286,7 +286,7 @@ def removeRaw (d : ConcreteDiagram) (selection : CheckedSelection d)
 
 /-- The region fallback is unreachable for every checked survivor. -/
 theorem removeRaw_region_reindexed
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     (region : domains.regions.Carrier) :
@@ -321,7 +321,7 @@ theorem removeRaw_region_reindexed
 
 /-- The node fallback is unreachable for every checked survivor. -/
 theorem removeRaw_node_reindexed
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     (node : domains.nodes.Carrier) :
@@ -350,17 +350,9 @@ theorem removeRaw_node_reindexed
       simp only [SurvivorDomain.reindexNode?]
       rw [domains.regions.index?_index region hregion]
       rfl
-  | named region definition arity =>
-      have hregion := domains.nodeRegion_survives
-        (domains.nodes.origin_survives node)
-      simp only [hnode, CNode.region] at hregion
-      simp only [SurvivorDomain.reindexNode?]
-      rw [domains.regions.index?_index region hregion]
-      rfl
-
 /-- Surviving wire scopes are reindexed exactly, never replaced by the root. -/
 theorem removeRaw_wire_scope
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     (wire : domains.wires.Carrier) :
@@ -378,7 +370,7 @@ theorem removeRaw_wire_scope
 
 /-- Parent links commute with dense survivor reindexing. -/
 theorem removeRaw_parent
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {region parent : Fin host.val.regionCount}
@@ -415,7 +407,7 @@ theorem removeRaw_parent
 
 /-- The retained sheet remains the unique root sheet. -/
 theorem removeRaw_root_is_sheet
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection) :
     (host.val.removeRaw selection domains).RootIsSheet := by
@@ -426,7 +418,7 @@ theorem removeRaw_root_is_sheet
   exact (Option.some.inj hreindexed).symm
 
 theorem removeRaw_only_root_is_sheet
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection) :
     (host.val.removeRaw selection domains).OnlyRootIsSheet := by
@@ -463,7 +455,7 @@ theorem removeRaw_only_root_is_sheet
 
 /-- Finite parent traversal commutes with survivor compaction. -/
 theorem removeRaw_climb
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {steps : Nat} {start finish : Fin host.val.regionCount}
@@ -494,7 +486,7 @@ theorem removeRaw_climb
 
 /-- A retained root path has at most as many edges as retained regions. -/
 theorem removeRaw_climb_to_root_steps_lt_regionCount
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {steps : Nat} {start : Fin host.val.regionCount}
@@ -542,7 +534,7 @@ theorem removeRaw_climb_to_root_steps_lt_regionCount
   omega
 
 theorem removeRaw_all_regions_reach_root
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection) :
     (host.val.removeRaw selection domains).AllRegionsReachRoot := by
@@ -565,7 +557,7 @@ theorem removeRaw_all_regions_reach_root
 
 /-- Enclosure is preserved exactly between surviving regions. -/
 theorem removeRaw_encloses
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {ancestor descendant : Fin host.val.regionCount}
@@ -593,7 +585,7 @@ theorem removeRaw_encloses
   simpa using hframeClimb
 
 theorem removeRaw_bubble
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {region parent : Fin host.val.regionCount} {arity : Nat}
@@ -614,7 +606,7 @@ theorem removeRaw_bubble
   rfl
 
 theorem removeRaw_atom
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {node : Fin host.val.nodeCount} {region binder : Fin host.val.regionCount}
@@ -637,32 +629,8 @@ theorem removeRaw_atom
   rw [domains.regions.index?_index, domains.regions.index?_index]
   rfl
 
-theorem removeRaw_named
-    (host : CheckedDiagram signature)
-    (selection : CheckedSelection host.val)
-    (domains : FrameDomains host.val selection)
-    {node : Fin host.val.nodeCount} {region : Fin host.val.regionCount}
-    {definition arity : Nat}
-    (hnodeSurvives : domains.nodes.survives node = true)
-    (hnode : host.val.nodes node = .named region definition arity) :
-    (host.val.removeRaw selection domains).nodes
-        (domains.nodes.index node hnodeSurvives) =
-      .named
-        (domains.regions.index region (by
-          simpa only [hnode, CNode.region] using
-            domains.nodeRegion_survives hnodeSurvives))
-        definition arity := by
-  change (domains.regions.reindexNode?
-    (host.val.nodes (domains.nodes.origin
-      (domains.nodes.index node hnodeSurvives)))).getD
-        (fallbackNode domains) = _
-  rw [domains.nodes.origin_index node hnodeSurvives]
-  simp only [hnode, SurvivorDomain.reindexNode?]
-  rw [domains.regions.index?_index]
-  rfl
-
 theorem removeRaw_identity
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {node : Fin host.val.nodeCount} {region : Fin host.val.regionCount}
@@ -686,7 +654,7 @@ theorem removeRaw_identity
   rfl
 
 theorem removeRaw_atom_binders_are_bubbles
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection) :
     (host.val.removeRaw selection domains).AtomBindersAreBubbles := by
@@ -699,10 +667,6 @@ theorem removeRaw_atom_binders_are_bubbles
   | identity region arity =>
       rw [← hindex,
         ConcreteDiagram.removeRaw_identity host selection domains hsurvives hnode]
-      trivial
-  | named region definition arity =>
-      rw [← hindex,
-        ConcreteDiagram.removeRaw_named host selection domains hsurvives hnode]
       trivial
   | atom region binder =>
       have hbubble := host.property.atom_binders_are_bubbles original
@@ -717,33 +681,8 @@ theorem removeRaw_atom_binders_are_bubbles
         hbinderSurvives hkind]
       exact ⟨_, _, rfl⟩
 
-theorem removeRaw_named_references_resolve
-    (host : CheckedDiagram signature)
-    (selection : CheckedSelection host.val)
-    (domains : FrameDomains host.val selection) :
-    (host.val.removeRaw selection domains).NamedReferencesResolve signature := by
-  intro node
-  let original := domains.nodes.origin node
-  have hsurvives := domains.nodes.origin_survives node
-  have hindex : domains.nodes.index original hsurvives = node :=
-    domains.nodes.index_origin node
-  cases hnode : host.val.nodes original with
-  | atom region binder =>
-      rw [← hindex,
-        ConcreteDiagram.removeRaw_atom host selection domains hsurvives hnode]
-      trivial
-  | identity region arity =>
-      rw [← hindex,
-        ConcreteDiagram.removeRaw_identity host selection domains hsurvives hnode]
-      trivial
-  | named region definition arity =>
-      rw [← hindex,
-        ConcreteDiagram.removeRaw_named host selection domains hsurvives hnode]
-      have hresolve := host.property.named_references_resolve original
-      simpa only [hnode] using hresolve
-
 theorem removeRaw_atom_binders_enclose
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection) :
     (host.val.removeRaw selection domains).AtomBindersEnclose := by
@@ -756,10 +695,6 @@ theorem removeRaw_atom_binders_enclose
   | identity region arity =>
       rw [← hindex,
         ConcreteDiagram.removeRaw_identity host selection domains hsurvives hnode]
-      trivial
-  | named region definition arity =>
-      rw [← hindex,
-        ConcreteDiagram.removeRaw_named host selection domains hsurvives hnode]
       trivial
   | atom region binder =>
       have hregion : domains.regions.survives region = true := by
@@ -776,7 +711,7 @@ theorem removeRaw_atom_binders_enclose
         hbinder hregion hencloses
 
 theorem removeRaw_requiresPort_iff
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     (node : domains.nodes.Carrier) (port : CPort) :
@@ -792,12 +727,6 @@ theorem removeRaw_requiresPort_iff
       rw [domains.nodes.origin_index original hsurvives]
       unfold ConcreteDiagram.RequiresPort
       rw [ConcreteDiagram.removeRaw_identity host selection domains hsurvives hnode]
-      simp only [hnode]
-  | named region definition arity =>
-      rw [← hindex]
-      rw [domains.nodes.origin_index original hsurvives]
-      unfold ConcreteDiagram.RequiresPort
-      rw [ConcreteDiagram.removeRaw_named host selection domains hsurvives hnode]
       simp only [hnode]
   | atom region binder =>
       have hbubble := host.property.atom_binders_are_bubbles original
@@ -816,7 +745,7 @@ theorem removeRaw_requiresPort_iff
       simp only [hkind]
 
 @[simp] theorem removeRaw_wire_endpoints
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     (wire : domains.wires.Carrier) :
@@ -825,7 +754,7 @@ theorem removeRaw_requiresPort_iff
         domains.nodes.reindexEndpoint? := rfl
 
 theorem mem_removeRaw_wire_endpoints_iff
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     (wire : domains.wires.Carrier)
@@ -890,7 +819,7 @@ private theorem filterMap_nodup_of_some_injective
           · exact ih htail
 
 theorem removeRaw_endpoints_are_nodup
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection) :
     (host.val.removeRaw selection domains).EndpointsAreNodup := by
@@ -902,7 +831,7 @@ theorem removeRaw_endpoints_are_nodup
       ConcreteDiagram.reindexEndpoint?_some_injective domains hfirst hsecond)
 
 theorem removeRaw_wire_endpoints_are_disjoint
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection) :
     (host.val.removeRaw selection domains).WireEndpointsAreDisjoint := by
@@ -932,7 +861,7 @@ theorem removeRaw_wire_endpoints_are_disjoint
   exact hdisjoint hsecondMember
 
 theorem removeRaw_endpointOccurs_of_surviving
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {wire : Fin host.val.wireCount} {endpoint : CEndpoint host.val.nodeCount}
@@ -957,7 +886,7 @@ theorem removeRaw_endpointOccurs_of_surviving
     rfl
 
 theorem removeRaw_required_ports_are_covered
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection) :
     (host.val.removeRaw selection domains).RequiredPortsAreCovered := by
@@ -970,16 +899,6 @@ theorem removeRaw_required_ports_are_covered
   | identity region arity =>
       rw [← hindex,
         ConcreteDiagram.removeRaw_identity host selection domains hsurvives hnode]
-      simp only
-      have hcovered := host.property.required_ports_are_covered original
-      simp only [hnode] at hcovered
-      intro port
-      obtain ⟨wire, hwire⟩ := hcovered port
-      exact ConcreteDiagram.removeRaw_endpointOccurs_of_surviving
-        host selection domains hwire hsurvives
-  | named region definition arity =>
-      rw [← hindex,
-        ConcreteDiagram.removeRaw_named host selection domains hsurvives hnode]
       simp only
       have hcovered := host.property.required_ports_are_covered original
       simp only [hnode] at hcovered
@@ -1007,7 +926,7 @@ theorem removeRaw_required_ports_are_covered
         host selection domains hwire hsurvives
 
 theorem removeRaw_endpoints_are_valid
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection) :
     (host.val.removeRaw selection domains).EndpointsAreValid := by
@@ -1023,7 +942,7 @@ theorem removeRaw_endpoints_are_valid
     endpoint.node endpoint.port).2 hvalid
 
 theorem removeRaw_wire_scopes_enclose
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection) :
     (host.val.removeRaw selection domains).WireScopesEnclose := by
@@ -1069,25 +988,12 @@ theorem removeRaw_wire_scopes_enclose
         ConcreteDiagram.removeRaw_identity host selection domains hnodeSurvives hnode]
       exact ConcreteDiagram.removeRaw_encloses host selection domains
         hscopeSurvives hregion hencloses
-  | named region definition arity =>
-      have hregion : domains.regions.survives region = true := by
-        have howner := domains.nodeRegion_survives hnodeSurvives
-        rw [hnode] at howner
-        exact howner
-      have hencloses : host.val.Encloses
-          (host.val.wires (domains.wires.origin wire)).scope region := by
-        simpa only [hnode, CNode.region] using hhostEncloses
-      rw [← hnodeIndex,
-        ConcreteDiagram.removeRaw_named host selection domains hnodeSurvives hnode]
-      exact ConcreteDiagram.removeRaw_encloses host selection domains
-        hscopeSurvives hregion hencloses
-
 /-- Removal preserves every concrete well-formedness clause. -/
 theorem removeRaw_wellFormed
-    (host : CheckedDiagram signature)
+    (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection) :
-    (host.val.removeRaw selection domains).WellFormed signature where
+    (host.val.removeRaw selection domains).WellFormed  where
   root_is_sheet := ConcreteDiagram.removeRaw_root_is_sheet host selection domains
   only_root_is_sheet :=
     ConcreteDiagram.removeRaw_only_root_is_sheet host selection domains
@@ -1097,8 +1003,6 @@ theorem removeRaw_wellFormed
     ConcreteDiagram.removeRaw_atom_binders_are_bubbles host selection domains
   atom_binders_enclose :=
     ConcreteDiagram.removeRaw_atom_binders_enclose host selection domains
-  named_references_resolve :=
-    ConcreteDiagram.removeRaw_named_references_resolve host selection domains
   endpoints_are_valid :=
     ConcreteDiagram.removeRaw_endpoints_are_valid host selection domains
   endpoints_are_nodup :=
@@ -1127,22 +1031,22 @@ theorem removeRaw_wellFormed
     (d.removeRaw selection domains).root = domains.root := rfl
 
 /-- Run the sole concrete well-formedness authority on the computed frame. -/
-def removeChecked (signature : List Nat) (host : CheckedDiagram signature)
+def removeChecked (host : CheckedDiagram )
     (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection := {}) :
-    Except WFError (CheckedDiagram signature) :=
-  checkWellFormed signature (host.val.removeRaw selection domains)
+    Except WFError (CheckedDiagram ) :=
+  checkWellFormed  (host.val.removeRaw selection domains)
 
 theorem removeChecked_sound
-    (h : removeChecked signature host selection domains = .ok frame) :
+    (h : removeChecked  host selection domains = .ok frame) :
     frame.val = host.val.removeRaw selection domains ∧
-      frame.val.WellFormed signature := by
+      frame.val.WellFormed  := by
   constructor
   · exact checkWellFormed_preserves_input h
   · exact frame.property
 
 theorem removeChecked_complete :
-    removeChecked signature host selection domains =
+    removeChecked  host selection domains =
       .ok ⟨host.val.removeRaw selection domains,
         removeRaw_wellFormed host selection domains⟩ := by
   exact checkWellFormed_complete (removeRaw_wellFormed host selection domains)

@@ -95,7 +95,6 @@ exact survivor context and binder maps. -/
 theorem regularNode_itemSimulation
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext trace.diagram)
@@ -108,22 +107,22 @@ theorem regularNode_itemSimulation
     (regular : trace.FrameRegular parent)
     (sourceNode : Fin input.val.nodeCount)
     (nodeRegion : (input.val.nodes sourceNode).region = parent)
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileNode? signature input.val
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileNode?  input.val
       sourceContext sourceBinders sourceNode = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode? signature trace.diagram
+    (targetCompiled : ConcreteElaboration.compileNode?  trace.diagram
       targetContext targetBinders
       (trace.targetNode sourceNode
         (trace.node_survives_of_regular parent regular sourceNode nodeRegion)) =
         some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       context.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   let nodeSurvives :=
     trace.node_survives_of_regular parent regular sourceNode nodeRegion
   apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
-    model named direction sourceContext targetContext context.indexRelation
+    model  direction sourceContext targetContext context.indexRelation
     sourceBinders targetBinders binderWitness.relationMap sourceNode
     (trace.targetNode sourceNode nodeSurvives) trace.regionMap trace.regionMap
   · have shape :=

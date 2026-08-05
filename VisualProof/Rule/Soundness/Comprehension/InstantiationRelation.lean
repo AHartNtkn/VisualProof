@@ -13,16 +13,15 @@ The witness is intentionally abstract here: the receipt-driven terminal-body
 simulation constructs the authoritative witness, including every external proxy
 binder, while this invariant records how the compiler sees it. -/
 def FixedRelationAt
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     {model : Model}
@@ -37,16 +36,15 @@ def FixedRelationAt
 /-- Pushing the selected existential witness establishes the fixed-relation
 invariant immediately inside the quantified bubble. -/
 theorem fixedRelationAt_push
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     {model : Model}
@@ -75,16 +73,15 @@ theorem fixedRelationAt_push
 /-- Descending through any other relation bubble preserves the selected
 quantified relation; the new head relation is lexically independent. -/
 theorem fixedRelationAt_push_other
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     {model : Model}
@@ -123,16 +120,15 @@ theorem fixedRelationAt_push_other
 /-- Under the fixed interpretation, the executor-owned atom denotes exactly
 the chosen relation witness at its receipt-recorded argument wires. -/
 theorem atom_iff_fixedRelation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
@@ -152,21 +148,19 @@ theorem atom_iff_fixedRelation
 
 /-- Pointwise compiler form of `atom_iff_fixedRelation`. -/
 theorem atom_item_iff_fixedRelation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
@@ -180,7 +174,7 @@ theorem atom_item_iff_fixedRelation
     (environment : Fin wires → model.Carrier)
     (resolvedArguments : Fin payload.arity → Fin wires)
     (values : environment ∘ resolvedArguments = wireValue ∘ arguments) :
-    denoteItem model named environment relEnv
+    denoteItem model  environment relEnv
         (.atom relation resolvedArguments) ↔
       relationValue (wireValue ∘ arguments) := by
   rw [denoteItem_atom, values]

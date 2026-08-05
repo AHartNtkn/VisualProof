@@ -291,8 +291,7 @@ theorem aliasWire_mem_raw_boundary (pattern : OpenConcreteDiagram)
 
 /-- Regions are unchanged, so the designated external-binder spine transports
 definitionally to the alias-materialized pattern. -/
-def binderSpine {signature : List Nat}
-    (pattern : CheckedOpenDiagram signature)
+def binderSpine (pattern : CheckedOpenDiagram )
     (spine : BinderSpine pattern.val.diagram) :
     BinderSpine (raw pattern.val spine.bodyContainer).diagram where
   proxyCount := spine.proxyCount
@@ -305,8 +304,7 @@ def binderSpine {signature : List Nat}
   body_eq_terminal_of_nonempty := spine.body_eq_terminal_of_nonempty
   proxy_region := spine.proxy_region
 
-theorem terminalBody {signature : List Nat}
-    (pattern : CheckedOpenDiagram signature)
+theorem terminalBody (pattern : CheckedOpenDiagram )
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val) :
     (binderSpine pattern spine).TerminalBodyContract
@@ -398,29 +396,25 @@ theorem terminalBody {signature : List Nat}
 
 /-- Proof-bearing checked normalization. The result is locked to `raw`; the
 certificate cannot replace the executor construction with another diagram. -/
-structure Certificate {signature : List Nat}
-    (pattern : CheckedOpenDiagram signature)
+structure Certificate (pattern : CheckedOpenDiagram )
     (spine : BinderSpine pattern.val.diagram) : Type where
-  wellFormed : (raw pattern.val spine.bodyContainer).WellFormed signature
+  wellFormed : (raw pattern.val spine.bodyContainer).WellFormed
 
 namespace Certificate
 
-def result {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+def result {pattern : CheckedOpenDiagram }
     {originalSpine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern originalSpine) :
-    CheckedOpenDiagram signature :=
+    CheckedOpenDiagram  :=
   ⟨raw pattern.val originalSpine.bodyContainer, certificate.wellFormed⟩
 
-def spine {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+def spine {pattern : CheckedOpenDiagram }
     {originalSpine : BinderSpine pattern.val.diagram}
     (_certificate : Certificate pattern originalSpine) :
     BinderSpine (raw pattern.val originalSpine.bodyContainer).diagram :=
   binderSpine pattern originalSpine
 
-theorem terminalBody {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+theorem terminalBody {pattern : CheckedOpenDiagram }
     {originalSpine : BinderSpine pattern.val.diagram}
     (_certificate : Certificate pattern originalSpine)
     (contract : originalSpine.TerminalBodyContract pattern.val) :
@@ -428,15 +422,13 @@ theorem terminalBody {signature : List Nat}
       (raw pattern.val originalSpine.bodyContainer) :=
   AliasMaterialization.terminalBody pattern originalSpine contract
 
-theorem boundary_length {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+theorem boundary_length {pattern : CheckedOpenDiagram }
     {originalSpine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern originalSpine) :
     certificate.result.val.boundary.length = pattern.val.boundary.length := by
   exact raw_boundary_length pattern.val originalSpine.bodyContainer
 
-theorem boundary_nodup {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+theorem boundary_nodup {pattern : CheckedOpenDiagram }
     {originalSpine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern originalSpine) :
     certificate.result.val.boundary.Nodup := by
@@ -448,18 +440,17 @@ end Certificate
 the same authoritative well-formedness decision used for rule outputs; the
 open-boundary and terminal-body obligations are structural consequences of
 the source contract. -/
-def check {signature : List Nat}
-    (pattern : CheckedOpenDiagram signature)
+def check (pattern : CheckedOpenDiagram )
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val) :
     Except WFError (Certificate pattern spine) :=
-  match hcheck : checkWellFormed signature
+  match hcheck : checkWellFormed
       (materializedDiagram pattern.val spine.bodyContainer) with
   | .error error => .error error
   | .ok checked =>
       let diagramWellFormed :
           (materializedDiagram pattern.val spine.bodyContainer).WellFormed
-            signature :=
+             :=
         checkWellFormed_iff.mp ⟨checked, hcheck,
           checkWellFormed_preserves_input hcheck⟩
       .ok {
@@ -470,8 +461,7 @@ def check {signature : List Nat}
         }
       }
 
-theorem check_success {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+theorem check_success {pattern : CheckedOpenDiagram }
     {spine : BinderSpine pattern.val.diagram}
     {contract : spine.TerminalBodyContract pattern.val}
     {certificate : Certificate pattern spine}

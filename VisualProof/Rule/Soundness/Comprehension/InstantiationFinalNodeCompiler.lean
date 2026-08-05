@@ -14,10 +14,9 @@ at its certified original node.  The final wire is the composite image of the
 original wire; atom compaction and vacuous promotion do not change ownership
 for this surviving node. -/
 theorem final_endpointOccurs_reverseNode_iff
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -32,7 +31,7 @@ theorem final_endpointOccurs_reverseNode_iff
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion)
@@ -79,10 +78,9 @@ theorem final_endpointOccurs_reverseNode_iff
 /-- Resolved ports at a regular final node are related by the certified
 final-to-original lexical-context relation. -/
 theorem regularNode_resolvedPorts_related
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -96,9 +94,9 @@ theorem regularNode_resolvedPorts_related
     {raw : ConcreteDiagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
+    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed )
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input.val)
@@ -147,10 +145,9 @@ theorem regularNode_resolvedPorts_related
 the item compiled from its certified original node under the reverse context
 and binder maps. -/
 theorem regularNode_itemSimulation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -164,11 +161,10 @@ theorem regularNode_itemSimulation
     {raw : ConcreteDiagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
+    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed )
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext
       elimTrace.sourceDiagram)
@@ -187,20 +183,20 @@ theorem regularNode_itemSimulation
     (finalNode : Fin elimTrace.sourceDiagram.nodeCount)
     (nodeRegion : (elimTrace.sourceDiagram.nodes finalNode).region =
       finalRegion)
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileNode? signature
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileNode?
       elimTrace.sourceDiagram sourceContext sourceBinders finalNode =
         some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode? signature input.val
+    (targetCompiled : ConcreteElaboration.compileNode?  input.val
       targetContext targetBinders
       (copyTrace.reverseNodeMap elimTrace finalWellFormed finalRegion regular
         finalNode nodeRegion) = some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       context.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
-    model named direction sourceContext targetContext context.indexRelation
+    model  direction sourceContext targetContext context.indexRelation
     sourceBinders targetBinders binderWitness.relationMap finalNode
     (copyTrace.reverseNodeMap elimTrace finalWellFormed finalRegion regular
       finalNode nodeRegion)

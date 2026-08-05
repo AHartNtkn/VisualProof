@@ -42,9 +42,6 @@ def rename (regions : FiniteEquiv (Fin sourceRegions) (Fin targetRegions)) :
     CNode sourceRegions -> CNode targetRegions
   | .atom region binder => CNode.atom (regions region) (regions binder)
   | .identity region arity => CNode.identity (regions region) arity
-  | .named region definition arity =>
-      CNode.named (regions region) definition arity
-
 @[simp] theorem region_rename
     (regions : FiniteEquiv (Fin sourceRegions) (Fin targetRegions))
     (node : CNode sourceRegions) :
@@ -387,10 +384,6 @@ theorem requiresPort_transport {source target : ConcreteDiagram}
   | identity =>
       simp only [hnode] at h
       simpa only [hnode, CNode.rename] using h
-  | named =>
-      simp only [hnode] at h
-      simpa only [hnode, CNode.rename] using h
-
 theorem rootIsSheet_transport {source target : ConcreteDiagram}
     (iso : ConcreteIso source target) (h : source.RootIsSheet) :
     target.RootIsSheet := by
@@ -445,10 +438,6 @@ theorem atomBindersAreBubbles_transport {source target : ConcreteDiagram}
       rw [hs] at hnodes
       rw [hnodes]
       trivial
-  | named =>
-      rw [hs] at hnodes
-      rw [hnodes]
-      trivial
   | atom region binder =>
       rw [hs] at hnodes
       simp only [CNode.rename] at hnodes
@@ -471,10 +460,6 @@ theorem atomBindersEnclose_transport {source target : ConcreteDiagram}
       rw [hs] at hnodes
       rw [hnodes]
       trivial
-  | named =>
-      rw [hs] at hnodes
-      rw [hnodes]
-      trivial
   | atom region binder =>
       rw [hs] at hnodes
       simp only [CNode.rename] at hnodes
@@ -482,30 +467,6 @@ theorem atomBindersEnclose_transport {source target : ConcreteDiagram}
       have hsource := h (iso.nodes.symm node)
       rw [hs] at hsource
       exact iso.encloses_transport hsource
-
-theorem namedReferencesResolve_transport {source target : ConcreteDiagram}
-    (iso : ConcreteIso source target) (signature : List Nat)
-    (h : source.NamedReferencesResolve signature) :
-    target.NamedReferencesResolve signature := by
-  unfold ConcreteDiagram.NamedReferencesResolve at h ⊢
-  intro node
-  have hnodes := iso.target_node_eq node
-  cases hs : source.nodes (iso.nodes.symm node) with
-  | atom =>
-      rw [hs] at hnodes
-      rw [hnodes]
-      trivial
-  | identity =>
-      rw [hs] at hnodes
-      rw [hnodes]
-      trivial
-  | named region definition arity =>
-      rw [hs] at hnodes
-      simp only [CNode.rename] at hnodes
-      rw [hnodes]
-      have hsource := h (iso.nodes.symm node)
-      rw [hs] at hsource
-      exact hsource
 
 theorem endpointsAreValid_transport {source target : ConcreteDiagram}
     (iso : ConcreteIso source target) (h : source.EndpointsAreValid) :
@@ -616,15 +577,6 @@ theorem requiredPortsAreCovered_transport {source target : ConcreteDiagram}
       rw [hs] at hsource
       intro index
       exact covered (hsource index)
-  | named region definition arity =>
-      rw [hs] at hnodes
-      simp only [CNode.rename] at hnodes
-      rw [hnodes]
-      have hsource := h sourceNode
-      rw [hs] at hsource
-      intro index
-      exact covered (hsource index)
-
 theorem wireScopesEnclose_transport {source target : ConcreteDiagram}
     (iso : ConcreteIso source target) (h : source.WireScopesEnclose) :
     target.WireScopesEnclose := by
@@ -648,8 +600,7 @@ theorem wireScopesEnclose_transport {source target : ConcreteDiagram}
   exact hencloses
 
 def wellFormed_transport {source target : ConcreteDiagram}
-    (iso : ConcreteIso source target) {signature : List Nat}
-    (h : source.WellFormed signature) : target.WellFormed signature where
+    (iso : ConcreteIso source target) (h : source.WellFormed ) : target.WellFormed  where
   root_is_sheet := iso.rootIsSheet_transport h.root_is_sheet
   only_root_is_sheet := iso.onlyRootIsSheet_transport h.only_root_is_sheet
   all_regions_reach_root :=
@@ -658,8 +609,6 @@ def wellFormed_transport {source target : ConcreteDiagram}
     iso.atomBindersAreBubbles_transport h.atom_binders_are_bubbles
   atom_binders_enclose :=
     iso.atomBindersEnclose_transport h.atom_binders_enclose
-  named_references_resolve :=
-    iso.namedReferencesResolve_transport signature h.named_references_resolve
   endpoints_are_valid :=
     iso.endpointsAreValid_transport h.endpoints_are_valid
   endpoints_are_nodup :=
@@ -672,9 +621,8 @@ def wellFormed_transport {source target : ConcreteDiagram}
     iso.wireScopesEnclose_transport h.wire_scopes_enclose
 
 def checked_transport {source target : ConcreteDiagram}
-    (iso : ConcreteIso source target) {signature : List Nat}
-    (checked : CheckedDiagram signature) (hsource : checked.val = source) :
-    CheckedDiagram signature := by
+    (iso : ConcreteIso source target) (checked : CheckedDiagram ) (hsource : checked.val = source) :
+    CheckedDiagram  := by
   subst source
   exact ⟨target, iso.wellFormed_transport checked.property⟩
 

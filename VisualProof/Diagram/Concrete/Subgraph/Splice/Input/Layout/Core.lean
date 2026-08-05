@@ -300,9 +300,6 @@ def mapPatternNode (layout : PlugLayout input)
       .atom (layout.bodyRegion region) (layout.binderRegion binder)
   | .identity region arity =>
       .identity (layout.bodyRegion region) arity
-  | .named region definition arity =>
-      .named (layout.bodyRegion region) definition arity
-
 def mapPatternEndpoint (layout : PlugLayout input)
     (endpoint : CEndpoint input.pattern.val.diagram.nodeCount) :
     CEndpoint layout.nodeCount :=
@@ -375,8 +372,7 @@ def exposedAttachment (layout : PlugLayout input)
 
 /-- Boundary-class substitution into the complete coalesced-host site
 context.  This is also the empty-proxy wire map. -/
-noncomputable def exposedWireRenaming {signature : List Nat}
-    {input : Input signature} (layout : PlugLayout input)
+noncomputable def exposedWireRenaming {input : Input } (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site) :
     Fin input.pattern.val.exposedWires.length →
@@ -387,8 +383,7 @@ noncomputable def exposedWireRenaming {signature : List Nat}
       (layout.exposedAttachment external)
       (input.quotientAttachment_visible hadmissible position)
 
-theorem exposedWireRenaming_spec {signature : List Nat}
-    {input : Input signature} (layout : PlugLayout input)
+theorem exposedWireRenaming_spec {input : Input } (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
     (external : Fin input.pattern.val.exposedWires.length) :
@@ -402,8 +397,8 @@ theorem exposedWireRenaming_spec {signature : List Nat}
   simpa only [exposedWireRenaming, exposedAttachment, position] using hspec
 
 noncomputable def terminalExternal
-    (input : Input signature)
-    {body : Region signature outer rels} {path : List Nat}
+    (input : Input )
+    {body : Region  outer rels} {path : List Nat}
     (patternPath : Region.ContextPath body path)
     (terminal : Fin input.binderSpine.proxyCount)
     (terminal_is_last : terminal.val = input.binderSpine.proxyCount - 1)
@@ -417,8 +412,8 @@ noncomputable def terminalExternal
     terminal_is_last patternLeaf
 
 theorem terminalExternal_spec
-    (input : Input signature)
-    {body : Region signature outer rels} {path : List Nat}
+    (input : Input )
+    {body : Region  outer rels} {path : List Nat}
     (patternPath : Region.ContextPath body path)
     (terminal : Fin input.binderSpine.proxyCount)
     (terminal_is_last : terminal.val = input.binderSpine.proxyCount - 1)
@@ -427,7 +422,7 @@ theorem terminalExternal_spec
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (index : Fin patternLeaf.inheritedWires.length) :
     input.pattern.val.exposedWires.get
-        (@terminalExternal signature outer rels input body path patternPath
+        (@terminalExternal  outer rels input body path patternPath
           terminal terminal_is_last patternLeaf hnonempty index) =
       patternLeaf.inheritedWires.get index := by
   exact patternLeaf.inheritedExposedEquiv_spec input.pattern
@@ -436,11 +431,10 @@ theorem terminalExternal_spec
 
 /-- Capture-avoiding wire transport from the terminal pattern compiler
 context into the coalesced host's complete site context. -/
-noncomputable def terminalWireRenaming {signature : List Nat}
-    {input : Input signature} (layout : PlugLayout input)
+noncomputable def terminalWireRenaming {input : Input } (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     (patternPath : Region.ContextPath body path)
     (terminal : Fin input.binderSpine.proxyCount)
     (terminal_is_last : terminal.val = input.binderSpine.proxyCount - 1)
@@ -452,16 +446,15 @@ noncomputable def terminalWireRenaming {signature : List Nat}
   fun index =>
     let externalMap : Fin patternLeaf.inheritedWires.length →
         Fin input.pattern.val.exposedWires.length :=
-      @terminalExternal signature outer rels input body path patternPath
+      @terminalExternal  outer rels input body path patternPath
         terminal terminal_is_last patternLeaf hnonempty
     let external := externalMap index
     layout.exposedWireRenaming hadmissible host external
 
-theorem terminalWireRenaming_target_spec {signature : List Nat}
-    {input : Input signature} (layout : PlugLayout input)
+theorem terminalWireRenaming_target_spec {input : Input } (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {body : Region signature outer rels} {path : List Nat}
+    {body : Region  outer rels} {path : List Nat}
     (patternPath : Region.ContextPath body path)
     (terminal : Fin input.binderSpine.proxyCount)
     (terminal_is_last : terminal.val = input.binderSpine.proxyCount - 1)
@@ -476,7 +469,7 @@ theorem terminalWireRenaming_target_spec {signature : List Nat}
         layout.exposedAttachment external := by
   let externalMap : Fin patternLeaf.inheritedWires.length →
       Fin input.pattern.val.exposedWires.length :=
-    @terminalExternal signature outer rels input body path patternPath terminal
+    @terminalExternal  outer rels input body path patternPath terminal
       terminal_is_last patternLeaf hnonempty
   let external := externalMap index
   refine ⟨external, ?_⟩
@@ -568,9 +561,6 @@ def mapFrameNode (layout : PlugLayout input) :
       .atom (layout.frameRegion region) (layout.frameRegion binder)
   | .identity region arity =>
       .identity (layout.frameRegion region) arity
-  | .named region definition arity =>
-      .named (layout.frameRegion region) definition arity
-
 @[simp] theorem mapFrameNode_region (layout : PlugLayout input)
     (node : CNode input.frame.val.regionCount) :
     (layout.mapFrameNode node).region = layout.frameRegion node.region := by
@@ -647,8 +637,7 @@ def semanticSiteOccurrences (layout : PlugLayout input) :
     (ConcreteElaboration.localOccurrences input.pattern.val.diagram
       input.binderSpine.bodyContainer).map layout.mapPatternOccurrence
 
-@[simp] theorem plugWire_quotientBlockWire (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+@[simp] theorem plugWire_quotientBlockWire (input : Input ) (layout : PlugLayout input)
     (wire : input.wireQuotient.Carrier) :
     layout.plugWire (layout.quotientBlockWire wire) = {
       scope := layout.frameRegion (input.coalescedScope wire)
@@ -658,8 +647,7 @@ def semanticSiteOccurrences (layout : PlugLayout input) :
     } := by
   simp [plugWire, quotientBlockWire]
 
-@[simp] theorem plugWire_internalBlockWire (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+@[simp] theorem plugWire_internalBlockWire (input : Input ) (layout : PlugLayout input)
     (wire : layout.internalWires.Carrier) :
     layout.plugWire (layout.internalBlockWire wire) =
       layout.mapPatternWire (input.pattern.val.diagram.wires
@@ -822,7 +810,7 @@ theorem bodyRegion_parent_encloses (layout : PlugLayout input)
   simp only [ConcreteDiagram.climb,
     layout.bodyRegion_parent_exact region parent hmaterial hparent]
 
-theorem nonmaterial_parent_eq_bodyContainer (input : Input signature)
+theorem nonmaterial_parent_eq_bodyContainer (input : Input )
     (region parent : Fin input.pattern.val.diagram.regionCount)
     (hmaterial : input.binderSpine.IsMaterialRegion region)
     (hparent : (input.pattern.val.diagram.regions region).parent? = some parent)
@@ -863,7 +851,7 @@ theorem nonmaterial_parent_eq_bodyContainer (input : Input signature)
 /-- Every direct child of the designated body container is material.  For a
 nonempty spine the container is the last proxy, so there is no further proxy
 child; for an empty spine every proper region is material. -/
-theorem directChildOfBody_material (input : Input signature)
+theorem directChildOfBody_material (input : Input )
     (region : Fin input.pattern.val.diagram.regionCount)
     (hparent : (input.pattern.val.diagram.regions region).parent? =
       some input.binderSpine.bodyContainer) :
@@ -903,7 +891,7 @@ theorem directChildOfBody_material (input : Input signature)
 
 /-- A proxy can only have the sheet or another proxy as parent, so every
 direct child of retained material is itself retained material. -/
-theorem directChildOfMaterial_material (input : Input signature)
+theorem directChildOfMaterial_material (input : Input )
     (parent child : Fin input.pattern.val.diagram.regionCount)
     (hparentMaterial : input.binderSpine.IsMaterialRegion parent)
     (hchild : (input.pattern.val.diagram.regions child).parent? =
@@ -927,7 +915,7 @@ theorem directChildOfMaterial_material (input : Input signature)
     exact hparentMaterial.2 previous (Option.some.inj hchild).symm
 
 theorem patternNode_region_material_or_bodyContainer
-    (input : Input signature)
+    (input : Input )
     (node : Fin input.pattern.val.diagram.nodeCount) :
     input.binderSpine.IsMaterialRegion
         (input.pattern.val.diagram.nodes node).region ∨
@@ -969,7 +957,7 @@ theorem patternNode_region_material_or_bodyContainer
         exact (input.binderSpine.body_eq_terminal_of_nonempty hnonzero).symm
 
 theorem patternInternalWire_scope_material_or_bodyContainer
-    (input : Input signature)
+    (input : Input )
     (wire : Fin input.pattern.val.diagram.wireCount)
     (hinternal : wire ∉ input.pattern.val.exposedWires) :
     input.binderSpine.IsMaterialRegion
@@ -1519,7 +1507,7 @@ theorem frameFinishRegion_renameWires_renameRelations
     (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
     (outerMap : Fin sourceContext.length → Fin targetContext.length)
     (relationMap : RelationRenaming sourceRels targetRels)
-    (items : ItemSeq signature (sourceContext.extend region).length sourceRels) :
+    (items : ItemSeq  (sourceContext.extend region).length sourceRels) :
     ((ConcreteElaboration.finishRegion input.coalesceFrameRaw sourceContext region
         items).renameWires outerMap).renameRelations relationMap =
       .mk (ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
@@ -2337,7 +2325,7 @@ theorem material_climb_body_and_plug_site (layout : PlugLayout input) :
               exact congrArg some
                 (layout.bodyRegion_nonmaterial parent hparentMaterial)
 
-theorem material_of_climb_lt_bodyContainer (input : Input signature) :
+theorem material_of_climb_lt_bodyContainer (input : Input ) :
     ∀ (steps : Nat)
       (region current : Fin input.pattern.val.diagram.regionCount)
       (position : Nat),
@@ -2698,12 +2686,12 @@ theorem site_encloses_bodyRegion (layout : PlugLayout input)
 
 theorem frameWire_inherited_mem_iff
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -2757,7 +2745,7 @@ theorem frameWire_inherited_mem_iff
 
 theorem internalWire_not_in_inherited
     (layout : PlugLayout input)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -2805,7 +2793,7 @@ theorem internalWire_not_in_inherited
 
 def semanticInheritedWires
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
@@ -2814,12 +2802,12 @@ def semanticInheritedWires
 
 theorem semanticInheritedWires_subset
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -2834,12 +2822,12 @@ theorem semanticInheritedWires_subset
 
 theorem semanticInheritedWires_complete
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -2861,7 +2849,7 @@ theorem semanticInheritedWires_complete
 
 theorem semanticInheritedWires_nodup
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
@@ -2874,7 +2862,7 @@ theorem semanticInheritedWires_nodup
 
 @[simp] theorem semanticInheritedWires_length
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
@@ -2885,12 +2873,12 @@ theorem semanticInheritedWires_nodup
 
 def inheritedWireEquiv
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -2916,12 +2904,12 @@ def inheritedWireEquiv
 
 theorem inheritedWireEquiv_spec
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw

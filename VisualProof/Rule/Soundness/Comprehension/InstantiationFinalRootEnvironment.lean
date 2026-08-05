@@ -90,10 +90,9 @@ theorem sourceEnvironment_agrees
 
 end FinalContextWitness
 
-variable {signature : List Nat}
-  {input : CheckedDiagram signature}
+variable {input : CheckedDiagram }
   {bubble : Fin input.val.regionCount}
-  {comprehension : CheckedOpenDiagram signature}
+  {comprehension : CheckedOpenDiagram }
   {attachments : List (Fin input.val.wireCount)}
   {binders : List
     (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -113,19 +112,19 @@ theorem finalRootEnvironmentSelection
       fuel (initialInstantiationState payload) result)
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
+    (sourceWellFormed : elimTrace.sourceDiagram.WellFormed )
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
     (direction : ConcreteElaboration.SimulationDirection)
     [Nonempty D] :
-    let source : CheckedOpenDiagram signature :=
+    let source : CheckedOpenDiagram  :=
       ⟨copyTrace.finalSourceOpen elimTrace boundary,
         copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
           finalWellFormed boundary boundaryRoot⟩
-    let target : CheckedOpenDiagram signature :=
+    let target : CheckedOpenDiagram  :=
       ⟨finalTargetOpen input boundary,
         finalTargetOpen_wellFormed input boundary boundaryRoot⟩
     let outer := copyTrace.finalOuterContextWitness elimTrace boundary
@@ -150,11 +149,11 @@ theorem finalRootEnvironmentSelection
                 (ConcreteElaboration.rootEnvironment target.val.exposedWires
                   target.val.hiddenWires targetOuter targetLocal) := by
   dsimp only
-  let source : CheckedOpenDiagram signature :=
+  let source : CheckedOpenDiagram  :=
     ⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
         finalWellFormed boundary boundaryRoot⟩
-  let target : CheckedOpenDiagram signature :=
+  let target : CheckedOpenDiagram  :=
     ⟨finalTargetOpen input boundary,
       finalTargetOpen_wellFormed input boundary boundaryRoot⟩
   let outer := copyTrace.finalOuterContextWitness elimTrace boundary

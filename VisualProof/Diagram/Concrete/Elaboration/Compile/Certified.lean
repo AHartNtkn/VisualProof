@@ -245,7 +245,7 @@ private theorem CertifiedWireContextsAgree.extend
 private theorem certifiedResolvePort?_equivariant
     {source target : ConcreteDiagram}
     (equiv : ConcreteOccurrenceEquiv source target)
-    (htarget : target.WellFormed signature)
+    (htarget : target.WellFormed )
     {sourceContext : WireContext source} {targetContext : WireContext target}
     {ambient : FiniteEquiv (Fin sourceContext.length)
       (Fin targetContext.length)}
@@ -283,7 +283,7 @@ private theorem certifiedResolvePort?_equivariant
 private theorem certifiedResolvePorts?_equivariant
     {source target : ConcreteDiagram}
     (equiv : ConcreteOccurrenceEquiv source target)
-    (htarget : target.WellFormed signature)
+    (htarget : target.WellFormed )
     {sourceContext : WireContext source} {targetContext : WireContext target}
     {ambient : FiniteEquiv (Fin sourceContext.length)
       (Fin targetContext.length)}
@@ -305,7 +305,7 @@ private theorem certifiedResolvePorts?_equivariant
 private theorem compileNode?_certifiedEquivariant
     {source target : ConcreteDiagram}
     (equiv : ConcreteOccurrenceEquiv source target)
-    (htarget : target.WellFormed signature)
+    (htarget : target.WellFormed )
     {sourceContext : WireContext source} {targetContext : WireContext target}
     {ambient : FiniteEquiv (Fin sourceContext.length)
       (Fin targetContext.length)}
@@ -315,13 +315,13 @@ private theorem compileNode?_certifiedEquivariant
     {targetBinders : BinderContext target rels}
     (hbinders : CertifiedBinderContextsAgree equiv sourceBinders targetBinders)
     (node : Fin source.nodeCount)
-    {sourceItem : Item signature sourceContext.length rels}
-    {targetItem : Item signature targetContext.length rels}
-    (hsource : compileNode? signature source sourceContext sourceBinders node =
+    {sourceItem : Item  sourceContext.length rels}
+    {targetItem : Item  targetContext.length rels}
+    (hsource : compileNode?  source sourceContext sourceBinders node =
       some sourceItem)
-    (htargetResult : compileNode? signature target targetContext targetBinders
+    (htargetResult : compileNode?  target targetContext targetBinders
       (equiv.nodes node) = some targetItem) :
-    ItemIso signature ambient rels sourceItem targetItem := by
+    ItemIso  ambient rels sourceItem targetItem := by
   unfold compileNode? at hsource htargetResult
   generalize hsourceNode : source.nodes node = sourceNode at hsource
   generalize htargetNode : target.nodes (equiv.nodes node) = targetNode
@@ -374,28 +374,6 @@ private theorem compileNode?_certifiedEquivariant
                 equiv htarget hwires htargetNodup node arity
                 (fun index => .arg index)
                 hsourceArguments htargetArguments)
-  | named sourceRegion targetRegion definition arity region_eq =>
-      simp only at hsource htargetResult
-      cases hrelation : namedRel? signature definition arity with
-      | none => simp [hrelation] at hsource
-      | some relation =>
-          cases hsourceArguments : resolvePorts? source sourceContext node arity
-              (fun index => .arg index) with
-          | none => simp [hrelation, hsourceArguments] at hsource
-          | some sourceArguments =>
-              simp [hrelation, hsourceArguments] at hsource
-              subst sourceItem
-              cases htargetArguments : resolvePorts? target targetContext
-                  (equiv.nodes node) arity (fun index => .arg index) with
-              | none => simp [hrelation, htargetArguments] at htargetResult
-              | some targetArguments =>
-                  simp [hrelation, htargetArguments] at htargetResult
-                  subst targetItem
-                  exact .named relation (certifiedResolvePorts?_equivariant
-                    equiv htarget hwires htargetNodup node arity
-                    (fun index => .arg index)
-                    hsourceArguments htargetArguments)
-
 theorem regionIso_of_cast
     {sourceOuter targetOuter sourceLocal targetLocal
       sourceExtended targetExtended : Nat}
@@ -403,12 +381,12 @@ theorem regionIso_of_cast
     (targetEq : targetExtended = targetOuter + targetLocal)
     (ambient : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
     (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
-    (sourceItems : ItemSeq signature sourceExtended rels)
-    (targetItems : ItemSeq signature targetExtended rels)
-    (hitems : ItemSeqIso signature
+    (sourceItems : ItemSeq  sourceExtended rels)
+    (targetItems : ItemSeq  targetExtended rels)
+    (hitems : ItemSeqIso
       (castFinEquiv sourceEq targetEq
         (extendWireEquiv ambient localEquiv)) rels sourceItems targetItems) :
-    RegionIso signature ambient rels
+    RegionIso  ambient rels
       (.mk sourceLocal (sourceItems.castWiresEq sourceEq))
       (.mk targetLocal (targetItems.castWiresEq targetEq)) := by
   subst sourceExtended
@@ -418,7 +396,7 @@ theorem regionIso_of_cast
 private theorem compileRegion?_certifiedEquivariant
     {source target : ConcreteDiagram}
     (equiv : ConcreteOccurrenceEquiv source target)
-    (htarget : target.WellFormed signature)
+    (htarget : target.WellFormed )
     {sourceFuel targetFuel : Nat} {region : Fin source.regionCount}
     {sourceContext : WireContext source} {targetContext : WireContext target}
     {ambient : FiniteEquiv (Fin sourceContext.length)
@@ -429,13 +407,13 @@ private theorem compileRegion?_certifiedEquivariant
     {sourceBinders : BinderContext source rels}
     {targetBinders : BinderContext target rels}
     (hbinders : CertifiedBinderContextsAgree equiv sourceBinders targetBinders)
-    {sourceBody : Region signature sourceContext.length rels}
-    {targetBody : Region signature targetContext.length rels}
-    (hsource : compileRegion? signature source sourceFuel region sourceContext
+    {sourceBody : Region  sourceContext.length rels}
+    {targetBody : Region  targetContext.length rels}
+    (hsource : compileRegion?  source sourceFuel region sourceContext
       sourceBinders = some sourceBody)
-    (htargetResult : compileRegion? signature target targetFuel
+    (htargetResult : compileRegion?  target targetFuel
       (equiv.regions region) targetContext targetBinders = some targetBody) :
-    RegionIso signature ambient rels sourceBody targetBody := by
+    RegionIso  ambient rels sourceBody targetBody := by
   induction sourceFuel generalizing targetFuel region sourceContext
       targetContext rels sourceBinders targetBinders sourceBody targetBody with
   | zero => simp [compileRegion?] at hsource
@@ -453,16 +431,16 @@ private theorem compileRegion?_certifiedEquivariant
           have hoccurrence : ∀
               (occurrence : LocalOccurrence source.regionCount source.nodeCount)
               (_ : occurrence ∈ localOccurrences source region)
-              (sourceItem : Item signature sourceExtended.length rels)
-              (targetItem : Item signature targetExtended.length rels),
-              compileOccurrenceWith? signature source
-                  (compileRegion? signature source sourceFuel) sourceExtended
+              (sourceItem : Item  sourceExtended.length rels)
+              (targetItem : Item  targetExtended.length rels),
+              compileOccurrenceWith?  source
+                  (compileRegion?  source sourceFuel) sourceExtended
                   sourceBinders occurrence = some sourceItem →
-              compileOccurrenceWith? signature target
-                  (compileRegion? signature target targetFuel) targetExtended
+              compileOccurrenceWith?  target
+                  (compileRegion?  target targetFuel) targetExtended
                   targetBinders (certifiedRenameOccurrence equiv occurrence) =
                     some targetItem →
-              ItemIso signature extended rels sourceItem targetItem := by
+              ItemIso  extended rels sourceItem targetItem := by
             intro occurrence hoccurrenceMem sourceItem targetItem
               hsourceItem htargetItem
             cases occurrence with
@@ -499,13 +477,13 @@ private theorem compileRegion?_certifiedEquivariant
                       htargetExact.extend_child htarget hparentTarget
                     rw [← hregionEq] at htargetItem
                     simp only [hchild] at hsourceItem htargetItem
-                    cases hsourceBody : compileRegion? signature source
+                    cases hsourceBody : compileRegion?  source
                         sourceFuel child sourceExtended sourceBinders with
                     | none => simp [hsourceBody] at hsourceItem
                     | some compiledSource =>
                         simp [hsourceBody] at hsourceItem
                         subst sourceItem
-                        cases htargetBody : compileRegion? signature target
+                        cases htargetBody : compileRegion?  target
                             targetFuel (equiv.regions child) targetExtended
                             targetBinders with
                         | none => simp [htargetBody] at htargetItem
@@ -533,14 +511,14 @@ private theorem compileRegion?_certifiedEquivariant
                     have hchildBinders := hbinders.push child arity
                     rw [← hregionEq] at htargetItem
                     simp only [hchild] at hsourceItem htargetItem
-                    cases hsourceBody : compileRegion? signature source
+                    cases hsourceBody : compileRegion?  source
                         sourceFuel child sourceExtended
                         (sourceBinders.push child arity) with
                     | none => simp [hsourceBody] at hsourceItem
                     | some compiledSource =>
                         simp [hsourceBody] at hsourceItem
                         subst sourceItem
-                        cases htargetBody : compileRegion? signature target
+                        cases htargetBody : compileRegion?  target
                             targetFuel (equiv.regions child) targetExtended
                             (targetBinders.push (equiv.regions child) arity) with
                         | none => simp [htargetBody] at htargetItem
@@ -550,15 +528,15 @@ private theorem compileRegion?_certifiedEquivariant
                             exact .bubble (ih hwiresExtended hchildExact
                               hchildBinders hsourceBody htargetBody)
           simp only [compileRegion?] at hsource htargetResult
-          cases hsourceItems : compileOccurrencesWith? signature source
-              (compileRegion? signature source sourceFuel) sourceExtended
+          cases hsourceItems : compileOccurrencesWith?  source
+              (compileRegion?  source sourceFuel) sourceExtended
               sourceBinders (localOccurrences source region) with
           | none => simp [sourceExtended, hsourceItems] at hsource
           | some sourceItems =>
               simp [sourceExtended, hsourceItems] at hsource
               subst sourceBody
-              cases htargetItems : compileOccurrencesWith? signature target
-                  (compileRegion? signature target targetFuel) targetExtended
+              cases htargetItems : compileOccurrencesWith?  target
+                  (compileRegion?  target targetFuel) targetExtended
                   targetBinders
                   (localOccurrences target (equiv.regions region)) with
               | none => simp [targetExtended, htargetItems] at htargetResult
@@ -566,16 +544,16 @@ private theorem compileRegion?_certifiedEquivariant
                   simp [targetExtended, htargetItems] at htargetResult
                   subst targetBody
                   have hsourceLength := compileOccurrencesWith?_length
-                    (compileRegion? signature source sourceFuel) sourceExtended
+                    (compileRegion?  source sourceFuel) sourceExtended
                     sourceBinders hsourceItems
                   have htargetLength := compileOccurrencesWith?_length
-                    (compileRegion? signature target targetFuel) targetExtended
+                    (compileRegion?  target targetFuel) targetExtended
                     targetBinders htargetItems
                   let positions : FiniteEquiv (Fin sourceItems.length)
                       (Fin targetItems.length) :=
                     castFinEquiv hsourceLength htargetLength
                       (certifiedLocalOccurrenceEquiv equiv region)
-                  have hitems : ItemSeqIso signature extended rels
+                  have hitems : ItemSeqIso  extended rels
                       sourceItems targetItems := by
                     apply ItemSeqIso.permute positions
                     intro sourceIndex
@@ -585,10 +563,10 @@ private theorem compileRegion?_certifiedEquivariant
                     let targetOccurrenceIndex :=
                       certifiedLocalOccurrenceEquiv equiv region occurrenceIndex
                     have hsourceGet := compileOccurrencesWith?_get
-                      (compileRegion? signature source sourceFuel) sourceExtended
+                      (compileRegion?  source sourceFuel) sourceExtended
                       sourceBinders hsourceItems occurrenceIndex
                     have htargetGet := compileOccurrencesWith?_get
-                      (compileRegion? signature target targetFuel) targetExtended
+                      (compileRegion?  target targetFuel) targetExtended
                       targetBinders htargetItems targetOccurrenceIndex
                     rw [certifiedLocalOccurrenceEquiv_spec equiv region
                       occurrenceIndex] at htargetGet
@@ -616,7 +594,7 @@ private theorem compileRegion?_certifiedEquivariant
 theorem compileRoot?_certifiedEquivariant
     {source target : ConcreteDiagram}
     (equiv : ConcreteOccurrenceEquiv source target)
-    (htarget : target.WellFormed signature)
+    (htarget : target.WellFormed )
     {sourceAmbient : WireContext source} {targetAmbient : WireContext target}
     {sourceLocal : WireContext source} {targetLocal : WireContext target}
     {ambient : FiniteEquiv (Fin sourceAmbient.length)
@@ -628,13 +606,13 @@ theorem compileRoot?_certifiedEquivariant
       (appendContextEquiv ambient localEquiv))
     (htargetExact : WireContext.Exact
       (targetAmbient ++ targetLocal) target.root)
-    {sourceBody : Region signature sourceAmbient.length []}
-    {targetBody : Region signature targetAmbient.length []}
-    (hsource : compileRoot? signature source sourceAmbient sourceLocal =
+    {sourceBody : Region  sourceAmbient.length []}
+    {targetBody : Region  targetAmbient.length []}
+    (hsource : compileRoot?  source sourceAmbient sourceLocal =
       some sourceBody)
-    (htargetResult : compileRoot? signature target targetAmbient targetLocal =
+    (htargetResult : compileRoot?  target targetAmbient targetLocal =
       some targetBody) :
-    RegionIso signature ambient [] sourceBody targetBody := by
+    RegionIso  ambient [] sourceBody targetBody := by
   let sourceRoot := sourceAmbient ++ sourceLocal
   let targetRoot := targetAmbient ++ targetLocal
   let rootEquiv := appendContextEquiv ambient localEquiv
@@ -649,16 +627,16 @@ theorem compileRoot?_certifiedEquivariant
   have hoccurrence : ∀
       (occurrence : LocalOccurrence source.regionCount source.nodeCount)
       (_ : occurrence ∈ localOccurrences source source.root)
-      (sourceItem : Item signature sourceRoot.length [])
-      (targetItem : Item signature targetRoot.length []),
-      compileOccurrenceWith? signature source
-          (compileRegion? signature source source.regionCount)
+      (sourceItem : Item  sourceRoot.length [])
+      (targetItem : Item  targetRoot.length []),
+      compileOccurrenceWith?  source
+          (compileRegion?  source source.regionCount)
           sourceRoot BinderContext.empty occurrence = some sourceItem →
-      compileOccurrenceWith? signature target
-          (compileRegion? signature target source.regionCount)
+      compileOccurrenceWith?  target
+          (compileRegion?  target source.regionCount)
           targetRoot BinderContext.empty
           (certifiedRenameOccurrence equiv occurrence) = some targetItem →
-      ItemIso signature rootEquiv [] sourceItem targetItem := by
+      ItemIso  rootEquiv [] sourceItem targetItem := by
     intro occurrence hoccurrenceMem sourceItem targetItem
       hsourceItem htargetItem
     cases occurrence with
@@ -695,13 +673,13 @@ theorem compileRoot?_certifiedEquivariant
               htargetExactMapped.extend_child htarget hparentTarget
             rw [← hregionEq] at htargetItem
             simp only [hchild] at hsourceItem htargetItem
-            cases hsourceBody : compileRegion? signature source
+            cases hsourceBody : compileRegion?  source
                 source.regionCount child sourceRoot BinderContext.empty with
             | none => simp [hsourceBody] at hsourceItem
             | some compiledSource =>
                 simp [hsourceBody] at hsourceItem
                 subst sourceItem
-                cases htargetBody : compileRegion? signature target
+                cases htargetBody : compileRegion?  target
                     source.regionCount (equiv.regions child) targetRoot
                     BinderContext.empty with
                 | none => simp [htargetBody] at htargetItem
@@ -730,14 +708,14 @@ theorem compileRoot?_certifiedEquivariant
             have hchildBinders := hbinders.push child arity
             rw [← hregionEq] at htargetItem
             simp only [hchild] at hsourceItem htargetItem
-            cases hsourceBody : compileRegion? signature source
+            cases hsourceBody : compileRegion?  source
                 source.regionCount child sourceRoot
                 (BinderContext.empty.push child arity) with
             | none => simp [hsourceBody] at hsourceItem
             | some compiledSource =>
                 simp [hsourceBody] at hsourceItem
                 subst sourceItem
-                cases htargetBody : compileRegion? signature target
+                cases htargetBody : compileRegion?  target
                     source.regionCount (equiv.regions child) targetRoot
                     (BinderContext.empty.push (equiv.regions child) arity) with
                 | none => simp [htargetBody] at htargetItem
@@ -749,16 +727,16 @@ theorem compileRoot?_certifiedEquivariant
                       hsourceBody htargetBody)
   simp only [compileRoot?] at hsource htargetResult
   rw [← equiv.regionCount_eq, ← equiv.root_eq] at htargetResult
-  cases hsourceItems : compileOccurrencesWith? signature source
-      (compileRegion? signature source source.regionCount)
+  cases hsourceItems : compileOccurrencesWith?  source
+      (compileRegion?  source source.regionCount)
       sourceRoot BinderContext.empty
       (localOccurrences source source.root) with
   | none => simp [sourceRoot, hsourceItems] at hsource
   | some sourceItems =>
       simp [sourceRoot, hsourceItems] at hsource
       subst sourceBody
-      cases htargetItems : compileOccurrencesWith? signature target
-          (compileRegion? signature target source.regionCount)
+      cases htargetItems : compileOccurrencesWith?  target
+          (compileRegion?  target source.regionCount)
           targetRoot BinderContext.empty
           (localOccurrences target (equiv.regions source.root)) with
       | none => simp [targetRoot, htargetItems] at htargetResult
@@ -766,16 +744,16 @@ theorem compileRoot?_certifiedEquivariant
           simp [targetRoot, htargetItems] at htargetResult
           subst targetBody
           have hsourceLength := compileOccurrencesWith?_length
-            (compileRegion? signature source source.regionCount)
+            (compileRegion?  source source.regionCount)
             sourceRoot BinderContext.empty hsourceItems
           have htargetLength := compileOccurrencesWith?_length
-            (compileRegion? signature target source.regionCount)
+            (compileRegion?  target source.regionCount)
             targetRoot BinderContext.empty htargetItems
           let positions : FiniteEquiv (Fin sourceItems.length)
               (Fin targetItems.length) :=
             castFinEquiv hsourceLength htargetLength
               (certifiedLocalOccurrenceEquiv equiv source.root)
-          have hitems : ItemSeqIso signature rootEquiv []
+          have hitems : ItemSeqIso  rootEquiv []
               sourceItems targetItems := by
             apply ItemSeqIso.permute positions
             intro sourceIndex
@@ -785,10 +763,10 @@ theorem compileRoot?_certifiedEquivariant
             let targetOccurrenceIndex :=
               certifiedLocalOccurrenceEquiv equiv source.root occurrenceIndex
             have hsourceGet := compileOccurrencesWith?_get
-              (compileRegion? signature source source.regionCount)
+              (compileRegion?  source source.regionCount)
               sourceRoot BinderContext.empty hsourceItems occurrenceIndex
             have htargetGet := compileOccurrencesWith?_get
-              (compileRegion? signature target source.regionCount)
+              (compileRegion?  target source.regionCount)
               targetRoot BinderContext.empty htargetItems targetOccurrenceIndex
             rw [certifiedLocalOccurrenceEquiv_spec equiv source.root
               occurrenceIndex] at htargetGet
@@ -813,8 +791,8 @@ namespace ConcreteIso
 
 theorem elaborate_isomorphic {source target : ConcreteDiagram}
     (iso : ConcreteIso source target)
-    (hsource : source.WellFormed signature)
-    (htarget : target.WellFormed signature) :
+    (hsource : source.WellFormed )
+    (htarget : target.WellFormed ) :
     Core.Isomorphic (source.elaborate hsource) (target.elaborate htarget) := by
   obtain ⟨sourceBody, hsourceKernel, hsourceElaborate⟩ :=
     ConcreteDiagram.elaborate_computation source hsource
@@ -839,7 +817,7 @@ theorem elaborate_isomorphic {source target : ConcreteDiagram}
           (iso.regions source.root)) target.root := by
     rw [iso.root_eq]
     exact ConcreteElaboration.closedRootWires_exact htarget
-  have hbody : RegionIso signature (.refl (Fin 0)) [] sourceBody targetBody :=
+  have hbody : RegionIso  (.refl (Fin 0)) [] sourceBody targetBody :=
     ConcreteElaboration.compileRoot?_equivariant iso htarget hwires
       htargetExact hsourceKernel htargetKernel'
   rw [hsourceElaborate, htargetElaborate]
@@ -852,8 +830,8 @@ namespace OpenConcreteIso
 /-- Ordered open concrete isomorphism commutes with checked elaboration. -/
 def elaborate_isomorphic {source target : OpenConcreteDiagram}
     (iso : OpenConcreteIso source target)
-    (hsource : source.WellFormed signature)
-    (htarget : target.WellFormed signature) :
+    (hsource : source.WellFormed )
+    (htarget : target.WellFormed ) :
     OpenDiagramIso (source.elaborate hsource)
       ((target.elaborate htarget).castArity
         iso.boundary_length_eq.symm) := by
@@ -868,14 +846,14 @@ def elaborate_isomorphic {source target : OpenConcreteDiagram}
       (target.exposedWires ++ target.hiddenWires) target.diagram.root := by
     simpa only [OpenConcreteDiagram.rootWires] using
       ConcreteElaboration.openRootWires_exact htarget
-  have hbody : RegionIso signature iso.exposedWiresEquiv []
+  have hbody : RegionIso  iso.exposedWiresEquiv []
       (source.elaborate hsource).body (target.elaborate htarget).body := by
     obtain ⟨sourceBody, hsourceKernel, hsourceElaborate⟩ :=
       CheckedOpenDiagram.elaborate_body_computation
-        (show CheckedOpenDiagram signature from ⟨source, hsource⟩)
+        (show CheckedOpenDiagram  from ⟨source, hsource⟩)
     obtain ⟨targetBody, htargetKernel, htargetElaborate⟩ :=
       CheckedOpenDiagram.elaborate_body_computation
-        (show CheckedOpenDiagram signature from ⟨target, htarget⟩)
+        (show CheckedOpenDiagram  from ⟨target, htarget⟩)
     change (source.elaborate hsource).body = sourceBody at hsourceElaborate
     change (target.elaborate htarget).body = targetBody at htargetElaborate
     rw [hsourceElaborate, htargetElaborate]

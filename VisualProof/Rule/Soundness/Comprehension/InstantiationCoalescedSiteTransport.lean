@@ -88,7 +88,7 @@ theorem extendedEnvironment_localEnvironmentOfComplete
 /-- A source site valuation constant on quotient fibers induces the target
 local valuation compatible with the already-related inherited environments. -/
 theorem site_targetLocal_exists
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (sourceOuter : ConcreteElaboration.WireContext input.frame.val)
     (targetOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
@@ -176,7 +176,7 @@ theorem site_targetLocal_exists
 /-- Conversely, any target site valuation pulls back along the canonical
 quotient map to a compatible source local valuation. -/
 theorem site_sourceLocal_exists
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (sourceOuter : ConcreteElaboration.WireContext input.frame.val)
     (targetOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)

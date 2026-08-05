@@ -11,22 +11,20 @@ namespace InstantiationSemantic
 /-- Truth of the trace's fixed comprehension relation exposes its ordered
 boundary assignment in both the zero- and nonzero-proxy-spine cases. -/
 theorem relation_boundaryAssignment_of_truth
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -34,9 +32,9 @@ theorem relation_boundaryAssignment_of_truth
     (nonemptyRelationEq : ∀ hnonempty :
       payload.binderSpine.proxyCount ≠ 0,
       relationValue = terminalRelationOfParameterValues payload state site
-        arguments hnonempty model named parameterValues values)
+        arguments hnonempty model  parameterValues values)
     (emptyRelationEq : ∀ _hzero : payload.binderSpine.proxyCount = 0,
-      relationValue = payload.interpretedRelation model named parameterValues)
+      relationValue = payload.interpretedRelation model  parameterValues)
     (relationArguments : Fin payload.arity → model.Carrier)
     (truth : relationValue relationArguments) :
     ∃ assignment : BoundaryAssignment comprehension.elaborate model.Carrier,
@@ -44,16 +42,16 @@ theorem relation_boundaryAssignment_of_truth
         Fin.addCases relationArguments parameterValues ∘
           Fin.cast payload.boundarySplit := by
   by_cases hzero : payload.binderSpine.proxyCount = 0
-  · have interpreted : payload.interpretedRelation model named parameterValues
+  · have interpreted : payload.interpretedRelation model  parameterValues
         relationArguments := by
       rw [← emptyRelationEq hzero]
       exact truth
     have patternDenotes :=
-      (payload.interpretedRelation_apply model named parameterValues
+      (payload.interpretedRelation_apply model  parameterValues
         relationArguments).mp interpreted
     exact ⟨patternDenotes.choose, patternDenotes.choose_spec.1⟩
   · have terminal : terminalRelationOfParameterValues payload state site
-        arguments hzero model named parameterValues values relationArguments := by
+        arguments hzero model  parameterValues values relationArguments := by
       rw [← nonemptyRelationEq hzero]
       exact truth
     exact ⟨terminal.choose, terminal.choose_spec.1⟩
@@ -61,22 +59,20 @@ theorem relation_boundaryAssignment_of_truth
 /-- The active fixed-relation atom therefore certifies every identification
 made by the executor's attachment quotient. -/
 theorem relation_truth_quotientWire_value_eq
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -86,9 +82,9 @@ theorem relation_truth_quotientWire_value_eq
     (nonemptyRelationEq : ∀ hnonempty :
       payload.binderSpine.proxyCount ≠ 0,
       relationValue = terminalRelationOfParameterValues payload state site
-        arguments hnonempty model named parameterValues values)
+        arguments hnonempty model  parameterValues values)
     (emptyRelationEq : ∀ _hzero : payload.binderSpine.proxyCount = 0,
-      relationValue = payload.interpretedRelation model named parameterValues)
+      relationValue = payload.interpretedRelation model  parameterValues)
     (truth : relationValue (wireValue ∘ arguments))
     {left right : Fin state.diagram.val.wireCount}
     (sameClass :
@@ -101,7 +97,7 @@ theorem relation_truth_quotientWire_value_eq
     payload state site arguments
   obtain ⟨assignment, assignmentArgs⟩ :=
     relation_boundaryAssignment_of_truth payload state site arguments model
-      named relationValue values parameterValues nonemptyRelationEq
+       relationValue values parameterValues nonemptyRelationEq
       emptyRelationEq (wireValue ∘ arguments) truth
   apply quotientWire_value_eq_of_boundaryAssignment spliceInput wireValue
     assignment

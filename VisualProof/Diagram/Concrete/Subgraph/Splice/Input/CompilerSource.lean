@@ -9,21 +9,21 @@ open VisualProof.Diagram
 open VisualProof.Diagram.ConcreteElaboration
 
 
-def plugLayout (input : Input signature) : PlugLayout input := {}
+def plugLayout (input : Input ) : PlugLayout input := {}
 
-def spliceChecked (signature : List Nat) (input : Input signature) :
-    Except Error (CheckedDiagram signature) :=
+def spliceChecked (input : Input ) :
+    Except Error (CheckedDiagram ) :=
   match checkInput input with
   | .error error => .error error
   | .ok _ =>
-      match checkWellFormed signature input.plugLayout.plugRaw with
+      match checkWellFormed  input.plugLayout.plugRaw with
       | .error error => .error (.resultNotWellFormed error)
       | .ok result => .ok result
 
 theorem spliceChecked_sound
-    (hsplice : spliceChecked signature input = .ok result) :
+    (hsplice : spliceChecked  input = .ok result) :
     result.val = input.plugLayout.plugRaw ∧
-      input.Admissible ∧ result.val.WellFormed signature := by
+      input.Admissible ∧ result.val.WellFormed  := by
   unfold spliceChecked at hsplice
   split at hsplice
   · contradiction
@@ -37,7 +37,7 @@ theorem spliceChecked_sound
 
 /-- The canonical intrinsic host view used by the checked splice endpoint. -/
 noncomputable def compiledSpliceHostView
-    (input : Input signature) (hadmissible : input.Admissible) :
+    (input : Input ) (hadmissible : input.Admissible) :
     SiteView (input.coalesceFrame hadmissible) input.site :=
   Classical.choice
     (siteView_complete (input.coalesceFrame hadmissible) input.site)
@@ -46,7 +46,7 @@ noncomputable def compiledSpliceHostView
 on the pattern and designated spine, so every executor copy of the same
 comprehension shares one canonical semantic presentation. -/
 structure PatternTerminalCompilerView
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (binderSpine : BinderSpine pattern.val.diagram) where
   path : List Nat
   witness : Region.ContextPath pattern.elaborate.body path
@@ -62,13 +62,13 @@ structure PatternTerminalCompilerView
   producer_leaf : HEq (producer.compilerLeaf.nestedOfNe proper) leaf
 
 /-- Backwards-compatible input-facing name for the pattern-owned view. -/
-abbrev TerminalCompilerView (input : Input signature) :=
+abbrev TerminalCompilerView (input : Input ) :=
   PatternTerminalCompilerView input.pattern input.binderSpine
 
 /-- A nonempty pattern-owned spine reaches its body through the ordinary
 nested compiler kernel, independently of any host splice. -/
 theorem patternTerminalCompilerView_complete
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (binderSpine : BinderSpine pattern.val.diagram)
     (hnonempty : binderSpine.proxyCount ≠ 0) :
     Nonempty (PatternTerminalCompilerView pattern binderSpine) := by
@@ -86,7 +86,7 @@ theorem patternTerminalCompilerView_complete
 /-- Canonical terminal compiler evidence owned by the pattern rather than by
 one particular host splice. -/
 noncomputable def compiledPatternTerminalView
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (binderSpine : BinderSpine pattern.val.diagram)
     (_terminalBody : binderSpine.TerminalBodyContract pattern.val)
     (hnonempty : binderSpine.proxyCount ≠ 0) :
@@ -95,56 +95,56 @@ noncomputable def compiledPatternTerminalView
     (patternTerminalCompilerView_complete pattern binderSpine hnonempty)
 
 noncomputable def compiledSpliceTerminalView
-    (input : Input signature)
+    (input : Input )
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
     TerminalCompilerView input :=
   compiledPatternTerminalView input.pattern input.binderSpine
     input.terminalBody hnonempty
 
 /-- The item sequence emitted by the checked open-root compiler. -/
-structure OpenRootCompilerItems (checked : CheckedOpenDiagram signature) where
-  items : ItemSeq signature checked.val.rootWires.length []
+structure OpenRootCompilerItems (checked : CheckedOpenDiagram ) where
+  items : ItemSeq  checked.val.rootWires.length []
   computation :
-    ConcreteElaboration.compileOccurrencesWith? signature
+    ConcreteElaboration.compileOccurrencesWith?
       checked.val.diagram
-      (ConcreteElaboration.compileRegion? signature checked.val.diagram
+      (ConcreteElaboration.compileRegion?  checked.val.diagram
         checked.val.diagram.regionCount)
       checked.val.rootWires ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences checked.val.diagram
         checked.val.diagram.root) = some items
 
 noncomputable def compiledSpliceOpenRootItems
-    (checked : CheckedOpenDiagram signature) :
+    (checked : CheckedOpenDiagram ) :
     OpenRootCompilerItems checked :=
   let complete := checkedOpenRootItems_complete checked
   ⟨Classical.choose complete, Classical.choose_spec complete⟩
 
 theorem PlugLayout.compiledCoalescedRootItemsIsoFromExactContext
-    (input : Input signature) (hadmissible : input.Admissible)
+    (input : Input ) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (context : ConcreteElaboration.WireContext input.coalesceFrameRaw)
     (exact : context.Exact input.coalesceFrameRaw.root)
-    {closedItems : ItemSeq signature context.length []}
-    {openItems : ItemSeq signature
+    {closedItems : ItemSeq  context.length []}
+    {openItems : ItemSeq
       (PlugLayout.coalescedOpenRoot input sourceBoundary).rootWires.length []}
-    (hclosed : ConcreteElaboration.compileOccurrencesWith? signature
+    (hclosed : ConcreteElaboration.compileOccurrencesWith?
       input.coalesceFrameRaw
-      (ConcreteElaboration.compileRegion? signature input.coalesceFrameRaw
+      (ConcreteElaboration.compileRegion?  input.coalesceFrameRaw
         input.coalesceFrameRaw.regionCount)
       context ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences input.coalesceFrameRaw
         input.coalesceFrameRaw.root) = some closedItems)
-    (hopen : ConcreteElaboration.compileOccurrencesWith? signature
+    (hopen : ConcreteElaboration.compileOccurrencesWith?
       input.coalesceFrameRaw
-      (ConcreteElaboration.compileRegion? signature input.coalesceFrameRaw
+      (ConcreteElaboration.compileRegion?  input.coalesceFrameRaw
         input.coalesceFrameRaw.regionCount)
       (PlugLayout.coalescedOpenRoot input sourceBoundary).rootWires
       ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences input.coalesceFrameRaw
         input.coalesceFrameRaw.root) = some openItems) :
-    ItemSeqIso signature
+    ItemSeqIso
       (exactContextToOpenRootWireEquiv
         (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
           sourceRoot) context exact) [] closedItems openItems := by
@@ -153,18 +153,18 @@ theorem PlugLayout.compiledCoalescedRootItemsIsoFromExactContext
       sourceRoot) context exact hclosed hopen
 
 theorem OpenRootCompilerItems.elaborate_body
-    {signature : List Nat} {checked : CheckedOpenDiagram signature}
+    {checked : CheckedOpenDiagram }
     (compiled : OpenRootCompilerItems checked) :
     checked.elaborate.body =
       ConcreteElaboration.finishRoot checked.val.exposedWires
         checked.val.hiddenWires compiled.items := by
-  have hroot : ConcreteElaboration.compileRoot? signature checked.val.diagram
+  have hroot : ConcreteElaboration.compileRoot?  checked.val.diagram
       checked.val.exposedWires checked.val.hiddenWires =
         some (ConcreteElaboration.finishRoot checked.val.exposedWires
           checked.val.hiddenWires compiled.items) := by
-    have hitems : ConcreteElaboration.compileOccurrencesWith? signature
+    have hitems : ConcreteElaboration.compileOccurrencesWith?
         checked.val.diagram
-        (ConcreteElaboration.compileRegion? signature checked.val.diagram
+        (ConcreteElaboration.compileRegion?  checked.val.diagram
           checked.val.diagram.regionCount)
         (checked.val.exposedWires ++ checked.val.hiddenWires)
         ConcreteElaboration.BinderContext.empty
@@ -180,16 +180,15 @@ theorem OpenRootCompilerItems.elaborate_body
 /-- Expose the exact assignment/hidden-witness semantics of the item sequence
 emitted by the checked open-root compiler. -/
 theorem OpenRootCompilerItems.denote_iff
-    {signature : List Nat} {checked : CheckedOpenDiagram signature}
+    {checked : CheckedOpenDiagram }
     (compiled : OpenRootCompilerItems checked)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin checked.val.boundary.length → model.Carrier) :
-    checked.denote model named args ↔
+    checked.denote model  args ↔
       ∃ assignment : BoundaryAssignment checked.elaborate model.Carrier,
         assignment.args = args ∧
           ∃ hiddenEnv : Fin checked.val.hiddenWires.length → model.Carrier,
-            denoteItemSeq (relCtx := []) model named
+            denoteItemSeq (relCtx := []) model
               (ConcreteElaboration.rootEnvironment checked.val.exposedWires
                 checked.val.hiddenWires assignment.classes hiddenEnv)
               (PUnit.unit : RelEnv model.Carrier []) compiled.items := by
@@ -204,7 +203,7 @@ theorem OpenRootCompilerItems.denote_iff
         checked.val.exposedWires.length + checked.val.hiddenWires.length := by
       simp [OpenConcreteDiagram.rootWires]
     rw [ItemSeq.castWiresEq_eq_renameWires] at hiddenDenotes
-    have raw := (denoteItemSeq_renameWires (relCtx := []) model named
+    have raw := (denoteItemSeq_renameWires (relCtx := []) model
       (Fin.cast rootEq) (extendWireEnv assignment.classes hiddenEnv)
       (PUnit.unit : RelEnv model.Carrier []) compiled.items).mp hiddenDenotes
     simpa [ConcreteElaboration.rootEnvironment] using raw
@@ -214,29 +213,28 @@ theorem OpenRootCompilerItems.denote_iff
         checked.val.exposedWires.length + checked.val.hiddenWires.length := by
       simp [OpenConcreteDiagram.rootWires]
     rw [ItemSeq.castWiresEq_eq_renameWires]
-    apply (denoteItemSeq_renameWires (relCtx := []) model named
+    apply (denoteItemSeq_renameWires (relCtx := []) model
       (Fin.cast rootEq) (extendWireEnv assignment.classes hiddenEnv)
       (PUnit.unit : RelEnv model.Carrier []) compiled.items).mpr
     simpa [ConcreteElaboration.rootEnvironment] using hiddenDenotes
 
 theorem PlugLayout.denote_expandedCoalescedRootItems_iff
-    (input : Input signature) (hadmissible : input.Admissible)
+    (input : Input ) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (context : ConcreteElaboration.WireContext input.coalesceFrameRaw)
     (exact : context.Exact input.coalesceFrameRaw.root)
-    (closedItems : ItemSeq signature context.length [])
-    (hclosed : ConcreteElaboration.compileOccurrencesWith? signature
+    (closedItems : ItemSeq  context.length [])
+    (hclosed : ConcreteElaboration.compileOccurrencesWith?
       input.coalesceFrameRaw
-      (ConcreteElaboration.compileRegion? signature input.coalesceFrameRaw
+      (ConcreteElaboration.compileRegion?  input.coalesceFrameRaw
         input.coalesceFrameRaw.regionCount)
       context ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences input.coalesceFrameRaw
         input.coalesceFrameRaw.root) = some closedItems)
     (extra : Nat)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin
       (PlugLayout.coalescedOpenRoot input sourceBoundary).exposedWires.length →
         model.Carrier) :
@@ -248,13 +246,13 @@ theorem PlugLayout.denote_expandedCoalescedRootItems_iff
     let transport :=
       (exactContextToOpenRootWireEquiv checked context exact).trans
         (FiniteEquiv.finCast rootEq)
-    denoteRegion (relCtx := []) model named env
+    denoteRegion (relCtx := []) model  env
         (PUnit.unit : RelEnv model.Carrier [])
         (Region.mk (checked.val.hiddenWires.length + extra)
           (closedItems.renameWires
             (Region.conjoinLeftWire checked.val.exposedWires.length
               checked.val.hiddenWires.length extra ∘ transport))) ↔
-      denoteRegion (relCtx := []) model named env
+      denoteRegion (relCtx := []) model  env
         (PUnit.unit : RelEnv model.Carrier [])
         checked.elaborate.body := by
   dsimp only
@@ -308,7 +306,7 @@ theorem PlugLayout.denote_expandedCoalescedRootItems_iff
     rw [hext]
     rfl
   dsimp only at hregion
-  have hregion' : RegionIso signature
+  have hregion' : RegionIso
       (FiniteEquiv.refl (Fin checked.val.exposedWires.length)) []
       (Region.mk checked.val.hiddenWires.length
         (closedItems.renameWires transport))
@@ -324,29 +322,29 @@ theorem PlugLayout.denote_expandedCoalescedRootItems_iff
     rw [← hreindexFun]
     exact hregion
   have hcanonical :
-      denoteRegion (relCtx := []) model named env
+      denoteRegion (relCtx := []) model  env
           (PUnit.unit : RelEnv model.Carrier [])
           (Region.mk checked.val.hiddenWires.length
             (closedItems.renameWires transport)) ↔
-        denoteRegion (relCtx := []) model named env
+        denoteRegion (relCtx := []) model  env
           (PUnit.unit : RelEnv model.Carrier [])
           checked.elaborate.body := by
     rw [openItems.elaborate_body]
     simpa only [ConcreteElaboration.finishRoot] using
-      hregion'.denotation model named env env
+      hregion'.denotation model  env env
         (PUnit.unit : RelEnv model.Carrier []) (by
         intro index
         rfl)
   rw [← hcanonical]
   rw [← ItemSeq.renameWires_comp]
-  exact Region.denote_addUnusedLocals_iff (relCtx := []) model named env
+  exact Region.denote_addUnusedLocals_iff (relCtx := []) model  env
     (PUnit.unit : RelEnv model.Carrier [])
     (closedItems.renameWires transport) extra
 
 /-- Canonical intrinsic view of the replacement site in the checked open
 splice output. -/
 noncomputable def compiledSpliceOutputOpenView
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -362,12 +360,12 @@ noncomputable def compiledSpliceOutputOpenView
 
 /-- Closed-root compiler data, used only in the sheet-root branch where the
 open compiler uses `finishRoot` rather than an ordinary nested leaf. -/
-structure ClosedRootCompilerItems (checked : CheckedDiagram signature) where
-  items : ItemSeq signature
+structure ClosedRootCompilerItems (checked : CheckedDiagram ) where
+  items : ItemSeq
     (ConcreteElaboration.exactScopeWires checked.val checked.val.root).length []
   computation :
-    ConcreteElaboration.compileOccurrencesWith? signature checked.val
-      (ConcreteElaboration.compileRegion? signature checked.val
+    ConcreteElaboration.compileOccurrencesWith?  checked.val
+      (ConcreteElaboration.compileRegion?  checked.val
         checked.val.regionCount)
       (ConcreteElaboration.exactScopeWires checked.val checked.val.root)
       ConcreteElaboration.BinderContext.empty
@@ -375,18 +373,18 @@ structure ClosedRootCompilerItems (checked : CheckedDiagram signature) where
         some items
 
 noncomputable def compiledSpliceClosedRootItems
-    (checked : CheckedDiagram signature) :
+    (checked : CheckedDiagram ) :
     ClosedRootCompilerItems checked :=
   let complete := checkedRootItems_complete checked
   ⟨Classical.choose complete, Classical.choose_spec complete⟩
 
 def checkedSpliceOutput
-    (input : Input signature) (layout : PlugLayout input)
-    (hadmissible : input.Admissible) : CheckedDiagram signature :=
-  ⟨layout.plugRaw, layout.plugRaw_wellFormed signature input hadmissible⟩
+    (input : Input ) (layout : PlugLayout input)
+    (hadmissible : input.Admissible) : CheckedDiagram  :=
+  ⟨layout.plugRaw, layout.plugRaw_wellFormed  input hadmissible⟩
 
 noncomputable def compiledSpliceClosedRootWitness
-    (checked : CheckedDiagram signature) :
+    (checked : CheckedDiagram ) :
     Region.ContextPath
       (ConcreteElaboration.finishRegion checked.val
         ([] : ConcreteElaboration.WireContext checked.val) checked.val.root
@@ -396,7 +394,7 @@ noncomputable def compiledSpliceClosedRootWitness
 /-- The ordinary closed compiler leaf at the sheet root.  This is used to
 connect the site item theorem to the open-root `finishRoot` kernel. -/
 noncomputable def compiledSpliceClosedRootLeaf
-    (checked : CheckedDiagram signature) :
+    (checked : CheckedDiagram ) :
     Region.ContextPath.CompilerLeaf checked.val checked.val.root
       (compiledSpliceClosedRootWitness checked) where
   inheritedWires := []
@@ -413,13 +411,13 @@ noncomputable def compiledSpliceClosedRootLeaf
   bodyComputation := rfl
 
 structure SpliceOutputRootItemsAt
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (target : Fin layout.plugRaw.regionCount) where
-  items : ItemSeq signature
+  items : ItemSeq
     (ConcreteElaboration.exactScopeWires layout.plugRaw target).length []
   computation :
-    ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+    ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+      (ConcreteElaboration.compileRegion?  layout.plugRaw
         layout.plugRaw.regionCount)
       (ConcreteElaboration.exactScopeWires layout.plugRaw target)
       ConcreteElaboration.BinderContext.empty
@@ -427,7 +425,7 @@ structure SpliceOutputRootItemsAt
         target) = some items
 
 noncomputable def compiledSpliceOutputRootItemsAtSite
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (hsite : input.site = input.frame.val.root) :
     SpliceOutputRootItemsAt input layout (layout.frameRegion input.site) := by
@@ -443,7 +441,7 @@ noncomputable def compiledSpliceOutputRootItemsAtSite
   }
 
 noncomputable def compiledSpliceOutputRootWitness
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (hsite : input.site = input.frame.val.root) :
     Region.ContextPath
@@ -454,7 +452,7 @@ noncomputable def compiledSpliceOutputRootWitness
   .here _
 
 noncomputable def compiledSpliceOutputRootLeaf
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (hsite : input.site = input.frame.val.root) :
     Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -477,11 +475,11 @@ noncomputable def compiledSpliceOutputRootLeaf
       simpa only [ConcreteElaboration.WireContext.extend, List.nil_append,
         htarget] using
         (ConcreteElaboration.WireContext.root_exact
-          (layout.plugRaw_wellFormed signature input hadmissible))
+          (layout.plugRaw_wellFormed  input hadmissible))
     bindersCover := by
       simpa only [htarget] using
         (ConcreteElaboration.BinderContext.empty_covers_root
-          (layout.plugRaw_wellFormed signature input hadmissible))
+          (layout.plugRaw_wellFormed  input hadmissible))
     binderEnumeration := by
       simpa only [htarget] using
         (ConcreteElaboration.BinderContext.Enumeration.empty layout.plugRaw)
@@ -493,7 +491,7 @@ noncomputable def compiledSpliceOutputRootLeaf
 Its external interface is the coalesced host interface; only the body is
 replaced. -/
 noncomputable def compiledSpliceRootSourceFromItems
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -506,8 +504,8 @@ noncomputable def compiledSpliceRootSourceFromItems
     {closedSourceWires : Nat}
     (closedWire : FiniteEquiv (Fin closedSourceWires)
       (Fin context.length))
-    (closedSourceItems : ItemSeq signature closedSourceWires []) :
-    OpenDiagram signature
+    (closedSourceItems : ItemSeq  closedSourceWires []) :
+    OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let targetEq :
@@ -532,7 +530,7 @@ noncomputable def compiledSpliceRootSourceFromItems
 shares the source's complete open interface and local-wire block, but omits
 the appended pattern constraints. -/
 noncomputable def compiledSpliceRootHostFromItems
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -545,15 +543,15 @@ noncomputable def compiledSpliceRootHostFromItems
     {closedSourceWires : Nat}
     (closedWire : FiniteEquiv (Fin closedSourceWires)
       (Fin context.length))
-    (closedHostItems : ItemSeq signature closedSourceWires []) :
-    OpenDiagram signature
+    (closedHostItems : ItemSeq  closedSourceWires []) :
+    OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   compiledSpliceRootSourceFromItems input layout hadmissible sourceBoundary
     sourceRoot sourceLocal localEquiv context exact closedWire closedHostItems
 
 theorem compiledSpliceRootSourceFromItems_projects_host
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -565,17 +563,16 @@ theorem compiledSpliceRootSourceFromItems_projects_host
     (exact : context.Exact layout.plugRaw.root)
     {closedSourceWires : Nat}
     (closedWire : FiniteEquiv (Fin closedSourceWires) (Fin context.length))
-    (hostItems patternItems : ItemSeq signature closedSourceWires [])
+    (hostItems patternItems : ItemSeq  closedSourceWires [])
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (compiledSpliceRootSourceFromItems input layout hadmissible
           sourceBoundary sourceRoot sourceLocal localEquiv context exact
           closedWire (hostItems.append patternItems)) args →
-      denoteOpen model named
+      denoteOpen model
         (compiledSpliceRootHostFromItems input layout hadmissible sourceBoundary
           sourceRoot sourceLocal localEquiv context exact closedWire hostItems)
         args := by
@@ -584,18 +581,18 @@ theorem compiledSpliceRootSourceFromItems_projects_host
   apply denote_replaceOpenBody_mono
   intro env hbody
   rw [ItemSeq.renameWires_append] at hbody
-  exact Region.denote_mk_append_left (rels := []) model named env
+  exact Region.denote_mk_append_left (rels := []) model  env
     (PUnit.unit : RelEnv model.Carrier []) sourceLocal _ _ hbody
 
 noncomputable def compiledSpliceRootSourceOfNonempty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hsite : input.site = input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    OpenDiagram signature
+    OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let host := compiledSpliceHostView input hadmissible
@@ -638,14 +635,14 @@ noncomputable def compiledSpliceRootSourceOfNonempty
     closedWire (hostPrepared.append patternPrepared)
 
 noncomputable def compiledSpliceRootSourceOfEmpty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hsite : input.site = input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0) :
-    OpenDiagram signature
+    OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let host := compiledSpliceHostView input hadmissible
@@ -682,14 +679,14 @@ noncomputable def compiledSpliceRootSourceOfEmpty
     closedWire (hostPrepared.append patternPrepared)
 
 noncomputable def compiledSpliceRootHostOfNonempty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hsite : input.site = input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    OpenDiagram signature
+    OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let host := compiledSpliceHostView input hadmissible
@@ -721,14 +718,14 @@ noncomputable def compiledSpliceRootHostOfNonempty
     closedWire hostPrepared
 
 noncomputable def compiledSpliceRootHostOfEmpty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hsite : input.site = input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0) :
-    OpenDiagram signature
+    OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let host := compiledSpliceHostView input hadmissible
@@ -759,7 +756,7 @@ noncomputable def compiledSpliceRootHostOfEmpty
     closedWire hostPrepared
 
 theorem compiledSpliceRootSourceOfNonempty_projects_compiledHost
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -767,14 +764,13 @@ theorem compiledSpliceRootSourceOfNonempty_projects_compiledHost
     (hsite : input.site = input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (compiledSpliceRootSourceOfNonempty input layout hadmissible
           sourceBoundary sourceRoot hsite hnonempty) args →
-      denoteOpen model named
+      denoteOpen model
         (compiledSpliceRootHostOfNonempty input layout hadmissible
           sourceBoundary sourceRoot hsite hnonempty) args := by
   unfold compiledSpliceRootSourceOfNonempty
@@ -783,7 +779,7 @@ theorem compiledSpliceRootSourceOfNonempty_projects_compiledHost
   apply compiledSpliceRootSourceFromItems_projects_host
 
 theorem compiledSpliceRootSourceOfEmpty_projects_compiledHost
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -791,14 +787,13 @@ theorem compiledSpliceRootSourceOfEmpty_projects_compiledHost
     (hsite : input.site = input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (compiledSpliceRootSourceOfEmpty input layout hadmissible sourceBoundary
           sourceRoot hsite hzero) args →
-      denoteOpen model named
+      denoteOpen model
         (compiledSpliceRootHostOfEmpty input layout hadmissible sourceBoundary
           sourceRoot hsite hzero) args := by
   unfold compiledSpliceRootSourceOfEmpty compiledSpliceRootHostOfEmpty
@@ -806,7 +801,7 @@ theorem compiledSpliceRootSourceOfEmpty_projects_compiledHost
   apply compiledSpliceRootSourceFromItems_projects_host
 
 noncomputable def compiledSpliceRootSourceFromItemsIso
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -818,22 +813,22 @@ noncomputable def compiledSpliceRootSourceFromItemsIso
     (exact : context.Exact layout.plugRaw.root)
     {closedSourceWires : Nat}
     (closedWire : FiniteEquiv (Fin closedSourceWires) (Fin context.length))
-    (closedSourceItems : ItemSeq signature closedSourceWires [])
-    {closedOutputItems : ItemSeq signature context.length []}
-    {openOutputItems : ItemSeq signature
+    (closedSourceItems : ItemSeq  closedSourceWires [])
+    {closedOutputItems : ItemSeq  context.length []}
+    {openOutputItems : ItemSeq
       (PlugLayout.outputOpenRoot input layout sourceBoundary).rootWires.length []}
-    (hclosed : ItemSeqIso signature closedWire []
+    (hclosed : ItemSeqIso  closedWire []
       closedSourceItems closedOutputItems)
     (closedOutputComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           layout.plugRaw.regionCount)
         context ConcreteElaboration.BinderContext.empty
         (ConcreteElaboration.localOccurrences layout.plugRaw
           layout.plugRaw.root) = some closedOutputItems)
     (openOutputComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           layout.plugRaw.regionCount)
         (PlugLayout.outputOpenRoot input layout sourceBoundary).rootWires
         ConcreteElaboration.BinderContext.empty
@@ -864,7 +859,7 @@ noncomputable def compiledSpliceRootSourceFromItemsIso
       sourceBoundary sourceRoot context exact).trans
       (FiniteEquiv.finCast targetEq)
   have hopen := PlugLayout.compiledOutputRootItemsIsoFromExactContext
-    signature input layout hadmissible sourceBoundary sourceRoot context exact
+     input layout hadmissible sourceBoundary sourceRoot context exact
     closedOutputComputation openOutputComputation
   have hregion := PlugLayout.openRootRegionIso_of_closedItems_cast closedWire
     (PlugLayout.outputExactContextToOpenRootWireEquiv input layout hadmissible
@@ -879,8 +874,8 @@ noncomputable def compiledSpliceRootSourceFromItemsIso
         (PlugLayout.outputOpenRoot input layout sourceBoundary).hiddenWires
         openOutputItems := by
     have hitemsExpanded :
-        ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-          (ConcreteElaboration.compileRegion? signature layout.plugRaw
+        ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+          (ConcreteElaboration.compileRegion?  layout.plugRaw
             layout.plugRaw.regionCount)
           ((PlugLayout.outputOpenRoot input layout sourceBoundary).exposedWires ++
             (PlugLayout.outputOpenRoot input layout sourceBoundary).hiddenWires)
@@ -889,7 +884,7 @@ noncomputable def compiledSpliceRootSourceFromItemsIso
             layout.plugRaw.root) = some openOutputItems := by
       simpa only [OpenConcreteDiagram.rootWires] using openOutputComputation
     have hroot :
-        ConcreteElaboration.compileRoot? signature
+        ConcreteElaboration.compileRoot?
           (PlugLayout.outputOpenRoot input layout sourceBoundary).diagram
           (PlugLayout.outputOpenRoot input layout sourceBoundary).exposedWires
           (PlugLayout.outputOpenRoot input layout sourceBoundary).hiddenWires =
@@ -898,9 +893,9 @@ noncomputable def compiledSpliceRootSourceFromItemsIso
           (PlugLayout.outputOpenRoot input layout sourceBoundary).hiddenWires
           openOutputItems) := by
       have hitemsOutput :
-          ConcreteElaboration.compileOccurrencesWith? signature
+          ConcreteElaboration.compileOccurrencesWith?
             (PlugLayout.outputOpenRoot input layout sourceBoundary).diagram
-            (ConcreteElaboration.compileRegion? signature
+            (ConcreteElaboration.compileRegion?
               (PlugLayout.outputOpenRoot input layout sourceBoundary).diagram
               (PlugLayout.outputOpenRoot input layout sourceBoundary).diagram.regionCount)
             ((PlugLayout.outputOpenRoot input layout sourceBoundary).exposedWires ++
@@ -933,7 +928,7 @@ noncomputable def compiledSpliceRootSourceFromItemsIso
     simpa only [ConcreteElaboration.finishRoot] using hregion
 
 noncomputable def compiledSpliceRootIsoOfNonempty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -984,24 +979,24 @@ noncomputable def compiledSpliceRootIsoOfNonempty
       (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
     simpa [hsite] using outputLeaf.wiresExact
-  have hsiteItems := layout.compiledSiteItemsIsoOfNonempty signature input
+  have hsiteItems := layout.compiledSiteItemsIsoOfNonempty  input
     hadmissible host pattern.witness pattern.leaf outputWitness outputLeaf
     hnonempty
   have hcast := ItemSeqIso.renameWiresEquiv outputLeaf.items
     (FiniteEquiv.finCast castEq)
-  change ItemSeqIso signature (FiniteEquiv.finCast castEq)
+  change ItemSeqIso  (FiniteEquiv.finCast castEq)
     outputWitness.toFocus.holeRels outputLeaf.items
       (outputLeaf.items.renameWires (FiniteEquiv.finCast castEq)) at hcast
-  have hcastBack : ItemSeqIso signature (FiniteEquiv.finCast castEq).symm
+  have hcastBack : ItemSeqIso  (FiniteEquiv.finCast castEq).symm
       outputWitness.toFocus.holeRels
       (outputLeaf.items.castWiresEq castEq) outputLeaf.items := by
     simpa only [ItemSeq.castWiresEq_eq_renameWires] using hcast.symm
-  have hclosed : ItemSeqIso signature closedWire []
+  have hclosed : ItemSeqIso  closedWire []
       (hostPrepared.append patternPrepared) outputLeaf.items := by
     exact hsiteItems.trans hcastBack
   have houtputComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           layout.plugRaw.regionCount)
         (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
         ConcreteElaboration.BinderContext.empty
@@ -1023,7 +1018,7 @@ noncomputable def compiledSpliceRootIsoOfNonempty
   simpa only [compiledSpliceRootSourceOfNonempty] using hiso
 
 noncomputable def compiledSpliceRootIsoOfEmpty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1069,24 +1064,24 @@ noncomputable def compiledSpliceRootIsoOfEmpty
       (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
     simpa [hsite] using outputLeaf.wiresExact
-  have hsiteItems := layout.compiledSiteItemsIsoOfEmpty signature input
+  have hsiteItems := layout.compiledSiteItemsIsoOfEmpty  input
     hadmissible host outputWitness outputLeaf hzero pattern.items
     pattern.computation
   have hcast := ItemSeqIso.renameWiresEquiv outputLeaf.items
     (FiniteEquiv.finCast castEq)
-  change ItemSeqIso signature (FiniteEquiv.finCast castEq)
+  change ItemSeqIso  (FiniteEquiv.finCast castEq)
     outputWitness.toFocus.holeRels outputLeaf.items
       (outputLeaf.items.renameWires (FiniteEquiv.finCast castEq)) at hcast
-  have hcastBack : ItemSeqIso signature (FiniteEquiv.finCast castEq).symm
+  have hcastBack : ItemSeqIso  (FiniteEquiv.finCast castEq).symm
       outputWitness.toFocus.holeRels
       (outputLeaf.items.castWiresEq castEq) outputLeaf.items := by
     simpa only [ItemSeq.castWiresEq_eq_renameWires] using hcast.symm
-  have hclosed : ItemSeqIso signature closedWire []
+  have hclosed : ItemSeqIso  closedWire []
       (hostPrepared.append patternPrepared) outputLeaf.items := by
     exact hsiteItems.trans hcastBack
   have houtputComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           layout.plugRaw.regionCount)
         (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
         ConcreteElaboration.BinderContext.empty
@@ -1109,7 +1104,7 @@ noncomputable def compiledSpliceRootIsoOfEmpty
 /-- Below the sheet root the open compiler necessarily uses an ordinary
 `finishRegion` leaf. -/
 noncomputable def compiledSpliceOutputNestedLeaf
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1128,14 +1123,14 @@ noncomputable def compiledSpliceOutputNestedLeaf
     exact hroot)
 
 noncomputable def compiledSpliceNestedSourceOfNonempty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hnested : input.site ≠ input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    OpenDiagram signature
+    OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let host := compiledSpliceHostView input hadmissible
@@ -1183,14 +1178,14 @@ noncomputable def compiledSpliceNestedSourceOfNonempty
   (replaceOpenBody output sourceBody).castArity arityEq.symm
 
 noncomputable def compiledSpliceNestedSourceOfEmpty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hnested : input.site ≠ input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0) :
-    OpenDiagram signature
+    OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let host := compiledSpliceHostView input hadmissible
@@ -1239,13 +1234,13 @@ noncomputable def compiledSpliceNestedSourceOfEmpty
 the executable output compiler's enclosing context and wire transports, but
 projects the focused `Region.spliceAt` back to the unchanged host items. -/
 noncomputable def compiledSpliceNestedHostOpen
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hnested : input.site ≠ input.frame.val.root) :
-    OpenDiagram signature
+    OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let host := compiledSpliceHostView input hadmissible
@@ -1284,7 +1279,7 @@ noncomputable def compiledSpliceNestedHostOpen
 to its frame-only compiler body covariantly at even depth and contravariantly
 at odd depth. -/
 theorem compiledSpliceNestedSourceOfNonempty_projects_host
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1292,24 +1287,23 @@ theorem compiledSpliceNestedSourceOfNonempty_projects_host
     (hnested : input.site ≠ input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
     let view := compiledSpliceOutputOpenView input layout hadmissible
       sourceBoundary sourceRoot
     (view.focus.context.cutDepth % 2 = 0 →
-      denoteOpen model named
+      denoteOpen model
           (compiledSpliceNestedSourceOfNonempty input layout hadmissible
             sourceBoundary sourceRoot hnested hnonempty) args →
-        denoteOpen model named
+        denoteOpen model
           (compiledSpliceNestedHostOpen input layout hadmissible sourceBoundary
             sourceRoot hnested) args) ∧
     (view.focus.context.cutDepth % 2 = 1 →
-      denoteOpen model named
+      denoteOpen model
           (compiledSpliceNestedHostOpen input layout hadmissible sourceBoundary
             sourceRoot hnested) args →
-        denoteOpen model named
+        denoteOpen model
           (compiledSpliceNestedSourceOfNonempty input layout hadmissible
             sourceBoundary sourceRoot hnested hnonempty) args) := by
   dsimp only
@@ -1362,46 +1356,46 @@ theorem compiledSpliceNestedSourceOfNonempty_projects_host
       PlugLayout.checkedOutputOpenRoot, PlugLayout.coalescedOpenRoot,
       PlugLayout.outputOpenRoot]
   have localProjection : ∀ env relEnv,
-      denoteRegion model named env relEnv splice →
-        denoteRegion model named env relEnv projected := by
+      denoteRegion model  env relEnv splice →
+        denoteRegion model  env relEnv projected := by
     intro env relEnv
-    exact Region.denote_spliceAt_host_renamed model named env relEnv
+    exact Region.denote_spliceAt_host_renamed model  env relEnv
       (ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
         input.site).length
       (host.compilerLeaf.items.castWiresEq localEq) material wireMap relationMap
       rootWireEquiv hostRelationMap
   constructor
   · intro heven hsource
-    change denoteOpen model named
+    change denoteOpen model
       ((replaceOpenBody output sourceBody).castArity arityEq.symm) args at hsource
-    change denoteOpen model named
+    change denoteOpen model
       ((replaceOpenBody output projectedBody).castArity arityEq.symm) args
     rw [denoteOpen_castArity] at hsource ⊢
-    apply denote_replaceOpenBody_mono output sourceBody projectedBody model named
+    apply denote_replaceOpenBody_mono output sourceBody projectedBody model
       (args ∘ Fin.cast arityEq.symm) _ hsource
     intro env hbody
     exact context_mono (ctx := view.focus.context) (a := splice)
-      (b := projected) model named env
+      (b := projected) model  env
       (PUnit.unit : RelEnv model.Carrier []) heven localProjection hbody
   · intro hodd hprojected
-    change denoteOpen model named
+    change denoteOpen model
       ((replaceOpenBody output projectedBody).castArity arityEq.symm) args
         at hprojected
-    change denoteOpen model named
+    change denoteOpen model
       ((replaceOpenBody output sourceBody).castArity arityEq.symm) args
     rw [denoteOpen_castArity] at hprojected ⊢
-    apply denote_replaceOpenBody_mono output projectedBody sourceBody model named
+    apply denote_replaceOpenBody_mono output projectedBody sourceBody model
       (args ∘ Fin.cast arityEq.symm) _ hprojected
     intro env hbody
     exact context_anti (ctx := view.focus.context) (a := splice)
-      (b := projected) model named env
+      (b := projected) model  env
       (PUnit.unit : RelEnv model.Carrier []) hodd localProjection hbody
 
 /-- In a nested empty-spine branch, the executable splice source projects
 to its frame-only compiler body covariantly at even depth and contravariantly
 at odd depth. -/
 theorem compiledSpliceNestedSourceOfEmpty_projects_host
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1409,24 +1403,23 @@ theorem compiledSpliceNestedSourceOfEmpty_projects_host
     (hnested : input.site ≠ input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
     let view := compiledSpliceOutputOpenView input layout hadmissible
       sourceBoundary sourceRoot
     (view.focus.context.cutDepth % 2 = 0 →
-      denoteOpen model named
+      denoteOpen model
           (compiledSpliceNestedSourceOfEmpty input layout hadmissible
             sourceBoundary sourceRoot hnested hzero) args →
-        denoteOpen model named
+        denoteOpen model
           (compiledSpliceNestedHostOpen input layout hadmissible sourceBoundary
             sourceRoot hnested) args) ∧
     (view.focus.context.cutDepth % 2 = 1 →
-      denoteOpen model named
+      denoteOpen model
           (compiledSpliceNestedHostOpen input layout hadmissible sourceBoundary
             sourceRoot hnested) args →
-        denoteOpen model named
+        denoteOpen model
           (compiledSpliceNestedSourceOfEmpty input layout hadmissible
             sourceBoundary sourceRoot hnested hzero) args) := by
   dsimp only
@@ -1476,52 +1469,52 @@ theorem compiledSpliceNestedSourceOfEmpty_projects_host
       PlugLayout.checkedOutputOpenRoot, PlugLayout.coalescedOpenRoot,
       PlugLayout.outputOpenRoot]
   have localProjection : ∀ env relEnv,
-      denoteRegion model named env relEnv splice →
-        denoteRegion model named env relEnv projected := by
+      denoteRegion model  env relEnv splice →
+        denoteRegion model  env relEnv projected := by
     intro env relEnv
-    exact Region.denote_spliceAt_host_renamed model named env relEnv
+    exact Region.denote_spliceAt_host_renamed model  env relEnv
       (ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
         input.site).length
       (host.compilerLeaf.items.castWiresEq localEq) material wireMap relationMap
       rootWireEquiv hostRelationMap
   constructor
   · intro heven hsource
-    change denoteOpen model named
+    change denoteOpen model
       ((replaceOpenBody output sourceBody).castArity arityEq.symm) args at hsource
-    change denoteOpen model named
+    change denoteOpen model
       ((replaceOpenBody output projectedBody).castArity arityEq.symm) args
     rw [denoteOpen_castArity] at hsource ⊢
-    apply denote_replaceOpenBody_mono output sourceBody projectedBody model named
+    apply denote_replaceOpenBody_mono output sourceBody projectedBody model
       (args ∘ Fin.cast arityEq.symm) _ hsource
     intro env hbody
     exact context_mono (ctx := view.focus.context) (a := splice)
-      (b := projected) model named env
+      (b := projected) model  env
       (PUnit.unit : RelEnv model.Carrier []) heven localProjection hbody
   · intro hodd hprojected
-    change denoteOpen model named
+    change denoteOpen model
       ((replaceOpenBody output projectedBody).castArity arityEq.symm) args
         at hprojected
-    change denoteOpen model named
+    change denoteOpen model
       ((replaceOpenBody output sourceBody).castArity arityEq.symm) args
     rw [denoteOpen_castArity] at hprojected ⊢
-    apply denote_replaceOpenBody_mono output projectedBody sourceBody model named
+    apply denote_replaceOpenBody_mono output projectedBody sourceBody model
       (args ∘ Fin.cast arityEq.symm) _ hprojected
     intro env hbody
     exact context_anti (ctx := view.focus.context) (a := splice)
-      (b := projected) model named env
+      (b := projected) model  env
       (PUnit.unit : RelEnv model.Carrier []) hodd localProjection hbody
 
 /-- The intrinsic source represented by a successful concrete splice.  All
 compiler witnesses and the sheet/nested and empty/nonempty distinctions are
 chosen internally. -/
 noncomputable def compiledSpliceSourceOpen
-    (input : Input signature) {result : CheckedDiagram signature}
-    (hsplice : spliceChecked signature input = .ok result)
+    (input : Input ) {result : CheckedDiagram }
+    (hsplice : spliceChecked  input = .ok result)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root) :
     let hadmissible := (spliceChecked_sound hsplice).2.1
-    OpenDiagram signature
+    OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let hadmissible := (spliceChecked_sound hsplice).2.1
@@ -1545,13 +1538,12 @@ noncomputable def compiledSpliceSourceOpen
 theorem preserves the caller's ordered boundary positions (including aliases)
 and requires no compiler path, leaf, or root-case witness from the caller. -/
 theorem spliceChecked_open_denotation_iff
-    (input : Input signature) {result : CheckedDiagram signature}
-    (hsplice : spliceChecked signature input = .ok result)
+    (input : Input ) {result : CheckedDiagram }
+    (hsplice : spliceChecked  input = .ok result)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input
         (spliceChecked_sound hsplice).2.1 sourceBoundary sourceRoot).val.boundary.length →
@@ -1565,9 +1557,9 @@ theorem spliceChecked_open_denotation_iff
       simp [PlugLayout.checkedCoalescedOpenRoot,
         PlugLayout.checkedOutputOpenRoot, PlugLayout.coalescedOpenRoot,
         PlugLayout.outputOpenRoot]
-    denoteOpen model named
+    denoteOpen model
         (compiledSpliceSourceOpen input hsplice sourceBoundary sourceRoot) args ↔
-      denoteOpen model named
+      denoteOpen model
         ((PlugLayout.checkedOutputOpenRoot input input.plugLayout hadmissible
           sourceBoundary sourceRoot).elaborate.castArity arityEq.symm) args := by
   dsimp only
@@ -1578,11 +1570,11 @@ theorem spliceChecked_open_denotation_iff
     · have hiso := compiledSpliceRootIsoOfEmpty input layout hadmissible
         sourceBoundary sourceRoot hsite hzero
       simpa only [compiledSpliceSourceOpen, hsite, hzero, dite_true,
-        layout] using hiso.denoteOpen_iff model named args
+        layout] using hiso.denoteOpen_iff model  args
     · have hiso := compiledSpliceRootIsoOfNonempty input layout hadmissible
         sourceBoundary sourceRoot hsite hzero
       simpa only [compiledSpliceSourceOpen, hsite, hzero, dite_true,
-        dite_false, layout] using hiso.denoteOpen_iff model named args
+        dite_false, layout] using hiso.denoteOpen_iff model  args
   · let host := compiledSpliceHostView input hadmissible
     let output := (PlugLayout.checkedOutputOpenRoot input layout hadmissible
       sourceBoundary sourceRoot).elaborate
@@ -1600,30 +1592,30 @@ theorem spliceChecked_open_denotation_iff
         PlugLayout.outputOpenRoot]
     by_cases hzero : input.binderSpine.proxyCount = 0
     · let pattern := compiledSpliceOpenRootItems input.pattern
-      have hwhole := layout.compiledOpenWholeRootDenotationOfEmpty signature
+      have hwhole := layout.compiledOpenWholeRootDenotationOfEmpty
         input hadmissible host output view.intrinsicPath outputLeaf hzero
-        pattern.items pattern.computation model named
+        pattern.items pattern.computation model
         (args ∘ Fin.cast arityEq.symm)
       simp only [compiledSpliceSourceOpen, hsite, hzero, dite_false,
         dite_true]
-      change denoteOpen model named
+      change denoteOpen model
           (compiledSpliceNestedSourceOfEmpty input layout hadmissible
             sourceBoundary sourceRoot hsite hzero) args ↔
-        denoteOpen model named (output.castArity arityEq.symm) args
+        denoteOpen model  (output.castArity arityEq.symm) args
       rw [denoteOpen_castArity]
       unfold compiledSpliceNestedSourceOfEmpty
       rw [denoteOpen_castArity]
       simpa only [compiledSpliceNestedSourceOfEmpty] using hwhole
     · let pattern := compiledSpliceTerminalView input hzero
-      have hwhole := layout.compiledOpenWholeRootDenotationOfNonempty signature
+      have hwhole := layout.compiledOpenWholeRootDenotationOfNonempty
         input hadmissible host pattern.witness pattern.leaf output
-        view.intrinsicPath outputLeaf hzero model named
+        view.intrinsicPath outputLeaf hzero model
         (args ∘ Fin.cast arityEq.symm)
       simp only [compiledSpliceSourceOpen, hsite, hzero, dite_false]
-      change denoteOpen model named
+      change denoteOpen model
           (compiledSpliceNestedSourceOfNonempty input layout hadmissible
             sourceBoundary sourceRoot hsite hzero) args ↔
-        denoteOpen model named (output.castArity arityEq.symm) args
+        denoteOpen model  (output.castArity arityEq.symm) args
       rw [denoteOpen_castArity]
       unfold compiledSpliceNestedSourceOfNonempty
       rw [denoteOpen_castArity]
@@ -1633,8 +1625,8 @@ theorem spliceChecked_open_denotation_iff
 actually returned by `spliceChecked`.  The cast changes only the finite carrier
 type; boundary order and repeated aliases are retained position-for-position. -/
 def spliceCheckedResultOpenRaw
-    (input : Input signature) {result : CheckedDiagram signature}
-    (hsplice : spliceChecked signature input = .ok result)
+    (input : Input ) {result : CheckedDiagram }
+    (hsplice : spliceChecked  input = .ok result)
     (sourceBoundary : List (Fin input.frame.val.wireCount)) :
     OpenConcreteDiagram where
   diagram := result.val
@@ -1644,13 +1636,13 @@ def spliceCheckedResultOpenRaw
         (spliceChecked_sound hsplice).1.symm))
 
 theorem spliceCheckedResultOpenRaw_wellFormed
-    (input : Input signature) {result : CheckedDiagram signature}
-    (hsplice : spliceChecked signature input = .ok result)
+    (input : Input ) {result : CheckedDiagram }
+    (hsplice : spliceChecked  input = .ok result)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root) :
     (spliceCheckedResultOpenRaw input hsplice sourceBoundary).WellFormed
-      signature := by
+       := by
   have hvalue := (spliceChecked_sound hsplice).1
   have hadmissible := (spliceChecked_sound hsplice).2.1
   rcases result with ⟨diagram, wellFormed⟩
@@ -1662,19 +1654,19 @@ theorem spliceCheckedResultOpenRaw_wellFormed
 
 /-- The ordered open view of the actual `spliceChecked` result. -/
 def spliceCheckedResultOpen
-    (input : Input signature) {result : CheckedDiagram signature}
-    (hsplice : spliceChecked signature input = .ok result)
+    (input : Input ) {result : CheckedDiagram }
+    (hsplice : spliceChecked  input = .ok result)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root) :
-    CheckedOpenDiagram signature :=
+    CheckedOpenDiagram  :=
   ⟨spliceCheckedResultOpenRaw input hsplice sourceBoundary,
     spliceCheckedResultOpenRaw_wellFormed input hsplice sourceBoundary
       sourceRoot⟩
 
 @[simp] theorem spliceCheckedResultOpen_diagram
-    (input : Input signature) {result : CheckedDiagram signature}
-    (hsplice : spliceChecked signature input = .ok result)
+    (input : Input ) {result : CheckedDiagram }
+    (hsplice : spliceChecked  input = .ok result)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root) :
@@ -1683,8 +1675,8 @@ def spliceCheckedResultOpen
   rfl
 
 theorem spliceCheckedResultOpen_eq_checkedOutputOpenRoot
-    (input : Input signature) {result : CheckedDiagram signature}
-    (hsplice : spliceChecked signature input = .ok result)
+    (input : Input ) {result : CheckedDiagram }
+    (hsplice : spliceChecked  input = .ok result)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root) :
@@ -1701,15 +1693,14 @@ theorem spliceCheckedResultOpen_eq_checkedOutputOpenRoot
   rfl
 
 theorem checkedOpen_eq_denotation_iff
-    {left right : CheckedOpenDiagram signature}
+    {left right : CheckedOpenDiagram }
     (heq : left = right)
     (leftArity : arity = left.val.boundary.length)
     (rightArity : arity = right.val.boundary.length)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin arity → model.Carrier) :
-    denoteOpen model named (left.elaborate.castArity leftArity.symm) args ↔
-      denoteOpen model named (right.elaborate.castArity rightArity.symm) args := by
+    denoteOpen model  (left.elaborate.castArity leftArity.symm) args ↔
+      denoteOpen model  (right.elaborate.castArity rightArity.symm) args := by
   subst right
   rw [show rightArity = leftArity from Subsingleton.elim _ _]
 
@@ -1717,13 +1708,12 @@ theorem checkedOpen_eq_denotation_iff
 see the open elaboration of the returned `CheckedDiagram`; all equality and
 arity transports remain internal to this corollary. -/
 theorem spliceChecked_result_open_denotation_iff
-    (input : Input signature) {result : CheckedDiagram signature}
-    (hsplice : spliceChecked signature input = .ok result)
+    (input : Input ) {result : CheckedDiagram }
+    (hsplice : spliceChecked  input = .ok result)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input
         (spliceChecked_sound hsplice).2.1 sourceBoundary sourceRoot).val.boundary.length →
@@ -1739,9 +1729,9 @@ theorem spliceChecked_result_open_denotation_iff
         spliceCheckedResultOpenRaw]
       simp [PlugLayout.checkedCoalescedOpenRoot,
         PlugLayout.coalescedOpenRoot, PlugLayout.outputOpenRoot]
-    denoteOpen model named
+    denoteOpen model
         (compiledSpliceSourceOpen input hsplice sourceBoundary sourceRoot) args ↔
-      denoteOpen model named
+      denoteOpen model
         (resultOpen.elaborate.castArity arityEq.symm) args := by
   dsimp only
   let hadmissible := (spliceChecked_sound hsplice).2.1
@@ -1762,18 +1752,18 @@ theorem spliceChecked_result_open_denotation_iff
       PlugLayout.checkedOutputOpenRoot, PlugLayout.coalescedOpenRoot,
       PlugLayout.outputOpenRoot]
   have hmain := spliceChecked_open_denotation_iff input hsplice sourceBoundary
-    sourceRoot model named args
+    sourceRoot model  args
   have htransport := checkedOpen_eq_denotation_iff
     (spliceCheckedResultOpen_eq_checkedOutputOpenRoot input hsplice
       sourceBoundary sourceRoot)
-    resultArityEq outputArityEq model named args
+    resultArityEq outputArityEq model  args
   exact hmain.trans htransport.symm
 
 /-- A successful executable splice carries a complete intrinsic compiler view
 of its replacement site.  This bridges the `Except` result to the witness form
 consumed by the whole-root commuting theorems. -/
 theorem spliceChecked_outputCompilerLeaf_complete
-    (hsplice : spliceChecked signature input = .ok result) :
+    (hsplice : spliceChecked  input = .ok result) :
     ∃ (path : List Nat)
       (witness : Region.ContextPath result.elaborate path),
       Nonempty (Region.ContextPath.CompilerLeaf
@@ -1784,21 +1774,21 @@ theorem spliceChecked_outputCompilerLeaf_complete
   dsimp at hvalue ⊢
   subst diagram
   obtain ⟨view⟩ := siteView_complete
-    (⟨input.plugLayout.plugRaw, wellFormed⟩ : CheckedDiagram signature)
+    (⟨input.plugLayout.plugRaw, wellFormed⟩ : CheckedDiagram )
     (input.plugLayout.frameRegion input.site)
   exact ⟨view.path, view.intrinsicPath, ⟨view.compilerLeaf⟩⟩
 
 theorem spliceChecked_complete (hadmissible : input.Admissible) :
-    ∃ result, spliceChecked signature input = .ok result := by
+    ∃ result, spliceChecked  input = .ok result := by
   unfold spliceChecked
   rw [input.checkInput_complete hadmissible]
-  have hwf := PlugLayout.plugRaw_wellFormed signature input
+  have hwf := PlugLayout.plugRaw_wellFormed  input
     input.plugLayout hadmissible
   rw [checkWellFormed_complete hwf]
   exact ⟨_, rfl⟩
 
 theorem spliceChecked_iff :
-    (∃ result, spliceChecked signature input = .ok result) ↔
+    (∃ result, spliceChecked  input = .ok result) ↔
       input.Admissible := by
   constructor
   · rintro ⟨result, hresult⟩

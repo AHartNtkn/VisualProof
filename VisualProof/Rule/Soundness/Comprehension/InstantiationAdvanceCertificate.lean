@@ -12,23 +12,21 @@ namespace InstantiationSemantic
 items.  This separates semantic seam recovery from the stronger (and here
 unavailable) premise that every retained host item also denotes. -/
 theorem patternTerminalRegion_denotes_of_native_items
-    {signature : List Nat}
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
@@ -52,7 +50,7 @@ theorem patternTerminalRegion_denotes_of_native_items
             (input.plugLayout.coalescedTerminalRelationRenaming hadmissible
               host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
               hnonempty relation)
-      denoteItemSeq model named
+      denoteItemSeq model
         (sourceEnv ∘ input.plugLayout.patternSeamPreparedWireOfNonempty
           hadmissible host patternWitness patternLeaf hnonempty)
         (RelEnv.pullback terminalRelations relEnv) patternLeaf.items) :
@@ -76,7 +74,7 @@ theorem patternTerminalRegion_denotes_of_native_items
           (input.plugLayout.coalescedTerminalRelationRenaming hadmissible
             host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
             hnonempty relation)
-    denoteRegion model named inheritedEnv
+    denoteRegion model  inheritedEnv
       (RelEnv.pullback terminalRelations relEnv)
       (ConcreteElaboration.finishRegion input.pattern.val.diagram
         patternLeaf.inheritedWires input.binderSpine.bodyContainer
@@ -111,7 +109,7 @@ theorem patternTerminalRegion_denotes_of_native_items
         (input.plugLayout.coalescedTerminalRelationRenaming hadmissible
           host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
           hnonempty relation)
-  have seamItems : denoteItemSeq model named
+  have seamItems : denoteItemSeq model
       (env ∘ input.plugLayout.patternSeamWireMapOfNonempty hadmissible host
         patternWitness patternLeaf outputWitness outputLeaf hnonempty)
       (RelEnv.pullback terminalRelations relEnv) patternLeaf.items := by
@@ -137,16 +135,15 @@ theorem patternTerminalRegion_denotes_of_native_items
 relation as a full splice output, without requiring previously processed host
 atoms to be reintroduced. -/
 theorem terminalRelationOfValues_of_survivor
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -157,10 +154,9 @@ theorem terminalRelationOfValues_of_survivor
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
@@ -173,15 +169,15 @@ theorem terminalRelationOfValues_of_survivor
         site arguments).plugLayout.frameRegion site)).length → model.Carrier)
     (outputRelEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
     (fallback : model.Carrier)
-    (survivorItems : ItemSeq signature
+    (survivorItems : ItemSeq
       (outputLeaf.inheritedWires.extend
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)).length
       outputWitness.toFocus.holeRels)
-    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
-      (compileSurvivorRegion? signature
+      (compileSurvivorRegion?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible) outputLeaf.fuel)
       (outputLeaf.inheritedWires.extend
@@ -196,7 +192,7 @@ theorem terminalRelationOfValues_of_survivor
         (dropOccurrenceSurvives
           (advanceInstantiationState comprehension attachments binders payload
             state atom tail site arguments hadmissible))) = some survivorItems)
-    (survivorDenotes : denoteItemSeq model named env outputRelEnv survivorItems)
+    (survivorDenotes : denoteItemSeq model  env outputRelEnv survivorItems)
     (fixed :
       let spliceInput := instantiateSpliceInput comprehension attachments binders
         payload state site arguments
@@ -215,7 +211,7 @@ theorem terminalRelationOfValues_of_survivor
       outputLeaf.wiresExact env fallback
     let wireValue : Fin state.diagram.val.wireCount → model.Carrier :=
       fun wire => quotientValues (spliceInput.quotientWire wire)
-    terminalRelationOfValues payload state site arguments hnonempty model named
+    terminalRelationOfValues payload state site arguments hnonempty model
       wireValue values (wireValue ∘ arguments) := by
   dsimp only
   let spliceInput := instantiateSpliceInput comprehension attachments binders
@@ -246,7 +242,7 @@ theorem terminalRelationOfValues_of_survivor
       ∃ relEnv : RelEnv model.Carrier pattern.witness.toFocus.holeRels,
         TerminalRelationsMatch payload state site arguments hnonempty values
             relEnv ∧
-          denoteRegion model named
+          denoteRegion model
             (terminalInheritedEnvironment payload state site arguments hnonempty
               assignment)
             relEnv
@@ -272,11 +268,11 @@ theorem terminalRelationOfValues_of_survivor
       hadmissible values outputWitness outputLeaf outputRelEnv fixed
   · have nativeItems := advance_terminalItems_denotes_nonempty comprehension
       attachments binders payload state atom tail site arguments hadmissible host
-      pattern.witness pattern.leaf outputWitness outputLeaf hnonempty model named
+      pattern.witness pattern.leaf outputWitness outputLeaf hnonempty model
       env outputRelEnv survivorItems survivorCompiled survivorDenotes
     have recovered := patternTerminalRegion_denotes_of_native_items spliceInput
       hadmissible host pattern.witness pattern.leaf outputWitness outputLeaf
-      hnonempty model named env outputRelEnv fallback nativeItems
+      hnonempty model  env outputRelEnv fallback nativeItems
     simpa [terminalRelEnv, terminalRelations, terminalInheritedEnvironment,
       assignment, quotientValues, context, pattern, layout, Function.comp_def]
       using recovered
@@ -284,16 +280,15 @@ theorem terminalRelationOfValues_of_survivor
 /-- Zero-spine survivor extraction directly certifies the payload's
 authoritative interpreted relation at the executor-recorded argument vector. -/
 theorem interpretedRelation_of_survivor_empty
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -304,8 +299,7 @@ theorem interpretedRelation_of_survivor_empty
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
@@ -318,15 +312,15 @@ theorem interpretedRelation_of_survivor_empty
         site arguments).plugLayout.frameRegion site)).length → model.Carrier)
     (outputRelEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
     (fallback : model.Carrier)
-    (survivorItems : ItemSeq signature
+    (survivorItems : ItemSeq
       (outputLeaf.inheritedWires.extend
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)).length
       outputWitness.toFocus.holeRels)
-    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
-      (compileSurvivorRegion? signature
+      (compileSurvivorRegion?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible) outputLeaf.fuel)
       (outputLeaf.inheritedWires.extend
@@ -341,7 +335,7 @@ theorem interpretedRelation_of_survivor_empty
         (dropOccurrenceSurvives
           (advanceInstantiationState comprehension attachments binders payload
             state atom tail site arguments hadmissible))) = some survivorItems)
-    (survivorDenotes : denoteItemSeq model named env outputRelEnv survivorItems) :
+    (survivorDenotes : denoteItemSeq model  env outputRelEnv survivorItems) :
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
     let context := outputLeaf.inheritedWires.extend
@@ -350,7 +344,7 @@ theorem interpretedRelation_of_survivor_empty
       context outputLeaf.wiresExact env fallback
     let wireValue : Fin state.diagram.val.wireCount → model.Carrier :=
       fun wire => quotientValues (spliceInput.quotientWire wire)
-    payload.interpretedRelation model named (wireValue ∘ state.parameters)
+    payload.interpretedRelation model  (wireValue ∘ state.parameters)
       (wireValue ∘ arguments) := by
   dsimp only
   let spliceInput := instantiateSpliceInput comprehension attachments binders
@@ -364,7 +358,7 @@ theorem interpretedRelation_of_survivor_empty
     fun wire => quotientValues (spliceInput.quotientWire wire)
   have nativeItems := advance_patternRootItems_denotes_empty comprehension
     attachments binders payload state atom tail site arguments hadmissible host
-    outputWitness outputLeaf hzero model named env outputRelEnv survivorItems
+    outputWitness outputLeaf hzero model  env outputRelEnv survivorItems
     survivorCompiled survivorDenotes
   dsimp only at nativeItems
   let targetEq := ConcreteElaboration.WireContext.length_extend
@@ -385,7 +379,7 @@ theorem interpretedRelation_of_survivor_empty
           outputLeaf := by
     funext index
     exact congrArg env (congrFun seamEq index)
-  have nativeItems' : denoteItemSeq (relCtx := []) model named
+  have nativeItems' : denoteItemSeq (relCtx := []) model
       (sourceEnv ∘ layout.patternRootSeamPreparedWireOfEmpty hadmissible host)
       PUnit.unit
       (Splice.Input.compiledSpliceOpenRootItems comprehension).items := by
@@ -393,7 +387,7 @@ theorem interpretedRelation_of_survivor_empty
       using nativeItems
   rw [environmentEq] at nativeItems'
   have patternDenotes := Splice.Input.pattern_denote_of_patternRootItems
-    spliceInput hadmissible outputWitness outputLeaf hzero model named env
+    spliceInput hadmissible outputWitness outputLeaf hzero model  env
     fallback nativeItems'
   have argumentValues :
       (fun position => quotientValues
@@ -411,7 +405,7 @@ theorem interpretedRelation_of_survivor_empty
         Function.comp_def]
     · simp [spliceInput, instantiateSpliceInput, wireValue,
         Function.comp_def]
-  change comprehension.denote model named
+  change comprehension.denote model
     (Fin.addCases (wireValue ∘ arguments) (wireValue ∘ state.parameters) ∘
       Fin.cast payload.boundarySplit)
   rw [← argumentValues]

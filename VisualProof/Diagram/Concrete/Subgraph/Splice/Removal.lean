@@ -13,7 +13,7 @@ namespace Input
 /-! ### Removing a frame selection before or after plugging
 
 This section owns the generic structural data used by replacement rules.  It is
-deliberately independent of any named rule: a caller supplies one executable
+deliberately independent of any  rule: a caller supplies one executable
 splice input and one checked selection of its frame. -/
 
 /-- Lift a checked frame selection through the canonical frame blocks of a plug
@@ -692,7 +692,7 @@ theorem PlugLayout.removePlugRegionEquiv_root
 /-- The canonical splice input obtained by first removing a frame selection.
 All reindexings are performed through the removal survivor domains, so this
 definition contains no arbitrary finite equivalence or fallback identifier. -/
-def removeFirstInput (input : Input signature)
+def removeFirstInput (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -700,7 +700,7 @@ def removeFirstInput (input : Input signature)
       domains.wires.survives (input.attachment position) = true)
     (binderTargetsSurvive : ∀ proxy,
       domains.regions.survives (input.binderTarget proxy) = true) :
-    Input signature where
+    Input  where
   frame := ⟨input.frame.val.removeRaw selection domains,
     ConcreteDiagram.removeRaw_wellFormed input.frame selection domains⟩
   pattern := input.pattern
@@ -715,7 +715,7 @@ def removeFirstInput (input : Input signature)
       (binderTargetsSurvive proxy)
 
 @[simp] theorem removeFirstInput_site
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -728,7 +728,7 @@ def removeFirstInput (input : Input signature)
         domains.regions.index input.site siteSurvives := rfl
 
 @[simp] theorem removeFirstInput_attachment
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -743,7 +743,7 @@ def removeFirstInput (input : Input signature)
           (attachmentsSurvive position) := rfl
 
 @[simp] theorem removeFirstInput_binderTarget
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -760,7 +760,7 @@ def removeFirstInput (input : Input signature)
 /-- Removal preserves all executable splice side conditions when every splice
 reference survives. -/
 theorem removeFirstInput_admissible
-    (input : Input signature) (hadmissible : input.Admissible)
+    (input : Input ) (hadmissible : input.Admissible)
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -832,7 +832,7 @@ def PlugLayout.removeFirstLayout
 /-- Restricting the attachment partition to frame wires that survive removal
 preserves exactly the original attachment relation. -/
 theorem removeFirstAttachmentPartition_related_iff
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -938,7 +938,7 @@ theorem removeFirstAttachmentPartition_related_iff
 /-- Quotient equality after removal is exactly original quotient equality on
 the survivor origins. -/
 theorem removeFirstQuotientWire_eq_iff
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -962,7 +962,7 @@ theorem removeFirstQuotientWire_eq_iff
 /-- Embed the quotient classes of the removed frame into the original frame
 quotient.  Deleted singleton classes are deliberately outside its image. -/
 def removeFirstQuotientWireMap
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -983,7 +983,7 @@ def removeFirstQuotientWireMap
 /-- The quotient embedding sends the removed class of a retained frame wire
 to that wire's original quotient class. -/
 theorem removeFirstQuotientWireMap_quotientWire
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -1017,7 +1017,7 @@ theorem removeFirstQuotientWireMap_quotientWire
 /-- Distinct quotient classes of the removed frame remain distinct in the
 original frame quotient. -/
 theorem removeFirstQuotientWireMap_injective
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -1051,7 +1051,7 @@ theorem removeFirstQuotientWireMap_injective
 /-- Survival is constant on every attachment quotient class when all
 attachment positions survive the source removal. -/
 theorem attachmentPartition_related_wireSurvival_eq
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (attachmentsSurvive : ∀ position,
@@ -1074,7 +1074,7 @@ theorem attachmentPartition_related_wireSurvival_eq
 /-- Original quotient classes retained by source removal, represented by the
 survival of their canonical normalized representative. -/
 def removeFirstQuotientDomain
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection) :
     SurvivorDomain input.wireQuotient.count where
@@ -1082,7 +1082,7 @@ def removeFirstQuotientDomain
     domains.wires.survives (input.wireQuotient.origin quotient)
 
 @[simp] theorem removeFirstQuotientDomain_quotientWire_survives_iff
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (attachmentsSurvive : ∀ position,
@@ -1104,7 +1104,7 @@ def removeFirstQuotientDomain
 /-- The quotient embedding restricted to exactly the original quotient
 classes retained by source removal. -/
 def removeFirstQuotientCarrierMap
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -1128,7 +1128,7 @@ def removeFirstQuotientCarrierMap
                 quotient)))
 
 @[simp] theorem removeFirstQuotientCarrierMap_origin
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -1146,7 +1146,7 @@ def removeFirstQuotientCarrierMap
   exact (removeFirstQuotientDomain input selection domains).origin_index _ _
 
 theorem removeFirstQuotientCarrierMap_bijective
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -1193,7 +1193,7 @@ theorem removeFirstQuotientCarrierMap_bijective
 /-- Canonical finite equivalence between removed-frame quotient classes and
 the surviving original quotient classes. -/
 noncomputable def removeFirstQuotientEquiv
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -1213,7 +1213,7 @@ noncomputable def removeFirstQuotientEquiv
       siteSurvives attachmentsSurvive binderTargetsSurvive)
 
 @[simp] theorem removeFirstQuotientEquiv_quotientWire_origin
-    (input : Input signature)
+    (input : Input )
     (selection : CheckedSelection input.frame.val)
     (domains : FrameDomains input.frame.val selection)
     (siteSurvives : domains.regions.survives input.site = true)
@@ -2471,33 +2471,6 @@ theorem PlugLayout.removePlugNode_frame_eq
           targetDomains.regions.index (layout.frameRegion binder)
             htargetBinder by
         simpa only [sourceDomains.regions.origin_index] using hbinderMap]
-  | named region definition arity =>
-      have hsourceRegion := sourceDomains.nodeRegion_survives
-        (sourceDomains.nodes.origin_survives node)
-      simp only [hkind, CNode.region] at hsourceRegion
-      have htargetRegion : targetDomains.regions.survives
-          (layout.frameRegion region) = true :=
-        (layout.mappedRegion_survives_frame_iff selection mapped hcheck
-          sourceDomains targetDomains region).2 hsourceRegion
-      rw [hkind] at hsourceReindexed htargetReindexed
-      simp only [PlugLayout.mapFrameNode, SurvivorDomain.reindexNode?]
-        at hsourceReindexed htargetReindexed
-      rw [sourceDomains.regions.index?_index region hsourceRegion]
-        at hsourceReindexed
-      rw [targetDomains.regions.index?_index
-        (layout.frameRegion region) htargetRegion] at htargetReindexed
-      rw [← Option.some.inj hsourceReindexed,
-        ← Option.some.inj htargetReindexed]
-      simp only [PlugLayout.mapFrameNode, CNode.rename]
-      exact congrArg (fun mappedRegion =>
-        CNode.named mappedRegion definition arity) (by
-          simpa only [sourceDomains.regions.origin_index] using
-            layout.removePlugRegionEquiv_frame_index selection mapped hcheck
-              site_eq_anchor sourceDomains targetDomains
-              (sourceDomains.regions.index region hsourceRegion) (by
-                simpa only [sourceDomains.regions.origin_index] using
-                  htargetRegion))
-
 /-- Pattern-node payloads agree when removal is commuted across plugging. -/
 theorem PlugLayout.removePlugNode_pattern_eq
     (layout : PlugLayout input) (hadmissible : input.Admissible)
@@ -2603,25 +2576,6 @@ theorem PlugLayout.removePlugNode_pattern_eq
       rw [layout.removePlugRegionEquiv_binder_index selection mapped hcheck
         site_eq_anchor sourceDomains targetDomains siteSurvives
         attachmentsSurvive binderTargetsSurvive binder htargetBinder]
-  | named region definition arity =>
-      have htargetRegion := targetDomains.nodeRegion_survives htargetNode
-      change targetDomains.regions.survives
-        (layout.plugNode (layout.patternNode node)).region = true
-        at htargetRegion
-      rw [layout.plugNode_patternNode, hkind] at htargetRegion
-      rw [hkind] at htargetReindexed
-      simp only [PlugLayout.mapPatternNode,
-        SurvivorDomain.reindexNode?] at htargetReindexed
-      rw [targetDomains.regions.index?_index
-        (layout.bodyRegion region) htargetRegion] at htargetReindexed
-      rw [← Option.some.inj htargetReindexed]
-      simp only [PlugLayout.mapPatternNode, CNode.rename]
-      exact congrArg (fun mappedRegion =>
-        CNode.named mappedRegion definition arity)
-        (layout.removePlugRegionEquiv_body_index selection mapped hcheck
-          site_eq_anchor sourceDomains targetDomains siteSurvives
-          attachmentsSurvive binderTargetsSurvive region htargetRegion)
-
 /-- Every node payload agrees under the canonical remove/plug region and node
 equivalences. -/
 theorem PlugLayout.removePlugNodes_eq

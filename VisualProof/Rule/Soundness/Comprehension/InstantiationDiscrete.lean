@@ -14,16 +14,15 @@ namespace InstantiationSemantic
 host quotient. The statement is independent of the current host state and of
 the ordered attachment tuple. -/
 theorem instantiateSpliceInput_boundary_nodup
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -37,16 +36,15 @@ theorem instantiateSpliceInput_boundary_nodup
 alias-free splice quotient. This is the exact source normalization needed to
 compose fixed-relation simulations over an executor trace. -/
 noncomputable def discreteDroppedStateIso
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -113,16 +111,15 @@ compilation on the actual dropped executor state.  The source side is stated
 through the survivor compiler used by the one-step semantic theorem; the
 target side is the ordinary compiler used by diagram denotation. -/
 theorem discreteDroppedRegionIso
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -164,21 +161,21 @@ theorem discreteDroppedRegionIso
       (discreteDroppedStateIso comprehension attachments binders payload state
         site arguments hadmissible boundaryNodup)
       sourceBinders targetBinders)
-    (sourceBody : Region signature sourceContext.length sourceRels)
-    (targetBody : Region signature targetContext.length sourceRels)
-    (sourceCompiled : compileSurvivorRegion? signature
+    (sourceBody : Region  sourceContext.length sourceRels)
+    (targetBody : Region  targetContext.length sourceRels)
+    (sourceCompiled : compileSurvivorRegion?
       (coalescedInstantiationState comprehension attachments binders payload
         state site arguments hadmissible)
       sourceFuel sourceRegion sourceContext sourceBinders = some sourceBody)
-    (targetCompiled : ConcreteElaboration.compileRegion? signature
+    (targetCompiled : ConcreteElaboration.compileRegion?
       (dropInstantiationAtomsRaw state) targetFuel targetRegion targetContext
       targetBinders = some targetBody) :
-    RegionIso signature ambient sourceRels sourceBody targetBody := by
+    RegionIso  ambient sourceRels sourceBody targetBody := by
   let coalesced := coalescedInstantiationState comprehension attachments binders
     payload state site arguments hadmissible
   let iso := discreteDroppedStateIso comprehension attachments binders payload
     state site arguments hadmissible boundaryNodup
-  have sourceCompiled' : ConcreteElaboration.compileRegion? signature
+  have sourceCompiled' : ConcreteElaboration.compileRegion?
       (dropInstantiationAtomsRaw coalesced) sourceFuel sourceRegion sourceContext
       sourceBinders = some sourceBody := by
     exact (drop_compileRegion_eq_survivor coalesced sourceFuel sourceRegion

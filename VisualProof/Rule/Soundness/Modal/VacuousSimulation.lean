@@ -11,19 +11,18 @@ theorem bubbleItem_denote
     (arity : Nat)
     (context : ConcreteElaboration.WireContext
       (vacuousIntroRaw input selection arity))
-    (items : ItemSeq signature
+    (items : ItemSeq
       (context.extend (bubbleRegion input)).length (arity :: rels))
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
-    denoteItem model named env relEnv
+    denoteItem model  env relEnv
         (.bubble arity
           (ConcreteElaboration.finishRegion
             (vacuousIntroRaw input selection arity) context
             (bubbleRegion input) items)) ↔
       ∃ fresh : Relation model.Carrier arity,
-        denoteItemSeq (relCtx := arity :: rels) model named env
+        denoteItemSeq (relCtx := arity :: rels) model  env
           ((fresh, relEnv) : RelEnv model.Carrier (arity :: rels))
           (items.castWiresEq
             (congrArg List.length (by
@@ -36,15 +35,14 @@ theorem bubbleItem_denote
   exact ModalSoundness.finishRegion_noWires_denote
     (vacuousIntroRaw input selection arity) context (bubbleRegion input)
     (vacuousIntroRaw_bubble_exactScopeWires input selection arity)
-    items model named env (fresh, relEnv)
+    items model  env (fresh, relEnv)
 
 theorem focusedItems
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) (arity : Nat)
     (targetWellFormed :
-      (vacuousIntroRaw input.val selection arity).WellFormed signature)
+      (vacuousIntroRaw input.val selection arity).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     {sourceRels targetRels : RelCtx}
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
@@ -95,37 +93,37 @@ theorem focusedItems
         child.castSucc →
       (childSourceContext.extend child).Exact child →
       (childTargetContext.extend child.castSucc).Exact child.castSucc →
-      ∀ (sourceBody : Region signature childSourceContext.length
+      ∀ (sourceBody : Region  childSourceContext.length
           childSourceRels)
-        (targetBody : Region signature childTargetContext.length
+        (targetBody : Region  childTargetContext.length
           childTargetRels),
-      ConcreteElaboration.compileRegion? signature input.val fuelSource child
+      ConcreteElaboration.compileRegion?  input.val fuelSource child
           childSourceContext childSourceBinders = some sourceBody →
-      ConcreteElaboration.compileRegion? signature
+      ConcreteElaboration.compileRegion?
           (vacuousIntroRaw input.val selection arity) childFuelTarget
           child.castSucc childTargetContext childTargetBinders =
         some targetBody →
-      ConcreteElaboration.RegionSimulation model named childDirection
+      ConcreteElaboration.RegionSimulation model  childDirection
         childContext.indexRelation
         (sourceBody.renameRelations childBinderWitness.relationMap) targetBody)
-    (sourceItems : ItemSeq signature sourceContext.length sourceRels)
-    (targetItems : ItemSeq signature targetContext.length targetRels)
+    (sourceItems : ItemSeq  sourceContext.length sourceRels)
+    (targetItems : ItemSeq  targetContext.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-        (ConcreteElaboration.compileRegion? signature input.val fuelSource)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+        (ConcreteElaboration.compileRegion?  input.val fuelSource)
         sourceContext sourceBinders
         (ConcreteElaboration.localOccurrences input.val
           selection.val.anchor) = some sourceItems)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         (vacuousIntroRaw input.val selection arity)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (vacuousIntroRaw input.val selection arity) fuelTarget)
         targetContext targetBinders
         (ConcreteElaboration.localOccurrences
           (vacuousIntroRaw input.val selection arity)
           selection.val.anchor.castSucc) = some targetItems) :
-    ConcreteElaboration.ItemSeqSimulation model named direction
+    ConcreteElaboration.ItemSeqSimulation model  direction
       context.indexRelation
       (sourceItems.renameRelations binderWitness.relationMap) targetItems := by
   rw [anchor_localOccurrences] at targetCompiled
@@ -133,8 +131,8 @@ theorem focusedItems
       bubbleTargetCompiled, targetItemsEq⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_append_split
       (d := vacuousIntroRaw input.val selection arity)
-      (signature := signature)
-      (fun {rels} => ConcreteElaboration.compileRegion? signature
+
+      (fun {rels} => ConcreteElaboration.compileRegion?
         (vacuousIntroRaw input.val selection arity) fuelTarget)
       targetContext targetBinders
       ((ModalSoundness.keptOccurrences input.val selection).map
@@ -146,7 +144,7 @@ theorem focusedItems
   simp only [ConcreteElaboration.compileOccurrenceWith?,
     vacuousIntroRaw_bubble] at bubbleTargetCompiled
   cases bubbleResult :
-      ConcreteElaboration.compileRegion? signature
+      ConcreteElaboration.compileRegion?
         (vacuousIntroRaw input.val selection arity) fuelTarget
         (bubbleRegion input.val) targetContext
         (targetBinders.push (bubbleRegion input.val) arity) with
@@ -173,8 +171,8 @@ theorem focusedItems
                 (child : Fin input.val.regionCount) →
                 (childContext : ConcreteElaboration.WireContext input.val) →
                 ConcreteElaboration.BinderContext input.val rels →
-                Option (Region signature childContext.length rels) :=
-            fun {rels} => ConcreteElaboration.compileRegion? signature
+                Option (Region  childContext.length rels) :=
+            fun {rels} => ConcreteElaboration.compileRegion?
               input.val fuelSource
           obtain ⟨partitionSourceItems, partitionSourceCompiled⟩ :=
             ConcreteElaboration.compileOccurrencesWith?_complete sourceRecurse
@@ -198,19 +196,19 @@ theorem focusedItems
           have keptPointwise :
               ∀ occurrence,
                 occurrence ∈ ModalSoundness.keptOccurrences input.val selection →
-                ∀ (sourceItem : Item signature sourceContext.length sourceRels)
-                  (targetItem : Item signature targetContext.length targetRels),
-                ConcreteElaboration.compileOccurrenceWith? signature input.val
+                ∀ (sourceItem : Item  sourceContext.length sourceRels)
+                  (targetItem : Item  targetContext.length targetRels),
+                ConcreteElaboration.compileOccurrenceWith?  input.val
                     sourceRecurse sourceContext sourceBinders occurrence =
                   some sourceItem →
-                ConcreteElaboration.compileOccurrenceWith? signature
+                ConcreteElaboration.compileOccurrenceWith?
                     (vacuousIntroRaw input.val selection arity)
-                    (ConcreteElaboration.compileRegion? signature
+                    (ConcreteElaboration.compileRegion?
                       (vacuousIntroRaw input.val selection arity)
                       (bubbleFuel + 1))
                     targetContext targetBinders
                     (liftOccurrence input.val occurrence) = some targetItem →
-                ConcreteElaboration.ItemSimulation model named direction
+                ConcreteElaboration.ItemSimulation model  direction
                   context.indexRelation
                   (sourceItem.renameRelations binderWitness.relationMap)
                   targetItem := by
@@ -220,7 +218,7 @@ theorem focusedItems
             rw [ModalSoundness.keptOccurrences] at filteredMember
             have sourceMember := (List.mem_filter.mp filteredMember).1
             apply compileOccurrence_itemSimulation input.val selection arity
-              input.property targetWellFormed model named direction fuelSource
+              input.property targetWellFormed model  direction fuelSource
               (bubbleFuel + 1) selection.val.anchor
               selection.val.anchor.castSucc sourceContext targetContext context
               sourceBinders targetBinders binderWitness sourceExact targetExact
@@ -293,21 +291,21 @@ theorem focusedItems
               ∀ occurrence,
                 occurrence ∈
                   ModalSoundness.selectedOccurrences input.val selection →
-                ∀ (sourceItem : Item signature sourceContext.length sourceRels)
-                  (targetItem : Item signature
+                ∀ (sourceItem : Item  sourceContext.length sourceRels)
+                  (targetItem : Item
                     (targetContext.extend (bubbleRegion input.val)).length
                     (arity :: targetRels)),
-                ConcreteElaboration.compileOccurrenceWith? signature input.val
+                ConcreteElaboration.compileOccurrenceWith?  input.val
                     sourceRecurse sourceContext sourceBinders occurrence =
                   some sourceItem →
-                ConcreteElaboration.compileOccurrenceWith? signature
+                ConcreteElaboration.compileOccurrenceWith?
                     (vacuousIntroRaw input.val selection arity)
-                    (ConcreteElaboration.compileRegion? signature
+                    (ConcreteElaboration.compileRegion?
                       (vacuousIntroRaw input.val selection arity) bubbleFuel)
                     (targetContext.extend (bubbleRegion input.val))
                     (targetBinders.push (bubbleRegion input.val) arity)
                     (liftOccurrence input.val occurrence) = some targetItem →
-                ConcreteElaboration.ItemSimulation model named direction
+                ConcreteElaboration.ItemSimulation model  direction
                   selectedContextWitness.indexRelation
                   (sourceItem.renameRelations bubbleBinderWitness.relationMap)
                   targetItem := by
@@ -317,7 +315,7 @@ theorem focusedItems
             rw [ModalSoundness.selectedOccurrences] at filteredMember
             have sourceMember := (List.mem_filter.mp filteredMember).1
             apply compileOccurrence_itemSimulation input.val selection arity
-              input.property targetWellFormed model named direction fuelSource
+              input.property targetWellFormed model  direction fuelSource
               bubbleFuel selection.val.anchor (bubbleRegion input.val)
               sourceContext (targetContext.extend (bubbleRegion input.val))
               selectedContextWitness sourceBinders
@@ -351,8 +349,8 @@ theorem focusedItems
             · exact targetOccurrenceCompiled
           have keptSimulation :=
             ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
-              model named direction sourceRecurse
-              (ConcreteElaboration.compileRegion? signature
+              model  direction sourceRecurse
+              (ConcreteElaboration.compileRegion?
                 (vacuousIntroRaw input.val selection arity) (bubbleFuel + 1))
               sourceContext targetContext sourceBinders targetBinders
               context.indexRelation binderWitness.relationMap
@@ -362,8 +360,8 @@ theorem focusedItems
               keptTargetCompiled
           have selectedSimulation :=
             ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
-              model named direction sourceRecurse
-              (ConcreteElaboration.compileRegion? signature
+              model  direction sourceRecurse
+              (ConcreteElaboration.compileRegion?
                 (vacuousIntroRaw input.val selection arity) bubbleFuel)
               sourceContext (targetContext.extend (bubbleRegion input.val))
               sourceBinders
@@ -376,16 +374,16 @@ theorem focusedItems
           have sourcePartitionDenote
               (sourceEnv : Fin sourceContext.length → model.Carrier)
               (sourceRelEnv : RelEnv model.Carrier sourceRels) :
-              denoteItemSeq model named sourceEnv sourceRelEnv sourceItems ↔
-                (denoteItemSeq model named sourceEnv sourceRelEnv
+              denoteItemSeq model  sourceEnv sourceRelEnv sourceItems ↔
+                (denoteItemSeq model  sourceEnv sourceRelEnv
                     keptSourceItems ∧
-                  denoteItemSeq model named sourceEnv sourceRelEnv
+                  denoteItemSeq model  sourceEnv sourceRelEnv
                     selectedSourceItems) := by
             have permutation :=
               ModalSoundness.compileOccurrences_denote_perm input.val
                 sourceRecurse sourceContext sourceBinders
                 (anchorOccurrences_perm_partition input.val selection).symm
-                sourceCompiled partitionSourceCompiled model named sourceEnv
+                sourceCompiled partitionSourceCompiled model  sourceEnv
                 sourceRelEnv
             rw [partitionSourceItemsEq,
               denoteItemSeq_append] at permutation
@@ -418,24 +416,24 @@ theorem focusedItems
           have bubbleDenotes
               (targetEnv : Fin targetContext.length → model.Carrier)
               (targetRelEnv : RelEnv model.Carrier targetRels) :
-              denoteItem model named targetEnv targetRelEnv
+              denoteItem model  targetEnv targetRelEnv
                   (.bubble arity
                     (ConcreteElaboration.finishRegion
                       (vacuousIntroRaw input.val selection arity) targetContext
                       (bubbleRegion input.val) selectedTargetItems)) ↔
                 ∃ fresh : Relation model.Carrier arity,
-                  denoteItemSeq (relCtx := arity :: targetRels) model named
+                  denoteItemSeq (relCtx := arity :: targetRels) model
                     (selectedTargetEnv targetEnv)
                     (fresh, targetRelEnv) selectedTargetItems := by
             rw [bubbleItem_denote input.val selection arity targetContext
-              selectedTargetItems model named targetEnv targetRelEnv]
+              selectedTargetItems model  targetEnv targetRelEnv]
             apply exists_congr
             intro fresh
             rw [ItemSeq.castWiresEq_eq_renameWires,
               denoteItemSeq_renameWires]
             apply iff_of_eq
             apply congrArg (fun environment =>
-              denoteItemSeq (relCtx := arity :: targetRels) model named
+              denoteItemSeq (relCtx := arity :: targetRels) model
                 environment (fresh, targetRelEnv) selectedTargetItems)
             funext index
             rfl
@@ -451,26 +449,26 @@ theorem focusedItems
             intro binderArity relation
             exact baseAgrees binderArity relation
           have sourceRename :
-              denoteItemSeq model named sourceEnv targetRelEnv
+              denoteItemSeq model  sourceEnv targetRelEnv
                   (sourceItems.renameRelations binderWitness.relationMap) ↔
-                denoteItemSeq model named sourceEnv sourceRelEnv sourceItems :=
-            denoteItemSeq_renameRelations model named binderWitness.relationMap
+                denoteItemSeq model  sourceEnv sourceRelEnv sourceItems :=
+            denoteItemSeq_renameRelations model  binderWitness.relationMap
               sourceRelEnv targetRelEnv baseAgrees sourceEnv sourceItems
           have keptRename :
-              denoteItemSeq model named sourceEnv targetRelEnv
+              denoteItemSeq model  sourceEnv targetRelEnv
                   (keptSourceItems.renameRelations binderWitness.relationMap) ↔
-                denoteItemSeq model named sourceEnv sourceRelEnv
+                denoteItemSeq model  sourceEnv sourceRelEnv
                   keptSourceItems :=
-            denoteItemSeq_renameRelations model named binderWitness.relationMap
+            denoteItemSeq_renameRelations model  binderWitness.relationMap
               sourceRelEnv targetRelEnv baseAgrees sourceEnv keptSourceItems
           have selectedRename (fresh : Relation model.Carrier arity) :
-              denoteItemSeq (relCtx := arity :: targetRels) model named
+              denoteItemSeq (relCtx := arity :: targetRels) model
                   sourceEnv (fresh, targetRelEnv)
                   (selectedSourceItems.renameRelations
                     bubbleBinderWitness.relationMap) ↔
-                denoteItemSeq model named sourceEnv sourceRelEnv
+                denoteItemSeq model  sourceEnv sourceRelEnv
                   selectedSourceItems :=
-            denoteItemSeq_renameRelations model named
+            denoteItemSeq_renameRelations model
               bubbleBinderWitness.relationMap sourceRelEnv
               (fresh, targetRelEnv) (bubbleAgrees fresh) sourceEnv
               selectedSourceItems
@@ -516,7 +514,6 @@ theorem focusedItems
 theorem localTransport_of_itemSimulation
     (input : ConcreteDiagram) (selection : CheckedSelection input)
     (arity : Nat) (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext input)
     (targetContext : ConcreteElaboration.WireContext
@@ -524,16 +521,16 @@ theorem localTransport_of_itemSimulation
     (context : LiftedContextWitness input selection arity
       sourceContext targetContext)
     (region : Fin input.regionCount)
-    (sourceItems : ItemSeq signature
+    (sourceItems : ItemSeq
       (sourceContext.extend region).length rels)
-    (targetItems : ItemSeq signature
+    (targetItems : ItemSeq
       (targetContext.extend region.castSucc).length rels)
-    (itemSimulation : ConcreteElaboration.ItemSeqSimulation model named
+    (itemSimulation : ConcreteElaboration.ItemSeqSimulation model
       direction (context.extend region).indexRelation sourceItems targetItems) :
     ∀ relEnv,
       ConcreteElaboration.DirectionalLocalTransport direction
         sourceContext targetContext region region.castSucc
-        context.indexRelation model named relEnv sourceItems targetItems := by
+        context.indexRelation model  relEnv sourceItems targetItems := by
   rcases context with ⟨contextsEq⟩
   cases contextsEq
   let extendedWitness :=
@@ -546,7 +543,7 @@ theorem localTransport_of_itemSimulation
     (source := input) (target := vacuousIntroRaw input selection arity)
     direction sourceContext sourceContext region region.castSucc
     (ConcreteElaboration.ContextIndexRelation.forwardMap id)
-    extendedWitness.indexRelation model named sourceItems targetItems
+    extendedWitness.indexRelation model  sourceItems targetItems
   · intro sourceOuter targetOuter outerAgrees
     have outerEq : sourceOuter = targetOuter := by
       simpa only [
@@ -613,14 +610,14 @@ theorem localTransport_of_itemSimulation
   · exact itemSimulation
 
 noncomputable def vacuousIntroSimulation
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val) (arity : Nat)
     (targetWellFormed :
-      (vacuousIntroRaw input.val selection arity).WellFormed signature)
+      (vacuousIntroRaw input.val selection arity).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
-    ConcreteElaboration.ConcreteSemanticSimulation signature input.val
-      (vacuousIntroRaw input.val selection arity) model named where
+    :
+    ConcreteElaboration.ConcreteSemanticSimulation  input.val
+      (vacuousIntroRaw input.val selection arity) model  where
   source_wellFormed := input.property
   target_wellFormed := targetWellFormed
   regionMap := Fin.castSucc
@@ -684,7 +681,7 @@ noncomputable def vacuousIntroSimulation
       atRegion regular allowed sourceExact targetExact sourceBindersCover
       targetBindersCover sourceEnumeration targetEnumeration sourceItems
       targetItems sourceCompiled targetCompiled itemSemantics
-    exact localTransport_of_itemSimulation input.val selection arity model named
+    exact localTransport_of_itemSimulation input.val selection arity model
       direction sourceContext targetContext context region
       (sourceItems.renameRelations binderWitness.relationMap) targetItems
       itemSemantics
@@ -696,7 +693,7 @@ noncomputable def vacuousIntroSimulation
     have targetNodeEq : targetNode = sourceNode :=
       ConcreteElaboration.LocalOccurrence.node.inj mapped.symm
     subst targetNode
-    apply compileNode_itemSimulation input.val selection arity model named
+    apply compileNode_itemSimulation input.val selection arity model
       direction sourceContext targetContext context sourceBinders targetBinders
       binderWitness.relationMap sourceNode binderWitness.bindersMapped
       Fin.castSucc
@@ -713,7 +710,7 @@ noncomputable def vacuousIntroSimulation
     subst region
     let extendedContext := context.extend selection.val.anchor
     have itemSemantics := focusedItems input selection arity targetWellFormed
-      model named direction fuelSource fuelTarget
+      model  direction fuelSource fuelTarget
       (sourceContext.extend selection.val.anchor)
       (targetContext.extend selection.val.anchor.castSucc) extendedContext
       sourceBinders targetBinders binderWitness sourceExact targetExact
@@ -725,9 +722,9 @@ noncomputable def vacuousIntroSimulation
       (source := input.val)
       (target := vacuousIntroRaw input.val selection arity)
       direction sourceContext targetContext selection.val.anchor
-      selection.val.anchor.castSucc context.indexRelation model named
+      selection.val.anchor.castSucc context.indexRelation model
       (sourceItems.renameRelations binderWitness.relationMap) targetItems
-    exact localTransport_of_itemSimulation input.val selection arity model named
+    exact localTransport_of_itemSimulation input.val selection arity model
       direction sourceContext targetContext context selection.val.anchor
       (sourceItems.renameRelations binderWitness.relationMap) targetItems
       itemSemantics

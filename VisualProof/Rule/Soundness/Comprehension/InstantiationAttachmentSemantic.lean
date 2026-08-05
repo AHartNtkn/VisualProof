@@ -11,22 +11,21 @@ open VisualProof.Theory
 namespace InstantiationSemantic
 
 private theorem materializedCompilerTrace_terminalLexical
-    {signature : List Nat}
     {Host : Type} [DecidableEq Host]
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (targetWellFormed :
       (Splice.AttachmentAliasMaterialization.materializedDiagram pattern.val
-        attachment spine.bodyContainer).WellFormed signature)
+        attachment spine.bodyContainer).WellFormed )
     {sourceStart sourceEnd : Fin pattern.val.diagram.regionCount}
     {targetStart targetEnd : Fin
       (Splice.AttachmentAliasMaterialization.materializedDiagram pattern.val
         attachment spine.bodyContainer).regionCount}
     {sourcePath targetPath : List Nat} {rels : RelCtx}
     {sourceOuter targetOuter : Nat}
-    {sourceBody : Region signature sourceOuter rels}
-    {targetBody : Region signature targetOuter rels}
+    {sourceBody : Region  sourceOuter rels}
+    {targetBody : Region  targetOuter rels}
     {sourceRoute : Splice.RegionRoute pattern.val.diagram sourceStart sourceEnd
       sourcePath}
     {targetRoute : Splice.RegionRoute
@@ -39,9 +38,9 @@ private theorem materializedCompilerTrace_terminalLexical
     {targetState : Splice.Region.ContextPath.CompilerLeaf
       (Splice.AttachmentAliasMaterialization.materializedDiagram pattern.val
         attachment spine.bodyContainer) targetStart (.here targetBody)}
-    (sourceTrace : Splice.CompilerTrace signature pattern.val.diagram
+    (sourceTrace : Splice.CompilerTrace  pattern.val.diagram
       sourceRoute sourceWitness sourceState)
-    (targetTrace : Splice.CompilerTrace signature
+    (targetTrace : Splice.CompilerTrace
       (Splice.AttachmentAliasMaterialization.materializedDiagram pattern.val
         attachment spine.bodyContainer)
       targetRoute targetWitness targetState)
@@ -174,16 +173,15 @@ private theorem materializedCompilerTrace_terminalLexical
 
 /- Placement scratch: moved below the complete ordinary-trace induction.
 private theorem materializedOpenCompilerTrace_terminalLexical
-    {signature : List Nat}
     {Host : Type} [DecidableEq Host]
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (certificate : Splice.AttachmentAliasMaterialization.Certificate pattern
       attachment spine)
     {sourcePath targetPath : List Nat}
-    {sourceBody : Region signature pattern.val.exposedWires.length []}
-    {targetBody : Region signature certificate.result.val.exposedWires.length []}
+    {sourceBody : Region  pattern.val.exposedWires.length []}
+    {targetBody : Region  certificate.result.val.exposedWires.length []}
     {sourceRoute : Splice.RegionRoute pattern.val.diagram pattern.val.diagram.root
       spine.bodyContainer sourcePath}
     {targetRoute : Splice.RegionRoute certificate.result.val.diagram
@@ -448,14 +446,13 @@ private theorem materializedOpenCompilerTrace_terminalLexical
           exact ih targetTailTrace sourceEndEq targetEndEq rfl hchildBinders
 
 private theorem materializedRoute_firstChild_eq
-    {signature : List Nat}
     {Host : Type} [DecidableEq Host]
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (targetWellFormed :
       (Splice.AttachmentAliasMaterialization.materializedDiagram pattern.val
-        attachment spine.bodyContainer).WellFormed signature)
+        attachment spine.bodyContainer).WellFormed )
     {sourceStart sourceChild sourceEnd : Fin pattern.val.diagram.regionCount}
     {targetStart targetChild targetEnd : Fin
       (Splice.AttachmentAliasMaterialization.materializedDiagram pattern.val
@@ -499,9 +496,8 @@ private theorem materializedRoute_firstChild_eq
     sourceEncloses targetEncloses).symm
 
 private theorem materializedOpenCompilerTrace_terminalLexical_aligned
-    {signature : List Nat}
     {Host : Type} [DecidableEq Host]
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (certificate : Splice.AttachmentAliasMaterialization.Certificate pattern
@@ -509,8 +505,8 @@ private theorem materializedOpenCompilerTrace_terminalLexical_aligned
     {sourceEnd : Fin pattern.val.diagram.regionCount}
     {targetEnd : Fin certificate.result.val.diagram.regionCount}
     {sourcePath targetPath : List Nat}
-    {sourceBody : Region signature pattern.val.exposedWires.length []}
-    {targetBody : Region signature certificate.result.val.exposedWires.length []}
+    {sourceBody : Region  pattern.val.exposedWires.length []}
+    {targetBody : Region  certificate.result.val.exposedWires.length []}
     {sourceRoute : Splice.RegionRoute pattern.val.diagram pattern.val.diagram.root
       sourceEnd sourcePath}
     {targetRoute : Splice.RegionRoute certificate.result.val.diagram
@@ -640,8 +636,7 @@ private theorem materializedOpenCompilerTrace_terminalLexical_aligned
             Splice.Region.ContextPath.CompilerLeaf.underBubble] using hleaf
 
 private theorem terminalView_producer_holeRels
-    {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+    {pattern : CheckedOpenDiagram }
     {spine : BinderSpine pattern.val.diagram}
     (view : Splice.Input.PatternTerminalCompilerView pattern spine) :
     view.producer.intrinsicPath.toFocus.holeRels =
@@ -654,8 +649,7 @@ private theorem terminalView_producer_holeRels
     (eq_of_heq witnessEq)
 
 private theorem terminalView_producer_leaf_binders
-    {signature : List Nat}
-    {pattern : CheckedOpenDiagram signature}
+    {pattern : CheckedOpenDiagram }
     {spine : BinderSpine pattern.val.diagram}
     (view : Splice.Input.PatternTerminalCompilerView pattern spine) :
     HEq (view.producer.compilerLeaf.nestedOfNe view.proper).binders
@@ -747,9 +741,8 @@ private theorem pullback_relationRenamingOfEq_cast
   exact pullback_identityRelationRenaming source environment
 
 private theorem materialized_binder_owner_eq
-    {signature : List Nat}
     {Host : Type} [DecidableEq Host]
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     {sourceRels targetRels : RelCtx}
@@ -794,16 +787,15 @@ private theorem fixed_relation_value_eq
   rfl
 
 private theorem materialized_chosenProxy_eq
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -906,16 +898,15 @@ private theorem materialized_chosenProxy_eq
       Splice.AttachmentAliasMaterialization.binderSpine] using targetProxySpec))
 
 private theorem terminalRelationsMatch_materialized_iff
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -1051,16 +1042,15 @@ This is deliberately stronger than whole-open denotation preservation, whose
 existential relation environment cannot establish preservation for an
 arbitrary caller-supplied proxy family. -/
 theorem terminalRelationOfParameterValues_materialized_iff
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -1072,7 +1062,6 @@ theorem terminalRelationOfParameterValues_materialized_iff
       payload.binderSpine)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -1082,10 +1071,10 @@ theorem terminalRelationOfParameterValues_materialized_iff
           (instantiationAttachment comprehension attachments binders payload state
             arguments)
           certificate)
-        state site arguments hnonempty model named parameterValues values
+        state site arguments hnonempty model  parameterValues values
         relationArguments ↔
       terminalRelationOfParameterValues payload state site arguments hnonempty
-        model named parameterValues values relationArguments := by
+        model  parameterValues values relationArguments := by
   let attachment := instantiationAttachment comprehension attachments binders
     payload state arguments
   let sourceInput := instantiateSpliceInput comprehension attachments binders
@@ -1215,14 +1204,14 @@ theorem terminalRelationOfParameterValues_materialized_iff
   let forwardSemantic :=
     Splice.AttachmentAliasMaterialization.Semantic.concreteSimulation
       .forward comprehension attachment payload.binderSpine payload.terminalBody
-        certificate.wellFormed.diagram_well_formed model named
+        certificate.wellFormed.diagram_well_formed model
   let forwardBinderWitness : forwardSemantic.BinderWitness
       sourcePattern.leaf.binders targetPattern.leaf.binders :=
     ⟨terminalRels, terminalBinders⟩
   have sourceItemsComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         comprehension.val.diagram
-        (ConcreteElaboration.compileRegion? signature comprehension.val.diagram
+        (ConcreteElaboration.compileRegion?  comprehension.val.diagram
           sourcePattern.leaf.fuel)
         (sourcePattern.leaf.inheritedWires.extend
           payload.binderSpine.bodyContainer)
@@ -1231,10 +1220,10 @@ theorem terminalRelationOfParameterValues_materialized_iff
           payload.binderSpine.bodyContainer) = some sourcePattern.leaf.items := by
     simpa [sourceInput, sourcePattern] using sourcePattern.leaf.itemsComputation
   have targetItemsComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         (Splice.AttachmentAliasMaterialization.materializedDiagram
           comprehension.val attachment payload.binderSpine.bodyContainer)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (Splice.AttachmentAliasMaterialization.materializedDiagram
             comprehension.val attachment payload.binderSpine.bodyContainer)
           targetPattern.leaf.fuel)
@@ -1288,7 +1277,7 @@ theorem terminalRelationOfParameterValues_materialized_iff
   let backwardSemantic :=
     Splice.AttachmentAliasMaterialization.Semantic.concreteSimulation
       .backward comprehension attachment payload.binderSpine payload.terminalBody
-        certificate.wellFormed.diagram_well_formed model named
+        certificate.wellFormed.diagram_well_formed model
   let backwardBinderWitness : backwardSemantic.BinderWitness
       sourcePattern.leaf.binders targetPattern.leaf.binders :=
     ⟨terminalRels, terminalBinders⟩
@@ -1336,7 +1325,7 @@ theorem terminalRelationOfParameterValues_materialized_iff
     have targetDenotesSaved := targetDenotes
     let targetOuter := terminalInheritedEnvironment targetPayload state site
       arguments hnonempty targetAssignment
-    change denoteRegion model named targetOuter targetRelEnv
+    change denoteRegion model  targetOuter targetRelEnv
       (ConcreteElaboration.finishRegion certificate.result.val.diagram
         targetPattern.leaf.inheritedWires payload.binderSpine.bodyContainer
         targetPattern.leaf.items) at targetDenotes
@@ -1345,7 +1334,7 @@ theorem terminalRelationOfParameterValues_materialized_iff
       at targetDenotes
     rcases targetDenotes with ⟨targetLocal, targetItemsDenote⟩
     have targetRawDenote :=
-      (denoteItemSeq_renameWires model named
+      (denoteItemSeq_renameWires model
         (Fin.cast (ConcreteElaboration.WireContext.length_extend
           targetPattern.leaf.inheritedWires payload.binderSpine.bodyContainer))
         (extendWireEnv targetOuter targetLocal) targetRelEnv
@@ -1364,10 +1353,10 @@ theorem terminalRelationOfParameterValues_materialized_iff
     rw [Splice.AttachmentAliasMaterialization.Semantic.materialized_focused_localOccurrences]
       at targetCompiled
     have targetCompiled' :
-        ConcreteElaboration.compileOccurrencesWith? signature
+        ConcreteElaboration.compileOccurrencesWith?
           (Splice.AttachmentAliasMaterialization.materializedDiagram
             comprehension.val attachment payload.binderSpine.bodyContainer)
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (Splice.AttachmentAliasMaterialization.materializedDiagram
               comprehension.val attachment payload.binderSpine.bodyContainer)
             targetPattern.leaf.fuel)
@@ -1387,7 +1376,7 @@ theorem terminalRelationOfParameterValues_materialized_iff
     obtain ⟨targetNodeItems, targetRestItems, targetNodeCompiled,
         targetRestCompiled, targetItemsEq⟩ :=
       ConcreteElaboration.compileOccurrencesWith?_append_split
-        (fun {rels} => ConcreteElaboration.compileRegion? signature
+        (fun {rels} => ConcreteElaboration.compileRegion?
           (Splice.AttachmentAliasMaterialization.materializedDiagram
             comprehension.val attachment payload.binderSpine.bodyContainer)
           targetPattern.leaf.fuel)
@@ -1406,7 +1395,7 @@ theorem terminalRelationOfParameterValues_materialized_iff
     obtain ⟨aliasItems, targetChildItems, aliasCompiled, targetChildCompiled,
         targetRestItemsEq⟩ :=
       ConcreteElaboration.compileOccurrencesWith?_append_split
-        (fun {rels} => ConcreteElaboration.compileRegion? signature
+        (fun {rels} => ConcreteElaboration.compileRegion?
           (Splice.AttachmentAliasMaterialization.materializedDiagram
             comprehension.val attachment payload.binderSpine.bodyContainer)
           targetPattern.leaf.fuel)
@@ -1420,10 +1409,10 @@ theorem terminalRelationOfParameterValues_materialized_iff
         targetRestItems targetRestCompiled
     rw [targetItemsEq, targetRestItemsEq] at targetRawDenote
     have targetRestDenotes :=
-      (denoteItemSeq_append model named _ targetRelEnv targetNodeItems
+      (denoteItemSeq_append model  _ targetRelEnv targetNodeItems
         (aliasItems.append targetChildItems)).mp targetRawDenote |>.2
     have aliasDenotes :=
-      (denoteItemSeq_append model named _ targetRelEnv aliasItems
+      (denoteItemSeq_append model  _ targetRelEnv aliasItems
         targetChildItems).mp targetRestDenotes |>.1
     have terminalFactor :=
       Splice.AttachmentAliasMaterialization.Semantic.aliasOccurrences_factor_collapse
@@ -1431,11 +1420,11 @@ theorem terminalRelationOfParameterValues_materialized_iff
         certificate.wellFormed.diagram_well_formed targetContext sourceContext
         extendedCollapse targetPattern.leaf.wiresExact
         sourcePattern.leaf.wiresExact.nodup targetPattern.leaf.binders
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (Splice.AttachmentAliasMaterialization.materializedDiagram
             comprehension.val attachment payload.binderSpine.bodyContainer)
           targetPattern.leaf.fuel)
-        aliasItems aliasCompiled model named
+        aliasItems aliasCompiled model
         (ConcreteElaboration.extendedEnvironment
           targetPattern.leaf.inheritedWires payload.binderSpine.bodyContainer
           targetOuter targetLocal) targetRelEnv aliasDenotes
@@ -1811,7 +1800,7 @@ theorem terminalRelationOfParameterValues_materialized_iff
         apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
           collapse.oldIndex _ _).mpr
         rfl
-      have targetDenotes' : denoteRegion model named targetOuter targetRelEnv
+      have targetDenotes' : denoteRegion model  targetOuter targetRelEnv
           (ConcreteElaboration.finishRegion certificate.result.val.diagram
             targetPattern.leaf.inheritedWires payload.binderSpine.bodyContainer
             targetPattern.leaf.items) := by
@@ -1826,7 +1815,7 @@ theorem terminalRelationOfParameterValues_materialized_iff
         exact relationMap_eq_relationRenamingOfEq backwardBinderWitness
       rw [relationMapEq] at sourceRenamed
       have sourceDenotes :=
-        (denoteRegion_renameRelations model named relationMap sourceRelEnv
+        (denoteRegion_renameRelations model  relationMap sourceRelEnv
           targetRelEnv (RelEnv.pullback_agrees relationMap targetRelEnv)
           (targetOuter ∘ collapse.oldIndex)
           (ConcreteElaboration.finishRegion comprehension.val.diagram
@@ -1974,7 +1963,7 @@ theorem terminalRelationOfParameterValues_materialized_iff
           exact RelEnv.pullback_agrees
             (forwardSemantic.relationMap forwardBinderWitness) targetRelEnv
       have sourceRenamed :=
-          (denoteRegion_renameRelations model named
+          (denoteRegion_renameRelations model
             (forwardSemantic.relationMap forwardBinderWitness) sourceRelEnv
             targetRelEnv relationAgrees
             (terminalInheritedEnvironment payload state site arguments
@@ -1991,16 +1980,15 @@ theorem terminalRelationOfParameterValues_materialized_iff
 
 /-- Extensional equality form consumed by the executor-trace simulation. -/
 theorem terminalRelationOfParameterValues_materialized
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -2012,22 +2000,21 @@ theorem terminalRelationOfParameterValues_materialized
       payload.binderSpine)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index)) :
     terminalRelationOfParameterValues payload state site arguments hnonempty
-        model named parameterValues values =
+        model  parameterValues values =
       terminalRelationOfParameterValues
         (materializedInstantiationPayload payload
           (instantiationAttachment comprehension attachments binders payload state
             arguments)
           certificate)
-        state site arguments hnonempty model named parameterValues values := by
+        state site arguments hnonempty model  parameterValues values := by
   funext relationArguments
   apply propext
   exact (terminalRelationOfParameterValues_materialized_iff payload state site
-    arguments certificate hnonempty model named parameterValues values
+    arguments certificate hnonempty model  parameterValues values
     relationArguments).symm
 
 end InstantiationSemantic

@@ -13,18 +13,16 @@ namespace InstantiationSemantic
 valuation determine the relation used at every accepted copy site.  The two
 equalities are conditional on the executor's actual binder-spine case. -/
 structure TraceRelationContract
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    (origin : CheckedDiagram signature)
+    (origin : CheckedDiagram )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -36,23 +34,22 @@ structure TraceRelationContract
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0),
     relationValue = terminalRelationOfParameterValues payload state site
-      arguments hnonempty model named parameterValues values
+      arguments hnonempty model  parameterValues values
   empty : ∀ _hzero : payload.binderSpine.proxyCount = 0,
-    relationValue = payload.interpretedRelation model named parameterValues
+    relationValue = payload.interpretedRelation model  parameterValues
 
 /-- A nonzero-spine relation selected at any one occurrence is the canonical
 trace relation at every occurrence. -/
 theorem TraceRelationContract.of_nonempty
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    (origin : CheckedDiagram signature)
+    (origin : CheckedDiagram )
     (reference : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (referenceSite : Fin reference.diagram.val.regionCount)
@@ -60,15 +57,14 @@ theorem TraceRelationContract.of_nonempty
       Fin reference.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier)
     (referenceEq : relationValue = terminalRelationOfParameterValues payload
-      reference referenceSite referenceArguments hnonempty model named
+      reference referenceSite referenceArguments hnonempty model
       parameterValues values) :
-    TraceRelationContract payload origin model named relationValue values
+    TraceRelationContract payload origin model  relationValue values
       parameterValues := by
   constructor
   · intro state site arguments hnonempty'
@@ -76,7 +72,7 @@ theorem TraceRelationContract.of_nonempty
     subst hnonempty'
     exact referenceEq.trans
       (terminalRelationOfParameterValues_eq payload reference state
-        referenceSite site referenceArguments arguments hnonempty model named
+        referenceSite site referenceArguments arguments hnonempty model
         parameterValues values)
   · intro hzero
     exact False.elim (hnonempty hzero)
@@ -84,26 +80,24 @@ theorem TraceRelationContract.of_nonempty
 /-- In the zero-spine case the interpreted open comprehension is already the
 single trace relation; all nonzero obligations are vacuous. -/
 theorem TraceRelationContract.of_empty
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    (origin : CheckedDiagram signature)
+    (origin : CheckedDiagram )
     (hzero : payload.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier)
     (relationEq : relationValue =
-      payload.interpretedRelation model named parameterValues) :
-    TraceRelationContract payload origin model named relationValue values
+      payload.interpretedRelation model  parameterValues) :
+    TraceRelationContract payload origin model  relationValue values
       parameterValues := by
   constructor
   · intro _state _site _arguments hnonempty
@@ -114,23 +108,21 @@ theorem TraceRelationContract.of_empty
 /-- The fixed-relation premises consumed by every one-step region simulation
 are available uniformly along an accepted executor trace. -/
 def RelationContractsEveryStep
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -140,38 +132,36 @@ def RelationContractsEveryStep
   | .step _ state _ _ _ site _ arguments _ _ _ _ _ rest =>
       (∀ hnonempty : payload.binderSpine.proxyCount ≠ 0,
         relationValue = terminalRelationOfParameterValues payload state site
-          arguments hnonempty model named parameterValues values) ∧
+          arguments hnonempty model  parameterValues values) ∧
       (∀ _hzero : payload.binderSpine.proxyCount = 0,
-        relationValue = payload.interpretedRelation model named
+        relationValue = payload.interpretedRelation model
           parameterValues) ∧
-      RelationContractsEveryStep rest model named relationValue values
+      RelationContractsEveryStep rest model  relationValue values
         parameterValues
 
 theorem TraceRelationContract.everyStep
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier)
-    (contract : TraceRelationContract payload origin model named relationValue
+    (contract : TraceRelationContract payload origin model  relationValue
       values parameterValues) :
-    RelationContractsEveryStep trace model named relationValue values
+    RelationContractsEveryStep trace model  relationValue values
       parameterValues := by
   induction trace with
   | done => trivial

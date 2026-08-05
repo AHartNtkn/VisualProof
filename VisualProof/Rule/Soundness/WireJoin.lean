@@ -10,8 +10,6 @@ open Theory
 
 namespace WireJoinSoundness
 
-variable {signature : List Nat}
-
 abbrev Target (input : ConcreteDiagram)
     (outer inner : Fin input.wireCount) :=
   joinWireRaw input outer inner
@@ -239,7 +237,7 @@ theorem endpointOccurs_map
 
 theorem visible_map
     (input : ConcreteDiagram)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (outer inner wire : Fin input.wireCount) (distinct : outer ≠ inner)
     (ordered :
       input.Encloses (input.wires outer).scope (input.wires inner).scope)
@@ -311,7 +309,7 @@ structure ContextWitness
 
 noncomputable def ContextWitness.ofExact
     (input : ConcreteDiagram)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (ordered :
       input.Encloses (input.wires outer).scope (input.wires inner).scope)
@@ -531,7 +529,7 @@ theorem localMap_surjective
 noncomputable def ContextWitness.extend
     (_witness : ContextWitness input outer inner distinct
       sourceContext targetContext)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (ordered :
       input.Encloses (input.wires outer).scope (input.wires inner).scope)
     (region : Fin input.regionCount)
@@ -546,7 +544,7 @@ noncomputable def ContextWitness.extend
 theorem ContextWitness.extend_index_inherited
     (witness : ContextWitness input outer inner distinct
       sourceContext targetContext)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (ordered :
       input.Encloses (input.wires outer).scope (input.wires inner).scope)
     (region : Fin input.regionCount)
@@ -607,7 +605,7 @@ theorem ContextWitness.extend_index_inherited
 theorem ContextWitness.extend_index_local_of_ne
     (witness : ContextWitness input outer inner distinct
       sourceContext targetContext)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (ordered :
       input.Encloses (input.wires outer).scope (input.wires inner).scope)
     (region : Fin input.regionCount)
@@ -733,7 +731,7 @@ noncomputable def targetLocalOfSource
 noncomputable def sourceLocalOfTarget
     (witness : ContextWitness input outer inner distinct
       sourceContext targetContext)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (ordered :
       input.Encloses (input.wires outer).scope (input.wires inner).scope)
     (region : Fin input.regionCount)
@@ -756,7 +754,7 @@ noncomputable def sourceLocalOfTarget
 theorem ContextWitness.extendedEnvironment_forward
     (witness : ContextWitness input outer inner distinct
       sourceContext targetContext)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (ordered :
       input.Encloses (input.wires outer).scope (input.wires inner).scope)
     (region : Fin input.regionCount)
@@ -803,7 +801,7 @@ theorem ContextWitness.extendedEnvironment_forward
 theorem ContextWitness.extendedEnvironment_backward
     (witness : ContextWitness input outer inner distinct
       sourceContext targetContext)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (ordered :
       input.Encloses (input.wires outer).scope (input.wires inner).scope)
     (region : Fin input.regionCount)
@@ -905,7 +903,7 @@ theorem allowed_bubble
   exact allowed parentRoute parentDepth
 
 theorem allowed_root
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (site : Fin source.val.diagram.regionCount)
     (orientation : Orientation)
     (polarity : spawnPolarity orientation
@@ -950,7 +948,7 @@ theorem allowed_forward_ne_site
 theorem resolvedPorts_related
     (input : ConcreteDiagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
-    (targetWellFormed : (Target input outer inner).WellFormed signature)
+    (targetWellFormed : (Target input outer inner).WellFormed )
     (sourceContext : ConcreteElaboration.WireContext input)
     (targetContext :
       ConcreteElaboration.WireContext (Target input outer inner))
@@ -994,18 +992,18 @@ theorem resolvedPorts_related
     simpa only [List.get_eq_getElem] using contextGet)
 
 noncomputable def simulation
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
       (source.val.diagram.wires outer).scope
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
-      (Target source.val.diagram outer inner).WellFormed signature)
+      (Target source.val.diagram outer inner).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
-    ConcreteElaboration.ConcreteSemanticSimulation signature
-      source.val.diagram (Target source.val.diagram outer inner) model named where
+    :
+    ConcreteElaboration.ConcreteSemanticSimulation
+      source.val.diagram (Target source.val.diagram outer inner) model  where
   source_wellFormed := source.property.diagram_well_formed
   target_wellFormed := targetWellFormed
   regionMap := id
@@ -1098,7 +1096,7 @@ noncomputable def simulation
       (ConcreteElaboration.ContextIndexRelation.forwardMap
         (witness.extend source.property.diagram_well_formed ordered region
           sourceExact targetExact).indexMap)
-      model named
+      model
       (sourceItems.renameRelations
         (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
       targetItems ?_ itemSemantics
@@ -1137,7 +1135,7 @@ noncomputable def simulation
       ConcreteElaboration.LocalOccurrence.node.inj nodeMapped
     subst targetNode
     apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
-      model named simulationDirection sourceContext targetContext
+      model  simulationDirection sourceContext targetContext
       (ConcreteElaboration.ContextIndexRelation.forwardMap witness.indexMap)
       sourceBinders sourceBinders
       (ConcreteElaboration.identityRelationRenaming sourceRels)
@@ -1168,15 +1166,15 @@ def targetOpenRaw
     (wireMap source.diagram outer inner distinct)
 
 theorem targetOpenRaw_wellFormed
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
       (source.val.diagram.wires outer).scope
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
-      (Target source.val.diagram outer inner).WellFormed signature) :
-    (targetOpenRaw source.val outer inner distinct).WellFormed signature where
+      (Target source.val.diagram outer inner).WellFormed ) :
+    (targetOpenRaw source.val outer inner distinct).WellFormed  where
   diagram_well_formed := targetWellFormed
   boundary_is_root_scoped := by
     intro targetWire targetMember
@@ -1206,15 +1204,15 @@ theorem targetOpenRaw_wellFormed
     · simpa [hwire] using sourceRoot
 
 def targetOpen
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
       (source.val.diagram.wires outer).scope
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
-      (Target source.val.diagram outer inner).WellFormed signature) :
-    CheckedOpenDiagram signature :=
+      (Target source.val.diagram outer inner).WellFormed ) :
+    CheckedOpenDiagram  :=
   ⟨targetOpenRaw source.val outer inner distinct,
     targetOpenRaw_wellFormed source outer inner distinct ordered
       targetWellFormed⟩
@@ -1285,7 +1283,7 @@ theorem exposedMap_surjective
         sourceGet).trans mapped))
 
 theorem exposedMap_injective_of_root_ne
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1330,14 +1328,14 @@ def leftIndex (left right : List α) :
   simp [leftIndex]
 
 noncomputable def rootWitness
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
       (source.val.diagram.wires outer).scope
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
-      (Target source.val.diagram outer inner).WellFormed signature) :
+      (Target source.val.diagram outer inner).WellFormed ) :
     ContextWitness source.val.diagram outer inner distinct
       (source.val.exposedWires ++ source.val.hiddenWires)
       ((targetOpenRaw source.val outer inner distinct).exposedWires ++
@@ -1358,14 +1356,14 @@ noncomputable def rootWitness
         ConcreteElaboration.openRootWires_exact target.property)
 
 theorem rootWitness_index_exposed
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
       (source.val.diagram.wires outer).scope
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
-      (Target source.val.diagram outer inner).WellFormed signature)
+      (Target source.val.diagram outer inner).WellFormed )
     (sourceIndex : Fin source.val.exposedWires.length) :
     (rootWitness source outer inner distinct ordered targetWellFormed).indexMap
         (leftIndex source.val.exposedWires source.val.hiddenWires
@@ -1410,7 +1408,7 @@ theorem rootWitness_index_exposed
     simpa only [List.get_eq_getElem] using hget)
 
 noncomputable def hiddenMap
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1454,7 +1452,7 @@ noncomputable def hiddenMap
             exact rootNe innerRoot.symm))
 
 theorem hiddenMap_get
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1502,7 +1500,7 @@ theorem hiddenMap_get
             exact rootNe innerRoot.symm)))
 
 theorem hiddenMap_injective
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1538,7 +1536,7 @@ theorem hiddenMap_injective
     simpa only [List.get_eq_getElem] using sourceGetEquality)
 
 theorem hiddenMap_surjective
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1604,7 +1602,7 @@ theorem hiddenMap_surjective
       simpa only [List.get_eq_getElem] using hget)
 
 noncomputable def hiddenInverse
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1616,7 +1614,7 @@ noncomputable def hiddenInverse
     (hiddenMap_surjective source outer inner distinct rootNe targetIndex)
 
 theorem hiddenInverse_spec
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1630,7 +1628,7 @@ theorem hiddenInverse_spec
     (hiddenMap_surjective source outer inner distinct rootNe targetIndex)
 
 theorem hiddenInverse_hiddenMap
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1674,14 +1672,14 @@ def rightIndex (left right : List α) :
   simp [ConcreteElaboration.rootEnvironment, rightIndex, extendWireEnv]
 
 theorem rootWitness_index_hidden
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
       (source.val.diagram.wires outer).scope
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
-      (Target source.val.diagram outer inner).WellFormed signature)
+      (Target source.val.diagram outer inner).WellFormed )
     (rootNe : source.val.diagram.root ≠
       (source.val.diagram.wires inner).scope)
     (sourceIndex : Fin source.val.hiddenWires.length) :
@@ -1728,7 +1726,7 @@ theorem rootWitness_index_hidden
     simpa only [List.get_eq_getElem] using hget)
 
 noncomputable def targetHiddenOfSource
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1738,7 +1736,7 @@ noncomputable def targetHiddenOfSource
   sourceHidden ∘ hiddenInverse source outer inner distinct rootNe
 
 @[simp] theorem targetHiddenOfSource_hiddenMap
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1751,14 +1749,14 @@ noncomputable def targetHiddenOfSource
   simp [targetHiddenOfSource, hiddenInverse_hiddenMap]
 
 noncomputable def sourceHiddenOfTarget
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
       (source.val.diagram.wires outer).scope
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
-      (Target source.val.diagram outer inner).WellFormed signature)
+      (Target source.val.diagram outer inner).WellFormed )
     (targetOuter :
       Fin (targetOpenRaw source.val outer inner distinct).exposedWires.length → D)
     (targetHidden :
@@ -1775,14 +1773,14 @@ noncomputable def sourceHiddenOfTarget
           sourceIndex))
 
 theorem rootEnvironment_forward
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
       (source.val.diagram.wires outer).scope
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
-      (Target source.val.diagram outer inner).WellFormed signature)
+      (Target source.val.diagram outer inner).WellFormed )
     (rootNe : source.val.diagram.root ≠
       (source.val.diagram.wires inner).scope)
     (sourceOuter : Fin source.val.exposedWires.length → D)
@@ -1843,14 +1841,14 @@ theorem rootEnvironment_forward
       rootEnvironment_rightIndex, targetHiddenOfSource_hiddenMap]
 
 theorem rootEnvironment_backward
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
       (source.val.diagram.wires outer).scope
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
-      (Target source.val.diagram outer inner).WellFormed signature)
+      (Target source.val.diagram outer inner).WellFormed )
     (sourceOuter : Fin source.val.exposedWires.length → D)
     (targetOuter :
       Fin (targetOpenRaw source.val outer inner distinct).exposedWires.length → D)
@@ -1908,26 +1906,25 @@ theorem rootEnvironment_backward
     rfl
 
 noncomputable def rootContext
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
       (source.val.diagram.wires outer).scope
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
-      (Target source.val.diagram outer inner).WellFormed signature)
+      (Target source.val.diagram outer inner).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (orientation : Orientation) :
     let semanticSimulation := simulation source outer inner distinct ordered
-      targetWellFormed model named
+      targetWellFormed model
     ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
       semanticSimulation (direction orientation)
       source.val.exposedWires source.val.hiddenWires
       (targetOpenRaw source.val outer inner distinct).exposedWires
       (targetOpenRaw source.val outer inner distinct).hiddenWires := by
   let semanticSimulation := simulation source outer inner distinct ordered
-    targetWellFormed model named
+    targetWellFormed model
   refine {
     outer := ConcreteElaboration.ContextIndexRelation.forwardMap
       (exposedMap source.val outer inner distinct)
@@ -1955,7 +1952,7 @@ noncomputable def rootContext
       (ConcreteElaboration.ContextIndexRelation.forwardMap
         (rootWitness source outer inner distinct ordered
           targetWellFormed).indexMap)
-      model named
+      model
       (sourceItems.renameRelations
         (semanticSimulation.relationMap semanticSimulation.binders_empty))
       targetItems ?_ itemSemantics
@@ -2035,7 +2032,7 @@ theorem exposedInverse_spec
     (exposedMap_surjective source outer inner distinct targetIndex)
 
 theorem exposedInverse_exposedMap
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -2048,20 +2045,19 @@ theorem exposedInverse_exposedMap
   exact exposedInverse_spec source.val outer inner distinct _
 
 private theorem boundaryWitness
-    (source : CheckedOpenDiagram signature)
+    (source : CheckedOpenDiagram )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
       (source.val.diagram.wires outer).scope
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
-      (Target source.val.diagram outer inner).WellFormed signature)
+      (Target source.val.diagram outer inner).WellFormed )
     (orientation : Orientation)
     (allowed :
       Allowed source.val.diagram (source.val.diagram.wires inner).scope
         (direction orientation) source.val.diagram.root)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (sourceArgs : Fin source.val.boundary.length → model.Carrier) :
     ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       (direction orientation) source.elaborate
@@ -2069,7 +2065,7 @@ private theorem boundaryWitness
         targetWellFormed).elaborate
       (ConcreteElaboration.ContextIndexRelation.forwardMap
         (exposedMap source.val outer inner distinct))
-      model named sourceArgs
+      model  sourceArgs
       (sourceArgs ∘
         Fin.cast (boundaryLengthEq source.val outer inner distinct)) := by
   cases orientation with
@@ -2227,19 +2223,19 @@ theorem interface_transportBoundary_eq_map
   exact Option.some.inj (transport.symm.trans canonical)
 
 private def operationalOpen
-    (source : OpenProofState signature)
+    (source : OpenProofState )
     (outer inner : Fin source.diagram.val.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.diagram.val.Encloses
       (source.diagram.val.wires outer).scope
       (source.diagram.val.wires inner).scope)
     (targetWellFormed :
-      (Target source.diagram.val outer inner).WellFormed signature) :
-    CheckedOpenDiagram signature :=
+      (Target source.diagram.val outer inner).WellFormed ) :
+    CheckedOpenDiagram  :=
   targetOpen source.asCheckedOpen outer inner distinct ordered targetWellFormed
 
 private def operationalIso
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {receipt : StepReceipt input}
     {outer inner : Fin input.val.wireCount}
     (realizes : receipt.Realizes
@@ -2249,7 +2245,7 @@ private def operationalIso
     (distinct : outer ≠ inner)
     (ordered : input.val.Encloses
       (input.val.wires outer).scope (input.val.wires inner).scope)
-    (targetWellFormed : (Target input.val outer inner).WellFormed signature)
+    (targetWellFormed : (Target input.val outer inner).WellFormed )
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ candidate, candidate ∈ boundary →
       (input.val.wires candidate).scope = input.val.root)
@@ -2270,9 +2266,9 @@ private def operationalIso
   simpa [rawEq] using expected
 
 private theorem orderedReceipt_sound
-    (context : ProofContext signature)
+    (context : ProofContext )
     (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (stepFirst stepSecond outer inner : Fin input.val.wireCount)
     (receipt : StepReceipt input)
     (realizes : receipt.Realizes
@@ -2287,7 +2283,7 @@ private theorem orderedReceipt_sound
     SuccessfulReceiptSound context orientation input
       (.wireJoin stepFirst stepSecond) receipt := by
   have targetWellFormed :
-      (Target input.val outer inner).WellFormed signature :=
+      (Target input.val outer inner).WellFormed  :=
     realizes.result_eq ▸ receipt.result.property
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := fun boundary sourceRoot mapped transport =>
@@ -2300,28 +2296,27 @@ private theorem orderedReceipt_sound
       operationalIso realizes distinct ordered targetWellFormed boundary
         sourceRoot mapped transport)
   intro model boundary sourceRoot mapped transport valid args
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
   }
   let target := operationalOpen source outer inner distinct ordered
     targetWellFormed
-  let named := Theory.interpretDefinitions model context.definitions
   let semanticSimulation := simulation source.asCheckedOpen outer inner
-    distinct ordered targetWellFormed model named
+    distinct ordered targetWellFormed model
   let rootSimulation := rootContext source.asCheckedOpen outer inner distinct
-    ordered targetWellFormed model named orientation
+    ordered targetWellFormed model  orientation
   have allowed :
       semanticSimulation.Allowed (direction orientation)
         source.asCheckedOpen.val.diagram.root := by
     exact allowed_root source.asCheckedOpen
       (source.asCheckedOpen.val.diagram.wires inner).scope orientation polarity
   have boundaryTransport := boundaryWitness source.asCheckedOpen outer inner
-    distinct ordered targetWellFormed orientation allowed model named args
+    distinct ordered targetWellFormed orientation allowed model  args
   have semantic :=
     ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
-      source.asCheckedOpen target model named semanticSimulation
+      source.asCheckedOpen target model  semanticSimulation
       (direction orientation) rootSimulation allowed args
       (args ∘ Fin.cast
         (boundaryLengthEq source.asCheckedOpen.val outer inner distinct))
@@ -2342,9 +2337,9 @@ private theorem orderedReceipt_sound
 
 /-- Every successful wire-join receipt preserves ordered-open semantics. -/
 theorem wireJoinReceipt_sound
-    (context : ProofContext signature)
+    (context : ProofContext )
     (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (first second : Fin input.val.wireCount)
     (receipt : StepReceipt input)
     (applyResult :

@@ -8,7 +8,7 @@ open VisualProof.Diagram
 
 /-- A material fragment region has exactly one host provenance. -/
 theorem fragmentParent_eq_materialRegion_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (region : Fin input.val.regionCount)
@@ -55,7 +55,7 @@ theorem fragmentParent_eq_materialRegion_iff
 region.  Boundary wires never become local; internal wires retain the exact
 host scope selected by their material provenance. -/
 theorem fragmentWireOrigin_scope_eq_materialRegion_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (wire : Fin layout.wireCount)
@@ -110,7 +110,7 @@ theorem fragmentWireOrigin_scope_eq_materialRegion_iff
       exact False.elim (horiginNe scopeEq)
 
 theorem fragmentWireOrigin_mem_exactScopeWires_material_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (wire : Fin layout.wireCount)
@@ -132,7 +132,7 @@ theorem fragmentWireOrigin_mem_exactScopeWires_material_iff
 
 /-- Every host wire local to copied material has one extracted local preimage. -/
 theorem hostExactScopeWire_has_fragmentPreimage
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (index : Fin layout.materialRegionCount)

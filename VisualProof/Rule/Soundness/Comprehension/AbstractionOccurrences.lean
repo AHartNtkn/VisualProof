@@ -103,9 +103,6 @@ theorem targetNode_region
           trace.domains.regions.index?_index binder binderSurvives,
           Option.map_some] at result
         exact congrArg CNode.region (Option.some.inj result).symm
-    | named owner definition arity =>
-        simp only [shape, direct, if_pos, Option.map_some] at result
-        exact congrArg CNode.region (Option.some.inj result).symm
   · simp only [direct, if_false]
     cases shape : input.val.nodes node with
     | identity owner arity =>
@@ -139,21 +136,6 @@ theorem targetNode_region
         rw [trace.regionMap_of_survives owner actualOwnerSurvives]
         simpa only [targetRegion] using
           congrArg CNode.region (Option.some.inj result).symm
-    | named owner definition arity =>
-        have actualOwnerSurvives :
-          trace.domains.regions.survives owner = true := by
-          simpa [shape] using trace.nodeOwner_survives node survives
-        have ownerEq : expectedOwner = owner := by
-          simpa [shape] using nodeRegion.symm
-        subst expectedOwner
-        simp only [shape, direct, if_false,
-          trace.domains.regions.index?_index owner actualOwnerSurvives,
-          Option.map_some] at result
-        simp only [shape, CNode.region]
-        rw [trace.regionMap_of_survives owner actualOwnerSurvives]
-        simpa only [targetRegion] using
-          congrArg CNode.region (Option.some.inj result).symm
-
 /-- The parent of every surviving non-sheet region survives. -/
 theorem regionParent_survives
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)

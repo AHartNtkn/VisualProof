@@ -6,8 +6,8 @@ open VisualProof.Data.Finite
 open ConcreteElaboration
 
 /-- An open concrete diagram paired with its single well-formedness certificate. -/
-abbrev CheckedOpenDiagram (signature : List Nat) :=
-  { d : OpenConcreteDiagram // d.WellFormed signature }
+abbrev CheckedOpenDiagram :=
+  { d : OpenConcreteDiagram // d.WellFormed  }
 
 namespace ConcreteDiagram
 
@@ -23,8 +23,8 @@ def asOpen (d : ConcreteDiagram) : OpenConcreteDiagram where
     d.asOpen.boundary = [] := rfl
 
 theorem asOpen_wellFormed (d : ConcreteDiagram)
-    (hwf : d.WellFormed signature) :
-    d.asOpen.WellFormed signature where
+    (hwf : d.WellFormed ) :
+    d.asOpen.WellFormed  where
   diagram_well_formed := hwf
   boundary_is_root_scoped := by
     intro wire hwire
@@ -35,11 +35,11 @@ end ConcreteDiagram
 namespace CheckedDiagram
 
 /-- A checked closed diagram viewed as a checked open diagram with no boundary. -/
-def asOpen (checked : CheckedDiagram signature) :
-    CheckedOpenDiagram signature :=
+def asOpen (checked : CheckedDiagram ) :
+    CheckedOpenDiagram  :=
   ⟨checked.val.asOpen, checked.val.asOpen_wellFormed checked.property⟩
 
-@[simp] theorem asOpen_val (checked : CheckedDiagram signature) :
+@[simp] theorem asOpen_val (checked : CheckedDiagram ) :
     checked.asOpen.val = checked.val.asOpen := rfl
 
 end CheckedDiagram
@@ -181,13 +181,13 @@ def rootWires (d : OpenConcreteDiagram) :
   d.exposedWires ++ d.hiddenWires
 
 theorem WellFormed.exposed_root_scoped
-    {d : OpenConcreteDiagram} (hwf : d.WellFormed signature)
+    {d : OpenConcreteDiagram} (hwf : d.WellFormed )
     {wire : Fin d.diagram.wireCount} (hexposed : wire ∈ d.exposedWires) :
     (d.diagram.wires wire).scope = d.diagram.root :=
   hwf.boundary_is_root_scoped wire ((mem_exposedWires d wire).mp hexposed)
 
 @[simp] theorem mem_rootWires_iff
-    (d : OpenConcreteDiagram) (hwf : d.WellFormed signature)
+    (d : OpenConcreteDiagram) (hwf : d.WellFormed )
     (wire : Fin d.diagram.wireCount) :
     wire ∈ d.rootWires ↔
       (d.diagram.wires wire).scope = d.diagram.root := by

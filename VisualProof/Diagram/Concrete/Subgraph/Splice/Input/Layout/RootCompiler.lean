@@ -21,7 +21,7 @@ output.  In particular, repeated source positions remain repeated positions.
 /-- A root-scoped host wire remains root-scoped after passing to its coalesced
 class. -/
 theorem quotientWire_scope_eq_root
-    (input : Input signature)
+    (input : Input )
     (hadmissible : input.Admissible)
     (wire : Fin input.frame.val.wireCount)
     (hroot : (input.frame.val.wires wire).scope = input.frame.val.root) :
@@ -36,19 +36,19 @@ theorem quotientWire_scope_eq_root
   simpa only [hroot] using hencloses
 
 /-- The coalesced host equipped with the caller's ordered open boundary. -/
-def coalescedOpenRoot (input : Input signature)
+def coalescedOpenRoot (input : Input )
     (sourceBoundary : List (Fin input.frame.val.wireCount)) :
     OpenConcreteDiagram where
   diagram := input.coalesceFrameRaw
   boundary := sourceBoundary.map input.quotientWire
 
 theorem coalescedOpenRoot_wellFormed
-    (input : Input signature)
+    (input : Input )
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root) :
-    (coalescedOpenRoot input sourceBoundary).WellFormed signature where
+    (coalescedOpenRoot input sourceBoundary).WellFormed  where
   diagram_well_formed := input.coalesceFrameRaw_wellFormed hadmissible
   boundary_is_root_scoped := by
     change ∀ quotient : input.wireQuotient.Carrier,
@@ -61,31 +61,31 @@ theorem coalescedOpenRoot_wellFormed
       (sourceRoot wire hwire)
 
 def checkedCoalescedOpenRoot
-    (input : Input signature)
+    (input : Input )
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root) :
-    CheckedOpenDiagram signature :=
+    CheckedOpenDiagram  :=
   ⟨coalescedOpenRoot input sourceBoundary,
     coalescedOpenRoot_wellFormed input hadmissible sourceBoundary sourceRoot⟩
 
 /-- The plugged output equipped with the same ordered positions, transported
 through quotienting and the frame-wire embedding. -/
-def outputOpenRoot (input : Input signature) (layout : PlugLayout input)
+def outputOpenRoot (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount)) :
     OpenConcreteDiagram where
   diagram := layout.plugRaw
   boundary := sourceBoundary.map (layout.frameWire ∘ input.quotientWire)
 
 theorem outputOpenRoot_wellFormed
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root) :
-    (outputOpenRoot input layout sourceBoundary).WellFormed signature where
-  diagram_well_formed := plugRaw_wellFormed signature input layout hadmissible
+    (outputOpenRoot input layout sourceBoundary).WellFormed  where
+  diagram_well_formed := plugRaw_wellFormed  input layout hadmissible
   boundary_is_root_scoped := by
     change ∀ outputWire : Fin layout.wireCount,
       outputWire ∈
@@ -107,17 +107,17 @@ theorem outputOpenRoot_wellFormed
     exact congrArg layout.frameRegion hcoalesced
 
 def checkedOutputOpenRoot
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root) :
-    CheckedOpenDiagram signature :=
+    CheckedOpenDiagram  :=
   ⟨outputOpenRoot input layout sourceBoundary,
     outputOpenRoot_wellFormed input layout hadmissible sourceBoundary sourceRoot⟩
 
 theorem frameWire_mem_rootExposed_iff
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (quotient : input.wireQuotient.Carrier) :
     layout.frameWire quotient ∈
@@ -143,7 +143,7 @@ theorem frameWire_mem_rootExposed_iff
 /-- The external wire classes of the coalesced and plugged open roots are in
 canonical bijection, independently of repeated boundary positions. -/
 noncomputable def rootExposedWireEquiv
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount)) :
     FiniteEquiv
@@ -173,7 +173,7 @@ noncomputable def rootExposedWireEquiv
     (fun left _ right _ heq => layout.frameWire_injective heq)
 
 theorem rootExposedWireEquiv_spec
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (index : Fin
@@ -208,7 +208,7 @@ theorem rootExposedWireEquiv_spec
 /-- The external-class equivalence preserves every ordered boundary
 position, including repeated positions that denote the same wire class. -/
 theorem rootExposedWireEquiv_boundaryClass
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (position : Fin sourceBoundary.length) :
@@ -225,7 +225,7 @@ theorem rootExposedWireEquiv_boundaryClass
 /-- Away from a sheet-root splice, hidden root wires are exactly the mapped
 hidden frame wires; every pattern-internal wire remains below the root. -/
 theorem frameWire_mem_rootHidden_iff_of_nested
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hnested : input.site ≠ input.frame.val.root)
     (quotient : input.wireQuotient.Carrier) :
@@ -266,7 +266,7 @@ theorem frameWire_mem_rootHidden_iff_of_nested
         sourceBoundary quotient).1 hexposed)
 
 theorem outputRootHidden_frame_complete_of_nested
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hnested : input.site ≠ input.frame.val.root)
     (wire : Fin layout.plugRaw.wireCount)
@@ -305,7 +305,7 @@ theorem outputRootHidden_frame_complete_of_nested
 /-- The local component of the open-root frame equivalence at a proper
 nested splice site. -/
 noncomputable def nestedRootHiddenWireEquiv
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hnested : input.site ≠ input.frame.val.root) :
     FiniteEquiv
@@ -324,7 +324,7 @@ noncomputable def nestedRootHiddenWireEquiv
     (fun left _ right _ heq => layout.frameWire_injective heq)
 
 theorem nestedRootHiddenWireEquiv_spec
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hnested : input.site ≠ input.frame.val.root)
     (index : Fin
@@ -347,7 +347,7 @@ theorem nestedRootHiddenWireEquiv_spec
 
 /-- The complete open-root wire transport at a proper nested splice site. -/
 noncomputable def nestedRootWireEquiv
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hnested : input.site ≠ input.frame.val.root) :
     FiniteEquiv
@@ -370,7 +370,7 @@ noncomputable def nestedRootWireEquiv
       (FiniteEquiv.finCast targetEq.symm))
 
 theorem nestedRootWireEquiv_spec
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hnested : input.site ≠ input.frame.val.root)
     (index : Fin
@@ -413,14 +413,14 @@ theorem nestedRootWireEquiv_spec
 /-- Hidden output-root wires in semantic splice order: hidden coalesced-frame
 classes followed by the terminal pattern's internal wire carriers. -/
 def semanticOpenRootHiddenWires
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount)) :
     List (Fin layout.plugRaw.wireCount) :=
   (coalescedOpenRoot input sourceBoundary).hiddenWires.map layout.frameWire ++
     layout.bodyInternalCarriers.map layout.internalWire
 
 theorem semanticOpenRootHiddenWires_subset
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hsite : input.site = input.frame.val.root) :
     ∀ wire, wire ∈
@@ -469,7 +469,7 @@ theorem semanticOpenRootHiddenWires_subset
         internal (by simpa only [Function.comp_apply] using heq)
 
 theorem semanticOpenRootHiddenWires_complete
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hsite : input.site = input.frame.val.root) :
     ∀ wire, wire ∈ (outputOpenRoot input layout sourceBoundary).hiddenWires →
@@ -519,7 +519,7 @@ theorem semanticOpenRootHiddenWires_complete
     · exact hbody
 
 theorem semanticOpenRootHiddenWires_nodup
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount)) :
     (semanticOpenRootHiddenWires input layout sourceBoundary).Nodup := by
   change ((coalescedOpenRoot input sourceBoundary).hiddenWires.map
@@ -538,7 +538,7 @@ theorem semanticOpenRootHiddenWires_nodup
     exact layout.frameWire_ne_internalWire source target heq
 
 noncomputable def rootHiddenWireEquiv
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hsite : input.site = input.frame.val.root) :
     FiniteEquiv
@@ -555,7 +555,7 @@ noncomputable def rootHiddenWireEquiv
       semanticOpenRootHiddenWires_subset input layout sourceBoundary hsite wire⟩)
 
 theorem rootHiddenWireEquiv_spec
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hsite : input.site = input.frame.val.root)
     (index : Fin
@@ -569,7 +569,7 @@ theorem rootHiddenWireEquiv_spec
     (outputOpenRoot input layout sourceBoundary).hiddenWires _ _ _ index
 
 @[simp] theorem semanticOpenRootHiddenWires_length
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount)) :
     (semanticOpenRootHiddenWires input layout sourceBoundary).length =
       (coalescedOpenRoot input sourceBoundary).hiddenWires.length +
@@ -584,7 +584,7 @@ theorem rootHiddenWireEquiv_spec
 coalesced classes have been moved to the ambient block; the remaining host
 classes precede the terminal pattern locals. -/
 noncomputable def rootLocalWireEquivOfNonempty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hsite : input.site = input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
@@ -604,7 +604,7 @@ noncomputable def rootLocalWireEquivOfNonempty
 /-- Empty-spine local-wire equivalence; the pattern's hidden sheet-root wires
 are the terminal internal block. -/
 noncomputable def rootLocalWireEquivOfEmpty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hsite : input.site = input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0) :
@@ -621,7 +621,7 @@ noncomputable def rootLocalWireEquivOfEmpty
         (rootHiddenWireEquiv input layout sourceBoundary hsite))
 
 theorem rootLocalWireEquivOfNonempty_host_spec
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hsite : input.site = input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
@@ -646,7 +646,7 @@ theorem rootLocalWireEquivOfNonempty_host_spec
     (List.getElem_map layout.frameWire)
 
 theorem rootLocalWireEquivOfEmpty_host_spec
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hsite : input.site = input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0)
@@ -669,7 +669,7 @@ theorem rootLocalWireEquivOfEmpty_host_spec
     (List.getElem_map layout.frameWire)
 
 theorem rootLocalWireEquivOfNonempty_pattern_spec
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hsite : input.site = input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
@@ -714,7 +714,7 @@ theorem rootLocalWireEquivOfNonempty_pattern_spec
     (List.getElem_map layout.internalWire)
 
 theorem rootLocalWireEquivOfEmpty_pattern_spec
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (hsite : input.site = input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0)
@@ -760,7 +760,7 @@ theorem rootLocalWireEquivOfEmpty_pattern_spec
 /-- Reorder the plugged diagram's closed root context into the canonical
 open-root context determined by the caller's ordered boundary. -/
 noncomputable def outputExactContextToOpenRootWireEquiv
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -795,12 +795,12 @@ noncomputable def outputExactContextToOpenRootWireEquiv
             sourceRoot) wire).2
         change (layout.plugRaw.wires wire).scope = layout.plugRaw.root
         exact ConcreteElaboration.encloses_sheet_eq
-          (layout.plugRaw_wellFormed signature input hadmissible).root_is_sheet
+          (layout.plugRaw_wellFormed  input hadmissible).root_is_sheet
           hencloses
       )
 
 theorem outputExactContextToOpenRootWireEquiv_spec
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -813,35 +813,35 @@ theorem outputExactContextToOpenRootWireEquiv_spec
   FiniteEquiv.restrictLists_spec _ _ _ _ _ _ index
 
 theorem compiledOutputRootItemsIsoFromExactContext
-    (signature : List Nat) (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (context : ConcreteElaboration.WireContext layout.plugRaw)
     (exact : context.Exact layout.plugRaw.root)
-    {closedItems : ItemSeq signature context.length []}
-    {openItems : ItemSeq signature
+    {closedItems : ItemSeq  context.length []}
+    {openItems : ItemSeq
       (outputOpenRoot input layout sourceBoundary).rootWires.length []}
-    (hclosed : ConcreteElaboration.compileOccurrencesWith? signature
-      layout.plugRaw (ConcreteElaboration.compileRegion? signature
+    (hclosed : ConcreteElaboration.compileOccurrencesWith?
+      layout.plugRaw (ConcreteElaboration.compileRegion?
         layout.plugRaw layout.plugRaw.regionCount) context
       ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences layout.plugRaw layout.plugRaw.root) =
         some closedItems)
-    (hopen : ConcreteElaboration.compileOccurrencesWith? signature
-      layout.plugRaw (ConcreteElaboration.compileRegion? signature
+    (hopen : ConcreteElaboration.compileOccurrencesWith?
+      layout.plugRaw (ConcreteElaboration.compileRegion?
         layout.plugRaw layout.plugRaw.regionCount)
       (outputOpenRoot input layout sourceBoundary).rootWires
       ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences layout.plugRaw layout.plugRaw.root) =
         some openItems) :
-    ItemSeqIso signature
+    ItemSeqIso
       (outputExactContextToOpenRootWireEquiv input layout hadmissible
         sourceBoundary sourceRoot context exact) [] closedItems openItems := by
   apply ConcreteElaboration.compileRootItems?_equivariant
     (ConcreteIso.refl layout.plugRaw)
-    (layout.plugRaw_wellFormed signature input hadmissible) context
+    (layout.plugRaw_wellFormed  input hadmissible) context
     (outputOpenRoot input layout sourceBoundary).rootWires
     (outputExactContextToOpenRootWireEquiv input layout hadmissible
       sourceBoundary sourceRoot context exact)
@@ -853,7 +853,7 @@ theorem compiledOutputRootItemsIsoFromExactContext
   · exact hopen
 
 noncomputable def outputClosedToOpenRootWireEquiv
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -878,7 +878,7 @@ noncomputable def outputClosedToOpenRootWireEquiv
           sourceRoot) wire)
 
 theorem outputClosedToOpenRootWireEquiv_spec
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -898,39 +898,38 @@ theorem outputClosedToOpenRootWireEquiv_spec
 /-- The output compiler's closed-root item sequence and its actual open-root
 item sequence differ only by the canonical root-context reordering above. -/
 theorem compiledOutputRootItemsIso
-    (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
-    {closedItems : ItemSeq signature
+    {closedItems : ItemSeq
       (ConcreteElaboration.exactScopeWires layout.plugRaw
         layout.plugRaw.root).length []}
-    {openItems : ItemSeq signature
+    {openItems : ItemSeq
       (outputOpenRoot input layout sourceBoundary).rootWires.length []}
-    (hclosed : ConcreteElaboration.compileOccurrencesWith? signature
+    (hclosed : ConcreteElaboration.compileOccurrencesWith?
       layout.plugRaw
-      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      (ConcreteElaboration.compileRegion?  layout.plugRaw
         layout.plugRaw.regionCount)
       (ConcreteElaboration.exactScopeWires layout.plugRaw layout.plugRaw.root)
       ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences layout.plugRaw
         layout.plugRaw.root) = some closedItems)
-    (hopen : ConcreteElaboration.compileOccurrencesWith? signature
+    (hopen : ConcreteElaboration.compileOccurrencesWith?
       layout.plugRaw
-      (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      (ConcreteElaboration.compileRegion?  layout.plugRaw
         layout.plugRaw.regionCount)
       (outputOpenRoot input layout sourceBoundary).rootWires
       ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences layout.plugRaw
         layout.plugRaw.root) = some openItems) :
-    ItemSeqIso signature
+    ItemSeqIso
       (outputClosedToOpenRootWireEquiv input layout hadmissible
         sourceBoundary sourceRoot) [] closedItems openItems := by
   apply ConcreteElaboration.compileRootItems?_equivariant
     (ConcreteIso.refl layout.plugRaw)
-    (layout.plugRaw_wellFormed signature input hadmissible)
+    (layout.plugRaw_wellFormed  input hadmissible)
     (ConcreteElaboration.exactScopeWires layout.plugRaw layout.plugRaw.root)
     (outputOpenRoot input layout sourceBoundary).rootWires
     (outputClosedToOpenRootWireEquiv input layout hadmissible
@@ -988,14 +987,14 @@ theorem openRootRegionIso_of_closedItems
       (Fin (targetOuter + targetLocal)))
     (ambient : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
     (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
-    (closedSourceItems : ItemSeq signature closedSourceWires [])
-    (closedTargetItems : ItemSeq signature closedTargetWires [])
-    (openTargetItems : ItemSeq signature (targetOuter + targetLocal) [])
-    (hclosed : ItemSeqIso signature closedWire []
+    (closedSourceItems : ItemSeq  closedSourceWires [])
+    (closedTargetItems : ItemSeq  closedTargetWires [])
+    (openTargetItems : ItemSeq  (targetOuter + targetLocal) [])
+    (hclosed : ItemSeqIso  closedWire []
       closedSourceItems closedTargetItems)
-    (hopen : ItemSeqIso signature outputTransport []
+    (hopen : ItemSeqIso  outputTransport []
       closedTargetItems openTargetItems) :
-    RegionIso signature ambient []
+    RegionIso  ambient []
       (Region.mk sourceLocal
         (closedSourceItems.renameWires
           (closedSourceToOpenRootReindex closedWire outputTransport
@@ -1022,23 +1021,23 @@ theorem openRootRegionIso_of_closedItems_cast
     (targetEq : openTargetWires = targetOuter + targetLocal)
     (ambient : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
     (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
-    (closedSourceItems : ItemSeq signature closedSourceWires [])
-    (closedTargetItems : ItemSeq signature closedTargetWires [])
-    (openTargetItems : ItemSeq signature openTargetWires [])
-    (hclosed : ItemSeqIso signature closedWire []
+    (closedSourceItems : ItemSeq  closedSourceWires [])
+    (closedTargetItems : ItemSeq  closedTargetWires [])
+    (openTargetItems : ItemSeq  openTargetWires [])
+    (hclosed : ItemSeqIso  closedWire []
       closedSourceItems closedTargetItems)
-    (hopen : ItemSeqIso signature outputTransport []
+    (hopen : ItemSeqIso  outputTransport []
       closedTargetItems openTargetItems) :
     let castTransport := outputTransport.trans
       (FiniteEquiv.finCast targetEq)
-    RegionIso signature ambient []
+    RegionIso  ambient []
       (Region.mk sourceLocal
         (closedSourceItems.renameWires
           (closedSourceToOpenRootReindex closedWire castTransport
             ambient localEquiv)))
       (Region.mk targetLocal (openTargetItems.castWiresEq targetEq)) := by
   dsimp only
-  have hopenCast : ItemSeqIso signature
+  have hopenCast : ItemSeqIso
       (outputTransport.trans (FiniteEquiv.finCast targetEq)) []
       closedTargetItems (openTargetItems.castWiresEq targetEq) := by
     rw [ItemSeq.castWiresEq_eq_renameWires]
@@ -1055,8 +1054,7 @@ The target is the actual elaborated body of `outputOpenRoot`; callers supply
 only the already-established closed commuting item isomorphism and the
 intrinsic source split they intend to expose. -/
 theorem compiledOpenRootRegionIso_of_closedItems
-    (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1068,17 +1066,17 @@ theorem compiledOpenRootRegionIso_of_closedItems
     (closedWire : FiniteEquiv (Fin closedSourceWires)
       (Fin (ConcreteElaboration.exactScopeWires layout.plugRaw
         layout.plugRaw.root).length))
-    (closedSourceItems : ItemSeq signature closedSourceWires [])
-    {closedOutputItems : ItemSeq signature
+    (closedSourceItems : ItemSeq  closedSourceWires [])
+    {closedOutputItems : ItemSeq
       (ConcreteElaboration.exactScopeWires layout.plugRaw
         layout.plugRaw.root).length []}
-    {openOutputItems : ItemSeq signature
+    {openOutputItems : ItemSeq
       (outputOpenRoot input layout sourceBoundary).rootWires.length []}
-    (hclosed : ItemSeqIso signature closedWire []
+    (hclosed : ItemSeqIso  closedWire []
       closedSourceItems closedOutputItems)
     (closedOutputComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           layout.plugRaw.regionCount)
         (ConcreteElaboration.exactScopeWires layout.plugRaw
           layout.plugRaw.root)
@@ -1086,8 +1084,8 @@ theorem compiledOpenRootRegionIso_of_closedItems
         (ConcreteElaboration.localOccurrences layout.plugRaw
           layout.plugRaw.root) = some closedOutputItems)
     (openOutputComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           layout.plugRaw.regionCount)
         (outputOpenRoot input layout sourceBoundary).rootWires
         ConcreteElaboration.BinderContext.empty
@@ -1101,7 +1099,7 @@ theorem compiledOpenRootRegionIso_of_closedItems
     let outputTransport :=
       (outputClosedToOpenRootWireEquiv input layout hadmissible
         sourceBoundary sourceRoot).trans (FiniteEquiv.finCast targetEq)
-    RegionIso signature
+    RegionIso
       (rootExposedWireEquiv input layout sourceBoundary) []
       (Region.mk sourceLocal
         (closedSourceItems.renameWires
@@ -1110,7 +1108,7 @@ theorem compiledOpenRootRegionIso_of_closedItems
       (checkedOutputOpenRoot input layout hadmissible sourceBoundary
         sourceRoot).elaborate.body := by
   dsimp only
-  have hopen := compiledOutputRootItemsIso signature input layout hadmissible
+  have hopen := compiledOutputRootItemsIso  input layout hadmissible
     sourceBoundary sourceRoot closedOutputComputation openOutputComputation
   have hiso := openRootRegionIso_of_closedItems_cast closedWire
     (outputClosedToOpenRootWireEquiv input layout hadmissible
@@ -1126,8 +1124,8 @@ theorem compiledOpenRootRegionIso_of_closedItems
           (outputOpenRoot input layout sourceBoundary).hiddenWires
           openOutputItems := by
     have hitemsExpanded :
-        ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-          (ConcreteElaboration.compileRegion? signature layout.plugRaw
+        ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+          (ConcreteElaboration.compileRegion?  layout.plugRaw
             layout.plugRaw.regionCount)
           ((outputOpenRoot input layout sourceBoundary).exposedWires ++
             (outputOpenRoot input layout sourceBoundary).hiddenWires)
@@ -1136,9 +1134,9 @@ theorem compiledOpenRootRegionIso_of_closedItems
             layout.plugRaw.root) = some openOutputItems := by
       simpa only [OpenConcreteDiagram.rootWires] using openOutputComputation
     have hitemsOutput :
-        ConcreteElaboration.compileOccurrencesWith? signature
+        ConcreteElaboration.compileOccurrencesWith?
           (outputOpenRoot input layout sourceBoundary).diagram
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (outputOpenRoot input layout sourceBoundary).diagram
             (outputOpenRoot input layout sourceBoundary).diagram.regionCount)
           ((outputOpenRoot input layout sourceBoundary).exposedWires ++
@@ -1150,7 +1148,7 @@ theorem compiledOpenRootRegionIso_of_closedItems
           some openOutputItems := by
       simpa only [outputOpenRoot] using hitemsExpanded
     have hroot :
-        ConcreteElaboration.compileRoot? signature
+        ConcreteElaboration.compileRoot?
           (outputOpenRoot input layout sourceBoundary).diagram
           (outputOpenRoot input layout sourceBoundary).exposedWires
           (outputOpenRoot input layout sourceBoundary).hiddenWires =
@@ -1171,8 +1169,7 @@ This packages the commuting body result with its canonical external-class
 map, so clients receive the complete open-diagram semantics and never have to
 reconstruct boundary compatibility from list indices. -/
 noncomputable def compiledOpenRootIso_of_closedItems
-    (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1184,17 +1181,17 @@ noncomputable def compiledOpenRootIso_of_closedItems
     (closedWire : FiniteEquiv (Fin closedSourceWires)
       (Fin (ConcreteElaboration.exactScopeWires layout.plugRaw
         layout.plugRaw.root).length))
-    (closedSourceItems : ItemSeq signature closedSourceWires [])
-    {closedOutputItems : ItemSeq signature
+    (closedSourceItems : ItemSeq  closedSourceWires [])
+    {closedOutputItems : ItemSeq
       (ConcreteElaboration.exactScopeWires layout.plugRaw
         layout.plugRaw.root).length []}
-    {openOutputItems : ItemSeq signature
+    {openOutputItems : ItemSeq
       (outputOpenRoot input layout sourceBoundary).rootWires.length []}
-    (hclosed : ItemSeqIso signature closedWire []
+    (hclosed : ItemSeqIso  closedWire []
       closedSourceItems closedOutputItems)
     (closedOutputComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           layout.plugRaw.regionCount)
         (ConcreteElaboration.exactScopeWires layout.plugRaw
           layout.plugRaw.root)
@@ -1202,8 +1199,8 @@ noncomputable def compiledOpenRootIso_of_closedItems
         (ConcreteElaboration.localOccurrences layout.plugRaw
           layout.plugRaw.root) = some closedOutputItems)
     (openOutputComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           layout.plugRaw.regionCount)
         (outputOpenRoot input layout sourceBoundary).rootWires
         ConcreteElaboration.BinderContext.empty
@@ -1244,7 +1241,7 @@ noncomputable def compiledOpenRootIso_of_closedItems
       rootExposedWireEquiv_boundaryClass input layout sourceBoundary
         (Fin.cast (by
           simp [checkedCoalescedOpenRoot, coalescedOpenRoot]) position)
-  · exact compiledOpenRootRegionIso_of_closedItems signature input layout
+  · exact compiledOpenRootRegionIso_of_closedItems  input layout
       hadmissible sourceBoundary sourceRoot sourceLocal localEquiv closedWire
       closedSourceItems hclosed closedOutputComputation openOutputComputation
 
@@ -1252,8 +1249,7 @@ noncomputable def compiledOpenRootIso_of_closedItems
 hidden coalesced host block followed by the terminal pattern's exact block;
 the canonical local map is fixed by the splice layout. -/
 noncomputable def compiledOpenRootIsoOfNonempty
-    (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1264,17 +1260,17 @@ noncomputable def compiledOpenRootIsoOfNonempty
     (closedWire : FiniteEquiv (Fin closedSourceWires)
       (Fin (ConcreteElaboration.exactScopeWires layout.plugRaw
         layout.plugRaw.root).length))
-    (closedSourceItems : ItemSeq signature closedSourceWires [])
-    {closedOutputItems : ItemSeq signature
+    (closedSourceItems : ItemSeq  closedSourceWires [])
+    {closedOutputItems : ItemSeq
       (ConcreteElaboration.exactScopeWires layout.plugRaw
         layout.plugRaw.root).length []}
-    {openOutputItems : ItemSeq signature
+    {openOutputItems : ItemSeq
       (outputOpenRoot input layout sourceBoundary).rootWires.length []}
-    (hclosed : ItemSeqIso signature closedWire []
+    (hclosed : ItemSeqIso  closedWire []
       closedSourceItems closedOutputItems)
     (closedOutputComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           layout.plugRaw.regionCount)
         (ConcreteElaboration.exactScopeWires layout.plugRaw
           layout.plugRaw.root)
@@ -1282,14 +1278,14 @@ noncomputable def compiledOpenRootIsoOfNonempty
         (ConcreteElaboration.localOccurrences layout.plugRaw
           layout.plugRaw.root) = some closedOutputItems)
     (openOutputComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           layout.plugRaw.regionCount)
         (outputOpenRoot input layout sourceBoundary).rootWires
         ConcreteElaboration.BinderContext.empty
         (ConcreteElaboration.localOccurrences layout.plugRaw
           layout.plugRaw.root) = some openOutputItems) :=
-  compiledOpenRootIso_of_closedItems signature input layout hadmissible
+  compiledOpenRootIso_of_closedItems  input layout hadmissible
     sourceBoundary sourceRoot
     ((coalescedOpenRoot input sourceBoundary).hiddenWires.length +
       (ConcreteElaboration.exactScopeWires input.pattern.val.diagram
@@ -1301,8 +1297,7 @@ noncomputable def compiledOpenRootIsoOfNonempty
 /-- Empty-spine root specialization.  The terminal pattern's hidden sheet
 wires form the second source-local block. -/
 noncomputable def compiledOpenRootIsoOfEmpty
-    (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1313,17 +1308,17 @@ noncomputable def compiledOpenRootIsoOfEmpty
     (closedWire : FiniteEquiv (Fin closedSourceWires)
       (Fin (ConcreteElaboration.exactScopeWires layout.plugRaw
         layout.plugRaw.root).length))
-    (closedSourceItems : ItemSeq signature closedSourceWires [])
-    {closedOutputItems : ItemSeq signature
+    (closedSourceItems : ItemSeq  closedSourceWires [])
+    {closedOutputItems : ItemSeq
       (ConcreteElaboration.exactScopeWires layout.plugRaw
         layout.plugRaw.root).length []}
-    {openOutputItems : ItemSeq signature
+    {openOutputItems : ItemSeq
       (outputOpenRoot input layout sourceBoundary).rootWires.length []}
-    (hclosed : ItemSeqIso signature closedWire []
+    (hclosed : ItemSeqIso  closedWire []
       closedSourceItems closedOutputItems)
     (closedOutputComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           layout.plugRaw.regionCount)
         (ConcreteElaboration.exactScopeWires layout.plugRaw
           layout.plugRaw.root)
@@ -1331,14 +1326,14 @@ noncomputable def compiledOpenRootIsoOfEmpty
         (ConcreteElaboration.localOccurrences layout.plugRaw
           layout.plugRaw.root) = some closedOutputItems)
     (openOutputComputation :
-      ConcreteElaboration.compileOccurrencesWith? signature layout.plugRaw
-        (ConcreteElaboration.compileRegion? signature layout.plugRaw
+      ConcreteElaboration.compileOccurrencesWith?  layout.plugRaw
+        (ConcreteElaboration.compileRegion?  layout.plugRaw
           layout.plugRaw.regionCount)
         (outputOpenRoot input layout sourceBoundary).rootWires
         ConcreteElaboration.BinderContext.empty
         (ConcreteElaboration.localOccurrences layout.plugRaw
           layout.plugRaw.root) = some openOutputItems) :=
-  compiledOpenRootIso_of_closedItems signature input layout hadmissible
+  compiledOpenRootIso_of_closedItems  input layout hadmissible
     sourceBoundary sourceRoot
     ((coalescedOpenRoot input sourceBoundary).hiddenWires.length +
       input.pattern.val.hiddenWires.length)
@@ -1377,7 +1372,7 @@ theorem plugRaw_frameEndpoint_backward
     (n := layout.internalWires.count) (fun quotient => ?_)
     (fun internal => ?_) targetWire
   · intro hquotient
-    rcases quotient_endpoint_provenance _ input layout quotient
+    rcases quotient_endpoint_provenance input layout quotient
         (layout.mapFrameEndpoint endpoint) hquotient with
       ⟨original, horiginal, heq⟩ |
         ⟨external, _, original, _, heq⟩
@@ -1390,7 +1385,7 @@ theorem plugRaw_frameEndpoint_backward
           heq.symm)
   · intro hinternal
     obtain ⟨original, _, heq⟩ :=
-      internal_endpoint_provenance _ input layout internal
+      internal_endpoint_provenance input layout internal
         (layout.mapFrameEndpoint endpoint) hinternal
     exact False.elim
       (layout.mapFrameEndpoint_ne_mapPatternEndpoint endpoint original
@@ -1400,8 +1395,7 @@ theorem plugRaw_frameEndpoint_backward
 The contracts are exactly the concrete wire and binder lookups carried by the
 recursive compiler. -/
 theorem compileFrameNode_at_region_of_maps
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (region : Fin input.coalesceFrameRaw.regionCount)
@@ -1428,11 +1422,11 @@ theorem compileFrameNode_at_region_of_maps
         some ⟨arity, relationMap relation⟩)
     (node : Fin input.coalesceFrameRaw.nodeCount)
     (hnodeAtRegion : (input.coalesceFrameRaw.nodes node).region = region) :
-    ConcreteElaboration.compileNode? signature layout.plugRaw targetContext
+    ConcreteElaboration.compileNode?  layout.plugRaw targetContext
         targetBinders (layout.frameNode node) =
-      (ConcreteElaboration.compileNode? signature input.coalesceFrameRaw
+      (ConcreteElaboration.compileNode?  input.coalesceFrameRaw
         sourceContext sourceBinders node).map
-          (fun item : Item signature sourceContext.length sourceRels =>
+          (fun item : Item  sourceContext.length sourceRels =>
             (item.renameWires wireMap).renameRelations relationMap) := by
   apply ConcreteElaboration.compileNode?_map
     (regionMap := layout.frameRegion)
@@ -1451,11 +1445,6 @@ theorem compileFrameNode_at_region_of_maps
         change input.frame.val.nodes node = .atom region binder at hsource
         rw [hsource]
         rfl
-    | named region definition arity =>
-        change input.frame.val.nodes node = .named region definition arity
-          at hsource
-        rw [hsource]
-        rfl
   · intro port
     apply ConcreteElaboration.resolvePort?_map_of_occurrence
       (concreteWireMap := layout.frameWire)
@@ -1464,7 +1453,7 @@ theorem compileFrameNode_at_region_of_maps
       (hmem := layout.frameWire_mem_context_iff region sourceContext
         targetContext sourceExact targetExact)
       (targetDisjoint :=
-        (layout.plugRaw_wellFormed signature input hadmissible)
+        (layout.plugRaw_wellFormed  input hadmissible)
           |>.wire_endpoints_are_disjoint)
     · intro wire requested hoccurs
       simpa [mapFrameEndpoint] using
@@ -1497,8 +1486,7 @@ theorem compileFrameNode_at_region_of_maps
     exact relationSpec relation
 
 theorem compileFrameNode_at_region_iso
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (region : Fin input.coalesceFrameRaw.regionCount)
@@ -1528,16 +1516,16 @@ theorem compileFrameNode_at_region_iso
         some ⟨arity, relationMap relation⟩)
     (node : Fin input.coalesceFrameRaw.nodeCount)
     (hnodeAtRegion : (input.coalesceFrameRaw.nodes node).region = region)
-    (sourceItem : Item signature (sourceOuter.extend region).length sourceRels)
-    (targetItem : Item signature
+    (sourceItem : Item  (sourceOuter.extend region).length sourceRels)
+    (targetItem : Item
       (targetOuter.extend (layout.frameRegion region)).length targetRels)
-    (hsource : ConcreteElaboration.compileNode? signature
+    (hsource : ConcreteElaboration.compileNode?
       input.coalesceFrameRaw (sourceOuter.extend region) sourceBinders node =
         some sourceItem)
-    (htarget : ConcreteElaboration.compileNode? signature layout.plugRaw
+    (htarget : ConcreteElaboration.compileNode?  layout.plugRaw
       (targetOuter.extend (layout.frameRegion region)) targetBinders
         (layout.frameNode node) = some targetItem) :
-    ItemIso signature
+    ItemIso
       (extendWireEquiv (FiniteEquiv.refl (Fin targetOuter.length))
         (layout.frameLocalWireEquiv region hne)) targetRels
       ((sourceItem.renameWires
@@ -1550,7 +1538,7 @@ theorem compileFrameNode_at_region_iso
     sourceOuter targetOuter outerMap
   have hextendedSpec := layout.frameExtendedWireMap_spec region hne
     sourceOuter targetOuter outerMap outerSpec
-  have htransport := layout.compileFrameNode_at_region_of_maps signature input
+  have htransport := layout.compileFrameNode_at_region_of_maps  input
     hadmissible region (sourceOuter.extend region)
     (targetOuter.extend (layout.frameRegion region)) sourceExact targetExact
     sourceBinders targetBinders sourceCover sourceEnumeration extendedMap
@@ -1584,8 +1572,7 @@ theorem compileFrameNode_at_region_iso
     hfactor] using hiso
 
 theorem frameRecursiveRegionIso
-    (signature : List Nat)
-    (input : Input signature)
+    (input : Input )
     (layout : PlugLayout input)
     (region : Fin input.coalesceFrameRaw.regionCount)
     (hne : region ≠ input.site)
@@ -1593,17 +1580,17 @@ theorem frameRecursiveRegionIso
     (targetOuter : ConcreteElaboration.WireContext layout.plugRaw)
     (outerMap : Fin sourceOuter.length → Fin targetOuter.length)
     (relationMap : RelationRenaming sourceRels targetRels)
-    (sourceBody : Region signature (sourceOuter.extend region).length sourceRels)
-    (targetBody : Region signature
+    (sourceBody : Region  (sourceOuter.extend region).length sourceRels)
+    (targetBody : Region
       (targetOuter.extend (layout.frameRegion region)).length targetRels)
-    (hrecursive : RegionIso signature
+    (hrecursive : RegionIso
       (FiniteEquiv.refl
         (Fin (targetOuter.extend (layout.frameRegion region)).length)) targetRels
       ((sourceBody.renameWires
         (layout.frameExtendedWireMap region hne sourceOuter targetOuter
           outerMap)).renameRelations relationMap)
       targetBody) :
-    RegionIso signature
+    RegionIso
       (extendWireEquiv (FiniteEquiv.refl (Fin targetOuter.length))
         (layout.frameLocalWireEquiv region hne)) targetRels
       ((sourceBody.renameWires
@@ -1632,7 +1619,7 @@ theorem frameRecursiveRegionIso
       layout.frameExtendedWireMap_factor region hne sourceOuter targetOuter
         outerMap
   have hfirstRaw := RegionIso.renameWiresEquiv sourcePrepared toTargetContext
-  have hfirst : RegionIso signature toTargetContext targetRels sourcePrepared
+  have hfirst : RegionIso  toTargetContext targetRels sourcePrepared
       ((sourceBody.renameWires
         (layout.frameExtendedWireMap region hne sourceOuter targetOuter
           outerMap)).renameRelations relationMap) := by
@@ -1641,7 +1628,7 @@ theorem frameRecursiveRegionIso
       Region.renameWires_comp, hmap] using hfirstRaw
   have hlastRaw := RegionIso.renameWiresEquiv targetBody
     (FiniteEquiv.finCast targetEq)
-  have hlast : RegionIso signature (FiniteEquiv.finCast targetEq) targetRels
+  have hlast : RegionIso  (FiniteEquiv.finCast targetEq) targetRels
       targetBody (targetBody.castWiresEq targetEq) := by
     simpa only [Region.castWiresEq_eq_renameWires,
       FiniteEquiv.finCast] using hlastRaw

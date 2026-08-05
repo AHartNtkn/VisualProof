@@ -8,10 +8,10 @@ open Rule
 
 /-- Execute one rule on an open proof state. A successful concrete rewrite is
 rejected when it deletes any pinned boundary identity. -/
-def applyOpenStep (context : ProofContext signature)
-    (orientation : Orientation) (input : OpenProofState signature)
+def applyOpenStep (context : ProofContext )
+    (orientation : Orientation) (input : OpenProofState )
     (action : Step context input.diagram) :
-    Except StepError (OpenProofState signature) :=
+    Except StepError (OpenProofState ) :=
   match applyStep context orientation input.diagram action with
   | .error error => .error error
   | .ok receipt =>
@@ -22,19 +22,19 @@ def applyOpenStep (context : ProofContext signature)
 /-- A typed executable proof program indexed by the complete open state. The
 continuation is indexed by the actual boundary-transported result of the sole
 dispatcher, so neither a diagram nor its boundary can be substituted. -/
-inductive Program (context : ProofContext signature) (orientation : Orientation) :
-    OpenProofState signature → Type
+inductive Program (context : ProofContext ) (orientation : Orientation) :
+    OpenProofState  → Type
   | done (input) : Program context orientation input
-  | step {input : OpenProofState signature}
+  | step {input : OpenProofState }
       (action : Step context input.diagram)
       (next : ∀ result,
         applyOpenStep context orientation input action = .ok result →
           Program context orientation result) :
       Program context orientation input
 
-def replay (context : ProofContext signature) (orientation : Orientation) :
-    (input : OpenProofState signature) → Program context orientation input →
-      Except StepError (OpenProofState signature)
+def replay (context : ProofContext ) (orientation : Orientation) :
+    (input : OpenProofState ) → Program context orientation input →
+      Except StepError (OpenProofState )
   | input, .done _ => .ok input
   | input, .step action next =>
       match happly : applyOpenStep context orientation input action with
@@ -42,10 +42,10 @@ def replay (context : ProofContext signature) (orientation : Orientation) :
       | .ok result => replay context orientation result (next result happly)
 
 /-- Closed replay is the empty-boundary specialization of open replay. -/
-def replayClosed (context : ProofContext signature)
-    (orientation : Orientation) (input : CheckedDiagram signature)
+def replayClosed (context : ProofContext )
+    (orientation : Orientation) (input : CheckedDiagram )
     (program : Program context orientation (OpenProofState.closed input)) :
-    Except StepError (OpenProofState signature) :=
+    Except StepError (OpenProofState ) :=
   replay context orientation (OpenProofState.closed input) program
 
 /-- Transport an ordered boundary assignment along the positional arity
@@ -74,28 +74,28 @@ theorem transportArgs_trans
 The equality records that the same ordered boundary positions survive, while
 `sound` records the implication in the selected proof orientation. -/
 structure ReplayEntailment (orientation : Orientation)
-    (source target : OpenProofState signature)
-    (model : Model) (named : NamedEnv model.Carrier signature) : Prop where
+    (source target : OpenProofState )
+    (model : Model) : Prop where
   boundaryLength : target.boundary.length = source.boundary.length
   sound : ∀ args : Fin source.boundary.length → model.Carrier,
     DirectedImplication orientation
-      (source.denote model named args)
-      (target.denote model named
+      (source.denote model  args)
+      (target.denote model
         (transportArgs boundaryLength args))
 
 namespace ReplayEntailment
 
-theorem refl (orientation : Orientation) (state : OpenProofState signature)
-    (model : Model) (named : NamedEnv model.Carrier signature) :
-    ReplayEntailment orientation state state model named := by
+theorem refl (orientation : Orientation) (state : OpenProofState )
+    (model : Model) :
+    ReplayEntailment orientation state state model  := by
   refine ⟨rfl, ?_⟩
   intro args
   cases orientation <;> exact id
 
 theorem trans
-    (first : ReplayEntailment orientation source middle model named)
-    (second : ReplayEntailment orientation middle target model named) :
-    ReplayEntailment orientation source target model named := by
+    (first : ReplayEntailment orientation source middle model )
+    (second : ReplayEntailment orientation middle target model ) :
+    ReplayEntailment orientation source target model  := by
   refine ⟨second.boundaryLength.trans first.boundaryLength, ?_⟩
   intro args
   have htransport := transportArgs_trans first.boundaryLength
@@ -109,7 +109,7 @@ theorem trans
       simpa only [htransport] using targetDenotes
   | backward =>
       intro targetDenotes
-      have targetDenotes' : target.denote model named
+      have targetDenotes' : target.denote model
           (transportArgs second.boundaryLength
             (transportArgs first.boundaryLength args)) := by
         simpa only [htransport] using targetDenotes
@@ -134,8 +134,7 @@ dispatcher theorem; replay has no separately supplied soundness authority. -/
 theorem applyOpenStep_sound
     (happly : applyOpenStep context orientation input action = .ok result)
     (valid : context.Valid model) :
-    ReplayEntailment orientation input result model
-      (Theory.interpretDefinitions model context.definitions) := by
+    ReplayEntailment orientation input result model := by
   unfold applyOpenStep at happly
   split at happly
   · contradiction
@@ -159,14 +158,13 @@ theorem replay_sound
     (program : Program context orientation input)
     (hreplay : replay context orientation input program = .ok finish)
     (valid : context.Valid model) :
-    ReplayEntailment orientation input finish model
-      (Theory.interpretDefinitions model context.definitions) := by
+    ReplayEntailment orientation input finish model := by
   induction program with
   | done input =>
       simp [replay] at hreplay
       cases hreplay
       exact ReplayEntailment.refl orientation finish
-        model (Theory.interpretDefinitions model context.definitions)
+        model
   | @step input action next ih =>
       simp only [replay] at hreplay
       split at hreplay
@@ -183,10 +181,8 @@ theorem forward_replay_sound
     (valid : context.Valid model) :
     ∃ length_eq : finish.boundary.length = input.boundary.length,
       ∀ args : Fin input.boundary.length → model.Carrier,
-        input.denote model
-            (Theory.interpretDefinitions model context.definitions) args →
+        input.denote model args →
           finish.denote model
-            (Theory.interpretDefinitions model context.definitions)
             (transportArgs length_eq args) := by
   let sound := replay_sound program hreplay valid
   exact ⟨sound.boundaryLength, sound.sound⟩
@@ -200,10 +196,8 @@ theorem backward_replay_sound
     ∃ length_eq : reduced.boundary.length = goal.boundary.length,
       ∀ args : Fin goal.boundary.length → model.Carrier,
         reduced.denote model
-            (Theory.interpretDefinitions model context.definitions)
             (transportArgs length_eq args) →
-          goal.denote model
-            (Theory.interpretDefinitions model context.definitions) args := by
+          goal.denote model args := by
   let sound := replay_sound program hreplay valid
   exact ⟨sound.boundaryLength, sound.sound⟩
 

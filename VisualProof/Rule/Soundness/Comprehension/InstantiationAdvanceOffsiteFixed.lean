@@ -12,16 +12,15 @@ namespace InstantiationSemantic
 /-- Backward fixed-relation transport for the survivor conjunction of a frame
 region strictly below the moving bubble and distinct from the splice site. -/
 theorem advance_offsite_items_denote_fixed
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -75,7 +74,6 @@ theorem advance_offsite_items_denote_fixed
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -100,14 +98,14 @@ theorem advance_offsite_items_denote_fixed
       (child : Fin state.diagram.val.regionCount),
       state.diagram.val.Encloses state.bubble child →
       FixedAdvanceRegionSimulation comprehension attachments binders payload
-        state atom tail site arguments hadmissible model named relationValue
+        state atom tail site arguments hadmissible model  relationValue
         values parameterValues direction sourceFuel targetFuel child)
-    (sourceItems : ItemSeq signature sourceContext.length sourceRels)
-    (targetItems : ItemSeq signature targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (sourceItems : ItemSeq  sourceContext.length sourceRels)
+    (targetItems : ItemSeq  targetContext.length targetRels)
+    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw
-      (compileSurvivorRegion? signature
+      (compileSurvivorRegion?
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible) sourceFuel)
       sourceContext sourceBinders
@@ -117,10 +115,10 @@ theorem advance_offsite_items_denote_fixed
         (dropOccurrenceSurvives
           (coalescedInstantiationState comprehension attachments binders
             payload state site arguments hadmissible))) = some sourceItems)
-    (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (targetCompiled : ConcreteElaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
-      (compileSurvivorRegion? signature
+      (compileSurvivorRegion?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible) targetFuel)
       targetContext targetBinders
@@ -132,20 +130,20 @@ theorem advance_offsite_items_denote_fixed
         (dropOccurrenceSurvives
           (advanceInstantiationState comprehension attachments binders payload
             state atom tail site arguments hadmissible))) = some targetItems)
-    (targetDenotes : denoteItemSeq model named targetEnv targetRelEnv targetItems) :
-    denoteItemSeq model named sourceEnv
+    (targetDenotes : denoteItemSeq model  targetEnv targetRelEnv targetItems) :
+    denoteItemSeq model  sourceEnv
       (RelEnv.pullback relationMap targetRelEnv) sourceItems := by
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
   let layout := spliceInput.plugLayout
   let coalesced := coalescedInstantiationState comprehension attachments binders
     payload state site arguments hadmissible
-  apply (denoteItemSeq_iff_get model named sourceEnv
+  apply (denoteItemSeq_iff_get model  sourceEnv
     (RelEnv.pullback relationMap targetRelEnv) sourceItems).2
   intro sourceItemIndex
   let sourceOccurrenceIndex := Fin.cast
     (ConcreteElaboration.compileOccurrencesWith?_length
-      (compileSurvivorRegion? signature coalesced sourceFuel) sourceContext
+      (compileSurvivorRegion?  coalesced sourceFuel) sourceContext
       sourceBinders sourceCompiled) sourceItemIndex
   generalize occurrenceEq :
     ((ConcreteElaboration.localOccurrences coalesced.diagram.val region).filter
@@ -154,11 +152,11 @@ theorem advance_offsite_items_denote_fixed
     ((ConcreteElaboration.localOccurrences coalesced.diagram.val region).filter
       (dropOccurrenceSurvives coalesced)) sourceOccurrenceIndex
   have sourceAt := ConcreteElaboration.compileOccurrencesWith?_get
-    (compileSurvivorRegion? signature coalesced sourceFuel) sourceContext
+    (compileSurvivorRegion?  coalesced sourceFuel) sourceContext
     sourceBinders sourceCompiled sourceOccurrenceIndex
-  have sourceAt' : ConcreteElaboration.compileOccurrenceWith? signature
+  have sourceAt' : ConcreteElaboration.compileOccurrenceWith?
       spliceInput.coalesceFrameRaw
-      (compileSurvivorRegion? signature coalesced sourceFuel)
+      (compileSurvivorRegion?  coalesced sourceFuel)
       sourceContext sourceBinders occurrence =
         some (sourceItems.get sourceItemIndex) := by
     rw [← occurrenceEq]
@@ -188,7 +186,7 @@ theorem advance_offsite_items_denote_fixed
             have siteEqRegion : site = region := by
               simpa [atomRegion] using localRegion
             exact hne siteEqRegion.symm)
-      targetFuel targetContext targetBinders model named targetEnv targetRelEnv
+      targetFuel targetContext targetBinders model  targetEnv targetRelEnv
       targetItems targetCompiled targetDenotes
   cases occurrence with
   | node node =>
@@ -197,7 +195,7 @@ theorem advance_offsite_items_denote_fixed
       exact frameNode_denotes_of_mapped spliceInput hadmissible region
         sourceContext targetContext sourceExact targetExact sourceBinders
         targetBinders sourceCover sourceEnumeration wireMap wireSpec relationMap
-        relationSpec node nodeRegion model named sourceEnv targetEnv environmentEq
+        relationSpec node nodeRegion model  sourceEnv targetEnv environmentEq
         (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
         (RelEnv.pullback_agrees relationMap targetRelEnv)
         (sourceItems.get sourceItemIndex) targetItem
@@ -211,7 +209,7 @@ theorem advance_offsite_items_denote_fixed
         sourceFuel targetFuel region bubbleEnclosesRegion sourceContext
         targetContext sourceExact targetExact sourceBinders targetBinders
         sourceCover targetCover sourceEnumeration targetEnumeration wireMap
-        wireSpec relationMap relationSpec model named relationValue values
+        wireSpec relationMap relationSpec model  relationValue values
         parameterValues
         sourceEnv targetEnv targetRelEnv environmentEq targetFixed targetProxies
         targetParameters childSimulation child occurrenceMember

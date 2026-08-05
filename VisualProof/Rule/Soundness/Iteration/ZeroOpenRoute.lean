@@ -10,7 +10,7 @@ open VisualProof.Diagram
 open VisualProof.Theory
 
 structure ProperIterationRootOpenTargetAlignment
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -37,7 +37,7 @@ structure ProperIterationRootOpenTargetAlignment
 
 /-- The proper iteration target remains nested in the coalesced frame. -/
 theorem ProperIterationRootOpenAnchorContraction.target_ne_root_fact
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -52,7 +52,7 @@ theorem ProperIterationRootOpenAnchorContraction.target_ne_root_fact
 /-- Coordinate transport from the executor's coalesced-open target focus to
 the contraction certificate's route-relative focus. -/
 noncomputable def ProperIterationRootOpenTargetAlignment.sourceWire
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -73,7 +73,7 @@ noncomputable def ProperIterationRootOpenTargetAlignment.sourceWire
     (FiniteEquiv.finCast alignment.holeWires_eq)
 
 def ProperIterationRootOpenTargetAlignment.sourceRelsEq
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -92,7 +92,7 @@ def ProperIterationRootOpenTargetAlignment.sourceRelsEq
 /-- Exact inherited-wire transport from the canonical coalesced-open target
 leaf to the route-relative terminal leaf retained by the contraction. -/
 noncomputable def ProperIterationRootOpenAnchorContraction.terminalSourceWire
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -123,7 +123,7 @@ noncomputable def ProperIterationRootOpenAnchorContraction.terminalSourceWire
 /-- The terminal compiler coordinate retained by the contraction is exactly
 the intrinsic hole coordinate of the executor's root-to-target context. -/
 theorem ProperIterationRootOpenAnchorContraction.terminalSourceWire_eq_sourceWire
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -183,7 +183,7 @@ theorem ProperIterationRootOpenAnchorContraction.terminalSourceWire_eq_sourceWir
 same complete source body as filling the executor's canonical target context
 with that replacement in target coordinates. -/
 theorem ProperIterationRootOpenAnchorContraction.modifiedBody_eq_targetFill
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -198,7 +198,7 @@ theorem ProperIterationRootOpenAnchorContraction.modifiedBody_eq_targetFill
     let sourceView := Splice.Input.compiledSpliceCoalescedOpenView
       (iterationInput input selection target) hadmissible sourceBoundary
         sourceRoot
-    let replacementAtSource : Region signature sourceView.focus.holeWires
+    let replacementAtSource : Region  sourceView.focus.holeWires
         sourceView.focus.holeRels :=
       alignment.sourceRelsEq.symm ▸
         certificate.replacement.renameWires alignment.sourceWire.symm
@@ -234,14 +234,14 @@ theorem ProperIterationRootOpenAnchorContraction.modifiedBody_eq_targetFill
   have alignmentHoleRels : alignmentRels =
       (congrArg (fun witness => witness.toFocus.holeRels)
         fullEq.symm).trans fullHoleRels := Subsingleton.elim _ _
-  let nestedReplacement : Region signature nested.toFocus.holeWires
+  let nestedReplacement : Region  nested.toFocus.holeWires
       nested.toFocus.holeRels :=
     Region.transportEq
       (anchorView.intrinsicPath.nest_toFocus_holeWires
         certificate.witness).symm
       (anchorView.intrinsicPath.nest_toFocus_holeRels
         certificate.witness).symm certificate.replacement
-  let fullReplacement : Region signature full.toFocus.holeWires
+  let fullReplacement : Region  full.toFocus.holeWires
       full.toFocus.holeRels :=
     Region.transportEq
       (Region.ContextPath.castPath_toFocus_holeWires pathEq nested).symm
@@ -258,7 +258,7 @@ theorem ProperIterationRootOpenAnchorContraction.modifiedBody_eq_targetFill
     simpa only [fullReplacement, nestedReplacement, Region.transportEq,
       full, nested] using
       castFill.trans nestedFill
-  let alignmentReplacement : Region signature
+  let alignmentReplacement : Region
       alignmentFull.toFocus.holeWires alignmentFull.toFocus.holeRels :=
     Region.transportEq alignmentWires.symm alignmentRels.symm
       certificate.replacement
@@ -291,7 +291,7 @@ theorem ProperIterationRootOpenAnchorContraction.modifiedBody_eq_targetFill
     (fun witness => witness.toFocus.holeWires) alignmentTarget
   let targetRelsEq := congrArg
     (fun witness => witness.toFocus.holeRels) alignmentTarget
-  let targetReplacement : Region signature sourceView.focus.holeWires
+  let targetReplacement : Region  sourceView.focus.holeWires
       sourceView.focus.holeRels :=
     Region.transportEq targetWireEq targetRelsEq alignmentReplacement
   have sourceWireInv :
@@ -362,7 +362,7 @@ theorem ProperIterationRootOpenAnchorContraction.modifiedBody_eq_targetFill
 /-- The contraction certificate and the executor's canonical coalesced-open
 compiler choose the same concrete outer-wire map at the insertion site. -/
 theorem ProperIterationRootOpenAnchorContraction.actualWire_eq_compilerOuterWire
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -446,7 +446,7 @@ theorem ProperIterationRootOpenAnchorContraction.actualWire_eq_compilerOuterWire
 the canonical coalesced-open compiler wire gives the source actual used by
 the generic splice semantics. -/
 theorem iterationActualSplice_root_pulled_eq_compiled
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -475,7 +475,7 @@ theorem iterationActualSplice_root_pulled_eq_compiled
     let canonicalWire := Splice.Input.compilerLeafOuterWire
       sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
         sourceHostInherited
-    let actual : Region signature host.focus.holeWires host.focus.holeRels :=
+    let actual : Region  host.focus.holeWires host.focus.holeRels :=
       iterationActualSpliceOfEmpty input selection target hadmissible
     (hrels.symm ▸ actual).renameWires canonicalWire.symm =
         Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
@@ -514,7 +514,7 @@ theorem iterationActualSplice_root_pulled_eq_compiled
         host.compilerLeaf.inheritedWires spliceInput.site)
       (spliceInput.plugLayout.exposedWireRenaming hadmissible host index))
     (Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels)
-  let actual : Region signature host.focus.holeWires host.focus.holeRels :=
+  let actual : Region  host.focus.holeWires host.focus.holeRels :=
     iterationActualSpliceOfEmpty input selection target hadmissible
   have actualEq : iterationActualSpliceOfEmpty input selection target
       hadmissible =
@@ -531,7 +531,7 @@ theorem iterationActualSplice_root_pulled_eq_compiled
     simpa [iterationActualSpliceOfEmpty, spliceInput, host, pattern,
       rawSource, localWires, items, wire,
       Region.castWiresEq_proof_irrel] using
-      (spliceAt_castOuter (signature := signature)
+      (spliceAt_castOuter
         host.compilerLeaf.inheritedLength items material wire
         (Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels))
   have wireEq : canonicalWire = sourceHostWire.trans
@@ -546,7 +546,7 @@ theorem iterationActualSplice_root_pulled_eq_compiled
   exact pulledCastWires_eq hrels host.compilerLeaf.inheritedLength rawSource
     sourceHostWire canonicalWire wireEq
 theorem ProperIterationRootOpenAnchorContraction.replacementAtSource_iso_compiled
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -570,12 +570,12 @@ theorem ProperIterationRootOpenAnchorContraction.replacementAtSource_iso_compile
             host.compilerLeaf)
     let sourceRelsEq := alignment.sourceRelsEq
     let hrels := sourceRelsEq.trans certificate.actualRelsEq
-    let replacementAtSource : Region signature sourceView.focus.holeWires
+    let replacementAtSource : Region  sourceView.focus.holeWires
         sourceView.focus.holeRels :=
       sourceRelsEq.symm ▸
         certificate.replacement.renameWires
           certificate.terminalSourceWire.symm
-    RegionIso signature (canonicalWire.trans canonicalWire.symm)
+    RegionIso  (canonicalWire.trans canonicalWire.symm)
       sourceView.focus.holeRels replacementAtSource
       (Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
         spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
@@ -595,9 +595,9 @@ theorem ProperIterationRootOpenAnchorContraction.replacementAtSource_iso_compile
       (Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
         sourceView.intrinsicPath sourceLeaf host.intrinsicPath
           host.compilerLeaf)
-  let actual : Region signature host.focus.holeWires host.focus.holeRels :=
+  let actual : Region  host.focus.holeWires host.focus.holeRels :=
     iterationActualSpliceOfEmpty input selection target hadmissible
-  let replacementAtSource : Region signature sourceView.focus.holeWires
+  let replacementAtSource : Region  sourceView.focus.holeWires
       sourceView.focus.holeRels :=
     sourceRelsEq.symm ▸
       certificate.replacement.renameWires sourceWire.symm
@@ -630,11 +630,11 @@ theorem ProperIterationRootOpenAnchorContraction.replacementAtSource_iso_compile
         hzero hrels
   dsimp only at compiledToRaw
   have renamedPulledEq := congrArg
-    (fun region : Region signature sourceView.focus.holeWires
+    (fun region : Region  sourceView.focus.holeWires
         sourceView.focus.holeRels =>
       region.renameRelations (Splice.Input.relationRenamingOfEq hrels))
     pulledEq
-  have compiledToRaw' : RegionIso signature canonicalWire
+  have compiledToRaw' : RegionIso  canonicalWire
       host.focus.holeRels
       (compiledActual.renameRelations
         (Splice.Input.relationRenamingOfEq hrels)) actual := by
@@ -655,7 +655,7 @@ theorem ProperIterationRootOpenAnchorContraction.replacementAtSource_iso_compile
     sourceRelsEq, hrels, replacementAtSource, compiledActual] using
     RegionIso.castTargetEq castBack normalized
 theorem properIterationRootOpenTargetAlignment_complete
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -696,7 +696,7 @@ theorem properIterationRootOpenTargetAlignment_complete
     holeRels_eq := holeRelsEq
   }⟩
 theorem properIterationRootOpen_compiledSource_equiv
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -708,16 +708,15 @@ theorem properIterationRootOpen_compiledSource_equiv
       hadmissible sourceBoundary sourceRoot)
     (alignment : ProperIterationRootOpenTargetAlignment certificate)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
         (iterationInput input selection target) hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
           (iterationInput input selection target) hadmissible sourceBoundary
           sourceRoot).elaborate args ↔
-      denoteOpen model named
+      denoteOpen model
         (Splice.Input.compiledSpliceNestedSourceOfEmpty
           (iterationInput input selection target)
           (iterationInput input selection target).plugLayout hadmissible
@@ -736,7 +735,7 @@ theorem properIterationRootOpen_compiledSource_equiv
         sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf)
   let sourceRelsEq := alignment.sourceRelsEq
   let hrels := sourceRelsEq.trans certificate.actualRelsEq
-  let replacementAtSource : Region signature sourceView.focus.holeWires
+  let replacementAtSource : Region  sourceView.focus.holeWires
       sourceView.focus.holeRels :=
     sourceRelsEq.symm ▸
       certificate.replacement.renameWires alignment.sourceWire.symm
@@ -749,7 +748,7 @@ theorem properIterationRootOpen_compiledSource_equiv
   let modifiedBody := anchorView.focus.context.fill
     (certificate.witness.toFocus.context.fill certificate.replacement)
   let compiledBody := sourceView.focus.context.fill compiledActual
-  have replacementIso : RegionIso signature
+  have replacementIso : RegionIso
       (canonicalWire.trans canonicalWire.symm) sourceView.focus.holeRels
       replacementAtSource compiledActual := by
     have core := certificate.replacementAtSource_iso_compiled hzero alignment
@@ -759,10 +758,10 @@ theorem properIterationRootOpen_compiledSource_equiv
   have replacementEquiv : ∀
       (environment : Fin sourceView.focus.holeWires → model.Carrier)
       (relations : RelEnv model.Carrier sourceView.focus.holeRels),
-      denoteRegion model named environment relations replacementAtSource ↔
-        denoteRegion model named environment relations compiledActual := by
+      denoteRegion model  environment relations replacementAtSource ↔
+        denoteRegion model  environment relations compiledActual := by
     intro environment relations
-    apply replacementIso.denotation model named environment environment
+    apply replacementIso.denotation model  environment environment
       relations
     intro index
     change environment (canonicalWire.symm (canonicalWire index)) =
@@ -771,26 +770,26 @@ theorem properIterationRootOpen_compiledSource_equiv
   have bodyEq := certificate.modifiedBody_eq_targetFill alignment
   have bodyEquiv : ∀ environment : Fin source.externalClasses →
       model.Carrier,
-      denoteRegion (relCtx := []) model named environment PUnit.unit
+      denoteRegion (relCtx := []) model  environment PUnit.unit
           modifiedBody ↔
-        denoteRegion (relCtx := []) model named environment PUnit.unit
+        denoteRegion (relCtx := []) model  environment PUnit.unit
           compiledBody := by
     intro environment
     dsimp only [modifiedBody, compiledBody]
     rw [bodyEq]
     exact DiagramContext.fill_equiv sourceView.focus.context
-      replacementAtSource compiledActual model named environment PUnit.unit
+      replacementAtSource compiledActual model  environment PUnit.unit
       replacementEquiv
-  have whole := certificate.wholeOpen_equiv model named args
+  have whole := certificate.wholeOpen_equiv model  args
   have replacements :
-      denoteOpen model named (Splice.replaceOpenBody source modifiedBody) args ↔
-        denoteOpen model named (Splice.replaceOpenBody source compiledBody)
+      denoteOpen model  (Splice.replaceOpenBody source modifiedBody) args ↔
+        denoteOpen model  (Splice.replaceOpenBody source compiledBody)
           args := by
     constructor
     · exact Splice.denote_replaceOpenBody_mono source modifiedBody compiledBody
-        model named args (fun environment => (bodyEquiv environment).mp)
+        model  args (fun environment => (bodyEquiv environment).mp)
     · exact Splice.denote_replaceOpenBody_mono source compiledBody modifiedBody
-        model named args (fun environment => (bodyEquiv environment).mpr)
+        model  args (fun environment => (bodyEquiv environment).mpr)
   obtain ⟨_terminalRels, terminalBinders⟩ :=
     Splice.Input.compiledSpliceCoalescedHost_terminalLexical spliceInput
       hadmissible sourceBoundary sourceRoot certificate.target_ne_root
@@ -800,13 +799,13 @@ theorem properIterationRootOpen_compiledSource_equiv
   exact whole.trans (replacements.trans
     (by simpa [Splice.Input.compiledSpliceNestedCoalescedActualOpenOfEmpty,
       source, sourceView, compiledBody, compiledActual, spliceInput] using
-      actualIso.denoteOpen_iff model named args))
+      actualIso.denoteOpen_iff model  args))
 theorem properIterationRootOpen_output_equiv
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
-    {result : CheckedDiagram signature}
-    (hsplice : Splice.Input.spliceChecked signature
+    {result : CheckedDiagram }
+    (hsplice : Splice.Input.spliceChecked
       (iterationInput input selection target) = .ok result)
     {sourceBoundary : List (Fin input.val.wireCount)}
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -818,9 +817,8 @@ theorem properIterationRootOpen_output_equiv
       sourceRoot)
     (alignment : ProperIterationRootOpenTargetAlignment certificate)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
-    let source : OpenProofState signature := {
+    let source : OpenProofState  := {
       diagram := input
       boundary := sourceBoundary
       boundary_root_scoped := sourceRoot
@@ -829,15 +827,15 @@ theorem properIterationRootOpen_output_equiv
       (iterationInput input selection target)
       (iterationInput input selection target).plugLayout
       (Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary sourceRoot
-    source.denote model named args ↔
-      output.denote model named
+    source.denote model  args ↔
+      output.denote model
         (args ∘ Fin.cast (by
           change (sourceBoundary.map _).length = sourceBoundary.length
           exact List.length_map (as := sourceBoundary) _)) := by
   dsimp only
   let spliceInput := iterationInput input selection target
   let hadmissible := (Splice.Input.spliceChecked_sound hsplice).2.1
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := sourceBoundary
     boundary_root_scoped := sourceRoot
@@ -855,20 +853,20 @@ theorem properIterationRootOpen_output_equiv
   have frameIso := iterationCoalescedOpenIso input selection target
     sourceBoundary
   have frameEquiv := frameIso.denote_iff coalesced.property
-    source.asCheckedOpen.property model named compilerArgs
-  have sourceToCoalesced : source.denote model named args ↔
-      coalesced.denote model named compilerArgs := by
+    source.asCheckedOpen.property model  compilerArgs
+  have sourceToCoalesced : source.denote model  args ↔
+      coalesced.denote model  compilerArgs := by
     symm
     simpa [source, coalesced, compilerArgs, coalescedArity,
       CheckedOpenDiagram.denote, OpenProofState.denote, Function.comp_def] using
       frameEquiv
   have contraction := properIterationRootOpen_compiledSource_equiv hzero certificate
-    alignment model named compilerArgs
+    alignment model  compilerArgs
   have hsite : spliceInput.site ≠ spliceInput.frame.val.root := by
     simpa [spliceInput, Splice.Input.coalesceFrameRaw] using
       certificate.target_ne_root
   have executable := Splice.Input.spliceChecked_open_denotation_iff
-    spliceInput hsplice sourceBoundary sourceRoot model named compilerArgs
+    spliceInput hsplice sourceBoundary sourceRoot model  compilerArgs
   dsimp only at executable
   rw [denoteOpen_castArity] at executable
   exact sourceToCoalesced.trans (contraction.trans

@@ -209,10 +209,6 @@ def reindexNode? (domain : SurvivorDomain size) :
   | .identity region arity =>
       (domain.index? region).map fun mapped =>
         CNode.identity mapped arity
-  | .named region definition arity =>
-      (domain.index? region).map fun mapped =>
-        CNode.named mapped definition arity
-
 /-- Reindex an endpoint when its node survives. -/
 def reindexEndpoint? (domain : SurvivorDomain size)
     (endpoint : CEndpoint size) : Option (CEndpoint domain.count) :=

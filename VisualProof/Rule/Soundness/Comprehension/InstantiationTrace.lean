@@ -9,16 +9,15 @@ open VisualProof.Diagram
 constructor records the exact checked splice and the exact state transition
 used by the executor. -/
 inductive InstantiationTrace
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature} :
+    {origin : CheckedDiagram } :
     Nat →
       InstantiationState origin attachments.length
         payload.binderSpine.proxyCount →
@@ -48,16 +47,15 @@ inductive InstantiationTrace
 
 /-- A successful executor run exposes its complete checked-splice trace. -/
 def instantiateCopiesSuccessTrace
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (fuel : Nat)
     (state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)

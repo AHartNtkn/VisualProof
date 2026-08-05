@@ -14,7 +14,7 @@ namespace Semantic
 /-- Every route from the sheet to the designated terminal body follows only
 the explicitly designated bubble spine. -/
 theorem BinderSpine.rootRoute_hasCutDepth_zero
-    (checked : CheckedOpenDiagram signature)
+    (checked : CheckedOpenDiagram )
     (spine : BinderSpine checked.val.diagram)
     (hnonempty : spine.proxyCount ≠ 0)
     {start : Fin checked.val.diagram.regionCount} {path : List Nat}
@@ -58,7 +58,7 @@ theorem BinderSpine.rootRoute_hasCutDepth_zero
                 (induction tail)
 
 theorem exposedCollapse_boundaryClass
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (position : Fin pattern.val.boundary.length) :
@@ -94,17 +94,15 @@ theorem exposedCollapse_boundaryClass
 
 
 theorem materialized_exposed_factor_of_denote_zero
-    {signature : List Nat}
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (certificate : Certificate pattern attachment spine)
     (hzero : spine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (targetAssignment : BoundaryAssignment
       certificate.result.elaborate model.Carrier)
-    (targetDenotes : denoteRegion (relCtx := []) model named
+    (targetDenotes : denoteRegion (relCtx := []) model
       targetAssignment.classes PUnit.unit
       certificate.result.elaborate.body) :
     targetAssignment.classes =
@@ -113,13 +111,13 @@ theorem materialized_exposed_factor_of_denote_zero
         (exposedCollapse pattern attachment spine).indexMap := by
   obtain ⟨targetItems, targetHidden, targetCompiled, targetItemsDenote⟩ :=
     VisualProof.Rule.CongruenceSoundness.open_body_denote_root_items
-      certificate.result model named
+      certificate.result model
       targetAssignment.classes targetDenotes
   have bodyRoot : spine.bodyContainer = pattern.val.diagram.root :=
     spine.body_eq_root_of_empty hzero
-  change ConcreteElaboration.compileOccurrencesWith? signature
+  change ConcreteElaboration.compileOccurrencesWith?
       (raw pattern.val attachment spine.bodyContainer).diagram
-      (ConcreteElaboration.compileRegion? signature
+      (ConcreteElaboration.compileRegion?
         (raw pattern.val attachment spine.bodyContainer).diagram
         (raw pattern.val attachment spine.bodyContainer).diagram.regionCount)
       (raw pattern.val attachment spine.bodyContainer).rootWires
@@ -132,9 +130,9 @@ theorem materialized_exposed_factor_of_denote_zero
       spine.bodyContainer by simpa [raw, materializedDiagram] using bodyRoot.symm]
       at targetCompiled
   have targetCompiledFocused :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         (materializedDiagram pattern.val attachment spine.bodyContainer)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           (materializedDiagram pattern.val attachment
             spine.bodyContainer).regionCount)
@@ -146,9 +144,9 @@ theorem materialized_exposed_factor_of_denote_zero
     simpa only [raw] using targetCompiled
   rw [materialized_focused_localOccurrences] at targetCompiledFocused
   have targetCompiled' :
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
         (materializedDiagram pattern.val attachment spine.bodyContainer)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           (materializedDiagram pattern.val attachment
             spine.bodyContainer).regionCount)
@@ -163,7 +161,7 @@ theorem materialized_exposed_factor_of_denote_zero
   obtain ⟨targetNodeItems, targetRestItems, targetNodeCompiled,
       targetRestCompiled, targetItemsEq⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_append_split
-      (fun {rels} => ConcreteElaboration.compileRegion? signature
+      (fun {rels} => ConcreteElaboration.compileRegion?
         (materializedDiagram pattern.val attachment spine.bodyContainer)
         (materializedDiagram pattern.val attachment spine.bodyContainer).regionCount)
       (raw pattern.val attachment spine.bodyContainer).rootWires
@@ -176,7 +174,7 @@ theorem materialized_exposed_factor_of_denote_zero
   obtain ⟨aliasItems, targetChildItems, aliasCompiled, targetChildCompiled,
       targetRestItemsEq⟩ :=
     ConcreteElaboration.compileOccurrencesWith?_append_split
-      (fun {rels} => ConcreteElaboration.compileRegion? signature
+      (fun {rels} => ConcreteElaboration.compileRegion?
         (materializedDiagram pattern.val attachment spine.bodyContainer)
         (materializedDiagram pattern.val attachment spine.bodyContainer).regionCount)
       (raw pattern.val attachment spine.bodyContainer).rootWires
@@ -186,14 +184,14 @@ theorem materialized_exposed_factor_of_denote_zero
         (liftOccurrence pattern.val attachment)) targetRestItems targetRestCompiled
   subst targetItems
   subst targetRestItems
-  have targetParts := (denoteItemSeq_append (relCtx := []) model named
+  have targetParts := (denoteItemSeq_append (relCtx := []) model
     (ConcreteElaboration.rootEnvironment
       certificate.result.val.exposedWires certificate.result.val.hiddenWires
       targetAssignment.classes targetHidden)
     (PUnit.unit : RelEnv model.Carrier []) targetNodeItems
       (aliasItems.append targetChildItems)).mp
       targetItemsDenote
-  have targetRestParts := (denoteItemSeq_append (relCtx := []) model named
+  have targetRestParts := (denoteItemSeq_append (relCtx := []) model
     (ConcreteElaboration.rootEnvironment
       certificate.result.val.exposedWires certificate.result.val.hiddenWires
       targetAssignment.classes targetHidden)
@@ -215,10 +213,10 @@ theorem materialized_exposed_factor_of_denote_zero
       certificate.wellFormed.diagram_well_formed)
     targetExact
     pattern.val.rootWires_nodup ConcreteElaboration.BinderContext.empty
-    (ConcreteElaboration.compileRegion? signature
+    (ConcreteElaboration.compileRegion?
       (materializedDiagram pattern.val attachment spine.bodyContainer)
       (materializedDiagram pattern.val attachment spine.bodyContainer).regionCount)
-    aliasItems aliasCompiled model named
+    aliasItems aliasCompiled model
     (ConcreteElaboration.rootEnvironment
       certificate.result.val.exposedWires certificate.result.val.hiddenWires
       targetAssignment.classes targetHidden)
@@ -237,16 +235,14 @@ theorem materialized_exposed_factor_of_denote_zero
     rootCollapse_indexMap_outer, rootCollapse_oldIndex_outer] using rootAt
 
 theorem materialized_exposed_factor_of_denote
-    {signature : List Nat}
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (certificate : Certificate pattern attachment spine)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (targetAssignment : BoundaryAssignment
       certificate.result.elaborate model.Carrier)
-    (targetDenotes : denoteRegion (relCtx := []) model named
+    (targetDenotes : denoteRegion (relCtx := []) model
       targetAssignment.classes PUnit.unit
       certificate.result.elaborate.body) :
     targetAssignment.classes =
@@ -255,10 +251,10 @@ theorem materialized_exposed_factor_of_denote
         (exposedCollapse pattern attachment spine).indexMap := by
   by_cases hzero : spine.proxyCount = 0
   · exact materialized_exposed_factor_of_denote_zero pattern attachment spine
-      certificate hzero model named targetAssignment targetDenotes
+      certificate hzero model  targetAssignment targetDenotes
   · obtain ⟨targetItems, targetHidden, targetCompiled, targetItemsDenote⟩ :=
       VisualProof.Rule.CongruenceSoundness.open_body_denote_root_items
-        certificate.result model named targetAssignment.classes targetDenotes
+        certificate.result model  targetAssignment.classes targetDenotes
     have targetEncloses : certificate.result.val.diagram.Encloses
         certificate.result.val.diagram.root spine.bodyContainer :=
       certificate.wellFormed.diagram_well_formed.all_regions_reach_root
@@ -270,7 +266,7 @@ theorem materialized_exposed_factor_of_denote
       exact BinderSpine.rootRoute_hasCutDepth_zero certificate.result
         certificate.spine (by simpa [Certificate.spine, binderSpine] using hzero)
         route
-    let closed : CheckedDiagram signature :=
+    let closed : CheckedDiagram  :=
       ⟨certificate.result.val.diagram,
         certificate.wellFormed.diagram_well_formed⟩
     let exactContext := ConcreteElaboration.exactScopeWires
@@ -287,9 +283,9 @@ theorem materialized_exposed_factor_of_denote
         exactContext (by simpa using exact)
     simp only [ConcreteElaboration.compileRoot?] at closedBodyCompiled
     have closedBodyCompiled' :
-        (ConcreteElaboration.compileOccurrencesWith? signature
+        (ConcreteElaboration.compileOccurrencesWith?
           certificate.result.val.diagram
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             certificate.result.val.diagram
             certificate.result.val.diagram.regionCount)
           exactContext ConcreteElaboration.BinderContext.empty
@@ -300,8 +296,8 @@ theorem materialized_exposed_factor_of_denote
           some closedBody := by
       simpa [Certificate.result, raw] using closedBodyCompiled
     cases exactItemsResult : ConcreteElaboration.compileOccurrencesWith?
-        signature certificate.result.val.diagram
-        (ConcreteElaboration.compileRegion? signature
+         certificate.result.val.diagram
+        (ConcreteElaboration.compileRegion?
           certificate.result.val.diagram
           certificate.result.val.diagram.regionCount)
         exactContext ConcreteElaboration.BinderContext.empty
@@ -323,13 +319,13 @@ theorem materialized_exposed_factor_of_denote
       have environmentsAgree : EnvironmentsAgree wireEquiv exactRaw rootRaw := by
         intro index
         rfl
-      have exactDenotes : denoteItemSeq (relCtx := []) model named exactRaw
+      have exactDenotes : denoteItemSeq (relCtx := []) model  exactRaw
           PUnit.unit exactItems :=
-        (itemIso.denotation model named exactRaw rootRaw PUnit.unit
+        (itemIso.denotation model  exactRaw rootRaw PUnit.unit
           environmentsAgree).mpr targetItemsDenote
-      have exactCompiled : ConcreteElaboration.compileOccurrencesWith? signature
+      have exactCompiled : ConcreteElaboration.compileOccurrencesWith?
           closed.val
-          (ConcreteElaboration.compileRegion? signature closed.val
+          (ConcreteElaboration.compileRegion?  closed.val
             closed.val.regionCount)
           (ConcreteElaboration.WireContext.extend
             ([] : ConcreteElaboration.WireContext closed.val) closed.val.root)
@@ -348,7 +344,7 @@ theorem materialized_exposed_factor_of_denote
             ConcreteElaboration.WireContext.extend] using exact)
           (ConcreteElaboration.BinderContext.empty_covers_root closed.property)
           (ConcreteElaboration.BinderContext.Enumeration.empty closed.val)
-          model named Fin.elim0 exactRaw PUnit.unit
+          model  Fin.elim0 exactRaw PUnit.unit
           (by
             rw [ConcreteElaboration.extendedEnvironment_nil_eq_cast]
             exact exactDenotes)
@@ -362,9 +358,9 @@ theorem materialized_exposed_factor_of_denote
         certificate.sourceTerminalBody spine.bodyContainer targetContext
         sourceContext descendant.leaf.wiresExact sourceView.leaf.wiresExact
       have targetLeafCompiled := descendant.leaf.itemsComputation
-      change ConcreteElaboration.compileOccurrencesWith? signature
+      change ConcreteElaboration.compileOccurrencesWith?
           (materializedDiagram pattern.val attachment spine.bodyContainer)
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             (materializedDiagram pattern.val attachment spine.bodyContainer)
             descendant.leaf.fuel)
           targetContext descendant.leaf.binders
@@ -373,9 +369,9 @@ theorem materialized_exposed_factor_of_denote
             spine.bodyContainer) = some descendant.leaf.items at targetLeafCompiled
       rw [materialized_focused_localOccurrences] at targetLeafCompiled
       have targetLeafCompiled' :
-          ConcreteElaboration.compileOccurrencesWith? signature
+          ConcreteElaboration.compileOccurrencesWith?
             (materializedDiagram pattern.val attachment spine.bodyContainer)
-            (ConcreteElaboration.compileRegion? signature
+            (ConcreteElaboration.compileRegion?
               (materializedDiagram pattern.val attachment spine.bodyContainer)
               descendant.leaf.fuel)
             targetContext descendant.leaf.binders
@@ -389,7 +385,7 @@ theorem materialized_exposed_factor_of_denote
       obtain ⟨targetNodeItems, targetRestItems, targetNodeCompiled,
           targetRestCompiled, targetItemsEq⟩ :=
         ConcreteElaboration.compileOccurrencesWith?_append_split
-          (fun {rels} => ConcreteElaboration.compileRegion? signature
+          (fun {rels} => ConcreteElaboration.compileRegion?
             (materializedDiagram pattern.val attachment spine.bodyContainer)
             descendant.leaf.fuel)
           targetContext descendant.leaf.binders
@@ -402,7 +398,7 @@ theorem materialized_exposed_factor_of_denote
       obtain ⟨aliasItems, targetChildItems, aliasCompiled, targetChildCompiled,
           targetRestItemsEq⟩ :=
         ConcreteElaboration.compileOccurrencesWith?_append_split
-          (fun {rels} => ConcreteElaboration.compileRegion? signature
+          (fun {rels} => ConcreteElaboration.compileRegion?
             (materializedDiagram pattern.val attachment spine.bodyContainer)
             descendant.leaf.fuel)
           targetContext descendant.leaf.binders
@@ -413,19 +409,19 @@ theorem materialized_exposed_factor_of_denote
       have targetLeafDenotes := descendant.itemsDenote
       rw [targetItemsEq, targetRestItemsEq] at targetLeafDenotes
       have targetRestDenotes :=
-        (denoteItemSeq_append model named _ descendant.relEnv targetNodeItems
+        (denoteItemSeq_append model  _ descendant.relEnv targetNodeItems
           (aliasItems.append targetChildItems)).mp targetLeafDenotes |>.2
       have aliasDenotes :=
-        (denoteItemSeq_append model named _ descendant.relEnv aliasItems
+        (denoteItemSeq_append model  _ descendant.relEnv aliasItems
           targetChildItems).mp targetRestDenotes |>.1
       have terminalFactor := aliasOccurrences_factor_collapse pattern attachment
         spine certificate.wellFormed.diagram_well_formed targetContext
         sourceContext terminalCollapse descendant.leaf.wiresExact
         sourceView.leaf.wiresExact.nodup descendant.leaf.binders
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           descendant.leaf.fuel)
-        aliasItems aliasCompiled model named
+        aliasItems aliasCompiled model
         (ConcreteElaboration.extendedEnvironment descendant.leaf.inheritedWires
           spine.bodyContainer descendant.outerEnv descendant.localEnv)
         descendant.relEnv aliasDenotes

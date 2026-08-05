@@ -276,11 +276,11 @@ end SameDiagramBinderWitness
 wire contexts and owner-aligned binder contexts. -/
 noncomputable def sameDiagramSemanticSimulation
     (diagram : ConcreteDiagram)
-    (wellFormed : diagram.WellFormed signature)
+    (wellFormed : diagram.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
-    ConcreteElaboration.ConcreteSemanticSimulation signature diagram diagram
-      model named where
+    :
+    ConcreteElaboration.ConcreteSemanticSimulation  diagram diagram
+      model  where
   source_wellFormed := wellFormed
   target_wellFormed := wellFormed
   regionMap := id
@@ -331,7 +331,7 @@ noncomputable def sameDiagramSemanticSimulation
       itemSimulation
     exact ConcreteElaboration.directionalLocalTransport_of_agreement direction
       source target region region context.indexRelation
-      (context.extend region).indexRelation model named
+      (context.extend region).indexRelation model
       (sourceItems.renameRelations binderWitness.relationMap) targetItems
       (context.localSelection direction region model) itemSimulation
   nodeSemantic := by
@@ -343,7 +343,7 @@ noncomputable def sameDiagramSemanticSimulation
       ConcreteElaboration.LocalOccurrence.node.inj mapped.symm
     subst targetNode
     apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
-      model named direction source target context.indexRelation sourceBinders
+      model  direction source target context.indexRelation sourceBinders
       targetBinders binderWitness.relationMap sourceNode sourceNode id id
     · cases diagram.nodes sourceNode <;> rfl
     · intro port sourceIndex targetIndex sourceResolved targetResolved

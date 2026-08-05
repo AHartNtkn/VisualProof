@@ -42,7 +42,7 @@ theorem collapseWire_mem_boundary_of_mem_rawBoundary
 /-- The exposed target classes collapse onto source exposed classes, while
 every source class has its canonical lifted-old representative. -/
 noncomputable def exposedCollapse
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram) :
     ContextCollapse pattern attachment spine
@@ -93,13 +93,13 @@ noncomputable def exposedCollapse
   }
 
 noncomputable def rootCollapse
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
-        signature) :
+        ) :
     ContextCollapse pattern attachment spine
       (raw pattern.val attachment spine.bodyContainer).rootWires
       pattern.val.rootWires :=
@@ -156,13 +156,13 @@ def combinedLocalIndex (ambient locals : List α)
     Fin.addCases_right]
 
 theorem rootCollapse_indexMap_outer
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
-        signature)
+        )
     (index : Fin
       (raw pattern.val attachment spine.bodyContainer).exposedWires.length) :
     (rootCollapse pattern attachment spine contract targetWellFormed).indexMap
@@ -201,13 +201,13 @@ theorem rootCollapse_indexMap_outer
         (exposedGet.symm.trans sourceOuterGet.symm)))
 
 theorem rootCollapse_oldIndex_outer
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
-        signature)
+        )
     (index : Fin pattern.val.exposedWires.length) :
     (rootCollapse pattern attachment spine contract targetWellFormed).oldIndex
         (combinedOuterIndex pattern.val.exposedWires pattern.val.hiddenWires
@@ -245,13 +245,13 @@ theorem rootCollapse_oldIndex_outer
       exact combinedGet.trans (exposedGet.symm.trans targetOuterGet.symm))
 
 noncomputable def forwardTargetLocal
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
-        signature)
+        )
     (sourceOuter : Fin pattern.val.exposedWires.length → D)
     (sourceLocal : Fin pattern.val.hiddenWires.length → D) :
     Fin (raw pattern.val attachment spine.bodyContainer).hiddenWires.length → D :=
@@ -264,13 +264,13 @@ noncomputable def forwardTargetLocal
           (raw pattern.val attachment spine.bodyContainer).hiddenWires index))
 
 noncomputable def backwardSourceLocal
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
-        signature)
+        )
     (targetOuter : Fin
       (raw pattern.val attachment spine.bodyContainer).exposedWires.length → D)
     (targetLocal : Fin
@@ -286,13 +286,13 @@ noncomputable def backwardSourceLocal
           index))
 
 theorem forwardRootEnvironment_agrees
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
-        signature)
+        )
     (sourceOuter : Fin pattern.val.exposedWires.length → D)
     (targetOuter : Fin
       (raw pattern.val attachment spine.bodyContainer).exposedWires.length → D)
@@ -342,13 +342,13 @@ theorem forwardRootEnvironment_agrees
     rfl
 
 theorem backwardRootEnvironment_agrees
-    (pattern : CheckedOpenDiagram signature)
+    (pattern : CheckedOpenDiagram )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
-        signature)
+        )
     (sourceOuter : Fin pattern.val.exposedWires.length → D)
     (targetOuter : Fin
       (raw pattern.val attachment spine.bodyContainer).exposedWires.length → D)

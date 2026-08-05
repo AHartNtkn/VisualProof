@@ -52,12 +52,12 @@ private theorem frameWire_visible_at_site_iff
 site.  It is defined from exact compiler contexts, not from list order. -/
 noncomputable def hostSiteWireIndexMap
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -74,12 +74,12 @@ noncomputable def hostSiteWireIndexMap
 
 theorem hostSiteWireIndexMap_spec
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -96,12 +96,12 @@ theorem hostSiteWireIndexMap_spec
 
 theorem frameWire_mem_outputSiteContext_iff
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -125,12 +125,12 @@ theorem frameWire_mem_outputSiteContext_iff
 
 private theorem hostRelationTarget_exists
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -171,12 +171,12 @@ private theorem hostRelationTarget_exists
 owning concrete bubble rather than by an assumed de Bruijn coincidence. -/
 noncomputable def hostRelationRenaming
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -189,12 +189,12 @@ noncomputable def hostRelationRenaming
 
 theorem hostRelationRenaming_lookup
     (layout : PlugLayout input)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Region.ContextPath.CompilerLeaf input.coalesceFrameRaw
       input.site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
@@ -211,7 +211,7 @@ theorem hostRelationRenaming_lookup
     (layout.hostRelationTarget_exists hostWitness hostLeaf outputWitness
       outputLeaf relation)
 
-theorem material_or_proxy_of_ne_root (input : Input signature)
+theorem material_or_proxy_of_ne_root (input : Input )
     (region : Fin input.pattern.val.diagram.regionCount)
     (hneRoot : region ≠ input.pattern.val.diagram.root) :
     input.binderSpine.IsMaterialRegion region ∨
@@ -275,7 +275,6 @@ theorem plugRaw_atom_binders_are_bubbles (layout : PlugLayout input)
     simp only [plugRaw, plugNode, Fin.addCases_left]
     cases hnode : input.frame.val.nodes frameNode with
     | identity => trivial
-    | named => trivial
     | atom region binder =>
         simp only [hnode] at hold
         obtain ⟨parent, arity, hbubble⟩ := hold
@@ -288,7 +287,6 @@ theorem plugRaw_atom_binders_are_bubbles (layout : PlugLayout input)
     simp only [plugRaw, plugNode, Fin.addCases_right]
     cases hnode : input.pattern.val.diagram.nodes patternNode with
     | identity => trivial
-    | named => trivial
     | atom region binder =>
         simp only [hnode] at hold
         obtain ⟨parent, arity, hbubble⟩ := hold
@@ -298,27 +296,7 @@ theorem plugRaw_atom_binders_are_bubbles (layout : PlugLayout input)
             hadmissible binder parent arity hbubble
         exact ⟨plugParent, arity, hplugBubble⟩
 
-theorem plugRaw_named_references_resolve (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input) :
-    layout.plugRaw.NamedReferencesResolve signature := by
-  intro node
-  refine Fin.addCases (m := input.frame.val.nodeCount)
-    (n := input.pattern.val.diagram.nodeCount)
-    (fun frameNode => ?_) (fun patternNode => ?_) node
-  · have hold := input.frame.property.named_references_resolve frameNode
-    simp only [plugRaw, plugNode, Fin.addCases_left]
-    cases hnode : input.frame.val.nodes frameNode <;>
-      simp only [hnode, mapFrameNode] at hold ⊢
-    exact hold
-  · have hold :=
-      input.pattern.property.diagram_well_formed.named_references_resolve
-        patternNode
-    simp only [plugRaw, plugNode, Fin.addCases_right]
-    cases hnode : input.pattern.val.diagram.nodes patternNode <;>
-      simp only [hnode, mapPatternNode] at hold ⊢
-    exact hold
-
-theorem bodyContainer_nonmaterial (input : Input signature) :
+theorem bodyContainer_nonmaterial (input : Input ) :
     ¬ input.binderSpine.IsMaterialRegion
       input.binderSpine.bodyContainer := by
   intro hmaterial
@@ -576,7 +554,6 @@ theorem plugRaw_atom_binders_enclose (layout : PlugLayout input)
     simp only [plugRaw, plugNode, Fin.addCases_left]
     cases hnode : input.frame.val.nodes frameNode with
     | identity => trivial
-    | named => trivial
     | atom region binder =>
         simp only [hnode] at hold
         simp only [mapFrameNode]
@@ -587,7 +564,6 @@ theorem plugRaw_atom_binders_enclose (layout : PlugLayout input)
     simp only [plugRaw, plugNode, Fin.addCases_right]
     cases hnode : input.pattern.val.diagram.nodes patternNode with
     | identity => trivial
-    | named => trivial
     | atom region binder =>
         simp only [hnode] at hold
         simp only [mapPatternNode]
@@ -629,7 +605,6 @@ theorem plugRaw_requiresPort_frame (layout : PlugLayout input)
   rw [layout.plugNode_frameNode]
   cases hnode : input.frame.val.nodes node with
   | identity => simpa only [hnode, mapFrameNode] using hrequires
-  | named => simpa only [hnode, mapFrameNode] using hrequires
   | atom region binder =>
       simp only [hnode, mapFrameNode] at hrequires ⊢
       rw [layout.plugRegion_frameRegion]
@@ -647,7 +622,6 @@ theorem plugRaw_requiresPort_pattern (layout : PlugLayout input)
   rw [layout.plugNode_patternNode]
   cases hnode : input.pattern.val.diagram.nodes node with
   | identity => simpa only [hnode, mapPatternNode] using hrequires
-  | named => simpa only [hnode, mapPatternNode] using hrequires
   | atom region binder =>
       simp only [hnode, mapPatternNode] at hrequires ⊢
       cases hbinder : input.pattern.val.diagram.regions binder with
@@ -693,8 +667,7 @@ theorem plugRaw_endpoints_are_valid (layout : PlugLayout input)
       (input.pattern.property.diagram_well_formed.endpoints_are_valid
         (layout.internalWires.origin internal) original horiginal)
 
-theorem plugRaw_endpointOccurs_frame (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+theorem plugRaw_endpointOccurs_frame (input : Input ) (layout : PlugLayout input)
     (wire : Fin input.frame.val.wireCount)
     (endpoint : CEndpoint input.frame.val.nodeCount)
     (hoccurs : input.frame.val.EndpointOccurs wire endpoint) :
@@ -703,15 +676,14 @@ theorem plugRaw_endpointOccurs_frame (signature : List Nat)
       (layout.mapFrameEndpoint endpoint) := by
   unfold ConcreteDiagram.EndpointOccurs
   simp only [plugRaw]
-  rw [plugWire_quotientBlockWire signature input layout]
+  rw [plugWire_quotientBlockWire  input layout]
   apply List.mem_append_left
   apply List.mem_map.mpr
   refine ⟨endpoint, ?_, rfl⟩
   rw [input.mem_coalescedEndpoints]
   exact ⟨wire, (input.mem_classWires _ wire).2 rfl, hoccurs⟩
 
-theorem plugRaw_endpointOccurs_pattern (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+theorem plugRaw_endpointOccurs_pattern (input : Input ) (layout : PlugLayout input)
     (wire : Fin input.pattern.val.diagram.wireCount)
     (endpoint : CEndpoint input.pattern.val.diagram.nodeCount)
     (hoccurs : input.pattern.val.diagram.EndpointOccurs wire endpoint) :
@@ -724,7 +696,7 @@ theorem plugRaw_endpointOccurs_pattern (signature : List Nat)
     refine ⟨layout.quotientBlockWire (layout.exposedAttachment external), ?_⟩
     unfold ConcreteDiagram.EndpointOccurs
     simp only [plugRaw]
-    rw [plugWire_quotientBlockWire signature input layout]
+    rw [plugWire_quotientBlockWire  input layout]
     apply List.mem_append_right
     rw [layout.mem_boundaryEndpoints]
     refine ⟨external, rfl, endpoint, ?_, rfl⟩
@@ -737,7 +709,7 @@ theorem plugRaw_endpointOccurs_pattern (signature : List Nat)
     refine ⟨layout.internalBlockWire internal, ?_⟩
     unfold ConcreteDiagram.EndpointOccurs
     simp only [plugRaw]
-    rw [plugWire_internalBlockWire signature input layout]
+    rw [plugWire_internalBlockWire  input layout]
     change layout.mapPatternEndpoint endpoint ∈
       (input.pattern.val.diagram.wires
         (layout.internalWires.origin internal)).endpoints.map
@@ -748,8 +720,7 @@ theorem plugRaw_endpointOccurs_pattern (signature : List Nat)
     rw [horigin]
     exact List.mem_map.mpr ⟨endpoint, hoccurs, rfl⟩
 
-theorem plugRaw_required_ports_are_covered (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+theorem plugRaw_required_ports_are_covered (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible) :
     layout.plugRaw.RequiredPortsAreCovered := by
   intro node
@@ -766,16 +737,7 @@ theorem plugRaw_required_ports_are_covered (signature : List Nat)
         refine ⟨layout.quotientBlockWire
           (input.quotientWire sourceWire), ?_⟩
         simpa [mapFrameEndpoint] using
-          plugRaw_endpointOccurs_frame signature input layout
-            sourceWire ⟨frameNode, .arg index⟩ hsource
-    | named region definition arity =>
-        simp only [hnode, mapFrameNode] at hold ⊢
-        intro index
-        obtain ⟨sourceWire, hsource⟩ := hold index
-        refine ⟨layout.quotientBlockWire
-          (input.quotientWire sourceWire), ?_⟩
-        simpa [mapFrameEndpoint] using
-          plugRaw_endpointOccurs_frame signature input layout
+          plugRaw_endpointOccurs_frame  input layout
             sourceWire ⟨frameNode, .arg index⟩ hsource
     | atom region binder =>
         simp only [hnode, mapFrameNode] at hold ⊢
@@ -790,7 +752,7 @@ theorem plugRaw_required_ports_are_covered (signature : List Nat)
             refine ⟨layout.quotientBlockWire
               (input.quotientWire sourceWire), ?_⟩
             simpa [mapFrameEndpoint] using
-              plugRaw_endpointOccurs_frame signature input layout
+              plugRaw_endpointOccurs_frame  input layout
                 sourceWire ⟨frameNode, .arg index⟩ hsource
   · have hold :=
       input.pattern.property.diagram_well_formed.required_ports_are_covered
@@ -802,15 +764,7 @@ theorem plugRaw_required_ports_are_covered (signature : List Nat)
         intro index
         obtain ⟨sourceWire, hsource⟩ := hold index
         obtain ⟨plugWire, hplug⟩ :=
-          plugRaw_endpointOccurs_pattern signature input layout sourceWire
-            ⟨patternNode, .arg index⟩ hsource
-        exact ⟨plugWire, by simpa [mapPatternEndpoint] using hplug⟩
-    | named region definition arity =>
-        simp only [hnode, mapPatternNode] at hold ⊢
-        intro index
-        obtain ⟨sourceWire, hsource⟩ := hold index
-        obtain ⟨plugWire, hplug⟩ :=
-          plugRaw_endpointOccurs_pattern signature input layout sourceWire
+          plugRaw_endpointOccurs_pattern  input layout sourceWire
             ⟨patternNode, .arg index⟩ hsource
         exact ⟨plugWire, by simpa [mapPatternEndpoint] using hplug⟩
     | atom region binder =>
@@ -829,7 +783,7 @@ theorem plugRaw_required_ports_are_covered (signature : List Nat)
         intro index
         obtain ⟨sourceWire, hsource⟩ := hold index
         obtain ⟨plugWire, hplug⟩ :=
-          plugRaw_endpointOccurs_pattern signature input layout sourceWire
+          plugRaw_endpointOccurs_pattern  input layout sourceWire
             ⟨patternNode, .arg index⟩ hsource
         exact ⟨plugWire, by simpa [mapPatternEndpoint] using hplug⟩
 
@@ -866,7 +820,7 @@ theorem plugRaw_endpoints_are_nodup (layout : PlugLayout input) :
       (layout.internalWires.origin internal)
 
 theorem patternWire_scope_material_or_bodyContainer
-    (input : Input signature)
+    (input : Input )
     (wire : Fin input.pattern.val.diagram.wireCount)
     (hinternal : wire ∉ input.pattern.val.exposedWires) :
     input.binderSpine.IsMaterialRegion
@@ -991,7 +945,7 @@ theorem plugRaw_wire_scopes_enclose (layout : PlugLayout input)
         (input.pattern.val.diagram.nodes original.node).region
         hscopeOwner hregionOwner horiginalScope
 
-theorem exposedWire_get_injective (input : Input signature) :
+theorem exposedWire_get_injective (input : Input ) :
     Function.Injective input.pattern.val.exposedWires.get := by
   intro first second heq
   apply Fin.ext
@@ -999,13 +953,13 @@ theorem exposedWire_get_injective (input : Input signature) :
     simpa only [List.get_eq_getElem] using heq)
 
 /-- The unique exposed-boundary position naming an exposed pattern wire. -/
-noncomputable def exposedWireIndex (input : Input signature)
+noncomputable def exposedWireIndex (input : Input )
     (wire : Fin input.pattern.val.diagram.wireCount)
     (hexposed : wire ∈ input.pattern.val.exposedWires) :
     Fin input.pattern.val.exposedWires.length :=
   Classical.choose (List.mem_iff_get.mp hexposed)
 
-@[simp] theorem exposedWireIndex_get (input : Input signature)
+@[simp] theorem exposedWireIndex_get (input : Input )
     (wire : Fin input.pattern.val.diagram.wireCount)
     (hexposed : wire ∈ input.pattern.val.exposedWires) :
     input.pattern.val.exposedWires.get
@@ -1493,7 +1447,7 @@ theorem finishRegion_renameWires_renameRelations
     (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
     (outerMap : Fin sourceContext.length → Fin targetContext.length)
     (relationMap : RelationRenaming sourceRels targetRels)
-    (items : ItemSeq signature (sourceContext.extend region).length sourceRels) :
+    (items : ItemSeq  (sourceContext.extend region).length sourceRels) :
     ((ConcreteElaboration.finishRegion input.pattern.val.diagram sourceContext
         region items).renameWires outerMap).renameRelations relationMap =
       .mk (ConcreteElaboration.exactScopeWires input.pattern.val.diagram
@@ -1849,8 +1803,7 @@ theorem materialOccurrenceEquiv_spec
     (ConcreteElaboration.localOccurrences layout.plugRaw
       (layout.bodyRegion region)) _ _ _ _ _ index
 
-theorem quotient_endpoint_provenance (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+theorem quotient_endpoint_provenance (input : Input ) (layout : PlugLayout input)
     (quotient : input.wireQuotient.Carrier)
     (endpoint : CEndpoint layout.nodeCount)
     (hoccurs : layout.plugRaw.EndpointOccurs
@@ -1866,15 +1819,14 @@ theorem quotient_endpoint_provenance (signature : List Nat)
               layout.mapPatternEndpoint original = endpoint := by
   unfold ConcreteDiagram.EndpointOccurs at hoccurs
   simp only [plugRaw] at hoccurs
-  rw [plugWire_quotientBlockWire signature input layout] at hoccurs
+  rw [plugWire_quotientBlockWire  input layout] at hoccurs
   rcases List.mem_append.mp hoccurs with hframe | hpattern
   · left
     exact List.mem_map.mp hframe
   · right
     exact (layout.mem_boundaryEndpoints quotient endpoint).1 hpattern
 
-theorem internal_endpoint_provenance (signature : List Nat)
-    (input : Input signature) (layout : PlugLayout input)
+theorem internal_endpoint_provenance (input : Input ) (layout : PlugLayout input)
     (internal : layout.internalWires.Carrier)
     (endpoint : CEndpoint layout.nodeCount)
     (hoccurs : layout.plugRaw.EndpointOccurs
@@ -1885,7 +1837,7 @@ theorem internal_endpoint_provenance (signature : List Nat)
         layout.mapPatternEndpoint original = endpoint := by
   unfold ConcreteDiagram.EndpointOccurs at hoccurs
   simp only [plugRaw] at hoccurs
-  rw [plugWire_internalBlockWire signature input layout] at hoccurs
+  rw [plugWire_internalBlockWire  input layout] at hoccurs
   change endpoint ∈
     (input.pattern.val.diagram.wires
       (layout.internalWires.origin internal)).endpoints.map
@@ -1933,7 +1885,7 @@ theorem plugRaw_patternEndpoint_backward
     (n := layout.internalWires.count) (fun quotient => ?_)
     (fun internal => ?_) targetWire
   · intro hquotient
-    rcases quotient_endpoint_provenance _ input layout quotient
+    rcases quotient_endpoint_provenance input layout quotient
         (layout.mapPatternEndpoint endpoint) hquotient with
       ⟨frameEndpoint, _, heq⟩ |
         ⟨external, hattachment, patternEndpoint,
@@ -1957,7 +1909,7 @@ theorem plugRaw_patternEndpoint_backward
       rfl
   · intro hinternal
     obtain ⟨patternEndpoint, hsourceOccurs, heq⟩ :=
-      internal_endpoint_provenance _ input layout internal
+      internal_endpoint_provenance input layout internal
         (layout.mapPatternEndpoint endpoint) hinternal
     have hendpoint : patternEndpoint = endpoint :=
       layout.mapPatternEndpoint_injective heq

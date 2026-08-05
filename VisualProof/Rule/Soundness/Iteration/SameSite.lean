@@ -18,7 +18,7 @@ theorem relationRenamingOfEq_agrees_transport
 
 theorem castRels_renameWires_commute
     {source target : RelCtx} (equality : source = target)
-    (region : Region signature wires source)
+    (region : Region  wires source)
     (wire : Fin wires → Fin targetWires) :
     equality ▸ (region.renameWires wire) =
       (equality ▸ region).renameWires wire := by
@@ -41,7 +41,7 @@ theorem extendWireEnv_conjoinLeft_preserve
   · simp [Region.conjoinLeftWire, extendWireEnv]
 
 theorem rootReindex_patternLocal_nonempty
-    (input : Splice.Input signature) (layout : Splice.Input.PlugLayout input)
+    (input : Splice.Input ) (layout : Splice.Input.PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -186,7 +186,7 @@ theorem rootReindex_patternLocal_nonempty
   simpa using congrArg Fin.val positions
 
 theorem rootReindex_patternLocal_empty
-    (input : Splice.Input signature) (layout : Splice.Input.PlugLayout input)
+    (input : Splice.Input ) (layout : Splice.Input.PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -364,21 +364,20 @@ theorem close_flatSplice_denote_iff_spliceAt
     {hostRels patternRels : RelCtx}
     (inheritedEq : inherited = outer)
     (fullEq : full = inherited + localWires)
-    (hostItems : ItemSeq signature full hostRels)
-    (material : Region signature patternWires patternRels)
+    (hostItems : ItemSeq  full hostRels)
+    (material : Region  patternWires patternRels)
     (wireMap : Fin patternWires → Fin full)
     (relationMap : RelationRenaming patternRels hostRels)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (environment : Fin outer → model.Carrier)
     (relations : RelEnv model.Carrier hostRels) :
     let targetEq : full = outer + localWires :=
       fullEq.trans (congrArg (fun value => value + localWires) inheritedEq)
-    denoteRegion model named environment relations (Region.castWiresEq inheritedEq
+    denoteRegion model  environment relations (Region.castWiresEq inheritedEq
         (Region.adjoinAt localWires .nil
           ((Region.spliceAt 0 hostItems material wireMap relationMap
             ).castWiresEq fullEq))) ↔
-      denoteRegion model named environment relations
+      denoteRegion model  environment relations
         (Region.spliceAt localWires (hostItems.castWiresEq targetEq) material
           (Fin.cast targetEq ∘ wireMap) relationMap) := by
   cases inheritedEq
@@ -400,7 +399,7 @@ theorem close_flatSplice_denote_iff_spliceAt
 /-- At a same-site iteration, the selected anchor block supplies the terminal
 material under the executor's exact wire and relation substitutions. -/
 theorem sameSite_terminal_available
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -409,7 +408,7 @@ theorem sameSite_terminal_available
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
+    :
     let spliceInput := iterationInput input selection target
     let layout : FragmentLayout input.val selection := {}
     let anchorView := iterationCoalescedAnchorView input selection target
@@ -425,8 +424,8 @@ theorem sameSite_terminal_available
     ∀ (sourceEnv : Fin
         (host.compilerLeaf.inheritedWires.extend target).length → model.Carrier)
       (sourceRelEnv : RelEnv model.Carrier host.focus.holeRels),
-      denoteItemSeq model named sourceEnv sourceRelEnv host.compilerLeaf.items →
-        denoteRegion model named
+      denoteItemSeq model  sourceEnv sourceRelEnv host.compilerLeaf.items →
+        denoteRegion model
           (sourceEnv ∘ spliceInput.plugLayout.bodyTerminalWireRenaming
             hadmissible host pattern.witness pattern.leaf hnonempty)
           (RelEnv.pullback actualRelation sourceRelEnv)
@@ -476,10 +475,10 @@ theorem sameSite_terminal_available
     exact Option.some.inj (selectedCompiled.symm.trans factorCompiled)
   subst factorItems
   intro sourceEnv sourceRelEnv sourceDenotes
-  have factored := (factor model named sourceEnv sourceRelEnv).mp sourceDenotes
-  have selectedDenotes : denoteItemSeq model named sourceEnv sourceRelEnv
+  have factored := (factor model  sourceEnv sourceRelEnv).mp sourceDenotes
+  have selectedDenotes : denoteItemSeq model  sourceEnv sourceRelEnv
       selectedItems :=
-    (denoteRegion_mk_zero_iff model named sourceEnv sourceRelEnv
+    (denoteRegion_mk_zero_iff model  sourceEnv sourceRelEnv
       selectedItems).1 factored.1
   have environments :
       (extractionContextRelation input selection layout
@@ -495,7 +494,7 @@ theorem sameSite_terminal_available
     apply Fin.ext
     apply (List.getElem_inj host.compilerLeaf.wiresExact.nodup).mp
     exact sameWire
-  have renamedMaterial := selectedSemantic model named sourceEnv sourceRelEnv
+  have renamedMaterial := selectedSemantic model  sourceEnv sourceRelEnv
     (sourceEnv ∘ spliceInput.plugLayout.bodyTerminalWireRenaming
       hadmissible host pattern.witness pattern.leaf hnonempty)
     environments selectedDenotes
@@ -527,7 +526,7 @@ theorem sameSite_terminal_available
       (extractionLookup.symm.trans hostLookup)
     simpa using (eq_of_heq (Sigma.ext_iff.mp sigmaEq).2).symm
   have rawMaterial :=
-    (denoteRegion_renameRelations model named binderWitness.relationMap
+    (denoteRegion_renameRelations model  binderWitness.relationMap
       (RelEnv.pullback binderWitness.relationMap sourceRelEnv) sourceRelEnv
       (RelEnv.pullback_agrees binderWitness.relationMap sourceRelEnv)
       (sourceEnv ∘ spliceInput.plugLayout.bodyTerminalWireRenaming
@@ -548,7 +547,7 @@ theorem sameSite_terminal_available
 /-- Empty-spine same-site iteration: the selected anchor block supplies the
 extracted open root under the executor's exposed-wire substitution. -/
 theorem sameSite_root_available
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -556,7 +555,7 @@ theorem sameSite_root_available
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
+    :
     let spliceInput := iterationInput input selection target
     let anchorView := iterationCoalescedAnchorView input selection target
       hadmissible
@@ -564,8 +563,8 @@ theorem sameSite_root_available
     ∀ (sourceEnv : Fin
         (host.compilerLeaf.inheritedWires.extend target).length → model.Carrier)
       (sourceRelEnv : RelEnv model.Carrier host.focus.holeRels),
-      denoteItemSeq model named sourceEnv sourceRelEnv host.compilerLeaf.items →
-        denoteRegion model named
+      denoteItemSeq model  sourceEnv sourceRelEnv host.compilerLeaf.items →
+        denoteRegion model
           (sourceEnv ∘ spliceInput.plugLayout.exposedWireRenaming
             hadmissible host)
           sourceRelEnv
@@ -602,10 +601,10 @@ theorem sameSite_root_available
     exact Option.some.inj (selectedCompiled.symm.trans factorCompiled)
   subst factorItems
   intro sourceEnv sourceRelEnv sourceDenotes
-  have factored := (factor model named sourceEnv sourceRelEnv).mp sourceDenotes
-  have selectedDenotes : denoteItemSeq model named sourceEnv sourceRelEnv
+  have factored := (factor model  sourceEnv sourceRelEnv).mp sourceDenotes
+  have selectedDenotes : denoteItemSeq model  sourceEnv sourceRelEnv
       selectedItems :=
-    (denoteRegion_mk_zero_iff model named sourceEnv sourceRelEnv
+    (denoteRegion_mk_zero_iff model  sourceEnv sourceRelEnv
       selectedItems).1 factored.1
   have environments :
       (extractionContextRelation input selection layout
@@ -620,14 +619,14 @@ theorem sameSite_root_available
     apply Fin.ext
     apply (List.getElem_inj host.compilerLeaf.wiresExact.nodup).mp
     exact sameWire
-  exact selectedSemantic model named sourceEnv sourceRelEnv
+  exact selectedSemantic model  sourceEnv sourceRelEnv
     (sourceEnv ∘ spliceInput.plugLayout.exposedWireRenaming
       hadmissible host) environments selectedDenotes
 
 /-- The complete same-site compiler leaf is equivalent to adjoining the
 nonempty-spine material over that same complete lexical context. -/
 theorem sameSite_flat_equiv_nonempty
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -636,7 +635,7 @@ theorem sameSite_flat_equiv_nonempty
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
+    :
     let spliceInput := iterationInput input selection target
     let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
     let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
@@ -653,8 +652,8 @@ theorem sameSite_flat_equiv_nonempty
     ∀ (environment : Fin
         (host.compilerLeaf.inheritedWires.extend target).length → model.Carrier)
       (relations : RelEnv model.Carrier host.focus.holeRels),
-      denoteItemSeq model named environment relations host.compilerLeaf.items ↔
-        denoteRegion model named environment relations
+      denoteItemSeq model  environment relations host.compilerLeaf.items ↔
+        denoteRegion model  environment relations
           (Region.spliceAt 0 host.compilerLeaf.items material wireMap
             relationMap) := by
   dsimp only
@@ -673,22 +672,22 @@ theorem sameSite_flat_equiv_nonempty
       hnonempty relation
   intro environment relations
   have contraction := spliceAt_contraction_sound 0 host.compilerLeaf.items
-    material wireMap relationMap model named environment relations (by
+    material wireMap relationMap model  environment relations (by
       intro emptyEnvironment hostDenotes
-      have hostDenotes' : denoteItemSeq model named environment relations
+      have hostDenotes' : denoteItemSeq model  environment relations
           host.compilerLeaf.items := by
         simpa [extendWireEnv_zero] using hostDenotes
       have supplied := sameSite_terminal_available input selection target
-        hadmissible targetEq targetNotSelected hnonempty model named
+        hadmissible targetEq targetNotSelected hnonempty model
         environment relations hostDenotes'
       simpa [extendWireEnv_zero, spliceInput, host, pattern, material, wireMap,
         relationMap] using supplied)
-  exact (denoteRegion_mk_zero_iff model named environment relations
+  exact (denoteRegion_mk_zero_iff model  environment relations
     host.compilerLeaf.items).symm.trans contraction.symm
 
 /-- Empty-spine counterpart of `sameSite_flat_equiv_nonempty`. -/
 theorem sameSite_flat_equiv_zero
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -696,7 +695,7 @@ theorem sameSite_flat_equiv_zero
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature) :
+    :
     let spliceInput := iterationInput input selection target
     let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
     let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
@@ -709,8 +708,8 @@ theorem sameSite_flat_equiv_zero
     ∀ (environment : Fin
         (host.compilerLeaf.inheritedWires.extend target).length → model.Carrier)
       (relations : RelEnv model.Carrier host.focus.holeRels),
-      denoteItemSeq model named environment relations host.compilerLeaf.items ↔
-        denoteRegion model named environment relations
+      denoteItemSeq model  environment relations host.compilerLeaf.items ↔
+        denoteRegion model  environment relations
           (Region.spliceAt 0 host.compilerLeaf.items material wireMap
             relationMap) := by
   dsimp only
@@ -725,28 +724,28 @@ theorem sameSite_flat_equiv_zero
     Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels
   intro environment relations
   have contraction := spliceAt_contraction_sound 0 host.compilerLeaf.items
-    material wireMap relationMap model named environment relations (by
+    material wireMap relationMap model  environment relations (by
       intro emptyEnvironment hostDenotes
-      have hostDenotes' : denoteItemSeq model named environment relations
+      have hostDenotes' : denoteItemSeq model  environment relations
           host.compilerLeaf.items := by
         simpa [extendWireEnv_zero] using hostDenotes
       have supplied := sameSite_root_available input selection target
-        hadmissible targetEq targetNotSelected hzero model named environment
+        hadmissible targetEq targetNotSelected hzero model  environment
         relations hostDenotes'
       have rawMaterial :=
-        (denoteRegion_renameRelations model named relationMap
+        (denoteRegion_renameRelations model  relationMap
           (RelEnv.pullback relationMap relations) relations
           (RelEnv.pullback_agrees relationMap relations)
           (environment ∘ wireMap) material).mp supplied
       simpa [extendWireEnv_zero, spliceInput, host, pattern, material, wireMap,
         relationMap] using rawMaterial)
-  exact (denoteRegion_mk_zero_iff model named environment relations
+  exact (denoteRegion_mk_zero_iff model  environment relations
     host.compilerLeaf.items).symm.trans contraction.symm
 
 /-- The same-site nonempty flat contraction closes exactly to the executor's
 canonical focused splice body. -/
 theorem sameSite_hostBody_equiv_nonempty
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -755,7 +754,6 @@ theorem sameSite_hostBody_equiv_nonempty
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (Splice.Input.compiledSpliceHostView
         (iterationInput input selection target) hadmissible).focus.holeWires →
@@ -763,10 +761,10 @@ theorem sameSite_hostBody_equiv_nonempty
     (relations : RelEnv model.Carrier
       (Splice.Input.compiledSpliceHostView
         (iterationInput input selection target) hadmissible).focus.holeRels) :
-    denoteRegion model named environment relations
+    denoteRegion model  environment relations
         (Splice.Input.compiledSpliceHostView
           (iterationInput input selection target) hadmissible).focus.body ↔
-      denoteRegion model named environment relations
+      denoteRegion model  environment relations
         (iterationActualSpliceOfNonempty input selection target hadmissible
           hnonempty) := by
   let spliceInput := iterationInput input selection target
@@ -789,7 +787,7 @@ theorem sameSite_hostBody_equiv_nonempty
   have bodyEquiv :=
     VisualProof.Rule.IterationSoundness.Splice.Region.ContextPath.CompilerLeaf.body_equiv_of_region
       host.compilerLeaf flat
-    flatEquiv model named environment relations
+    flatEquiv model  environment relations
   let localWires :=
     (ConcreteElaboration.exactScopeWires spliceInput.coalesceFrameRaw
       spliceInput.site).length
@@ -798,14 +796,14 @@ theorem sameSite_hostBody_equiv_nonempty
   dsimp only at bodyEquiv
   have closed := close_flatSplice_denote_iff_spliceAt
     host.compilerLeaf.inheritedLength fullEq host.compilerLeaf.items material
-    wireMap relationMap model named environment relations
+    wireMap relationMap model  environment relations
   simpa [spliceInput, host, pattern, material, wireMap, relationMap, flat,
     localWires, fullEq, iterationActualSpliceOfNonempty, Function.comp_def]
     using bodyEquiv.trans closed
 
 /-- Empty-spine counterpart of `sameSite_hostBody_equiv_nonempty`. -/
 theorem sameSite_hostBody_equiv_zero
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -813,7 +811,6 @@ theorem sameSite_hostBody_equiv_zero
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (Splice.Input.compiledSpliceHostView
         (iterationInput input selection target) hadmissible).focus.holeWires →
@@ -821,10 +818,10 @@ theorem sameSite_hostBody_equiv_zero
     (relations : RelEnv model.Carrier
       (Splice.Input.compiledSpliceHostView
         (iterationInput input selection target) hadmissible).focus.holeRels) :
-    denoteRegion model named environment relations
+    denoteRegion model  environment relations
         (Splice.Input.compiledSpliceHostView
           (iterationInput input selection target) hadmissible).focus.body ↔
-      denoteRegion model named environment relations
+      denoteRegion model  environment relations
         (iterationActualSpliceOfEmpty input selection target hadmissible) := by
   let spliceInput := iterationInput input selection target
   let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
@@ -842,7 +839,7 @@ theorem sameSite_hostBody_equiv_zero
   have bodyEquiv :=
     VisualProof.Rule.IterationSoundness.Splice.Region.ContextPath.CompilerLeaf.body_equiv_of_region
       host.compilerLeaf flat
-    flatEquiv model named environment relations
+    flatEquiv model  environment relations
   let localWires :=
     (ConcreteElaboration.exactScopeWires spliceInput.coalesceFrameRaw
       spliceInput.site).length
@@ -851,7 +848,7 @@ theorem sameSite_hostBody_equiv_zero
   dsimp only at bodyEquiv
   have closed := close_flatSplice_denote_iff_spliceAt
     host.compilerLeaf.inheritedLength fullEq host.compilerLeaf.items material
-    wireMap relationMap model named environment relations
+    wireMap relationMap model  environment relations
   simpa [spliceInput, host, pattern, material, wireMap, relationMap, flat,
     localWires, fullEq, iterationActualSpliceOfEmpty, Function.comp_def]
     using bodyEquiv.trans closed
@@ -859,7 +856,7 @@ theorem sameSite_hostBody_equiv_zero
 /-- Same-site contraction transported into the ordered coalesced compiler
 leaf used by the executable nested nonempty source. -/
 theorem sameSite_coalescedFocus_equiv_nonempty
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -872,7 +869,6 @@ theorem sameSite_coalescedFocus_equiv_nonempty
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.val.wires wire).scope = input.val.root)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (Splice.Input.compiledSpliceCoalescedOpenView
         (iterationInput input selection target) hadmissible sourceBoundary
@@ -887,8 +883,8 @@ theorem sameSite_coalescedFocus_equiv_nonempty
     let hrels := Classical.choose
       (Splice.Input.compiledSpliceCoalescedHost_terminalLexical spliceInput
         hadmissible sourceBoundary sourceRoot hnested)
-    denoteRegion model named environment relations sourceView.focus.body ↔
-      denoteRegion model named environment relations
+    denoteRegion model  environment relations sourceView.focus.body ↔
+      denoteRegion model  environment relations
         (Splice.Input.compiledSpliceCoalescedActualOfNonempty spliceInput
           spliceInput.plugLayout hadmissible sourceBoundary sourceRoot hnested
           hnonempty hrels) := by
@@ -915,19 +911,19 @@ theorem sameSite_coalescedFocus_equiv_nonempty
     (spliceInput.coalesceFrameRaw_wellFormed hadmissible)
     sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
     hrels hbinders
-  have sourceHost := sourceHostIso.denotation model named environment
+  have sourceHost := sourceHostIso.denotation model  environment
     hostEnvironment (hrels ▸ relations) environments
   have relationAgreement : RelEnv.Agrees
       (Splice.Input.relationRenamingOfEq hrels) relations
       (hrels ▸ relations) :=
     relationRenamingOfEq_agrees_transport hrels relations
-  have sourceRename := denoteRegion_renameRelations model named
+  have sourceRename := denoteRegion_renameRelations model
     (Splice.Input.relationRenamingOfEq hrels) relations (hrels ▸ relations)
     relationAgreement environment sourceView.focus.body
   have hostActual := sameSite_hostBody_equiv_nonempty input selection target
-    hadmissible targetEq targetNotSelected hnonempty model named hostEnvironment
+    hadmissible targetEq targetNotSelected hnonempty model  hostEnvironment
     (hrels ▸ relations)
-  have renamedActual := denoteRegion_renameWires model named wire.symm
+  have renamedActual := denoteRegion_renameWires model  wire.symm
     environment (hrels ▸ relations)
     (iterationActualSpliceOfNonempty input selection target hadmissible
       hnonempty)
@@ -935,7 +931,7 @@ theorem sameSite_coalescedFocus_equiv_nonempty
     target hadmissible sourceBoundary sourceRoot hnested hnonempty hrels
   let rawPulled := (iterationActualSpliceOfNonempty input selection target
     hadmissible hnonempty).renameWires wire.symm
-  have castActual := denoteRegion_castRels_iff hrels.symm rawPulled model named
+  have castActual := denoteRegion_castRels_iff hrels.symm rawPulled model
     environment relations
   have castEq : hrels.symm ▸ rawPulled =
       Splice.Input.compiledSpliceCoalescedActualOfNonempty spliceInput
@@ -947,11 +943,11 @@ theorem sameSite_coalescedFocus_equiv_nonempty
           simpa [wire, spliceInput, sourceView, sourceLeaf, host] using
             pulledEq)
   have compiledActualSem :
-      denoteRegion model named environment relations
+      denoteRegion model  environment relations
           (Splice.Input.compiledSpliceCoalescedActualOfNonempty spliceInput
             spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
             hnested hnonempty hrels) ↔
-        denoteRegion model named environment (hrels ▸ relations)
+        denoteRegion model  environment (hrels ▸ relations)
           rawPulled := by
     rw [← castEq]
     exact castActual
@@ -962,7 +958,7 @@ theorem sameSite_coalescedFocus_equiv_nonempty
 
 /-- Empty-spine counterpart of `sameSite_coalescedFocus_equiv_nonempty`. -/
 theorem sameSite_coalescedFocus_equiv_zero
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -974,7 +970,6 @@ theorem sameSite_coalescedFocus_equiv_zero
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.val.wires wire).scope = input.val.root)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (Splice.Input.compiledSpliceCoalescedOpenView
         (iterationInput input selection target) hadmissible sourceBoundary
@@ -989,8 +984,8 @@ theorem sameSite_coalescedFocus_equiv_zero
     let hrels := Classical.choose
       (Splice.Input.compiledSpliceCoalescedHost_terminalLexical spliceInput
         hadmissible sourceBoundary sourceRoot hnested)
-    denoteRegion model named environment relations sourceView.focus.body ↔
-      denoteRegion model named environment relations
+    denoteRegion model  environment relations sourceView.focus.body ↔
+      denoteRegion model  environment relations
         (Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
           spliceInput.plugLayout hadmissible sourceBoundary sourceRoot hnested
           hzero hrels) := by
@@ -1017,26 +1012,26 @@ theorem sameSite_coalescedFocus_equiv_zero
     (spliceInput.coalesceFrameRaw_wellFormed hadmissible)
     sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
     hrels hbinders
-  have sourceHost := sourceHostIso.denotation model named environment
+  have sourceHost := sourceHostIso.denotation model  environment
     hostEnvironment (hrels ▸ relations) environments
   have relationAgreement : RelEnv.Agrees
       (Splice.Input.relationRenamingOfEq hrels) relations
       (hrels ▸ relations) :=
     relationRenamingOfEq_agrees_transport hrels relations
-  have sourceRename := denoteRegion_renameRelations model named
+  have sourceRename := denoteRegion_renameRelations model
     (Splice.Input.relationRenamingOfEq hrels) relations (hrels ▸ relations)
     relationAgreement environment sourceView.focus.body
   have hostActual := sameSite_hostBody_equiv_zero input selection target
-    hadmissible targetEq targetNotSelected hzero model named hostEnvironment
+    hadmissible targetEq targetNotSelected hzero model  hostEnvironment
     (hrels ▸ relations)
-  have renamedActual := denoteRegion_renameWires model named wire.symm
+  have renamedActual := denoteRegion_renameWires model  wire.symm
     environment (hrels ▸ relations)
     (iterationActualSpliceOfEmpty input selection target hadmissible)
   have pulledEq := iterationActualSplice_root_pulled_eq_compiled input selection
     target hadmissible sourceBoundary sourceRoot hnested hzero hrels
   let rawPulled := (iterationActualSpliceOfEmpty input selection target
     hadmissible).renameWires wire.symm
-  have castActual := denoteRegion_castRels_iff hrels.symm rawPulled model named
+  have castActual := denoteRegion_castRels_iff hrels.symm rawPulled model
     environment relations
   have castEq : hrels.symm ▸ rawPulled =
       Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
@@ -1048,11 +1043,11 @@ theorem sameSite_coalescedFocus_equiv_zero
           simpa [wire, spliceInput, sourceView, sourceLeaf, host] using
             pulledEq)
   have compiledActualSem :
-      denoteRegion model named environment relations
+      denoteRegion model  environment relations
           (Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
             spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
             hnested hzero hrels) ↔
-        denoteRegion model named environment (hrels ▸ relations)
+        denoteRegion model  environment (hrels ▸ relations)
           rawPulled := by
     rw [← castEq]
     exact castActual
@@ -1064,7 +1059,7 @@ theorem sameSite_coalescedFocus_equiv_zero
 /-- A same-site nonempty contraction lifts through the unchanged ordered-open
 context and the executable nested-source transport. -/
 theorem sameSite_nested_compiledSource_equiv_nonempty
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -1077,16 +1072,15 @@ theorem sameSite_nested_compiledSource_equiv_nonempty
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
         (iterationInput input selection target) hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
           (iterationInput input selection target) hadmissible sourceBoundary
           sourceRoot).elaborate args ↔
-      denoteOpen model named
+      denoteOpen model
         (Splice.Input.compiledSpliceNestedSourceOfNonempty
           (iterationInput input selection target)
           (iterationInput input selection target).plugLayout hadmissible
@@ -1108,30 +1102,30 @@ theorem sameSite_nested_compiledSource_equiv_nonempty
     target hadmissible targetEq targetNotSelected hnested hnonempty
     sourceBoundary sourceRoot
   have bodyEquiv : ∀ environment : Fin source.externalClasses → model.Carrier,
-      denoteRegion (relCtx := []) model named environment PUnit.unit
+      denoteRegion (relCtx := []) model  environment PUnit.unit
           source.body ↔
-        denoteRegion (relCtx := []) model named environment PUnit.unit
+        denoteRegion (relCtx := []) model  environment PUnit.unit
           compiledBody := by
     intro environment
     rw [← sourceView.rebuild]
     exact DiagramContext.fill_equiv sourceView.focus.context
-      sourceView.focus.body compiledActual model named environment PUnit.unit
+      sourceView.focus.body compiledActual model  environment PUnit.unit
       (fun holeEnvironment holeRelations =>
-        focusEquiv model named holeEnvironment holeRelations)
+        focusEquiv model  holeEnvironment holeRelations)
   have replacement := Splice.denote_replaceOpenBody_iff source compiledBody
-    model named args (fun environment => (bodyEquiv environment).symm)
+    model  args (fun environment => (bodyEquiv environment).symm)
   have actualIso := Splice.Input.compiledSpliceNestedActualIsoOfNonempty
     spliceInput spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
     hnested hnonempty hrels terminalBinders
   exact replacement.symm.trans (by
     simpa [Splice.Input.compiledSpliceNestedCoalescedActualOpenOfNonempty,
       source, sourceView, compiledBody, compiledActual, spliceInput] using
-      actualIso.denoteOpen_iff model named args)
+      actualIso.denoteOpen_iff model  args)
 
 /-- Empty-spine counterpart of
 `sameSite_nested_compiledSource_equiv_nonempty`. -/
 theorem sameSite_nested_compiledSource_equiv_zero
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -1143,16 +1137,15 @@ theorem sameSite_nested_compiledSource_equiv_zero
     (hnested : target ≠ input.val.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
         (iterationInput input selection target) hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
           (iterationInput input selection target) hadmissible sourceBoundary
           sourceRoot).elaborate args ↔
-      denoteOpen model named
+      denoteOpen model
         (Splice.Input.compiledSpliceNestedSourceOfEmpty
           (iterationInput input selection target)
           (iterationInput input selection target).plugLayout hadmissible
@@ -1174,34 +1167,34 @@ theorem sameSite_nested_compiledSource_equiv_zero
     hadmissible targetEq targetNotSelected hnested hzero sourceBoundary
     sourceRoot
   have bodyEquiv : ∀ environment : Fin source.externalClasses → model.Carrier,
-      denoteRegion (relCtx := []) model named environment PUnit.unit
+      denoteRegion (relCtx := []) model  environment PUnit.unit
           source.body ↔
-        denoteRegion (relCtx := []) model named environment PUnit.unit
+        denoteRegion (relCtx := []) model  environment PUnit.unit
           compiledBody := by
     intro environment
     rw [← sourceView.rebuild]
     exact DiagramContext.fill_equiv sourceView.focus.context
-      sourceView.focus.body compiledActual model named environment PUnit.unit
+      sourceView.focus.body compiledActual model  environment PUnit.unit
       (fun holeEnvironment holeRelations =>
-        focusEquiv model named holeEnvironment holeRelations)
+        focusEquiv model  holeEnvironment holeRelations)
   have replacement := Splice.denote_replaceOpenBody_iff source compiledBody
-    model named args (fun environment => (bodyEquiv environment).symm)
+    model  args (fun environment => (bodyEquiv environment).symm)
   have actualIso := Splice.Input.compiledSpliceNestedActualIsoOfEmpty
     spliceInput spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
     hnested hzero hrels terminalBinders
   exact replacement.symm.trans (by
     simpa [Splice.Input.compiledSpliceNestedCoalescedActualOpenOfEmpty,
       source, sourceView, compiledBody, compiledActual, spliceInput] using
-      actualIso.denoteOpen_iff model named args)
+      actualIso.denoteOpen_iff model  args)
 
 /-- Result-facing same-site iteration for a nested target and nonempty binder
 spine, preserving the caller's ordered boundary exactly. -/
 theorem sameSite_nested_output_equiv_nonempty
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
-    {result : CheckedDiagram signature}
-    (hsplice : Splice.Input.spliceChecked signature
+    {result : CheckedDiagram }
+    (hsplice : Splice.Input.spliceChecked
       (iterationInput input selection target) = .ok result)
     {sourceBoundary : List (Fin input.val.wireCount)}
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1212,9 +1205,8 @@ theorem sameSite_nested_output_equiv_nonempty
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
-    let source : OpenProofState signature := {
+    let source : OpenProofState  := {
       diagram := input
       boundary := sourceBoundary
       boundary_root_scoped := sourceRoot
@@ -1223,15 +1215,15 @@ theorem sameSite_nested_output_equiv_nonempty
       (iterationInput input selection target)
       (iterationInput input selection target).plugLayout
       (Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary sourceRoot
-    source.denote model named args ↔
-      output.denote model named
+    source.denote model  args ↔
+      output.denote model
         (args ∘ Fin.cast (by
           change (sourceBoundary.map _).length = sourceBoundary.length
           exact List.length_map (as := sourceBoundary) _)) := by
   dsimp only
   let spliceInput := iterationInput input selection target
   let hadmissible := (Splice.Input.spliceChecked_sound hsplice).2.1
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := sourceBoundary
     boundary_root_scoped := sourceRoot
@@ -1249,17 +1241,17 @@ theorem sameSite_nested_output_equiv_nonempty
   have frameIso := iterationCoalescedOpenIso input selection target
     sourceBoundary
   have frameEquiv := frameIso.denote_iff coalesced.property
-    source.asCheckedOpen.property model named compilerArgs
-  have sourceToCoalesced : source.denote model named args ↔
-      coalesced.denote model named compilerArgs := by
+    source.asCheckedOpen.property model  compilerArgs
+  have sourceToCoalesced : source.denote model  args ↔
+      coalesced.denote model  compilerArgs := by
     symm
     simpa [source, coalesced, compilerArgs, coalescedArity,
       CheckedOpenDiagram.denote, OpenProofState.denote, Function.comp_def] using
       frameEquiv
   have contraction := sameSite_nested_compiledSource_equiv_nonempty
-    targetEq targetNotSelected hnested hnonempty model named compilerArgs
+    targetEq targetNotSelected hnested hnonempty model  compilerArgs
   have executable := Splice.Input.spliceChecked_open_denotation_iff
-    spliceInput hsplice sourceBoundary sourceRoot model named compilerArgs
+    spliceInput hsplice sourceBoundary sourceRoot model  compilerArgs
   dsimp only at executable
   rw [denoteOpen_castArity] at executable
   have hsite : spliceInput.site ≠ spliceInput.frame.val.root := by
@@ -1272,11 +1264,11 @@ theorem sameSite_nested_output_equiv_nonempty
 
 /-- Empty-spine counterpart of `sameSite_nested_output_equiv_nonempty`. -/
 theorem sameSite_nested_output_equiv_zero
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
-    {result : CheckedDiagram signature}
-    (hsplice : Splice.Input.spliceChecked signature
+    {result : CheckedDiagram }
+    (hsplice : Splice.Input.spliceChecked
       (iterationInput input selection target) = .ok result)
     {sourceBoundary : List (Fin input.val.wireCount)}
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1286,9 +1278,8 @@ theorem sameSite_nested_output_equiv_zero
     (hnested : target ≠ input.val.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
-    let source : OpenProofState signature := {
+    let source : OpenProofState  := {
       diagram := input
       boundary := sourceBoundary
       boundary_root_scoped := sourceRoot
@@ -1297,15 +1288,15 @@ theorem sameSite_nested_output_equiv_zero
       (iterationInput input selection target)
       (iterationInput input selection target).plugLayout
       (Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary sourceRoot
-    source.denote model named args ↔
-      output.denote model named
+    source.denote model  args ↔
+      output.denote model
         (args ∘ Fin.cast (by
           change (sourceBoundary.map _).length = sourceBoundary.length
           exact List.length_map (as := sourceBoundary) _)) := by
   dsimp only
   let spliceInput := iterationInput input selection target
   let hadmissible := (Splice.Input.spliceChecked_sound hsplice).2.1
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := sourceBoundary
     boundary_root_scoped := sourceRoot
@@ -1323,17 +1314,17 @@ theorem sameSite_nested_output_equiv_zero
   have frameIso := iterationCoalescedOpenIso input selection target
     sourceBoundary
   have frameEquiv := frameIso.denote_iff coalesced.property
-    source.asCheckedOpen.property model named compilerArgs
-  have sourceToCoalesced : source.denote model named args ↔
-      coalesced.denote model named compilerArgs := by
+    source.asCheckedOpen.property model  compilerArgs
+  have sourceToCoalesced : source.denote model  args ↔
+      coalesced.denote model  compilerArgs := by
     symm
     simpa [source, coalesced, compilerArgs, coalescedArity,
       CheckedOpenDiagram.denote, OpenProofState.denote, Function.comp_def] using
       frameEquiv
   have contraction := sameSite_nested_compiledSource_equiv_zero targetEq
-    targetNotSelected hnested hzero model named compilerArgs
+    targetNotSelected hnested hzero model  compilerArgs
   have executable := Splice.Input.spliceChecked_open_denotation_iff
-    spliceInput hsplice sourceBoundary sourceRoot model named compilerArgs
+    spliceInput hsplice sourceBoundary sourceRoot model  compilerArgs
   dsimp only at executable
   rw [denoteOpen_castArity] at executable
   have hsite : spliceInput.site ≠ spliceInput.frame.val.root := by
@@ -1344,7 +1335,7 @@ theorem sameSite_nested_output_equiv_zero
       CheckedOpenDiagram.denote, Function.comp_def] using executable))
 
 theorem sameSite_root_compiledSource_equiv_nonempty
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -1357,16 +1348,15 @@ theorem sameSite_root_compiledSource_equiv_nonempty
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
         (iterationInput input selection target) hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
           (iterationInput input selection target) hadmissible sourceBoundary
           sourceRoot).elaborate args ↔
-      denoteOpen model named
+      denoteOpen model
         (Splice.Input.compiledSpliceRootSourceOfNonempty
           (iterationInput input selection target)
           (iterationInput input selection target).plugLayout hadmissible
@@ -1379,17 +1369,17 @@ theorem sameSite_root_compiledSource_equiv_nonempty
   · intro coalesced
     have host := (Splice.Input.compiledSpliceRootHostOfNonempty_denote_iff_coalesced
       spliceInput spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
-      hsite' hnonempty model named args).mpr coalesced
+      hsite' hnonempty model  args).mpr coalesced
     let rootHost := Splice.Input.compiledSpliceRootHostOfNonempty spliceInput
       spliceInput.plugLayout hadmissible sourceBoundary sourceRoot hsite'
       hnonempty
     let rootSource := Splice.Input.compiledSpliceRootSourceOfNonempty spliceInput
       spliceInput.plugLayout hadmissible sourceBoundary sourceRoot hsite'
       hnonempty
-    have host' : denoteOpen model named rootHost args := by
+    have host' : denoteOpen model  rootHost args := by
       simpa [rootHost] using host
-    have hostToSource : denoteOpen model named rootHost args →
-        denoteOpen model named rootSource args := by
+    have hostToSource : denoteOpen model  rootHost args →
+        denoteOpen model  rootSource args := by
       unfold rootHost rootSource
       unfold Splice.Input.compiledSpliceRootHostOfNonempty
         Splice.Input.compiledSpliceRootHostFromItems
@@ -1462,23 +1452,23 @@ theorem sameSite_root_compiledSource_equiv_nonempty
         PUnit.unit
       let hostRelations : RelEnv model.Carrier hostView.focus.holeRels :=
         RelEnv.pullback hostRel outputRelations
-      have preparedHost := (denoteItemSeq_renameWires model named reindex
+      have preparedHost := (denoteItemSeq_renameWires model  reindex
         fullOld outputRelations
         ((hostView.compilerLeaf.items.renameWires hostSeam).renameRelations
           hostRel)).mp (by
             simpa [hostView, pattern, outputWitness, outputLeaf, castEq,
               closedWire, rootExact, outputRootEq, outputTransport, reindex,
               hostSeam, hostRel, fullOld, outputRelations] using oldHost)
-      have seamHost := (denoteItemSeq_renameRelations model named hostRel
+      have seamHost := (denoteItemSeq_renameRelations model  hostRel
         hostRelations outputRelations
         (RelEnv.pullback_agrees hostRel outputRelations)
         (fullOld ∘ reindex)
         (hostView.compilerLeaf.items.renameWires hostSeam)).mp preparedHost
-      have rawHost := (denoteItemSeq_renameWires model named hostSeam
+      have rawHost := (denoteItemSeq_renameWires model  hostSeam
         (fullOld ∘ reindex) hostRelations hostView.compilerLeaf.items).mp
         seamHost
       have material := sameSite_terminal_available input selection target
-        hadmissible targetEq targetNotSelected hnonempty model named
+        hadmissible targetEq targetNotSelected hnonempty model
         (((fullOld ∘ reindex) ∘ hostSeam)) hostRelations rawHost
       obtain ⟨materialLocal, materialItems⟩ := material
       let hidden := (Splice.Input.PlugLayout.coalescedOpenRoot spliceInput
@@ -1506,25 +1496,25 @@ theorem sameSite_root_compiledSource_equiv_nonempty
         exact congrFun
           (extendWireEnv_conjoinLeft_preserve environment oldLocal
             materialLocal) _
-      have rawHostNew : denoteItemSeq model named
+      have rawHostNew : denoteItemSeq model
           (((fullNew ∘ reindex) ∘ hostSeam)) hostRelations
           hostView.compilerLeaf.items := by
         rw [hostEnvironmentEq]
         exact rawHost
-      have seamHostNew := (denoteItemSeq_renameWires model named hostSeam
+      have seamHostNew := (denoteItemSeq_renameWires model  hostSeam
         (fullNew ∘ reindex) hostRelations hostView.compilerLeaf.items).mpr
         rawHostNew
-      have preparedHostNew := (denoteItemSeq_renameRelations model named
+      have preparedHostNew := (denoteItemSeq_renameRelations model
         hostRel hostRelations outputRelations
         (RelEnv.pullback_agrees hostRel outputRelations)
         (fullNew ∘ reindex)
         (hostView.compilerLeaf.items.renameWires hostSeam)).mpr seamHostNew
-      have finalHostNew := (denoteItemSeq_renameWires model named reindex
+      have finalHostNew := (denoteItemSeq_renameWires model  reindex
         fullNew outputRelations
         ((hostView.compilerLeaf.items.renameWires hostSeam).renameRelations
           hostRel)).mpr preparedHostNew
       refine ⟨newLocal, ?_⟩
-      change denoteItemSeq model named fullNew outputRelations
+      change denoteItemSeq model  fullNew outputRelations
         ((hostPrepared.append patternPrepared).renameWires reindex)
       rw [ItemSeq.renameWires_append, denoteItemSeq_append]
       refine ⟨?_, ?_⟩
@@ -1548,7 +1538,7 @@ theorem sameSite_root_compiledSource_equiv_nonempty
         let materialRelations : RelEnv model.Carrier
             pattern.witness.toFocus.holeRels :=
           RelEnv.pullback actualRel hostRelations
-        have rawPattern := (denoteItemSeq_renameWires model named
+        have rawPattern := (denoteItemSeq_renameWires model
           (Fin.cast patternLength) materialEnvironment materialRelations
           pattern.leaf.items).mp (by
             simpa [pattern, hostView, actualWire, actualRel,
@@ -1613,15 +1603,15 @@ theorem sameSite_root_compiledSource_equiv_nonempty
               rfl
             rw [outerIndexEq, Fin.addCases_right, Fin.addCases_right,
               Fin.addCases_right]
-        have rawPatternNew : denoteItemSeq model named
+        have rawPatternNew : denoteItemSeq model
             (((fullNew ∘ reindex) ∘ patternSeam)) materialRelations
             pattern.leaf.items := by
           rw [patternEnvironmentEq]
           exact rawPattern
-        have seamPattern := (denoteItemSeq_renameWires model named
+        have seamPattern := (denoteItemSeq_renameWires model
           patternSeam (fullNew ∘ reindex) materialRelations
           pattern.leaf.items).mpr rawPatternNew
-        have preparedPattern := (denoteItemSeq_renameRelations model named
+        have preparedPattern := (denoteItemSeq_renameRelations model
           patternRel materialRelations outputRelations (by
             intro arity relation
             exact (RelEnv.pullback_agrees actualRel hostRelations arity
@@ -1630,7 +1620,7 @@ theorem sameSite_root_compiledSource_equiv_nonempty
                 (actualRel relation)))
           (fullNew ∘ reindex)
           (pattern.leaf.items.renameWires patternSeam)).mpr seamPattern
-        exact (denoteItemSeq_renameWires model named reindex fullNew
+        exact (denoteItemSeq_renameWires model  reindex fullNew
           outputRelations patternPrepared).mpr (by
             simpa [patternPrepared] using preparedPattern)
     exact (by
@@ -1638,10 +1628,10 @@ theorem sameSite_root_compiledSource_equiv_nonempty
         hostToSource host')
   · exact Splice.Input.compiledSpliceRootSourceOfNonempty_projects_coalesced
       spliceInput spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
-      hsite' hnonempty model named args
+      hsite' hnonempty model  args
 
 theorem sameSite_root_compiledSource_equiv_zero
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -1653,16 +1643,15 @@ theorem sameSite_root_compiledSource_equiv_zero
     (hsite : target = input.val.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
         (iterationInput input selection target) hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
           (iterationInput input selection target) hadmissible sourceBoundary
           sourceRoot).elaborate args ↔
-      denoteOpen model named
+      denoteOpen model
         (Splice.Input.compiledSpliceRootSourceOfEmpty
           (iterationInput input selection target)
           (iterationInput input selection target).plugLayout hadmissible
@@ -1675,15 +1664,15 @@ theorem sameSite_root_compiledSource_equiv_zero
   · intro coalesced
     have host := (Splice.Input.compiledSpliceRootHostOfEmpty_denote_iff_coalesced
       spliceInput spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
-      hsite' hzero model named args).mpr coalesced
+      hsite' hzero model  args).mpr coalesced
     let rootHost := Splice.Input.compiledSpliceRootHostOfEmpty spliceInput
       spliceInput.plugLayout hadmissible sourceBoundary sourceRoot hsite' hzero
     let rootSource := Splice.Input.compiledSpliceRootSourceOfEmpty spliceInput
       spliceInput.plugLayout hadmissible sourceBoundary sourceRoot hsite' hzero
-    have host' : denoteOpen model named rootHost args := by
+    have host' : denoteOpen model  rootHost args := by
       simpa [rootHost] using host
-    have hostToSource : denoteOpen model named rootHost args →
-        denoteOpen model named rootSource args := by
+    have hostToSource : denoteOpen model  rootHost args →
+        denoteOpen model  rootSource args := by
       unfold rootHost rootSource
       unfold Splice.Input.compiledSpliceRootHostOfEmpty
         Splice.Input.compiledSpliceRootHostFromItems
@@ -1755,23 +1744,23 @@ theorem sameSite_root_compiledSource_equiv_zero
         PUnit.unit
       let hostRelations : RelEnv model.Carrier hostView.focus.holeRels :=
         RelEnv.pullback hostRel outputRelations
-      have preparedHost := (denoteItemSeq_renameWires model named reindex
+      have preparedHost := (denoteItemSeq_renameWires model  reindex
         fullOld outputRelations
         ((hostView.compilerLeaf.items.renameWires hostSeam).renameRelations
           hostRel)).mp (by
             simpa [hostView, pattern, outputWitness, outputLeaf, castEq,
               closedWire, rootExact, outputRootEq, outputTransport, reindex,
               hostSeam, hostRel, fullOld, outputRelations] using oldHost)
-      have seamHost := (denoteItemSeq_renameRelations model named hostRel
+      have seamHost := (denoteItemSeq_renameRelations model  hostRel
         hostRelations outputRelations
         (RelEnv.pullback_agrees hostRel outputRelations)
         (fullOld ∘ reindex)
         (hostView.compilerLeaf.items.renameWires hostSeam)).mp preparedHost
-      have rawHost := (denoteItemSeq_renameWires model named hostSeam
+      have rawHost := (denoteItemSeq_renameWires model  hostSeam
         (fullOld ∘ reindex) hostRelations hostView.compilerLeaf.items).mp
         seamHost
       have material := sameSite_root_available input selection target
-        hadmissible targetEq targetNotSelected hzero model named
+        hadmissible targetEq targetNotSelected hzero model
         (((fullOld ∘ reindex) ∘ hostSeam)) hostRelations rawHost
       obtain ⟨materialLocal, materialItems⟩ := material
       let hidden := (Splice.Input.PlugLayout.coalescedOpenRoot spliceInput
@@ -1797,25 +1786,25 @@ theorem sameSite_root_compiledSource_equiv_zero
         exact congrFun
           (extendWireEnv_conjoinLeft_preserve environment oldLocal
             materialLocal) _
-      have rawHostNew : denoteItemSeq model named
+      have rawHostNew : denoteItemSeq model
           (((fullNew ∘ reindex) ∘ hostSeam)) hostRelations
           hostView.compilerLeaf.items := by
         rw [hostEnvironmentEq]
         exact rawHost
-      have seamHostNew := (denoteItemSeq_renameWires model named hostSeam
+      have seamHostNew := (denoteItemSeq_renameWires model  hostSeam
         (fullNew ∘ reindex) hostRelations hostView.compilerLeaf.items).mpr
         rawHostNew
-      have preparedHostNew := (denoteItemSeq_renameRelations model named
+      have preparedHostNew := (denoteItemSeq_renameRelations model
         hostRel hostRelations outputRelations
         (RelEnv.pullback_agrees hostRel outputRelations)
         (fullNew ∘ reindex)
         (hostView.compilerLeaf.items.renameWires hostSeam)).mpr seamHostNew
-      have finalHostNew := (denoteItemSeq_renameWires model named reindex
+      have finalHostNew := (denoteItemSeq_renameWires model  reindex
         fullNew outputRelations
         ((hostView.compilerLeaf.items.renameWires hostSeam).renameRelations
           hostRel)).mpr preparedHostNew
       refine ⟨newLocal, ?_⟩
-      change denoteItemSeq model named fullNew outputRelations
+      change denoteItemSeq model  fullNew outputRelations
         ((hostPrepared.append patternPrepared).renameWires reindex)
       rw [ItemSeq.renameWires_append, denoteItemSeq_append]
       refine ⟨?_, ?_⟩
@@ -1836,7 +1825,7 @@ theorem sameSite_root_compiledSource_equiv_zero
             hostView.focus.holeRels
         let materialRelations : RelEnv model.Carrier [] :=
           RelEnv.pullback materialRelMap hostRelations
-        have unrenamedPattern := (denoteItemSeq_renameRelations model named
+        have unrenamedPattern := (denoteItemSeq_renameRelations model
           materialRelMap materialRelations hostRelations
           (RelEnv.pullback_agrees materialRelMap hostRelations)
           materialEnvironment
@@ -1844,7 +1833,7 @@ theorem sameSite_root_compiledSource_equiv_zero
             simpa [pattern, hostView, materialEnvironment, materialRelMap,
               materialRelations, ItemSeq.castWiresEq_eq_renameWires] using
               materialItems)
-        have rawPattern := (denoteItemSeq_renameWires model named
+        have rawPattern := (denoteItemSeq_renameWires model
           (Fin.cast patternLength) materialEnvironment materialRelations
           pattern.items).mp unrenamedPattern
         have patternEnvironmentEq :
@@ -1911,22 +1900,22 @@ theorem sameSite_root_compiledSource_equiv_zero
               rfl
             rw [outerIndexEq, Fin.addCases_right, Fin.addCases_right,
               Fin.addCases_right]
-        have rawPatternNew : denoteItemSeq model named
+        have rawPatternNew : denoteItemSeq model
             (((fullNew ∘ reindex) ∘ patternSeam)) materialRelations
             pattern.items := by
           rw [patternEnvironmentEq]
           exact rawPattern
-        have seamPattern := (denoteItemSeq_renameWires model named
+        have seamPattern := (denoteItemSeq_renameWires model
           patternSeam (fullNew ∘ reindex) materialRelations
           pattern.items).mpr rawPatternNew
-        have preparedPattern := (denoteItemSeq_renameRelations model named
+        have preparedPattern := (denoteItemSeq_renameRelations model
           patternRel materialRelations outputRelations (by
             intro arity relation
             exact RelEnv.pullback_agrees patternRel outputRelations arity
               relation)
           (fullNew ∘ reindex)
           (pattern.items.renameWires patternSeam)).mpr seamPattern
-        exact (denoteItemSeq_renameWires model named reindex fullNew
+        exact (denoteItemSeq_renameWires model  reindex fullNew
           outputRelations patternPrepared).mpr (by
             simpa [patternPrepared] using preparedPattern)
     exact (by
@@ -1934,16 +1923,16 @@ theorem sameSite_root_compiledSource_equiv_zero
         hostToSource host')
   · exact Splice.Input.compiledSpliceRootSourceOfEmpty_projects_coalesced
       spliceInput spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
-      hsite' hzero model named args
+      hsite' hzero model  args
 
 /-- Result-facing same-site iteration at the sheet root with a nonempty binder
 spine, preserving the caller's ordered boundary exactly. -/
 theorem sameSite_root_output_equiv_nonempty
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
-    {result : CheckedDiagram signature}
-    (hsplice : Splice.Input.spliceChecked signature
+    {result : CheckedDiagram }
+    (hsplice : Splice.Input.spliceChecked
       (iterationInput input selection target) = .ok result)
     {sourceBoundary : List (Fin input.val.wireCount)}
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1954,9 +1943,8 @@ theorem sameSite_root_output_equiv_nonempty
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
-    let source : OpenProofState signature := {
+    let source : OpenProofState  := {
       diagram := input
       boundary := sourceBoundary
       boundary_root_scoped := sourceRoot
@@ -1965,15 +1953,15 @@ theorem sameSite_root_output_equiv_nonempty
       (iterationInput input selection target)
       (iterationInput input selection target).plugLayout
       (Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary sourceRoot
-    source.denote model named args ↔
-      output.denote model named
+    source.denote model  args ↔
+      output.denote model
         (args ∘ Fin.cast (by
           change (sourceBoundary.map _).length = sourceBoundary.length
           exact List.length_map (as := sourceBoundary) _)) := by
   dsimp only
   let spliceInput := iterationInput input selection target
   let hadmissible := (Splice.Input.spliceChecked_sound hsplice).2.1
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := sourceBoundary
     boundary_root_scoped := sourceRoot
@@ -1991,17 +1979,17 @@ theorem sameSite_root_output_equiv_nonempty
   have frameIso := iterationCoalescedOpenIso input selection target
     sourceBoundary
   have frameEquiv := frameIso.denote_iff coalesced.property
-    source.asCheckedOpen.property model named compilerArgs
-  have sourceToCoalesced : source.denote model named args ↔
-      coalesced.denote model named compilerArgs := by
+    source.asCheckedOpen.property model  compilerArgs
+  have sourceToCoalesced : source.denote model  args ↔
+      coalesced.denote model  compilerArgs := by
     symm
     simpa [source, coalesced, compilerArgs, coalescedArity,
       CheckedOpenDiagram.denote, OpenProofState.denote, Function.comp_def] using
       frameEquiv
   have contraction := sameSite_root_compiledSource_equiv_nonempty targetEq
-    targetNotSelected hroot hnonempty model named compilerArgs
+    targetNotSelected hroot hnonempty model  compilerArgs
   have executable := Splice.Input.spliceChecked_open_denotation_iff
-    spliceInput hsplice sourceBoundary sourceRoot model named compilerArgs
+    spliceInput hsplice sourceBoundary sourceRoot model  compilerArgs
   dsimp only at executable
   rw [denoteOpen_castArity] at executable
   have hsite : spliceInput.site = spliceInput.frame.val.root := by
@@ -2014,11 +2002,11 @@ theorem sameSite_root_output_equiv_nonempty
 
 /-- Empty-spine counterpart of `sameSite_root_output_equiv_nonempty`. -/
 theorem sameSite_root_output_equiv_zero
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
-    {result : CheckedDiagram signature}
-    (hsplice : Splice.Input.spliceChecked signature
+    {result : CheckedDiagram }
+    (hsplice : Splice.Input.spliceChecked
       (iterationInput input selection target) = .ok result)
     {sourceBoundary : List (Fin input.val.wireCount)}
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -2028,9 +2016,8 @@ theorem sameSite_root_output_equiv_zero
     (hroot : target = input.val.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
-    let source : OpenProofState signature := {
+    let source : OpenProofState  := {
       diagram := input
       boundary := sourceBoundary
       boundary_root_scoped := sourceRoot
@@ -2039,15 +2026,15 @@ theorem sameSite_root_output_equiv_zero
       (iterationInput input selection target)
       (iterationInput input selection target).plugLayout
       (Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary sourceRoot
-    source.denote model named args ↔
-      output.denote model named
+    source.denote model  args ↔
+      output.denote model
         (args ∘ Fin.cast (by
           change (sourceBoundary.map _).length = sourceBoundary.length
           exact List.length_map (as := sourceBoundary) _)) := by
   dsimp only
   let spliceInput := iterationInput input selection target
   let hadmissible := (Splice.Input.spliceChecked_sound hsplice).2.1
-  let source : OpenProofState signature := {
+  let source : OpenProofState  := {
     diagram := input
     boundary := sourceBoundary
     boundary_root_scoped := sourceRoot
@@ -2065,17 +2052,17 @@ theorem sameSite_root_output_equiv_zero
   have frameIso := iterationCoalescedOpenIso input selection target
     sourceBoundary
   have frameEquiv := frameIso.denote_iff coalesced.property
-    source.asCheckedOpen.property model named compilerArgs
-  have sourceToCoalesced : source.denote model named args ↔
-      coalesced.denote model named compilerArgs := by
+    source.asCheckedOpen.property model  compilerArgs
+  have sourceToCoalesced : source.denote model  args ↔
+      coalesced.denote model  compilerArgs := by
     symm
     simpa [source, coalesced, compilerArgs, coalescedArity,
       CheckedOpenDiagram.denote, OpenProofState.denote, Function.comp_def] using
       frameEquiv
   have contraction := sameSite_root_compiledSource_equiv_zero targetEq
-    targetNotSelected hroot hzero model named compilerArgs
+    targetNotSelected hroot hzero model  compilerArgs
   have executable := Splice.Input.spliceChecked_open_denotation_iff
-    spliceInput hsplice sourceBoundary sourceRoot model named compilerArgs
+    spliceInput hsplice sourceBoundary sourceRoot model  compilerArgs
   dsimp only at executable
   rw [denoteOpen_castArity] at executable
   have hsite : spliceInput.site = spliceInput.frame.val.root := by

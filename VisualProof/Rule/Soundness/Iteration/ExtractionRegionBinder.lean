@@ -15,7 +15,7 @@ private theorem directParent_encloses
 
 /-- A copied bubble binder has exactly the same arity at its host provenance. -/
 theorem extractionBinderOrigin_bubble
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (binder : Fin layout.regionCount)
@@ -68,7 +68,7 @@ theorem extractionBinderOrigin_bubble
         rw [extractionBinderOrigin_materialRegion, hostKind, arityEq]
 
 private theorem anchor_encloses_selectedRegion
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (region : Fin input.val.regionCount)
     (selected : region ∈ selection.selectedRegions) :
@@ -84,7 +84,7 @@ private theorem anchor_encloses_selectedRegion
 /-- A copied bubble visible at copied material maps to a host bubble visible at
 the corresponding host region. -/
 theorem extractionBinderOrigin_bubble_encloses_material
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
@@ -130,7 +130,7 @@ theorem extractionBinderOrigin_bubble_encloses_material
 
 /-- Relation-variable transport at one copied material region. -/
 noncomputable def extractionMaterialRelationRenaming
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
@@ -165,7 +165,7 @@ noncomputable def extractionMaterialRelationRenaming
       (hostCover _ hostParent arity hostBubble provenance.2)
 
 theorem extractionMaterialRelationRenaming_lookup
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
@@ -208,12 +208,11 @@ theorem extractionMaterialRelationRenaming_lookup
 /-- The generic node compiler kernel specialized to one recursively copied
 material region and its derived relation renaming. -/
 theorem extractionCompileNode_itemSimulationAtMaterial
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fragmentContext : ConcreteElaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
@@ -232,15 +231,15 @@ theorem extractionCompileNode_itemSimulationAtMaterial
     (hostCover : hostBinders.Covers
       (selection.selectedRegions.get material))
     (node : Fin layout.nodeCount)
-    (fragmentItem : Item signature fragmentContext.length fragmentRels)
-    (hostItem : Item signature hostContext.length hostRels)
-    (fragmentCompiled : ConcreteElaboration.compileNode? signature
+    (fragmentItem : Item  fragmentContext.length fragmentRels)
+    (hostItem : Item  hostContext.length hostRels)
+    (fragmentCompiled : ConcreteElaboration.compileNode?
       (input.val.extractDiagramRaw selection layout) fragmentContext
       fragmentBinders node = some fragmentItem)
-    (hostCompiled : ConcreteElaboration.compileNode? signature input.val
+    (hostCompiled : ConcreteElaboration.compileNode?  input.val
       hostContext hostBinders (selection.selectedNodes.get node) =
         some hostItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
       (fragmentItem.renameRelations
@@ -248,7 +247,7 @@ theorem extractionCompileNode_itemSimulationAtMaterial
           fragmentBinders fragmentEnumeration hostBinders hostCover))
       hostItem := by
   apply extractionCompileNode_itemSimulationOfMembership input selection layout
-    model named direction fragmentContext hostContext membership hostNodup fragmentBinders
+    model  direction fragmentContext hostContext membership hostNodup fragmentBinders
     hostBinders
     (extractionMaterialRelationRenaming input selection layout material
       fragmentBinders fragmentEnumeration hostBinders hostCover)

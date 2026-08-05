@@ -13,16 +13,15 @@ trace when wire values are pulled back through the trace's certified frame
 map.  In particular, every occurrence is interpreted with one relation value,
 not with an independently chosen per-splice approximation. -/
 theorem terminalRelationOfValues_eq_along_trace
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -34,16 +33,15 @@ theorem terminalRelationOfValues_eq_along_trace
     (resultArguments : Fin payload.arity → Fin result.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (resultWire : Fin result.diagram.val.wireCount → model.Carrier)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index)) :
     terminalRelationOfValues payload state stateSite stateArguments hnonempty
-        model named (resultWire ∘ trace.wireMap) values =
+        model  (resultWire ∘ trace.wireMap) values =
       terminalRelationOfValues payload result resultSite resultArguments
-        hnonempty model named resultWire values := by
+        hnonempty model  resultWire values := by
   apply terminalRelationOfValues_eq payload state result stateSite resultSite
-    stateArguments resultArguments hnonempty model named
+    stateArguments resultArguments hnonempty model
       (resultWire ∘ trace.wireMap) resultWire values
   funext index
   change resultWire (trace.wireMap (state.parameters index)) =
@@ -55,16 +53,15 @@ valuation back through a complete executor trace preserves application of the
 single canonical terminal relation.  Repeated argument wires remain repeated:
 the statement is pointwise over the executor's `Fin`-indexed argument vector. -/
 theorem terminalRelationOfValues_apply_along_trace
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -77,18 +74,17 @@ theorem terminalRelationOfValues_apply_along_trace
     (arguments_eq : trace.wireMap ∘ stateArguments = resultArguments)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (resultWire : Fin result.diagram.val.wireCount → model.Carrier)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index)) :
     terminalRelationOfValues payload state stateSite stateArguments hnonempty
-        model named (resultWire ∘ trace.wireMap) values
+        model  (resultWire ∘ trace.wireMap) values
         ((resultWire ∘ trace.wireMap) ∘ stateArguments) ↔
       terminalRelationOfValues payload result resultSite resultArguments
-        hnonempty model named resultWire values
+        hnonempty model  resultWire values
         (resultWire ∘ resultArguments) := by
   rw [terminalRelationOfValues_eq_along_trace trace stateSite resultSite
-    stateArguments resultArguments hnonempty model named resultWire values]
+    stateArguments resultArguments hnonempty model  resultWire values]
   have argumentValues :
       ((resultWire ∘ trace.wireMap) ∘ stateArguments) =
         resultWire ∘ resultArguments := by

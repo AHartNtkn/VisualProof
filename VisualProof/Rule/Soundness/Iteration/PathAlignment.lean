@@ -8,12 +8,12 @@ open VisualProof.Diagram
 open VisualProof.Diagram.Splice.Input
 
 theorem compilerLeaf_sameDiagramFrame
-    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed signature)
+    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed )
     {site : Fin diagram.regionCount}
     {sourceOuter sourceLocal targetOuter targetLocal : Nat}
     {rels : Theory.RelCtx}
-    {sourceSeq : ItemSeq signature (sourceOuter + sourceLocal) rels}
-    {targetSeq : ItemSeq signature (targetOuter + targetLocal) rels}
+    {sourceSeq : ItemSeq  (sourceOuter + sourceLocal) rels}
+    {targetSeq : ItemSeq  (targetOuter + targetLocal) rels}
     (sourceState : Splice.Region.ContextPath.CompilerLeaf diagram site
       (.here (.mk sourceLocal sourceSeq)))
     (targetState : Splice.Region.ContextPath.CompilerLeaf diagram site
@@ -56,11 +56,11 @@ theorem compilerLeaf_sameDiagramFrame
     simpa [concreteIso, bindersEq]
   let occurrences := ConcreteElaboration.localOccurrences diagram site
   let occurrencePositions := FiniteEquiv.refl (Fin occurrences.length)
-  have rawIso : ItemSeqIso signature extended rels sourceState.items
+  have rawIso : ItemSeqIso  extended rels sourceState.items
       targetState.items := by
     apply ConcreteElaboration.compileOccurrencesWith?_iso
-      (ConcreteElaboration.compileRegion? signature diagram sourceState.fuel)
-      (ConcreteElaboration.compileRegion? signature diagram targetState.fuel)
+      (ConcreteElaboration.compileRegion?  diagram sourceState.fuel)
+      (ConcreteElaboration.compileRegion?  diagram targetState.fuel)
       (sourceState.inheritedWires.extend site)
       (targetState.inheritedWires.extend site)
       sourceState.binders targetState.binders occurrences occurrences
@@ -69,24 +69,24 @@ theorem compilerLeaf_sameDiagramFrame
     intro occurrenceIndex
     let sourceItemIndex : Fin sourceState.items.length := Fin.cast
       (ConcreteElaboration.compileOccurrencesWith?_length
-        (ConcreteElaboration.compileRegion? signature diagram sourceState.fuel)
+        (ConcreteElaboration.compileRegion?  diagram sourceState.fuel)
         (sourceState.inheritedWires.extend site) sourceState.binders
         sourceState.itemsComputation).symm occurrenceIndex
     let targetItemIndex : Fin targetState.items.length := Fin.cast
       (ConcreteElaboration.compileOccurrencesWith?_length
-        (ConcreteElaboration.compileRegion? signature diagram targetState.fuel)
+        (ConcreteElaboration.compileRegion?  diagram targetState.fuel)
         (targetState.inheritedWires.extend site) targetState.binders
         targetState.itemsComputation).symm occurrenceIndex
     have sourceGet := ConcreteElaboration.compileOccurrencesWith?_get
-      (ConcreteElaboration.compileRegion? signature diagram sourceState.fuel)
+      (ConcreteElaboration.compileRegion?  diagram sourceState.fuel)
       (sourceState.inheritedWires.extend site) sourceState.binders
       sourceState.itemsComputation occurrenceIndex
     have targetGet := ConcreteElaboration.compileOccurrencesWith?_get
-      (ConcreteElaboration.compileRegion? signature diagram targetState.fuel)
+      (ConcreteElaboration.compileRegion?  diagram targetState.fuel)
       (targetState.inheritedWires.extend site) targetState.binders
       targetState.itemsComputation occurrenceIndex
-    have targetGet' : ConcreteElaboration.compileOccurrenceWith? signature
-        diagram (ConcreteElaboration.compileRegion? signature diagram
+    have targetGet' : ConcreteElaboration.compileOccurrenceWith?
+        diagram (ConcreteElaboration.compileRegion?  diagram
           targetState.fuel)
         (targetState.inheritedWires.extend site) targetState.binders
         (ConcreteElaboration.renameOccurrence concreteIso
@@ -157,11 +157,11 @@ theorem compilerLeaf_sameDiagramFrame
       funext index
       rfl))
   let sourceLength := ConcreteElaboration.compileOccurrencesWith?_length
-    (ConcreteElaboration.compileRegion? signature diagram sourceState.fuel)
+    (ConcreteElaboration.compileRegion?  diagram sourceState.fuel)
     (sourceState.inheritedWires.extend site) sourceState.binders
     sourceState.itemsComputation
   let targetLength := ConcreteElaboration.compileOccurrencesWith?_length
-    (ConcreteElaboration.compileRegion? signature diagram targetState.fuel)
+    (ConcreteElaboration.compileRegion?  diagram targetState.fuel)
     (targetState.inheritedWires.extend site) targetState.binders
     targetState.itemsComputation
   let rawPositions : FiniteEquiv (Fin sourceState.items.length)
@@ -169,16 +169,16 @@ theorem compilerLeaf_sameDiagramFrame
     (FiniteEquiv.finCast sourceLength).trans
       (FiniteEquiv.finCast targetLength.symm)
   have rawItems : ∀ index : Fin sourceState.items.length,
-      ItemIso signature extended rels (sourceState.items.get index)
+      ItemIso  extended rels (sourceState.items.get index)
         (targetState.items.get (rawPositions index)) := by
     intro index
     let occurrenceIndex : Fin occurrences.length := Fin.cast sourceLength index
     have sourceGet := ConcreteElaboration.compileOccurrencesWith?_get
-      (ConcreteElaboration.compileRegion? signature diagram sourceState.fuel)
+      (ConcreteElaboration.compileRegion?  diagram sourceState.fuel)
       (sourceState.inheritedWires.extend site) sourceState.binders
       sourceState.itemsComputation occurrenceIndex
     have targetGet := ConcreteElaboration.compileOccurrencesWith?_get
-      (ConcreteElaboration.compileRegion? signature diagram targetState.fuel)
+      (ConcreteElaboration.compileRegion?  diagram targetState.fuel)
       (targetState.inheritedWires.extend site) targetState.binders
       targetState.itemsComputation occurrenceIndex
     have sourcePosition : Fin.cast sourceLength.symm occurrenceIndex = index := by
@@ -190,8 +190,8 @@ theorem compilerLeaf_sameDiagramFrame
       rfl
     rw [sourcePosition] at sourceGet
     rw [targetPosition] at targetGet
-    have targetGet' : ConcreteElaboration.compileOccurrenceWith? signature
-        diagram (ConcreteElaboration.compileRegion? signature diagram
+    have targetGet' : ConcreteElaboration.compileOccurrenceWith?
+        diagram (ConcreteElaboration.compileRegion?  diagram
           targetState.fuel)
         (targetState.inheritedWires.extend site) targetState.binders
         (ConcreteElaboration.renameOccurrence concreteIso
@@ -340,17 +340,17 @@ structure SameDiagramCompilerTraceAlignment
     {sourceRoute : Splice.RegionRoute diagram start target sourcePath}
     {targetRoute : Splice.RegionRoute diagram start target targetPath}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
-    {sourceBody : Region signature sourceOuter rels}
-    {targetBody : Region signature targetOuter rels}
+    {sourceBody : Region  sourceOuter rels}
+    {targetBody : Region  targetOuter rels}
     {sourceWitness : Region.ContextPath sourceBody sourcePath}
     {targetWitness : Region.ContextPath targetBody targetPath}
     (sourceState : Splice.Region.ContextPath.CompilerLeaf diagram start
       (.here sourceBody))
     (targetState : Splice.Region.ContextPath.CompilerLeaf diagram start
       (.here targetBody))
-    (sourceTrace : Splice.CompilerTrace signature diagram sourceRoute
+    (sourceTrace : Splice.CompilerTrace  diagram sourceRoute
       sourceWitness sourceState)
-    (targetTrace : Splice.CompilerTrace signature diagram targetRoute
+    (targetTrace : Splice.CompilerTrace  diagram targetRoute
       targetWitness targetState)
     (inherited : FiniteEquiv (Fin sourceState.inheritedWires.length)
       (Fin targetState.inheritedWires.length)) where
@@ -364,23 +364,23 @@ structure SameDiagramCompilerTraceAlignment
       sourceTrace.leaf.inheritedWires.get index
 
 theorem compilerTrace_sameRouteContextIso
-    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed signature)
+    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed )
     {start target : Fin diagram.regionCount}
     {sourcePath targetPath : List Nat}
     {sourceRoute : Splice.RegionRoute diagram start target sourcePath}
     {targetRoute : Splice.RegionRoute diagram start target targetPath}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
-    {sourceBody : Region signature sourceOuter rels}
-    {targetBody : Region signature targetOuter rels}
+    {sourceBody : Region  sourceOuter rels}
+    {targetBody : Region  targetOuter rels}
     {sourceWitness : Region.ContextPath sourceBody sourcePath}
     {targetWitness : Region.ContextPath targetBody targetPath}
     (sourceState : Splice.Region.ContextPath.CompilerLeaf diagram start
       (.here sourceBody))
     (targetState : Splice.Region.ContextPath.CompilerLeaf diagram start
       (.here targetBody))
-    (sourceTrace : Splice.CompilerTrace signature diagram sourceRoute
+    (sourceTrace : Splice.CompilerTrace  diagram sourceRoute
       sourceWitness sourceState)
-    (targetTrace : Splice.CompilerTrace signature diagram targetRoute
+    (targetTrace : Splice.CompilerTrace  diagram targetRoute
       targetWitness targetState)
     (inherited : FiniteEquiv (Fin sourceState.inheritedWires.length)
       (Fin targetState.inheritedWires.length))
@@ -566,7 +566,7 @@ theorem compilerTrace_sameRouteContextIso
               (ConcreteElaboration.localWireEquiv concreteIso sourceStart)
             simpa [childInherited, extendedEq, localWire, localWireEq,
               concreteIso] using algebra
-          have childContexts : DiagramContextIso signature
+          have childContexts : DiagramContextIso
               (extendWireEquiv
                 (compilerBodyOuterWire sourceState targetState inherited)
                 localWire)
@@ -821,7 +821,7 @@ theorem compilerTrace_sameRouteContextIso
               (ConcreteElaboration.localWireEquiv concreteIso sourceStart)
             simpa [childInherited, extendedEq, localWire, localWireEq,
               concreteIso] using algebra
-          have childContexts : DiagramContextIso signature
+          have childContexts : DiagramContextIso
               (extendWireEquiv
                 (compilerBodyOuterWire sourceState targetState inherited)
                 localWire)
@@ -870,8 +870,8 @@ theorem compilerTrace_sameRouteContextIso
 def pairedCompilerContextAlignment_castBodies
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
     {wire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
-    {sourceBody sourceBody' : Region signature sourceOuter rels}
-    {targetBody targetBody' : Region signature targetOuter rels}
+    {sourceBody sourceBody' : Region  sourceOuter rels}
+    {targetBody targetBody' : Region  targetOuter rels}
     (sourceEq : sourceBody = sourceBody')
     (targetEq : targetBody = targetBody')
     {sourcePath targetPath : List Nat}
@@ -890,8 +890,8 @@ contexts selected by the two compiler traces. -/
 structure SameRouteCompilerLeafAlignment
     {diagram : ConcreteDiagram} {start target : Fin diagram.regionCount}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
-    {sourceBody : Region signature sourceOuter rels}
-    {targetBody : Region signature targetOuter rels}
+    {sourceBody : Region  sourceOuter rels}
+    {targetBody : Region  targetOuter rels}
     {path : List Nat}
     (sourceInitialWires targetInitialWires : List (Fin diagram.wireCount))
     (outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)) where
@@ -919,7 +919,7 @@ structure SameRouteCompilerLeafAlignment
       {sourceState : Splice.Region.ContextPath.CompilerLeaf diagram start
         (.here sourceBody)}
       {sourceRoute : Splice.RegionRoute diagram start target sourcePath}
-      (sourceTrace : Splice.CompilerTrace signature diagram sourceRoute
+      (sourceTrace : Splice.CompilerTrace  diagram sourceRoute
         sourceWitness' sourceState),
     sourceState.inheritedWires = sourceInitialWires →
       sourceTerminalWires = sourceTrace.leaf.inheritedWires
@@ -928,7 +928,7 @@ structure SameRouteCompilerLeafAlignment
       {targetState : Splice.Region.ContextPath.CompilerLeaf diagram start
         (.here targetBody)}
       {targetRoute : Splice.RegionRoute diagram start target targetPath}
-      (targetTrace : Splice.CompilerTrace signature diagram targetRoute
+      (targetTrace : Splice.CompilerTrace  diagram targetRoute
         targetWitness' targetState),
     targetState.inheritedWires = targetInitialWires →
       targetTerminalWires = targetTrace.leaf.inheritedWires
@@ -936,8 +936,8 @@ structure SameRouteCompilerLeafAlignment
 def SameRouteCompilerLeafAlignment.cast
     {diagram : ConcreteDiagram} {start target : Fin diagram.regionCount}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
-    {sourceBody sourceBody' : Region signature sourceOuter rels}
-    {targetBody targetBody' : Region signature targetOuter rels}
+    {sourceBody sourceBody' : Region  sourceOuter rels}
+    {targetBody targetBody' : Region  targetOuter rels}
     {path : List Nat}
     {sourceInitialWires targetInitialWires : List (Fin diagram.wireCount)}
     {outerWire outerWire' : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
@@ -958,11 +958,11 @@ def SameRouteCompilerLeafAlignment.cast
   exact result
 
 theorem compilerLeaf_sameRouteContextIso_with_terminal
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     {start target : Fin input.val.regionCount}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
-    {sourceBody : Region signature sourceOuter rels}
-    {targetBody : Region signature targetOuter rels}
+    {sourceBody : Region  sourceOuter rels}
+    {targetBody : Region  targetOuter rels}
     (sourceLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here sourceBody))
     (targetLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
@@ -1103,11 +1103,11 @@ theorem compilerLeaf_sameRouteContextIso_with_terminal
 /-- Context-only projection retained for callers that do not need the
 terminal concrete-coordinate law. -/
 theorem compilerLeaf_sameRouteContextIso
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     {start target : Fin input.val.regionCount}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
-    {sourceBody : Region signature sourceOuter rels}
-    {targetBody : Region signature targetOuter rels}
+    {sourceBody : Region  sourceOuter rels}
+    {targetBody : Region  targetOuter rels}
     (sourceLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here sourceBody))
     (targetLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
@@ -1131,12 +1131,12 @@ theorem compilerLeaf_sameRouteContextIso
 
 
 theorem compilerLeaf_sameRouteContextIso_of_relEq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     {start target : Fin input.val.regionCount}
     {sourceOuter targetOuter : Nat}
     {sourceRels targetRels : Theory.RelCtx}
-    {sourceBody : Region signature sourceOuter sourceRels}
-    {targetBody : Region signature targetOuter targetRels}
+    {sourceBody : Region  sourceOuter sourceRels}
+    {targetBody : Region  targetOuter targetRels}
     (sourceLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here sourceBody))
     (targetLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
@@ -1168,9 +1168,9 @@ structure SameRouteCompilerLeafAlignmentTo
     {diagram : ConcreteDiagram} {start target : Fin diagram.regionCount}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
     {terminalTargetRels : Theory.RelCtx}
-    {sourceBody : Region signature sourceOuter rels}
-    {targetBody : Region signature targetOuter rels}
-    {terminalTargetBody : Region signature targetOuter terminalTargetRels}
+    {sourceBody : Region  sourceOuter rels}
+    {targetBody : Region  targetOuter rels}
+    {terminalTargetBody : Region  targetOuter terminalTargetRels}
     {path : List Nat}
     (sourceInitialWires targetInitialWires : List (Fin diagram.wireCount))
     (outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
@@ -1198,7 +1198,7 @@ structure SameRouteCompilerLeafAlignmentTo
       {sourceState : Splice.Region.ContextPath.CompilerLeaf diagram start
         (.here sourceBody)}
       {sourceRoute : Splice.RegionRoute diagram start target sourcePath}
-      (sourceTrace : Splice.CompilerTrace signature diagram sourceRoute
+      (sourceTrace : Splice.CompilerTrace  diagram sourceRoute
         sourceWitness' sourceState),
     sourceState.inheritedWires = sourceInitialWires →
       sourceTerminalWires = sourceTrace.leaf.inheritedWires
@@ -1207,18 +1207,18 @@ structure SameRouteCompilerLeafAlignmentTo
       {targetState : Splice.Region.ContextPath.CompilerLeaf diagram start
         (.here terminalTargetBody)}
       {targetRoute : Splice.RegionRoute diagram start target targetPath}
-      (targetTrace : Splice.CompilerTrace signature diagram targetRoute
+      (targetTrace : Splice.CompilerTrace  diagram targetRoute
         targetWitness' targetState),
     targetState.inheritedWires = targetInitialWires →
       targetTerminalWires = targetTrace.leaf.inheritedWires
 
 theorem compilerLeaf_sameRouteContextIso_toWitness_with_terminal_of_relEq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     {start target : Fin input.val.regionCount}
     {sourceOuter targetOuter : Nat}
     {sourceRels targetRels : Theory.RelCtx}
-    {sourceBody : Region signature sourceOuter sourceRels}
-    {targetBody : Region signature targetOuter targetRels}
+    {sourceBody : Region  sourceOuter sourceRels}
+    {targetBody : Region  targetOuter targetRels}
     (sourceLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here sourceBody))
     (targetLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
@@ -1266,12 +1266,12 @@ theorem compilerLeaf_sameRouteContextIso_toWitness_with_terminal_of_relEq
   }⟩
 
 theorem compilerLeaf_sameRouteContextIso_toWitness_of_relEq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     {start target : Fin input.val.regionCount}
     {sourceOuter targetOuter : Nat}
     {sourceRels targetRels : Theory.RelCtx}
-    {sourceBody : Region signature sourceOuter sourceRels}
-    {targetBody : Region signature targetOuter targetRels}
+    {sourceBody : Region  sourceOuter sourceRels}
+    {targetBody : Region  targetOuter targetRels}
     (sourceLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here sourceBody))
     (targetLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start

@@ -14,8 +14,8 @@ namespace InstantiationSemantic
 context of the terminal parent before the eliminated bubble is reinserted. -/
 theorem terminalParent_exact
     (trace : VacuousElimTrace input bubble raw)
-    (targetWellFormed : input.WellFormed signature)
-    (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
+    (targetWellFormed : input.WellFormed )
+    (sourceWellFormed : trace.sourceDiagram.WellFormed )
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (sourceExact : (sourceContext.extend
       (trace.targetIndex targetWellFormed)).Exact
@@ -92,8 +92,7 @@ theorem terminalParent_exact
 /-- A binder context covering an executor state also covers the atom-dropped
 compiler view, whose regions and enclosure relation are unchanged. -/
 theorem binderCover_to_drop
-    {signature : List Nat}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin parameterCount proxyCount)
     (context : ConcreteElaboration.BinderContext state.diagram.val rels)
     (region : Fin state.diagram.val.regionCount)
@@ -109,8 +108,7 @@ theorem binderCover_to_drop
 /-- Exact binder enumeration is preserved when executor-owned atoms are
 deleted from the compiler view. -/
 def binderEnumeration_to_drop
-    {signature : List Nat}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin parameterCount proxyCount)
     (context : ConcreteElaboration.BinderContext state.diagram.val rels)
     (region : Fin state.diagram.val.regionCount)
@@ -162,10 +160,9 @@ noncomputable def traceBinderContext
 covers the copied terminal parent.  The proof uses the selected bubble as the
 ancestry anchor, excluding the deleted child itself. -/
 theorem traceBinderContext_covers_parent
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -270,10 +267,9 @@ noncomputable def traceBinderEnumeration
 /-- The canonical external relation map for a copied binder context, extended
 by the moving bubble itself, preserves every intrinsic relation variable. -/
 theorem traceExternalRelationMap_traceBinderContext_push
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -356,10 +352,9 @@ namespace InstantiationTrace
 /-- At every admissible final compiler binder, the vacuous origin is the
 copy-trace image of the authoritative reverse region. -/
 theorem origin_eq_regionMap_reverse_of_admissible
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -374,7 +369,7 @@ theorem origin_eq_regionMap_reverse_of_admissible
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin elimTrace.sourceDiagram.regionCount)
     (admissible : copyTrace.FinalAdmissible elimTrace finalWellFormed region) :
     elimTrace.origin region = copyTrace.regionMap
@@ -411,10 +406,9 @@ theorem origin_eq_regionMap_reverse_of_admissible
 /-- The final-to-original binder witness factors through the terminal copied
 frame context before the eliminated bubble is reconstructed. -/
 noncomputable def terminalMappedBinderWitness
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -429,7 +423,7 @@ noncomputable def terminalMappedBinderWitness
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     {finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature}
+      (dropInstantiationAtomsRaw result).WellFormed }
     {sourceRels targetRels : RelCtx}
     {sourceBinders : ConcreteElaboration.BinderContext
       elimTrace.sourceDiagram sourceRels}

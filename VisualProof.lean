@@ -1,6 +1,4 @@
-import VisualProof.Theory.Signature
-import VisualProof.Theory.Definition
-import VisualProof.Theory.Semantics
+import VisualProof.Theory.Relation
 import VisualProof.Data.Finite
 import VisualProof.Diagram.Core
 import VisualProof.Diagram.Boundary
@@ -20,7 +18,7 @@ import VisualProof.Correspondence.StepTags
 import VisualProof.Rule.Step
 import VisualProof.Rule.Structural
 import VisualProof.Rule.Comprehension
-import VisualProof.Rule.Named
+import VisualProof.Rule.Theorem
 import VisualProof.Rule.Soundness
 import VisualProof.Rule.Soundness.All
 import VisualProof.Proof.Replay

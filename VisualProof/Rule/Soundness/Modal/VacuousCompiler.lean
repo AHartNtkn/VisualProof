@@ -189,7 +189,6 @@ end MappedBinderWitness
 theorem compileNode_itemSimulation
     (input : ConcreteDiagram) (selection : CheckedSelection input)
     (arity : Nat) (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext input)
     (targetContext : ConcreteElaboration.WireContext
@@ -210,26 +209,24 @@ theorem compileNode_itemSimulation
         | .atom owner binder =>
             .atom (regionMap owner) binder.castSucc
         | .identity owner arity =>
-            .identity (regionMap owner) arity
-        | .named owner definition nodeArity =>
-            .named (regionMap owner) definition nodeArity)
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
+            .identity (regionMap owner) arity)
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileNode? signature input sourceContext
+      ConcreteElaboration.compileNode?  input sourceContext
         sourceBinders node = some sourceItem)
     (targetCompiled :
-      ConcreteElaboration.compileNode? signature
+      ConcreteElaboration.compileNode?
         (vacuousIntroRaw input selection arity) targetContext targetBinders node =
           some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       contextWitness.indexRelation
       (sourceItem.renameRelations relationMap) targetItem := by
   rcases contextWitness with ⟨contextsEq⟩
   cases contextsEq
   apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
     (source := input) (target := vacuousIntroRaw input selection arity)
-    model named direction sourceContext sourceContext
+    model  direction sourceContext sourceContext
     (ConcreteElaboration.ContextIndexRelation.forwardMap id)
     sourceBinders targetBinders relationMap
     node node regionMap Fin.castSucc
@@ -248,11 +245,10 @@ theorem compileNode_itemSimulation
 
 theorem compileOccurrence_itemSimulation
     (input : ConcreteDiagram) (selection : CheckedSelection input)
-    (arity : Nat) (sourceWellFormed : input.WellFormed signature)
+    (arity : Nat) (sourceWellFormed : input.WellFormed )
     (targetWellFormed :
-      (vacuousIntroRaw input selection arity).WellFormed signature)
+      (vacuousIntroRaw input selection arity).WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
     (sourceParent : Fin input.regionCount)
@@ -287,9 +283,7 @@ theorem compileOccurrence_itemSimulation
         | .atom owner binder =>
             .atom (regionMap owner) binder.castSucc
         | .identity owner arity =>
-            .identity (regionMap owner) arity
-        | .named owner definition nodeArity =>
-            .named (regionMap owner) definition nodeArity)
+            .identity (regionMap owner) arity)
     (regionShape : ∀ child,
       occurrence = .child child →
       (input.regions child).parent? = some sourceParent →
@@ -323,40 +317,40 @@ theorem compileOccurrence_itemSimulation
         child.castSucc →
       (childSourceContext.extend child).Exact child →
       (childTargetContext.extend child.castSucc).Exact child.castSucc →
-      ∀ (sourceBody : Region signature childSourceContext.length
+      ∀ (sourceBody : Region  childSourceContext.length
           childSourceRels)
-        (targetBody : Region signature childTargetContext.length
+        (targetBody : Region  childTargetContext.length
           childTargetRels),
-      ConcreteElaboration.compileRegion? signature input fuelSource child
+      ConcreteElaboration.compileRegion?  input fuelSource child
           childSourceContext childSourceBinders = some sourceBody →
-      ConcreteElaboration.compileRegion? signature
+      ConcreteElaboration.compileRegion?
           (vacuousIntroRaw input selection arity) childFuelTarget
           child.castSucc childTargetContext childTargetBinders =
         some targetBody →
-      ConcreteElaboration.RegionSimulation model named childDirection
+      ConcreteElaboration.RegionSimulation model  childDirection
         childContext.indexRelation
         (sourceBody.renameRelations childBinderWitness.relationMap) targetBody)
     (member : occurrence ∈
       ConcreteElaboration.localOccurrences input sourceParent)
-    (sourceItem : Item signature sourceContext.length sourceRels)
-    (targetItem : Item signature targetContext.length targetRels)
+    (sourceItem : Item  sourceContext.length sourceRels)
+    (targetItem : Item  targetContext.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrenceWith? signature input
-        (ConcreteElaboration.compileRegion? signature input fuelSource)
+      ConcreteElaboration.compileOccurrenceWith?  input
+        (ConcreteElaboration.compileRegion?  input fuelSource)
         sourceContext sourceBinders occurrence = some sourceItem)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrenceWith? signature
+      ConcreteElaboration.compileOccurrenceWith?
         (vacuousIntroRaw input selection arity)
-        (ConcreteElaboration.compileRegion? signature
+        (ConcreteElaboration.compileRegion?
           (vacuousIntroRaw input selection arity) fuelTarget)
         targetContext targetBinders (liftOccurrence input occurrence) =
           some targetItem) :
-    ConcreteElaboration.ItemSimulation model named direction
+    ConcreteElaboration.ItemSimulation model  direction
       contextWitness.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   cases occurrence with
   | node node =>
-      exact compileNode_itemSimulation input selection arity model named
+      exact compileNode_itemSimulation input selection arity model
         direction sourceContext targetContext contextWitness sourceBinders
         targetBinders binderWitness.relationMap node
         binderWitness.bindersMapped regionMap
@@ -377,7 +371,7 @@ theorem compileOccurrence_itemSimulation
           subst actualParent
           simp only [sourceKind] at targetKind
           cases sourceResult :
-              ConcreteElaboration.compileRegion? signature input fuelSource
+              ConcreteElaboration.compileRegion?  input fuelSource
                 child sourceContext sourceBinders with
           | none =>
               simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
@@ -387,7 +381,7 @@ theorem compileOccurrence_itemSimulation
                 sourceResult] at sourceCompiled
               subst sourceItem
               cases targetResult :
-                  ConcreteElaboration.compileRegion? signature
+                  ConcreteElaboration.compileRegion?
                     (vacuousIntroRaw input selection arity) fuelTarget
                     child.castSucc targetContext targetBinders with
               | none =>
@@ -433,7 +427,7 @@ theorem compileOccurrence_itemSimulation
           let sourcePushed := sourceBinders.push child childArity
           let targetPushed := targetBinders.push child.castSucc childArity
           cases sourceResult :
-              ConcreteElaboration.compileRegion? signature input fuelSource
+              ConcreteElaboration.compileRegion?  input fuelSource
                 child sourceContext sourcePushed with
           | none =>
               simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
@@ -443,7 +437,7 @@ theorem compileOccurrence_itemSimulation
                 sourcePushed, sourceResult] at sourceCompiled
               subst sourceItem
               cases targetResult :
-                  ConcreteElaboration.compileRegion? signature
+                  ConcreteElaboration.compileRegion?
                     (vacuousIntroRaw input selection arity) fuelTarget
                     child.castSucc targetContext targetPushed with
               | none =>

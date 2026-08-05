@@ -13,7 +13,7 @@ bubble and its surviving parent both map to the promoted parent focus; every
 other region maps to its exact survivor index. -/
 def liftRegion
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region : Fin input.regionCount) :
     Fin trace.sourceDiagram.regionCount :=
   if equal : region = bubble then
@@ -24,13 +24,13 @@ def liftRegion
 
 @[simp] theorem liftRegion_bubble
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     trace.liftRegion wellFormed bubble = trace.targetIndex wellFormed := by
   simp [liftRegion]
 
 theorem liftRegion_of_ne
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region : Fin input.regionCount)
     (notBubble : region ≠ bubble) :
     trace.liftRegion wellFormed region =
@@ -40,7 +40,7 @@ theorem liftRegion_of_ne
 
 theorem origin_liftRegion_of_ne
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region : Fin input.regionCount)
     (notBubble : region ≠ bubble) :
     trace.origin (trace.liftRegion wellFormed region) = region := by
@@ -49,14 +49,14 @@ theorem origin_liftRegion_of_ne
 
 @[simp] theorem origin_liftRegion_bubble
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     trace.origin (trace.liftRegion wellFormed bubble) = trace.parent := by
   rw [trace.liftRegion_bubble]
   exact trace.targetIndex_origin wellFormed
 
 theorem liftRegion_eq_targetIndex_iff
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region : Fin input.regionCount) :
     trace.liftRegion wellFormed region = trace.targetIndex wellFormed ↔
       region = trace.parent ∨ region = bubble := by
@@ -77,7 +77,7 @@ theorem liftRegion_eq_targetIndex_iff
 
 theorem liftRegion_ne_targetIndex
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (region : Fin input.regionCount)
     (notParent : region ≠ trace.parent)
     (notBubble : region ≠ bubble) :
@@ -88,7 +88,7 @@ theorem liftRegion_ne_targetIndex
 
 theorem liftRegion_root
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature) :
+    (wellFormed : input.WellFormed ) :
     trace.liftRegion wellFormed input.root = trace.sourceDiagram.root := by
   have rootNe : input.root ≠ bubble := by
     intro equal
@@ -104,7 +104,7 @@ theorem liftRegion_root
 endpoint identities themselves are unchanged. -/
 theorem liftWire_scope
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount) :
     (trace.sourceDiagram.wires wire).scope =
       trace.liftRegion wellFormed (input.wires wire).scope := by
@@ -136,10 +136,9 @@ namespace InstantiationTrace
 /-- Composite region map from the original quantified diagram through every
 accepted splice, processed-atom deletion, and final vacuous promotion. -/
 def finalRegionMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -154,17 +153,16 @@ def finalRegionMap
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount) :
     Fin elimTrace.sourceDiagram.regionCount :=
   elimTrace.liftRegion finalWellFormed (copyTrace.regionMap region)
 
 /-- Composite old-wire map into the final promoted executor diagram. -/
 def finalWireMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -183,10 +181,9 @@ def finalWireMap
   copyTrace.wireMap wire
 
 @[simp] theorem finalRegionMap_bubble
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -201,7 +198,7 @@ def finalWireMap
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature) :
+      (dropInstantiationAtomsRaw result).WellFormed ) :
     copyTrace.finalRegionMap elimTrace finalWellFormed bubble =
       elimTrace.targetIndex finalWellFormed := by
   unfold finalRegionMap
@@ -211,10 +208,9 @@ def finalWireMap
   exact elimTrace.liftRegion_bubble finalWellFormed
 
 theorem finalRegionMap_root
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -229,7 +225,7 @@ theorem finalRegionMap_root
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature) :
+      (dropInstantiationAtomsRaw result).WellFormed ) :
     copyTrace.finalRegionMap elimTrace finalWellFormed input.val.root =
       elimTrace.sourceDiagram.root := by
   unfold finalRegionMap
@@ -241,10 +237,9 @@ theorem finalRegionMap_root
 /-- The copy trace preserves the quantified bubble's parent, and the final
 vacuous receipt identifies that copied parent as its promoted parent. -/
 theorem regionMap_parent_eq_elimParent
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -283,10 +278,9 @@ theorem regionMap_parent_eq_elimParent
 
 /-- The quantified bubble is an immediate child of the payload parent. -/
 theorem payload_parent_encloses_bubble
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -305,10 +299,9 @@ theorem payload_parent_encloses_bubble
 diagram.  This is the exact outside-frame fact needed to transport the
 parent's ordered local traversal through the copy trace. -/
 theorem payload_bubble_not_encloses_parent
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -324,10 +317,9 @@ theorem payload_bubble_not_encloses_parent
 focus.  This identifies the unique compiler location at which the complete
 instantiation law is discharged. -/
 theorem finalRegionMap_parent
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -342,7 +334,7 @@ theorem finalRegionMap_parent
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature) :
+      (dropInstantiationAtomsRaw result).WellFormed ) :
     copyTrace.finalRegionMap elimTrace finalWellFormed payload.parent =
       elimTrace.targetIndex finalWellFormed := by
   unfold finalRegionMap
@@ -354,10 +346,9 @@ theorem finalRegionMap_parent
 its parent at the target focus.  Injectivity of the copy trace rules out every
 other preimage. -/
 theorem finalRegionMap_eq_targetIndex_iff
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -372,7 +363,7 @@ theorem finalRegionMap_eq_targetIndex_iff
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount) :
     copyTrace.finalRegionMap elimTrace finalWellFormed region =
         elimTrace.targetIndex finalWellFormed ↔
@@ -393,10 +384,9 @@ theorem finalRegionMap_eq_targetIndex_iff
     · exact Or.inr bubbleMap
 
 theorem finalRegionMap_ne_targetIndex_of_not_enclosed
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -411,7 +401,7 @@ theorem finalRegionMap_ne_targetIndex_of_not_enclosed
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount)
     (regular : ¬ input.val.Encloses payload.parent region) :
     copyTrace.finalRegionMap elimTrace finalWellFormed region ≠
@@ -425,10 +415,9 @@ theorem finalRegionMap_ne_targetIndex_of_not_enclosed
     exact regular (payload_parent_encloses_bubble payload)
 
 theorem finalWireMap_injective
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -446,10 +435,9 @@ theorem finalWireMap_injective
   exact copyTrace.wireMap_injective
 
 theorem finalWireMap_scope
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
@@ -464,7 +452,7 @@ theorem finalWireMap_scope
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
-      (dropInstantiationAtomsRaw result).WellFormed signature)
+      (dropInstantiationAtomsRaw result).WellFormed )
     (wire : Fin input.val.wireCount) :
     (elimTrace.sourceDiagram.wires
         (copyTrace.finalWireMap elimTrace wire)).scope =

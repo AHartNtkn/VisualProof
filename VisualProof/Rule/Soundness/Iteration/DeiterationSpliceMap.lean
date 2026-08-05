@@ -48,7 +48,7 @@ private theorem finiteSumEquiv_right
   simp [finiteSumEquiv]
 
 theorem deiterationPattern_material_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (region : Fin
@@ -95,7 +95,7 @@ theorem deiterationPattern_material_iff
       exact targetProxy.trans aligned.symm
 
 private theorem deiterationMaterial_mem_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (region : Fin
@@ -133,7 +133,7 @@ private theorem deiterationMaterial_mem_iff
       (occurrence.diagram.regions region)).mpr targetSurvives
 
 noncomputable def deiterationMaterialEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     FiniteEquiv
@@ -153,7 +153,7 @@ noncomputable def deiterationMaterialEquiv
       exact deiterationMaterial_mem_iff input selection witness region)
 
 theorem deiterationMaterialEquiv_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (material :
@@ -180,7 +180,7 @@ theorem deiterationMaterialEquiv_origin
     SurvivorDomain.origin] using spec
 
 noncomputable def deiterationInternalWireEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     FiniteEquiv
@@ -221,7 +221,7 @@ noncomputable def deiterationInternalWireEquiv
               (occurrence.diagram.wires wire)).mpr targetInternal))
 
 theorem deiterationInternalWireEquiv_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire :
@@ -269,7 +269,7 @@ theorem deiterationInternalWireEquiv_origin
     SurvivorDomain.origin] using spec
 
 noncomputable def deiterationQuotientEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     FiniteEquiv
@@ -284,7 +284,7 @@ noncomputable def deiterationQuotientEquiv
         (deiterationDecomposition input selection)).symm
 
 theorem deiterationQuotientEquiv_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire : (deiterationReinsertInput input selection witness).wireQuotient.Carrier) :
@@ -299,7 +299,7 @@ theorem deiterationQuotientEquiv_origin
     (deiterationDecomposition input selection)).right_inv _
 
 theorem deiterationBinderTarget_alignment
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin
@@ -349,7 +349,7 @@ theorem deiterationBinderTarget_alignment
       rfl
 
 noncomputable def deiterationOutputRegionEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     FiniteEquiv
@@ -361,7 +361,7 @@ noncomputable def deiterationOutputRegionEquiv
     (deiterationMaterialEquiv input selection witness)
 
 noncomputable def deiterationOutputNodeEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     FiniteEquiv
@@ -373,7 +373,7 @@ noncomputable def deiterationOutputNodeEquiv
     (deiterationPatternOccurrenceEquiv input selection witness).diagram.nodes
 
 noncomputable def deiterationOutputWireEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     FiniteEquiv
@@ -384,7 +384,7 @@ noncomputable def deiterationOutputWireEquiv
     (deiterationInternalWireEquiv input selection witness)
 
 @[simp] theorem deiterationOutputRegionEquiv_frame
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (region : Fin (deiterationRemoved input selection).val.regionCount) :
@@ -395,7 +395,7 @@ noncomputable def deiterationOutputWireEquiv
   exact finiteSumEquiv_left _ _ region
 
 @[simp] theorem deiterationOutputRegionEquiv_material
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (region :
@@ -408,7 +408,7 @@ noncomputable def deiterationOutputWireEquiv
   exact finiteSumEquiv_right _ _ region
 
 theorem deiterationOutputRegionEquiv_body
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (region : Fin
@@ -483,7 +483,7 @@ private theorem binderRegion_eq_body_of_no_proxy
   rw [lookupNone]
 
 theorem deiterationOutputRegionEquiv_binder
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (region : Fin
@@ -535,7 +535,7 @@ theorem deiterationOutputRegionEquiv_binder
     exact deiterationOutputRegionEquiv_body input selection witness region
 
 @[simp] theorem deiterationOutputNodeEquiv_frame
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (node : Fin (deiterationRemoved input selection).val.nodeCount) :
@@ -546,7 +546,7 @@ theorem deiterationOutputRegionEquiv_binder
   exact finiteSumEquiv_left _ _ node
 
 @[simp] theorem deiterationOutputNodeEquiv_pattern
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (node : Fin
@@ -559,7 +559,7 @@ theorem deiterationOutputRegionEquiv_binder
   exact finiteSumEquiv_right _ _ node
 
 @[simp] theorem deiterationOutputWireEquiv_quotient
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire : (deiterationReinsertInput input selection witness).wireQuotient.Carrier) :
@@ -571,7 +571,7 @@ theorem deiterationOutputRegionEquiv_binder
   exact finiteSumEquiv_left _ _ wire
 
 @[simp] theorem deiterationOutputWireEquiv_internal
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire :

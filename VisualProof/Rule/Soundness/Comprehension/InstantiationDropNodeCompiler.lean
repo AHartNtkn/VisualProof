@@ -82,14 +82,13 @@ theorem drop_resolvePorts_origin
 /-- Every surviving node compiles to exactly the same intrinsic item after
 the executor filters processed atoms and densely reindexes the node carrier. -/
 theorem drop_compileNode_origin
-    {signature : List Nat}
     (state : InstantiationState origin parameterCount proxyCount)
     (context : ConcreteElaboration.WireContext state.diagram.val)
     (binders : ConcreteElaboration.BinderContext state.diagram.val rels)
     (node : Fin (dropInstantiationAtomsRaw state).nodeCount) :
-    ConcreteElaboration.compileNode? signature
+    ConcreteElaboration.compileNode?
         (dropInstantiationAtomsRaw state) context binders node =
-      ConcreteElaboration.compileNode? signature state.diagram.val context
+      ConcreteElaboration.compileNode?  state.diagram.val context
         binders ((instantiationAtomDomain state).origin node) := by
   cases hnode : state.diagram.val.nodes
       ((instantiationAtomDomain state).origin node) with
@@ -117,25 +116,6 @@ theorem drop_compileNode_origin
               pure (Item.atom relation arguments))
           rw [drop_resolvePorts_origin state context node arity]
           rfl
-  | named region definition arity =>
-      simp only [ConcreteElaboration.compileNode?, InstantiationDrop.raw_node,
-        hnode]
-      cases hrelation : ConcreteElaboration.namedRel? signature definition arity
-          with
-      | none => rfl
-      | some relation =>
-          change (do
-              let arguments ← ConcreteElaboration.resolvePorts?
-                (dropInstantiationAtomsRaw state) context node arity
-              pure (Item.named relation arguments)) =
-            (do
-              let arguments ← ConcreteElaboration.resolvePorts?
-                state.diagram.val context
-                  ((instantiationAtomDomain state).origin node) arity
-              pure (Item.named relation arguments))
-          rw [drop_resolvePorts_origin state context node arity]
-          rfl
-
 end InstantiationSemantic
 
 end VisualProof.Rule

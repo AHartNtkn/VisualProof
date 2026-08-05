@@ -56,7 +56,7 @@ theorem rootTargetEnvironment_outer
 
 theorem rootSelectedTargetEnvironment_outer
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
@@ -80,7 +80,7 @@ theorem rootSelectedTargetEnvironment_outer
 
 theorem rootSelectedSourceEnvironment_outer
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (sourceAmbient sourceLocals :
       ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetAmbient targetLocals : ConcreteElaboration.WireContext input)
@@ -158,22 +158,21 @@ theorem rootSelectedSourceEnvironment_outer
 theorem targetRoot_bubble_denote_iff
     (trace : VacuousElimTrace input bubble raw)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (targetContext : ConcreteElaboration.WireContext input)
-    (keptItems : ItemSeq signature targetContext.length [])
-    (selectedItems : ItemSeq signature
+    (keptItems : ItemSeq  targetContext.length [])
+    (selectedItems : ItemSeq
       (targetContext.extend bubble).length [trace.arity])
     (targetEnvironment : Fin targetContext.length → model.Carrier) :
-    denoteItemSeq (relCtx := []) model named targetEnvironment ()
+    denoteItemSeq (relCtx := []) model  targetEnvironment ()
         (keptItems.append (.cons
           (.bubble trace.arity
             (ConcreteElaboration.finishRegion input targetContext bubble
               selectedItems)) .nil)) ↔
-      denoteItemSeq (relCtx := []) model named targetEnvironment () keptItems ∧
+      denoteItemSeq (relCtx := []) model  targetEnvironment () keptItems ∧
         ∃ fresh : Relation model.Carrier trace.arity,
           ∃ bubbleLocal : Fin (ConcreteElaboration.exactScopeWires input
               bubble).length → model.Carrier,
-            denoteItemSeq (relCtx := [trace.arity]) model named
+            denoteItemSeq (relCtx := [trace.arity]) model
               (ConcreteElaboration.extendedEnvironment targetContext bubble
                 targetEnvironment bubbleLocal) (fresh, ()) selectedItems := by
   simp only [denoteItemSeq_append, denoteItemSeq_cons, denoteItemSeq_nil,
@@ -182,13 +181,12 @@ theorem targetRoot_bubble_denote_iff
   apply exists_congr
   intro fresh
   exact finishRegion_denote_iff input targetContext bubble selectedItems
-    model named targetEnvironment (fresh, ())
+    model  targetEnvironment (fresh, ())
 
 theorem focusedRootPartition_transport
     (trace : VacuousElimTrace input bubble raw)
-    (wellFormed : input.WellFormed signature)
+    (wellFormed : input.WellFormed )
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceAmbient sourceLocals :
       ConcreteElaboration.WireContext trace.sourceDiagram)
@@ -209,15 +207,15 @@ theorem focusedRootPartition_transport
     (sourceAmbientSubset :
       ∀ wire, wire ∈ sourceAmbient → wire ∈ targetAmbient)
     (relationMap : RelationRenaming [] [trace.arity])
-    (sourceKept sourceSelected : ItemSeq signature
+    (sourceKept sourceSelected : ItemSeq
       (sourceAmbient ++ sourceLocals).length [])
-    (targetKept : ItemSeq signature
+    (targetKept : ItemSeq
       (targetAmbient ++ targetLocals).length [])
-    (targetSelected : ItemSeq signature
+    (targetSelected : ItemSeq
       ((targetAmbient ++ targetLocals).extend bubble).length [trace.arity])
-    (keptSimulation : ConcreteElaboration.ItemSeqSimulation model named
+    (keptSimulation : ConcreteElaboration.ItemSeqSimulation model
       direction context.indexRelation sourceKept targetKept)
-    (selectedSimulation : ConcreteElaboration.ItemSeqSimulation model named
+    (selectedSimulation : ConcreteElaboration.ItemSeqSimulation model
       direction
         (context.extendRootSelected trace wellFormed
           (sourceAmbient ++ sourceLocals) (targetAmbient ++ targetLocals)
@@ -226,7 +224,7 @@ theorem focusedRootPartition_transport
     ConcreteElaboration.DirectionalRootTransport direction
       sourceAmbient sourceLocals targetAmbient targetLocals
       (trace.wireIdentityRelation sourceAmbient targetAmbient)
-      model named (sourceKept.append sourceSelected)
+      model  (sourceKept.append sourceSelected)
       (targetKept.append (.cons
         (.bubble trace.arity
           (ConcreteElaboration.finishRegion input
@@ -244,7 +242,7 @@ theorem focusedRootPartition_transport
   | forward =>
       intro sourceLocal sourceDenotation
       obtain ⟨sourceKeptDenotation, sourceSelectedDenotation⟩ :=
-        (denoteItemSeq_append model named
+        (denoteItemSeq_append model
           (ConcreteElaboration.rootEnvironment sourceAmbient sourceLocals
             sourceOuter sourceLocal) relations sourceKept sourceSelected).mp
           sourceDenotation
@@ -286,16 +284,16 @@ theorem focusedRootPartition_transport
       let fresh : Relation model.Carrier trace.arity :=
         freshForward sourceEnvironment targetRootPulled () ()
       have sourceSelectedRenamed :
-          denoteItemSeq (relCtx := [trace.arity]) model named sourceEnvironment
+          denoteItemSeq (relCtx := [trace.arity]) model  sourceEnvironment
             (fresh, ()) (sourceSelected.renameRelations relationMap) :=
-        (denoteItemSeq_renameRelations model named relationMap () (fresh, ())
+        (denoteItemSeq_renameRelations model  relationMap () (fresh, ())
           (relationAgreement fresh) sourceEnvironment sourceSelected).mpr
           sourceSelectedDenotation
       have targetSelectedDenotation := selectedSimulation sourceEnvironment
         targetSelectedPulled (fresh, ()) selectedAgreement
         sourceSelectedRenamed
       refine ⟨targetLocal, ?_⟩
-      apply (trace.targetRoot_bubble_denote_iff model named
+      apply (trace.targetRoot_bubble_denote_iff model
         (targetAmbient ++ targetLocals) targetKept targetSelected
         (ConcreteElaboration.rootEnvironment targetAmbient targetLocals
           targetOuter targetLocal)).mpr
@@ -311,7 +309,7 @@ theorem focusedRootPartition_transport
           targetOuter targetLocal
       obtain ⟨targetKeptDenotation, fresh, bubbleLocal,
           targetSelectedDenotation⟩ :=
-        (trace.targetRoot_bubble_denote_iff model named
+        (trace.targetRoot_bubble_denote_iff model
           (targetAmbient ++ targetLocals) targetKept targetSelected
           targetRootEnvironment).mp targetDenotation
       let targetSelectedEnvironment :=
@@ -343,9 +341,9 @@ theorem focusedRootPartition_transport
         targetSelectedEnvironment (fresh, ()) selectedAgreement
         targetSelectedDenotation
       have sourceSelectedDenotation :
-          denoteItemSeq (relCtx := []) model named sourceEnvironment ()
+          denoteItemSeq (relCtx := []) model  sourceEnvironment ()
             sourceSelected :=
-        (denoteItemSeq_renameRelations model named relationMap () (fresh, ())
+        (denoteItemSeq_renameRelations model  relationMap () (fresh, ())
           (relationAgreement fresh) sourceEnvironment sourceSelected).mp
           sourceSelectedRenamed
       have contextAgreement : context.indexRelation.EnvironmentsAgree
@@ -362,7 +360,7 @@ theorem focusedRootPartition_transport
       have sourceKeptDenotation := keptSimulation sourceEnvironment
         targetRootEnvironment () contextAgreement targetKeptDenotation
       refine ⟨sourceLocal, ?_⟩
-      apply (denoteItemSeq_append (relCtx := []) model named
+      apply (denoteItemSeq_append (relCtx := []) model
         (ConcreteElaboration.rootEnvironment sourceAmbient sourceLocals
           sourceOuter sourceLocal) () sourceKept sourceSelected).mpr
       rw [sourceEnvironmentEq]

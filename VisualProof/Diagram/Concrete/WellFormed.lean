@@ -49,8 +49,6 @@ instance (d : ConcreteDiagram) : Decidable (AtomBindersAreBubbles d) := by
             simp [hbinder] at h)
       | bubble parent arity => exact isTrue ⟨parent, arity, hbinder⟩
   | identity => exact isTrue trivial
-  | named => exact isTrue trivial
-
 def AtomBindersEnclose (d : ConcreteDiagram) : Prop :=
   forall node : Fin d.nodeCount,
     match d.nodes node with
@@ -63,24 +61,6 @@ instance (d : ConcreteDiagram) : Decidable (AtomBindersEnclose d) := by
   cases hnode : d.nodes node with
   | atom region binder => exact inferInstance
   | identity => exact isTrue trivial
-  | named => exact isTrue trivial
-
-def NamedReferencesResolve (signature : List Nat)
-    (d : ConcreteDiagram) : Prop :=
-  forall node : Fin d.nodeCount,
-    match d.nodes node with
-    | .named _ definition arity => signature[definition]? = some arity
-    | _ => True
-
-instance (signature : List Nat) (d : ConcreteDiagram) :
-    Decidable (NamedReferencesResolve signature d) := by
-  unfold NamedReferencesResolve
-  apply @Nat.decidableForallFin _ _ (fun node => ?_)
-  cases hnode : d.nodes node with
-  | atom => exact isTrue trivial
-  | identity => exact isTrue trivial
-  | named _ definition arity => exact inferInstance
-
 def EndpointsAreValid (d : ConcreteDiagram) : Prop :=
   forall wire : Fin d.wireCount,
     forall endpoint : CEndpoint d.nodeCount,
@@ -121,10 +101,6 @@ def RequiredPortsAreCovered (d : ConcreteDiagram) : Prop :=
     | .identity _ arity =>
         forall index : Fin arity,
           exists wire, d.EndpointOccurs wire ⟨node, .arg index⟩
-    | .named _ _ arity =>
-        forall index : Fin arity,
-          exists wire, d.EndpointOccurs wire ⟨node, .arg index⟩
-
 instance (d : ConcreteDiagram) : Decidable (RequiredPortsAreCovered d) := by
   unfold RequiredPortsAreCovered
   apply @Nat.decidableForallFin _ _ (fun node => ?_)
@@ -145,10 +121,6 @@ instance (d : ConcreteDiagram) : Decidable (RequiredPortsAreCovered d) := by
   | identity _ arity =>
       exact @Nat.decidableForallFin _ _ (fun index =>
         @Nat.decidableExistsFin _ _ (fun wire => inferInstance))
-  | named _ _ arity =>
-      exact @Nat.decidableForallFin _ _ (fun index =>
-        @Nat.decidableExistsFin _ _ (fun wire => inferInstance))
-
 def WireScopesEnclose (d : ConcreteDiagram) : Prop :=
   forall wire : Fin d.wireCount,
     forall endpoint : CEndpoint d.nodeCount,
@@ -163,13 +135,12 @@ instance (d : ConcreteDiagram) : Decidable (WireScopesEnclose d) := by
       d.Encloses (d.wires wire).scope (d.nodes endpoint.node).region)
     (fun endpoint => inferInstance) (d.wires wire).endpoints
 
-structure WellFormed (d : ConcreteDiagram) (signature : List Nat) : Prop where
+structure WellFormed (d : ConcreteDiagram) : Prop where
   root_is_sheet : RootIsSheet d
   only_root_is_sheet : OnlyRootIsSheet d
   all_regions_reach_root : AllRegionsReachRoot d
   atom_binders_are_bubbles : AtomBindersAreBubbles d
   atom_binders_enclose : AtomBindersEnclose d
-  named_references_resolve : NamedReferencesResolve signature d
   endpoints_are_valid : EndpointsAreValid d
   endpoints_are_nodup : EndpointsAreNodup d
   wire_endpoints_are_disjoint : WireEndpointsAreDisjoint d
@@ -178,13 +149,13 @@ structure WellFormed (d : ConcreteDiagram) (signature : List Nat) : Prop where
 
 end ConcreteDiagram
 
-abbrev CheckedDiagram (signature : List Nat) :=
-  { d : ConcreteDiagram // d.WellFormed signature }
+abbrev CheckedDiagram :=
+  { d : ConcreteDiagram // d.WellFormed  }
 
 namespace OpenConcreteDiagram
 
-structure WellFormed (d : OpenConcreteDiagram) (signature : List Nat) : Prop where
-  diagram_well_formed : d.diagram.WellFormed signature
+structure WellFormed (d : OpenConcreteDiagram) : Prop where
+  diagram_well_formed : d.diagram.WellFormed
   boundary_is_root_scoped : forall wire, wire ∈ d.boundary ->
     (d.diagram.wires wire).scope = d.diagram.root
 
@@ -196,7 +167,6 @@ inductive WFError
   | parentDoesNotReachRoot
   | binderNotBubble
   | binderDoesNotEnclose
-  | namedReferenceDoesNotResolve
   | invalidEndpoint
   | duplicateEndpoint
   | endpointOnTwoWires
@@ -204,15 +174,14 @@ inductive WFError
   | wireScopeDoesNotEnclose
   deriving DecidableEq
 
-def checkWellFormed (signature : List Nat) (d : ConcreteDiagram) :
-    Except WFError (CheckedDiagram signature) :=
+def checkWellFormed (d : ConcreteDiagram) :
+    Except WFError (CheckedDiagram ) :=
   if hroot : d.RootIsSheet then
     if honlyRoot : d.OnlyRootIsSheet then
       if hreach : d.AllRegionsReachRoot then
         if hbubbles : d.AtomBindersAreBubbles then
           if henclose : d.AtomBindersEnclose then
-            if hresolve : d.NamedReferencesResolve signature then
-              if hvalid : d.EndpointsAreValid then
+            if hvalid : d.EndpointsAreValid then
                 if hnodup : d.EndpointsAreNodup then
                   if hdisjoint : d.WireEndpointsAreDisjoint then
                     if hcovered : d.RequiredPortsAreCovered then
@@ -223,7 +192,6 @@ def checkWellFormed (signature : List Nat) (d : ConcreteDiagram) :
                             all_regions_reach_root := hreach
                             atom_binders_are_bubbles := hbubbles
                             atom_binders_enclose := henclose
-                            named_references_resolve := hresolve
                             endpoints_are_valid := hvalid
                             endpoints_are_nodup := hnodup
                             wire_endpoints_are_disjoint := hdisjoint
@@ -235,7 +203,6 @@ def checkWellFormed (signature : List Nat) (d : ConcreteDiagram) :
                   else .error .endpointOnTwoWires
                 else .error .duplicateEndpoint
               else .error .invalidEndpoint
-            else .error .namedReferenceDoesNotResolve
           else .error .binderDoesNotEnclose
         else .error .binderNotBubble
       else .error .parentDoesNotReachRoot
@@ -243,10 +210,9 @@ def checkWellFormed (signature : List Nat) (d : ConcreteDiagram) :
   else .error .rootNotSheet
 
 theorem checkWellFormed_preserves_input
-    (hcheck : checkWellFormed signature d = .ok checked) :
+    (hcheck : checkWellFormed  d = .ok checked) :
     checked.val = d := by
   unfold checkWellFormed at hcheck
-  split at hcheck <;> try contradiction
   split at hcheck <;> try contradiction
   split at hcheck <;> try contradiction
   split at hcheck <;> try contradiction
@@ -262,20 +228,20 @@ theorem checkWellFormed_preserves_input
   all_goals contradiction
 
 theorem checkWellFormed_complete
-    (h : d.WellFormed signature) :
-    checkWellFormed signature d = .ok ⟨d, h⟩ := by
+    (h : d.WellFormed ) :
+    checkWellFormed  d = .ok ⟨d, h⟩ := by
   unfold checkWellFormed
   simp only [dif_pos h.root_is_sheet, dif_pos h.only_root_is_sheet,
     dif_pos h.all_regions_reach_root, dif_pos h.atom_binders_are_bubbles,
-    dif_pos h.atom_binders_enclose, dif_pos h.named_references_resolve,
+    dif_pos h.atom_binders_enclose,
     dif_pos h.endpoints_are_valid, dif_pos h.endpoints_are_nodup,
     dif_pos h.wire_endpoints_are_disjoint,
     dif_pos h.required_ports_are_covered, dif_pos h.wire_scopes_enclose]
 
 theorem checkWellFormed_iff :
-    (exists checked, checkWellFormed signature d = .ok checked /\
+    (exists checked, checkWellFormed  d = .ok checked /\
       checked.val = d) <->
-      d.WellFormed signature := by
+      d.WellFormed  := by
   constructor
   · rintro ⟨checked, _, rfl⟩
     exact checked.property

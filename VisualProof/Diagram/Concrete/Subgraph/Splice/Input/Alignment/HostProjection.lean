@@ -11,7 +11,7 @@ open VisualProof.Diagram.ConcreteElaboration
 /-- Paired compiler-trace induction aligns every enclosing frame of a proper
 nested splice site. -/
 theorem PlugLayout.compiledNestedFrameContextIso_complete
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -23,7 +23,7 @@ theorem PlugLayout.compiledNestedFrameContextIso_complete
     sourceBoundary sourceRoot
   let targetView := compiledSpliceOutputOpenView input layout hadmissible
     sourceBoundary sourceRoot
-  obtain ⟨alignment⟩ := layout.pairedOpenCompilerTraceContextIso signature
+  obtain ⟨alignment⟩ := layout.pairedOpenCompilerTraceContextIso
     input hadmissible sourceBoundary sourceRoot hnested
     sourceView.result.state targetView.result.state rfl rfl
     sourceView.result.trace targetView.result.trace
@@ -44,7 +44,7 @@ theorem PlugLayout.compiledNestedFrameContextIso_complete
 
 /-- Canonical projection of the complete paired compiler-context alignment. -/
 noncomputable def PlugLayout.compiledNestedFrameContextIso
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -59,7 +59,7 @@ noncomputable def PlugLayout.compiledNestedFrameContextIso
 relation-hole context is closed.  This proof-independent fact erases the
 dependent trace choice made by `compiledSpliceHostView`. -/
 private theorem contextPath_holeRels_eq_of_path_eq_nil
-    {region : Region signature wires rels} {path : List Nat}
+    {region : Region  wires rels} {path : List Nat}
     (witness : Region.ContextPath region path) (hpath : path = []) :
     witness.toFocus.holeRels = rels := by
   subst path
@@ -67,7 +67,7 @@ private theorem contextPath_holeRels_eq_of_path_eq_nil
   rfl
 
 theorem compiledSpliceHostView_root_holeRels_eq_nil
-    (input : Input signature) (hadmissible : input.Admissible)
+    (input : Input ) (hadmissible : input.Admissible)
     (hsite : input.site = input.frame.val.root) :
     (compiledSpliceHostView input hadmissible).focus.holeRels = [] := by
   let host := compiledSpliceHostView input hadmissible
@@ -83,10 +83,10 @@ theorem compiledSpliceHostView_root_holeRels_eq_nil
   exact contextPath_holeRels_eq_of_path_eq_nil host.intrinsicPath hpath
 
 private theorem ItemSeq.renameRelations_to_nil_eq_cast
-    (items : ItemSeq signature wires rels)
+    (items : ItemSeq  wires rels)
     (hrels : rels = []) (rho : RelationRenaming rels []) :
     items.renameRelations rho =
-      cast (congrArg (ItemSeq signature wires) hrels) items := by
+      cast (congrArg (ItemSeq  wires) hrels) items := by
   subst rels
   have hrho :
       ((fun {arity} (relation : Theory.RelVar [] arity) => rho relation) :
@@ -104,7 +104,7 @@ private theorem ItemSeq.renameRelations_to_nil_eq_cast
   rfl
 
 theorem compiledSpliceRootHostOfNonempty_body_eq_canonical
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -112,10 +112,10 @@ theorem compiledSpliceRootHostOfNonempty_body_eq_canonical
     (hsite : input.site = input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
     let host := compiledSpliceHostView input hadmissible
-    let hostItems : ItemSeq signature
+    let hostItems : ItemSeq
         (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
       cast (congrArg
-        (ItemSeq signature
+        (ItemSeq
           (host.compilerLeaf.inheritedWires.extend input.site).length)
         (compiledSpliceHostView_root_holeRels_eq_nil input hadmissible hsite))
         host.compilerLeaf.items
@@ -161,7 +161,7 @@ theorem compiledSpliceRootHostOfNonempty_body_eq_canonical
       layout hadmissible sourceBoundary sourceRoot hsite hnonempty index
 
 theorem compiledSpliceRootHostOfEmpty_body_eq_canonical
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -169,10 +169,10 @@ theorem compiledSpliceRootHostOfEmpty_body_eq_canonical
     (hsite : input.site = input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0) :
     let host := compiledSpliceHostView input hadmissible
-    let hostItems : ItemSeq signature
+    let hostItems : ItemSeq
         (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
       cast (congrArg
-        (ItemSeq signature
+        (ItemSeq
           (host.compilerLeaf.inheritedWires.extend input.site).length)
         (compiledSpliceHostView_root_holeRels_eq_nil input hadmissible hsite))
         host.compilerLeaf.items
@@ -218,22 +218,22 @@ theorem compiledSpliceRootHostOfEmpty_body_eq_canonical
 private theorem CompilerTrace.leafItemsComputation_of_path_eq_nil
     {diagram : ConcreteDiagram}
     {start target : Fin diagram.regionCount} {path : List Nat}
-    {body : Region signature 0 []}
+    {body : Region  0 []}
     {route : RegionRoute diagram start target path}
     {witness : Region.ContextPath body path}
     {state : Region.ContextPath.CompilerLeaf diagram start (.here body)}
-    (trace : CompilerTrace signature diagram route witness state)
+    (trace : CompilerTrace  diagram route witness state)
     (hpath : path = [])
     (hinherited : state.inheritedWires = [])
     (hbinders : state.binders = ConcreteElaboration.BinderContext.empty)
     (hrels : witness.toFocus.holeRels = []) :
-    ConcreteElaboration.compileOccurrencesWith? signature diagram
-      (ConcreteElaboration.compileRegion? signature diagram state.fuel)
+    ConcreteElaboration.compileOccurrencesWith?  diagram
+      (ConcreteElaboration.compileRegion?  diagram state.fuel)
       (trace.leaf.inheritedWires.extend target)
       ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences diagram target) =
         some (cast (congrArg
-          (ItemSeq signature
+          (ItemSeq
             (trace.leaf.inheritedWires.extend target).length) hrels)
           trace.leaf.items) := by
   cases trace with
@@ -247,19 +247,19 @@ private theorem CompilerTrace.leafItemsComputation_of_path_eq_nil
       simp at hpath
 
 theorem compiledSpliceRootHostItems_computation
-    (input : Input signature) (hadmissible : input.Admissible)
+    (input : Input ) (hadmissible : input.Admissible)
     (hsite : input.site = input.frame.val.root) :
     let host := compiledSpliceHostView input hadmissible
-    let hostItems : ItemSeq signature
+    let hostItems : ItemSeq
         (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
       cast (congrArg
-        (ItemSeq signature
+        (ItemSeq
           (host.compilerLeaf.inheritedWires.extend input.site).length)
         (compiledSpliceHostView_root_holeRels_eq_nil input hadmissible hsite))
         host.compilerLeaf.items
-    ConcreteElaboration.compileOccurrencesWith? signature
+    ConcreteElaboration.compileOccurrencesWith?
       input.coalesceFrameRaw
-      (ConcreteElaboration.compileRegion? signature input.coalesceFrameRaw
+      (ConcreteElaboration.compileRegion?  input.coalesceFrameRaw
         input.coalesceFrameRaw.regionCount)
       (host.compilerLeaf.inheritedWires.extend input.site)
       ConcreteElaboration.BinderContext.empty
@@ -292,7 +292,7 @@ theorem compiledSpliceRootHostItems_computation
   simpa [hsite, hfuel] using hcomputation
 
 theorem compiledSpliceRootHostOfNonempty_denote_iff_coalesced
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -300,14 +300,13 @@ theorem compiledSpliceRootHostOfNonempty_denote_iff_coalesced
     (hsite : input.site = input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (compiledSpliceRootHostOfNonempty input layout hadmissible
           sourceBoundary sourceRoot hsite hnonempty) args ↔
-      denoteOpen model named
+      denoteOpen model
         (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
           sourceRoot).elaborate args := by
   let checked := PlugLayout.checkedCoalescedOpenRoot input hadmissible
@@ -317,10 +316,10 @@ theorem compiledSpliceRootHostOfNonempty_denote_iff_coalesced
   let host := compiledSpliceHostView input hadmissible
   let hrels := compiledSpliceHostView_root_holeRels_eq_nil input hadmissible
     hsite
-  let hostItems : ItemSeq signature
+  let hostItems : ItemSeq
       (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
     cast (congrArg
-      (ItemSeq signature
+      (ItemSeq
         (host.compilerLeaf.inheritedWires.extend input.site).length) hrels)
       host.compilerLeaf.items
   let extra := (ConcreteElaboration.exactScopeWires
@@ -334,11 +333,11 @@ theorem compiledSpliceRootHostOfNonempty_denote_iff_coalesced
   have hbody : source.body = canonical := by
     exact compiledSpliceRootHostOfNonempty_body_eq_canonical input layout
       hadmissible sourceBoundary sourceRoot hsite hnonempty
-  change denoteOpen model named source args ↔
-    denoteOpen model named checked.elaborate args
-  change denoteOpen model named
+  change denoteOpen model  source args ↔
+    denoteOpen model  checked.elaborate args
+  change denoteOpen model
       (replaceOpenBody checked.elaborate source.body) args ↔
-    denoteOpen model named checked.elaborate args
+    denoteOpen model  checked.elaborate args
   rw [hbody]
   apply denote_replaceOpenBody_iff
   intro env
@@ -347,9 +346,9 @@ theorem compiledSpliceRootHostOfNonempty_denote_iff_coalesced
     change context.Exact input.frame.val.root
     rw [← hsite]
     exact host.compilerLeaf.wiresExact
-  have hclosed : ConcreteElaboration.compileOccurrencesWith? signature
+  have hclosed : ConcreteElaboration.compileOccurrencesWith?
       input.coalesceFrameRaw
-      (ConcreteElaboration.compileRegion? signature input.coalesceFrameRaw
+      (ConcreteElaboration.compileRegion?  input.coalesceFrameRaw
         input.coalesceFrameRaw.regionCount)
       context ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences input.coalesceFrameRaw
@@ -357,13 +356,13 @@ theorem compiledSpliceRootHostOfNonempty_denote_iff_coalesced
     exact compiledSpliceRootHostItems_computation input hadmissible hsite
   have hsemantic := PlugLayout.denote_expandedCoalescedRootItems_iff
     input hadmissible sourceBoundary sourceRoot context hexact hostItems hclosed
-    extra model named env
+    extra model  env
   simpa [canonical, extra, hostItems, context, hrels,
     PlugLayout.rootHostOpenEmbedding] using
     hsemantic
 
 theorem compiledSpliceRootHostOfEmpty_denote_iff_coalesced
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -371,14 +370,13 @@ theorem compiledSpliceRootHostOfEmpty_denote_iff_coalesced
     (hsite : input.site = input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (compiledSpliceRootHostOfEmpty input layout hadmissible
           sourceBoundary sourceRoot hsite hzero) args ↔
-      denoteOpen model named
+      denoteOpen model
         (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
           sourceRoot).elaborate args := by
   let checked := PlugLayout.checkedCoalescedOpenRoot input hadmissible
@@ -388,10 +386,10 @@ theorem compiledSpliceRootHostOfEmpty_denote_iff_coalesced
   let host := compiledSpliceHostView input hadmissible
   let hrels := compiledSpliceHostView_root_holeRels_eq_nil input hadmissible
     hsite
-  let hostItems : ItemSeq signature
+  let hostItems : ItemSeq
       (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
     cast (congrArg
-      (ItemSeq signature
+      (ItemSeq
         (host.compilerLeaf.inheritedWires.extend input.site).length) hrels)
       host.compilerLeaf.items
   let extra := input.pattern.val.hiddenWires.length
@@ -404,11 +402,11 @@ theorem compiledSpliceRootHostOfEmpty_denote_iff_coalesced
   have hbody : source.body = canonical := by
     exact compiledSpliceRootHostOfEmpty_body_eq_canonical input layout
       hadmissible sourceBoundary sourceRoot hsite hzero
-  change denoteOpen model named source args ↔
-    denoteOpen model named checked.elaborate args
-  change denoteOpen model named
+  change denoteOpen model  source args ↔
+    denoteOpen model  checked.elaborate args
+  change denoteOpen model
       (replaceOpenBody checked.elaborate source.body) args ↔
-    denoteOpen model named checked.elaborate args
+    denoteOpen model  checked.elaborate args
   rw [hbody]
   apply denote_replaceOpenBody_iff
   intro env
@@ -417,9 +415,9 @@ theorem compiledSpliceRootHostOfEmpty_denote_iff_coalesced
     change context.Exact input.frame.val.root
     rw [← hsite]
     exact host.compilerLeaf.wiresExact
-  have hclosed : ConcreteElaboration.compileOccurrencesWith? signature
+  have hclosed : ConcreteElaboration.compileOccurrencesWith?
       input.coalesceFrameRaw
-      (ConcreteElaboration.compileRegion? signature input.coalesceFrameRaw
+      (ConcreteElaboration.compileRegion?  input.coalesceFrameRaw
         input.coalesceFrameRaw.regionCount)
       context ConcreteElaboration.BinderContext.empty
       (ConcreteElaboration.localOccurrences input.coalesceFrameRaw
@@ -427,13 +425,13 @@ theorem compiledSpliceRootHostOfEmpty_denote_iff_coalesced
     exact compiledSpliceRootHostItems_computation input hadmissible hsite
   have hsemantic := PlugLayout.denote_expandedCoalescedRootItems_iff
     input hadmissible sourceBoundary sourceRoot context hexact hostItems hclosed
-    extra model named env
+    extra model  env
   simpa [canonical, extra, hostItems, context, hrels,
     PlugLayout.rootHostOpenEmbedding] using
     hsemantic
 
 theorem compiledSpliceRootSourceOfNonempty_projects_coalesced
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -441,25 +439,24 @@ theorem compiledSpliceRootSourceOfNonempty_projects_coalesced
     (hsite : input.site = input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (compiledSpliceRootSourceOfNonempty input layout hadmissible
           sourceBoundary sourceRoot hsite hnonempty) args →
-      denoteOpen model named
+      denoteOpen model
         (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
           sourceRoot).elaborate args := by
   intro hsource
   apply (compiledSpliceRootHostOfNonempty_denote_iff_coalesced input layout
-    hadmissible sourceBoundary sourceRoot hsite hnonempty model named args).mp
+    hadmissible sourceBoundary sourceRoot hsite hnonempty model  args).mp
   exact compiledSpliceRootSourceOfNonempty_projects_compiledHost input layout
-    hadmissible sourceBoundary sourceRoot hsite hnonempty model named args
+    hadmissible sourceBoundary sourceRoot hsite hnonempty model  args
     hsource
 
 theorem compiledSpliceRootSourceOfEmpty_projects_coalesced
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -467,26 +464,25 @@ theorem compiledSpliceRootSourceOfEmpty_projects_coalesced
     (hsite : input.site = input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (compiledSpliceRootSourceOfEmpty input layout hadmissible
           sourceBoundary sourceRoot hsite hzero) args →
-      denoteOpen model named
+      denoteOpen model
         (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
           sourceRoot).elaborate args := by
   intro hsource
   apply (compiledSpliceRootHostOfEmpty_denote_iff_coalesced input layout
-    hadmissible sourceBoundary sourceRoot hsite hzero model named args).mp
+    hadmissible sourceBoundary sourceRoot hsite hzero model  args).mp
   exact compiledSpliceRootSourceOfEmpty_projects_compiledHost input layout
-    hadmissible sourceBoundary sourceRoot hsite hzero model named args hsource
+    hadmissible sourceBoundary sourceRoot hsite hzero model  args hsource
 
 /-- Direct children on two routes from the same region to the same terminal
 region coincide. -/
 theorem RegionRoute.firstChild_eq
-    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed signature)
+    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed )
     {start leftChild rightChild target : Fin diagram.regionCount}
     {leftRest rightRest : List Nat}
     (leftParent : (diagram.regions leftChild).parent? = some start)
@@ -516,7 +512,7 @@ theorem RegionRoute.firstChild_eq
 /-- Two direct children of one region that both enclose a common target are
 the same child. -/
 theorem RegionRoute.directChild_eq_of_encloses
-    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed signature)
+    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed )
     {start leftChild rightChild target : Fin diagram.regionCount}
     (leftParent : (diagram.regions leftChild).parent? = some start)
     (rightParent : (diagram.regions rightChild).parent? = some start)
@@ -541,12 +537,12 @@ theorem RegionRoute.directChild_eq_of_encloses
 /-- Two retained compiler traces through the same concrete diagram and from
 the same lexical state end with the same relation context and binder state. -/
 theorem CompilerTrace.sameDiagramTerminalLexical
-    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed signature)
+    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed )
     {start target : Fin diagram.regionCount}
     {sourcePath targetPath : List Nat} {rels : Theory.RelCtx}
     {sourceOuter targetOuter : Nat}
-    {sourceBody : Region signature sourceOuter rels}
-    {targetBody : Region signature targetOuter rels}
+    {sourceBody : Region  sourceOuter rels}
+    {targetBody : Region  targetOuter rels}
     {sourceRoute : RegionRoute diagram start target sourcePath}
     {targetRoute : RegionRoute diagram start target targetPath}
     {sourceWitness : Region.ContextPath sourceBody sourcePath}
@@ -555,9 +551,9 @@ theorem CompilerTrace.sameDiagramTerminalLexical
       (.here sourceBody)}
     {targetState : Region.ContextPath.CompilerLeaf diagram start
       (.here targetBody)}
-    (sourceTrace : CompilerTrace signature diagram sourceRoute sourceWitness
+    (sourceTrace : CompilerTrace  diagram sourceRoute sourceWitness
       sourceState)
-    (targetTrace : CompilerTrace signature diagram targetRoute targetWitness
+    (targetTrace : CompilerTrace  diagram targetRoute targetWitness
       targetState)
     (hbinders : sourceState.binders = targetState.binders) :
     ∃ hrels : sourceWitness.toFocus.holeRels =
@@ -665,13 +661,13 @@ theorem CompilerTrace.sameDiagramTerminalLexical
 ordered inherited wire contexts from the initial lexical state to the
 terminal compiler leaf. -/
 theorem CompilerTrace.sameDiagramTerminalInherited
-    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed signature)
+    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed )
     {start target : Fin diagram.regionCount}
     {sourcePath targetPath : List Nat}
     {sourceRels targetRels : Theory.RelCtx}
     {sourceOuter targetOuter : Nat}
-    {sourceBody : Region signature sourceOuter sourceRels}
-    {targetBody : Region signature targetOuter targetRels}
+    {sourceBody : Region  sourceOuter sourceRels}
+    {targetBody : Region  targetOuter targetRels}
     {sourceRoute : RegionRoute diagram start target sourcePath}
     {targetRoute : RegionRoute diagram start target targetPath}
     {sourceWitness : Region.ContextPath sourceBody sourcePath}
@@ -680,9 +676,9 @@ theorem CompilerTrace.sameDiagramTerminalInherited
       (.here sourceBody)}
     {targetState : Region.ContextPath.CompilerLeaf diagram start
       (.here targetBody)}
-    (sourceTrace : CompilerTrace signature diagram sourceRoute sourceWitness
+    (sourceTrace : CompilerTrace  diagram sourceRoute sourceWitness
       sourceState)
-    (targetTrace : CompilerTrace signature diagram targetRoute targetWitness
+    (targetTrace : CompilerTrace  diagram targetRoute targetWitness
       targetState)
     (hinherited : sourceState.inheritedWires =
       targetState.inheritedWires) :
@@ -780,14 +776,14 @@ ordered inherited-wire context computed at the final region.  The suffix may
 start from an independently reconstructed compiler state; equality of the
 inherited context at the split point is sufficient. -/
 theorem CompilerTrace.sameDiagramTerminalInheritedOfSplit
-    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed signature)
+    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed )
     {start middle target : Fin diagram.regionCount}
     {firstPath secondPath wholePath : List Nat}
     {firstRels secondRels wholeRels : Theory.RelCtx}
     {firstOuter secondOuter wholeOuter : Nat}
-    {firstBody : Region signature firstOuter firstRels}
-    {secondBody : Region signature secondOuter secondRels}
-    {wholeBody : Region signature wholeOuter wholeRels}
+    {firstBody : Region  firstOuter firstRels}
+    {secondBody : Region  secondOuter secondRels}
+    {wholeBody : Region  wholeOuter wholeRels}
     {firstRoute : RegionRoute diagram start middle firstPath}
     {secondRoute : RegionRoute diagram middle target secondPath}
     {wholeRoute : RegionRoute diagram start target wholePath}
@@ -800,11 +796,11 @@ theorem CompilerTrace.sameDiagramTerminalInheritedOfSplit
       (.here secondBody)}
     {wholeState : Region.ContextPath.CompilerLeaf diagram start
       (.here wholeBody)}
-    (firstTrace : CompilerTrace signature diagram firstRoute firstWitness
+    (firstTrace : CompilerTrace  diagram firstRoute firstWitness
       firstState)
-    (secondTrace : CompilerTrace signature diagram secondRoute secondWitness
+    (secondTrace : CompilerTrace  diagram secondRoute secondWitness
       secondState)
-    (wholeTrace : CompilerTrace signature diagram wholeRoute wholeWitness
+    (wholeTrace : CompilerTrace  diagram wholeRoute wholeWitness
       wholeState)
     (initialEq : firstState.inheritedWires = wholeState.inheritedWires)
     (splitEq : secondState.inheritedWires =
@@ -918,12 +914,12 @@ theorem CompilerTrace.sameDiagramTerminalInheritedOfSplit
 second canonical trace below that ancestor, with the exact lexical binder
 state reached by the ancestor trace. -/
 theorem CompilerTrace.tailAtEnclosed
-    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed signature)
+    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed )
     {start anchor target : Fin diagram.regionCount}
     {anchorPath targetPath : List Nat} {rels : Theory.RelCtx}
     {anchorOuter targetOuter : Nat}
-    {anchorBody : Region signature anchorOuter rels}
-    {targetBody : Region signature targetOuter rels}
+    {anchorBody : Region  anchorOuter rels}
+    {targetBody : Region  targetOuter rels}
     {anchorRoute : RegionRoute diagram start anchor anchorPath}
     {targetRoute : RegionRoute diagram start target targetPath}
     {anchorWitness : Region.ContextPath anchorBody anchorPath}
@@ -932,20 +928,20 @@ theorem CompilerTrace.tailAtEnclosed
       (.here anchorBody)}
     {targetState : Region.ContextPath.CompilerLeaf diagram start
       (.here targetBody)}
-    (anchorTrace : CompilerTrace signature diagram anchorRoute anchorWitness
+    (anchorTrace : CompilerTrace  diagram anchorRoute anchorWitness
       anchorState)
-    (targetTrace : CompilerTrace signature diagram targetRoute targetWitness
+    (targetTrace : CompilerTrace  diagram targetRoute targetWitness
       targetState)
     (hbinders : anchorState.binders = targetState.binders)
     (hencloses : diagram.Encloses anchor target) :
     ∃ (tailPath : List Nat) (tailOuter : Nat)
-      (tailBody : Region signature tailOuter
+      (tailBody : Region  tailOuter
         anchorWitness.toFocus.holeRels)
       (tailRoute : RegionRoute diagram anchor target tailPath)
       (tailWitness : Region.ContextPath tailBody tailPath)
       (tailState : Region.ContextPath.CompilerLeaf diagram anchor
         (.here tailBody))
-      (tailTrace : CompilerTrace signature diagram tailRoute tailWitness
+      (tailTrace : CompilerTrace  diagram tailRoute tailWitness
         tailState),
       tailState.binders = anchorTrace.leaf.binders ∧
         ∃ hrels : tailWitness.toFocus.holeRels =
@@ -1050,13 +1046,13 @@ theorem CompilerTrace.tailAtEnclosed
 /-- Peel the open sheet frame and compare its retained ordinary tail with a
 closed-root trace through the same concrete diagram. -/
 theorem OpenCompilerTrace.sameDiagramClosedTerminalLexical
-    {checked : CheckedOpenDiagram signature}
-    (hwf : checked.val.diagram.WellFormed signature)
+    {checked : CheckedOpenDiagram }
+    (hwf : checked.val.diagram.WellFormed )
     {target : Fin checked.val.diagram.regionCount}
     (hnested : target ≠ checked.val.diagram.root)
     {sourcePath targetPath : List Nat}
-    {sourceBody : Region signature checked.val.exposedWires.length []}
-    {targetOuter : Nat} {targetBody : Region signature targetOuter []}
+    {sourceBody : Region  checked.val.exposedWires.length []}
+    {targetOuter : Nat} {targetBody : Region  targetOuter []}
     {sourceRoute : RegionRoute checked.val.diagram checked.val.diagram.root
       target sourcePath}
     {targetRoute : RegionRoute checked.val.diagram checked.val.diagram.root
@@ -1068,7 +1064,7 @@ theorem OpenCompilerTrace.sameDiagramClosedTerminalLexical
       checked.val.diagram.root (.here targetBody)}
     (sourceTrace : OpenCompilerTrace checked sourceRoute sourceWitness
       sourceState)
-    (targetTrace : CompilerTrace signature checked.val.diagram targetRoute
+    (targetTrace : CompilerTrace  checked.val.diagram targetRoute
       targetWitness targetState)
     (targetBinders : targetState.binders =
       ConcreteElaboration.BinderContext.empty) :
@@ -1161,15 +1157,15 @@ theorem OpenCompilerTrace.sameDiagramClosedTerminalLexical
 the same ordered inherited-wire context as the canonical open-root trace to
 the suffix endpoint. -/
 theorem OpenCompilerTrace.sameDiagramTerminalInheritedOfSplit
-    {checked : CheckedOpenDiagram signature}
-    (hwf : checked.val.diagram.WellFormed signature)
+    {checked : CheckedOpenDiagram }
+    (hwf : checked.val.diagram.WellFormed )
     {anchor target : Fin checked.val.diagram.regionCount}
     (hanchor : anchor ≠ checked.val.diagram.root)
     {prefixPath suffixPath wholePath : List Nat}
-    {prefixBody wholeBody : Region signature
+    {prefixBody wholeBody : Region
       checked.val.exposedWires.length []}
     {suffixOuter : Nat} {suffixRels : Theory.RelCtx}
-    {suffixBody : Region signature suffixOuter suffixRels}
+    {suffixBody : Region  suffixOuter suffixRels}
     {prefixRoute : RegionRoute checked.val.diagram checked.val.diagram.root
       anchor prefixPath}
     {suffixRoute : RegionRoute checked.val.diagram anchor target suffixPath}
@@ -1184,7 +1180,7 @@ theorem OpenCompilerTrace.sameDiagramTerminalInheritedOfSplit
     {wholeState : OpenRootCompilerState checked wholeBody}
     (prefixTrace : OpenCompilerTrace checked prefixRoute prefixWitness
       prefixState)
-    (suffixTrace : CompilerTrace signature checked.val.diagram suffixRoute
+    (suffixTrace : CompilerTrace  checked.val.diagram suffixRoute
       suffixWitness suffixState)
     (wholeTrace : OpenCompilerTrace checked wholeRoute wholeWitness wholeState)
     (splitEq : suffixState.inheritedWires =
@@ -1319,8 +1315,8 @@ theorem OpenCompilerTrace.sameDiagramTerminalInheritedOfSplit
 concrete site. -/
 noncomputable def Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
     {diagram : ConcreteDiagram} {site : Fin diagram.regionCount}
-    {sourceBody : Region signature sourceOuter sourceRels}
-    {targetBody : Region signature targetOuter targetRels}
+    {sourceBody : Region  sourceOuter sourceRels}
+    {targetBody : Region  targetOuter targetRels}
     {sourcePath targetPath : List Nat}
     (sourceWitness : Region.ContextPath sourceBody sourcePath)
     (sourceLeaf : Region.ContextPath.CompilerLeaf diagram site sourceWitness)
@@ -1344,8 +1340,8 @@ noncomputable def Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
 
 theorem Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv_spec
     {diagram : ConcreteDiagram} {site : Fin diagram.regionCount}
-    {sourceBody : Region signature sourceOuter sourceRels}
-    {targetBody : Region signature targetOuter targetRels}
+    {sourceBody : Region  sourceOuter sourceRels}
+    {targetBody : Region  targetOuter targetRels}
     {sourcePath targetPath : List Nat}
     (sourceWitness : Region.ContextPath sourceBody sourcePath)
     (sourceLeaf : Region.ContextPath.CompilerLeaf diagram site sourceWitness)
@@ -1361,7 +1357,7 @@ theorem Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv_spec
     sourceLeaf.inheritedWires targetLeaf.inheritedWires _ _ _ index
 
 private theorem finishRegionIso_sameDiagram_of_relEq
-    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed signature)
+    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed )
     {site : Fin diagram.regionCount} {sourceRels targetRels : Theory.RelCtx}
     (hrels : sourceRels = targetRels)
     (sourceContext targetContext : ConcreteElaboration.WireContext diagram)
@@ -1374,19 +1370,19 @@ private theorem finishRegionIso_sameDiagram_of_relEq
     (targetBinders : ConcreteElaboration.BinderContext diagram targetRels)
     (hbinders : HEq sourceBinders targetBinders)
     (sourceFuel targetFuel : Nat)
-    (sourceItems : ItemSeq signature (sourceContext.extend site).length
+    (sourceItems : ItemSeq  (sourceContext.extend site).length
       sourceRels)
-    (targetItems : ItemSeq signature (targetContext.extend site).length
+    (targetItems : ItemSeq  (targetContext.extend site).length
       targetRels)
-    (hsourceItems : ConcreteElaboration.compileOccurrencesWith? signature
-      diagram (ConcreteElaboration.compileRegion? signature diagram sourceFuel)
+    (hsourceItems : ConcreteElaboration.compileOccurrencesWith?
+      diagram (ConcreteElaboration.compileRegion?  diagram sourceFuel)
       (sourceContext.extend site) sourceBinders
       (ConcreteElaboration.localOccurrences diagram site) = some sourceItems)
-    (htargetItems : ConcreteElaboration.compileOccurrencesWith? signature
-      diagram (ConcreteElaboration.compileRegion? signature diagram targetFuel)
+    (htargetItems : ConcreteElaboration.compileOccurrencesWith?
+      diagram (ConcreteElaboration.compileRegion?  diagram targetFuel)
       (targetContext.extend site) targetBinders
       (ConcreteElaboration.localOccurrences diagram site) = some targetItems) :
-    RegionIso signature inherited targetRels
+    RegionIso  inherited targetRels
       ((ConcreteElaboration.finishRegion diagram sourceContext site sourceItems)
         |>.renameRelations (relationRenamingOfEq hrels))
       (ConcreteElaboration.finishRegion diagram targetContext site
@@ -1394,12 +1390,12 @@ private theorem finishRegionIso_sameDiagram_of_relEq
   subst targetRels
   have hbindersEq : targetBinders = sourceBinders :=
     (eq_of_heq hbinders).symm
-  have hsource : ConcreteElaboration.compileRegion? signature diagram
+  have hsource : ConcreteElaboration.compileRegion?  diagram
       (sourceFuel + 1) site sourceContext sourceBinders =
         some (ConcreteElaboration.finishRegion diagram sourceContext site
           sourceItems) := by
     simp [ConcreteElaboration.compileRegion?, hsourceItems]
-  have htarget : ConcreteElaboration.compileRegion? signature diagram
+  have htarget : ConcreteElaboration.compileRegion?  diagram
       (targetFuel + 1) site targetContext targetBinders =
         some (ConcreteElaboration.finishRegion diagram targetContext site
           targetItems) := by
@@ -1411,10 +1407,10 @@ private theorem finishRegionIso_sameDiagram_of_relEq
 /-- Exact compiler equivariance turns lexical alignment at one concrete site
 into an intrinsic region isomorphism between the two retained leaves. -/
 theorem compilerLeaf_regionIso_sameDiagram
-    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed signature)
+    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed )
     {site : Fin diagram.regionCount}
-    {sourceBody : Region signature sourceOuter sourceRels}
-    {targetBody : Region signature targetOuter targetRels}
+    {sourceBody : Region  sourceOuter sourceRels}
+    {targetBody : Region  targetOuter targetRels}
     {sourcePath targetPath : List Nat}
     (sourceWitness : Region.ContextPath sourceBody sourcePath)
     (sourceLeaf : Region.ContextPath.CompilerLeaf diagram site sourceWitness)
@@ -1423,7 +1419,7 @@ theorem compilerLeaf_regionIso_sameDiagram
     (hrels : sourceWitness.toFocus.holeRels =
       targetWitness.toFocus.holeRels)
     (hbinders : HEq sourceLeaf.binders targetLeaf.binders) :
-    RegionIso signature
+    RegionIso
       (compilerLeafOuterWire sourceWitness sourceLeaf targetWitness targetLeaf
         (VisualProof.Diagram.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
           sourceWitness sourceLeaf targetWitness targetLeaf))
@@ -1438,7 +1434,7 @@ theorem compilerLeaf_regionIso_sameDiagram
     sourceLeaf.inheritedWires site sourceLeaf.items
   let targetCompiled := ConcreteElaboration.finishRegion diagram
     targetLeaf.inheritedWires site targetLeaf.items
-  have hcore : RegionIso signature inherited
+  have hcore : RegionIso  inherited
       targetWitness.toFocus.holeRels
       (sourceCompiled.renameRelations (relationRenamingOfEq hrels))
       targetCompiled :=
@@ -1461,7 +1457,7 @@ theorem compilerLeaf_regionIso_sameDiagram
       hcombined
 
 theorem compiledSpliceCoalescedHost_terminalLexical
-    (input : Input signature) (hadmissible : input.Admissible)
+    (input : Input ) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
@@ -1517,7 +1513,7 @@ private theorem binderEnumeration_owner_eq_of_relEq
   exact sourceEnumeration.lookup index
 
 theorem compiledNestedHostRelation_factor
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1564,7 +1560,7 @@ theorem compiledNestedHostRelation_factor
   exact eq_of_heq (Sigma.ext_iff.mp hsigma).2
 
 theorem compiledNestedHostWire_factor
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1670,18 +1666,18 @@ theorem regionIso_of_renamed_relEq
     (hrels : sourceRels = targetRels)
     {sourceWires targetWires : Nat}
     (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
-    (source : Region signature sourceWires sourceRels)
-    (target : Region signature targetWires targetRels)
-    (iso : RegionIso signature wire targetRels
+    (source : Region  sourceWires sourceRels)
+    (target : Region  targetWires targetRels)
+    (iso : RegionIso  wire targetRels
       (source.renameRelations (relationRenamingOfEq hrels)) target) :
-    RegionIso signature wire sourceRels source (hrels.symm ▸ target) := by
+    RegionIso  wire sourceRels source (hrels.symm ▸ target) := by
   subst targetRels
   simpa [relationRenamingOfEq, Region.renameRelations_id] using iso
 
 theorem Region.castRels_eq_renameRelations
     {sourceRels targetRels : Theory.RelCtx}
     (hrels : sourceRels = targetRels)
-    (region : Region signature wires targetRels) :
+    (region : Region  wires targetRels) :
     (hrels.symm ▸ region) =
       region.renameRelations (relationRenamingOfEq hrels.symm) := by
   subst targetRels
@@ -1699,7 +1695,7 @@ theorem relationRenamingOfEq_apply_symm
 /-- The frame-only projected host at a proper nested site is intrinsically
 the canonical coalesced source focus. -/
 private theorem compiledNestedProjectedHostFocusIso
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1730,7 +1726,7 @@ private theorem compiledNestedProjectedHostFocusIso
       (layout.inheritedWireEquiv host.intrinsicPath host.compilerLeaf
         outputView.intrinsicPath outputLeaf).trans
         (FiniteEquiv.finCast outputLeaf.inheritedLength)
-    RegionIso signature alignment.holeWire sourceView.focus.holeRels
+    RegionIso  alignment.holeWire sourceView.focus.holeRels
       sourceView.focus.body
       (alignment.holeRelsEq.symm ▸ projected.renameWires rootWire) := by
   dsimp only
@@ -1798,7 +1794,7 @@ private theorem compiledNestedProjectedHostFocusIso
     simpa [hostOutputWire, rootWire, sourceHostInherited] using
       compiledNestedHostWire_factor input layout hadmissible sourceBoundary
         sourceRoot hnested alignment
-  have outputIso : RegionIso signature alignment.holeWire
+  have outputIso : RegionIso  alignment.holeWire
       outputView.focus.holeRels
       (sourceView.focus.body.renameRelations
         (relationRenamingOfEq alignment.holeRelsEq))
@@ -1877,7 +1873,7 @@ in the executable output leaf.  Unlike host projection, this theorem retains
 the copied material and therefore identifies the operational source rather
 than merely one of its logical projections. -/
 theorem compiledNestedActualFocusIsoOfNonempty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -1940,7 +1936,7 @@ theorem compiledNestedActualFocusIsoOfNonempty
         (FiniteEquiv.finCast outputLeaf.inheritedLength)
     let outputActual :=
       (rawSource.renameRelations hostRelation).renameWires rootWire
-    RegionIso signature alignment.holeWire sourceView.focus.holeRels
+    RegionIso  alignment.holeWire sourceView.focus.holeRels
       sourceActual (alignment.holeRelsEq.symm ▸ outputActual) := by
   dsimp only
   let sourceView := compiledSpliceCoalescedOpenView input hadmissible
@@ -2030,7 +2026,7 @@ theorem compiledNestedActualFocusIsoOfNonempty
     calc
       _ = (rawSource.renameRelations hostRelation).renameWires
           sourceHostWire.symm := by
-        apply congrArg (fun region : Region signature
+        apply congrArg (fun region : Region
           host.compilerLeaf.inheritedWires.length outputView.focus.holeRels =>
             region.renameWires sourceHostWire.symm)
         apply congrArg (fun relation : RelationRenaming host.focus.holeRels
@@ -2056,8 +2052,8 @@ theorem compiledNestedActualFocusIsoOfNonempty
 private theorem DiagramContext.fill_transport_holeRels
     {sourceRels targetRels : Theory.RelCtx}
     (hrels : sourceRels = targetRels)
-    (context : DiagramContext signature outer hole outerRels targetRels)
-    (body : Region signature hole targetRels) :
+    (context : DiagramContext  outer hole outerRels targetRels)
+    (body : Region  hole targetRels) :
     (hrels.symm ▸ context).fill (hrels.symm ▸ body) =
       context.fill body := by
   subst targetRels
@@ -2066,7 +2062,7 @@ private theorem DiagramContext.fill_transport_holeRels
 /-- The executable nonempty splice, transported back into the coalesced open
 compiler leaf's lexical coordinates. -/
 noncomputable def compiledSpliceCoalescedActualOfNonempty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -2076,7 +2072,7 @@ noncomputable def compiledSpliceCoalescedActualOfNonempty
     (hrels : (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
       sourceRoot).focus.holeRels =
         (compiledSpliceHostView input hadmissible).focus.holeRels) :
-    Region signature
+    Region
       (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
         sourceRoot).focus.holeWires
       (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
@@ -2117,14 +2113,14 @@ noncomputable def compiledSpliceCoalescedActualOfNonempty
 /-- The same executable nonempty splice in the output open compiler leaf's
 lexical coordinates. -/
 noncomputable def compiledSpliceOutputActualOfNonempty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hnested : input.site ≠ input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    Region signature
+    Region
       (compiledSpliceOutputOpenView input layout hadmissible sourceBoundary
         sourceRoot).focus.holeWires
       (compiledSpliceOutputOpenView input layout hadmissible sourceBoundary
@@ -2167,7 +2163,7 @@ noncomputable def compiledSpliceOutputActualOfNonempty
 frame.  This is the whole-root structural bridge consumed by iteration's
 semantic contraction; no projection or polarity argument is involved. -/
 theorem compiledNestedActualRootIsoOfNonempty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -2185,7 +2181,7 @@ theorem compiledNestedActualRootIsoOfNonempty
       sourceBoundary sourceRoot
     let outputView := compiledSpliceOutputOpenView input layout hadmissible
       sourceBoundary sourceRoot
-    RegionIso signature
+    RegionIso
       (PlugLayout.rootExposedWireEquiv input layout sourceBoundary) []
       (sourceView.focus.context.fill
         (compiledSpliceCoalescedActualOfNonempty input layout hadmissible
@@ -2212,7 +2208,7 @@ theorem compiledNestedActualRootIsoOfNonempty
 /-- Coalesced-open presentation whose focused site has been replaced by the
 exact nonempty executable splice in the coalesced lexical coordinates. -/
 noncomputable def compiledSpliceNestedCoalescedActualOpenOfNonempty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -2222,7 +2218,7 @@ noncomputable def compiledSpliceNestedCoalescedActualOpenOfNonempty
     (hrels : (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
       sourceRoot).focus.holeRels =
         (compiledSpliceHostView input hadmissible).focus.holeRels) :
-    OpenDiagram signature
+    OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let source := (PlugLayout.checkedCoalescedOpenRoot input hadmissible
@@ -2237,7 +2233,7 @@ noncomputable def compiledSpliceNestedCoalescedActualOpenOfNonempty
 /-- The coalesced exact-splice presentation and the source used by
 `spliceChecked_open_denotation_iff` are ordered-open isomorphic. -/
 noncomputable def compiledSpliceNestedActualIsoOfNonempty
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -2296,7 +2292,7 @@ noncomputable def compiledSpliceNestedActualIsoOfNonempty
 /-- Lifting the projected focus isomorphism through every paired enclosing
 frame produces the canonical open-root body isomorphism. -/
 private theorem compiledNestedProjectedHostRootIso
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -2325,7 +2321,7 @@ private theorem compiledNestedProjectedHostRootIso
       (layout.inheritedWireEquiv host.intrinsicPath host.compilerLeaf
         outputView.intrinsicPath outputLeaf).trans
         (FiniteEquiv.finCast outputLeaf.inheritedLength)
-    RegionIso signature
+    RegionIso
       (PlugLayout.rootExposedWireEquiv input layout sourceBoundary) []
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).elaborate.body
@@ -2370,7 +2366,7 @@ private theorem compiledNestedProjectedHostRootIso
 /-- The frame-only nested host is an ordered open-diagram presentation of the
 canonical coalesced frame. -/
 noncomputable def compiledSpliceNestedHostIso
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -2432,30 +2428,29 @@ noncomputable def compiledSpliceNestedHostIso
       sourceBoundary sourceRoot hnested
 
 theorem compiledSpliceNestedHostOpen_denote_iff_coalesced
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hnested : input.site ≠ input.frame.val.root)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model named
+    denoteOpen model
         (compiledSpliceNestedHostOpen input layout hadmissible sourceBoundary
           sourceRoot hnested) args ↔
-      denoteOpen model named
+      denoteOpen model
         (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
           sourceRoot).elaborate args := by
   exact (compiledSpliceNestedHostIso input layout hadmissible sourceBoundary
-    sourceRoot hnested).denoteOpen_iff model named args |>.symm
+    sourceRoot hnested).denoteOpen_iff model  args |>.symm
 
 /-- Nested nonempty splices project directly to the canonical coalesced frame,
 with variance determined by the enclosing cut parity. -/
 theorem compiledSpliceNestedSourceOfNonempty_projects_coalesced
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -2463,33 +2458,32 @@ theorem compiledSpliceNestedSourceOfNonempty_projects_coalesced
     (hnested : input.site ≠ input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
     let view := compiledSpliceOutputOpenView input layout hadmissible
       sourceBoundary sourceRoot
     (view.focus.context.cutDepth % 2 = 0 →
-      denoteOpen model named
+      denoteOpen model
           (compiledSpliceNestedSourceOfNonempty input layout hadmissible
             sourceBoundary sourceRoot hnested hnonempty) args →
-        denoteOpen model named
+        denoteOpen model
           (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
             sourceRoot).elaborate args) ∧
     (view.focus.context.cutDepth % 2 = 1 →
-      denoteOpen model named
+      denoteOpen model
           (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
             sourceRoot).elaborate args →
-        denoteOpen model named
+        denoteOpen model
           (compiledSpliceNestedSourceOfNonempty input layout hadmissible
             sourceBoundary sourceRoot hnested hnonempty) args) := by
   dsimp only
   have hostProjection :=
     compiledSpliceNestedSourceOfNonempty_projects_host input layout
-      hadmissible sourceBoundary sourceRoot hnested hnonempty model named args
+      hadmissible sourceBoundary sourceRoot hnested hnonempty model  args
   have hostCanonical :=
     compiledSpliceNestedHostOpen_denote_iff_coalesced input layout hadmissible
-      sourceBoundary sourceRoot hnested model named args
+      sourceBoundary sourceRoot hnested model  args
   constructor
   · intro heven hsource
     exact hostCanonical.mp (hostProjection.1 heven hsource)
@@ -2499,7 +2493,7 @@ theorem compiledSpliceNestedSourceOfNonempty_projects_coalesced
 /-- Nested empty splices project directly to the canonical coalesced frame,
 with variance determined by the enclosing cut parity. -/
 theorem compiledSpliceNestedSourceOfEmpty_projects_coalesced
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -2507,33 +2501,32 @@ theorem compiledSpliceNestedSourceOfEmpty_projects_coalesced
     (hnested : input.site ≠ input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
     let view := compiledSpliceOutputOpenView input layout hadmissible
       sourceBoundary sourceRoot
     (view.focus.context.cutDepth % 2 = 0 →
-      denoteOpen model named
+      denoteOpen model
           (compiledSpliceNestedSourceOfEmpty input layout hadmissible
             sourceBoundary sourceRoot hnested hzero) args →
-        denoteOpen model named
+        denoteOpen model
           (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
             sourceRoot).elaborate args) ∧
     (view.focus.context.cutDepth % 2 = 1 →
-      denoteOpen model named
+      denoteOpen model
           (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
             sourceRoot).elaborate args →
-        denoteOpen model named
+        denoteOpen model
           (compiledSpliceNestedSourceOfEmpty input layout hadmissible
             sourceBoundary sourceRoot hnested hzero) args) := by
   dsimp only
   have hostProjection :=
     compiledSpliceNestedSourceOfEmpty_projects_host input layout hadmissible
-      sourceBoundary sourceRoot hnested hzero model named args
+      sourceBoundary sourceRoot hnested hzero model  args
   have hostCanonical :=
     compiledSpliceNestedHostOpen_denote_iff_coalesced input layout hadmissible
-      sourceBoundary sourceRoot hnested model named args
+      sourceBoundary sourceRoot hnested model  args
   constructor
   · intro heven hsource
     exact hostCanonical.mp (hostProjection.1 heven hsource)

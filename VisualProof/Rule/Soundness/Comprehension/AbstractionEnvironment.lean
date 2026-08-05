@@ -154,7 +154,7 @@ theorem localSourceIndex_get
 
 theorem localSourceIndex_injective
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (targetWellFormed : trace.diagram.WellFormed signature)
+    (targetWellFormed : trace.diagram.WellFormed )
     (region : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives region = true) :
     Function.Injective (trace.localSourceIndex region survives) := by
@@ -175,7 +175,7 @@ theorem localSourceIndex_injective
 
 noncomputable def sourceLocalOfTarget [Nonempty D]
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (targetWellFormed : trace.diagram.WellFormed signature)
+    (targetWellFormed : trace.diagram.WellFormed )
     (region : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives region = true)
     (targetLocal : Fin
@@ -190,7 +190,7 @@ noncomputable def sourceLocalOfTarget [Nonempty D]
 
 @[simp] theorem sourceLocalOfTarget_image [Nonempty D]
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (targetWellFormed : trace.diagram.WellFormed signature)
+    (targetWellFormed : trace.diagram.WellFormed )
     (region : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives region = true)
     (targetLocal : Fin
@@ -311,7 +311,7 @@ directions. Deleted source-local wires are irrelevant to the backward index
 relation and receive an arbitrary carrier value. -/
 theorem regularEnvironmentSelection
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (targetWellFormed : trace.diagram.WellFormed signature)
+    (targetWellFormed : trace.diagram.WellFormed )
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext trace.diagram)

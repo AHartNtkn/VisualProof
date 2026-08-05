@@ -11,7 +11,7 @@ open VisualProof.Rule.ModalSoundness
 /-- A route from the selection anchor to an unselected target begins through
 an occurrence retained by the selection partition. -/
 theorem routeHead_mem_keptOccurrences
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     {child target : Fin input.val.regionCount}
     {rest : List Nat}
@@ -41,13 +41,13 @@ theorem routeHead_mem_keptOccurrences
 /-- A proper descendant reached through a compiled occurrence block, together
 with the exact wire and relation transports retained by the compiler trace. -/
 structure CompiledRouteTerminal
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     {start : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
-    {startBody : Region signature outer rels}
+    {startBody : Region  outer rels}
     (startLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here startBody))
-    (compiledItems : ItemSeq signature
+    (compiledItems : ItemSeq
       (startLeaf.inheritedWires.extend start).length rels)
     {target : Fin input.val.regionCount} {path : List Nat}
     (_route : Splice.RegionRoute input.val start target path)
@@ -68,24 +68,24 @@ structure CompiledRouteTerminal
     leaf.binders (startLeaf.binderEnumeration.binder relation.index) =
       some ⟨arity, witness.toFocus.context.outerRelation relation⟩
   terminalLexical : ∀ {targetPath : List Nat} {targetOuter : Nat}
-      {targetBody : Region signature targetOuter rels}
+      {targetBody : Region  targetOuter rels}
       {targetRoute : Splice.RegionRoute input.val start target targetPath}
       {targetWitness : Region.ContextPath targetBody targetPath}
       {targetState : Splice.Region.ContextPath.CompilerLeaf input.val start
         (.here targetBody)}
-      (targetTrace : Splice.CompilerTrace signature input.val targetRoute
+      (targetTrace : Splice.CompilerTrace  input.val targetRoute
         targetWitness targetState),
     targetState.binders = startLeaf.binders →
       ∃ hrels : witness.toFocus.holeRels =
           targetWitness.toFocus.holeRels,
         HEq leaf.binders targetTrace.leaf.binders
   terminalInherited : ∀ {targetPath : List Nat} {targetOuter : Nat}
-      {targetBody : Region signature targetOuter rels}
+      {targetBody : Region  targetOuter rels}
       {targetRoute : Splice.RegionRoute input.val start target targetPath}
       {targetWitness : Region.ContextPath targetBody targetPath}
       {targetState : Splice.Region.ContextPath.CompilerLeaf input.val start
         (.here targetBody)}
-      (targetTrace : Splice.CompilerTrace signature input.val targetRoute
+      (targetTrace : Splice.CompilerTrace  input.val targetRoute
         targetWitness targetState),
     targetState.inheritedWires = startLeaf.inheritedWires →
       leaf.inheritedWires = targetTrace.leaf.inheritedWires
@@ -94,13 +94,13 @@ structure CompiledRouteTerminal
 path witness.  Keeping the path and witness in one dependent transport avoids
 manufacturing a second certificate after route-position normalization. -/
 def CompiledRouteTerminal.castPath
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {start : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
-    {startBody : Region signature outer rels}
+    {startBody : Region  outer rels}
     {startLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here startBody)}
-    {compiledItems : ItemSeq signature
+    {compiledItems : ItemSeq
       (startLeaf.inheritedWires.extend start).length rels}
     {target : Fin input.val.regionCount} {path : List Nat}
     {route : Splice.RegionRoute input.val start target path}
@@ -117,15 +117,15 @@ def CompiledRouteTerminal.castPath
 /-- Intrinsic path obtained by compiling an arbitrary retained occurrence
 block at the route's start. -/
 structure CompiledRouteResult
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     {start : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
-    {startBody : Region signature outer rels}
+    {startBody : Region  outer rels}
     (startLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here startBody))
     (occurrences : List (ConcreteElaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount))
-    (compiledItems : ItemSeq signature
+    (compiledItems : ItemSeq
       (startLeaf.inheritedWires.extend start).length rels)
     {target : Fin input.val.regionCount} {path : List Nat}
     (route : Splice.RegionRoute input.val start target path) where
@@ -153,10 +153,10 @@ This proof-relevant result is what path-preserving cross-presentation
 alignment consumes; callers that need only a terminal leaf use the projection
 below. -/
 theorem compilerLeaf_routeTrace_complete
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     {start target : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     (leaf : Splice.Region.ContextPath.CompilerLeaf input.val start (.here body))
     {path : List Nat}
     (route : Splice.RegionRoute input.val start target path) :
@@ -164,7 +164,7 @@ theorem compilerLeaf_routeTrace_complete
       leaf.binders (leaf.fuel + 1)
       (ConcreteElaboration.finishRegion input.val leaf.inheritedWires start
         leaf.items)) := by
-  have compiled : ConcreteElaboration.compileRegion? signature input.val
+  have compiled : ConcreteElaboration.compileRegion?  input.val
       (leaf.fuel + 1) start leaf.inheritedWires leaf.binders =
         some (ConcreteElaboration.finishRegion input.val leaf.inheritedWires
           start leaf.items) := by
@@ -177,10 +177,10 @@ that route's exact position list.  This is the canonical full-leaf path used
 to identify an anchor-relative route with the executor's root-relative site
 view. -/
 theorem compilerLeaf_routePath_complete
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     {start target : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
-    {body : Region signature outer rels}
+    {body : Region  outer rels}
     (leaf : Splice.Region.ContextPath.CompilerLeaf input.val start (.here body))
     {path : List Nat}
     (route : Splice.RegionRoute input.val start target path) :
@@ -200,19 +200,19 @@ theorem compilerLeaf_routePath_complete
 /-- Compiler-route completeness for an arbitrary occurrence sublist.  This is
 the proof-critical core behind iteration's retained selection route. -/
 theorem compiledOccurrences_route_complete
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     {start : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
-    {startBody : Region signature outer rels}
+    {startBody : Region  outer rels}
     (startLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here startBody))
     (occurrences : List (ConcreteElaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount))
-    (compiledItems : ItemSeq signature
+    (compiledItems : ItemSeq
       (startLeaf.inheritedWires.extend start).length rels)
     (itemsCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-        (ConcreteElaboration.compileRegion? signature input.val startLeaf.fuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+        (ConcreteElaboration.compileRegion?  input.val startLeaf.fuel)
         (startLeaf.inheritedWires.extend start) startLeaf.binders occurrences =
           some compiledItems)
     {target : Fin input.val.regionCount} {path : List Nat}
@@ -242,7 +242,7 @@ theorem compiledOccurrences_route_complete
         indexOf?_complete headMember
       obtain ⟨focus, focusEq, childCompiled⟩ :=
         Splice.compiledOccurrence_focus input.val
-          (ConcreteElaboration.compileRegion? signature input.val startLeaf.fuel)
+          (ConcreteElaboration.compileRegion?  input.val startLeaf.fuel)
           (startLeaf.inheritedWires.extend start) rels startLeaf.binders
           occurrences compiledItems (.child child) compiledPosition
           itemsCompiled compiledPositionEq
@@ -590,13 +590,13 @@ theorem compiledOccurrences_route_complete
 the selection anchor.  The selected block is therefore available as a
 separate ancestor conjunct while this path reaches the insertion site. -/
 structure KeptRouteResult
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     {outer : Nat} {rels : Theory.RelCtx}
-    {anchorBody : Region signature outer rels}
+    {anchorBody : Region  outer rels}
     (anchorLeaf : Splice.Region.ContextPath.CompilerLeaf input.val
       selection.val.anchor (.here anchorBody))
-    (keptItems : ItemSeq signature
+    (keptItems : ItemSeq
       (anchorLeaf.inheritedWires.extend selection.val.anchor).length rels)
     {target : Fin input.val.regionCount} {path : List Nat}
     (_route : Splice.RegionRoute input.val selection.val.anchor target path) where
@@ -610,17 +610,17 @@ structure KeptRouteResult
 is introduced: the top item block is the partition compiler result and every
 recursive child is the result already returned by `compileRegion?`. -/
 theorem keptRoute_complete
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     {outer : Nat} {rels : Theory.RelCtx}
-    {anchorBody : Region signature outer rels}
+    {anchorBody : Region  outer rels}
     (anchorLeaf : Splice.Region.ContextPath.CompilerLeaf input.val
       selection.val.anchor (.here anchorBody))
-    (keptItems : ItemSeq signature
+    (keptItems : ItemSeq
       (anchorLeaf.inheritedWires.extend selection.val.anchor).length rels)
     (keptCompiled :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-        (ConcreteElaboration.compileRegion? signature input.val anchorLeaf.fuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+        (ConcreteElaboration.compileRegion?  input.val anchorLeaf.fuel)
         (anchorLeaf.inheritedWires.extend selection.val.anchor)
         anchorLeaf.binders (keptOccurrences input.val selection) =
           some keptItems)

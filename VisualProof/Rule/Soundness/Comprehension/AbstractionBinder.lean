@@ -38,10 +38,9 @@ def empty
     ConcreteElaboration.BinderContext.empty]
 
 def push
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
@@ -83,10 +82,9 @@ def push
           rfl
 
 theorem relationMap_push
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
@@ -105,10 +103,9 @@ theorem relationMap_push
 /-- Push a corresponding surviving bubble directly at the simulation's total
 region map, avoiding proof-dependent transport through `targetRegion`. -/
 def pushMapped
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
@@ -152,10 +149,9 @@ def pushMapped
           rfl
 
 theorem relationMap_pushMapped
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
@@ -172,10 +168,9 @@ theorem relationMap_pushMapped
         RelationRenaming (arity :: sourceRels) (arity :: targetRels)) := rfl
 
 def weakenRelationMap
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
@@ -191,10 +186,9 @@ def weakenRelationMap
 /-- Enter the fresh existential relation bubble on the target side while
 retaining every mapped source binder in the tail relation context. -/
 def intoFreshBubble
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}

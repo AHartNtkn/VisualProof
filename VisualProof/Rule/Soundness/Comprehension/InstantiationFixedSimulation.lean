@@ -13,8 +13,8 @@ namespace InstantiationSemantic
 /-- Canonical target compiler index of a quotient-host wire visible at the
 distinguished splice site. -/
 noncomputable def siteSourceWireMap
-    (input : Splice.Input signature)
-    {outputBody : Region signature outputOuter outputRels}
+    (input : Splice.Input )
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
@@ -34,8 +34,8 @@ noncomputable def siteSourceWireMap
           (List.get_mem sourceContext index)))
 
 theorem siteSourceWireMap_spec
-    (input : Splice.Input signature)
-    {outputBody : Region signature outputOuter outputRels}
+    (input : Splice.Input )
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
@@ -54,8 +54,8 @@ theorem siteSourceWireMap_spec
 /-- The induced quotient valuation agrees pointwise with the target compiler
 environment along `siteSourceWireMap`. -/
 theorem siteSourceWireMap_environment
-    (input : Splice.Input signature)
-    {outputBody : Region signature outputOuter outputRels}
+    (input : Splice.Input )
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
@@ -89,7 +89,7 @@ theorem siteSourceWireMap_environment
 /-- A target local witness at the splice site induces the unique quotient-host
 local witness with the same concrete wire values. -/
 theorem site_sourceLocalEnvironment_exists
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
     (targetOuter : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
     (sourceExact : (sourceOuter.extend input.site).Exact input.site)
@@ -225,16 +225,15 @@ comprehension relation selected for the complete trace.  Unlike the ordinary
 region simulation interface, this predicate records that the target lexical
 environment interprets the moving bubble by that fixed relation. -/
 def FixedAdvanceRegionSimulation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -244,7 +243,6 @@ def FixedAdvanceRegionSimulation
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -294,13 +292,13 @@ def FixedAdvanceRegionSimulation
             state site arguments).plugLayout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (sourceBody : Region signature sourceOuter.length sourceRels)
-    (targetBody : Region signature targetOuter.length targetRels),
-    compileSurvivorRegion? signature
+    (sourceBody : Region  sourceOuter.length sourceRels)
+    (targetBody : Region  targetOuter.length targetRels),
+    compileSurvivorRegion?
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible)
         sourceFuel region sourceOuter sourceBinders = some sourceBody →
-    compileSurvivorRegion? signature
+    compileSurvivorRegion?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible)
         targetFuel
@@ -325,23 +323,22 @@ def FixedAdvanceRegionSimulation
           state atom tail site arguments hadmissible)
         targetOuter targetEnv parameterValues →
       direction.Entails
-        (denoteRegion model named sourceEnv
+        (denoteRegion model  sourceEnv
           targetRelEnv (sourceBody.renameRelations relationMap))
-        (denoteRegion model named targetEnv targetRelEnv targetBody)
+        (denoteRegion model  targetEnv targetRelEnv targetBody)
 
 /-- Frame binder transport reflects the target's fixed moving-bubble
 interpretation to the quotient source context. -/
 theorem fixedRelationAt_pullback_frame
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -390,16 +387,15 @@ theorem fixedRelationAt_pullback_frame
 /-- The same frame transport reflects the complete indexed proxy-relation
 family to the quotient source context. -/
 theorem proxyRelationsAt_pullback_frame
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -448,16 +444,15 @@ theorem proxyRelationsAt_pullback_frame
 /-- Any focused output compiler presentation reflects the target proxy family
 to the canonical quotient-host seam presentation used by terminal extraction. -/
 theorem proxyRelationsAt_host_pullback
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram signature)
+    (comprehension : CheckedOpenDiagram )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -466,13 +461,13 @@ theorem proxyRelationsAt_host_pullback
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    {hostBody : Region signature hostOuter hostRels}
+    {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
     (hostLeaf : Splice.Region.ContextPath.CompilerLeaf
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw site hostWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf

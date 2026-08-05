@@ -35,7 +35,7 @@ theorem anchorIndices_nodup
 /-- The source occurrence blocks deleted at one surviving anchor, grouped in
 the same occurrence order that produces `atomsAt`. -/
 def selectedAt
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (occurrences : List (AbstractionOccurrence input))
     (region : Fin input.val.regionCount) :
     List (ConcreteElaboration.LocalOccurrence input.val.regionCount
@@ -45,7 +45,7 @@ def selectedAt
       (occurrences.get index).selection
 
 theorem mem_selectedAt
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (occurrences : List (AbstractionOccurrence input))
     (region : Fin input.val.regionCount)
     (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount

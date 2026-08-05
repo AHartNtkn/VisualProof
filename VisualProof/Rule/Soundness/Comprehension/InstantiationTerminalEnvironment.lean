@@ -11,16 +11,15 @@ namespace InstantiationSemantic
 /-- The terminal body's canonical boundary-class valuation is exactly the
 valuation read by the authoritative splice seam at each inherited wire. -/
 theorem patternTerminalInheritedEnvironment_seam
-    {signature : List Nat}
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
@@ -94,16 +93,15 @@ theorem patternTerminalInheritedEnvironment_seam
 /-- Splitting the terminal compiler context into its inherited and local parts
 recovers exactly the complete environment transported through the splice seam. -/
 theorem patternTerminalExtendedEnvironment_seam
-    {signature : List Nat}
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
@@ -177,28 +175,26 @@ theorem patternTerminalExtendedEnvironment_seam
 /-- A denoting post-splice compiler leaf therefore supplies the native terminal
 body under the canonical ordered boundary assignment. -/
 theorem patternTerminalRegion_denotes_of_output
-    {signature : List Nat}
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (hadmissible : input.Admissible)
     (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region signature patternOuter patternRels}
+    {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
     (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region signature outputOuter outputRels}
+    {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
     (fallback : model.Carrier)
-    (denotes : denoteItemSeq model named env relEnv outputLeaf.items) :
+    (denotes : denoteItemSeq model  env relEnv outputLeaf.items) :
     let context := outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)
     let values := Splice.Input.siteQuotientEnvironment input context
@@ -219,7 +215,7 @@ theorem patternTerminalRegion_denotes_of_output
           (input.plugLayout.coalescedTerminalRelationRenaming hadmissible
             host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
             hnonempty relation)
-    denoteRegion model named inheritedEnv
+    denoteRegion model  inheritedEnv
       (RelEnv.pullback terminalRelations relEnv)
       (ConcreteElaboration.finishRegion input.pattern.val.diagram
         patternLeaf.inheritedWires input.binderSpine.bodyContainer
@@ -256,8 +252,8 @@ theorem patternTerminalRegion_denotes_of_output
           hnonempty relation)
   have nativeItems := terminalItems_denotes_of_output input input.plugLayout
     hadmissible host patternWitness patternLeaf outputWitness outputLeaf
-    hnonempty model named env relEnv denotes
-  have seamItems : denoteItemSeq model named
+    hnonempty model  env relEnv denotes
+  have seamItems : denoteItemSeq model
       (env ∘ input.plugLayout.patternSeamWireMapOfNonempty hadmissible host
         patternWitness patternLeaf outputWitness outputLeaf hnonempty)
       (RelEnv.pullback terminalRelations relEnv) patternLeaf.items := by

@@ -12,8 +12,7 @@ namespace InstantiationSemantic
 /-- The executor's endpoint-owner vector and the authoritative compiler's
 resolved argument vector name the same concrete wires. -/
 theorem resolvedArguments_wire_eq
-    {signature : List Nat}
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     {parameterCount proxyCount : Nat}
     (state : InstantiationState origin parameterCount proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -42,16 +41,15 @@ theorem resolvedArguments_wire_eq
 /-- A compiled executor-owned atom denotes exactly the fixed relation witness
 at the receipt-recorded endpoint-owner vector. -/
 theorem compiled_atom_iff_fixedRelation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -61,7 +59,6 @@ theorem compiled_atom_iff_fixedRelation
     (arguments_eq : instantiateArguments? state atom payload.arity =
       some arguments)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
@@ -75,10 +72,10 @@ theorem compiled_atom_iff_fixedRelation
     (environment : Fin context.length → model.Carrier)
     (environment_eq : ∀ index,
       environment index = wireValue (context.get index))
-    (item : Item signature context.length rels)
-    (compiled : ConcreteElaboration.compileNode? signature state.diagram.val
+    (item : Item  context.length rels)
+    (compiled : ConcreteElaboration.compileNode?  state.diagram.val
       context binderContext atom = some item) :
-    denoteItem model named environment relEnv item ↔
+    denoteItem model  environment relEnv item ↔
       relationValue (wireValue ∘ arguments) := by
   unfold ConcreteElaboration.compileNode? at compiled
   simp only [node_eq] at compiled
@@ -96,7 +93,7 @@ theorem compiled_atom_iff_fixedRelation
       have item_eq : item = .atom relation resolvedArguments :=
         (Option.some.inj compiled).symm
       subst item
-      apply atom_item_iff_fixedRelation payload state arguments model named
+      apply atom_item_iff_fixedRelation payload state arguments model
         wireValue relationValue binderContext relEnv fixed relation lookup
         environment resolvedArguments
       funext index
@@ -109,16 +106,15 @@ theorem compiled_atom_iff_fixedRelation
 /-- A denoting local compiler conjunction supplies the chosen relation at the
 executor-owned atom's exact arguments. -/
 theorem compiled_items_entail_fixedRelation
-    {signature : List Nat}
-    {input : CheckedDiagram signature}
+    {input : CheckedDiagram }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram signature}
+    {comprehension : CheckedOpenDiagram }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram signature}
+    {origin : CheckedDiagram }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -128,7 +124,6 @@ theorem compiled_items_entail_fixedRelation
     (arguments_eq : instantiateArguments? state atom payload.arity =
       some arguments)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
@@ -143,14 +138,14 @@ theorem compiled_items_entail_fixedRelation
     (environment : Fin context.length → model.Carrier)
     (environment_eq : ∀ index,
       environment index = wireValue (context.get index))
-    (items : ItemSeq signature context.length rels)
-    (compiled : ConcreteElaboration.compileOccurrencesWith? signature
+    (items : ItemSeq  context.length rels)
+    (compiled : ConcreteElaboration.compileOccurrencesWith?
       state.diagram.val
-      (ConcreteElaboration.compileRegion? signature state.diagram.val fuel)
+      (ConcreteElaboration.compileRegion?  state.diagram.val fuel)
       context binderContext
       (ConcreteElaboration.localOccurrences state.diagram.val site) =
         some items)
-    (denotes : denoteItemSeq model named environment relEnv items) :
+    (denotes : denoteItemSeq model  environment relEnv items) :
     relationValue (wireValue ∘ arguments) := by
   have atom_mem : ConcreteElaboration.LocalOccurrence.node atom ∈
       ConcreteElaboration.localOccurrences state.diagram.val site := by
@@ -166,22 +161,22 @@ theorem compiled_items_entail_fixedRelation
     indexOf?_sound occurrenceIndex_eq
   let itemIndex := Fin.cast
     (ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion? signature state.diagram.val fuel)
+      (ConcreteElaboration.compileRegion?  state.diagram.val fuel)
       context binderContext compiled).symm occurrenceIndex
-  have atom_compiled : ConcreteElaboration.compileNode? signature
+  have atom_compiled : ConcreteElaboration.compileNode?
       state.diagram.val context binderContext atom =
         some (items.get itemIndex) := by
     have atIndex := ConcreteElaboration.compileOccurrencesWith?_get
-      (ConcreteElaboration.compileRegion? signature state.diagram.val fuel)
+      (ConcreteElaboration.compileRegion?  state.diagram.val fuel)
       context binderContext compiled occurrenceIndex
     rw [occurrence_eq] at atIndex
     exact atIndex
-  have atom_denotes : denoteItem model named environment relEnv
+  have atom_denotes : denoteItem model  environment relEnv
       (items.get itemIndex) :=
-    (denoteItemSeq_iff_get model named environment relEnv items).mp denotes
+    (denoteItemSeq_iff_get model  environment relEnv items).mp denotes
       itemIndex
   exact (compiled_atom_iff_fixedRelation payload state atom site arguments
-    node_eq arguments_eq model named wireValue relationValue context
+    node_eq arguments_eq model  wireValue relationValue context
     binderContext relEnv fixed relation lookup environment environment_eq
     (items.get itemIndex) atom_compiled).mp atom_denotes
 

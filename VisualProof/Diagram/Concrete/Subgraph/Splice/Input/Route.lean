@@ -6,7 +6,7 @@ open VisualProof.Data.Finite
 
 theorem RegionRoute.encloses
     (route : RegionRoute d start target path)
-    (hwf : d.WellFormed signature) : d.Encloses start target := by
+    (hwf : d.WellFormed ) : d.Encloses start target := by
   induction route with
   | here => exact ConcreteDiagram.Encloses.refl _ _
   | @step start child target rest hparent position hposition tail ih =>
@@ -19,7 +19,7 @@ theorem RegionRoute.encloses
 Unlike an existential target route, this records the exact paired occurrence
 at every enclosing frame and is therefore suitable for paired trace
 induction. -/
-inductive FrameRouteAlignment {signature : List Nat} {input : Input signature}
+inductive FrameRouteAlignment {input : Input }
     (layout : Input.PlugLayout input) :
     {start target : Fin input.coalesceFrameRaw.regionCount} →
     {sourcePath targetPath : List Nat} →
@@ -123,7 +123,7 @@ open VisualProof.Data.Finite
 
 /-- Canonical intrinsic source-open view of the splice site. -/
 noncomputable def compiledSpliceCoalescedOpenView
-    (input : Input signature)
+    (input : Input )
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -140,7 +140,7 @@ noncomputable def compiledSpliceCoalescedOpenView
 /-- Below the sheet root, the source-open compiler also terminates at an
 ordinary `finishRegion` leaf. -/
 noncomputable def compiledSpliceCoalescedNestedLeaf
-    (input : Input signature)
+    (input : Input )
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -166,8 +166,8 @@ noncomputable def compilerLeafInheritedWireOfHole
     {targetTarget : Fin targetDiagram.regionCount}
     {sourceOuter targetOuter : Nat}
     {sourceRels targetRels : Theory.RelCtx}
-    {sourceBody : Region signature sourceOuter sourceRels}
-    {targetBody : Region signature targetOuter targetRels}
+    {sourceBody : Region  sourceOuter sourceRels}
+    {targetBody : Region  targetOuter targetRels}
     {sourcePath targetPath : List Nat}
     (sourceWitness : Region.ContextPath sourceBody sourcePath)
     (sourceLeaf : Region.ContextPath.CompilerLeaf sourceDiagram sourceTarget
@@ -190,8 +190,8 @@ noncomputable def compilerLeafOuterWire
     {targetTarget : Fin targetDiagram.regionCount}
     {sourceOuter targetOuter : Nat}
     {sourceRels targetRels : Theory.RelCtx}
-    {sourceBody : Region signature sourceOuter sourceRels}
-    {targetBody : Region signature targetOuter targetRels}
+    {sourceBody : Region  sourceOuter sourceRels}
+    {targetBody : Region  targetOuter targetRels}
     {sourcePath targetPath : List Nat}
     (sourceWitness : Region.ContextPath sourceBody sourcePath)
     (sourceLeaf : Region.ContextPath.CompilerLeaf sourceDiagram sourceTarget
@@ -209,7 +209,7 @@ noncomputable def compilerLeafOuterWire
 /-- The exact algebraic payload required to lift a nested site isomorphism
 through the paired source and target open compiler contexts. -/
 structure PlugLayout.NestedFrameContextAlignment
-    (input : Input signature) (layout : PlugLayout input)
+    (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -225,7 +225,7 @@ structure PlugLayout.NestedFrameContextAlignment
       sourceRoot).focus.holeWires)
     (Fin (compiledSpliceOutputOpenView input layout hadmissible sourceBoundary
       sourceRoot).focus.holeWires)
-  contexts : DiagramContextIso signature
+  contexts : DiagramContextIso
     (PlugLayout.rootExposedWireEquiv input layout sourceBoundary)
     holeWire []
     (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary

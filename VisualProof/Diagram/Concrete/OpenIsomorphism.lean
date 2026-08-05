@@ -171,8 +171,7 @@ theorem boundaryClass_commute {source target : OpenConcreteDiagram}
 
 /-- Open well-formedness is invariant under ordered-interface isomorphism. -/
 def wellFormed_transport {source target : OpenConcreteDiagram}
-    (iso : OpenConcreteIso source target) {signature : List Nat}
-    (h : source.WellFormed signature) : target.WellFormed signature where
+    (iso : OpenConcreteIso source target) (h : source.WellFormed ) : target.WellFormed  where
   diagram_well_formed := iso.diagram.wellFormed_transport
     h.diagram_well_formed
   boundary_is_root_scoped := by
@@ -191,9 +190,8 @@ def wellFormed_transport {source target : OpenConcreteDiagram}
 
 /-- Transport a checked open diagram along an isomorphism from its value. -/
 def checked_transport {source target : OpenConcreteDiagram}
-    (iso : OpenConcreteIso source target) {signature : List Nat}
-    (checked : CheckedOpenDiagram signature) (hsource : checked.val = source) :
-    CheckedOpenDiagram signature := by
+    (iso : OpenConcreteIso source target) (checked : CheckedOpenDiagram ) (hsource : checked.val = source) :
+    CheckedOpenDiagram  := by
   subst source
   exact ⟨target, iso.wellFormed_transport checked.property⟩
 

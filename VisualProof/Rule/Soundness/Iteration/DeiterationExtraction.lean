@@ -7,7 +7,7 @@ open VisualProof.Data.Finite
 open VisualProof.Diagram
 
 def deiterationRetainedLayout
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     FragmentLayout
@@ -15,13 +15,13 @@ def deiterationRetainedLayout
       (deiterationRetainedSelection input selection witness) := {}
 
 def deiterationOriginalLayout
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     FragmentLayout input.val witness.justifier := {}
 
 def deiterationRetainedExtract
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) : OpenConcreteDiagram :=
   input.val.removeRaw selection (deiterationDomains input selection)
@@ -29,7 +29,7 @@ def deiterationRetainedExtract
       (deiterationRetainedLayout input selection witness)
 
 def deiterationOriginalExtract
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) : OpenConcreteDiagram :=
   input.val.extractOpenRaw witness.justifier
@@ -93,7 +93,7 @@ private theorem indexOf?_of_map_eq
   exact indexOf?_map_injective origin injective source sourceNodup value
 
 theorem deiterationRetainedLayout_externalBinders_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationRetainedLayout input selection witness).externalBinders.map
@@ -104,7 +104,7 @@ theorem deiterationRetainedLayout_externalBinders_origin
   exact deiterationRetained_externalBinders_origin input selection witness
 
 def deiterationExternalLengthEq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationRetainedLayout input selection witness).externalBinders.length =
@@ -114,7 +114,7 @@ def deiterationExternalLengthEq
       (deiterationRetainedLayout_externalBinders_origin input selection witness)
 
 def deiterationRegionLengthEq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationRetainedSelection input selection witness).selectedRegions.length =
@@ -124,7 +124,7 @@ def deiterationRegionLengthEq
       (deiterationRetained_selectedRegions_origin input selection witness)
 
 def deiterationNodeLengthEq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationRetainedSelection input selection witness).selectedNodes.length =
@@ -134,7 +134,7 @@ def deiterationNodeLengthEq
       (deiterationRetained_selectedNodes_origin input selection witness)
 
 def deiterationInternalWireLengthEq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationRetainedSelection input selection witness).internalWires.length =
@@ -144,7 +144,7 @@ def deiterationInternalWireLengthEq
       (deiterationRetained_internalWires_origin input selection witness)
 
 def deiterationTouchingWireLengthEq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationRetainedSelection input selection witness).touchingWires.length =
@@ -154,7 +154,7 @@ def deiterationTouchingWireLengthEq
       (deiterationRetained_touchingWires_origin input selection witness)
 
 def deiterationExtractRegionCountEq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationRetainedExtract input selection witness).diagram.regionCount =
@@ -167,7 +167,7 @@ def deiterationExtractRegionCountEq
     deiterationRegionLengthEq input selection witness]
 
 def deiterationExtractNodeCountEq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationRetainedExtract input selection witness).diagram.nodeCount =
@@ -175,7 +175,7 @@ def deiterationExtractNodeCountEq
   deiterationNodeLengthEq input selection witness
 
 def deiterationExtractWireCountEq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationRetainedExtract input selection witness).diagram.wireCount =
@@ -188,7 +188,7 @@ def deiterationExtractWireCountEq
     deiterationTouchingWireLengthEq input selection witness]
 
 def deiterationExtractRegionEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     FiniteEquiv
@@ -197,7 +197,7 @@ def deiterationExtractRegionEquiv
   FiniteEquiv.finCast (deiterationExtractRegionCountEq input selection witness)
 
 def deiterationExtractNodeEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     FiniteEquiv
@@ -206,7 +206,7 @@ def deiterationExtractNodeEquiv
   FiniteEquiv.finCast (deiterationExtractNodeCountEq input selection witness)
 
 def deiterationExtractWireEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     FiniteEquiv
@@ -215,7 +215,7 @@ def deiterationExtractWireEquiv
   FiniteEquiv.finCast (deiterationExtractWireCountEq input selection witness)
 
 theorem deiterationRetained_selectedRegion_get_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedSelection input selection witness
@@ -229,7 +229,7 @@ theorem deiterationRetained_selectedRegion_get_origin
     (deiterationRetained_selectedRegions_origin input selection witness) index
 
 theorem deiterationRetained_selectedNode_get_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedSelection input selection witness
@@ -243,7 +243,7 @@ theorem deiterationRetained_selectedNode_get_origin
     (deiterationRetained_selectedNodes_origin input selection witness) index
 
 theorem deiterationRetained_internalWire_get_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedSelection input selection witness
@@ -258,7 +258,7 @@ theorem deiterationRetained_internalWire_get_origin
     (deiterationRetained_internalWires_origin input selection witness) index
 
 theorem deiterationRetained_touchingWire_get_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedSelection input selection witness
@@ -273,7 +273,7 @@ theorem deiterationRetained_touchingWire_get_origin
     (deiterationRetained_touchingWires_origin input selection witness) index
 
 theorem deiterationRetained_externalBinder_get_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedLayout input selection witness
@@ -289,7 +289,7 @@ theorem deiterationRetained_externalBinder_get_origin
     index
 
 theorem deiterationExtractRegionEquiv_root
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     deiterationExtractRegionEquiv input selection witness
@@ -299,7 +299,7 @@ theorem deiterationExtractRegionEquiv_root
   rfl
 
 theorem deiterationExtractRegionEquiv_proxy
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedLayout input selection witness
@@ -313,7 +313,7 @@ theorem deiterationExtractRegionEquiv_proxy
   rfl
 
 theorem deiterationExtractRegionEquiv_materialRegion
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedLayout input selection witness
@@ -337,7 +337,7 @@ theorem deiterationExtractRegionEquiv_materialRegion
     deiterationExternalLengthEq input selection witness]
 
 theorem deiterationExtractRegionEquiv_bodyContainer
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     deiterationExtractRegionEquiv input selection witness
@@ -361,7 +361,7 @@ theorem deiterationExtractRegionEquiv_bodyContainer
     omega
 
 theorem deiterationExtractWireEquiv_internalWire
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedLayout input selection witness
@@ -376,7 +376,7 @@ theorem deiterationExtractWireEquiv_internalWire
   rfl
 
 theorem deiterationExtractWireEquiv_boundaryWire
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedLayout input selection witness
@@ -399,7 +399,7 @@ theorem deiterationExtractWireEquiv_boundaryWire
     deiterationInternalWireLengthEq input selection witness]
 
 theorem deiterationExtractNodeEquiv_index
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedLayout input selection witness
@@ -408,7 +408,7 @@ theorem deiterationExtractNodeEquiv_index
       Fin.cast (deiterationNodeLengthEq input selection witness) index := rfl
 
 private theorem deiteration_selectedRegions_indexOf_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (region : (deiterationDomains input selection).regions.Carrier) :
@@ -428,7 +428,7 @@ private theorem deiteration_selectedRegions_indexOf_origin
     (deiterationRetained_selectedRegions_origin input selection witness) region
 
 private theorem deiteration_externalBinders_indexOf_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (binder : (deiterationDomains input selection).regions.Carrier) :
@@ -449,7 +449,7 @@ private theorem deiteration_externalBinders_indexOf_origin
     binder
 
 private theorem deiteration_selectedNodes_indexOf_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (node : (deiterationDomains input selection).nodes.Carrier) :
@@ -469,7 +469,7 @@ private theorem deiteration_selectedNodes_indexOf_origin
     (deiterationRetained_selectedNodes_origin input selection witness) node
 
 theorem deiteration_fragmentParent_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (parent : (deiterationDomains input selection).regions.Carrier) :
@@ -517,7 +517,7 @@ theorem deiteration_fragmentParent_origin
           witness index
 
 theorem deiteration_fragmentBinder_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (binder : (deiterationDomains input selection).regions.Carrier) :
@@ -552,7 +552,7 @@ theorem deiteration_fragmentBinder_origin
             witness
 
 private theorem deiteration_removeRaw_binderArity_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (domains : FrameDomains input.val selection)
     (binder : domains.regions.Carrier) :
@@ -597,7 +597,7 @@ private theorem deiteration_removeRaw_binderArity_origin
       rw [removedKind, originalKind]
 
 theorem deiterationExtract_materialRegion_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedLayout input selection witness
@@ -704,7 +704,7 @@ theorem deiterationExtract_materialRegion_eq
           rw [domains.regions.origin_index])
 
 theorem deiterationExtract_proxyRegion_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedLayout input selection witness
@@ -763,7 +763,7 @@ theorem deiterationExtract_proxyRegion_eq
       deiterationRetained_externalBinder_get_origin input selection witness]
 
 theorem deiterationExtract_regions_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (region : Fin
@@ -818,7 +818,7 @@ theorem deiterationExtract_regions_eq
       exact deiterationExtract_materialRegion_eq input selection witness material
 
 theorem deiterationExtract_nodes_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin
@@ -895,31 +895,8 @@ theorem deiterationExtract_nodes_eq
       · exact deiteration_fragmentBinder_origin input selection witness
           (domains.regions.index binder binderSurvives) |>.trans (by
             rw [domains.regions.origin_index])
-  | named region definition arity =>
-      have ownerSurvives : domains.regions.survives region = true := by
-        have core := domains.nodeRegion_survives nodeSurvives
-        rw [originalKind] at core
-        exact core
-      have removedKind := ConcreteDiagram.removeRaw_named input selection domains
-        nodeSurvives originalKind
-      rw [nodeIndex] at removedKind
-      have targetKind : input.val.nodes
-          (witness.justifier.selectedNodes.get targetIndex) =
-            .named region definition arity := by
-        rw [← originalGet]
-        exact originalKind
-      rw [ConcreteDiagram.extractDiagramRaw_node_named _ retained sourceLayout
-          index _ _ _ removedKind,
-        ConcreteDiagram.extractDiagramRaw_node_named _ witness.justifier
-          targetLayout targetIndex region definition arity targetKind]
-      simp only [CNode.rename]
-      congr 1
-      exact deiteration_fragmentParent_origin input selection witness
-        (domains.regions.index region ownerSurvives) |>.trans (by
-          rw [domains.regions.origin_index])
-
 theorem deiterationExtract_internalWire_scope_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedLayout input selection witness
@@ -980,7 +957,7 @@ theorem deiterationExtract_internalWire_scope_eq
       (congrArg (fun wire => (input.val.wires wire).scope) wireGet)
 
 theorem deiterationExtract_boundaryWire_scope_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (index : Fin (deiterationRetainedLayout input selection witness
@@ -1001,7 +978,7 @@ theorem deiterationExtract_boundaryWire_scope_eq
   exact deiterationExtractRegionEquiv_root input selection witness
 
 theorem deiterationExtract_wire_scope_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire : Fin
@@ -1037,7 +1014,7 @@ theorem deiterationExtract_wire_scope_eq
     exact deiterationExtract_boundaryWire_scope_eq input selection witness index
 
 theorem deiterationExtract_wireOrigin_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire : Fin
@@ -1081,7 +1058,7 @@ theorem deiterationExtract_wireOrigin_origin
         deiterationRetained_touchingWire_get_origin input selection witness index
 
 theorem deiterationExtract_endpoint_mem_iff
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire : Fin
@@ -1224,7 +1201,7 @@ private theorem perm_of_nodup_and_mem_iff
     simp [member, otherNotMember]
 
 theorem deiterationExtract_wire_endpoints_perm
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (wire : Fin
@@ -1236,7 +1213,7 @@ theorem deiterationExtract_wire_endpoints_perm
       ((deiterationOriginalExtract input selection witness).diagram.wires
         (deiterationExtractWireEquiv input selection witness wire)).endpoints := by
   let domains := deiterationDomains input selection
-  let removed : CheckedDiagram signature :=
+  let removed : CheckedDiagram  :=
     ⟨input.val.removeRaw selection domains,
       ConcreteDiagram.removeRaw_wellFormed input selection domains⟩
   have sourceNodup :
@@ -1263,7 +1240,7 @@ theorem deiterationExtract_wire_endpoints_perm
     (deiterationExtract_endpoint_mem_iff input selection witness wire)
 
 theorem deiterationExtract_boundary_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     (deiterationRetainedExtract input selection witness).boundary.map
@@ -1285,7 +1262,7 @@ theorem deiterationExtract_boundary_eq
         simpa using sourceBound⟩
 
 def deiterationExtractOccurrenceEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     OpenOccurrenceEquiv
@@ -1310,7 +1287,7 @@ def deiterationExtractOccurrenceEquiv
   boundary := deiterationExtract_boundary_eq input selection witness
 
 private theorem selectedFragment_eq_extractOpenRaw
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
     selectedFragment input selection =
@@ -1322,7 +1299,7 @@ private theorem selectedFragment_eq_extractOpenRaw
   exact pinned
 
 theorem deiterationRetained_selectedFragment_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     selectedFragment
@@ -1340,7 +1317,7 @@ theorem deiterationRetained_selectedFragment_eq
     (layout := deiterationRetainedLayout input selection witness)
 
 theorem deiterationOriginal_selectedFragment_eq
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     selectedFragment input witness.justifier =
@@ -1349,7 +1326,7 @@ theorem deiterationOriginal_selectedFragment_eq
     (deiterationOriginalLayout input selection witness)
 
 def deiterationRetainedOccurrenceEquiv
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
     OpenOccurrenceEquiv

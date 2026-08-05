@@ -9,7 +9,7 @@ open VisualProof.Diagram
 /-- Exact provenance agreement of ambient contexts is preserved when both
 compilers descend into corresponding copied material. -/
 theorem extractionContextMembership_extend_material
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -44,7 +44,7 @@ theorem extractionContextMembership_extend_material
 /-- Canonical lexical index transport from any pair of contexts known to
 contain exactly the same provenance wires. -/
 noncomputable def extractionContextIndexMapOfMembership
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -58,7 +58,7 @@ noncomputable def extractionContextIndexMapOfMembership
     (List.get_mem fragmentContext index)))
 
 theorem extractionContextIndexMapOfMembership_spec
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -77,7 +77,7 @@ theorem extractionContextIndexMapOfMembership_spec
     ((membership _).2 (List.get_mem fragmentContext index)))) |>.symm
 
 theorem extractionContextEnvironmentsAgreeOfMembership
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -105,7 +105,7 @@ theorem extractionContextEnvironmentsAgreeOfMembership
 /-- Port resolution transports through any recursively corresponding pair of
 contexts; terminal exactness is only one way to establish membership equality. -/
 theorem extractionResolvePort_mapOfMembership
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -153,7 +153,7 @@ theorem extractionResolvePort_mapOfMembership
   · exact input.property.wire_endpoints_are_disjoint
 
 theorem extractionResolvePort_relatedOfMembership
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentContext : ConcreteElaboration.WireContext

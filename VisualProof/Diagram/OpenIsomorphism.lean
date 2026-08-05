@@ -3,25 +3,25 @@ import VisualProof.Diagram.Isomorphism
 namespace VisualProof.Diagram
 
 structure OpenDiagramIso
-    (source target : OpenDiagram signature arity) where
+    (source target : OpenDiagram  arity) where
   external : FiniteEquiv (Fin source.externalClasses)
     (Fin target.externalClasses)
   boundary : forall i, external (source.boundary i) = target.boundary i
-  body : RegionIso signature external [] source.body target.body
+  body : RegionIso  external [] source.body target.body
 
 namespace OpenDiagramIso
 
 /-- Build an ordered open isomorphism across propositionally equal arities. -/
 def ofArityEq {sourceArity targetArity : Nat}
-    {source : OpenDiagram signature sourceArity}
-    {target : OpenDiagram signature targetArity}
+    {source : OpenDiagram  sourceArity}
+    {target : OpenDiagram  targetArity}
     (arityEq : sourceArity = targetArity)
     (external : FiniteEquiv (Fin source.externalClasses)
       (Fin target.externalClasses))
     (boundary : forall position,
       external (source.boundary position) =
         target.boundary (Fin.cast arityEq position))
-    (body : RegionIso signature external [] source.body target.body) :
+    (body : RegionIso  external [] source.body target.body) :
     OpenDiagramIso source (target.castArity arityEq.symm) := by
   subst targetArity
   exact {
@@ -30,13 +30,13 @@ def ofArityEq {sourceArity targetArity : Nat}
     body := body
   }
 
-def refl (diagram : OpenDiagram signature arity) :
+def refl (diagram : OpenDiagram  arity) :
     OpenDiagramIso diagram diagram where
   external := FiniteEquiv.refl (Fin diagram.externalClasses)
   boundary := fun _ => rfl
   body := RegionIso.refl diagram.body
 
-def symm {source target : OpenDiagram signature arity}
+def symm {source target : OpenDiagram  arity}
     (iso : OpenDiagramIso source target) : OpenDiagramIso target source where
   external := iso.external.symm
   boundary := by
@@ -48,7 +48,7 @@ def symm {source target : OpenDiagram signature arity}
       _ = source.boundary i := iso.external.left_inv _
   body := iso.body.symm
 
-def trans {source middle target : OpenDiagram signature arity}
+def trans {source middle target : OpenDiagram  arity}
     (first : OpenDiagramIso source middle)
     (second : OpenDiagramIso middle target) : OpenDiagramIso source target where
   external := first.external.trans second.external
@@ -62,7 +62,7 @@ def trans {source middle target : OpenDiagram signature arity}
       _ = target.boundary i := second.boundary i
   body := first.body.trans second.body
 
-def transportAssignment {source target : OpenDiagram signature arity}
+def transportAssignment {source target : OpenDiagram  arity}
     (iso : OpenDiagramIso source target)
     (assignment : BoundaryAssignment source D) : BoundaryAssignment target D where
   args := assignment.args
@@ -75,14 +75,14 @@ def transportAssignment {source target : OpenDiagram signature arity}
     exact assignment.agrees i
 
 @[simp] theorem transportAssignment_args
-    {source target : OpenDiagram signature arity}
+    {source target : OpenDiagram  arity}
     (iso : OpenDiagramIso source target)
     (assignment : BoundaryAssignment source D) :
     (iso.transportAssignment assignment).args = assignment.args :=
   rfl
 
 @[simp] theorem transportAssignment_classes
-    {source target : OpenDiagram signature arity}
+    {source target : OpenDiagram  arity}
     (iso : OpenDiagramIso source target)
     (assignment : BoundaryAssignment source D)
     (targetClass : Fin target.externalClasses) :
@@ -90,7 +90,7 @@ def transportAssignment {source target : OpenDiagram signature arity}
       assignment.classes (iso.external.invFun targetClass) :=
   rfl
 
-theorem aliasConsistent_iff {source target : OpenDiagram signature arity}
+theorem aliasConsistent_iff {source target : OpenDiagram  arity}
     (iso : OpenDiagramIso source target) (args : Fin arity -> D) :
     AliasConsistent source args <-> AliasConsistent target args := by
   constructor
@@ -103,17 +103,16 @@ theorem aliasConsistent_iff {source target : OpenDiagram signature arity}
     apply targetConsistent i j
     rw [← iso.boundary i, ← iso.boundary j, sourceEqual]
 
-theorem preservesDenotation {source target : OpenDiagram signature arity}
+theorem preservesDenotation {source target : OpenDiagram  arity}
     (iso : OpenDiagramIso source target)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin arity -> model.Carrier) :
-    denoteOpen model named source args -> denoteOpen model named target args := by
+    denoteOpen model  source args -> denoteOpen model  target args := by
   rintro ⟨sourceAssignment, sourceArgs, sourceBody⟩
   let targetAssignment := iso.transportAssignment sourceAssignment
   refine ⟨targetAssignment, ?_, ?_⟩
   · exact sourceArgs
-  · apply (iso.body.denotation model named sourceAssignment.classes
+  · apply (iso.body.denotation model  sourceAssignment.classes
       targetAssignment.classes PUnit.unit ?_).mp sourceBody
     intro sourceClass
     change sourceAssignment.classes
@@ -121,15 +120,14 @@ theorem preservesDenotation {source target : OpenDiagram signature arity}
       sourceAssignment.classes sourceClass
     rw [iso.external.left_inv]
 
-theorem denoteOpen_iff {source target : OpenDiagram signature arity}
+theorem denoteOpen_iff {source target : OpenDiagram  arity}
     (iso : OpenDiagramIso source target)
     (model : Model)
-    (named : NamedEnv model.Carrier signature)
     (args : Fin arity -> model.Carrier) :
-    denoteOpen model named source args <-> denoteOpen model named target args := by
+    denoteOpen model  source args <-> denoteOpen model  target args := by
   constructor
-  · exact iso.preservesDenotation model named args
-  · exact iso.symm.preservesDenotation model named args
+  · exact iso.preservesDenotation model  args
+  · exact iso.symm.preservesDenotation model  args
 
 end OpenDiagramIso
 

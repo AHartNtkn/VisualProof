@@ -14,7 +14,7 @@ open VisualProof.Rule.ModalSoundness
 frame.  This is distinct from the splice-site view when iteration copies an
 ancestor occurrence into a proper descendant. -/
 noncomputable def iterationCoalescedAnchorView
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible) :
@@ -30,7 +30,7 @@ isomorphic to a compiler block over the original diagram at the same anchor.
 The target context is exactly the pointwise image of the authoritative splice
 context, so the theorem retains every lexical wire value. -/
 theorem coalescedAnchorSelected_iso
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible) :
@@ -46,22 +46,22 @@ theorem coalescedAnchorSelected_iso
     let wireEquiv : FiniteEquiv (Fin sourceContext.length)
         (Fin targetContext.length) :=
       FiniteEquiv.finCast (List.length_map iso.wires).symm
-    ∃ (sourceItems : ItemSeq signature sourceContext.length
+    ∃ (sourceItems : ItemSeq  sourceContext.length
         anchorView.focus.holeRels)
-      (targetItems : ItemSeq signature targetContext.length
+      (targetItems : ItemSeq  targetContext.length
         anchorView.focus.holeRels)
       (targetFuel : Nat),
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
           spliceInput.coalesceFrameRaw
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             spliceInput.coalesceFrameRaw sourceLeaf.fuel)
           sourceContext sourceLeaf.binders
           (selectedOccurrences input.val selection) = some sourceItems ∧
-        ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val targetFuel)
+        ConcreteElaboration.compileOccurrencesWith?  input.val
+          (ConcreteElaboration.compileRegion?  input.val targetFuel)
           targetContext targetBinders
           (selectedOccurrences input.val selection) = some targetItems ∧
-        ItemSeqIso signature wireEquiv anchorView.focus.holeRels
+        ItemSeqIso  wireEquiv anchorView.focus.holeRels
           sourceItems targetItems := by
   dsimp only
   let spliceInput := iterationInput input selection target
@@ -165,8 +165,8 @@ theorem coalescedAnchorSelected_iso
               ConcreteElaboration.LocalOccurrence.child child :: tail
             rw [show iso.regions child = child by rfl, induction]
   have targetCompiledRenamed :
-      ConcreteElaboration.compileOccurrencesWith? signature input.val
-          (ConcreteElaboration.compileRegion? signature input.val targetFuel)
+      ConcreteElaboration.compileOccurrencesWith?  input.val
+          (ConcreteElaboration.compileRegion?  input.val targetFuel)
           targetContext targetBinders
           ((selectedOccurrences input.val selection).map
             (ConcreteElaboration.renameOccurrence iso)) = some targetItems := by
@@ -184,7 +184,7 @@ terminal material.  The statement exposes exactly the environment relation
 needed later to identify extraction's lexical coordinates with the splice
 wire and binder maps. -/
 theorem coalescedAnchorSelected_entails_terminal
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -209,24 +209,23 @@ theorem coalescedAnchorSelected_entails_terminal
     let binderWitness := ExtractionBinderWitness.terminal input selection layout
       pattern.leaf.binders pattern.leaf.binderEnumeration targetBinders
       targetCover
-    ∃ sourceItems : ItemSeq signature sourceContext.length
+    ∃ sourceItems : ItemSeq  sourceContext.length
         anchorView.focus.holeRels,
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
           spliceInput.coalesceFrameRaw
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             spliceInput.coalesceFrameRaw sourceLeaf.fuel)
           sourceContext sourceLeaf.binders
           (selectedOccurrences input.val selection) = some sourceItems ∧
       ∀ (model : Model)
-        (named : NamedEnv model.Carrier signature)
         (sourceEnv : Fin sourceContext.length → model.Carrier)
         (relEnv : RelEnv model.Carrier anchorView.focus.holeRels)
         (fragmentEnv : Fin pattern.leaf.inheritedWires.length → model.Carrier),
         (extractionContextRelation input selection layout
           pattern.leaf.inheritedWires targetContext).EnvironmentsAgree
             fragmentEnv (fun index => sourceEnv (wireEquiv.symm index)) →
-        denoteItemSeq model named sourceEnv relEnv sourceItems →
-        denoteRegion model named fragmentEnv relEnv
+        denoteItemSeq model  sourceEnv relEnv sourceItems →
+        denoteRegion model  fragmentEnv relEnv
           ((ConcreteElaboration.finishRegion
               (input.val.extractDiagramRaw selection layout)
               pattern.leaf.inheritedWires layout.bodyContainer
@@ -265,21 +264,21 @@ theorem coalescedAnchorSelected_entails_terminal
   have targetExact : ConcreteElaboration.WireContext.Exact targetContext
       selection.val.anchor := sourceLeaf.wiresExact.mapIso iso
   refine ⟨sourceItems, sourceCompiled, ?_⟩
-  intro model named sourceEnv relEnv fragmentEnv environments sourceDenotes
+  intro model  sourceEnv relEnv fragmentEnv environments sourceDenotes
   let targetEnv : Fin targetContext.length → model.Carrier :=
     fun index => sourceEnv (wireEquiv.symm index)
   have isoEnvironments : EnvironmentsAgree wireEquiv sourceEnv targetEnv := by
     intro index
     exact congrArg sourceEnv (wireEquiv.left_inv index)
-  have targetDenotes : denoteItemSeq model named targetEnv relEnv targetItems :=
-    (selectedIso.denotation model named sourceEnv targetEnv relEnv
+  have targetDenotes : denoteItemSeq model  targetEnv relEnv targetItems :=
+    (selectedIso.denotation model  sourceEnv targetEnv relEnv
       isoEnvironments).mp sourceDenotes
-  have targetRegion : denoteRegion model named targetEnv relEnv
+  have targetRegion : denoteRegion model  targetEnv relEnv
       (Region.mk 0 targetItems) :=
-    (denoteRegion_mk_zero_iff model named targetEnv relEnv targetItems).2
+    (denoteRegion_mk_zero_iff model  targetEnv relEnv targetItems).2
       targetDenotes
   have terminalSimulation := extractionCompileTerminal_selected_denote
-    input selection layout model named pattern.leaf.fuel targetFuel
+    input selection layout model  pattern.leaf.fuel targetFuel
     pattern.leaf.inheritedWires targetContext pattern.leaf.binders targetBinders
     pattern.leaf.binderEnumeration targetEnumeration targetCover
     pattern.leaf.wiresExact targetExact pattern.leaf.items targetItems
@@ -291,7 +290,7 @@ open root when the binder spine is empty.  Exposed positions remain ambient;
 hidden root wires are provided by the root simulation's existential local
 environment. -/
 theorem coalescedAnchorSelected_entails_root
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -311,16 +310,15 @@ theorem coalescedAnchorSelected_entails_root
         (Fin targetContext.length) :=
       FiniteEquiv.finCast (List.length_map iso.wires).symm
     let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
-    ∃ sourceItems : ItemSeq signature sourceContext.length
+    ∃ sourceItems : ItemSeq  sourceContext.length
         anchorView.focus.holeRels,
-      ConcreteElaboration.compileOccurrencesWith? signature
+      ConcreteElaboration.compileOccurrencesWith?
           spliceInput.coalesceFrameRaw
-          (ConcreteElaboration.compileRegion? signature
+          (ConcreteElaboration.compileRegion?
             spliceInput.coalesceFrameRaw sourceLeaf.fuel)
           sourceContext sourceLeaf.binders
           (selectedOccurrences input.val selection) = some sourceItems ∧
       ∀ (model : Model)
-        (named : NamedEnv model.Carrier signature)
         (sourceEnv : Fin sourceContext.length → model.Carrier)
         (relEnv : RelEnv model.Carrier anchorView.focus.holeRels)
         (fragmentEnv : Fin spliceInput.pattern.val.exposedWires.length →
@@ -328,8 +326,8 @@ theorem coalescedAnchorSelected_entails_root
         (extractionContextRelation input selection layout
           spliceInput.pattern.val.exposedWires targetContext).EnvironmentsAgree
             fragmentEnv (fun index => sourceEnv (wireEquiv.symm index)) →
-        denoteItemSeq model named sourceEnv relEnv sourceItems →
-        denoteRegion model named fragmentEnv relEnv
+        denoteItemSeq model  sourceEnv relEnv sourceItems →
+        denoteRegion model  fragmentEnv relEnv
           ((ConcreteElaboration.finishRoot
               spliceInput.pattern.val.exposedWires
               spliceInput.pattern.val.hiddenWires pattern.items
@@ -366,21 +364,21 @@ theorem coalescedAnchorSelected_entails_root
   have targetExact : ConcreteElaboration.WireContext.Exact targetContext
       selection.val.anchor := sourceLeaf.wiresExact.mapIso iso
   refine ⟨sourceItems, sourceCompiled, ?_⟩
-  intro model named sourceEnv relEnv fragmentEnv environments sourceDenotes
+  intro model  sourceEnv relEnv fragmentEnv environments sourceDenotes
   let targetEnv : Fin targetContext.length → model.Carrier :=
     fun index => sourceEnv (wireEquiv.symm index)
   have isoEnvironments : EnvironmentsAgree wireEquiv sourceEnv targetEnv := by
     intro index
     exact congrArg sourceEnv (wireEquiv.left_inv index)
-  have targetDenotes : denoteItemSeq model named targetEnv relEnv targetItems :=
-    (selectedIso.denotation model named sourceEnv targetEnv relEnv
+  have targetDenotes : denoteItemSeq model  targetEnv relEnv targetItems :=
+    (selectedIso.denotation model  sourceEnv targetEnv relEnv
       isoEnvironments).mp sourceDenotes
-  have targetRegion : denoteRegion model named targetEnv relEnv
+  have targetRegion : denoteRegion model  targetEnv relEnv
       (Region.mk 0 targetItems) :=
-    (denoteRegion_mk_zero_iff model named targetEnv relEnv targetItems).2
+    (denoteRegion_mk_zero_iff model  targetEnv relEnv targetItems).2
       targetDenotes
   have rootSimulation := extractionCompileRoot_selected_denote
-    input selection layout hzero model named targetFuel targetContext
+    input selection layout hzero model  targetFuel targetContext
     targetBinders targetEnumeration targetCover targetExact pattern.items
     targetItems pattern.computation targetCompiled
   exact rootSimulation fragmentEnv targetEnv relEnv environments targetRegion

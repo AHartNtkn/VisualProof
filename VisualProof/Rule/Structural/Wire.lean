@@ -60,13 +60,13 @@ def severWireInterfaceTransport (input : ConcreteDiagram)
   InterfaceTransport.append input (severWireRaw input wire keep) 1 rfl
 
 def applyWireSever (orientation : Orientation)
-    (input : CheckedDiagram signature) (wire : Fin input.val.wireCount)
+    (input : CheckedDiagram ) (wire : Fin input.val.wireCount)
     (keep : List (CEndpoint input.val.nodeCount)) :
     Except StepError (StepReceipt input) :=
   if erasurePolarity orientation
       (concreteCutDepth input.val (input.val.wires wire).scope) then
     if endpointSubset keep (input.val.wires wire).endpoints then
-      match hcheck : checkWellFormed signature
+      match hcheck : checkWellFormed
           (severWireRaw input.val wire keep) with
       | .error error => .error (.resultNotWellFormed error)
       | .ok result => .ok (StepReceipt.ofChecked input
@@ -102,8 +102,7 @@ theorem applyWireSever_realizes
   cases happly
   exact StepReceipt.ofChecked_realizes _ _ _ _ checked hcheck
 
-theorem applyWireSever_success {signature : List Nat}
-    (orientation : Orientation) (input : CheckedDiagram signature)
+theorem applyWireSever_success (orientation : Orientation) (input : CheckedDiagram )
     (wire : Fin input.val.wireCount)
     (keep : List (CEndpoint input.val.nodeCount)) (result : StepReceipt input)
     (happly : applyWireSever orientation input wire keep = .ok result) :
@@ -224,7 +223,7 @@ theorem joinWireInterfaceTransport_coalesces_pair
   · simp [joinWireProvenance, WireProvenance.rootFiltered,
       hinnerDeleted']
 
-def removeWireProvenance (input : CheckedDiagram signature)
+def removeWireProvenance (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (domains : FrameDomains input.val selection := {}) :
     WireProvenance input.val (input.val.removeRaw selection domains) :=
@@ -232,7 +231,7 @@ def removeWireProvenance (input : CheckedDiagram signature)
     (input.val.removeRaw selection domains) domains.wires.index?
     (survivor_index?_injective domains.wires)
 
-def removeWireInterfaceTransport (input : CheckedDiagram signature)
+def removeWireInterfaceTransport (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (domains : FrameDomains input.val selection := {}) :
     InterfaceTransport input.val (input.val.removeRaw selection domains) :=
@@ -240,7 +239,7 @@ def removeWireInterfaceTransport (input : CheckedDiagram signature)
     (input.val.removeRaw selection domains) domains.wires rfl
 
 theorem removeWireInterfaceTransport_image_origin
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (domains : FrameDomains input.val selection)
     (wire : Fin input.val.wireCount)
@@ -276,7 +275,7 @@ theorem removeWireInterfaceTransport_image_origin
 /-- Successful removal transport is exactly survivor compaction at every
 ordered boundary position.  The equality retains order and duplicates. -/
 theorem removeWireInterfaceTransport_boundary_origins
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (domains : FrameDomains input.val selection)
     (boundary : List (Fin input.val.wireCount))
@@ -295,7 +294,7 @@ theorem removeWireInterfaceTransport_boundary_origins
   apply removeWireInterfaceTransport_image_origin input selection domains
   simpa [sourceIndex] using himage
 
-def spliceFrameWireProvenance (input : Splice.Input signature) :
+def spliceFrameWireProvenance (input : Splice.Input ) :
     WireProvenance input.frame.val input.plugLayout.plugRaw :=
   let layout := input.plugLayout
   let domain := input.wireQuotient
@@ -316,14 +315,14 @@ def spliceFrameWireProvenance (input : Splice.Input signature) :
 /-- Logical frame transport for splice. Every original frame identity maps
 through its quotient class, including nonrepresentative members that graph
 provenance must omit to remain injective. -/
-def spliceFrameInterfaceTransport (input : Splice.Input signature) :
+def spliceFrameInterfaceTransport (input : Splice.Input ) :
     InterfaceTransport input.frame.val input.plugLayout.plugRaw :=
   let layout := input.plugLayout
   InterfaceTransport.rootFiltered input.frame.val layout.plugRaw
     (fun wire => some (layout.frameWire (input.quotientWire wire)))
 
 theorem spliceFrameInterfaceTransport_boundary_eq
-    (input : Splice.Input signature)
+    (input : Splice.Input )
     (boundary : List (Fin input.frame.val.wireCount))
     (mapped : List (Fin input.plugLayout.plugRaw.wireCount))
     (htransport :
@@ -372,7 +371,7 @@ theorem spliceFrameInterfaceTransport_boundary_eq
   · contradiction
 
 def applyWireJoin (orientation : Orientation)
-    (input : CheckedDiagram signature)
+    (input : CheckedDiagram )
     (first second : Fin input.val.wireCount) :
     Except StepError (StepReceipt input) :=
   if first = second then
@@ -382,7 +381,7 @@ def applyWireJoin (orientation : Orientation)
     let secondScope := (input.val.wires second).scope
     if input.val.Encloses firstScope secondScope then
       if spawnPolarity orientation (concreteCutDepth input.val secondScope) then
-        match hcheck : checkWellFormed signature
+        match hcheck : checkWellFormed
             (joinWireRaw input.val first second) with
         | .error error => .error (.resultNotWellFormed error)
         | .ok result => .ok (StepReceipt.ofChecked input
@@ -393,7 +392,7 @@ def applyWireJoin (orientation : Orientation)
         .error .wrongPolarity
     else if input.val.Encloses secondScope firstScope then
       if spawnPolarity orientation (concreteCutDepth input.val firstScope) then
-        match hcheck : checkWellFormed signature
+        match hcheck : checkWellFormed
             (joinWireRaw input.val second first) with
         | .error error => .error (.resultNotWellFormed error)
         | .ok result => .ok (StepReceipt.ofChecked input
@@ -449,8 +448,7 @@ theorem applyWireJoin_realizes
     cases happly
     exact Or.inr (StepReceipt.ofChecked_realizes _ _ _ _ checked hcheck)
 
-theorem applyWireJoin_success {signature : List Nat}
-    (orientation : Orientation) (input : CheckedDiagram signature)
+theorem applyWireJoin_success (orientation : Orientation) (input : CheckedDiagram )
     (first second : Fin input.val.wireCount) (result : StepReceipt input)
     (happly : applyWireJoin orientation input first second = .ok result) :
     first ≠ second ∧
@@ -512,16 +510,11 @@ def liftCNode (added : Nat) :
       .identity (Fin.castAdd added region) arity
   | .atom region binder =>
       .atom (Fin.castAdd added region) (Fin.castAdd added binder)
-  | .named region definition arity =>
-      .named (Fin.castAdd added region) definition arity
-
 def reparentLiftedNode (added : Nat)
     (region : Fin (regions + added)) :
     CNode regions → CNode (regions + added)
   | .identity _ arity => .identity region arity
   | .atom _ binder => .atom region (Fin.castAdd added binder)
-  | .named _ definition arity => .named region definition arity
-
 def liftCWireRegions (added : Nat) :
     CWire regions nodes → CWire (regions + added) nodes
   | wire =>
