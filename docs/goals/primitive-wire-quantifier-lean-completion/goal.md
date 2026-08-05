@@ -1,60 +1,97 @@
-# Second-Order to Higher-Order Lean Conversion
+# Macro-Free Higher-Order Diagram Calculus
 
 ## Objective
 
 Execute
 `docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md`
-from the restored completed second-order baseline at commit `6693b04` until:
+from the restored completed second-order architecture until:
 
-1. Lambda, term/equation, and relation-bubble authority has been replaced by
-   the zero-signature higher-order calculus with recursive signature-indexed
-   wires and atom/ref/identity/cut content;
-2. every actual higher-order rule is sound in every full model and
-   `applyStep_sound` exhaustively covers the production rule sum;
-3. the completed replay, checked-theorem, and verified-theory soundness
-   architecture is preserved over the new calculus;
-4. the production formula compiler has semantic preservation and
-   expressiveness theorems; and
-5. direct relation substitution/comprehension is constructively reproduced by
-   primitive relation-wire programs with exact raw ordered-boundary
-   correspondence, independently of identity normalization.
+1. the formal calculus has recursive signature-indexed wires and exactly
+   atom/identity/cut diagram content, with no formalized macro system;
+2. the exact 31 primitive higher-order rules have owning all-model soundness
+   theorems and exhaustive `applyStep_sound` coverage;
+3. replay, checked-theorem, and verified-theory soundness certify primitive
+   derivations without making a theorem, definition, or reference consumable by
+   a primitive step;
+4. every well-typed formula in the independently defined higher-order language
+   has some diagram with the same semantics; and
+5. every valid direct relation substitution and comprehension has some
+   primitive derivation landing at an exactly ordered-boundary-preserving raw
+   target.
 
-## Baseline Authority
+## Formal Boundary
 
-The Lean source and build inputs were restored exactly from `6693b04`, the
-parent immediately before the wholesale semantic-core deletion. This baseline,
-the three governing specifications cited by the plan, and later user
-clarifications are authoritative.
+The Lean formalization contains no reference nodes, definition environment,
+fold/unfold, reference operations, theorem-citation step, public formula
+compiler, identity canonicalizer, or direct-operation compiler. A
+`TheoremSchema`, `CheckedTheorem`, or verified theory is a meta-level
+certification result only and is never an input to `RuleInput` or `Step`.
 
-The discarded in-flight Lean source is recoverable at
-`/tmp/vpa-current-lean-code-20260804-XO7NPu`, with checksum manifest
-`/tmp/vpa-current-lean-code-20260804-XO7NPu.sha256`. It is not an implementation
-or design authority.
+The formal content constructors are exactly atom, identity, and cut. The
+primitive rule sum contains exactly:
 
-## Non-Negotiable Constraints
+- atom spawning and identity insertion;
+- identity degeneracy, one-point collapse, and same-region fusion;
+- erasure, iteration, deiteration, and double-cut introduction/elimination;
+- vacuous-wire introduction/elimination;
+- wire join/sever, cut wrap/absorb, parallel split/fuse, and ends delete/spawn;
+- arity shift/unshift, argument permutation, duplication/contraction, and
+  drop/extend; and
+- formal application/abstraction and identity leaf/abstraction.
 
-- Task 1 constructs the complete honest target production declaration skeleton
-  before proof work. Correct incomplete owners use `sorry`; invalid old proofs
-  and statements are deleted rather than weakened.
-- Lean RED/GREEN uses owning production declarations only. No fixture modules,
-  redundant examples, `#check`, or test theorems.
-- Preserve the generic second-order proof architecture, not any
-  second-order-specific theorem content.
-- Every actual new rule has an owning all-model soundness theorem, and
-  `applyStep_sound` is the exhaustive rule-coverage theorem.
-- Formula expressiveness and primitive derivability are separate capstones.
-- Direct compiler adequacy owns exact raw ordered-boundary correspondence and
-  has no identity-normalization dependency.
-- Do not recreate discarded receipt, allocation, provenance, transport,
-  inverse, atlas, search, redundancy-mismatch, fixture, or compatibility
-  infrastructure unless a final production theorem directly requires it.
-- Preserve unrelated non-Lean work and commit every validated task-owned slice.
+## Development Contract
+
+- Rebuild the complete macro-free production skeleton before further proof
+  work. Every definition is implemented; only owning production theorem proofs
+  may use `sorry` in RED.
+- Lean RED/GREEN uses production declarations only. Do not create fixtures,
+  redundant `example` or `#check` declarations, or test theorems.
+- Port the generic second-order proof architecture and its content-parametric
+  structural soundness. Do not retain second-order-specific semantic content.
+- Audit every owner against both the complete SO implementation at `2bddfe4`
+  and the abandoned higher-order implementation at
+  `/tmp/vpa-current-lean-code-20260804-XO7NPu` before writing it. Port completed
+  predecessor work with only representation-level changes. Greenfield work is
+  forbidden unless the exact responsibility is absent or honestly unfinished
+  in both predecessors.
+- A current operation is reusable only after declaration-level comparison
+  establishes substantive equivalence to its selected completed predecessor.
+  Iteration uses the completed abandoned signature-indexed HO operation,
+  extraction, raw-splice/insertion, factorization, semantic-equivalence, and
+  terminal-soundness chain as its single basis. The SO tree at `2bddfe4` may
+  supply only localized current-representation facts. Remove obsolete macro,
+  definition/reference, normalization, provenance, transport, and checker
+  packaging without replacing the mathematical owners consumed by
+  `CheckedOrdinaryIteration.equivalence`. The current `copySelection` and
+  copied-fragment simulation path is not that architecture and must not remain.
+  Do not create an adapter between the two proof architectures. The three
+  identity proofs and all nineteen wire-primitive proofs still port their
+  completed higher-order owners.
+- Formula expressiveness is existential and selects no public implementation.
+- Direct substitution/comprehension completeness is existential primitive
+  derivability, independent of identity normalization, canonicalization,
+  macros, and compilation. The identity leaf/abstraction pair remains part of
+  the nineteen relation-wire primitives needed for identity-node content.
+- Exact ordered-boundary preservation belongs only to the final raw landing
+  relation; it does not require receipts, transport APIs, normalization, or a
+  theorem checker.
+- The temporary backup at `/tmp/vpa-current-lean-code-20260804-XO7NPu` is
+  implementation evidence only. Reuse a mathematical kernel only when it is
+  required by the corrected plan and matches the reconstructed owner.
+- The durable two-surface owner map is
+  `notes/temporary-backup-salvage-map.md`; the exhaustive iteration comparison
+  is `notes/iteration-declaration-audit.md`. If a selected HO iteration declaration
+  cannot be adapted by the permitted localized representation edits, record its
+  exact statement and the precise incompatible hypothesis or conclusion before
+  proposing any new construction.
 
 ## Completion Oracle
 
-All eight tasks are complete; R1–R5 each have direct GREEN production owners;
-no displaced or discarded implementation model remains; and Task 8's complete
-axiom, dependency, build, unit, type, and end-to-end gates pass.
+All eight plan tasks are complete; R1-R5 have direct GREEN production owners;
+the exact 31-constructor `Step` sum is exhaustively covered; no macro,
+second-order-specific, normalization, compiler, receipt, transport, search,
+atlas, or fixture authority remains in the formal dependency closure; and the
+final axiom, build, formal-size, type, unit, and end-to-end gates pass.
 
 ## Canonical Board
 
@@ -68,8 +105,7 @@ axiom, dependency, build, unit, type, and end-to-end gates pass.
 
 ## PM Loop
 
-Read this charter, the governing plan, and `state.yaml`. Work only on the one
-active task. Judge every declaration against the restored `6693b04` owner and
-R1–R5 before keeping it. Record production-theorem RED/GREEN evidence, focused
-and full validation, and the task commit; then activate the next task. Do not
-claim completion until Task 8 records all five outcomes directly.
+Read this charter, the governing plan, and `state.yaml`. Work only on the active
+task. Record theorem RED/GREEN evidence, direct validation, and a task commit
+before activating the next task. Never infer completion from an earlier receipt;
+completion requires the current production source to satisfy the oracle.

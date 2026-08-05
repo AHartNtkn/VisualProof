@@ -212,6 +212,8 @@ function renderBoard(board) {
   document.getElementById("goal-tranche").textContent = board.goal.tranche || "";
   document.getElementById("goal-status").textContent = board.goal.status;
   document.getElementById("goal-active").textContent = board.goal.activeTask || "None";
+  document.getElementById("goal-executor").textContent = board.executor?.label || "Not observed";
+  document.getElementById("goal-executor").title = board.executor?.detail || "";
   document.getElementById("goal-updated").textContent = new Date(board.generatedAt).toLocaleTimeString();
 
   if (board.error) {

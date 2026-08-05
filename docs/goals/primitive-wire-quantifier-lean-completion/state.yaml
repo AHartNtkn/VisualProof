@@ -2,39 +2,47 @@
 version: 2
 
 goal:
-  title: "Second-Order to Higher-Order Lean Conversion"
+  title: "Macro-Free Higher-Order Diagram Calculus"
   slug: "primitive-wire-quantifier-lean-completion"
   kind: existing_plan
-  tranche: "Execute the eight-task conversion plan from the restored completed second-order baseline."
+  tranche: "Reconstruct and execute the corrected eight-task Lean plan."
   status: active
   oracle:
-    signal: "R1-R5 are proved by the final production theorem surface and Task 8 gates pass."
+    signal: "R1-R5 are GREEN over the macro-free atom/identity/cut calculus and the exact 31-rule sum."
     cadence: "after each task and at final conformance"
-    final_proof: "Kernel-checked all-model rule/dispatcher/proof-chain soundness, formula semantic expressiveness, primitive direct-operation adequacy, displaced-model absence, and clean full gates."
+    final_proof: "Kernel-checked semantic core, all-model rule and proof-chain soundness, existential formula expressiveness, existential direct-operation primitive adequacy, displaced-model absence, and clean full gates."
   intake:
-    original_request: "Back up the in-flight Lean code, restore the last completed second-order Lean state, and plan a coherent conversion of that state to the requested higher-order calculus."
-    interpreted_outcome: "A clean second-order-to-higher-order Lean conversion based only on commit 6693b04, preserving generic soundness architecture and adding formula expressiveness plus primitive derivability."
+    original_request: "Convert the completed second-order formalization to the higher-order diagram calculus, add soundness for its rules, prove formula semantic expressiveness, and prove primitive completeness for direct relation substitution and comprehension."
+    interpreted_outcome: "A macro-free Lean calculus with recursive signature-indexed wires, atom/identity/cut content, 31 sound primitive rules, primitive proof certification, existential formula expressiveness, and existential primitive adequacy for the two direct operations."
     input_shape: existing_plan
     audience: "VisualProofAssistant maintainers and users relying on checked higher-order proofs"
     authority: requested
     proof_type: theorem
-    completion_proof: "Every required production declaration is GREEN and maps to R1-R5 in the governing plan."
-    likely_misfire: "Using the discarded in-flight Lean tree as a design source, proving before the complete RED skeleton exists, porting second-order-specific theorems, weakening statements, or inventing extra completion requirements."
+    completion_proof: "Every required production declaration is GREEN and maps directly to R1-R5 in the corrected plan."
+    likely_misfire: "Formalizing the macro system, exposing a compiler or canonicalizer, weakening theorem statements, treating theorem certificates as rule inputs, using fixtures for RED/GREEN, or claiming completion from stale receipts."
     blind_spots_considered:
-      - "The exact source baseline is commit 6693b04"
-      - "Lambda/terms and quantifier bubbles are both removed"
-      - "The generic replay/theorem/theory architecture is preserved"
-      - "All actual higher-order rules and exhaustive applyStep_sound are required"
-      - "Formula completeness means semantic expressiveness only"
-      - "Primitive adequacy covers direct substitution/comprehension only"
-      - "Primitive adequacy is independent of identity normalization"
-      - "Lean RED/GREEN never uses fixtures or test theorems"
+      - "Formal content is exactly atom, identity, and cut"
+      - "The primitive rule sum has exactly 31 constructors"
+      - "Reference nodes, definitions, citation, fold/unfold, and ref rules are macro-system concerns excluded from Lean"
+      - "Checked theorems and verified theories remain meta-level certification outputs, not primitive inputs"
+      - "Structural SO proofs are content-parametric architecture to port"
+      - "New HO rules require owning all-model soundness proofs"
+      - "Formula completeness is existential semantic expressiveness, not compilation"
+      - "Direct-operation completeness is existential primitive derivability and does not depend on identity normalization; identity leaf/abstraction remain two of the nineteen wire primitives for identity-node content"
+      - "Lean has three explicit identity equivalence rules and no canonicalizer"
+      - "RED is an owning production theorem with sorry; definitions are complete"
+      - "No fixtures, redundant examples, #check declarations, or test theorems"
+      - "The temporary backup supplies implementation evidence only"
+      - "Every remaining owner is audited against both commit 2bddfe4 and /tmp/vpa-current-lean-code-20260804-XO7NPu before implementation"
+      - "The predecessor audit follows each terminal owner through its raw construction, factorization, semantic-ledger, inverse, and denotation dependency chain; absent current lower layers are port work, not greenfield work"
+      - "Constructor deletion, recursive signatures, and removed macro indices are porting changes, not permission for greenfield reconstruction"
+      - "Formula expressiveness is the only wholly new theorem family; direct adequacy ports completed residual/plumbing/inversion/landing cases and proves the current-input, empty-alias-request, failure-free-totality, and exact-landing gaps"
     existing_plan_facts:
       - "Plan path: docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
-      - "The plan has eight tasks derived from the restored second-order owners."
-      - "Task 1 creates the complete target RED skeleton before proof work."
-      - "Task 8 and the five-outcome completion oracle define completion."
-      - "Discarded source backup: /tmp/vpa-current-lean-code-20260804-XO7NPu"
+      - "The corrected plan has eight tasks and a five-outcome R1-R5 matrix"
+      - "Task 1 reconstructs the entire macro-free RED skeleton"
+      - "Task 8 defines final conformance"
+      - "Durable provenance map: docs/goals/primitive-wire-quantifier-lean-completion/notes/temporary-backup-salvage-map.md"
 
 rules:
   pm_owns_state: true
@@ -65,32 +73,31 @@ agents:
 visual_board:
   selected: local
   local:
-    status: live
+    status: stopped
     url: "http://goalbuddy.localhost:41737/primitive-wire-quantifier-lean-completion/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.2/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/primitive-wire-quantifier-lean-completion"
 
-active_task: T001
+active_task: T003
 
 tasks:
   - id: T001
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
-    objective: "Execute plan Task 1: replace the restored second-order declaration surface with the complete honest higher-order RED skeleton before proving target theorems."
+    objective: "Correct and revalidate the complete macro-free atom/identity/cut RED skeleton after the whole-plan two-predecessor audit."
     inputs:
-      - "Commit 6693b04 restored VisualProof source and build inputs"
-      - "Governing plan Task 1 and complete Target Production Theorem Surface"
-      - "docs/superpowers/specs/2026-07-22-signature-indexed-wires-design.md"
-      - "docs/superpowers/specs/2026-07-25-zero-signature-hol-redesign-design.md"
-      - "docs/superpowers/specs/2026-07-29-primitive-wire-quantifier-rules-design.md"
-      - "Production TypeScript Sig, Formula, and rule inventory"
+      - "Corrected plan Task 1"
+      - "Completed second-order proof architecture"
+      - "src/kernel/diagram/canonical/identity.ts solely as the rule definition for the three explicit identity transformations"
+      - "Temporary backup solely for equivalent implementation kernels required by this task"
     constraints:
-      - "Do not use /tmp/vpa-current-lean-code-20260804-XO7NPu as an implementation or design source."
-      - "Do not prove beyond the minimum needed to elaborate the complete target skeleton."
-      - "Use sorry only in owning production declarations with strongest correct statements."
-      - "Delete invalid old statements/proofs and all fixture/example/test-theorem RED artifacts."
-      - "Preserve unrelated non-Lean work."
+      - "Definitions are complete; sorry appears only in owning production theorem proofs"
+      - "Exactly 31 primitive constructors"
+      - "No ref, definition environment, fold/unfold, citation, formula compiler, direct-operation compiler, or canonicalizer"
+      - "The direct adequacy basis is exactly the nineteen wire primitives plus vacuous introduction/elimination: identity leaf/abstraction are included, while identity insertion and degeneracy/collapse/fusion are excluded"
+      - "Theorem schemas and certificates cannot be consumed by RuleInput or Step"
+      - "No fixtures, examples, #check declarations, or test theorems"
     allowed_files:
       - "VisualProof.lean"
       - "VisualProof/**"
@@ -99,152 +106,367 @@ tasks:
       - "docs/goals/primitive-wire-quantifier-lean-completion/**"
       - ".superpowers/sdd/2026-07-30-primitive-wire-quantifier-lean-completion/**"
     verify:
-      - "Focused lake env lean checks for every changed production owner"
+      - "Focused elaboration of every changed owner"
       - "lake build"
       - "npm run formal:size"
-      - "Complete sorry-to-final-owner declaration ledger"
+      - "Exact 31-constructor audit"
+      - "Displaced macro and fixture scan"
       - "GoalBuddy state checker"
       - "git diff --check"
     stop_if:
-      - "A missing semantic decision would change a final theorem statement."
-      - "A required edit overlaps unrelated non-Lean user work and cannot be isolated."
-      - "Evidence shows R1-R5 omitted a requested outcome."
+      - "Evidence reveals a missing semantic decision that would change an R1-R5 theorem statement"
+      - "A task-owned edit cannot be isolated from unrelated user work"
     expected_output:
-      - "Recursive-signature/all-model target declaration surface"
-      - "Exact production higher-order Step sum"
-      - "All R1-R5 owners elaborating, incomplete ones honestly RED with sorry"
-      - "Invalid second-order theorem statements and fixtures removed"
+      - "Complete macro-free definitions"
+      - "Complete honest R1-R5 RED theorem surface"
+      - "Meta-level primitive replay/theorem/theory declarations"
+      - "Deleted macro and obsolete report authority"
       - "Task-scoped commit"
+    progress:
+      - "The prior T001 pass completed the macro-free RED skeleton and passed all stated gates, but its receipt was reopened after the whole-plan predecessor audit found that RuleKind.IsDirectPrimitive omitted identityLeaf and identityAbstract."
+      - "The correction does not admit identity insertion or any identity-normalization rule. It restores two members of the specified nineteen wire primitives needed for arbitrary identity-node content."
+    receipt:
+      result: done
+      changed_files:
+        - "VisualProof/Rule/WirePrimitive.lean"
+        - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
+        - "docs/goals/primitive-wire-quantifier-lean-completion/**"
+      commands:
+        - cmd: "lake env lean VisualProof/Rule/WirePrimitive.lean"
+          status: pass
+        - cmd: "lake build"
+          status: pass
+        - cmd: "npm run formal:size"
+          status: pass
+        - cmd: "Direct basis audit: all nineteen wire primitives plus vacuous intro/elim; identity insertion and three identity-normalization rules absent"
+          status: pass
+        - cmd: "Displaced macro and fixture scans"
+          status: pass
+        - cmd: "GoalBuddy state checker"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "The reopened RED-skeleton audit corrected the direct basis without changing the 31-rule calculus: identityLeaf and identityAbstract are admitted as two of the nineteen relation-wire primitives required for identity-node content; identity insertion, degeneracy, collapse, fusion, canonicalization, normalization, macros, and compiler authority remain excluded. The whole R1-R5 two-predecessor audit now identifies every completed port, pending minor port, partial direct-adequacy predecessor, and the sole wholly new formula theorem family."
+      harness: codex
+
   - id: T002
     type: worker
     assignee: Worker
-    status: queued
+    status: done
     reasoning_hint: high
-    objective: "Execute plan Task 2: prove the higher-order semantic and checked-diagram core GREEN."
-    inputs:
-      - "T001 target declarations and commit"
-      - "Restored generic diagram proof patterns from 6693b04"
+    objective: "Prove the macro-free semantic and checked-diagram core GREEN."
+    inputs: ["T001 macro-free types and RED owners"]
     constraints:
-      - "No Lambda, equation, bubble, RelCtx, or RelVar authority."
-      - "Port only helpers directly required by R2-R5."
-    expected_output:
-      - "GREEN recursive full Model semantics"
-      - "GREEN checked diagram/elaboration/occurrence/splice/isomorphism core"
-      - "Deleted displaced semantic helpers"
-      - "Task-scoped commit"
+      - "Preserve recursive full-model semantics, existential local wires, ordered boundaries, and concrete-isomorphism meaning"
+      - "Delete only displaced ref/definition cases and helpers"
+    allowed_files:
+      - "VisualProof/Sig.lean"
+      - "VisualProof/Model.lean"
+      - "VisualProof/Diagram/**"
+      - "VisualProof/Theory/**"
+      - "VisualProof.lean"
+      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
+      - "docs/goals/primitive-wire-quantifier-lean-completion/**"
+    verify:
+      - "Focused Lean builds for every semantic and checked-diagram owner"
+      - "No sorry in the T002 owner closure"
+      - "lake build"
+      - "npm run formal:size"
+      - "git diff --check"
+    stop_if:
+      - "A T001 theorem statement is false or artificially weakened"
+      - "A helper is not directly required by an R2-R5 production owner"
+    expected_output: ["GREEN semantic, elaboration, occurrence, extraction-witness contract, removal, copy, renaming, and isomorphism core", "Task-scoped commit"]
+    receipt:
+      result: done
+      changed_files:
+        - "VisualProof/Diagram/**"
+        - "VisualProof/Model.lean"
+        - "VisualProof/Theory/Semantics.lean"
+        - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
+        - "docs/goals/primitive-wire-quantifier-lean-completion/**"
+      commands:
+        - cmd: "rg sorry over Sig/Model/Diagram/Theory owner closure"
+          status: pass
+        - cmd: "lake env lean /tmp/vpa-task2-axioms-20260804.lean"
+          status: pass
+        - cmd: "lake build"
+          status: pass
+        - cmd: "npm run formal:size"
+          status: pass
+        - cmd: "Displaced macro scan"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "The macro-free semantic and checked-diagram core is GREEN: intrinsic denotation/renaming/context, concrete elaboration, ordered-boundary preservation, occurrence contracts, removal, and checked concrete-isomorphism denotation compile without sorry or nonstandard axioms. Iteration-owned declarations are controlled separately by the HO-selected audit in T003."
+      harness: codex
+
   - id: T003
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Make the production iteration_sound theorem GREEN through one coherent macro-free port of the completed signature-indexed HO extraction, raw-splice/insertion, factorization, equivalence, and terminal-soundness closure; then continue the separately audited structural owners."
+    inputs:
+      - "T002 GREEN semantic and checked-diagram core, subject to declaration-level reassessment for iteration-owned helpers"
+      - "Selected basis: completed abandoned signature-indexed HO iteration architecture, including CheckedExtraction, site/relative frames, ConcreteSpliceAttachment, InsertionCompilation, spliceRaw, Factorization kernels, intrinsic containment, and CheckedOrdinaryIteration.equivalence/sound"
+      - "Localized representation evidence only: SO atom/identity/cut, region-local witness, and current public-surface facts"
+      - "docs/goals/primitive-wire-quantifier-lean-completion/notes/T003-structural-proof-closure.md"
+      - "docs/goals/primitive-wire-quantifier-lean-completion/notes/temporary-backup-salvage-map.md"
+      - "docs/goals/primitive-wire-quantifier-lean-completion/notes/iteration-declaration-audit.md"
+    constraints:
+      - "Use the abandoned signature-indexed HO iteration architecture as the single basis; do not combine it with the SO selection/copy/compiler-route architecture"
+      - "Before retaining any current iteration declaration, establish its exact HO predecessor and downstream use in CheckedOrdinaryIteration.equivalence or sound"
+      - "Port the HO exact extraction, site/relative frame, raw splice, insertion/factorization, intrinsic containment, and terminal theorem together"
+      - "Remove obsolete macro, definition/reference, normalization, provenance, transport, and checker packaging only when it is not a mathematical owner required by the selected chain"
+      - "Use the SO tree only for localized current-representation equations"
+      - "Do not create new factorization, compiler-simulation, carrier, contraction, transport, or semantic machinery"
+      - "If an exact predecessor declaration cannot be adapted, stop and report its precise statement and incompatible hypothesis or conclusion before writing an alternative"
+      - "Do not create fixture/example/check declarations"
+    allowed_files:
+      - "VisualProof/Diagram/Concrete/Subgraph/**"
+      - "VisualProof/Diagram/Concrete/Occurrence*.lean"
+      - "VisualProof/Diagram/Concrete/Elaboration/**"
+      - "VisualProof/Diagram/Context*.lean"
+      - "VisualProof/Rule/Structural/**"
+      - "VisualProof/Rule/Soundness/**"
+      - "VisualProof/Rule/Soundness.lean"
+      - "VisualProof/Rule/Operations.lean"
+      - "VisualProof/Rule/Step.lean"
+      - "VisualProof.lean"
+      - "docs/superpowers/plans/2026-07-30-primitive-wire-quantifier-lean-completion.md"
+      - "docs/goals/primitive-wire-quantifier-lean-completion/**"
+    verify:
+      - "Focused Lean build of the complete selected iteration dependency closure and production iteration_sound"
+      - "Full lake build"
+      - "Axiom audit for iteration_sound and its owning terminal/factorization declarations"
+      - "Exact global sorry inventory with iteration_sound removed and no artificial theorem weakening"
+      - "npm run formal:size"
+      - "Displaced iteration-operation and hybrid-scaffolding scan"
+      - "Fixture/example/check scan"
+      - "git diff --check and clean task commit"
+    stop_if:
+      - "An exact selected HO iteration declaration cannot be adapted after the permitted current-representation and obsolete-wrapper edits"
+      - "The port would require a new semantic or operation architecture rather than a representation edit"
+    expected_output:
+      - "Corrected persistent plan and board"
+      - "One coherent adapted HO iteration operation and proof dependency closure"
+      - "GREEN production iteration_sound"
+      - "No displaced copySelection/copied-fragment simulation atlas and no obsolete HO wrapper authority"
+      - "Validated task-scoped commit and clean repository"
+    progress:
+      - "The SO-predecessor selection was materially false and contradicted the controlling iteration redirect, which explicitly selected the abandoned signature-indexed HO predecessor."
+      - "The independent CopyLegal/copyRaw/copySelection API has been removed. Its audited raw table and well-formedness kernel now lives under IterationSplice as the canonical-extraction specialization of the selected HO raw splice; applyIteration consumes that owner directly."
+      - "SelectionPartition.lean and ExtractionSelected.lean were disconnected connection-layer files serving the displaced operation; they have been removed."
+      - "The prior physical deletion of OpenCompilation, SpliceRaw, and Factorization* does not delete their selected mathematical kernels; required owners must be coherently ported without restoring excluded wrappers or unrelated macro consumers."
+      - "The required next action is removal of the bespoke copySelection/compiler-simulation path followed by a coherent port of the exact HO operation and complete proof chain."
+      - "Declaration comparison establishes that the finite raw table and well-formedness kernel inside Copy.lean is the canonical-extraction specialization of HO ConcreteSpliceAttachment/RawConcreteSpliceResult/spliceRaw; only that kernel is salvageable, under the selected raw-splice owner rather than an independent copy architecture."
+      - "Focused build of IterationSplice and the production structural soundness closure passes after the raw-owner replacement. The sole-use 2,356-line copied-fragment semantic atlas and its production import are removed; iteration_sound remains the honest RED endpoint."
+      - "Current conjoin/adjoinAt and their local/contextual denotation laws are retained as the Region.locals adaptation of HO conjoin/iterateInto/denote_iterateInto. The unused generalized ancestorCopy_sound and ancestorAdjoin_sound wrappers have been removed because they have no exact HO owner."
+      - "Canonical extract and current SiteFrame/compileRegionFrame?/compileRootFrame? are audited GREEN specializations of HO CheckedExtraction/OpenCompilation and RegionFrame/SiteCompilation, with SO used only for existential Region.locals. The next exact missing owner is InsertionCompilation.generated_checked_denotes_inserted."
+    receipt: null
+  - id: T009
     type: worker
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 3: prove every actual higher-order rule and exhaustive applyStep_sound GREEN."
+    objective: "Port the three completed higher-order identity-equivalence soundness proofs without formalizing the canonicalizer."
     inputs:
-      - "T002 semantic core"
-      - "T001 production Step sum and rule theorem skeleton"
+      - "T003 GREEN structural foundation"
+      - "Abandoned IdentityNormalizationCore and three WellFormed/Semantics proof families"
+      - "Current explicit identity candidates and legality gates"
     constraints:
-      - "One owning theorem per actual production obligation."
-      - "applyStep_sound exhaustively covers the exact Step sum."
-      - "No caller-supplied semantic truth, landing, inverse, or desired entailment."
-      - "Identity normalization remains separate from primitive compiler adequacy."
-    expected_output:
-      - "GREEN rule-owned all-model soundness theorems"
-      - "GREEN exhaustive applyStep_sound"
-      - "Exact rule-constructor coverage audit"
-      - "Task-scoped commit"
+      - "Rules are exactly degeneracy, one-point collapse, and same-region fusion"
+      - "Port completed transformation proofs; no canonicalizer enumeration, orchestration, repetition, normalization, or transport"
+      - "Begin from IdentityIncidence, IdentityNormalizationCore, and the exact Drop/Collapse/Fusion WellFormed and Semantics dependency chains; their absent current lower layers are port work, not fresh lemmas"
+      - "If a port fails, report the exact predecessor theorem and precise incompatible statement"
+    allowed_files:
+      - "VisualProof/Rule/Structural/Identity.lean"
+      - "VisualProof/Rule/Soundness/Identity.lean"
+      - "VisualProof/Diagram/**"
+      - "VisualProof.lean"
+      - "docs/goals/primitive-wire-quantifier-lean-completion/**"
+    verify:
+      - "Focused Lean builds for all three identity owners"
+      - "Axiom audit for all three identity owners"
+      - "Canonicalizer/normalization dependency absence scan"
+      - "lake build"
+      - "npm run formal:size"
+      - "git diff --check"
+    stop_if:
+      - "A current candidate is not equivalent to its canonicalizer transformation source"
+      - "A proof requires canonicalizer orchestration or an excluded mechanism"
+    expected_output: ["GREEN identityDegeneracy_sound", "GREEN identityCollapse_sound", "GREEN identityFusion_sound", "Task-scoped commit"]
+    receipt: null
+
+  - id: T010
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Port all nineteen completed higher-order wire-primitive soundness owners and close exhaustive step soundness."
+    inputs:
+      - "T003 GREEN structural foundation"
+      - "T009 GREEN identity owners"
+      - "Abandoned Partition, Content, ArgumentsArity, ArgumentsPermute, ArgumentsCore, ArgumentsDropExtend, and Leaves owners"
+      - "Current completed primitive operation definitions"
+    constraints:
+      - "Every theorem is a port of its completed predecessor owner, not a fresh proof design"
+      - "Trace each terminal theorem through Concrete/WirePartition* or Concrete/WirePrimitive/{Content*,Arguments*,Leaves*}; adapt only the lower construction, factorization, inverse, ledger, and denotation lemmas directly consumed by the terminal owner"
+      - "Do not restore receipts, normalization, provenance, general transport, search, atlases, refs, or fixtures"
+    allowed_files:
+      - "VisualProof/Rule/WirePrimitive/**"
+      - "VisualProof/Rule/Soundness/WirePrimitive.lean"
+      - "VisualProof/Rule/Soundness.lean"
+      - "VisualProof/Diagram/**"
+      - "VisualProof.lean"
+      - "docs/goals/primitive-wire-quantifier-lean-completion/**"
+    verify:
+      - "Focused Lean build and axiom audit for each of the nineteen owners"
+      - "Exact 31-constructor to 31-owner applyStep_sound coverage"
+      - "Excluded wrapper/fixture dependency scan"
+      - "lake build"
+      - "npm run formal:size"
+      - "git diff --check"
+    stop_if:
+      - "A current primitive candidate is not substantively equivalent to its predecessor operation"
+      - "A proof requires an excluded wrapper system"
+    expected_output: ["Nineteen GREEN wire-primitive owners", "GREEN exhaustive applyStep_sound over all 31 rules", "Task-scoped commit"]
+    receipt: null
+
   - id: T004
     type: worker
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 4: port the completed replay, checked-theorem, and verified-theory proofs over the new calculus."
-    inputs:
-      - "T003 applyStep_sound"
-      - "T002 ordered checked-open and concrete-isomorphism interfaces"
-      - "Commit 6693b04 Proof/Replay.lean, Proof/Theorem.lean, and Proof/Theory.lean"
+    objective: "Prove primitive replay, checked-theorem, and verified-theory soundness without citation."
+    inputs: ["T010 GREEN applyStep_sound", "Complete SO replay/theorem/theory inductions"]
     constraints:
-      - "Preserve former theorem meanings and proof decomposition; replace only displaced types."
-      - "No new receipt, allocation, provenance, or general transport architecture."
-      - "Exact registered sides, ordered endpoints, and prior-prefix citations remain authoritative."
-    expected_output:
-      - "GREEN replay_sound and directional corollaries"
-      - "GREEN checkedTheorem_sound and registration validity"
-      - "GREEN verifiedTheory_sound"
-      - "Task-scoped commit"
+      - "Primitive programs have no theorem/definition context"
+      - "Each checked theorem and verified theory member is independently certified"
+      - "No theorem registration, prior-prefix citation, or theorem step"
+      - "Mechanically port the predecessor inductions; do not build a replay checker or receipt transport"
+    allowed_files:
+      - "VisualProof/Proof/Replay.lean"
+      - "VisualProof/Proof/Theorem.lean"
+      - "VisualProof/Proof/Theory.lean"
+      - "VisualProof.lean"
+      - "docs/goals/primitive-wire-quantifier-lean-completion/**"
+    verify:
+      - "Focused Lean builds and axiom audits for replay, checked theorem, and verified theory"
+      - "Citation/definition-context absence scan"
+      - "lake build"
+      - "npm run formal:size"
+      - "git diff --check"
+    stop_if:
+      - "A predecessor induction cannot be adapted to the current dependent Program"
+      - "A proof would restore an excluded checker, registry, or citation path"
+    expected_output: ["GREEN replay_sound", "GREEN checkedTheorem_sound", "GREEN verifiedTheory_sound", "Task-scoped commit"]
+    receipt: null
+
   - id: T005
     type: worker
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 5: formalize formula compilation and prove semantic preservation/expressiveness."
-    inputs:
-      - "T002 Sig, Model, diagram, and denotation core"
-      - "src/formula/syntax.ts"
-      - "src/formula/diagram.ts"
-      - "T001 R4 theorem skeleton"
+    objective: "Prove existential semantic expressiveness of the typed higher-order formula language."
+    inputs: ["T002 GREEN macro-free semantics"]
     constraints:
-      - "AST/compiler semantics only; parser and UI are out of scope."
-      - "Use the same Model and diagram denotation."
-      - "No deductive-completeness claim."
-    expected_output:
-      - "GREEN formula compiler well-formedness/elaboration"
-      - "GREEN semantic preservation theorem"
-      - "GREEN expressiveness corollary"
-      - "Task-scoped commit"
+      - "Equality is well-typed only between expressions of the same signature"
+      - "Definitions and semantics are complete"
+      - "No public formula compiler or deductive-completeness claim"
+      - "This is the only wholly new theorem; keep witness construction internal"
+    allowed_files:
+      - "VisualProof/Formula/Syntax.lean"
+      - "VisualProof/Formula/Semantics.lean"
+      - "VisualProof/Formula/Soundness.lean"
+      - "VisualProof.lean"
+      - "docs/goals/primitive-wire-quantifier-lean-completion/**"
+    verify:
+      - "Focused Lean build and axiom audit for Formula.semantically_complete"
+      - "Compiler/definition dependency absence scan"
+      - "lake build"
+      - "npm run formal:size"
+      - "git diff --check"
+    stop_if:
+      - "The current formula grammar or semantics is insufficient for the existential theorem"
+      - "The proof would require exposing a public translator"
+    expected_output: ["Complete formula grammar and denotation", "GREEN existential semantic expressiveness", "Task-scoped commit"]
+    receipt: null
+
   - id: T006
     type: worker
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 6: prove direct relation substitution/comprehension constructively derivable from primitive relation-wire programs."
-    inputs:
-      - "T002 checked diagram/splice/isomorphism core"
-      - "T003 primitive rule and program soundness"
-      - "T001 R5 compiler and adequacy skeleton"
-      - "July 29 residual compiler cases"
+    objective: "Prove primitive-program soundness and exact macro-free direct-operation foundations."
+    inputs: ["T002 checked diagrams", "T010 primitive rules", "Completed abandoned runPrimitiveProgram_sound induction"]
     constraints:
-      - "Universal accepted-input compiler success."
-      - "Raw checked concrete isomorphism and exact ordered boundary."
-      - "No identity normalization, search, atlas, assumed compilation, or assumed inverse landing."
-      - "Direct monolithic operations are specifications, not durable Step constructors."
-    expected_output:
-      - "GREEN compiled_join_redundant"
-      - "GREEN compiled_sever_redundant"
-      - "GREEN semantic corollaries"
-      - "Task-scoped commit"
+      - "Direct relations contain no identity-normalization, canonicalizer, macro, compiler, or search data"
+      - "The direct primitive predicate includes identity leaf/abstraction for identity-node content and excludes identity insertion plus degeneracy/collapse/fusion"
+      - "Ordered boundary correspondence is positional and raw"
+      - "Primitive-program soundness is a mechanical predecessor port"
+    allowed_files:
+      - "VisualProof/Rule/WirePrimitive/Direct.lean"
+      - "VisualProof/Rule/WirePrimitive/Program.lean"
+      - "VisualProof.lean"
+      - "docs/goals/primitive-wire-quantifier-lean-completion/**"
+    verify:
+      - "Focused Lean build and axiom audit for primitive Program.sound"
+      - "Direct relation identity-normalization/compiler/macro dependency absence scan"
+      - "lake build"
+      - "npm run formal:size"
+      - "git diff --check"
+    stop_if:
+      - "A current direct relation encodes an implementation choice not required by the mathematical transformation"
+      - "The program induction cannot be adapted from its completed predecessor"
+    expected_output: ["GREEN primitive-program soundness", "Exact direct substitution/comprehension relations", "Task-scoped commit"]
+    receipt: null
+
   - id: T007
     type: worker
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 7: delete all displaced second-order and non-authoritative infrastructure outside the R1-R5 dependency closure."
-    inputs:
-      - "Final production owners from T002-T006"
-      - "Governing plan Explicit Non-Requirements"
+    objective: "Prove existential primitive derivability for direct relation substitution and comprehension."
+    inputs: ["T006 direct foundations", "T010 exact primitive basis", "Abandoned compiler construction/termination proofs as source material only"]
     constraints:
-      - "Delete obsolete paths; no aliases, adapters, fixture modules, or compatibility authorities."
-      - "Preserve the generic proof chain and ordered theorem interface."
-      - "Preserve unrelated non-Lean work."
-    expected_output:
-      - "Dependency closure report"
-      - "Lambda/bubble/second-order/fixture authority deleted"
-      - "Minimal production umbrella and Lake targets"
-      - "Task-scoped commit"
+      - "Port abandoned Compiler/CompilerTermination residual, plumbing, connective, leaf, inversion, termination, and landing cases as proof-local existential witnesses; do not port or recreate compiler definitions or an API"
+      - "Use current attachment_alias to prove the predecessor identity-request prefix empty; do not port identity insertion"
+      - "Identity leaf/abstraction handle identity-node content; the theorem does not depend on identity normalization, canonicalization, definitions, refs, or normalization"
+      - "The exhibited raw target preserves the ordered boundary exactly"
+      - "New work is limited to the honestly unfinished current-input bridge, empty-request bridge, failure-free totality, exact landing, and current-representation adaptation"
+    allowed_files:
+      - "VisualProof/Rule/WirePrimitive/Adequacy.lean"
+      - "VisualProof/Rule/WirePrimitive/Direct.lean"
+      - "VisualProof/Rule/WirePrimitive/Program.lean"
+      - "VisualProof/Rule/WirePrimitive/**"
+      - "VisualProof/Diagram/**"
+      - "VisualProof.lean"
+      - "docs/goals/primitive-wire-quantifier-lean-completion/**"
+    verify:
+      - "Focused Lean builds and axiom audits for both adequacy theorems"
+      - "Identity-insertion/identity-normalization/canonicalizer/macro/normalization/public-compiler dependency absence scan"
+      - "Exact ConcreteIso ordered-boundary field audit"
+      - "lake build"
+      - "npm run formal:size"
+      - "git diff --check"
+    stop_if:
+      - "A missing construction case is absent from the predecessor compiler rather than merely unported"
+      - "The current direct relation cannot be bridged without changing its mathematical meaning"
+    expected_output: ["GREEN relationSubstitution_complete", "GREEN relationComprehension_complete", "Task-scoped commit"]
+    receipt: null
+
   - id: T008
     type: pm
     assignee: PM
     status: queued
     reasoning_hint: high
-    objective: "Execute plan Task 8: audit R1-R5, run clean full gates, record conformance, and close only on direct kernel evidence."
-    inputs:
-      - "T001-T007 reports and commits"
-      - "Governing plan Completion Oracle"
-      - "Restored baseline commit 6693b04"
+    objective: "Run final R1-R5 conformance, axiom, closure, and full validation audits."
+    inputs: ["T001-T010 production source and commits", "Two-predecessor provenance map"]
     constraints:
-      - "No completion from historical receipts, source scans, fixtures, passing narrow tests, or missing sorry alone."
-      - "Repair every fixable in-repository failure before reporting."
-    expected_output:
-      - "R1-R5 provenance-to-source conformance matrix"
-      - "Axiom, placeholder, rule-constructor, proof-chain, and import-closure audits"
-      - "Clean formal/unit/type/E2E gates"
-      - "Foundation conformance appendix"
-      - "full_outcome_complete: true"
+      - "No completion from stale receipts, source substrings, fixtures, or absence of sorry alone"
+      - "Delete unused helpers and every displaced model from the production closure"
+      - "No owner is classified as new without explicit absence evidence from both predecessors"
+    expected_output: ["R1-R5 conformance matrix", "Clean full gates", "Foundation conformance appendix", "full_outcome_complete: true"]
+    receipt: null
