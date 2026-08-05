@@ -157,7 +157,7 @@ theorem rootSelectedSourceEnvironment_outer
 
 theorem targetRoot_bubble_denote_iff
     (trace : VacuousElimTrace input bubble raw)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (targetContext : ConcreteElaboration.WireContext input)
     (keptItems : ItemSeq signature targetContext.length [])
@@ -187,7 +187,7 @@ theorem targetRoot_bubble_denote_iff
 theorem focusedRootPartition_transport
     (trace : VacuousElimTrace input bubble raw)
     (wellFormed : input.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceAmbient sourceLocals :

@@ -162,7 +162,7 @@ theorem extractionCompileSelectedItems_denote
     (input : CheckedDiagram signature)
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     {fragmentRels hostRels : RelCtx}
@@ -455,7 +455,7 @@ theorem extractionCompileTerminal_selected_denote
     (input : CheckedDiagram signature)
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     {fragmentRels hostRels : RelCtx}
     (fragmentFuel hostFuel : Nat)
@@ -761,7 +761,7 @@ theorem extractionCompileRoot_selected_denote
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (hzero : layout.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (hostFuel : Nat)
     (hostContext : ConcreteElaboration.WireContext input.val)

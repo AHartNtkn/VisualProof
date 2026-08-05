@@ -100,7 +100,7 @@ theorem materialized_exposed_factor_of_denote_zero
     (spine : BinderSpine pattern.val.diagram)
     (certificate : Certificate pattern attachment spine)
     (hzero : spine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (targetAssignment : BoundaryAssignment
       certificate.result.elaborate model.Carrier)
@@ -242,7 +242,7 @@ theorem materialized_exposed_factor_of_denote
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (certificate : Certificate pattern attachment spine)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (targetAssignment : BoundaryAssignment
       certificate.result.elaborate model.Carrier)

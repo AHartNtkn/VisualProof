@@ -12,7 +12,7 @@ theorem extractionCompileNode_itemSimulationOfMembership
     (input : CheckedDiagram signature)
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fragmentContext : ConcreteElaboration.WireContext
@@ -58,9 +58,9 @@ theorem extractionCompileNode_itemSimulationOfMembership
   · have howner := extractionRegionOrigin_fragmentParent_of_selectedNode input
       selection layout node
     cases hnode : input.val.nodes (selection.selectedNodes.get node) with
-    | term region freePorts term =>
-        rw [input.val.extractDiagramRaw_node_term selection layout node region
-          freePorts term hnode]
+    | identity region arity =>
+        rw [input.val.extractDiagramRaw_node_identity selection layout node region
+          arity hnode]
         simp only
         simp only [hnode, CNode.region] at howner
         rw [howner]

@@ -112,7 +112,7 @@ theorem bubble_transport_holeRels
 end DiagramContext
 
 theorem denoteItemSeq_append
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx)
     (first second : ItemSeq signature wires relCtx) :
@@ -131,7 +131,7 @@ theorem denoteItemSeq_append
         exact ⟨hitem, htail, hsecond⟩
 
 theorem denoteItemSeq_frame
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx)
     (before after : ItemSeq signature wires relCtx)
@@ -148,7 +148,7 @@ theorem denoteItemSeq_frame
 denotation at the hole. -/
 theorem DiagramContext.denote_hole_of_cutDepth_zero_with_outer
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires -> model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (body : Region signature holeWires holeRels)
@@ -185,7 +185,7 @@ hole body under the wire and relation environments chosen by those bubbles.
 -/
 theorem DiagramContext.denote_hole_of_cutDepth_zero
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires -> model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (body : Region signature holeWires holeRels)
@@ -209,7 +209,7 @@ private theorem succ_odd_implies_even {n : Nat} (h : (n + 1) % 2 = 1) :
 
 private theorem context_polarity
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (a b : Region signature holeWires holeRels)
     (hab : forall holeEnv holeRelEnv,
       denoteRegion model named holeEnv holeRelEnv a ->
@@ -289,7 +289,7 @@ private theorem context_polarity
 theorem context_mono
     {ctx : DiagramContext signature outerWires holeWires outerRels holeRels}
     {a b : Region signature holeWires holeRels}
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires -> model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (hEven : ctx.cutDepth % 2 = 0)
@@ -303,7 +303,7 @@ theorem context_mono
 theorem context_anti
     {ctx : DiagramContext signature outerWires holeWires outerRels holeRels}
     {a b : Region signature holeWires holeRels}
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires -> model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
     (hOdd : ctx.cutDepth % 2 = 1)

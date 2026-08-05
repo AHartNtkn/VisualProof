@@ -2296,7 +2296,7 @@ theorem PinnedOccurrence.openState_denote_iff
     {pattern : CheckedOpenDiagram signature}
     {hostArgs : List (Fin input.val.wireCount)}
     (occurrence : PinnedOccurrence input selection pattern hostArgs)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin occurrence.openState.boundary.length → model.Carrier) :
     occurrence.openState.denote model named args ↔
@@ -2548,33 +2548,35 @@ theorem TheoremPayload.canonicalReplacement_complete
   exact ⟨decomposition, hdecomposition, canonical, hcanonical⟩
 
 theorem relUnfold_equiv
+    (model : Model)
     (definitions : VerifiedDefinitions signature)
     (index : Fin signature.length)
     (args : Fin (definitions.entry index).body.val.boundary.length →
-      Lambda.Individual) :
-    (interpretDefinitions definitions)
+      model.Carrier) :
+    (interpretDefinitions model definitions)
         (definitions.entry index).body.val.boundary.length
         (definitions.entry index).namedRelation args ↔
-      (definitions.entry index).body.denote Lambda.canonicalModel
-        (interpretDefinitions definitions) args :=
-  interpretDefinitions_entry_equation definitions index args
+      (definitions.entry index).body.denote model
+        (interpretDefinitions model definitions) args :=
+  interpretDefinitions_entry_equation model definitions index args
 
 theorem relFold_equiv
+    (model : Model)
     (definitions : VerifiedDefinitions signature)
     (index : Fin signature.length)
     (args : Fin (definitions.entry index).body.val.boundary.length →
-      Lambda.Individual) :
-    (definitions.entry index).body.denote Lambda.canonicalModel
-        (interpretDefinitions definitions) args ↔
-      (interpretDefinitions definitions)
+      model.Carrier) :
+    (definitions.entry index).body.denote model
+        (interpretDefinitions model definitions) args ↔
+      (interpretDefinitions model definitions)
         (definitions.entry index).body.val.boundary.length
         (definitions.entry index).namedRelation args :=
-  (interpretDefinitions_entry_equation definitions index args).symm
+  (interpretDefinitions_entry_equation model definitions index args).symm
 
 theorem theoremCitation_positive
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (source target : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -2589,7 +2591,7 @@ theorem theoremCitation_positive
 theorem theoremCitation_negative
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (source target : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)

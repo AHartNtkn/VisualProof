@@ -81,7 +81,7 @@ theorem advance_site_items_denote_empty_fixed_forward
             state site arguments).plugLayout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -193,9 +193,7 @@ theorem advance_site_items_denote_empty_fixed_forward
   let targetContext := targetOuter.extend (layout.frameRegion site)
   let sourceEnv := ConcreteElaboration.extendedEnvironment sourceOuter site
     sourceOuterEnv sourceLocal
-  let fallback : model.Carrier :=
-    model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
-      Lambda.Term 0 (Fin 0)) Fin.elim0
+  let fallback : model.Carrier := Classical.choice model.nonempty
   have outerEq : sourceOuterEnv = targetOuterEnv ∘ outerMap := by
     simpa using outerAgrees
   let dummyHidden : Fin comprehension.val.hiddenWires.length → model.Carrier :=
@@ -561,7 +559,7 @@ theorem advance_site_items_denote_nonempty_fixed_forward
             state site arguments).plugLayout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -671,9 +669,7 @@ theorem advance_site_items_denote_nonempty_fixed_forward
   let targetContext := targetOuter.extend (layout.frameRegion site)
   let sourceEnv := ConcreteElaboration.extendedEnvironment sourceOuter site
     sourceOuterEnv sourceLocal
-  let fallback : model.Carrier :=
-    model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
-      Lambda.Term 0 (Fin 0)) Fin.elim0
+  let fallback : model.Carrier := Classical.choice model.nonempty
   have outerEq : sourceOuterEnv = targetOuterEnv ∘ outerMap := by
     simpa using outerAgrees
   let dummyPattern : Fin (ConcreteElaboration.exactScopeWires

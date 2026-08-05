@@ -125,7 +125,7 @@ noncomputable def semanticSimulation
     (trace : DoubleCutElimTrace input outer raw)
     (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
     (targetWellFormed : input.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     ConcreteElaboration.ConcreteSemanticSimulation signature
       trace.sourceDiagram input model named where

@@ -792,9 +792,9 @@ theorem regular_nodeShape
     (nodeRegion : (input.nodes node).region = region) :
     (vacuousIntroRaw input selection arity).nodes node =
       match input.nodes node with
-      | .term owner freePorts term =>
-          .term owner.castSucc freePorts term
       | .atom owner binder => .atom owner.castSucc binder.castSucc
+      | .identity owner nodeArity =>
+          .identity owner.castSucc nodeArity
       | .named owner definition nodeArity =>
           .named owner.castSucc definition nodeArity := by
   have nodeNotSelected : node ∉ selection.val.directNodes := by
@@ -810,10 +810,10 @@ theorem selected_nodeShape
     (selected : node ∈ selection.val.directNodes) :
     (vacuousIntroRaw input selection arity).nodes node =
       match input.nodes node with
-      | .term _ freePorts term =>
-          .term (bubbleRegion input) freePorts term
       | .atom _ binder =>
           .atom (bubbleRegion input) binder.castSucc
+      | .identity _ nodeArity =>
+          .identity (bubbleRegion input) nodeArity
       | .named _ definition nodeArity =>
           .named (bubbleRegion input) definition nodeArity := by
   rw [vacuousIntroRaw_node, if_pos selected]
@@ -825,9 +825,9 @@ theorem unselected_nodeShape
     (unselected : node ∉ selection.val.directNodes) :
     (vacuousIntroRaw input selection arity).nodes node =
       match input.nodes node with
-      | .term owner freePorts term =>
-          .term owner.castSucc freePorts term
       | .atom owner binder => .atom owner.castSucc binder.castSucc
+      | .identity owner nodeArity =>
+          .identity owner.castSucc nodeArity
       | .named owner definition nodeArity =>
           .named owner.castSucc definition nodeArity := by
   rw [vacuousIntroRaw_node, if_neg unselected]

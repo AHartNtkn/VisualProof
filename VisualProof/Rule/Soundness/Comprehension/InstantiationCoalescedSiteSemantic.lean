@@ -35,7 +35,7 @@ theorem coalesced_site_items_denote_forward
     (ownedNodup : state.ownedAtoms.Nodup)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -98,9 +98,7 @@ theorem coalesced_site_items_denote_forward
     payload state site arguments
   let sourceComplete := ConcreteElaboration.extendedEnvironment sourceOuter site
     sourceOuterEnvironment sourceLocal
-  let fallback : model.Carrier :=
-    model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
-      Lambda.Term 0 (Fin 0)) Fin.elim0
+  let fallback : model.Carrier := Classical.choice model.nonempty
   have sourceParameters : ParameterValuesAt state (sourceOuter.extend site)
       sourceComplete parameterValues :=
     sourceOuterParameters.extend state sourceOuter sourceOuterEnvironment
@@ -135,7 +133,7 @@ quotient-host valuation pulls back to all of its original wire positions. -/
 theorem coalesced_site_items_denote_backward
     (input : Splice.Input signature)
     (hadmissible : input.Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceOuter : ConcreteElaboration.WireContext input.frame.val)
     (targetOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)

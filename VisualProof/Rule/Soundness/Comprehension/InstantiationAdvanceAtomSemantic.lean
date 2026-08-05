@@ -34,7 +34,7 @@ theorem advance_current_atom_denotes_nonempty
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -167,7 +167,7 @@ theorem advance_current_atom_denotes_empty
     (hzero : payload.binderSpine.proxyCount = 0)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     {outputBody : Region signature outputOuter outputRels}
     {outputPath : List Nat}

@@ -22,7 +22,7 @@ theorem patternRootItems_denotes_of_output
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)
@@ -107,7 +107,7 @@ theorem output_denotes_of_host_and_patternRootPrepared
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)
@@ -207,7 +207,7 @@ theorem pattern_denote_of_output
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)
@@ -251,7 +251,7 @@ theorem interpretedRelation_of_output_empty
     (hzero : payload.binderSpine.proxyCount = 0)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     {outputBody : Region signature outputOuter outputRels}
     {outputPath : List Nat}

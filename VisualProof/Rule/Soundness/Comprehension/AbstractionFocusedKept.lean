@@ -132,7 +132,7 @@ contexts and binder renaming in either polarity. -/
 theorem focusedKeptNode_itemSimulation
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext input.val)
@@ -202,7 +202,7 @@ theorem focusedKeptOccurrence_itemSimulation
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)

@@ -11,7 +11,7 @@ open VisualProof.Rule.ModalSoundness
 environment.  This form is what lets the selected block remain an ancestor
 resource while the retained block supplies the route to the insertion site. -/
 theorem denoteRegion_mk_zero_iff
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -47,7 +47,7 @@ theorem compilerLeaf_selection_factor
           (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
           (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
           (selectedOccurrences input.val selection) = some selectedItems ∧
-        ∀ (model : Lambda.LambdaModel)
+        ∀ (model : Model)
           (named : NamedEnv model.Carrier signature)
           (env : Fin (leaf.inheritedWires.extend
             selection.val.anchor).length → model.Carrier)

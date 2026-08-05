@@ -20,7 +20,7 @@ theorem focusedRootItemsSimulation
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
         signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (fuelSource fuelTarget : Nat)
     (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)

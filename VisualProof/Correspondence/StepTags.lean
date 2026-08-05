@@ -6,7 +6,6 @@ namespace VisualProof.Rule.StepTag
 correspondence checks compare this projection of `StepTag.all` directly with
 the TypeScript `ProofStep` discriminants. -/
 def serializedName : StepTag → String
-  | .openTermSpawn => "openTermSpawn"
   | .relationSpawn => "relationSpawn"
   | .boundRelationSpawn => "boundRelationSpawn"
   | .wireJoin => "wireJoin"
@@ -16,15 +15,6 @@ def serializedName : StepTag → String
   | .deiteration => "deiteration"
   | .doubleCutIntro => "doubleCutIntro"
   | .doubleCutElim => "doubleCutElim"
-  | .inconsistentCutElim => "inconsistentCutElim"
-  | .conversion => "conversion"
-  | .congruenceJoin => "congruenceJoin"
-  | .anchoredWireSplit => "anchoredWireSplit"
-  | .anchoredWireContract => "anchoredWireContract"
-  | .headStrip => "headStrip"
-  | .closedTermIntro => "closedTermIntro"
-  | .fusion => "fusion"
-  | .fission => "fission"
   | .comprehensionInstantiate => "comprehensionInstantiate"
   | .comprehensionAbstract => "comprehensionAbstract"
   | .theorem => "theorem"
@@ -39,7 +29,7 @@ theorem serializedName_injective : Function.Injective serializedName := by
   intro left right equality
   cases left <;> cases right <;> simp_all [serializedName]
 
-theorem serializedAll_length : serializedAll.length = 26 := by
+theorem serializedAll_length : serializedAll.length = 16 := by
   simpa [serializedAll] using StepTag.all_length
 
 theorem serializedAll_nodup : serializedAll.Nodup := by

@@ -36,7 +36,7 @@ certificate making the retained-frame valuation factor through every wire
 coalescence performed by the splice input. -/
 theorem quotientFrameValue_quotientWire_of_pattern_denotes
     (input : Splice.Input signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (frameValue : Fin input.frame.val.wireCount → model.Carrier)
     (args : Fin input.pattern.val.boundary.length → model.Carrier)
@@ -55,7 +55,7 @@ theorem quotientFrameValue_quotientWire_of_pattern_denotes
 It preserves all original wire positions, including repeated ordered aliases. -/
 theorem quotientFrameValue_comp_quotientWire_of_pattern_denotes
     (input : Splice.Input signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (frameValue : Fin input.frame.val.wireCount → model.Carrier)
     (args : Fin input.pattern.val.boundary.length → model.Carrier)

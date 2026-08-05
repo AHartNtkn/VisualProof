@@ -23,7 +23,7 @@ structure TraceRelationContract
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
     (origin : CheckedDiagram signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -59,7 +59,7 @@ theorem TraceRelationContract.of_nonempty
     (referenceArguments : Fin payload.arity →
       Fin reference.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -95,7 +95,7 @@ theorem TraceRelationContract.of_empty
       attachments binders)
     (origin : CheckedDiagram signature)
     (hzero : payload.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -129,7 +129,7 @@ def RelationContractsEveryStep
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -163,7 +163,7 @@ theorem TraceRelationContract.everyStep
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,

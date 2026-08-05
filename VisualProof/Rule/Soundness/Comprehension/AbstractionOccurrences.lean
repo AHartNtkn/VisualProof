@@ -93,7 +93,7 @@ theorem targetNode_region
   by_cases direct : node ∈ wrap.val.directNodes
   · simp only [direct, if_pos]
     cases shape : input.val.nodes node with
-    | term owner freePorts term =>
+    | identity owner arity =>
         simp only [shape, direct, if_pos, Option.map_some] at result
         exact congrArg CNode.region (Option.some.inj result).symm
     | atom owner binder =>
@@ -108,7 +108,7 @@ theorem targetNode_region
         exact congrArg CNode.region (Option.some.inj result).symm
   · simp only [direct, if_false]
     cases shape : input.val.nodes node with
-    | term owner freePorts term =>
+    | identity owner arity =>
         have actualOwnerSurvives :
           trace.domains.regions.survives owner = true := by
           simpa [shape] using trace.nodeOwner_survives node survives

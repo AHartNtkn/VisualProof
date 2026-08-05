@@ -202,13 +202,13 @@ def reindexRegion? (domain : SurvivorDomain size) :
 /-- Reindex a concrete node when its owner and, for atoms, binder survive. -/
 def reindexNode? (domain : SurvivorDomain size) :
     CNode size → Option (CNode domain.count)
-  | .term region freePorts term =>
-      (domain.index? region).map fun mapped =>
-        CNode.term mapped freePorts term
   | .atom region binder => do
       let mappedRegion ← domain.index? region
       let mappedBinder ← domain.index? binder
       pure (.atom mappedRegion mappedBinder)
+  | .identity region arity =>
+      (domain.index? region).map fun mapped =>
+        CNode.identity mapped arity
   | .named region definition arity =>
       (domain.index? region).map fun mapped =>
         CNode.named mapped definition arity

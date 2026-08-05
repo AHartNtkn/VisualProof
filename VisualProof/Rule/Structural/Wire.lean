@@ -517,8 +517,8 @@ def reparentLiftedRegion (added : Nat)
 
 def liftCNode (added : Nat) :
     CNode regions → CNode (regions + added)
-  | .term region freePorts term =>
-      .term (Fin.castAdd added region) freePorts term
+  | .identity region arity =>
+      .identity (Fin.castAdd added region) arity
   | .atom region binder =>
       .atom (Fin.castAdd added region) (Fin.castAdd added binder)
   | .named region definition arity =>
@@ -527,7 +527,7 @@ def liftCNode (added : Nat) :
 def reparentLiftedNode (added : Nat)
     (region : Fin (regions + added)) :
     CNode regions → CNode (regions + added)
-  | .term _ freePorts term => .term region freePorts term
+  | .identity _ arity => .identity region arity
   | .atom _ binder => .atom region (Fin.castAdd added binder)
   | .named _ definition arity => .named region definition arity
 

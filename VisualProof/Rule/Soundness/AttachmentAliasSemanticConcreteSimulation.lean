@@ -131,7 +131,7 @@ noncomputable def concreteSimulation
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
         signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     ConcreteElaboration.ConcreteSemanticSimulation signature pattern.val.diagram
       (materializedDiagram pattern.val attachment spine.bodyContainer)

@@ -75,7 +75,7 @@ theorem focusedFrameOccurrence_itemSimulation
     {signature : List Nat} {source target : Input signature}
     {rels : Theory.RelCtx}
     (presentation : TwoInputPresentation source target)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceAdmissible : source.Admissible)
     (targetAdmissible : target.Admissible)
@@ -332,7 +332,7 @@ theorem regularLocalSelection
     (targetExact :
       (targetContext.extend (presentation.regionMap region)).Exact
         (presentation.regionMap region))
-    (model : Lambda.LambdaModel) :
+    (model : Model) :
     ∀ (sourceOuter : Fin sourceContext.length → model.Carrier)
       (targetOuter : Fin targetContext.length → model.Carrier),
       (presentation.contextIndexRelation sourceContext targetContext)
@@ -663,7 +663,7 @@ theorem regularLocalTransport
     (targetExact :
       (targetContext.extend (presentation.regionMap region)).Exact
         (presentation.regionMap region))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceItems : ItemSeq signature
       (sourceContext.extend region).length rels)
@@ -1406,7 +1406,7 @@ No target quotient valuation is selected before the local implication fires. -/
 theorem forwardQuotientEnvironment_of_pattern_entailment
     {signature : List Nat} {source target : Input signature}
     (presentation : TwoInputPresentation source target)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceValues : source.wireQuotient.Carrier → model.Carrier)
     (localLaw :
@@ -1490,7 +1490,7 @@ quotient environment once the target pattern entails the source pattern. -/
 theorem backwardQuotientEnvironment_of_pattern_entailment
     {signature : List Nat} {source target : Input signature}
     (presentation : TwoInputPresentation source target)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (targetValues : target.wireQuotient.Carrier → model.Carrier)
     (localLaw :

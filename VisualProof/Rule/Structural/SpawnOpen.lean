@@ -24,7 +24,7 @@ def SpawnRootSiteReflection
           (spawnNodeRawOpen source.val node scope portCount port).exposedWires
           (spawnNodeRawOpen source.val node scope portCount port).hiddenWires =
             some targetBody →
-      ∀ (model : Lambda.LambdaModel)
+      ∀ (model : Model)
         (named : NamedEnv model.Carrier signature)
         (outerEnv : Fin
           (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length
@@ -70,7 +70,7 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires
       (spawnNodeRawOpen source.val node scope portCount port).hiddenWires =
         some targetBody) :
-    ((∀ (model : Lambda.LambdaModel)
+    ((∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
@@ -80,7 +80,7 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
         denoteRegion (relCtx := []) model named
           (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
             portCount port) PUnit.unit sourceBody) ∧
-    (∀ (model : Lambda.LambdaModel)
+    (∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
@@ -93,7 +93,7 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
     ((SpawnRootSiteReflectionAtRoot source node scope portCount port ∧
         SpawnRegionSiteReflection (signature := signature) source.val.diagram node
           scope portCount port) →
-      ((∀ (model : Lambda.LambdaModel)
+      ((∀ (model : Model)
         (named : NamedEnv model.Carrier signature)
         (outerEnv : Fin
           (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
@@ -103,7 +103,7 @@ private theorem spawnNodeRaw_compileRoot_route_kernel
             (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
               portCount port) PUnit.unit sourceBody →
           denoteRegion (relCtx := []) model named outerEnv PUnit.unit targetBody) ∧
-      (∀ (model : Lambda.LambdaModel)
+      (∀ (model : Model)
         (named : NamedEnv model.Carrier signature)
         (outerEnv : Fin
           (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
@@ -577,7 +577,7 @@ theorem spawnNodeRaw_compileRoot_route_projects
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires
       (spawnNodeRawOpen source.val node scope portCount port).hiddenWires =
         some targetBody) :
-    (∀ (model : Lambda.LambdaModel)
+    (∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
@@ -587,7 +587,7 @@ theorem spawnNodeRaw_compileRoot_route_projects
         denoteRegion (relCtx := []) model named
           (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
             portCount port) PUnit.unit sourceBody) ∧
-    (∀ (model : Lambda.LambdaModel)
+    (∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
@@ -629,7 +629,7 @@ theorem spawnNodeRaw_compileRoot_route_reflects
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires
       (spawnNodeRawOpen source.val node scope portCount port).hiddenWires =
         some targetBody) :
-    (∀ (model : Lambda.LambdaModel)
+    (∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
@@ -639,7 +639,7 @@ theorem spawnNodeRaw_compileRoot_route_reflects
           (outerEnv ∘ spawnNodeRawOpenExternalClass source.val node scope
             portCount port) PUnit.unit sourceBody →
         denoteRegion (relCtx := []) model named outerEnv PUnit.unit targetBody) ∧
-    (∀ (model : Lambda.LambdaModel)
+    (∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
@@ -668,7 +668,7 @@ theorem spawnNodeRawOpen_projects
     (route : Diagram.Splice.RegionRoute source.val.diagram
       source.val.diagram.root scope path)
     {depth : Nat} (hdepth : route.HasCutDepth depth)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin source.val.boundary.length → model.Carrier) :
     let targetOpen := spawnNodeRawOpen source.val node scope portCount port
@@ -801,7 +801,7 @@ theorem spawnNodeRawOpen_reflects
     (route : Diagram.Splice.RegionRoute source.val.diagram
       source.val.diagram.root scope path)
     {depth : Nat} (hdepth : route.HasCutDepth depth)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin source.val.boundary.length → model.Carrier) :
     let targetOpen := spawnNodeRawOpen source.val node scope portCount port
@@ -920,7 +920,7 @@ theorem spawn_context_sound
     (orientation : Orientation)
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (source target : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -945,7 +945,7 @@ does not require another semantic context induction. -/
 theorem context_equiv
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (source target : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -1014,27 +1014,6 @@ theorem castTarget_interface_image_realizes
   subst raw
   simp [InterfaceTransport.castTarget]
 
-def applyOpenTermSpawn (orientation : Orientation)
-    (input : CheckedDiagram signature)
-    (region : Fin input.val.regionCount) (freePorts : Nat)
-    (term : Lambda.Term 0 (Fin freePorts)) :
-    Except StepError (StepReceipt input) :=
-  if spawnPolarity orientation
-      (concreteCutDepth input.val region) then
-    if 0 < freePorts then
-      let raw := spawnNodeRaw input.val (.term region freePorts term) region
-        (freePorts + 1) (Fin.cases .output fun index => .free index)
-      checkRawReceipt input raw
-        (spawnNodeWireProvenance input.val (.term region freePorts term) region
-          (freePorts + 1) (Fin.cases .output fun index => .free index))
-        (spawnNodeInterfaceTransport input.val (.term region freePorts term)
-          region (freePorts + 1)
-          (Fin.cases .output fun index => .free index))
-    else
-      .error .openTermRequired
-  else
-    .error .wrongPolarity
-
 def applyRelationSpawn (orientation : Orientation)
     (input : CheckedDiagram signature)
     (region : Fin input.val.regionCount) (definition arity : Nat) :
@@ -1076,21 +1055,6 @@ def applyBoundRelationSpawn (orientation : Orientation)
   else
     .error .wrongPolarity
 
-theorem applyOpenTermSpawn_preserves_raw
-    (happly : applyOpenTermSpawn orientation input region freePorts term =
-      .ok result) :
-    result.result.val = spawnNodeRaw input.val (.term region freePorts term) region
-      (freePorts + 1) (Fin.cases .output fun index => .free index) := by
-  unfold applyOpenTermSpawn at happly
-  split at happly <;> try contradiction
-  split at happly <;> try contradiction
-  dsimp only at happly
-  unfold checkRawReceipt at happly
-  split at happly <;> try contradiction
-  rename_i checked hcheck
-  cases happly
-  exact checkWellFormed_preserves_input hcheck
-
 theorem applyRelationSpawn_preserves_raw
     (happly : applyRelationSpawn orientation input region definition arity =
       .ok result) :
@@ -1121,26 +1085,6 @@ theorem applyBoundRelationSpawn_preserves_raw
   rename_i checked hcheck
   cases happly
   exact checkWellFormed_preserves_input hcheck
-
-theorem applyOpenTermSpawn_realizes
-    (happly : applyOpenTermSpawn orientation input region freePorts term =
-      .ok result) :
-    result.Realizes
-      (spawnNodeRaw input.val (.term region freePorts term) region
-        (freePorts + 1) (Fin.cases .output fun index => .free index))
-      (spawnNodeWireProvenance input.val (.term region freePorts term) region
-        (freePorts + 1) (Fin.cases .output fun index => .free index))
-      (spawnNodeInterfaceTransport input.val (.term region freePorts term) region
-        (freePorts + 1) (Fin.cases .output fun index => .free index)) := by
-  unfold applyOpenTermSpawn at happly
-  split at happly <;> try contradiction
-  split at happly <;> try contradiction
-  dsimp only at happly
-  unfold checkRawReceipt at happly
-  split at happly <;> try contradiction
-  rename_i checked hcheck
-  cases happly
-  exact StepReceipt.ofChecked_realizes _ _ _ _ checked hcheck
 
 theorem applyRelationSpawn_realizes
     (happly : applyRelationSpawn orientation input region definition arity =
@@ -1182,29 +1126,6 @@ theorem applyBoundRelationSpawn_realizes
   rename_i checked hcheck
   cases happly
   exact StepReceipt.ofChecked_realizes _ _ _ _ checked hcheck
-
-theorem applyOpenTermSpawn_success {signature : List Nat}
-    (orientation : Orientation) (input : CheckedDiagram signature)
-    (region : Fin input.val.regionCount) (freePorts : Nat)
-    (term : Lambda.Term 0 (Fin freePorts)) (result : StepReceipt input)
-    (happly : applyOpenTermSpawn orientation input region freePorts term =
-      .ok result) :
-    spawnPolarity orientation (concreteCutDepth input.val region) ∧
-      0 < freePorts ∧
-      result.result.val = spawnNodeRaw input.val
-        (.term region freePorts term) region (freePorts + 1)
-        (Fin.cases .output fun index => .free index) := by
-  have hpolarity : spawnPolarity orientation
-      (concreteCutDepth input.val region) := by
-    by_cases h : spawnPolarity orientation
-        (concreteCutDepth input.val region)
-    · exact h
-    · simp [applyOpenTermSpawn, h] at happly
-  have hopen : 0 < freePorts := by
-    by_cases h : 0 < freePorts
-    · exact h
-    · simp [applyOpenTermSpawn, hpolarity, h] at happly
-  exact ⟨hpolarity, hopen, applyOpenTermSpawn_preserves_raw happly⟩
 
 theorem applyRelationSpawn_success {signature : List Nat}
     (orientation : Orientation) (input : CheckedDiagram signature)

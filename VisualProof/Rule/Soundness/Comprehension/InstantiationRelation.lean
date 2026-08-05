@@ -25,7 +25,7 @@ def FixedRelationAt
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
@@ -49,7 +49,7 @@ theorem fixedRelationAt_push
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
@@ -87,7 +87,7 @@ theorem fixedRelationAt_push_other
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
@@ -136,7 +136,7 @@ theorem atom_iff_fixedRelation
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
@@ -165,7 +165,7 @@ theorem atom_item_iff_fixedRelation
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)

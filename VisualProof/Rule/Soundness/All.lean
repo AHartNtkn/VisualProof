@@ -1,5 +1,4 @@
 import VisualProof.Rule.Soundness.Structural
-import VisualProof.Rule.Soundness.Equational
 import VisualProof.Rule.Soundness.HighLevel
 
 namespace VisualProof.Rule
@@ -17,9 +16,6 @@ theorem applyStep_sound
     (happly : applyStep context orientation input step = .ok receipt) :
     SuccessfulReceiptSound context orientation input step receipt := by
   cases step with
-  | openTermSpawn region freePorts term =>
-      exact applyOpenTermSpawn_sound context orientation input region freePorts
-        term receipt happly
   | relationSpawn region definition arity =>
       exact applyRelationSpawn_sound context orientation input region definition
         arity receipt happly
@@ -46,31 +42,6 @@ theorem applyStep_sound
   | doubleCutElim region =>
       exact applyDoubleCutElim_sound context orientation input region receipt
         happly
-  | inconsistentCutElim region first second payload =>
-      exact applyInconsistentCutElim_sound context orientation input region first
-        second payload receipt happly
-  | conversion node payload =>
-      exact applyConversion_sound context orientation input node payload receipt
-        happly
-  | congruenceJoin first second payload =>
-      exact applyCongruenceJoin_sound context orientation input first second
-        payload receipt happly
-  | anchoredWireSplit wire witness endpoints target =>
-      exact applyAnchoredWireSplit_sound context orientation input wire witness
-        endpoints target receipt happly
-  | anchoredWireContract redundant survivor certificate =>
-      exact applyAnchoredWireContract_sound context orientation input redundant
-        survivor certificate receipt happly
-  | headStrip first second payload =>
-      exact applyHeadStrip_sound context orientation input first second payload
-        receipt happly
-  | closedTermIntro region term =>
-      exact applyClosedTermIntro_sound context orientation input region term
-        receipt happly
-  | fusion wire =>
-      exact applyFusion_sound context orientation input wire receipt happly
-  | fission node path =>
-      exact applyFission_sound context orientation input node path receipt happly
   | comprehensionInstantiate bubble comprehension attachments binders payload =>
       exact applyComprehensionInstantiate_sound context orientation input bubble
         comprehension attachments binders payload receipt happly

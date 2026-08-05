@@ -455,9 +455,9 @@ theorem final_node_shape_of_regular
     elimTrace.sourceDiagram.nodes
         (copyTrace.finalNodeMap elimTrace node outside) =
       match input.val.nodes node with
-      | .term owner freePorts term =>
-          .term (copyTrace.finalRegionMap elimTrace finalWellFormed owner)
-            freePorts term
+      | .identity owner arity =>
+          .identity (copyTrace.finalRegionMap elimTrace finalWellFormed owner)
+            arity
       | .atom owner binder =>
           .atom (copyTrace.finalRegionMap elimTrace finalWellFormed owner)
             (copyTrace.finalRegionMap elimTrace finalWellFormed binder)
@@ -487,7 +487,7 @@ theorem final_node_shape_of_regular
     (copyTrace.droppedNodeMap node outside) finalOwner
   have droppedShape := copyTrace.dropped_node_shape node outside
   cases sourceShape : input.val.nodes node with
-  | term sourceOwner sourceFreePorts sourceTerm =>
+  | identity sourceOwner sourceArity =>
       have sourceOwnerEq : sourceOwner = region := by
         rw [sourceShape] at nodeRegion
         exact nodeRegion
@@ -496,7 +496,7 @@ theorem final_node_shape_of_regular
       simp only [mapNodeShape] at droppedShape
       cases targetShape : elimTrace.sourceDiagram.nodes
           (copyTrace.finalNodeMap elimTrace node outside) with
-      | term targetOwner targetFreePorts targetTerm =>
+      | identity targetOwner targetArity =>
           have targetOwnerEq : targetOwner =
               copyTrace.finalRegionMap elimTrace finalWellFormed region := by
             rw [targetShape] at finalOwner
@@ -504,8 +504,8 @@ theorem final_node_shape_of_regular
           subst targetOwner
           have targetShape' : elimTrace.promotion.nodes
               (copyTrace.droppedNodeMap node outside) =
-                .term (copyTrace.finalRegionMap elimTrace finalWellFormed region)
-                  targetFreePorts targetTerm := targetShape
+                .identity (copyTrace.finalRegionMap elimTrace finalWellFormed region)
+                  targetArity := targetShape
           rw [targetShape'] at promotedShape
           simp only at promotedShape
           rw [originRegion] at promotedShape
@@ -543,10 +543,10 @@ theorem final_node_shape_of_regular
       simp only [mapNodeShape] at droppedShape
       cases targetShape : elimTrace.sourceDiagram.nodes
           (copyTrace.finalNodeMap elimTrace node outside) with
-      | term targetOwner targetFreePorts targetTerm =>
+      | identity targetOwner targetArity =>
           have targetShape' : elimTrace.promotion.nodes
               (copyTrace.droppedNodeMap node outside) =
-                .term targetOwner targetFreePorts targetTerm := targetShape
+                .identity targetOwner targetArity := targetShape
           rw [targetShape'] at promotedShape
           rw [droppedShape] at promotedShape
           cases promotedShape
@@ -587,10 +587,10 @@ theorem final_node_shape_of_regular
       simp only [mapNodeShape] at droppedShape
       cases targetShape : elimTrace.sourceDiagram.nodes
           (copyTrace.finalNodeMap elimTrace node outside) with
-      | term targetOwner targetFreePorts targetTerm =>
+      | identity targetOwner targetArity =>
           have targetShape' : elimTrace.promotion.nodes
               (copyTrace.droppedNodeMap node outside) =
-                .term targetOwner targetFreePorts targetTerm := targetShape
+                .identity targetOwner targetArity := targetShape
           rw [targetShape'] at promotedShape
           rw [droppedShape] at promotedShape
           cases promotedShape

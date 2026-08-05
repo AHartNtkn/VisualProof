@@ -94,7 +94,7 @@ the hole; it then lifts through the surrounding context. -/
 theorem fill_equiv_of_reachable
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (first second : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin outerWires → model.Carrier)
     (outerRelEnv : RelEnv model.Carrier outerRels)

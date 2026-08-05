@@ -20,7 +20,7 @@ private theorem rootSelection
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
         signature)
-    (model : Lambda.LambdaModel) :
+    (model : Model) :
     ∀ (sourceOuter : Fin pattern.val.exposedWires.length → model.Carrier)
       (targetOuter : Fin
         (raw pattern.val attachment spine.bodyContainer).exposedWires.length →
@@ -86,7 +86,7 @@ noncomputable def rootContext
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
         signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     let simulation := concreteSimulation mode pattern attachment spine contract
       targetWellFormed model named
@@ -452,7 +452,7 @@ theorem denote_iff {signature : List Nat}
     {attachment : Fin pattern.val.boundary.length → Host}
     {originalSpine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern attachment originalSpine)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin pattern.val.boundary.length → model.Carrier) :
     certificate.result.denote model named

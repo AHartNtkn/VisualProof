@@ -161,7 +161,7 @@ theorem advance_pattern_item_denotes_nonempty
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion site) outputWitness)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -343,7 +343,7 @@ theorem advance_terminalItems_denotes_nonempty
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion site) outputWitness)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       ((instantiateSpliceInput comprehension attachments binders payload state

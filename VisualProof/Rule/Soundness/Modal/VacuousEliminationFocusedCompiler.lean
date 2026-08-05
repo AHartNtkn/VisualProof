@@ -11,7 +11,7 @@ theorem focusedOccurrence_itemSimulation
     (trace : VacuousElimTrace input bubble raw)
     (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
     (targetWellFormed : input.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
@@ -125,7 +125,7 @@ theorem focusedItems_regionSimulation
     (trace : VacuousElimTrace input bubble raw)
     (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
     (targetWellFormed : input.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     {sourceRels targetRels : RelCtx}
     (direction : ConcreteElaboration.SimulationDirection)

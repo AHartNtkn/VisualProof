@@ -35,7 +35,7 @@ def ProxyRelationsAt
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     {rels : RelCtx}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
@@ -60,7 +60,7 @@ theorem ProxyRelationsAt.push_other
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     {rels : RelCtx}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
@@ -140,7 +140,7 @@ noncomputable def proxyRelationsAtBubble
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     {hostBody : Region signature hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
@@ -167,7 +167,7 @@ theorem proxyRelationsAtBubble_fixed
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     {hostBody : Region signature hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
@@ -210,7 +210,7 @@ theorem terminalRelationPullback_lookup
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (targets : BinderTargetsAtBubble payload state)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     {hostBody : Region signature hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)

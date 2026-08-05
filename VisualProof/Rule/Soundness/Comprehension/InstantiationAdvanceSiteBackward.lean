@@ -73,7 +73,7 @@ theorem advance_site_child_denotes_fixed
             state site arguments).plugLayout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -442,7 +442,7 @@ theorem advance_site_items_denote_fixed
             state site arguments).plugLayout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,

@@ -217,7 +217,7 @@ theorem coalescedAnchorSelected_entails_terminal
             spliceInput.coalesceFrameRaw sourceLeaf.fuel)
           sourceContext sourceLeaf.binders
           (selectedOccurrences input.val selection) = some sourceItems ∧
-      ∀ (model : Lambda.LambdaModel)
+      ∀ (model : Model)
         (named : NamedEnv model.Carrier signature)
         (sourceEnv : Fin sourceContext.length → model.Carrier)
         (relEnv : RelEnv model.Carrier anchorView.focus.holeRels)
@@ -319,7 +319,7 @@ theorem coalescedAnchorSelected_entails_root
             spliceInput.coalesceFrameRaw sourceLeaf.fuel)
           sourceContext sourceLeaf.binders
           (selectedOccurrences input.val selection) = some sourceItems ∧
-      ∀ (model : Lambda.LambdaModel)
+      ∀ (model : Model)
         (named : NamedEnv model.Carrier signature)
         (sourceEnv : Fin sourceContext.length → model.Carrier)
         (relEnv : RelEnv model.Carrier anchorView.focus.holeRels)

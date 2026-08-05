@@ -239,7 +239,7 @@ namespace ConcreteDiagram
 
 private def fallbackNode (domains : FrameDomains d selection) :
     CNode domains.regions.count :=
-  .term domains.root 0 (.lam (.bvar 0))
+  .named domains.root 0 0
 
 private def frameRegion (d : ConcreteDiagram)
     (selection : CheckedSelection d) (domains : FrameDomains d selection)
@@ -333,13 +333,6 @@ theorem removeRaw_node_reindexed
     some (host.val.frameNode selection domains node)
   unfold frameNode
   cases hnode : host.val.nodes (domains.nodes.origin node) with
-  | term region freePorts term =>
-      have hregion := domains.nodeRegion_survives
-        (domains.nodes.origin_survives node)
-      simp only [hnode, CNode.region] at hregion
-      simp only [SurvivorDomain.reindexNode?]
-      rw [domains.regions.index?_index region hregion]
-      rfl
   | atom region binder =>
       have hregion := domains.nodeRegion_survives
         (domains.nodes.origin_survives node)
@@ -349,6 +342,13 @@ theorem removeRaw_node_reindexed
       simp only [SurvivorDomain.reindexNode?]
       rw [domains.regions.index?_index region hregion,
         domains.regions.index?_index binder hbinder]
+      rfl
+  | identity region arity =>
+      have hregion := domains.nodeRegion_survives
+        (domains.nodes.origin_survives node)
+      simp only [hnode, CNode.region] at hregion
+      simp only [SurvivorDomain.reindexNode?]
+      rw [domains.regions.index?_index region hregion]
       rfl
   | named region definition arity =>
       have hregion := domains.nodeRegion_survives
@@ -613,30 +613,6 @@ theorem removeRaw_bubble
   rw [domains.regions.index?_index]
   rfl
 
-theorem removeRaw_term
-    (host : CheckedDiagram signature)
-    (selection : CheckedSelection host.val)
-    (domains : FrameDomains host.val selection)
-    {node : Fin host.val.nodeCount} {region : Fin host.val.regionCount}
-    {freePorts : Nat} {term : Lambda.Term 0 (Fin freePorts)}
-    (hnodeSurvives : domains.nodes.survives node = true)
-    (hnode : host.val.nodes node = .term region freePorts term) :
-    (host.val.removeRaw selection domains).nodes
-        (domains.nodes.index node hnodeSurvives) =
-      .term
-        (domains.regions.index region (by
-          simpa only [hnode, CNode.region] using
-            domains.nodeRegion_survives hnodeSurvives))
-        freePorts term := by
-  change (domains.regions.reindexNode?
-    (host.val.nodes (domains.nodes.origin
-      (domains.nodes.index node hnodeSurvives)))).getD
-        (fallbackNode domains) = _
-  rw [domains.nodes.origin_index node hnodeSurvives]
-  simp only [hnode, SurvivorDomain.reindexNode?]
-  rw [domains.regions.index?_index]
-  rfl
-
 theorem removeRaw_atom
     (host : CheckedDiagram signature)
     (selection : CheckedSelection host.val)
@@ -685,6 +661,30 @@ theorem removeRaw_named
   rw [domains.regions.index?_index]
   rfl
 
+theorem removeRaw_identity
+    (host : CheckedDiagram signature)
+    (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    {node : Fin host.val.nodeCount} {region : Fin host.val.regionCount}
+    {arity : Nat}
+    (hnodeSurvives : domains.nodes.survives node = true)
+    (hnode : host.val.nodes node = .identity region arity) :
+    (host.val.removeRaw selection domains).nodes
+        (domains.nodes.index node hnodeSurvives) =
+      .identity
+        (domains.regions.index region (by
+          simpa only [hnode, CNode.region] using
+            domains.nodeRegion_survives hnodeSurvives))
+        arity := by
+  change (domains.regions.reindexNode?
+    (host.val.nodes (domains.nodes.origin
+      (domains.nodes.index node hnodeSurvives)))).getD
+        (fallbackNode domains) = _
+  rw [domains.nodes.origin_index node hnodeSurvives]
+  simp only [hnode, SurvivorDomain.reindexNode?]
+  rw [domains.regions.index?_index]
+  rfl
+
 theorem removeRaw_atom_binders_are_bubbles
     (host : CheckedDiagram signature)
     (selection : CheckedSelection host.val)
@@ -696,9 +696,9 @@ theorem removeRaw_atom_binders_are_bubbles
   have hindex : domains.nodes.index original hsurvives = node :=
     domains.nodes.index_origin node
   cases hnode : host.val.nodes original with
-  | term region freePorts term =>
+  | identity region arity =>
       rw [← hindex,
-        ConcreteDiagram.removeRaw_term host selection domains hsurvives hnode]
+        ConcreteDiagram.removeRaw_identity host selection domains hsurvives hnode]
       trivial
   | named region definition arity =>
       rw [← hindex,
@@ -728,13 +728,13 @@ theorem removeRaw_named_references_resolve
   have hindex : domains.nodes.index original hsurvives = node :=
     domains.nodes.index_origin node
   cases hnode : host.val.nodes original with
-  | term region freePorts term =>
-      rw [← hindex,
-        ConcreteDiagram.removeRaw_term host selection domains hsurvives hnode]
-      trivial
   | atom region binder =>
       rw [← hindex,
         ConcreteDiagram.removeRaw_atom host selection domains hsurvives hnode]
+      trivial
+  | identity region arity =>
+      rw [← hindex,
+        ConcreteDiagram.removeRaw_identity host selection domains hsurvives hnode]
       trivial
   | named region definition arity =>
       rw [← hindex,
@@ -753,9 +753,9 @@ theorem removeRaw_atom_binders_enclose
   have hindex : domains.nodes.index original hsurvives = node :=
     domains.nodes.index_origin node
   cases hnode : host.val.nodes original with
-  | term region freePorts term =>
+  | identity region arity =>
       rw [← hindex,
-        ConcreteDiagram.removeRaw_term host selection domains hsurvives hnode]
+        ConcreteDiagram.removeRaw_identity host selection domains hsurvives hnode]
       trivial
   | named region definition arity =>
       rw [← hindex,
@@ -787,11 +787,11 @@ theorem removeRaw_requiresPort_iff
   have hindex : domains.nodes.index original hsurvives = node :=
     domains.nodes.index_origin node
   cases hnode : host.val.nodes original with
-  | term region freePorts term =>
+  | identity region arity =>
       rw [← hindex]
       rw [domains.nodes.origin_index original hsurvives]
       unfold ConcreteDiagram.RequiresPort
-      rw [ConcreteDiagram.removeRaw_term host selection domains hsurvives hnode]
+      rw [ConcreteDiagram.removeRaw_identity host selection domains hsurvives hnode]
       simp only [hnode]
   | named region definition arity =>
       rw [← hindex]
@@ -967,20 +967,16 @@ theorem removeRaw_required_ports_are_covered
   have hindex : domains.nodes.index original hsurvives = node :=
     domains.nodes.index_origin node
   cases hnode : host.val.nodes original with
-  | term region freePorts term =>
+  | identity region arity =>
       rw [← hindex,
-        ConcreteDiagram.removeRaw_term host selection domains hsurvives hnode]
+        ConcreteDiagram.removeRaw_identity host selection domains hsurvives hnode]
       simp only
       have hcovered := host.property.required_ports_are_covered original
       simp only [hnode] at hcovered
-      constructor
-      · obtain ⟨wire, hwire⟩ := hcovered.1
-        exact ConcreteDiagram.removeRaw_endpointOccurs_of_surviving
-          host selection domains hwire hsurvives
-      · intro port
-        obtain ⟨wire, hwire⟩ := hcovered.2 port
-        exact ConcreteDiagram.removeRaw_endpointOccurs_of_surviving
-          host selection domains hwire hsurvives
+      intro port
+      obtain ⟨wire, hwire⟩ := hcovered port
+      exact ConcreteDiagram.removeRaw_endpointOccurs_of_surviving
+        host selection domains hwire hsurvives
   | named region definition arity =>
       rw [← hindex,
         ConcreteDiagram.removeRaw_named host selection domains hsurvives hnode]
@@ -1049,18 +1045,6 @@ theorem removeRaw_wire_scopes_enclose
       CEndpoint host.val.nodeCount) horiginalMember
   rw [ConcreteDiagram.removeRaw_wire_scope host selection domains wire]
   cases hnode : host.val.nodes originalNode with
-  | term region freePorts term =>
-      have hregion : domains.regions.survives region = true := by
-        have howner := domains.nodeRegion_survives hnodeSurvives
-        rw [hnode] at howner
-        exact howner
-      have hencloses : host.val.Encloses
-          (host.val.wires (domains.wires.origin wire)).scope region := by
-        simpa only [hnode, CNode.region] using hhostEncloses
-      rw [← hnodeIndex,
-        ConcreteDiagram.removeRaw_term host selection domains hnodeSurvives hnode]
-      exact ConcreteDiagram.removeRaw_encloses host selection domains
-        hscopeSurvives hregion hencloses
   | atom region binder =>
       have hregion : domains.regions.survives region = true := by
         have howner := domains.nodeRegion_survives hnodeSurvives
@@ -1071,6 +1055,18 @@ theorem removeRaw_wire_scopes_enclose
         simpa only [hnode, CNode.region] using hhostEncloses
       rw [← hnodeIndex,
         ConcreteDiagram.removeRaw_atom host selection domains hnodeSurvives hnode]
+      exact ConcreteDiagram.removeRaw_encloses host selection domains
+        hscopeSurvives hregion hencloses
+  | identity region arity =>
+      have hregion : domains.regions.survives region = true := by
+        have howner := domains.nodeRegion_survives hnodeSurvives
+        rw [hnode] at howner
+        exact howner
+      have hencloses : host.val.Encloses
+          (host.val.wires (domains.wires.origin wire)).scope region := by
+        simpa only [hnode, CNode.region] using hhostEncloses
+      rw [← hnodeIndex,
+        ConcreteDiagram.removeRaw_identity host selection domains hnodeSurvives hnode]
       exact ConcreteDiagram.removeRaw_encloses host selection domains
         hscopeSurvives hregion hencloses
   | named region definition arity =>

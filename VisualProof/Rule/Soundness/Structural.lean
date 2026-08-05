@@ -9,7 +9,6 @@ import VisualProof.Rule.Soundness.Iteration.RootAnchorSemantic
 import VisualProof.Rule.Soundness.Iteration.SameSite
 import VisualProof.Rule.Soundness.Iteration.DeiterationSemantic
 import VisualProof.Rule.Soundness.WireJoin
-import VisualProof.Rule.Soundness.InconsistentCut
 
 namespace VisualProof.Rule
 
@@ -713,22 +712,17 @@ private theorem severWireRaw_compileNode?_collapse
     fun port => severWireRaw_resolvePort?_collapse input wire keep
       expanded original collapse originalNodup inputDisjoint node port
   cases hnode : input.nodes node with
-  | term region freePorts term =>
+  | identity region arity =>
       simp only [ConcreteElaboration.compileNode?, hnode,
         severWireRaw_nodes]
-      rw [hports .output]
-      have hfree := ConcreteElaboration.resolvePorts?_map
-        expanded original node node collapse.indexMap freePorts
-        (fun index => .free index) hports
-      rw [hfree]
-      cases houtput : ConcreteElaboration.resolvePort?
-          (severWireRaw input wire keep) expanded node .output <;>
-        simp
-      cases hfreeExpanded : ConcreteElaboration.resolvePorts?
-          (severWireRaw input wire keep) expanded node freePorts
-          (fun index => .free index) <;>
-        simp [Item.renameWires,
-          Lambda.Term.mapFree_comp, Function.comp_def]
+      have harguments := ConcreteElaboration.resolvePorts?_map
+        expanded original node node collapse.indexMap arity
+        (fun index => .arg index) hports
+      rw [harguments]
+      cases hexpanded : ConcreteElaboration.resolvePorts?
+          (severWireRaw input wire keep) expanded node arity
+          (fun index => .arg index) <;>
+        simp [Item.renameWires, Function.comp_def]
   | atom region binder =>
       simp only [ConcreteElaboration.compileNode?, hnode,
         severWireRaw_nodes]
@@ -1412,7 +1406,7 @@ private noncomputable def severWireSimulation
     (keep : List (CEndpoint source.val.diagram.nodeCount))
     (targetWellFormed : (severWireRaw source.val.diagram wire keep).WellFormed
       signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     ConcreteElaboration.ConcreteSemanticSimulation signature
       source.val.diagram (severWireRaw source.val.diagram wire keep) model named where
@@ -1573,7 +1567,7 @@ private noncomputable def severWireRootContext
     (keep : List (CEndpoint source.val.diagram.nodeCount))
     (targetWellFormed : (severWireRaw source.val.diagram wire keep).WellFormed
       signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (orientation : Orientation)
     (polarity : erasurePolarity orientation
@@ -1716,7 +1710,7 @@ private theorem severBoundaryWitness
     (targetWellFormed : (severWireRaw source.val.diagram wire keep).WellFormed
       signature)
     (direction : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceArgs : Fin source.val.boundary.length → model.Carrier) :
     ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
@@ -1850,15 +1844,14 @@ theorem applyWireSever_sound
       } wire keep targetWellFormed)
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       severOperationalIso realizes boundary sourceRoot mapped htransport)
-  intro boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport valid args
   let source : OpenProofState signature := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
   }
   let target := severOperationalOpen source wire keep targetWellFormed
-  let model := Lambda.canonicalModel
-  let named := Theory.interpretDefinitions context.definitions
+  let named := Theory.interpretDefinitions model context.definitions
   let simulation := severWireSimulation source.asCheckedOpen wire keep
     targetWellFormed model named
   let rootContext := severWireRootContext source.asCheckedOpen wire keep
@@ -2206,7 +2199,7 @@ private theorem applyIteration_sound_proper_nonempty
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
         htransport)
-  intro boundary sourceRoot mapped htransport _valid args
+  intro model boundary sourceRoot mapped htransport _valid args
   obtain ⟨certificate⟩ :=
     IterationSoundness.properIterationOpenAnchorContraction_complete input
       selection target hadmissible success.1 success.2.1 targetNe hnonempty
@@ -2214,8 +2207,8 @@ private theorem applyIteration_sound_proper_nonempty
   obtain ⟨alignment⟩ :=
     IterationSoundness.properIterationOpenTargetAlignment_complete certificate
   have semantic := IterationSoundness.properIterationOpen_output_equiv
-    hsplice sourceRoot hnonempty certificate alignment Lambda.canonicalModel
-    (Theory.interpretDefinitions context.definitions) args
+    hsplice sourceRoot hnonempty certificate alignment model
+    (Theory.interpretDefinitions model context.definitions) args
   simpa only [DirectedEntailment, StepTag.semanticMode,
     iterationOperationalOpen] using semantic
 
@@ -2244,7 +2237,7 @@ private theorem applyIteration_sound_proper_zero
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
         htransport)
-  intro boundary sourceRoot mapped htransport _valid args
+  intro model boundary sourceRoot mapped htransport _valid args
   obtain ⟨certificate⟩ :=
     IterationSoundness.properIterationRootOpenAnchorContraction_complete input
       selection target hadmissible success.1 success.2.1 targetNe hzero
@@ -2253,8 +2246,8 @@ private theorem applyIteration_sound_proper_zero
     IterationSoundness.properIterationRootOpenTargetAlignment_complete
       certificate
   have semantic := IterationSoundness.properIterationRootOpen_output_equiv
-    hsplice sourceRoot hzero certificate alignment Lambda.canonicalModel
-    (Theory.interpretDefinitions context.definitions) args
+    hsplice sourceRoot hzero certificate alignment model
+    (Theory.interpretDefinitions model context.definitions) args
   simpa only [DirectedEntailment, StepTag.semanticMode,
     iterationOperationalOpen] using semantic
 
@@ -2283,7 +2276,7 @@ private theorem applyIteration_sound_root_nonempty
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
         htransport)
-  intro boundary sourceRoot mapped htransport _valid args
+  intro model boundary sourceRoot mapped htransport _valid args
   obtain ⟨closed⟩ :=
     IterationSoundness.properIterationAnchorContraction_complete input
       selection target hadmissible success.1 success.2.1 targetNe hnonempty
@@ -2296,8 +2289,8 @@ private theorem applyIteration_sound_root_nonempty
       certificate
   have semantic :=
     IterationSoundness.properIterationOrderedRoot_output_equiv_nonempty
-      hsplice sourceRoot hnonempty certificate alignment Lambda.canonicalModel
-      (Theory.interpretDefinitions context.definitions) args
+      hsplice sourceRoot hnonempty certificate alignment model
+      (Theory.interpretDefinitions model context.definitions) args
   simpa only [DirectedEntailment, StepTag.semanticMode,
     iterationOperationalOpen] using semantic
 
@@ -2325,7 +2318,7 @@ private theorem applyIteration_sound_root_zero
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
         htransport)
-  intro boundary sourceRoot mapped htransport _valid args
+  intro model boundary sourceRoot mapped htransport _valid args
   obtain ⟨closed⟩ :=
     IterationSoundness.properIterationRootAnchorContraction_complete input
       selection target hadmissible success.1 success.2.1 targetNe hzero
@@ -2337,8 +2330,8 @@ private theorem applyIteration_sound_root_zero
       certificate
   have semantic :=
     IterationSoundness.properIterationOrderedRoot_output_equiv_zero
-      hsplice sourceRoot hzero certificate alignment Lambda.canonicalModel
-      (Theory.interpretDefinitions context.definitions) args
+      hsplice sourceRoot hzero certificate alignment model
+      (Theory.interpretDefinitions model context.definitions) args
   simpa only [DirectedEntailment, StepTag.semanticMode,
     iterationOperationalOpen] using semantic
 
@@ -2364,14 +2357,14 @@ private theorem applyIteration_sound_same
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
         htransport)
-  intro boundary sourceRoot mapped htransport _valid args
+  intro model boundary sourceRoot mapped htransport _valid args
   by_cases hroot : target = input.val.root
   · by_cases hnonempty :
         (iterationInput input selection target).binderSpine.proxyCount ≠ 0
     · have semantic :=
         IterationSoundness.sameSite_root_output_equiv_nonempty hsplice
-          sourceRoot targetEq success.2.1 hroot hnonempty Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) args
+          sourceRoot targetEq success.2.1 hroot hnonempty model
+          (Theory.interpretDefinitions model context.definitions) args
       simpa only [DirectedEntailment, StepTag.semanticMode,
         iterationOperationalOpen] using semantic
     · have hzero :
@@ -2380,16 +2373,16 @@ private theorem applyIteration_sound_same
           hnonempty (Nat.ne_of_gt positive))
       have semantic := IterationSoundness.sameSite_root_output_equiv_zero
         hsplice sourceRoot targetEq success.2.1 hroot hzero
-        Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions) args
+        model
+        (Theory.interpretDefinitions model context.definitions) args
       simpa only [DirectedEntailment, StepTag.semanticMode,
         iterationOperationalOpen] using semantic
   · by_cases hnonempty :
         (iterationInput input selection target).binderSpine.proxyCount ≠ 0
     · have semantic :=
         IterationSoundness.sameSite_nested_output_equiv_nonempty hsplice
-          sourceRoot targetEq success.2.1 hroot hnonempty Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) args
+          sourceRoot targetEq success.2.1 hroot hnonempty model
+          (Theory.interpretDefinitions model context.definitions) args
       simpa only [DirectedEntailment, StepTag.semanticMode,
         iterationOperationalOpen] using semantic
     · have hzero :
@@ -2398,8 +2391,8 @@ private theorem applyIteration_sound_same
           hnonempty (Nat.ne_of_gt positive))
       have semantic := IterationSoundness.sameSite_nested_output_equiv_zero
         hsplice sourceRoot targetEq success.2.1 hroot hzero
-        Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions) args
+        model
+        (Theory.interpretDefinitions model context.definitions) args
       simpa only [DirectedEntailment, StepTag.semanticMode,
         iterationOperationalOpen] using semantic
 
@@ -2511,7 +2504,7 @@ theorem applyDoubleCutIntro_sound
       realizes.operationalIso_to_rawResultOpen htransport boundary
         (ModalSoundness.doubleCutIntroInterfaceTransport_transportBoundary
           input.val selection boundary sourceRoot))
-  intro boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport valid args
   let source : OpenProofState signature := {
     diagram := input
     boundary := boundary
@@ -2521,8 +2514,7 @@ theorem applyDoubleCutIntro_sound
     ⟨ModalSoundness.doubleCutIntroRawOpen source.asCheckedOpen.val selection,
       ModalSoundness.doubleCutIntroRawOpen_wellFormed source.asCheckedOpen
         selection targetWellFormed⟩
-  let model := Lambda.canonicalModel
-  let named := Theory.interpretDefinitions context.definitions
+  let named := Theory.interpretDefinitions model context.definitions
   let simulation := ModalSoundness.doubleCutIntroSimulation input selection
     targetWellFormed model named
   have forward :=
@@ -2608,7 +2600,7 @@ theorem applyDoubleCutElim_sound
           input.property boundary sourceRoot))
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := operational) (operationalIso := operationalIso)
-  intro boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport valid args
   let source : OpenProofState signature := {
     diagram := input
     boundary := boundary
@@ -2622,8 +2614,7 @@ theorem applyDoubleCutElim_sound
     ⟨DoubleCutElimTrace.targetOpen input.val boundary,
       DoubleCutElimTrace.targetOpen_wellFormed input.property boundary
         sourceRoot⟩
-  let model := Lambda.canonicalModel
-  let named := Theory.interpretDefinitions context.definitions
+  let named := Theory.interpretDefinitions model context.definitions
   let simulation := trace.semanticSimulation sourceWellFormed input.property
     model named
   have forward :=
@@ -2684,7 +2675,7 @@ theorem applyVacuousIntro_sound
       realizes.operationalIso_to_rawResultOpen htransport boundary
         (VacuousSoundness.vacuousIntroInterfaceTransport_transportBoundary
           input.val selection arity boundary sourceRoot))
-  intro boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport valid args
   let source : OpenProofState signature := {
     diagram := input
     boundary := boundary
@@ -2695,8 +2686,7 @@ theorem applyVacuousIntro_sound
         arity,
       VacuousSoundness.vacuousIntroRawOpen_wellFormed source.asCheckedOpen
         selection arity targetWellFormed⟩
-  let model := Lambda.canonicalModel
-  let named := Theory.interpretDefinitions context.definitions
+  let named := Theory.interpretDefinitions model context.definitions
   let simulation := VacuousSoundness.vacuousIntroSimulation input selection
     arity targetWellFormed model named
   have forward :=
@@ -2782,7 +2772,7 @@ theorem applyVacuousElim_sound
           input.property boundary sourceRoot))
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := operational) (operationalIso := operationalIso)
-  intro boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport valid args
   let source : OpenProofState signature := {
     diagram := input
     boundary := boundary
@@ -2796,8 +2786,7 @@ theorem applyVacuousElim_sound
     ⟨VacuousElimTrace.targetOpen input.val boundary,
       VacuousElimTrace.targetOpen_wellFormed input.property boundary
         sourceRoot⟩
-  let model := Lambda.canonicalModel
-  let named := Theory.interpretDefinitions context.definitions
+  let named := Theory.interpretDefinitions model context.definitions
   let freshForward := fun {sourceRels targetRels : RelCtx}
       (_sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
       (_targetContext : ConcreteElaboration.WireContext input.val)

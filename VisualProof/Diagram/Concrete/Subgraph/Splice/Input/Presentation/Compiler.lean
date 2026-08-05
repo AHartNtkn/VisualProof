@@ -392,8 +392,8 @@ def mapFrameNodeShape
     (presentation : TwoInputPresentation source target) :
     CNode source.plugLayout.plugRaw.regionCount →
       CNode target.plugLayout.plugRaw.regionCount
-  | .term region freePorts term =>
-      .term (presentation.regionMap region) freePorts term
+  | .identity region arity =>
+      .identity (presentation.regionMap region) arity
   | .atom region binder =>
       .atom (presentation.regionMap region)
         (presentation.regionMap binder)
@@ -1801,7 +1801,7 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
     {signature : List Nat} {source target : Input signature}
     {rels : Theory.RelCtx}
     (presentation : TwoInputPresentation source target)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceAdmissible : source.Admissible)
     (targetAdmissible : target.Admissible)
@@ -1933,7 +1933,7 @@ theorem focusedFrameOccurrence_itemSimulation_of_compiled
           at sourceAtom
         rw [source.plugLayout.plugNode_frameNode] at sourceAtom
         cases hnode : source.frame.val.nodes node with
-        | term nodeRegion freePorts term =>
+        | identity nodeRegion arity =>
             simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
         | atom nodeRegion frameBinder =>
             simp [hnode, PlugLayout.mapFrameNode] at sourceAtom

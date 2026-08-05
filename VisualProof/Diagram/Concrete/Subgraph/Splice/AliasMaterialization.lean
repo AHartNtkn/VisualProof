@@ -130,7 +130,7 @@ def aliasOutputs (pattern : OpenConcreteDiagram)
     List (CEndpoint (pattern.diagram.nodeCount + repeatCount pattern)) :=
   (allFin (repeatCount pattern)).filterMap fun aliasIndex =>
     if pattern.boundary.get (repeatPosition pattern aliasIndex) = wire then
-      some { node := aliasNode pattern aliasIndex, port := .output }
+      some { node := aliasNode pattern aliasIndex, port := .arg 0 }
     else
       none
 
@@ -142,7 +142,7 @@ def materializedDiagram (pattern : OpenConcreteDiagram)
   root := pattern.diagram.root
   regions := pattern.diagram.regions
   nodes := Fin.addCases pattern.diagram.nodes fun _ =>
-    .term bodyContainer 1 (.port 0)
+    .identity bodyContainer 2
   wires := Fin.addCases
     (fun wire => {
       scope := (pattern.diagram.wires wire).scope
@@ -152,7 +152,7 @@ def materializedDiagram (pattern : OpenConcreteDiagram)
     })
     (fun aliasIndex => {
       scope := pattern.diagram.root
-      endpoints := [{ node := aliasNode pattern aliasIndex, port := .free 0 }]
+      endpoints := [{ node := aliasNode pattern aliasIndex, port := .arg 1 }]
     })
 
 def materializedBoundaryWire (pattern : OpenConcreteDiagram)

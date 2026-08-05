@@ -27,7 +27,7 @@ theorem patternTerminalRegion_denotes_of_native_items
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)
@@ -156,7 +156,7 @@ theorem terminalRelationOfValues_of_survivor
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -303,7 +303,7 @@ theorem interpretedRelation_of_survivor_empty
     (hzero : payload.binderSpine.proxyCount = 0)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     {outputBody : Region signature outputOuter outputRels}
     {outputPath : List Nat}

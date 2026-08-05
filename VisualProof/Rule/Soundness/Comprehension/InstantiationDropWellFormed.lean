@@ -148,7 +148,7 @@ theorem requiresPort_iff
   rw [raw_node]
   cases hnode : state.diagram.val.nodes
       ((instantiationAtomDomain state).origin node) with
-  | term => rfl
+  | identity => rfl
   | atom region binder =>
       simp only [raw_regions]
       cases state.diagram.val.regions binder <;> rfl
@@ -188,7 +188,7 @@ theorem raw_wellFormed
     rw [raw_node]
     cases hnode : state.diagram.val.nodes
         ((instantiationAtomDomain state).origin node) with
-    | term => trivial
+    | identity => trivial
     | named => trivial
     | atom region binder =>
         have source := state.diagram.property.atom_binders_are_bubbles
@@ -200,7 +200,7 @@ theorem raw_wellFormed
     rw [raw_node]
     cases hnode : state.diagram.val.nodes
         ((instantiationAtomDomain state).origin node) with
-    | term => trivial
+    | identity => trivial
     | named => trivial
     | atom region binder =>
         have source := state.diagram.property.atom_binders_enclose
@@ -212,7 +212,7 @@ theorem raw_wellFormed
     rw [raw_node]
     cases hnode : state.diagram.val.nodes
         ((instantiationAtomDomain state).origin node) with
-    | term => trivial
+    | identity => trivial
     | atom => trivial
     | named region definition arity =>
         have source := state.diagram.property.named_references_resolve
@@ -255,17 +255,14 @@ theorem raw_wellFormed
     have hindex : (instantiationAtomDomain state).index original hsurvives = node :=
       (instantiationAtomDomain state).index_origin node
     cases hnode : state.diagram.val.nodes original with
-    | term region freePorts term =>
+    | identity region arity =>
         have hcovered := state.diagram.property.required_ports_are_covered
           original
         simp only [hnode] at hcovered
         rw [raw_node, hnode]
-        constructor
-        · obtain ⟨wire, hwire⟩ := hcovered.1
-          exact ⟨wire, hindex ▸ endpointOccurs_of_surviving state hwire hsurvives⟩
-        · intro port
-          obtain ⟨wire, hwire⟩ := hcovered.2 port
-          exact ⟨wire, hindex ▸ endpointOccurs_of_surviving state hwire hsurvives⟩
+        intro port
+        obtain ⟨wire, hwire⟩ := hcovered port
+        exact ⟨wire, hindex ▸ endpointOccurs_of_surviving state hwire hsurvives⟩
     | atom region binder =>
         have hcovered := state.diagram.property.required_ports_are_covered
           original

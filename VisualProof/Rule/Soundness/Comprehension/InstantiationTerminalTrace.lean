@@ -33,7 +33,7 @@ theorem terminalRelationOfValues_eq_along_trace
     (stateArguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (resultArguments : Fin payload.arity → Fin result.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (resultWire : Fin result.diagram.val.wireCount → model.Carrier)
     (values : ∀ index,
@@ -76,7 +76,7 @@ theorem terminalRelationOfValues_apply_along_trace
     (resultArguments : Fin payload.arity → Fin result.diagram.val.wireCount)
     (arguments_eq : trace.wireMap ∘ stateArguments = resultArguments)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (resultWire : Fin result.diagram.val.wireCount → model.Carrier)
     (values : ∀ index,

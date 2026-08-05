@@ -66,7 +66,7 @@ theorem advance_offsite_items_simulation
             state site arguments).plugLayout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceItems : ItemSeq signature sourceContext.length sourceRels)

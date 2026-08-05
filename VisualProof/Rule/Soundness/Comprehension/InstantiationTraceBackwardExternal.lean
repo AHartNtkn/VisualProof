@@ -151,7 +151,7 @@ structure ExternalAlignedBubblePresentation
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -194,7 +194,7 @@ noncomputable def ExternalAlignedBubblePresentation.ofTerminal
     {externalRels : RelCtx}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       (initialInstantiationState payload) result)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -246,7 +246,7 @@ theorem coalescedExternalAligned_nonempty
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -351,7 +351,7 @@ theorem externalAligned_nonempty_of_trace
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -547,7 +547,7 @@ noncomputable def externalAligned_of_trace
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -584,7 +584,7 @@ theorem ExternalAlignedBubblePresentation.denoteRecompiled_initial
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     {payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {model : Lambda.LambdaModel}
+    {model : Model}
     {named : NamedEnv model.Carrier signature}
     {relationValue : Relation model.Carrier payload.arity}
     {values : ∀ index,

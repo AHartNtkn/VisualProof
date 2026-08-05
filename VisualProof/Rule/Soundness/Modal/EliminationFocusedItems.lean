@@ -11,7 +11,7 @@ theorem finishRegion_denote_iff
     (context : ConcreteElaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (items : ItemSeq signature (context.extend region).length rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin context.length → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
@@ -419,7 +419,7 @@ theorem selectedSourceEnvironment_outer
 
 theorem targetFocused_doubleCut_denote_iff
     (trace : DoubleCutElimTrace input outer raw)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (targetContext : ConcreteElaboration.WireContext input)
     (keptItems : ItemSeq signature
@@ -534,7 +534,7 @@ theorem targetFocused_doubleCut_denote_iff
 theorem sourceFocused_partition_denote_iff
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (keptItems selectedItems : ItemSeq signature

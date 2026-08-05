@@ -289,7 +289,7 @@ noncomputable def terminalRelationOfNonempty
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (targets : BinderTargetsAtBubble payload state)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     {hostBody : Region signature hostOuter hostRels}
@@ -334,7 +334,7 @@ theorem terminalRelationOfNonempty_apply
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (targets : BinderTargetsAtBubble payload state)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     {hostBody : Region signature hostOuter hostRels}

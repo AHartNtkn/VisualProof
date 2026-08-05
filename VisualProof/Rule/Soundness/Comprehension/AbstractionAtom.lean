@@ -126,7 +126,7 @@ theorem compiledTargetAtom_denote_iff_relation
     (payload : ComprehensionAbstractPayload input wrap comprehension
       occurrences)
     (occurrenceIndex : Fin occurrences.length)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext trace.diagram)

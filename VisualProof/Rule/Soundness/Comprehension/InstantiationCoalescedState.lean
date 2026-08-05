@@ -256,7 +256,7 @@ theorem coalesced_compiled_atom_iff_fixedRelation
       some arguments)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (quotientWireValue : Fin
       (instantiateSpliceInput comprehension attachments binders payload state
@@ -335,7 +335,7 @@ theorem coalesced_current_atom_denotes_of_terminal
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (quotientWireValue : Fin
       (instantiateSpliceInput comprehension attachments binders payload state
@@ -415,7 +415,7 @@ theorem coalesced_current_atom_denotes_of_interpreted
       some arguments)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (quotientWireValue : Fin
       (instantiateSpliceInput comprehension attachments binders payload state

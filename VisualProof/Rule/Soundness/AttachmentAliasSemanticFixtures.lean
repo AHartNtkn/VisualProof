@@ -64,7 +64,7 @@ example {signature : List Nat} {Host : Type} [DecidableEq Host]
     {spine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern attachment spine)
     (halias : aliasCount pattern.val attachment = 0)
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (args : Fin pattern.val.boundary.length → model.Carrier) :
     aliasCount pattern.val attachment = 0 ∧
       (certificate.result.denote model named
@@ -80,7 +80,7 @@ example {signature : List Nat} {Host : Type} [DecidableEq Host]
     {spine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern attachment spine)
     (hone : aliasCount pattern.val attachment = 1)
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (args : Fin pattern.val.boundary.length → model.Carrier) :
     aliasCount pattern.val attachment = 1 ∧
       (certificate.result.denote model named
@@ -96,7 +96,7 @@ example {signature : List Nat} {Host : Type} [DecidableEq Host]
     {spine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern attachment spine)
     (hnonempty : spine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (args : Fin pattern.val.boundary.length → model.Carrier) :
     spine.proxyCount ≠ 0 ∧
       (certificate.result.denote model named

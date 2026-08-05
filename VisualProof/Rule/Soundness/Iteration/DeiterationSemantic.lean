@@ -35,7 +35,7 @@ theorem deiteration_sound_of_reinsert
         realizes.rawResultOpen_wellFormed sourceRoot htransport⟩)
     (operationalIso := fun _boundary _sourceRoot mapped _htransport =>
       OpenConcreteIso.refl (realizes.rawResultOpen mapped))
-  intro boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport valid args
   let rawMapped := realizes.targetBoundary mapped
   have hexpected :
       (removeWireInterfaceTransport input selection).transportBoundary boundary =
@@ -82,11 +82,11 @@ theorem deiteration_sound_of_reinsert
       (reinsertRealizes.rawResultOpen reinsertMapped) :=
     reinsertRealizes.operationalIso_to_rawResultOpen hReinsertTransport
       reinsertOpen.val.boundary hExpectedReinsert
-  let removedArgs : Fin rawMapped.length → Lambda.Individual :=
+  let removedArgs : Fin rawMapped.length → model.Carrier :=
     args ∘ Fin.cast
       ((removeWireInterfaceTransport input selection)
         |>.transportBoundary_length hexpected)
-  have hReinsert := reinsertSound rawMapped rawRoot reinsertMapped
+  have hReinsert := reinsertSound model rawMapped rawRoot reinsertMapped
     hReinsertTransport valid removedArgs
   let removed : OpenProofState signature := {
     diagram := deiterationRemoved input selection
@@ -101,31 +101,30 @@ theorem deiteration_sound_of_reinsert
         hReinsertTransport
   }
   have hReinsertEquiv :
-      removed.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) removedArgs ↔
-        reinsertTarget.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
+      removed.denote model
+          (Theory.interpretDefinitions model context.definitions) removedArgs ↔
+        reinsertTarget.denote model
+          (Theory.interpretDefinitions model context.definitions)
           (removedArgs ∘ Fin.cast
             (reinsertReceipt.interface.transportBoundary_length
               hReinsertTransport)) := by
     simpa only [DirectedEntailment, StepTag.semanticMode] using hReinsert
   have hNormalize := reinsertRealizes.operationalOpen_denote_iff_result
     rawRoot hReinsertTransport reinsertOpen reinsertIso
-    Lambda.canonicalModel (Theory.interpretDefinitions context.definitions)
+    model (Theory.interpretDefinitions model context.definitions)
     removedArgs
   dsimp only at hNormalize
-  let reinsertArgs : Fin reinsertOpen.val.boundary.length →
-      Lambda.Individual :=
+  let reinsertArgs : Fin reinsertOpen.val.boundary.length → model.Carrier :=
     removedArgs ∘ Fin.cast
       (reinsertIso.boundary_length_eq.trans
         ((reinsertRealizes.rawResultOpen_boundary_length reinsertMapped).trans
           (reinsertReceipt.interface.transportBoundary_length
             hReinsertTransport)))
   have hNormalize' :
-      reinsertOpen.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) reinsertArgs ↔
-        reinsertTarget.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
+      reinsertOpen.denote model
+          (Theory.interpretDefinitions model context.definitions) reinsertArgs ↔
+        reinsertTarget.denote model
+          (Theory.interpretDefinitions model context.definitions)
           (removedArgs ∘ Fin.cast
             (reinsertReceipt.interface.transportBoundary_length
               hReinsertTransport)) := by
@@ -139,34 +138,33 @@ theorem deiteration_sound_of_reinsert
   let occurrence := deiterationOutputOpenOccurrenceEquiv input selection witness
     rawMapped
   have hOccurrence := occurrence.denote_iff reinsertOpen.property
-    canonicalOpen.property Lambda.canonicalModel
-    (Theory.interpretDefinitions context.definitions) reinsertArgs
+    canonicalOpen.property model
+    (Theory.interpretDefinitions model context.definitions) reinsertArgs
   rw [denoteOpen_castArity] at hOccurrence
-  let canonicalArgs : Fin canonicalOpen.val.boundary.length →
-      Lambda.Individual :=
+  let canonicalArgs : Fin canonicalOpen.val.boundary.length → model.Carrier :=
     reinsertArgs ∘ Fin.cast occurrence.boundary_length_eq.symm
   have hOccurrence' :
-      reinsertOpen.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) reinsertArgs ↔
-        canonicalOpen.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) canonicalArgs := by
+      reinsertOpen.denote model
+          (Theory.interpretDefinitions model context.definitions) reinsertArgs ↔
+        canonicalOpen.denote model
+          (Theory.interpretDefinitions model context.definitions) canonicalArgs := by
     simpa only [canonicalArgs, reinsertOpen, canonicalOpen,
       CheckedOpenDiagram.denote] using hOccurrence
   have hReassembly :=
     Splice.Decomposition.reassemble_original_output_open_denotation_iff
-      decomposition rawMapped rawRoot Lambda.canonicalModel
-      (Theory.interpretDefinitions context.definitions) canonicalArgs
+      decomposition rawMapped rawRoot model
+      (Theory.interpretDefinitions model context.definitions) canonicalArgs
   let hostOpen := Splice.Decomposition.reassembleCanonicalHostOpen
     decomposition rawMapped rawRoot
-  let hostArgs : Fin hostOpen.val.boundary.length → Lambda.Individual :=
+  let hostArgs : Fin hostOpen.val.boundary.length → model.Carrier :=
     canonicalArgs ∘ Fin.cast
       (Splice.Decomposition.reassemble_original_output_open_iso decomposition
         rawMapped).boundary_length_eq.symm
   have hReassembly' :
-      canonicalOpen.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) canonicalArgs ↔
-        hostOpen.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) hostArgs := by
+      canonicalOpen.denote model
+          (Theory.interpretDefinitions model context.definitions) canonicalArgs ↔
+        hostOpen.denote model
+          (Theory.interpretDefinitions model context.definitions) hostArgs := by
     simpa only [canonicalOpen, hostOpen, hostArgs,
       CheckedOpenDiagram.denote] using hReassembly
   let source : OpenProofState signature := {
@@ -188,8 +186,8 @@ theorem deiteration_sound_of_reinsert
       simpa [ConcreteIso.refl, FiniteEquiv.refl] using horigins.symm
   }
   have hSourceHost := sourceHostIso.denote_iff source.asCheckedOpen.property
-    hostOpen.property Lambda.canonicalModel
-    (Theory.interpretDefinitions context.definitions) args
+    hostOpen.property model
+    (Theory.interpretDefinitions model context.definitions) args
   have hHostArgs : hostArgs =
       args ∘ Fin.cast sourceHostIso.boundary_length_eq.symm := by
     funext position
@@ -197,41 +195,41 @@ theorem deiteration_sound_of_reinsert
     apply Fin.ext
     rfl
   have hInsertedHost :
-      reinsertTarget.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
+      reinsertTarget.denote model
+          (Theory.interpretDefinitions model context.definitions)
           (removedArgs ∘ Fin.cast
             (reinsertReceipt.interface.transportBoundary_length
               hReinsertTransport)) ↔
-        source.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) args := by
+        source.denote model
+          (Theory.interpretDefinitions model context.definitions) args := by
     rw [← hNormalize', hOccurrence', hReassembly', hHostArgs]
     exact hSourceHost.symm
   have hRemovedSource :
-      removed.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) removedArgs ↔
-        source.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) args :=
+      removed.denote model
+          (Theory.interpretDefinitions model context.definitions) removedArgs ↔
+        source.denote model
+          (Theory.interpretDefinitions model context.definitions) args :=
     hReinsertEquiv.trans hInsertedHost
   let operational : CheckedOpenDiagram signature :=
     ⟨realizes.rawResultOpen mapped,
       realizes.rawResultOpen_wellFormed sourceRoot htransport⟩
-  let operationalArgs : Fin rawMapped.length → Lambda.Individual :=
+  let operationalArgs : Fin rawMapped.length → model.Carrier :=
     args ∘ Fin.cast
       ((OpenConcreteIso.refl (realizes.rawResultOpen mapped)).boundary_length_eq.trans
         ((realizes.rawResultOpen_boundary_length mapped).trans
           (receipt.interface.transportBoundary_length htransport)))
   change DirectedEntailment .deiteration orientation
-    (source.denote Lambda.canonicalModel
-      (Theory.interpretDefinitions context.definitions) args)
-    (operational.denote Lambda.canonicalModel
-      (Theory.interpretDefinitions context.definitions)
+    (source.denote model
+      (Theory.interpretDefinitions model context.definitions) args)
+    (operational.denote model
+      (Theory.interpretDefinitions model context.definitions)
       operationalArgs)
   unfold DirectedEntailment
   simp only [StepTag.semanticMode]
-  change source.denote Lambda.canonicalModel
-      (Theory.interpretDefinitions context.definitions) args ↔
-    removed.denote Lambda.canonicalModel
-      (Theory.interpretDefinitions context.definitions)
+  change source.denote model
+      (Theory.interpretDefinitions model context.definitions) args ↔
+    removed.denote model
+      (Theory.interpretDefinitions model context.definitions)
       operationalArgs
   have hOperationalArgs : operationalArgs = removedArgs := by
     funext position

@@ -90,8 +90,8 @@ mutual
 
   def Item.renameWires (rho : Fin source -> Fin target) :
       Item signature source rels -> Item signature target rels
-    | .equation output term => .equation (rho output) (term.mapFree rho)
     | .atom relation arguments => .atom relation (rho ∘ arguments)
+    | .identity arity arguments => .identity arity (rho ∘ arguments)
     | .named relation arguments => .named relation (rho ∘ arguments)
     | .cut body => .cut (body.renameWires rho)
     | .bubble arity body => .bubble arity (body.renameWires rho)
@@ -109,8 +109,8 @@ mutual
 
   def Item.renameRelations (rho : RelationRenaming source target) :
       Item signature wires source -> Item signature wires target
-    | .equation output term => .equation output term
     | .atom relation arguments => .atom (rho relation) arguments
+    | .identity arity arguments => .identity arity arguments
     | .named relation arguments => .named relation arguments
     | .cut body => .cut (body.renameRelations rho)
     | .bubble arity body =>
@@ -132,9 +132,9 @@ theorem Region.renameWires_id (region : Region signature wires rels) :
   · intro _ _ localWires items ih
     simp only [Region.renameWires, extendWireRenaming_id]
     exact congrArg (Region.mk localWires) ih
-  · intro _ _ output term
-    simp [Item.renameWires, Lambda.Term.mapFree_id]
   · intro _ _ _ relation arguments
+    simp [Item.renameWires, Function.comp_def]
+  · intro _ _ arity arguments
     simp [Item.renameWires, Function.comp_def]
   · intro _ _ _ relation arguments
     simp [Item.renameWires, Function.comp_def]
@@ -186,9 +186,8 @@ mutual
       (item.renameWires rho).renameWires tau =
         item.renameWires (tau ∘ rho) := by
     cases item with
-    | equation output term =>
-        simp [Item.renameWires, Lambda.Term.mapFree_comp, Function.comp_def]
     | atom relation arguments => rfl
+    | identity arity arguments => rfl
     | named relation arguments => rfl
     | cut body =>
         exact congrArg Item.cut (Region.renameWires_comp body rho tau)
@@ -218,9 +217,9 @@ theorem Region.renameRelations_id (region : Region signature wires rels) :
       items.renameRelations (fun r => r) = items)
   · intro _ _ localWires items ih
     exact congrArg (Region.mk localWires) ih
-  · intro _ _ output term
-    rfl
   · intro _ _ _ relation arguments
+    rfl
+  · intro _ _ arity arguments
     rfl
   · intro _ _ _ relation arguments
     rfl
@@ -274,9 +273,9 @@ theorem Region.renameRelations_comp (region : Region signature wires source)
           items.renameRelations (fun r => tau (rho r)))
   · intro _ _ localWires items ih _ _ rho tau
     exact congrArg (Region.mk localWires) (ih rho tau)
-  · intro _ _ output term _ _ rho tau
-    rfl
   · intro _ _ _ relation arguments _ _ rho tau
+    rfl
+  · intro _ _ arity arguments _ _ rho tau
     rfl
   · intro _ _ _ relation arguments _ _ rho tau
     rfl

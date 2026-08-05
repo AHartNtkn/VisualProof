@@ -111,7 +111,7 @@ def namedReferenceRelation (signature : List Nat)
 relation applied to the ordered external arguments. -/
 theorem namedReferencePattern_denote
     (signature : List Nat) (definition : Fin signature.length)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin (signature.get definition) → model.Carrier) :
     (namedReferencePattern signature definition).denote model named
@@ -351,7 +351,7 @@ quotient. -/
 theorem wiredNamedReferencePattern_denote
     (signature : List Nat) (definition : Fin signature.length)
     (wiring : NamedReferenceWiring (signature.get definition))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin (signature.get definition) → model.Carrier) :
     (wiredNamedReferencePattern signature definition wiring).denote model named
@@ -654,7 +654,7 @@ private theorem castNamedRel_index
 arity transport normalized to the checked definition body. -/
 theorem namedReferencePattern_denote_entry
     (entry : DefinitionEntry signature definition)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin entry.body.val.boundary.length → model.Carrier) :
     (namedReferencePattern signature definition).denote model named
@@ -680,7 +680,7 @@ remains on the occurrence's ordered argument interface. -/
 theorem wiredNamedReferencePattern_denote_entry
     (entry : DefinitionEntry signature definition)
     (wiring : NamedReferenceWiring (signature.get definition))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin entry.body.val.boundary.length → model.Carrier) :
     (wiredNamedReferencePattern signature definition wiring).denote model named

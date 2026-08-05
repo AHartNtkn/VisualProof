@@ -60,7 +60,7 @@ theorem compiled_atom_iff_fixedRelation
     (node_eq : state.diagram.val.nodes atom = .atom site state.bubble)
     (arguments_eq : instantiateArguments? state atom payload.arity =
       some arguments)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
@@ -127,7 +127,7 @@ theorem compiled_items_entail_fixedRelation
     (node_eq : state.diagram.val.nodes atom = .atom site state.bubble)
     (arguments_eq : instantiateArguments? state atom payload.arity =
       some arguments)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)

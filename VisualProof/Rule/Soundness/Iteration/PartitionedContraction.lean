@@ -319,7 +319,7 @@ theorem partitionedRoute_rootCopyTransport
         (iterationCoalescedAnchorView input selection target hadmissible
           ).compilerLeaf.binderEnumeration)
       keptItems route compiledPath witness)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     let spliceInput := iterationInput input selection target
     let layout : FragmentLayout input.val selection := {}
@@ -485,7 +485,7 @@ theorem partitionedRoute_rootSplice_equiv
     {hostLocal : Nat}
     {hostItems : ItemSeq signature (witness.toFocus.holeWires + hostLocal)
       witness.toFocus.holeRels}
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin ((iterationCoalescedAnchorView input selection target
       hadmissible).compilerLeaf.inheritedWires.extend
@@ -635,7 +635,7 @@ theorem partitionedRoute_copyTransport
         (iterationCoalescedAnchorView input selection target hadmissible
           ).compilerLeaf.binderEnumeration)
       keptItems route compiledPath witness)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     let spliceInput := iterationInput input selection target
     let layout : FragmentLayout input.val selection := {}
@@ -829,7 +829,7 @@ theorem partitionedRoute_splice_equiv
     {hostLocal : Nat}
     {hostItems : ItemSeq signature (witness.toFocus.holeWires + hostLocal)
       witness.toFocus.holeRels}
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin ((iterationCoalescedAnchorView input selection target
       hadmissible).compilerLeaf.inheritedWires.extend

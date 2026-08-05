@@ -8,7 +8,7 @@ open Theory
 
 theorem OpenProofState.closed_denote_iff
     (input : CheckedDiagram signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin 0 → model.Carrier) :
     (OpenProofState.closed input).denote model named args ↔
@@ -31,13 +31,11 @@ theorem OpenProofState.closed_denote_iff
     }
     exact ⟨assignment, rfl, by simpa using hbody⟩
 
-/-- The sole checked dispatcher for the complete twenty-five-form calculus. -/
+/-- The sole checked dispatcher for the complete calculus. -/
 def applyStep (context : ProofContext signature) (orientation : Orientation)
     (input : CheckedDiagram signature) (step : Step context input) :
     Except StepError (StepReceipt input) :=
   match step with
-  | .openTermSpawn region freePorts term =>
-      applyOpenTermSpawn orientation input region freePorts term
   | .relationSpawn region definition arity =>
       applyRelationSpawn orientation input region definition arity
   | .boundRelationSpawn region binder arity =>
@@ -56,22 +54,6 @@ def applyStep (context : ProofContext signature) (orientation : Orientation)
       applyDoubleCutIntro input selection
   | .doubleCutElim region =>
       applyDoubleCutElim input region
-  | .conversion node payload =>
-      applyConversion input node payload
-  | .congruenceJoin first second payload =>
-      applyCongruenceJoin input payload
-  | .anchoredWireSplit wire witness endpoints target =>
-      applyAnchoredWireSplit input wire witness endpoints target
-  | .anchoredWireContract redundant survivor certificate =>
-      applyAnchoredWireContract input redundant survivor certificate
-  | .headStrip first second payload =>
-      applyHeadStrip input payload
-  | .closedTermIntro region term =>
-      applyClosedTermIntro input region term
-  | .fusion wire =>
-      applyFusion input wire
-  | .fission node path =>
-      applyFission input node path
   | .comprehensionInstantiate bubble comprehension attachments binders payload =>
       applyComprehensionInstantiate orientation input bubble comprehension
         attachments binders payload
@@ -90,30 +72,29 @@ def applyStep (context : ProofContext signature) (orientation : Orientation)
   | .relFold selection definition args payload body_eq =>
       applyRelFold input selection definition args payload
         (relFold_namedReference_arity context definition payload body_eq)
-  | .inconsistentCutElim region first second payload =>
-      applyInconsistentCutElim input region first second payload
 
 def TheoremSchema.Valid (schema : TheoremSchema signature)
-    (named : NamedEnv Lambda.Individual signature) : Prop :=
-  ∀ args : Fin schema.left.val.boundary.length → Lambda.Individual,
-    schema.left.denote Lambda.canonicalModel named args →
-      schema.right.denote Lambda.canonicalModel named
+    (model : Model) (named : NamedEnv model.Carrier signature) : Prop :=
+  ∀ args : Fin schema.left.val.boundary.length → model.Carrier,
+    schema.left.denote model named args →
+      schema.right.denote model named
         (args ∘ Fin.cast schema.sameBoundaryArity.symm)
 
-structure ProofContext.Valid (context : ProofContext signature) : Prop where
+structure ProofContext.Valid (context : ProofContext signature)
+    (model : Model) : Prop where
   theorems : ∀ index : Fin context.theorems.length,
-    (context.theorems.get index).Valid
-      (Theory.interpretDefinitions context.definitions)
+    (context.theorems.get index).Valid model
+      (Theory.interpretDefinitions model context.definitions)
 
 def SuccessfulStepSound (context : ProofContext signature)
     (orientation : Orientation) (input result : CheckedDiagram signature)
     (step : Step context input) : Prop :=
-  context.Valid →
+  ∀ model, context.Valid model →
     DirectedEntailment step.tag orientation
-      (input.denote Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions))
-      (result.denote Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions))
+      (input.denote model
+        (Theory.interpretDefinitions model context.definitions))
+      (result.denote model
+        (Theory.interpretDefinitions model context.definitions))
 
 /-- Boundary-parametric soundness of an interface-bearing successful result.
 This is the theorem strength required by replay and theorem registration;
@@ -121,12 +102,12 @@ closed soundness is its empty-boundary specialization. -/
 def SuccessfulReceiptSound (context : ProofContext signature)
     (orientation : Orientation) (input : CheckedDiagram signature)
     (step : Step context input) (receipt : StepReceipt input) : Prop :=
-  ∀ (boundary : List (Fin input.val.wireCount))
+  ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin receipt.result.val.wireCount))
     (htransport : receipt.interface.transportBoundary boundary = some mapped),
-    context.Valid → ∀ args : Fin boundary.length → Lambda.Individual,
+    context.Valid model → ∀ args : Fin boundary.length → model.Carrier,
       let source : OpenProofState signature := {
         diagram := input
         boundary := boundary
@@ -139,10 +120,10 @@ def SuccessfulReceiptSound (context : ProofContext signature)
           receipt.interface.transportBoundary_root_scoped sourceRoot htransport
       }
       DirectedEntailment step.tag orientation
-        (source.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) args)
-        (target.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
+        (source.denote model
+          (Theory.interpretDefinitions model context.definitions) args)
+        (target.denote model
+          (Theory.interpretDefinitions model context.definitions)
           (args ∘ Fin.cast
             (receipt.interface.transportBoundary_length htransport)))
 
@@ -155,12 +136,12 @@ authority. -/
 theorem of_equivalence
     (mode : step.tag.semanticMode = .equivalent)
     (equivalent :
-      ∀ (boundary : List (Fin input.val.wireCount))
+      ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
         (sourceRoot : ∀ wire, wire ∈ boundary →
           (input.val.wires wire).scope = input.val.root)
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
-        context.Valid → ∀ args : Fin boundary.length → Lambda.Individual,
+        context.Valid model → ∀ args : Fin boundary.length → model.Carrier,
           let source : OpenProofState signature := {
             diagram := input
             boundary := boundary
@@ -172,15 +153,15 @@ theorem of_equivalence
             boundary_root_scoped :=
               receipt.interface.transportBoundary_root_scoped sourceRoot htransport
           }
-          source.denote Lambda.canonicalModel
-              (Theory.interpretDefinitions context.definitions) args ↔
-            target.denote Lambda.canonicalModel
-              (Theory.interpretDefinitions context.definitions)
+          source.denote model
+              (Theory.interpretDefinitions model context.definitions) args ↔
+            target.denote model
+              (Theory.interpretDefinitions model context.definitions)
               (args ∘ Fin.cast
                 (receipt.interface.transportBoundary_length htransport))) :
     SuccessfulReceiptSound context orientation input step receipt := by
-  intro boundary sourceRoot mapped htransport valid args
-  have hequivalent := equivalent boundary sourceRoot mapped htransport
+  intro model boundary sourceRoot mapped htransport valid args
+  have hequivalent := equivalent model boundary sourceRoot mapped htransport
     valid args
   unfold DirectedEntailment
   rw [mode]
@@ -191,12 +172,12 @@ forward replay. -/
 theorem of_forward
     (mode : step.tag.semanticMode = .directed)
     (entails :
-      ∀ (boundary : List (Fin input.val.wireCount))
+      ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
         (sourceRoot : ∀ wire, wire ∈ boundary →
           (input.val.wires wire).scope = input.val.root)
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
-        context.Valid → ∀ args : Fin boundary.length → Lambda.Individual,
+        context.Valid model → ∀ args : Fin boundary.length → model.Carrier,
           let source : OpenProofState signature := {
             diagram := input
             boundary := boundary
@@ -208,15 +189,15 @@ theorem of_forward
             boundary_root_scoped :=
               receipt.interface.transportBoundary_root_scoped sourceRoot htransport
           }
-          source.denote Lambda.canonicalModel
-              (Theory.interpretDefinitions context.definitions) args →
-            target.denote Lambda.canonicalModel
-              (Theory.interpretDefinitions context.definitions)
+          source.denote model
+              (Theory.interpretDefinitions model context.definitions) args →
+            target.denote model
+              (Theory.interpretDefinitions model context.definitions)
               (args ∘ Fin.cast
                 (receipt.interface.transportBoundary_length htransport))) :
     SuccessfulReceiptSound context .forward input step receipt := by
-  intro boundary sourceRoot mapped htransport valid args
-  have hentails := entails boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport valid args
+  have hentails := entails model boundary sourceRoot mapped htransport valid args
   unfold DirectedEntailment DirectedImplication
   rw [mode]
   exact hentails
@@ -226,12 +207,12 @@ backward replay. -/
 theorem of_backward
     (mode : step.tag.semanticMode = .directed)
     (entails :
-      ∀ (boundary : List (Fin input.val.wireCount))
+      ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
         (sourceRoot : ∀ wire, wire ∈ boundary →
           (input.val.wires wire).scope = input.val.root)
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
-        context.Valid → ∀ args : Fin boundary.length → Lambda.Individual,
+        context.Valid model → ∀ args : Fin boundary.length → model.Carrier,
           let source : OpenProofState signature := {
             diagram := input
             boundary := boundary
@@ -243,15 +224,15 @@ theorem of_backward
             boundary_root_scoped :=
               receipt.interface.transportBoundary_root_scoped sourceRoot htransport
           }
-          target.denote Lambda.canonicalModel
-              (Theory.interpretDefinitions context.definitions)
+          target.denote model
+              (Theory.interpretDefinitions model context.definitions)
               (args ∘ Fin.cast
                 (receipt.interface.transportBoundary_length htransport)) →
-            source.denote Lambda.canonicalModel
-              (Theory.interpretDefinitions context.definitions) args) :
+            source.denote model
+              (Theory.interpretDefinitions model context.definitions) args) :
     SuccessfulReceiptSound context .backward input step receipt := by
-  intro boundary sourceRoot mapped htransport valid args
-  have hentails := entails boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport valid args
+  have hentails := entails model boundary sourceRoot mapped htransport valid args
   unfold DirectedEntailment DirectedImplication
   rw [mode]
   exact hentails
@@ -285,12 +266,12 @@ theorem of_realized_operational
           (operational boundary sourceRoot mapped htransport).val
           (realizes.rawResultOpen mapped))
     (sound :
-      ∀ (boundary : List (Fin input.val.wireCount))
+      ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
         (sourceRoot : ∀ wire, wire ∈ boundary →
           (input.val.wires wire).scope = input.val.root)
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
-        context.Valid → ∀ args : Fin boundary.length → Lambda.Individual,
+        context.Valid model → ∀ args : Fin boundary.length → model.Carrier,
           let source : OpenProofState signature := {
             diagram := input
             boundary := boundary
@@ -298,22 +279,22 @@ theorem of_realized_operational
           }
           let iso := operationalIso boundary sourceRoot mapped htransport
           DirectedEntailment step.tag orientation
-            (source.denote Lambda.canonicalModel
-              (Theory.interpretDefinitions context.definitions) args)
+            (source.denote model
+              (Theory.interpretDefinitions model context.definitions) args)
             ((operational boundary sourceRoot mapped htransport).denote
-              Lambda.canonicalModel
-              (Theory.interpretDefinitions context.definitions)
+              model
+              (Theory.interpretDefinitions model context.definitions)
               (args ∘ Fin.cast (iso.boundary_length_eq.trans
                 ((realizes.rawResultOpen_boundary_length mapped).trans
                   (receipt.interface.transportBoundary_length htransport)))))) :
     SuccessfulReceiptSound context orientation input step receipt := by
-  intro boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport valid args
   let op := operational boundary sourceRoot mapped htransport
   let iso := operationalIso boundary sourceRoot mapped htransport
-  have hsound := sound boundary sourceRoot mapped htransport valid args
+  have hsound := sound model boundary sourceRoot mapped htransport valid args
   have hnormalize := realizes.operationalOpen_denote_iff_result sourceRoot
-    htransport op iso Lambda.canonicalModel
-    (Theory.interpretDefinitions context.definitions) args
+    htransport op iso model
+    (Theory.interpretDefinitions model context.definitions) args
   unfold DirectedEntailment at hsound ⊢
   cases hmode : step.tag.semanticMode with
   | directed =>
@@ -395,7 +376,7 @@ private theorem spawnReceipt_sound
       } node scope portCount port htarget)
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       spawnOperationalIso realizes boundary sourceRoot mapped htransport)
-  intro boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport valid args
   let source : OpenProofState signature := {
     diagram := input
     boundary := boundary
@@ -407,8 +388,8 @@ private theorem spawnReceipt_sound
       view.focus.context.cutDepth := by
     simpa [source] using openSiteView_concreteCutDepth_eq view
   have projects := spawnNodeRawOpen_projects source.asCheckedOpen node scope
-    portCount port hnode htarget view.route view.cutDepth Lambda.canonicalModel
-    (Theory.interpretDefinitions context.definitions) args
+    portCount port hnode htarget view.route view.cutDepth model
+    (Theory.interpretDefinitions model context.definitions) args
   dsimp only
   unfold DirectedEntailment
   rw [mode]
@@ -427,67 +408,6 @@ private theorem spawnReceipt_sound
       intro hoperational
       apply projects.1 heven
       simpa [source, spawnOperationalOpen] using hoperational
-
-/-- Every successful closed-term introduction receipt preserves ordered-open
-semantics in both directions. -/
-theorem applyClosedTermIntro_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : Diagram.CheckedDiagram signature)
-    (region : Fin input.val.regionCount) (term : Lambda.Term 0 (Fin 0))
-    (receipt : StepReceipt input)
-    (happly : applyClosedTermIntro input region term = .ok receipt) :
-    SuccessfulReceiptSound context orientation input
-      (.closedTermIntro region term) receipt := by
-  have realizes := applyClosedTermIntro_realizes happly
-  have htargetClosed : (closedTermIntroRaw input.val region term).WellFormed
-      signature := realizes.result_eq ▸ receipt.result.property
-  have htarget : (spawnNodeRaw input.val (.term region 0 term) region 1
-      (fun _ => .output)).WellFormed signature :=
-    by simpa only [closedTermIntroRaw] using htargetClosed
-  apply SuccessfulReceiptSound.of_realized_operational realizes
-    (operational := fun boundary sourceRoot _ _ =>
-      spawnOperationalOpen {
-        diagram := input
-        boundary := boundary
-        boundary_root_scoped := sourceRoot
-      } (.term region 0 term) region 1 (fun _ => .output) htarget)
-    (operationalIso := fun boundary sourceRoot mapped htransport =>
-      spawnOperationalIso realizes boundary sourceRoot mapped htransport)
-  intro boundary sourceRoot mapped htransport valid args
-  let source : OpenProofState signature := {
-    diagram := input
-    boundary := boundary
-    boundary_root_scoped := sourceRoot
-  }
-  let view := Classical.choice
-    (Diagram.Splice.openSiteView_complete source.asCheckedOpen region)
-  have hequivalent := closedTermIntroOpen_equiv source.asCheckedOpen region term
-    htarget view.route view.cutDepth Lambda.canonicalModel
-    (Theory.interpretDefinitions context.definitions) args
-  dsimp only
-  unfold DirectedEntailment
-  change source.denote Lambda.canonicalModel
-      (Theory.interpretDefinitions context.definitions) args ↔ _
-  simpa [source, spawnOperationalOpen] using hequivalent
-
-/-- Every successful open-term spawn receipt has the directed semantics
-selected by its checked orientation and site polarity. -/
-theorem applyOpenTermSpawn_sound
-    (context : ProofContext signature) (orientation : Orientation)
-    (input : Diagram.CheckedDiagram signature)
-    (region : Fin input.val.regionCount) (freePorts : Nat)
-    (term : Lambda.Term 0 (Fin freePorts)) (receipt : StepReceipt input)
-    (happly : applyOpenTermSpawn orientation input region freePorts term =
-      .ok receipt) :
-    SuccessfulReceiptSound context orientation input
-      (.openTermSpawn region freePorts term) receipt := by
-  have realizes := applyOpenTermSpawn_realizes happly
-  have success := applyOpenTermSpawn_success orientation input region freePorts
-    term receipt happly
-  exact spawnReceipt_sound orientation input
-    (.openTermSpawn region freePorts term) receipt
-    (.term region freePorts term) region (freePorts + 1)
-    (Fin.cases .output fun index => .free index) rfl realizes success.1 rfl
 
 /-- Every successful named-relation spawn receipt has the directed semantics
 selected by its checked orientation and site polarity. -/
@@ -544,7 +464,7 @@ private theorem canonicalErasureProjection
       (Diagram.Splice.Decomposition.originalFragmentInput decomposition).frame.val.root)
     (polarity : erasurePolarity orientation
       (concreteCutDepth host.val selection.val.anchor))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
@@ -716,7 +636,7 @@ theorem applyErasure_sound
       erasureOperationalOpen realizes boundary sourceRoot mapped htransport)
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       erasureOperationalIso realizes boundary sourceRoot mapped htransport)
-  intro boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport valid args
   let rawMapped := realizes.targetBoundary mapped
   have hexpected :
       (removeWireInterfaceTransport input selection).transportBoundary
@@ -758,12 +678,12 @@ theorem applyErasure_sound
         |>.transportBoundary_length hexpected
   let commonArgs := args ∘ Fin.cast hcoalescedArity
   have projection := canonicalErasureProjection orientation decomposition
-    hsplice rawMapped rawRoot success.1 Lambda.canonicalModel
-    (Theory.interpretDefinitions context.definitions) commonArgs
+    hsplice rawMapped rawRoot success.1 model
+    (Theory.interpretDefinitions model context.definitions) commonArgs
   have hdirect :=
     Diagram.Splice.Decomposition.reassemble_original_source_open_denotation_iff_direct
-      decomposition hsplice rawMapped rawRoot Lambda.canonicalModel
-      (Theory.interpretDefinitions context.definitions) commonArgs
+      decomposition hsplice rawMapped rawRoot model
+      (Theory.interpretDefinitions model context.definitions) commonArgs
   dsimp only at hdirect
   let source : OpenProofState signature := {
     diagram := input
@@ -787,8 +707,8 @@ theorem applyErasure_sound
   }
   have hsourceHost := sourceHostIso.denote_iff source.asCheckedOpen.property
     (Diagram.Splice.Decomposition.reassembleCanonicalHostOpen decomposition
-      rawMapped rawRoot).property Lambda.canonicalModel
-    (Theory.interpretDefinitions context.definitions) args
+      rawMapped rawRoot).property model
+    (Theory.interpretDefinitions model context.definitions) args
   let outputArityEq :
       (Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
         (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
@@ -808,13 +728,13 @@ theorem applyErasure_sound
       (Diagram.Splice.Decomposition.reassemble_original_output_open_iso
         decomposition rawMapped).boundary_length_eq.symm
   have hdirect' :
-      denoteOpen Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
+      denoteOpen model
+          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.compiledSpliceSourceOpen
             (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
             hsplice rawMapped rawRoot) commonArgs ↔
-        denoteOpen Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
+        denoteOpen model
+          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Decomposition.reassembleCanonicalHostOpen decomposition
             rawMapped rawRoot).elaborate directArgs := by
     simpa only [directArgs, outputArityEq] using hdirect
@@ -825,13 +745,13 @@ theorem applyErasure_sound
     apply Fin.ext
     rfl
   have hcompilerSource :
-      denoteOpen Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
+      denoteOpen model
+          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.compiledSpliceSourceOpen
             (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
             hsplice rawMapped rawRoot) commonArgs ↔
-        source.denote Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions) args := by
+        source.denote model
+          (Theory.interpretDefinitions model context.definitions) args := by
     rw [hdirect', hdirectArgs]
     exact hsourceHost.symm
   have hframeRawEq :
@@ -851,8 +771,8 @@ theorem applyErasure_sound
       (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
       (Diagram.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped rawRoot)
     (realizes.rawResultOpen_wellFormed sourceRoot htransport)
-    Lambda.canonicalModel
-    (Theory.interpretDefinitions context.definitions) commonArgs
+    model
+    (Theory.interpretDefinitions model context.definitions) commonArgs
   let operationalIso := erasureOperationalIso realizes boundary sourceRoot
     mapped htransport
   let frameArgs := commonArgs ∘ Fin.cast frameIso.boundary_length_eq.symm
@@ -866,34 +786,34 @@ theorem applyErasure_sound
     apply Fin.ext
     rfl
   have hframe' :
-      denoteOpen Lambda.canonicalModel
-          (Theory.interpretDefinitions context.definitions)
+      denoteOpen model
+          (Theory.interpretDefinitions model context.definitions)
           (Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
             (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
             (Diagram.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped
             rawRoot).elaborate commonArgs ↔
         (erasureOperationalOpen realizes boundary sourceRoot mapped htransport).denote
-            Lambda.canonicalModel
-            (Theory.interpretDefinitions context.definitions)
+            model
+            (Theory.interpretDefinitions model context.definitions)
             operationalArgs := by
     rw [← hopenArgs]
-    change denoteOpen Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions)
+    change denoteOpen model
+        (Theory.interpretDefinitions model context.definitions)
         (Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
           (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
           (Diagram.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped
           rawRoot).elaborate commonArgs ↔
-      denoteOpen Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions)
+      denoteOpen model
+        (Theory.interpretDefinitions model context.definitions)
         (erasureOperationalOpen realizes boundary sourceRoot mapped htransport).elaborate
         frameArgs
     exact hframe
   change DirectedEntailment .erasure orientation
-    (source.denote Lambda.canonicalModel
-      (Theory.interpretDefinitions context.definitions) args)
+    (source.denote model
+      (Theory.interpretDefinitions model context.definitions) args)
     ((erasureOperationalOpen realizes boundary sourceRoot mapped htransport).denote
-        Lambda.canonicalModel
-        (Theory.interpretDefinitions context.definitions)
+        model
+        (Theory.interpretDefinitions model context.definitions)
         operationalArgs)
   unfold DirectedEntailment
   simp only [StepTag.semanticMode]
@@ -909,13 +829,13 @@ theorem SuccessfulReceiptSound.closed
     (receipt : StepReceipt input)
     (sound : SuccessfulReceiptSound context orientation input step receipt) :
     SuccessfulStepSound context orientation input receipt.result step := by
-  intro valid
-  have hopen := sound [] (by simp) [] rfl valid Fin.elim0
+  intro model valid
+  have hopen := sound model [] (by simp) [] rfl valid Fin.elim0
   change DirectedEntailment step.tag orientation
-    ((OpenProofState.closed input).denote Lambda.canonicalModel
-      (Theory.interpretDefinitions context.definitions) Fin.elim0)
-    ((OpenProofState.closed receipt.result).denote Lambda.canonicalModel
-      (Theory.interpretDefinitions context.definitions) Fin.elim0) at hopen
+    ((OpenProofState.closed input).denote model
+      (Theory.interpretDefinitions model context.definitions) Fin.elim0)
+    ((OpenProofState.closed receipt.result).denote model
+      (Theory.interpretDefinitions model context.definitions) Fin.elim0) at hopen
   unfold DirectedEntailment at hopen ⊢
   cases hmode : step.tag.semanticMode <;> simp only [hmode] at hopen ⊢
   · cases orientation <;>

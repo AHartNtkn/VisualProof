@@ -627,7 +627,7 @@ theorem compilerLeaf_partition_of_perm
           (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
           (leaf.inheritedWires.extend anchor) leaf.binders selected =
             some selectedItems ∧
-        ∀ (model : Lambda.LambdaModel)
+        ∀ (model : Model)
           (named : NamedEnv model.Carrier signature)
           (env : Fin (leaf.inheritedWires.extend anchor).length →
             model.Carrier)
@@ -699,7 +699,7 @@ theorem compilerLeaf_selection_partition
           (ConcreteElaboration.compileRegion? signature input.val leaf.fuel)
           (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
           (selectedOccurrences input.val selection) = some selectedItems ∧
-        ∀ (model : Lambda.LambdaModel)
+        ∀ (model : Model)
           (named : NamedEnv model.Carrier signature)
           (env : Fin (leaf.inheritedWires.extend
             selection.val.anchor).length → model.Carrier)

@@ -1,4 +1,4 @@
-import VisualProof.Lambda.Syntax
+import VisualProof.Model
 import VisualProof.Theory.Signature
 
 namespace VisualProof.Diagram
@@ -13,9 +13,9 @@ mutual
         Region signature wires rels
 
   inductive Item (signature : List Nat) : Nat -> RelCtx -> Type
-    | equation : Fin wires -> Lambda.Term 0 (Fin wires) ->
-        Item signature wires rels
     | atom : RelVar rels arity -> (Fin arity -> Fin wires) ->
+        Item signature wires rels
+    | identity : (arity : Nat) -> (Fin arity -> Fin wires) ->
         Item signature wires rels
     | named : NamedRel signature arity -> (Fin arity -> Fin wires) ->
         Item signature wires rels
@@ -68,6 +68,12 @@ def cutExample : Item [] 0 [] :=
 theorem cutExample_constructible :
     cutExample = Item.cut (Region.mk 0 .nil) := rfl
 
+def binaryIdentityExample : Item [] 2 [] :=
+  .identity 2 id
+
+theorem binaryIdentityExample_constructible :
+    binaryIdentityExample = Item.identity 2 id := rfl
+
 private def binaryHead : RelVar [2] 2 where
   index := 0
   hasArity := rfl
@@ -79,14 +85,6 @@ theorem binaryBubbleAtomExample_constructible :
     binaryBubbleAtomExample =
       Item.bubble 2
         (Region.mk 0 (ItemSeq.cons (Item.atom binaryHead id) .nil)) := rfl
-
-def ancestorWireUnderCutExample : Item [] 1 [] :=
-  .cut (.mk 0 (.cons (.equation 0 (.port 0)) .nil))
-
-theorem ancestorWireUnderCutExample_scoped :
-    ancestorWireUnderCutExample =
-      Item.cut
-        (Region.mk 0 (ItemSeq.cons (Item.equation 0 (.port 0)) .nil)) := rfl
 
 def bareLocalWireExample : Region [] 0 [] :=
   .mk 1 .nil

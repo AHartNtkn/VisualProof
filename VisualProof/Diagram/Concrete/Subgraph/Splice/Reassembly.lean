@@ -1014,7 +1014,7 @@ private theorem originalNode_frame_eq
   rw [decomposition.frameDomains.nodes.origin_eq_enumeration_get] at hreindexed
   cases hkind : host.val.nodes
       (decomposition.frameDomains.nodes.enumeration.get node) with
-  | term region freePorts term =>
+  | identity region arity =>
       have hregion := decomposition.frameDomains.nodeRegion_survives
         (decomposition.frameDomains.nodes.origin_survives node)
       have hregion' : decomposition.frameDomains.regions.survives region = true := by
@@ -1087,11 +1087,11 @@ private theorem originalNode_pattern_eq
         decomposition.extraction.raw.layout).nodes index)).rename
         (originalRegionEquiv decomposition)) = _
   cases hkind : host.val.nodes (selection.selectedNodes.get index) with
-  | term region freePorts term =>
+  | identity region arity =>
       have howner := originalRegionEquiv_fragmentNodeRegion decomposition index
       simp only [hkind, CNode.region] at howner
-      rw [host.val.extractDiagramRaw_node_term selection
-        decomposition.extraction.raw.layout index region freePorts term hkind]
+      rw [host.val.extractDiagramRaw_node_identity selection
+        decomposition.extraction.raw.layout index region arity hkind]
       simp [Input.PlugLayout.mapPatternNode, CNode.rename,
         howner, hkind]
   | atom region binder =>
@@ -2143,7 +2143,7 @@ noncomputable def reassemble_original_checked_iso
 /-- Structural reassembly preserves closed concrete denotation. -/
 theorem plugOriginalFragment_denote_iff
     (decomposition : Decomposition signature host selection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     (plugOriginalFragment decomposition).denote
         (plugOriginalFragment_wellFormed decomposition) model named ↔
@@ -2158,7 +2158,7 @@ theorem reassemble_original_checked_denote_iff
     {result : CheckedDiagram signature}
     (hsplice : Input.spliceChecked signature
       (originalFragmentInput decomposition) = .ok result)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     result.denote model named ↔ host.denote model named := by
   change result.val.denote result.property model named ↔
@@ -2257,7 +2257,7 @@ theorem reassemble_original_output_open_denotation_iff
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       ((originalFragmentInput decomposition).frame.val.wires wire).scope =
         (originalFragmentInput decomposition).frame.val.root)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Input.PlugLayout.outputOpenRoot (originalFragmentInput decomposition)
@@ -2298,7 +2298,7 @@ theorem reassemble_original_source_open_denotation_iff_direct
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       ((originalFragmentInput decomposition).frame.val.wires wire).scope =
         (originalFragmentInput decomposition).frame.val.root)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Input.PlugLayout.checkedCoalescedOpenRoot
@@ -2431,7 +2431,7 @@ theorem reassemble_original_result_open_denotation_iff
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       ((originalFragmentInput decomposition).frame.val.wires wire).scope =
         (originalFragmentInput decomposition).frame.val.root)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Input.spliceCheckedResultOpenRaw (originalFragmentInput decomposition)
@@ -2466,7 +2466,7 @@ theorem reassemble_original_source_open_denotation_iff
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       ((originalFragmentInput decomposition).frame.val.wires wire).scope =
         (originalFragmentInput decomposition).frame.val.root)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Input.PlugLayout.checkedCoalescedOpenRoot

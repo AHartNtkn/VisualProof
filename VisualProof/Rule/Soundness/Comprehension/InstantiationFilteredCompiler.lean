@@ -24,7 +24,7 @@ theorem compileOccurrencesWith_filter_denotes
     (binders : ConcreteElaboration.BinderContext diagram rels)
     (keep : ConcreteElaboration.LocalOccurrence diagram.regionCount
       diagram.nodeCount → Bool)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -120,7 +120,7 @@ theorem compileOccurrencesWith_filter_denotes_of_all
     (binders : ConcreteElaboration.BinderContext diagram rels)
     (keep : ConcreteElaboration.LocalOccurrence diagram.regionCount
       diagram.nodeCount → Bool)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)

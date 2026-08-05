@@ -12,7 +12,7 @@ theorem doubleCutIntroFocusedItems
     (selection : CheckedSelection input.val)
     (targetWellFormed :
       (doubleCutIntroRaw input.val selection).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     {sourceRels targetRels : RelCtx}
     (direction : ConcreteElaboration.SimulationDirection)

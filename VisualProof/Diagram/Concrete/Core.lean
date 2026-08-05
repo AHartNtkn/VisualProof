@@ -1,4 +1,4 @@
-import VisualProof.Lambda.Syntax
+import VisualProof.Model
 
 namespace VisualProof.Diagram
 
@@ -9,8 +9,6 @@ inductive CRegion (regions : Nat)
   deriving DecidableEq
 
 inductive CPort
-  | output
-  | free (index : Nat)
   | arg (index : Nat)
   deriving DecidableEq
 
@@ -20,9 +18,8 @@ structure CEndpoint (nodes : Nat) where
   deriving DecidableEq
 
 inductive CNode (regions : Nat)
-  | term (region : Fin regions) (freePorts : Nat)
-      (term : Lambda.Term 0 (Fin freePorts))
   | atom (region binder : Fin regions)
+  | identity (region : Fin regions) (arity : Nat)
   | named (region : Fin regions) (definition arity : Nat)
 
 structure CWire (regions nodes : Nat) where
@@ -54,8 +51,8 @@ end CRegion
 namespace CNode
 
 def region : CNode regions -> Fin regions
-  | .term region _ _ => region
   | .atom region _ => region
+  | .identity region _ => region
   | .named region _ _ => region
 
 end CNode
@@ -111,20 +108,19 @@ def binderArity? (d : ConcreteDiagram)
 def RequiresPort (d : ConcreteDiagram)
     (node : Fin d.nodeCount) (port : CPort) : Prop :=
   match d.nodes node with
-  | .term _ freePorts _ =>
-      port = .output \/ exists i : Fin freePorts, port = .free i
   | .atom _ binder =>
       match d.regions binder with
       | .bubble _ arity => exists i : Fin arity, port = .arg i
       | _ => False
+  | .identity _ arity => exists i : Fin arity, port = .arg i
   | .named _ _ arity => exists i : Fin arity, port = .arg i
 
 instance (d : ConcreteDiagram) (node : Fin d.nodeCount) (port : CPort) :
     Decidable (d.RequiresPort node port) := by
   unfold RequiresPort
   split
-  · infer_instance
   · split <;> infer_instance
+  · infer_instance
   · infer_instance
 
 def EndpointOccurs (d : ConcreteDiagram) (wire : Fin d.wireCount)
@@ -136,15 +132,6 @@ instance (d : ConcreteDiagram) (wire : Fin d.wireCount)
     Decidable (d.EndpointOccurs wire endpoint) := by
   unfold EndpointOccurs
   infer_instance
-
-theorem requiresPort_term_iff (d : ConcreteDiagram)
-    (node : Fin d.nodeCount) (port : CPort)
-    (region : Fin d.regionCount) (freePorts : Nat)
-    (term : Lambda.Term 0 (Fin freePorts))
-    (hnode : d.nodes node = .term region freePorts term) :
-    d.RequiresPort node port <->
-      port = .output \/ exists i : Fin freePorts, port = .free i := by
-  simp only [RequiresPort, hnode]
 
 theorem requiresPort_atom_bubble_iff (d : ConcreteDiagram)
     (node : Fin d.nodeCount) (port : CPort)
@@ -159,6 +146,14 @@ theorem requiresPort_named_iff (d : ConcreteDiagram)
     (node : Fin d.nodeCount) (port : CPort)
     (region : Fin d.regionCount) (definition arity : Nat)
     (hnode : d.nodes node = .named region definition arity) :
+    d.RequiresPort node port <->
+      exists i : Fin arity, port = .arg i := by
+  simp only [RequiresPort, hnode]
+
+theorem requiresPort_identity_iff (d : ConcreteDiagram)
+    (node : Fin d.nodeCount) (port : CPort)
+    (region : Fin d.regionCount) (arity : Nat)
+    (hnode : d.nodes node = .identity region arity) :
     d.RequiresPort node port <->
       exists i : Fin arity, port = .arg i := by
   simp only [RequiresPort, hnode]

@@ -1,5 +1,4 @@
 import VisualProof.Diagram.Rename
-import VisualProof.Lambda.Quotient
 
 namespace VisualProof.Diagram
 
@@ -41,7 +40,7 @@ def extendWireEnv (outerEnv : Fin outer -> D) (localEnv : Fin localWires -> D) :
   exact Fin.addCases_left j
 
 mutual
-  def denoteRegion (model : Lambda.LambdaModel)
+  def denoteRegion (model : Model)
       (named : NamedEnv model.Carrier signature)
       (env : Fin outer -> model.Carrier)
       (rels : RelEnv model.Carrier relCtx) :
@@ -50,13 +49,14 @@ mutual
         exists localEnv : Fin localWires -> model.Carrier,
           denoteItemSeq model named (extendWireEnv env localEnv) rels items
 
-  def denoteItem (model : Lambda.LambdaModel)
+  def denoteItem (model : Model)
       (named : NamedEnv model.Carrier signature)
       (env : Fin wires -> model.Carrier)
       (rels : RelEnv model.Carrier relCtx) :
       Item signature wires relCtx -> Prop
-    | .equation output term => env output = model.eval term env
     | .atom relation arguments => rels.lookup relation (env ∘ arguments)
+    | .identity arity arguments =>
+        ∀ left right : Fin arity, env (arguments left) = env (arguments right)
     | .named relation arguments => named _ relation (env ∘ arguments)
     | .cut body => Not (denoteRegion model named env rels body)
     | .bubble arity body =>
@@ -64,7 +64,7 @@ mutual
           denoteRegion (relCtx := arity :: relCtx) model named env
             (relation, rels) body
 
-  def denoteItemSeq (model : Lambda.LambdaModel)
+  def denoteItemSeq (model : Model)
       (named : NamedEnv model.Carrier signature)
       (env : Fin wires -> model.Carrier)
       (rels : RelEnv model.Carrier relCtx) :
@@ -75,7 +75,7 @@ mutual
           denoteItemSeq model named env rels tail
 end
 
-def denoteOpen (model : Lambda.LambdaModel)
+def denoteOpen (model : Model)
     (named : NamedEnv model.Carrier signature)
     (diagram : OpenDiagram signature arity)
     (args : Fin arity -> model.Carrier) : Prop :=
@@ -84,7 +84,7 @@ def denoteOpen (model : Lambda.LambdaModel)
       denoteRegion (relCtx := []) model named assignment.classes PUnit.unit
         diagram.body
 
-theorem denoteOpen_castArity (model : Lambda.LambdaModel)
+theorem denoteOpen_castArity (model : Model)
     (named : NamedEnv model.Carrier signature)
     (diagram : OpenDiagram signature sourceArity)
     (equality : sourceArity = targetArity)
@@ -95,7 +95,7 @@ theorem denoteOpen_castArity (model : Lambda.LambdaModel)
   rfl
 
 @[simp] theorem denoteRegion_mk
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin outer -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx) (localWires : Nat)
     (items : ItemSeq signature (outer + localWires) relCtx) :
@@ -104,17 +104,8 @@ theorem denoteOpen_castArity (model : Lambda.LambdaModel)
         denoteItemSeq model named (extendWireEnv env localEnv) rels items := by
   rfl
 
-@[simp] theorem denoteItem_equation
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
-    (env : Fin wires -> model.Carrier)
-    (rels : RelEnv model.Carrier relCtx) (output : Fin wires)
-    (term : Lambda.Term 0 (Fin wires)) :
-    denoteItem model named env rels (Item.equation output term) <->
-      env output = model.eval term env := by
-  rfl
-
 @[simp] theorem denoteItem_atom
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx) (relation : RelVar relCtx arity)
     (arguments : Fin arity -> Fin wires) :
@@ -123,7 +114,7 @@ theorem denoteOpen_castArity (model : Lambda.LambdaModel)
   rfl
 
 @[simp] theorem denoteItem_named
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx) (relation : NamedRel signature arity)
     (arguments : Fin arity -> Fin wires) :
@@ -131,8 +122,18 @@ theorem denoteOpen_castArity (model : Lambda.LambdaModel)
       named arity relation (env ∘ arguments) := by
   rfl
 
+@[simp] theorem denoteItem_identity
+    (model : Model) (named : NamedEnv model.Carrier signature)
+    (env : Fin wires -> model.Carrier)
+    (rels : RelEnv model.Carrier relCtx) (arity : Nat)
+    (arguments : Fin arity -> Fin wires) :
+    denoteItem model named env rels (Item.identity arity arguments) <->
+      ∀ left right : Fin arity,
+        env (arguments left) = env (arguments right) := by
+  rfl
+
 @[simp] theorem cut_denotes_negation
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx)
     (body : Region signature wires relCtx) :
@@ -141,7 +142,7 @@ theorem denoteOpen_castArity (model : Lambda.LambdaModel)
   rfl
 
 @[simp] theorem bubble_denotes_exists
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx) (arity : Nat)
     (body : Region signature wires (arity :: relCtx)) :
@@ -152,7 +153,7 @@ theorem denoteOpen_castArity (model : Lambda.LambdaModel)
   rfl
 
 @[simp] theorem denoteItemSeq_nil
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx) :
     denoteItemSeq model named env rels (ItemSeq.nil :
@@ -160,7 +161,7 @@ theorem denoteOpen_castArity (model : Lambda.LambdaModel)
   rfl
 
 @[simp] theorem denoteItemSeq_cons
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx)
     (item : Item signature wires relCtx)
@@ -171,7 +172,7 @@ theorem denoteOpen_castArity (model : Lambda.LambdaModel)
   rfl
 
 theorem blank_zero_local_denotes_true
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx) :
     denoteRegion model named env rels
@@ -183,7 +184,7 @@ theorem blank_zero_local_denotes_true
     exact ⟨Fin.elim0, trivial⟩
 
 theorem two_item_sequence_denotes_conjunction
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx)
     (first second : Item signature wires relCtx) :
@@ -193,7 +194,7 @@ theorem two_item_sequence_denotes_conjunction
   simp
 
 theorem bareLocalWireExample_denotes_iff_nonempty
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier []) :
+    (model : Model) (named : NamedEnv model.Carrier []) :
     denoteRegion (relCtx := []) model named Fin.elim0 PUnit.unit
         bareLocalWireExample <->
       Nonempty model.Carrier := by
@@ -204,7 +205,7 @@ theorem bareLocalWireExample_denotes_iff_nonempty
     exact ⟨fun _ => value, trivial⟩
 
 theorem unary_bubble_denotes_exists
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx)
     (body : Region signature wires (1 :: relCtx)) :
@@ -215,7 +216,7 @@ theorem unary_bubble_denotes_exists
   rfl
 
 theorem denoteOpen_iff_assignment
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (diagram : OpenDiagram signature arity)
     (args : Fin arity -> model.Carrier) :
     denoteOpen model named diagram args <->
@@ -226,7 +227,7 @@ theorem denoteOpen_iff_assignment
   rfl
 
 theorem aliasedBinaryBoundaryExample_rejects_unequal
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier [])
+    (model : Model) (named : NamedEnv model.Carrier [])
     (args : Fin 2 -> model.Carrier) (unequal : args 0 ≠ args 1) :
     Not (denoteOpen model named aliasedBinaryBoundaryExample args) := by
   rintro ⟨assignment, hargs, _⟩
@@ -237,7 +238,7 @@ theorem aliasedBinaryBoundaryExample_rejects_unequal
       aliasedBinaryBoundaryExample assignment.args).mp ⟨assignment, rfl⟩)
 
 theorem double_cut_denotes_iff
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx)
     (body : Region signature wires relCtx) :

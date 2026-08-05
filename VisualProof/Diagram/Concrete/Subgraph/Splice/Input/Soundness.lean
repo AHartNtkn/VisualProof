@@ -14,7 +14,7 @@ namespace TwoInputPresentation
 def LocalLaw {signature : List Nat} {source target : Input signature}
     (presentation : TwoInputPresentation source target)
     (direction : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) : Prop :=
   match direction with
   | .forward => ∀ sourceArgs,
@@ -31,7 +31,7 @@ ordered boundary values induced by an actual splice quotient valuation. -/
 def AttachmentLocalLaw {signature : List Nat} {source target : Input signature}
     (presentation : TwoInputPresentation source target)
     (direction : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) : Prop :=
   match direction with
   | .forward => ∀ sourceValues : source.wireQuotient.Carrier → model.Carrier,
@@ -53,7 +53,7 @@ theorem LocalLaw.toAttachmentLocalLaw
     {signature : List Nat} {source target : Input signature}
     (presentation : TwoInputPresentation source target)
     (direction : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (law : presentation.LocalLaw direction model named) :
     presentation.AttachmentLocalLaw direction model named := by
@@ -75,7 +75,7 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
     (sourceZero : source.binderSpine.proxyCount = 0)
     (targetZero : target.binderSpine.proxyCount = 0)
     (siteDirection : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (fuelSource fuelTarget : Nat)
     (sourceContext : ConcreteElaboration.WireContext
@@ -219,9 +219,7 @@ theorem focusedForwardLocalTransportWithAgreementOfEmpty
       (target.plugLayout.frameRegion target.site) targetContext targetBinders
       fuelTarget targetItems targetItemsCompiled targetExact targetBindersCover
       targetEnumeration
-  let fallback : model.Carrier :=
-    model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
-      Lambda.Term 0 (Fin 0)) Fin.elim0
+  let fallback : model.Carrier := Classical.choice model.nonempty
   let sourceEnv :=
     ConcreteElaboration.extendedEnvironment sourceContext
       (source.plugLayout.frameRegion source.site) sourceOuter sourceLocal
@@ -348,7 +346,7 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
     (sourceZero : source.binderSpine.proxyCount = 0)
     (targetZero : target.binderSpine.proxyCount = 0)
     (siteDirection : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (fuelSource fuelTarget : Nat)
     (sourceContext : ConcreteElaboration.WireContext
@@ -492,9 +490,7 @@ theorem focusedBackwardLocalTransportWithAgreementOfEmpty
       (target.plugLayout.frameRegion target.site) targetContext targetBinders
       fuelTarget targetItems targetItemsCompiled targetExact targetBindersCover
       targetEnumeration
-  let fallback : model.Carrier :=
-    model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
-      Lambda.Term 0 (Fin 0)) Fin.elim0
+  let fallback : model.Carrier := Classical.choice model.nonempty
   let targetEnv :=
     ConcreteElaboration.extendedEnvironment targetContext
       (target.plugLayout.frameRegion target.site) targetOuter targetLocal
@@ -610,7 +606,7 @@ noncomputable def concreteSemanticSimulationOfEmpty
     (targetZero : target.binderSpine.proxyCount = 0)
     (sourceBoundary : List (Fin source.frame.val.wireCount))
     (siteDirection : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (localLaw : presentation.AttachmentLocalLaw siteDirection model named) :
     ConcreteElaboration.ConcreteSemanticSimulation signature
@@ -793,7 +789,7 @@ noncomputable def concreteSemanticSimulationOfEmpty
               .atom nodeRegion binder at sourceAtom
         rw [source.plugLayout.plugNode_frameNode] at sourceAtom
         cases hnode : source.frame.val.nodes frameNode with
-        | term owner freePorts term =>
+        | identity owner arity =>
             simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
         | atom owner frameBinder =>
             simp [hnode, PlugLayout.mapFrameNode] at sourceAtom
@@ -996,7 +992,7 @@ theorem rootExactChildSimulationOfEmpty
     (targetClosedExact : targetClosed.Exact
       target.plugLayout.plugRaw.root)
     (siteDirection : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (localLaw : presentation.AttachmentLocalLaw siteDirection model named) :
     ∀ {childDirection : ConcreteElaboration.SimulationDirection}
@@ -1219,7 +1215,7 @@ theorem rootClosedTransportOfEmpty
       (source.frame.val.wires wire).scope = source.frame.val.root)
     (hsite : source.site = source.frame.val.root)
     (siteDirection : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (localLaw : presentation.AttachmentLocalLaw siteDirection model named)
     (allowed : presentation.Allowed siteDirection siteDirection
@@ -1640,7 +1636,7 @@ theorem rootOutput_denoteOfEmpty
       (source.frame.val.wires wire).scope = source.frame.val.root)
     (hsite : source.site = source.frame.val.root)
     (direction : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (localLaw : presentation.AttachmentLocalLaw direction model named)
     (allowed : presentation.Allowed direction direction
@@ -1961,7 +1957,7 @@ noncomputable def nestedRootContextSimulationOfEmpty
     (hnested : source.site ≠ source.frame.val.root)
     (siteDirection rootDirection :
       ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (localLaw : presentation.AttachmentLocalLaw siteDirection model named) :
     ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
@@ -2053,7 +2049,7 @@ theorem nestedDirectionalBoundaryWitnessOfEmpty
       (source.frame.val.wires wire).scope = source.frame.val.root)
     (hnested : source.site ≠ source.frame.val.root)
     (direction : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
     ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
@@ -2215,7 +2211,7 @@ theorem nestedOutput_denoteOfEmpty
     (hnested : source.site ≠ source.frame.val.root)
     (siteDirection rootDirection :
       ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (localLaw : presentation.AttachmentLocalLaw siteDirection model named)
     (allowed : presentation.Allowed siteDirection rootDirection
@@ -2280,7 +2276,7 @@ theorem compiledSpliceSourceOpen_entails_of_root
     (sourceZero : source.binderSpine.proxyCount = 0)
     (targetZero : target.binderSpine.proxyCount = 0)
     (direction : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (localLaw : presentation.AttachmentLocalLaw direction model named)
     (allowed : presentation.Allowed direction direction
@@ -2361,7 +2357,7 @@ theorem compiledSpliceSourceOpen_entails_of_nested
     (targetZero : target.binderSpine.proxyCount = 0)
     (siteDirection rootDirection :
       ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (localLaw : presentation.AttachmentLocalLaw siteDirection model named)
     (allowed : presentation.Allowed siteDirection rootDirection
@@ -2443,7 +2439,7 @@ theorem compiledSpliceSourceOpen_entails_at_attachments
     (targetZero : target.binderSpine.proxyCount = 0)
     (siteDirection rootDirection :
       ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (localLaw : presentation.AttachmentLocalLaw siteDirection model named)
     (allowed : presentation.Allowed siteDirection rootDirection
@@ -2493,7 +2489,7 @@ theorem compiledSpliceSourceOpen_entails
     (targetZero : target.binderSpine.proxyCount = 0)
     (siteDirection rootDirection :
       ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (localLaw : presentation.LocalLaw siteDirection model named)
     (allowed : presentation.Allowed siteDirection rootDirection

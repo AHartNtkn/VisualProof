@@ -27,7 +27,7 @@ noncomputable def relationOfTraceFocus
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       (initialInstantiationState payload) result)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,
@@ -74,7 +74,7 @@ theorem relationOfTraceFocus_contract_of_step
       (initialInstantiationState payload) atom tail site arguments}
     {rest : InstantiationTrace comprehension attachments binders payload fuel
       plan.next result}
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,
@@ -116,7 +116,7 @@ noncomputable def finalFocusRelationSelector
       result.bubble raw)
     (targetWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     VacuousElimTrace.FreshRelationSelector elimTrace targetWellFormed model := by
   intro sourceRels targetRels sourceContext targetContext sourceBinders
@@ -214,7 +214,7 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
       result.bubble raw)
     (targetWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     {sourceRels targetRels : RelCtx}
     (sourceContext : ConcreteElaboration.WireContext elimTrace.sourceDiagram)

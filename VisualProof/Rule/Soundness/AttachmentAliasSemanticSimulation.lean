@@ -32,7 +32,7 @@ theorem childOccurrence_itemSimulation
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
         signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
@@ -212,7 +212,7 @@ theorem oldNodeOccurrences_simulation
     (pattern : CheckedOpenDiagram signature)
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceRecurse : ∀ {relations : RelCtx},
@@ -273,7 +273,7 @@ theorem oldNodeOccurrences_simulation_collapse
     (pattern : CheckedOpenDiagram signature)
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceRecurse : ∀ {relations : RelCtx},
       Fin pattern.val.diagram.regionCount →
@@ -336,7 +336,7 @@ theorem childOccurrences_simulation
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
         signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
@@ -431,7 +431,7 @@ theorem focusedLocalTransport_backward
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
         signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (fuelSource fuelTarget : Nat)
     (sourceOuterContext : ConcreteElaboration.WireContext pattern.val.diagram)
@@ -616,7 +616,7 @@ theorem focusedLocalTransport_forward
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
         signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (fuelSource fuelTarget : Nat)
     (sourceOuterContext : ConcreteElaboration.WireContext pattern.val.diagram)

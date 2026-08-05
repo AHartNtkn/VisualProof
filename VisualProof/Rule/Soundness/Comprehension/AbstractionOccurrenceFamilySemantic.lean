@@ -21,7 +21,7 @@ theorem occurrenceFamily_forward
     {sourceRels targetRels : RelCtx}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (hostFuel : Nat)
     (region : Fin input.val.regionCount)
@@ -106,7 +106,7 @@ theorem occurrenceFamily_backward
     {sourceRels targetRels : RelCtx}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (hostFuel : Nat)
     (region : Fin input.val.regionCount)

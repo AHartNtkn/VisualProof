@@ -296,10 +296,10 @@ def mapPatternNode (layout : PlugLayout input)
     (node : CNode input.pattern.val.diagram.regionCount) :
     CNode layout.regionCount :=
   match node with
-  | .term region freePorts term =>
-      .term (layout.bodyRegion region) freePorts term
   | .atom region binder =>
       .atom (layout.bodyRegion region) (layout.binderRegion binder)
+  | .identity region arity =>
+      .identity (layout.bodyRegion region) arity
   | .named region definition arity =>
       .named (layout.bodyRegion region) definition arity
 
@@ -564,10 +564,10 @@ def mapFrameRegion (layout : PlugLayout input) :
 
 def mapFrameNode (layout : PlugLayout input) :
     CNode input.frame.val.regionCount → CNode layout.regionCount
-  | .term region freePorts term =>
-      .term (layout.frameRegion region) freePorts term
   | .atom region binder =>
       .atom (layout.frameRegion region) (layout.frameRegion binder)
+  | .identity region arity =>
+      .identity (layout.frameRegion region) arity
   | .named region definition arity =>
       .named (layout.frameRegion region) definition arity
 

@@ -59,7 +59,7 @@ theorem localSelection
     (context : SameDiagramContext diagram source target)
     (direction : ConcreteElaboration.SimulationDirection)
     (region : Fin diagram.regionCount)
-    (model : Lambda.LambdaModel) :
+    (model : Model) :
     ∀ (sourceOuter : Fin source.length → model.Carrier)
       (targetOuter : Fin target.length → model.Carrier),
       context.indexRelation.EnvironmentsAgree sourceOuter targetOuter →
@@ -277,7 +277,7 @@ wire contexts and owner-aligned binder contexts. -/
 noncomputable def sameDiagramSemanticSimulation
     (diagram : ConcreteDiagram)
     (wellFormed : diagram.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     ConcreteElaboration.ConcreteSemanticSimulation signature diagram diagram
       model named where

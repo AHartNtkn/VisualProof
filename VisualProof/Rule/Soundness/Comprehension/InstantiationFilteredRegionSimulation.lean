@@ -157,7 +157,7 @@ diagram is supplied as a semantic certificate for each removed atom. -/
 theorem compileRegion_filter_simulation
     {signature : List Nat}
     (state : InstantiationState origin parameterCount proxyCount)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (removed : ∀ {rels : RelCtx}
       (region : Fin state.diagram.val.regionCount)

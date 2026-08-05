@@ -207,7 +207,7 @@ theorem selectedSourceEnvironment_outer
 theorem sourceFocused_partition_denote_iff
     (trace : VacuousElimTrace input bubble raw)
     (wellFormed : input.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (keptItems selectedItems : ItemSeq signature
@@ -235,7 +235,7 @@ theorem sourceFocused_partition_denote_iff
 
 theorem targetFocused_bubble_denote_iff
     (trace : VacuousElimTrace input bubble raw)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (targetContext : ConcreteElaboration.WireContext input)
     (keptItems : ItemSeq signature

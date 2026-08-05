@@ -198,7 +198,7 @@ def mapRegionShape (map : Fin source → Fin target) :
 
 def mapNodeShape (regionMap : Fin sourceRegions → Fin targetRegions) :
     CNode sourceRegions → CNode targetRegions
-  | .term owner freePorts term => .term (regionMap owner) freePorts term
+  | .identity owner arity => .identity (regionMap owner) arity
   | .atom owner binder => .atom (regionMap owner) (regionMap binder)
   | .named owner definition arity =>
       .named (regionMap owner) definition arity
@@ -221,7 +221,7 @@ theorem node_shape_of_regular
     exact regular.2.1 (nodeRegion.symm.trans
       (wrap.property.directNodes_at_anchor node direct))
   cases sourceShape : input.val.nodes node with
-  | term owner freePorts term =>
+  | identity owner arity =>
       have ownerEq : owner = parent := by
         simpa [sourceShape] using nodeRegion
       subst owner

@@ -14,7 +14,7 @@ private theorem finishRegion_denote_iff
     (context : ConcreteElaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (items : ItemSeq signature (context.extend region).length rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin context.length → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
@@ -104,7 +104,7 @@ theorem advance_site_region_simulation_fixed
     (targets : BinderTargetsAtBubble payload state)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -297,8 +297,7 @@ theorem advance_site_region_simulation_fixed
                           targetItems model named targetOuterEnv targetRelEnv).mp
                             targetDenotes
                       let fallback : model.Carrier :=
-                        model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
-                          Lambda.Term 0 (Fin 0)) Fin.elim0
+                        Classical.choice model.nonempty
                       obtain ⟨sourceLocal, sourceItemsDenote⟩ :=
                         advance_site_items_denote_fixed comprehension attachments
                           binders payload state atom tail site arguments node_eq
@@ -358,7 +357,7 @@ theorem advance_enclosed_region_simulation_fixed
     (targets : BinderTargetsAtBubble payload state)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,

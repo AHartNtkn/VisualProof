@@ -98,7 +98,7 @@ structure RootItemContractionTransport
   replacementIso : RegionIso signature holeWire
     sourceWitness.toFocus.holeRels sourceReplacement
     (holeRelsEq ▸ targetReplacement)
-  equivalent : ∀ (model : Lambda.LambdaModel)
+  equivalent : ∀ (model : Model)
     (named : NamedEnv model.Carrier signature)
     (targetEnvironment : Fin targetWires → model.Carrier)
     (relEnv : RelEnv model.Carrier rels),
@@ -117,7 +117,7 @@ theorem ItemSeqIso.transportRootContraction
     (sourceWitness : Region.ContextPath (Region.mk 0 sourceItems) path)
     (sourceReplacement : Region signature sourceWitness.toFocus.holeWires
       sourceWitness.toFocus.holeRels)
-    (sourceEquivalent : ∀ (model : Lambda.LambdaModel)
+    (sourceEquivalent : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (sourceEnvironment : Fin sourceWires → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
@@ -206,7 +206,7 @@ structure OrderedRootItemContraction
   witness : Region.ContextPath (Region.mk 0 items) path
   replacement : Region signature witness.toFocus.holeWires
     witness.toFocus.holeRels
-  equivalent : ∀ (model : Lambda.LambdaModel)
+  equivalent : ∀ (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin checked.val.rootWires.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels),
@@ -1158,7 +1158,7 @@ relation environment across the same relation-context equality. -/
 theorem denoteItemSeq_castRels_iff
     {source target : RelCtx} (equality : source = target)
     (items : ItemSeq signature wires source)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin wires → model.Carrier)
     (targetRelEnv : RelEnv model.Carrier target) :
@@ -1174,7 +1174,7 @@ theorem OrderedRootItemContraction.pointwise_equiv
     {checked : CheckedOpenDiagram signature}
     {compiled : Splice.Input.OpenRootCompilerItems checked}
     (contraction : OrderedRootItemContraction checked compiled)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin checked.val.rootWires.length → model.Carrier) :
     let modified : Region signature checked.val.rootWires.length [] :=
@@ -1210,7 +1210,7 @@ theorem OrderedRootItemContraction.wholeOpen_equiv
     {checked : CheckedOpenDiagram signature}
     {compiled : Splice.Input.OpenRootCompilerItems checked}
     (contraction : OrderedRootItemContraction checked compiled)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin checked.val.boundary.length → model.Carrier) :
     let source := checked.elaborate
@@ -2155,7 +2155,7 @@ structure RootItemContractionAlongTransport
   replacementIso : RegionIso signature alignment.holeWire
     sourceWitness.toFocus.holeRels sourceReplacement
     (alignment.holeRelsEq.symm ▸ targetReplacement)
-  equivalent : ∀ (model : Lambda.LambdaModel)
+  equivalent : ∀ (model : Model)
     (named : NamedEnv model.Carrier signature)
     (targetEnvironment : Fin targetWires → model.Carrier)
     (relEnv : RelEnv model.Carrier rels),
@@ -2178,7 +2178,7 @@ theorem ItemSeqIso.transportRootContractionAlong
       sourceWitness targetWitness)
     (sourceReplacement : Region signature sourceWitness.toFocus.holeWires
       sourceWitness.toFocus.holeRels)
-    (sourceEquivalent : ∀ (model : Lambda.LambdaModel)
+    (sourceEquivalent : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (sourceEnvironment : Fin sourceWires → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
@@ -2206,7 +2206,7 @@ theorem ItemSeqIso.transportRootContractionAlong
       (sourceWitness.toFocus.context.fill sourceReplacement)
       (targetWitness.toFocus.context.fill targetReplacement) :=
     targetFill ▸ filledIsoCore
-  have targetEquivalent : ∀ (model : Lambda.LambdaModel)
+  have targetEquivalent : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (targetEnvironment : Fin targetWires → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),

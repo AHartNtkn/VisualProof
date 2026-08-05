@@ -94,7 +94,7 @@ theorem targetNode_endpoint_origin_occurs
 exact survivor context and binder maps. -/
 theorem regularNode_itemSimulation
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext input.val)

@@ -113,7 +113,7 @@ theorem advance_mapped_frame_item_denotes
     (relBinders : ConcreteElaboration.BinderContext
       (advanceInstantiationState comprehension attachments binders payload state
         atom tail site arguments hadmissible).diagram.val rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)

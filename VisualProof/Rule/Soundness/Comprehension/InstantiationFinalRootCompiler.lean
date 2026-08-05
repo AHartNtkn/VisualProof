@@ -34,7 +34,7 @@ theorem focusedRootItems_transport
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (fuelSource fuelTarget : Nat)
     (sourceRoot : ConcreteElaboration.WireContext elimTrace.sourceDiagram)
@@ -683,8 +683,7 @@ theorem focusedRootItems_transport
                           bindersAgree sourceCompiledDrop
                           targetBubbleCompiledRegion
                       let fallback : model.Carrier :=
-                        Classical.choice
-                          (ConcreteElaboration.lambdaModel_carrier_nonempty model)
+                        Classical.choice model.nonempty
                       let wireValue :=
                         InstantiationSemantic.exactContextWireValue
                           sourceRoot
@@ -798,8 +797,7 @@ theorem focusedRootItems_transport
                           terminalSelectedCompiled terminalFocusEnvironment
                           targetRelations fresh terminalBubbleDenote
                       let fallback : model.Carrier :=
-                        Classical.choice
-                          (ConcreteElaboration.lambdaModel_carrier_nonempty model)
+                        Classical.choice model.nonempty
                       let terminalWireValue :=
                         InstantiationSemantic.exactContextWireValue
                           sourceRoot

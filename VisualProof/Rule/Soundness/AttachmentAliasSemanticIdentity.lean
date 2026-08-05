@@ -33,7 +33,7 @@ theorem aliasOccurrence_denotes_iff
     (compiled : ConcreteElaboration.compileOccurrencesWith? signature
       (materializedDiagram pattern attachment bodyContainer) recurse context
       binders [.node (aliasNode pattern attachment aliasIndex)] = some items)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
@@ -41,10 +41,10 @@ theorem aliasOccurrence_denotes_iff
       ∀ output input,
         ConcreteElaboration.resolvePort?
             (materializedDiagram pattern attachment bodyContainer) context
-            (aliasNode pattern attachment aliasIndex) .output = some output →
+            (aliasNode pattern attachment aliasIndex) (.arg 0) = some output →
         ConcreteElaboration.resolvePort?
             (materializedDiagram pattern attachment bodyContainer) context
-            (aliasNode pattern attachment aliasIndex) (.free 0) = some input →
+            (aliasNode pattern attachment aliasIndex) (.arg 1) = some input →
         env output = env input := by
   simp only [ConcreteElaboration.compileOccurrencesWith?,
     ConcreteElaboration.compileOccurrenceWith?] at compiled
@@ -52,59 +52,60 @@ theorem aliasOccurrence_denotes_iff
   have aliasShape :
       (materializedDiagram pattern attachment bodyContainer).nodes
           (aliasNode pattern attachment aliasIndex) =
-        .term bodyContainer 1 (.port 0) := by
+        .identity bodyContainer 2 := by
     simp [materializedDiagram, aliasNode]
   rw [aliasShape] at compiled
-  cases outputResult : ConcreteElaboration.resolvePort?
+  simp only at compiled
+  cases argumentsResult : ConcreteElaboration.resolvePorts?
       (materializedDiagram pattern attachment bodyContainer) context
-      (aliasNode pattern attachment aliasIndex) .output with
+      (aliasNode pattern attachment aliasIndex) 2 with
   | none =>
-      rw [outputResult] at compiled
+      rw [argumentsResult] at compiled
       simp at compiled
-  | some output =>
-      rw [outputResult] at compiled
-      simp only [Option.bind_some] at compiled
-      cases freeResult : ConcreteElaboration.resolvePorts?
-          (materializedDiagram pattern attachment bodyContainer) context
-          (aliasNode pattern attachment aliasIndex) 1 (fun index => .free index) with
-      | none =>
-          rw [freeResult] at compiled
-          simp at compiled
-      | some free =>
-          rw [freeResult] at compiled
-          change some (ItemSeq.cons
-            (Item.equation output ((Lambda.Term.port 0).mapFree free))
-              ItemSeq.nil) = some items at compiled
-          injection compiled with itemsEq
-          subst items
-          simp only [denoteItemSeq_cons, denoteItem_equation,
-            denoteItemSeq_nil, and_true]
-          rw [model.eval_mapFree]
-          have evalPort : model.eval (Lambda.Term.port 0)
-              (env ∘ free) = env (free 0) := by
-            simpa using model.eval_port (0 : Fin 1) (env ∘ free)
-          rw [evalPort]
-          constructor
-          · intro equality candidateOutput candidateInput candidateOutputResult
-              candidateInputResult
-            have outputEq : candidateOutput = output :=
-              Option.some.inj candidateOutputResult.symm
-            have inputResult : ConcreteElaboration.resolvePorts?
-                (materializedDiagram pattern attachment bodyContainer) context
-                (aliasNode pattern attachment aliasIndex) 1
-                (fun index => .free index) = some free := freeResult
-            have inputEq : candidateInput = free 0 := by
-              have singleton := sequenceFin_sound inputResult (0 : Fin 1)
-              change ConcreteElaboration.resolvePort?
+  | some arguments =>
+      rw [argumentsResult] at compiled
+      injection compiled with itemsEq
+      subst items
+      simp only [denoteItemSeq_cons, denoteItem_identity,
+        denoteItemSeq_nil, and_true]
+      have portResult (index : Fin 2) :
+          ConcreteElaboration.resolvePort?
+              (materializedDiagram pattern attachment bodyContainer) context
+              (aliasNode pattern attachment aliasIndex) (.arg index) =
+            some (arguments index) :=
+        sequenceFin_sound argumentsResult index
+      constructor
+      · intro equality output input outputResult inputResult
+        have outputEq : output = arguments 0 := by
+          have atZero :
+              ConcreteElaboration.resolvePort?
                   (materializedDiagram pattern attachment bodyContainer) context
-                  (aliasNode pattern attachment aliasIndex) (.free 0) =
-                some (free 0) at singleton
-              rw [candidateInputResult] at singleton
-              exact Option.some.inj singleton
-            simpa [outputEq, inputEq] using equality
-          · intro property
-            apply property output (free 0) rfl
-            exact sequenceFin_sound freeResult (0 : Fin 1)
+                  (aliasNode pattern attachment aliasIndex) (.arg 0) =
+                some (arguments 0) := by
+            simpa using portResult (0 : Fin 2)
+          rw [outputResult] at atZero
+          exact Option.some.inj atZero
+        have inputEq : input = arguments 1 := by
+          have atOne :
+              ConcreteElaboration.resolvePort?
+                  (materializedDiagram pattern attachment bodyContainer) context
+                  (aliasNode pattern attachment aliasIndex) (.arg 1) =
+                some (arguments 1) := by
+            simpa using portResult (1 : Fin 2)
+          rw [inputResult] at atOne
+          exact Option.some.inj atOne
+        simpa [outputEq, inputEq] using equality (0 : Fin 2) (1 : Fin 2)
+      · intro property left right
+        have equality : env (arguments 0) = env (arguments 1) :=
+          property (arguments 0) (arguments 1) (portResult 0) (portResult 1)
+        have leftCases : left = 0 ∨ left = 1 := by omega
+        have rightCases : right = 0 ∨ right = 1 := by omega
+        rcases leftCases with rfl | rfl <;>
+          rcases rightCases with rfl | rfl
+        · rfl
+        · exact equality
+        · exact equality.symm
+        · rfl
 
 /-- Under the collapse environment, every inserted identity block denotes. -/
 theorem aliasOccurrences_denote_of_collapse
@@ -134,7 +135,7 @@ theorem aliasOccurrences_denote_of_collapse
     (compiled : ConcreteElaboration.compileOccurrencesWith? signature
       (materializedDiagram pattern.val attachment spine.bodyContainer) recurse
       targetContext binders (aliasOccurrences pattern.val attachment) = some items)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin sourceContext.length → model.Carrier)
     (targetEnv : Fin targetContext.length → model.Carrier)

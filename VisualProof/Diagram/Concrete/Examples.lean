@@ -15,13 +15,13 @@ def validNested : ConcreteDiagram where
     else .cut 1
   nodes := fun node =>
     if node = 0 then
-      .term 2 0 (.lam (.bvar 0))
+      .atom 2 1
     else
       .atom 2 1
   wires := fun _ => {
     scope := 1
     endpoints := [
-      { node := 0, port := .output },
+      { node := 0, port := .arg 0 },
       { node := 1, port := .arg 0 }
     ]
   }
@@ -104,15 +104,15 @@ theorem namedArityMismatch_check :
   rfl
 
 def invalidPort : ConcreteDiagram where
-  regionCount := 1
+  regionCount := 2
   nodeCount := 1
   wireCount := 1
   root := 0
-  regions := fun _ => .sheet
-  nodes := fun _ => .term 0 0 (.lam (.bvar 0))
+  regions := fun region => if region = 0 then .sheet else .bubble 0 0
+  nodes := fun _ => .atom 1 1
   wires := fun _ => {
-    scope := 0
-    endpoints := [{ node := 0, port := .free 0 }]
+    scope := 1
+    endpoints := [{ node := 0, port := .arg 0 }]
   }
 
 theorem invalidPort_check :
@@ -120,17 +120,17 @@ theorem invalidPort_check :
   rfl
 
 def duplicateEndpoint : ConcreteDiagram where
-  regionCount := 1
+  regionCount := 2
   nodeCount := 1
   wireCount := 1
   root := 0
-  regions := fun _ => .sheet
-  nodes := fun _ => .term 0 0 (.lam (.bvar 0))
+  regions := fun region => if region = 0 then .sheet else .bubble 0 1
+  nodes := fun _ => .atom 1 1
   wires := fun _ => {
-    scope := 0
+    scope := 1
     endpoints := [
-      { node := 0, port := .output },
-      { node := 0, port := .output }
+      { node := 0, port := .arg 0 },
+      { node := 0, port := .arg 0 }
     ]
   }
 
@@ -139,15 +139,15 @@ theorem duplicateEndpoint_check :
   rfl
 
 def crossWireEndpoint : ConcreteDiagram where
-  regionCount := 1
+  regionCount := 2
   nodeCount := 1
   wireCount := 2
   root := 0
-  regions := fun _ => .sheet
-  nodes := fun _ => .term 0 0 (.lam (.bvar 0))
+  regions := fun region => if region = 0 then .sheet else .bubble 0 1
+  nodes := fun _ => .atom 1 1
   wires := fun _ => {
-    scope := 0
-    endpoints := [{ node := 0, port := .output }]
+    scope := 1
+    endpoints := [{ node := 0, port := .arg 0 }]
   }
 
 theorem crossWireEndpoint_check :
@@ -155,15 +155,15 @@ theorem crossWireEndpoint_check :
   rfl
 
 def missingPort : ConcreteDiagram where
-  regionCount := 1
+  regionCount := 2
   nodeCount := 1
   wireCount := 1
   root := 0
-  regions := fun _ => .sheet
-  nodes := fun _ => .term 0 1 (.port 0)
+  regions := fun region => if region = 0 then .sheet else .bubble 0 1
+  nodes := fun _ => .atom 1 1
   wires := fun _ => {
-    scope := 0
-    endpoints := [{ node := 0, port := .output }]
+    scope := 1
+    endpoints := []
   }
 
 theorem missingPort_check :
@@ -171,15 +171,18 @@ theorem missingPort_check :
   rfl
 
 def nonenclosingScope : ConcreteDiagram where
-  regionCount := 2
+  regionCount := 3
   nodeCount := 1
   wireCount := 1
   root := 0
-  regions := fun region => if region = 0 then .sheet else .cut 0
-  nodes := fun _ => .term 0 0 (.lam (.bvar 0))
+  regions := fun region =>
+    if region = 0 then .sheet
+    else if region = 1 then .bubble 0 1
+    else .cut 0
+  nodes := fun _ => .atom 1 1
   wires := fun _ => {
-    scope := 1
-    endpoints := [{ node := 0, port := .output }]
+    scope := 2
+    endpoints := [{ node := 0, port := .arg 0 }]
   }
 
 theorem nonenclosingScope_check :

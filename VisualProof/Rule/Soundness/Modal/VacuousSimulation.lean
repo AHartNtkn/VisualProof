@@ -13,7 +13,7 @@ theorem bubbleItem_denote
       (vacuousIntroRaw input selection arity))
     (items : ItemSeq signature
       (context.extend (bubbleRegion input)).length (arity :: rels))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
@@ -43,7 +43,7 @@ theorem focusedItems
     (selection : CheckedSelection input.val) (arity : Nat)
     (targetWellFormed :
       (vacuousIntroRaw input.val selection arity).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     {sourceRels targetRels : RelCtx}
     (direction : ConcreteElaboration.SimulationDirection)
@@ -515,7 +515,7 @@ theorem focusedItems
 
 theorem localTransport_of_itemSimulation
     (input : ConcreteDiagram) (selection : CheckedSelection input)
-    (arity : Nat) (model : Lambda.LambdaModel)
+    (arity : Nat) (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext input)
@@ -617,7 +617,7 @@ noncomputable def vacuousIntroSimulation
     (selection : CheckedSelection input.val) (arity : Nat)
     (targetWellFormed :
       (vacuousIntroRaw input.val selection arity).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     ConcreteElaboration.ConcreteSemanticSimulation signature input.val
       (vacuousIntroRaw input.val selection arity) model named where

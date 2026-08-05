@@ -55,10 +55,10 @@ private def symmetricHostRaw : ConcreteDiagram where
   wireCount := 2
   root := 0
   regions := fun _ => .sheet
-  nodes := fun _ => .term 0 0 (.lam (.bvar 0))
+  nodes := fun _ => .identity 0 1
   wires := fun wire => {
     scope := 0
-    endpoints := [{ node := ⟨wire.val, wire.isLt⟩, port := .output }]
+    endpoints := [{ node := ⟨wire.val, wire.isLt⟩, port := .arg 0 }]
   }
 
 private theorem symmetricHostRaw_check :
@@ -75,10 +75,10 @@ private def symmetricPatternDiagram : ConcreteDiagram where
   wireCount := 1
   root := 0
   regions := fun _ => .sheet
-  nodes := fun _ => .term 0 0 (.lam (.bvar 0))
+  nodes := fun _ => .identity 0 1
   wires := fun _ => {
     scope := 0
-    endpoints := [{ node := 0, port := .output }]
+    endpoints := [{ node := 0, port := .arg 0 }]
   }
 
 private theorem symmetricPatternDiagram_check :
@@ -177,32 +177,28 @@ private def statusJson : SearchStatus → String
   | .exhausted => "\"exhausted\""
 
 private def boundaryAliasesBareWireJson : String :=
-  let result := findOccurrences boundaryAliasesBareWire
-    (exactOracle boundaryAliasesBareWire) 100
+  let result := findOccurrences boundaryAliasesBareWire 100
   "{\"fixture\":\"boundaryAliasesBareWire\",\"status\":" ++
     statusJson result.status ++ ",\"attachments\":[0,0],\"found\":[" ++
     String.intercalate ","
       (result.found.map (footprintJson boundaryAliasesBareWire)) ++ "]}"
 
 private def nestedExactnessJson : String :=
-  let result := findOccurrences nestedExactness
-    (exactOracle nestedExactness) 1000
+  let result := findOccurrences nestedExactness 1000
   "{\"fixture\":\"nestedExactness\",\"status\":" ++
     statusJson result.status ++ ",\"attachments\":[],\"found\":[" ++
     String.intercalate ","
       (result.found.map (footprintJson nestedExactness)) ++ "]}"
 
 private def symmetricFootprintsJson : String :=
-  let result := findOccurrences symmetricFootprints
-    (exactOracle symmetricFootprints) 1000
+  let result := findOccurrences symmetricFootprints 1000
   "{\"fixture\":\"symmetricFootprints\",\"status\":" ++
     statusJson result.status ++ ",\"attachments\":[],\"found\":[" ++
     String.intercalate ","
       (result.found.map (footprintJson symmetricFootprints)) ++ "]}"
 
 private def openBinderIdentityJson : String :=
-  let result := findOccurrences openBinderIdentity
-    (exactOracle openBinderIdentity) 1000
+  let result := findOccurrences openBinderIdentity 1000
   "{\"fixture\":\"openBinderIdentity\",\"status\":" ++
     statusJson result.status ++ ",\"attachments\":[0,1],\"found\":[" ++
     String.intercalate ","

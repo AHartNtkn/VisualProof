@@ -27,7 +27,7 @@ theorem terminalPrepared_denotes_of_output
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).length → model.Carrier)
@@ -124,7 +124,7 @@ theorem output_denotes_of_host_and_terminalPrepared
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).length → model.Carrier)
@@ -235,7 +235,7 @@ theorem terminalItems_denotes_of_output
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).length → model.Carrier)

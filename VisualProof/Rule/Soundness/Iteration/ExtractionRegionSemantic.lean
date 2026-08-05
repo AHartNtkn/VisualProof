@@ -108,7 +108,7 @@ theorem extractionCompileRegion_material_denote
     (input : CheckedDiagram signature)
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     ∀ {fragmentRels hostRels : RelCtx}
       (direction : ConcreteElaboration.SimulationDirection)

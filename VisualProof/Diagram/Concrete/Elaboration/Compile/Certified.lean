@@ -321,7 +321,7 @@ private theorem compileNode?_certifiedEquivariant
       some sourceItem)
     (htargetResult : compileNode? signature target targetContext targetBinders
       (equiv.nodes node) = some targetItem) :
-    ItemBetaEtaEquiv signature ambient rels sourceItem targetItem := by
+    ItemIso signature ambient rels sourceItem targetItem := by
   unfold compileNode? at hsource htargetResult
   generalize hsourceNode : source.nodes node = sourceNode at hsource
   generalize htargetNode : target.nodes (equiv.nodes node) = targetNode
@@ -329,38 +329,6 @@ private theorem compileNode?_certifiedEquivariant
   have correspondence := equiv.nodes_correspond node
   rw [hsourceNode, htargetNode] at correspondence
   cases correspondence with
-  | term sourceRegion targetRegion ports sourceTerm targetTerm
-      region_eq certificate =>
-      simp only at hsource htargetResult
-      cases hsourceOutput : resolvePort? source sourceContext node .output with
-      | none => simp [hsourceOutput] at hsource
-      | some sourceOutput =>
-          cases hsourceFree : resolvePorts? source sourceContext node ports
-              (fun index => .free index) with
-          | none => simp [hsourceOutput, hsourceFree] at hsource
-          | some sourceFree =>
-              simp [hsourceOutput, hsourceFree] at hsource
-              subst sourceItem
-              cases htargetOutput : resolvePort? target targetContext
-                  (equiv.nodes node) .output with
-              | none => simp [htargetOutput] at htargetResult
-              | some targetOutput =>
-                  cases htargetFree : resolvePorts? target targetContext
-                      (equiv.nodes node) ports (fun index => .free index) with
-                  | none => simp [htargetOutput, htargetFree] at htargetResult
-                  | some targetFree =>
-                      simp [htargetOutput, htargetFree] at htargetResult
-                      subst targetItem
-                      apply ItemBetaEtaEquiv.equation
-                      · exact certifiedResolvePort?_equivariant equiv htarget
-                          hwires htargetNodup node .output
-                          hsourceOutput htargetOutput
-                      · rw [Lambda.Term.mapFree_comp]
-                        have free_eq := certifiedResolvePorts?_equivariant
-                          equiv htarget hwires htargetNodup node ports
-                          (fun index => .free index) hsourceFree htargetFree
-                        rw [free_eq]
-                        exact certificate.positionalBetaEta.mapFree targetFree
   | atom sourceRegion sourceBinder targetRegion targetBinder
       region_eq binder_eq =>
       simp only at hsource htargetResult
@@ -388,6 +356,24 @@ private theorem compileNode?_certifiedEquivariant
                         equiv htarget hwires htargetNodup node arity
                         (fun index => .arg index)
                         hsourceArguments htargetArguments)
+  | identity sourceRegion targetRegion arity region_eq =>
+      simp only at hsource htargetResult
+      cases hsourceArguments : resolvePorts? source sourceContext node arity
+          (fun index => .arg index) with
+      | none => simp [hsourceArguments] at hsource
+      | some sourceArguments =>
+          simp [hsourceArguments] at hsource
+          subst sourceItem
+          cases htargetArguments : resolvePorts? target targetContext
+              (equiv.nodes node) arity (fun index => .arg index) with
+          | none => simp [htargetArguments] at htargetResult
+          | some targetArguments =>
+              simp [htargetArguments] at htargetResult
+              subst targetItem
+              exact .identity (certifiedResolvePorts?_equivariant
+                equiv htarget hwires htargetNodup node arity
+                (fun index => .arg index)
+                hsourceArguments htargetArguments)
   | named sourceRegion targetRegion definition arity region_eq =>
       simp only at hsource htargetResult
       cases hrelation : namedRel? signature definition arity with
@@ -410,7 +396,7 @@ private theorem compileNode?_certifiedEquivariant
                     (fun index => .arg index)
                     hsourceArguments htargetArguments)
 
-theorem regionBetaEtaEquiv_of_cast
+theorem regionIso_of_cast
     {sourceOuter targetOuter sourceLocal targetLocal
       sourceExtended targetExtended : Nat}
     (sourceEq : sourceExtended = sourceOuter + sourceLocal)
@@ -419,15 +405,15 @@ theorem regionBetaEtaEquiv_of_cast
     (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
     (sourceItems : ItemSeq signature sourceExtended rels)
     (targetItems : ItemSeq signature targetExtended rels)
-    (hitems : ItemSeqBetaEtaEquiv signature
+    (hitems : ItemSeqIso signature
       (castFinEquiv sourceEq targetEq
         (extendWireEquiv ambient localEquiv)) rels sourceItems targetItems) :
-    RegionBetaEtaEquiv signature ambient rels
+    RegionIso signature ambient rels
       (.mk sourceLocal (sourceItems.castWiresEq sourceEq))
       (.mk targetLocal (targetItems.castWiresEq targetEq)) := by
   subst sourceExtended
   subst targetExtended
-  simpa using RegionBetaEtaEquiv.mk localEquiv hitems
+  simpa using RegionIso.mk localEquiv hitems
 
 private theorem compileRegion?_certifiedEquivariant
     {source target : ConcreteDiagram}
@@ -449,7 +435,7 @@ private theorem compileRegion?_certifiedEquivariant
       sourceBinders = some sourceBody)
     (htargetResult : compileRegion? signature target targetFuel
       (equiv.regions region) targetContext targetBinders = some targetBody) :
-    RegionBetaEtaEquiv signature ambient rels sourceBody targetBody := by
+    RegionIso signature ambient rels sourceBody targetBody := by
   induction sourceFuel generalizing targetFuel region sourceContext
       targetContext rels sourceBinders targetBinders sourceBody targetBody with
   | zero => simp [compileRegion?] at hsource
@@ -476,7 +462,7 @@ private theorem compileRegion?_certifiedEquivariant
                   (compileRegion? signature target targetFuel) targetExtended
                   targetBinders (certifiedRenameOccurrence equiv occurrence) =
                     some targetItem →
-              ItemBetaEtaEquiv signature extended rels sourceItem targetItem := by
+              ItemIso signature extended rels sourceItem targetItem := by
             intro occurrence hoccurrenceMem sourceItem targetItem
               hsourceItem htargetItem
             cases occurrence with
@@ -589,9 +575,9 @@ private theorem compileRegion?_certifiedEquivariant
                       (Fin targetItems.length) :=
                     castFinEquiv hsourceLength htargetLength
                       (certifiedLocalOccurrenceEquiv equiv region)
-                  have hitems : ItemSeqBetaEtaEquiv signature extended rels
+                  have hitems : ItemSeqIso signature extended rels
                       sourceItems targetItems := by
-                    apply ItemSeqBetaEtaEquiv.permute positions
+                    apply ItemSeqIso.permute positions
                     intro sourceIndex
                     let occurrenceIndex :
                         Fin (localOccurrences source region).length :=
@@ -620,7 +606,7 @@ private theorem compileRegion?_certifiedEquivariant
                       hsourceGet htargetGet
                   simpa only [finishRegion, sourceExtended, targetExtended,
                     extended, certifiedExtendedContextEquiv] using
-                    regionBetaEtaEquiv_of_cast
+                    regionIso_of_cast
                       (WireContext.length_extend sourceContext region)
                       (WireContext.length_extend targetContext
                         (equiv.regions region))
@@ -648,7 +634,7 @@ theorem compileRoot?_certifiedEquivariant
       some sourceBody)
     (htargetResult : compileRoot? signature target targetAmbient targetLocal =
       some targetBody) :
-    RegionBetaEtaEquiv signature ambient [] sourceBody targetBody := by
+    RegionIso signature ambient [] sourceBody targetBody := by
   let sourceRoot := sourceAmbient ++ sourceLocal
   let targetRoot := targetAmbient ++ targetLocal
   let rootEquiv := appendContextEquiv ambient localEquiv
@@ -672,7 +658,7 @@ theorem compileRoot?_certifiedEquivariant
           (compileRegion? signature target source.regionCount)
           targetRoot BinderContext.empty
           (certifiedRenameOccurrence equiv occurrence) = some targetItem →
-      ItemBetaEtaEquiv signature rootEquiv [] sourceItem targetItem := by
+      ItemIso signature rootEquiv [] sourceItem targetItem := by
     intro occurrence hoccurrenceMem sourceItem targetItem
       hsourceItem htargetItem
     cases occurrence with
@@ -789,9 +775,9 @@ theorem compileRoot?_certifiedEquivariant
               (Fin targetItems.length) :=
             castFinEquiv hsourceLength htargetLength
               (certifiedLocalOccurrenceEquiv equiv source.root)
-          have hitems : ItemSeqBetaEtaEquiv signature rootEquiv []
+          have hitems : ItemSeqIso signature rootEquiv []
               sourceItems targetItems := by
-            apply ItemSeqBetaEtaEquiv.permute positions
+            apply ItemSeqIso.permute positions
             intro sourceIndex
             let occurrenceIndex :
                 Fin (localOccurrences source source.root).length :=
@@ -819,7 +805,7 @@ theorem compileRoot?_certifiedEquivariant
             exact hoccurrence _ (List.get_mem _ _) _ _
               hsourceGet htargetGet
           simpa only [finishRoot, sourceRoot, targetRoot, rootEquiv] using
-            regionBetaEtaEquiv_of_cast (by simp [sourceRoot])
+            regionIso_of_cast (by simp [sourceRoot])
               (by simp [targetRoot]) ambient localEquiv
               sourceItems targetItems hitems
 

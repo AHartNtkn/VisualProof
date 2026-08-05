@@ -10,12 +10,12 @@ open Theory
 namespace CheckedDiagram
 
 def denote (checked : CheckedDiagram signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) : Prop :=
   denoteRegion (relCtx := []) model named Fin.elim0 PUnit.unit checked.elaborate
 
 theorem denote_eq_intrinsic (checked : CheckedDiagram signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     checked.denote model named =
       denoteRegion (relCtx := []) model named Fin.elim0 PUnit.unit
@@ -26,13 +26,13 @@ end CheckedDiagram
 namespace CheckedOpenDiagram
 
 def denote (checked : CheckedOpenDiagram signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin checked.val.boundary.length → model.Carrier) : Prop :=
   VisualProof.Diagram.denoteOpen model named checked.elaborate args
 
 theorem denote_eq_intrinsic (checked : CheckedOpenDiagram signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin checked.val.boundary.length → model.Carrier) :
     checked.denote model named args =
@@ -43,14 +43,14 @@ end CheckedOpenDiagram
 namespace OpenConcreteDiagram
 
 def denote (d : OpenConcreteDiagram) (hwf : d.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin d.boundary.length → model.Carrier) : Prop :=
   CheckedOpenDiagram.denote ⟨d, hwf⟩ model named args
 
 theorem denote_eq_intrinsic (d : OpenConcreteDiagram)
     (hwf : d.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin d.boundary.length → model.Carrier) :
     d.denote hwf model named args =
@@ -58,7 +58,7 @@ theorem denote_eq_intrinsic (d : OpenConcreteDiagram)
 
 theorem denote_proof_irrelevant (d : OpenConcreteDiagram)
     (first second : d.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin d.boundary.length → model.Carrier) :
     d.denote first model named args = d.denote second model named args := by
@@ -73,7 +73,7 @@ theorem denote_iff {source target : OpenConcreteDiagram}
     (iso : OpenConcreteIso source target)
     (hsource : source.WellFormed signature)
     (htarget : target.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin source.boundary.length -> model.Carrier) :
     source.denote hsource model named args <->
@@ -92,13 +92,13 @@ end OpenConcreteIso
 namespace ConcreteDiagram
 
 def denote (d : ConcreteDiagram) (hwf : d.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) : Prop :=
   CheckedDiagram.denote ⟨d, hwf⟩ model named
 
 theorem denote_proof_irrelevant (d : ConcreteDiagram)
     (first second : d.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     d.denote first model named = d.denote second model named := by
   rfl
@@ -111,7 +111,7 @@ theorem denote_iff {source target : ConcreteDiagram}
     (iso : ConcreteIso source target)
     (hsource : source.WellFormed signature)
     (htarget : target.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     source.denote hsource model named ↔ target.denote htarget model named := by
   exact iso_denotation (iso.elaborate_isomorphic hsource htarget)
@@ -122,7 +122,7 @@ end ConcreteIso
 namespace ConcreteExamples
 
 theorem repeatedBoundary_denote_rejects_unequal
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier [])
+    (model : Model) (named : NamedEnv model.Carrier [])
     (args : Fin repeatedBoundary.boundary.length → model.Carrier)
     (hne : args ⟨0, by decide⟩ ≠ args ⟨1, by decide⟩) :
     ¬ repeatedBoundaryChecked.denote model named args := by
@@ -141,13 +141,13 @@ theorem repeatedBoundary_denote_rejects_unequal
       assignment.agrees ⟨1, by decide⟩
 
 theorem bareWire_denotes_iff_nonempty
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier []) :
+    (model : Model) (named : NamedEnv model.Carrier []) :
     bareWireChecked.denote model named <-> Nonempty model.Carrier := by
   rw [CheckedDiagram.denote_eq_intrinsic, bareWire_elaborate]
   exact bareLocalWireExample_denotes_iff_nonempty model named
 
 theorem validNestedRelabeled_denote_iff
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier []) :
+    (model : Model) (named : NamedEnv model.Carrier []) :
     validNested.denote (checkWellFormed_iff.mp validNested_check) model named ↔
       validNestedRelabeled.denote validNestedRelabeled_wellFormed model named :=
   validNestedRelabeledIso.denote_iff
@@ -159,7 +159,7 @@ end ConcreteExamples
 namespace OpenConcreteIsomorphismExamples
 
 theorem relabeledOpen_denote_iff
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier [1])
     (args : Fin relabeledSource.boundary.length -> model.Carrier) :
     relabeledSource.denote relabeledSource_wellFormed model named args <->

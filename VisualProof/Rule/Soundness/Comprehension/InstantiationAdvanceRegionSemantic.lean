@@ -29,7 +29,7 @@ def AdvanceRegionSimulation
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
@@ -116,7 +116,7 @@ theorem advance_region_simulation_of_site
     (node_eq : state.diagram.val.nodes atom = .atom site state.bubble)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (siteCase : ∀ direction sourceFuel targetFuel,
       AdvanceRegionSimulation comprehension attachments binders payload state

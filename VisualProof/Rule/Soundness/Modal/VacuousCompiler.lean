@@ -188,7 +188,7 @@ end MappedBinderWitness
 
 theorem compileNode_itemSimulation
     (input : ConcreteDiagram) (selection : CheckedSelection input)
-    (arity : Nat) (model : Lambda.LambdaModel)
+    (arity : Nat) (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext input)
@@ -207,10 +207,10 @@ theorem compileNode_itemSimulation
     (nodeShape :
       (vacuousIntroRaw input selection arity).nodes node =
         match input.nodes node with
-        | .term owner freePorts term =>
-            .term (regionMap owner) freePorts term
         | .atom owner binder =>
             .atom (regionMap owner) binder.castSucc
+        | .identity owner arity =>
+            .identity (regionMap owner) arity
         | .named owner definition nodeArity =>
             .named (regionMap owner) definition nodeArity)
     (sourceItem : Item signature sourceContext.length sourceRels)
@@ -251,7 +251,7 @@ theorem compileOccurrence_itemSimulation
     (arity : Nat) (sourceWellFormed : input.WellFormed signature)
     (targetWellFormed :
       (vacuousIntroRaw input selection arity).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
@@ -284,10 +284,10 @@ theorem compileOccurrence_itemSimulation
       occurrence = .node node →
       (vacuousIntroRaw input selection arity).nodes node =
         match input.nodes node with
-        | .term owner freePorts term =>
-            .term (regionMap owner) freePorts term
         | .atom owner binder =>
             .atom (regionMap owner) binder.castSucc
+        | .identity owner arity =>
+            .identity (regionMap owner) arity
         | .named owner definition nodeArity =>
             .named (regionMap owner) definition nodeArity)
     (regionShape : ∀ child,

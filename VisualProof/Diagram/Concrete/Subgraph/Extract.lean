@@ -150,7 +150,7 @@ theorem usesExternalBinder_encloses_anchor
     host.val.Encloses binder selection.val.anchor := by
   obtain ⟨hnotSelected, node, hselectedNode, hatom⟩ := huses
   cases hnode : host.val.nodes node with
-  | term region freePorts term => simp [hnode] at hatom
+  | identity region arity => simp [hnode] at hatom
   | named region definition arity => simp [hnode] at hatom
   | atom region candidate =>
       simp only [hnode] at hatom
@@ -540,10 +540,10 @@ private def fragmentNode (d : ConcreteDiagram)
     (selection : CheckedSelection d) (layout : FragmentLayout d selection)
     (index : Fin layout.nodeCount) : CNode layout.regionCount :=
   match d.nodes (selection.selectedNodes.get index) with
-  | .term region freePorts term =>
-      .term (fragmentParent layout region) freePorts term
   | .atom region binder =>
       .atom (fragmentParent layout region) (fragmentBinder layout binder)
+  | .identity region arity =>
+      .identity (fragmentParent layout region) arity
   | .named region definition arity =>
       .named (fragmentParent layout region) definition arity
 
@@ -797,21 +797,6 @@ theorem fragmentBinder_externalBinder
     (d.extractDiagramRaw selection layout).nodes index =
       d.fragmentNode selection layout index := rfl
 
-theorem extractDiagramRaw_node_term
-    (d : ConcreteDiagram) (selection : CheckedSelection d)
-    (layout : FragmentLayout d selection) (index : Fin layout.nodeCount)
-    (region : Fin d.regionCount) (freePorts : Nat)
-    (term : Lambda.Term 0 (Fin freePorts))
-    (hnode : d.nodes (selection.selectedNodes.get index) =
-      .term region freePorts term) :
-    (d.extractDiagramRaw selection layout).nodes index =
-      .term (d.fragmentParent layout region) freePorts term := by
-  rw [d.extractDiagramRaw_node selection layout index]
-  change d.fragmentNode selection layout index = _
-  unfold fragmentNode
-  rw [hnode]
-  rfl
-
 theorem extractDiagramRaw_node_atom
     (d : ConcreteDiagram) (selection : CheckedSelection d)
     (layout : FragmentLayout d selection) (index : Fin layout.nodeCount)
@@ -820,6 +805,20 @@ theorem extractDiagramRaw_node_atom
       .atom region binder) :
     (d.extractDiagramRaw selection layout).nodes index =
       .atom (d.fragmentParent layout region) (d.fragmentBinder layout binder) := by
+  rw [d.extractDiagramRaw_node selection layout index]
+  change d.fragmentNode selection layout index = _
+  unfold fragmentNode
+  rw [hnode]
+  rfl
+
+theorem extractDiagramRaw_node_identity
+    (d : ConcreteDiagram) (selection : CheckedSelection d)
+    (layout : FragmentLayout d selection) (index : Fin layout.nodeCount)
+    (region : Fin d.regionCount) (arity : Nat)
+    (hnode : d.nodes (selection.selectedNodes.get index) =
+      .identity region arity) :
+    (d.extractDiagramRaw selection layout).nodes index =
+      .identity (d.fragmentParent layout region) arity := by
   rw [d.extractDiagramRaw_node selection layout index]
   change d.fragmentNode selection layout index = _
   unfold fragmentNode
@@ -914,7 +913,7 @@ theorem extractDiagramRaw_requiresPort_iff
     (host.val.extractDiagramRaw selection layout).RequiresPort node port ↔
       host.val.RequiresPort (selection.selectedNodes.get node) port := by
   cases hnode : host.val.nodes (selection.selectedNodes.get node) with
-  | term region freePorts term =>
+  | identity region arity =>
       unfold ConcreteDiagram.RequiresPort
       simp only [extractDiagramRaw_node, fragmentNode, hnode]
   | named region definition arity =>
@@ -1848,7 +1847,7 @@ theorem extractDiagramRaw_atom_binders_are_bubbles
   intro node
   rw [host.val.extractDiagramRaw_node selection layout node]
   cases hnode : host.val.nodes (selection.selectedNodes.get node) with
-  | term region freePorts term =>
+  | identity region arity =>
       unfold fragmentNode
       rw [hnode]
       trivial
@@ -1873,11 +1872,11 @@ theorem extractDiagramRaw_named_references_resolve
   intro node
   rw [host.val.extractDiagramRaw_node selection layout node]
   cases hnode : host.val.nodes (selection.selectedNodes.get node) with
-  | term region freePorts term =>
+  | atom region binder =>
       unfold fragmentNode
       rw [hnode]
       trivial
-  | atom region binder =>
+  | identity region arity =>
       unfold fragmentNode
       rw [hnode]
       trivial
@@ -1897,7 +1896,7 @@ theorem extractDiagramRaw_atom_binders_enclose
   intro node
   rw [host.val.extractDiagramRaw_node selection layout node]
   cases hnode : host.val.nodes (selection.selectedNodes.get node) with
-  | term region freePorts term =>
+  | identity region arity =>
       unfold fragmentNode
       rw [hnode]
       trivial
@@ -1979,21 +1978,17 @@ theorem extractDiagramRaw_required_ports_are_covered
   intro node
   rw [host.val.extractDiagramRaw_node selection layout node]
   cases hnode : host.val.nodes (selection.selectedNodes.get node) with
-  | term region freePorts term =>
+  | identity region arity =>
       have hcovered := host.property.required_ports_are_covered
         (selection.selectedNodes.get node)
       simp only [hnode] at hcovered
       unfold fragmentNode
       rw [hnode]
       simp only
-      constructor
-      · obtain ⟨wire, hwire⟩ := hcovered.1
-        exact extractDiagramRaw_endpointOccurs_of_selected host selection layout
-          node .output hwire
-      · intro port
-        obtain ⟨wire, hwire⟩ := hcovered.2 port
-        exact extractDiagramRaw_endpointOccurs_of_selected host selection layout
-          node (.free port) hwire
+      intro port
+      obtain ⟨wire, hwire⟩ := hcovered port
+      exact extractDiagramRaw_endpointOccurs_of_selected host selection layout
+        node (.arg port) hwire
   | named region definition arity =>
       have hcovered := host.property.required_ports_are_covered
         (selection.selectedNodes.get node)
@@ -2427,7 +2422,7 @@ theorem extractedBinderSpine_target_region
   obtain ⟨_, node, _, hatom⟩ :=
     selection.mem_externalBinders_uses hmemberSelection
   cases hnode : host.val.nodes node with
-  | term region freePorts term =>
+  | identity region arity =>
       simp [hnode] at hatom
   | named region definition arity =>
       simp [hnode] at hatom

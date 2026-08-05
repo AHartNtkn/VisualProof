@@ -89,27 +89,6 @@ private theorem regionIsoRenamingCase
     (extendWireRenaming_commutes wire localWire sourceMap targetMap renamedWire
       commutes)
 
-private theorem equationIsoRenamingCase
-    {signature : List Nat}
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    {sourceOutput : Fin sourceWires} {targetOutput : Fin targetWires}
-    {sourceTerm : Lambda.Term 0 (Fin sourceWires)}
-    {targetTerm : Lambda.Term 0 (Fin targetWires)}
-    (outputEq : wire sourceOutput = targetOutput)
-    (termEq : sourceTerm.mapFree wire = targetTerm) :
-    ItemIsoRenamingMotive (signature := signature) wire rels
-      (.equation sourceOutput sourceTerm)
-      (.equation targetOutput targetTerm)
-      (ItemIso.equation (signature := signature) outputEq termEq) := by
-  intro renamedSource renamedTarget sourceMap targetMap renamedWire commutes
-  apply ItemIso.equation
-  · have mapped := congrFun commutes sourceOutput
-    simpa [outputEq] using mapped
-  · rw [Lambda.Term.mapFree_comp]
-    have functionEq : renamedWire.toFun ∘ sourceMap =
-        targetMap ∘ wire.toFun := commutes
-    rw [functionEq, ← Lambda.Term.mapFree_comp, termEq]
-
 private theorem atomIsoRenamingCase
     {signature : List Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
@@ -122,6 +101,21 @@ private theorem atomIsoRenamingCase
       (ItemIso.atom (signature := signature) relation argumentsEq) := by
   intro renamedSource renamedTarget sourceMap targetMap renamedWire commutes
   apply ItemIso.atom relation
+  funext index
+  have mapped := congrFun commutes (sourceArguments index)
+  simpa [Function.comp_apply, ← argumentsEq] using mapped
+
+private theorem identityIsoRenamingCase
+    {signature : List Nat}
+    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {sourceArguments : Fin arity → Fin sourceWires}
+    {targetArguments : Fin arity → Fin targetWires}
+    (argumentsEq : wire.toFun ∘ sourceArguments = targetArguments) :
+    ItemIsoRenamingMotive (signature := signature) wire rels
+      (.identity arity sourceArguments) (.identity arity targetArguments)
+      (ItemIso.identity (signature := signature) argumentsEq) := by
+  intro renamedSource renamedTarget sourceMap targetMap renamedWire commutes
+  apply ItemIso.identity
   funext index
   have mapped := congrFun commutes (sourceArguments index)
   simpa [Function.comp_apply, ← argumentsEq] using mapped
@@ -204,7 +198,7 @@ private theorem regionIsoRenamingRec
     (motive_1 := RegionIsoRenamingMotive)
     (motive_2 := ItemIsoRenamingMotive)
     (motive_3 := ItemSeqIsoRenamingMotive)
-    regionIsoRenamingCase equationIsoRenamingCase atomIsoRenamingCase
+    regionIsoRenamingCase atomIsoRenamingCase identityIsoRenamingCase
     namedIsoRenamingCase cutIsoRenamingCase bubbleIsoRenamingCase
     itemSeqIsoRenamingCase iso
 
@@ -218,7 +212,7 @@ private theorem itemIsoRenamingRec
     (motive_1 := RegionIsoRenamingMotive)
     (motive_2 := ItemIsoRenamingMotive)
     (motive_3 := ItemSeqIsoRenamingMotive)
-    regionIsoRenamingCase equationIsoRenamingCase atomIsoRenamingCase
+    regionIsoRenamingCase atomIsoRenamingCase identityIsoRenamingCase
     namedIsoRenamingCase cutIsoRenamingCase bubbleIsoRenamingCase
     itemSeqIsoRenamingCase iso
 
@@ -232,7 +226,7 @@ private theorem itemSeqIsoRenamingRec
     (motive_1 := RegionIsoRenamingMotive)
     (motive_2 := ItemIsoRenamingMotive)
     (motive_3 := ItemSeqIsoRenamingMotive)
-    regionIsoRenamingCase equationIsoRenamingCase atomIsoRenamingCase
+    regionIsoRenamingCase atomIsoRenamingCase identityIsoRenamingCase
     namedIsoRenamingCase cutIsoRenamingCase bubbleIsoRenamingCase
     itemSeqIsoRenamingCase iso
 

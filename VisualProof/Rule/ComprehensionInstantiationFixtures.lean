@@ -104,7 +104,7 @@ def plannedAliasCounts? : Option (Nat × Nat) :=
   | [] => none
   | firstAtom :: firstTail =>
       match initial.diagram.val.nodes firstAtom with
-      | .term .. | .named .. => none
+      | .identity .. | .named .. => none
       | .atom firstSite firstCandidate =>
           if firstCandidate = initial.bubble then
             match instantiateArguments? initial firstAtom payload.arity with
@@ -119,7 +119,7 @@ def plannedAliasCounts? : Option (Nat × Nat) :=
                     | [] => none
                     | secondAtom :: secondTail =>
                         match next.diagram.val.nodes secondAtom with
-                        | .term .. | .named .. => none
+                        | .identity .. | .named .. => none
                         | .atom secondSite secondCandidate =>
                             if secondCandidate = next.bubble then
                               match instantiateArguments? next secondAtom

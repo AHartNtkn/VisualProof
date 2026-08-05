@@ -208,12 +208,12 @@ def relabeledSourceDiagram : ConcreteDiagram where
   root := 0
   regions := fun region => if region = 0 then .sheet else .cut 0
   nodes := fun node =>
-    if node = 0 then .term 1 0 (.lam (.bvar 0)) else .named 1 0 1
+    if node = 0 then .named 1 0 1 else .named 1 0 1
   wires := fun wire =>
     if wire = 0 then {
       scope := 0
       endpoints := [
-        { node := 0, port := .output },
+        { node := 0, port := .arg 0 },
         { node := 1, port := .arg 0 }
       ]
     } else {

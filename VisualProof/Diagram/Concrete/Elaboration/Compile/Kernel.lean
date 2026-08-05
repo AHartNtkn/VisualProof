@@ -647,14 +647,13 @@ def compileNode? (signature : List Nat) (d : ConcreteDiagram)
     (context : WireContext d) (binders : BinderContext d rels)
     (node : Fin d.nodeCount) : Option (Item signature context.length rels) :=
   match d.nodes node with
-  | .term _ freePorts term => do
-      let output <- resolvePort? d context node .output
-      let free <- resolvePorts? d context node freePorts (fun index => .free index)
-      pure (.equation output (term.mapFree free))
   | .atom _ binder => do
       let relation <- binders binder
       let arguments <- resolvePorts? d context node relation.1
       pure (.atom relation.2 arguments)
+  | .identity _ arity => do
+      let arguments <- resolvePorts? d context node arity
+      pure (.identity arity arguments)
   | .named _ definition arity => do
       let relation <- namedRel? signature definition arity
       let arguments <- resolvePorts? d context node arity
@@ -678,10 +677,10 @@ theorem compileNode?_map
     (relationMap : RelationRenaming sourceRels targetRels)
     (hnode : target.nodes targetNode =
       match source.nodes sourceNode with
-      | .term region freePorts term =>
-          .term (regionMap region) freePorts term
       | .atom region binder =>
           .atom (regionMap region) (binderMap binder)
+      | .identity region arity =>
+          .identity (regionMap region) arity
       | .named region definition arity =>
           .named (regionMap region) definition arity)
     (hports : ∀ port,
@@ -697,18 +696,6 @@ theorem compileNode?_map
         (fun item =>
           (item.renameWires wireMap).renameRelations relationMap) := by
   cases hsourceNode : source.nodes sourceNode with
-  | term region freePorts term =>
-      simp only [compileNode?, hsourceNode, hnode]
-      rw [hports .output]
-      have hfree := resolvePorts?_map sourceContext targetContext sourceNode
-        targetNode wireMap freePorts (fun index => .free index) hports
-      rw [hfree]
-      cases houtput : resolvePort? source sourceContext sourceNode .output <;>
-        simp [houtput]
-      cases hfreeSource : resolvePorts? source sourceContext sourceNode
-          freePorts (fun index => .free index) <;>
-        simp [hfreeSource, Item.renameWires, Item.renameRelations,
-          Lambda.Term.mapFree_comp, Function.comp_def]
   | atom region binder =>
       simp only [compileNode?, hsourceNode, hnode]
       rw [hbinders region binder hsourceNode]
@@ -727,6 +714,15 @@ theorem compileNode?_map
                   sourceNode arity (fun index => .arg index) <;>
                 simp [hrelation, hsourceArguments, Item.renameWires,
                   Item.renameRelations, Function.comp_def]
+  | identity region arity =>
+      simp only [compileNode?, hsourceNode, hnode]
+      have harguments := resolvePorts?_map sourceContext targetContext
+        sourceNode targetNode wireMap arity (fun index => .arg index) hports
+      rw [harguments]
+      cases hsourceArguments : resolvePorts? source sourceContext sourceNode
+          arity (fun index => .arg index) <;>
+        simp [hsourceArguments, Item.renameWires, Item.renameRelations,
+          Function.comp_def]
   | named region definition arity =>
       simp only [compileNode?, hsourceNode, hnode]
       have harguments := resolvePorts?_map sourceContext targetContext
@@ -767,15 +763,6 @@ theorem compileNode?_appendRight
       (compileNode? signature d context binders node).map
         (Item.renameNamed (NamedRenaming.appendRight signature suffix)) := by
   cases hnode : d.nodes node with
-  | term region freePorts term =>
-      cases houtput : resolvePort? d context node .output with
-      | none => simp [compileNode?, hnode, houtput]
-      | some output =>
-          cases hfree : resolvePorts? d context node freePorts
-              (fun index => .free index) with
-          | none => simp [compileNode?, hnode, houtput, hfree]
-          | some free =>
-              simp [compileNode?, hnode, houtput, hfree, Item.renameNamed]
   | atom region binder =>
       cases hrelation : binders binder with
       | none => simp [compileNode?, hnode, hrelation]
@@ -785,6 +772,11 @@ theorem compileNode?_appendRight
           | some arguments =>
               simp [compileNode?, hnode, hrelation, harguments,
                 Item.renameNamed]
+  | identity region arity =>
+      cases harguments : resolvePorts? d context node arity with
+      | none => simp [compileNode?, hnode, harguments]
+      | some arguments =>
+          simp [compileNode?, hnode, harguments, Item.renameNamed]
   | named region definition arity =>
       have hlookup := hwf.named_references_resolve node
       simp only [hnode] at hlookup
@@ -818,36 +810,6 @@ theorem compileNode?_equivariant {source target : ConcreteDiagram}
   unfold compileNode? at hsource htargetResult
   rw [<- iso.nodes_eq node] at htargetResult
   cases hnode : source.nodes node with
-  | term region freePorts term =>
-      simp only [hnode, CNode.rename] at hsource htargetResult
-      cases hsourceOutput : resolvePort? source sourceContext node .output with
-      | none => simp [hsourceOutput] at hsource
-      | some sourceOutput =>
-          cases hsourceFree : resolvePorts? source sourceContext node freePorts
-              (fun index => .free index) with
-          | none => simp [hsourceOutput, hsourceFree] at hsource
-          | some sourceFree =>
-              simp [hsourceOutput, hsourceFree] at hsource
-              subst sourceItem
-              cases htargetOutput : resolvePort? target targetContext
-                  (iso.nodes node) .output with
-              | none => simp [htargetOutput] at htargetResult
-              | some targetOutput =>
-                  cases htargetFree : resolvePorts? target targetContext
-                      (iso.nodes node) freePorts (fun index => .free index) with
-                  | none =>
-                      simp [htargetOutput, htargetFree] at htargetResult
-                  | some targetFree =>
-                      simp [htargetOutput, htargetFree] at htargetResult
-                      subst targetItem
-                      apply ItemIso.equation
-                      · exact resolvePort?_equivariant iso htarget hwires
-                          htargetNodup node .output hsourceOutput htargetOutput
-                      · rw [Lambda.Term.mapFree_comp]
-                        apply congrArg term.mapFree
-                        exact resolvePorts?_equivariant iso htarget hwires
-                          htargetNodup node freePorts (fun index => .free index)
-                          hsourceFree htargetFree
   | atom region binder =>
       simp only [hnode, CNode.rename] at hsource htargetResult
       cases hsourceRelation : sourceBinders binder with
@@ -874,6 +836,24 @@ theorem compileNode?_equivariant {source target : ConcreteDiagram}
                       exact resolvePorts?_equivariant iso htarget hwires
                         htargetNodup node arity (fun index => .arg index)
                         hsourceArguments htargetArguments
+  | identity region arity =>
+      simp only [hnode, CNode.rename] at hsource htargetResult
+      cases hsourceArguments : resolvePorts? source sourceContext node arity
+          (fun index => .arg index) with
+      | none => simp [hsourceArguments] at hsource
+      | some sourceArguments =>
+          simp [hsourceArguments] at hsource
+          subst sourceItem
+          cases htargetArguments : resolvePorts? target targetContext
+              (iso.nodes node) arity (fun index => .arg index) with
+          | none => simp [htargetArguments] at htargetResult
+          | some targetArguments =>
+              simp [htargetArguments] at htargetResult
+              subst targetItem
+              apply ItemIso.identity
+              exact resolvePorts?_equivariant iso htarget hwires
+                htargetNodup node arity (fun index => .arg index)
+                hsourceArguments htargetArguments
   | named region definition arity =>
       simp only [hnode, CNode.rename] at hsource htargetResult
       cases hrelation : namedRel? signature definition arity with

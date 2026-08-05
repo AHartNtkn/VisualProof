@@ -2106,7 +2106,7 @@ theorem regionIso_fill_denotation
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     (hiso : RegionIso signature wire rels source target)
     (context : DiagramContext signature outerWires targetWires outerRels rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (relEnv : RelEnv model.Carrier outerRels) :
@@ -2130,7 +2130,7 @@ theorem regionIso_fill_denotation_cast
     (hiso : RegionIso signature wire rels source target)
     (targetWiresEq : targetWires = holeWires)
     (context : DiagramContext signature outerWires holeWires outerRels rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (relEnv : RelEnv model.Carrier outerRels) :
@@ -2162,7 +2162,7 @@ repeated aliases retain exactly the same argument-equality obligations. -/
 theorem denote_replaceOpenBody_mono
     (diagram : OpenDiagram signature arity)
     (before after : Region signature diagram.externalClasses [])
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin arity → model.Carrier)
     (entails : ∀ env : Fin diagram.externalClasses → model.Carrier,
@@ -2185,7 +2185,7 @@ preserved because both assignments use the same class and argument maps. -/
 theorem denote_replaceOpenBody_iff
     (diagram : OpenDiagram signature arity)
     (body : Region signature diagram.externalClasses [])
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin arity → model.Carrier)
     (hequiv : ∀ env : Fin diagram.externalClasses → model.Carrier,

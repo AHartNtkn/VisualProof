@@ -179,7 +179,7 @@ theorem patternLocalSelection
     (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
     (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
     (indexMap : Fin sourceContext.length → Fin targetContext.length)
-    (model : Lambda.LambdaModel) :
+    (model : Model) :
     ∀ (sourceOuter : Fin sourceContext.length → model.Carrier)
       (targetOuter : Fin targetContext.length → model.Carrier),
       (ConcreteElaboration.ContextIndexRelation.forwardMap indexMap)
@@ -261,7 +261,7 @@ theorem patternLocalSelectionAt
     (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
     (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
     (indexMap : Fin sourceContext.length → Fin targetContext.length)
-    (model : Lambda.LambdaModel) :
+    (model : Model) :
     ∀ (sourceOuter : Fin sourceContext.length → model.Carrier)
       (targetOuter : Fin targetContext.length → model.Carrier),
       (ConcreteElaboration.ContextIndexRelation.forwardMap indexMap)
@@ -300,7 +300,7 @@ theorem patternLocalSelectionMapped
     (sourceContext : ConcreteElaboration.WireContext input.pattern.val.diagram)
     (targetContext : ConcreteElaboration.WireContext layout.plugRaw)
     (indexMap : Fin sourceContext.length → Fin targetContext.length)
-    (model : Lambda.LambdaModel) :
+    (model : Model) :
     ∀ (sourceOuter : Fin sourceContext.length → model.Carrier)
       (targetOuter : Fin targetContext.length → model.Carrier),
       (ConcreteElaboration.ContextIndexRelation.forwardMap indexMap)
@@ -338,7 +338,7 @@ noncomputable def patternConcreteSemanticSimulation
     {input : Input signature}
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     ConcreteElaboration.ConcreteSemanticSimulation signature
       input.pattern.val.diagram layout.plugRaw model named where
@@ -575,7 +575,7 @@ theorem compilePatternRegion_denote_at_material
     {input : Input signature}
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     {sourceRels targetRels : Theory.RelCtx}
     (direction : ConcreteElaboration.SimulationDirection)
@@ -651,7 +651,7 @@ theorem compilePatternRootOccurrence_at_site_simulation
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (occurrence : ConcreteElaboration.LocalOccurrence
@@ -941,7 +941,7 @@ theorem focusedPatternOccurrence_itemSimulation
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (patternIndex : Fin
@@ -1034,7 +1034,7 @@ theorem denoteFocusedItems_of_patternRootItems_and_frame
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).length → model.Carrier)
@@ -1188,7 +1188,7 @@ theorem denotePatternRootItems_of_denoteFocusedItems
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).length → model.Carrier)
@@ -1304,7 +1304,7 @@ theorem pattern_denote_of_denoteFocusedItems
     (outputLeaf : Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)

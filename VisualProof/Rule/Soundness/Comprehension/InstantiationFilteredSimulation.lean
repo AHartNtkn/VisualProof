@@ -23,7 +23,7 @@ theorem compileOccurrencesWith_filter_simulation
     (binders : ConcreteElaboration.BinderContext diagram rels)
     (keep : ConcreteElaboration.LocalOccurrence diagram.regionCount
       diagram.nodeCount → Bool)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (relation : ConcreteElaboration.ContextIndexRelation

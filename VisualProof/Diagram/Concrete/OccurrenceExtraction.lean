@@ -988,17 +988,6 @@ private theorem regionsEquiv_regions_eq
   · obtain ⟨index, rfl⟩ := material
     exact specialization.regionsEquiv_material_eq index
 
-private theorem checkCertificate_swap
-    {left right : Lambda.Term n α} [DecidableEq α]
-    {certificate : Lambda.Certificate}
-    (valid : Lambda.checkCertificate left right certificate = true) :
-    Lambda.checkCertificate right left
-      { left := certificate.right, right := certificate.left } = true := by
-  unfold Lambda.checkCertificate at valid ⊢
-  generalize leftResult : Lambda.checkPath left certificate.left = leftPath at valid
-  generalize rightResult : Lambda.checkPath right certificate.right = rightPath at valid
-  cases leftPath <;> cases rightPath <;> simp_all
-
 private theorem patternNode_hasContentIndex
     {embedding : OpenOccurrenceEmbedding problem}
     (specialization : ExtractionSpecialization embedding)
@@ -1211,69 +1200,9 @@ private noncomputable def nodes_correspond
   have valid := embedding.valid.nodes content
   cases patternKind : problem.pattern.val.diagram.nodes
       (content.origin problem) with
-  | term patternRegion patternPorts patternTerm =>
-      cases hostKindSelected : problem.host.val.nodes
-          (embedding.selection.selectedNodes.get index) with
-      | term hostRegion hostPorts hostTerm =>
-          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
-              .term hostRegion hostPorts hostTerm := by
-            rw [hostIndex]
-            exact hostKindSelected
-          obtain ⟨regionValid, termExists⟩ :=
-            valid.term_elim patternKind hostKind
-          let portsEq := Classical.choose termExists
-          let certificateExists := Classical.choose_spec termExists
-          let certificate := Classical.choose certificateExists
-          have certificateFacts := Classical.choose_spec certificateExists
-          have certificateValid := certificateFacts.2
-          cases portsEq
-          have sourceNode : specialization.occurrenceFragment.diagram.nodes
-              index = .term
-                (problem.host.val.fragmentParent
-                  specialization.occurrenceLayout hostRegion)
-                patternPorts hostTerm := by
-            change (problem.host.val.extractDiagramRaw embedding.selection
-              specialization.occurrenceLayout).nodes index = _
-            apply problem.host.val.extractDiagramRaw_node_term
-            exact hostKindSelected
-          rw [sourceNode, targetIndex, patternKind]
-          apply CNode.CertifiedCorresponds.term
-          · exact specialization.regionForward_fragmentParent_of_mappedOwner
-              regionValid
-          · exact {
-              certificate := {
-                left := certificate.right
-                right := certificate.left }
-              valid := by
-                change Lambda.checkCertificate hostTerm.closeOverPorts
-                  patternTerm.closeOverPorts {
-                    left := (Classical.choose certificateExists).right
-                    right := (Classical.choose certificateExists).left } = true
-                simpa only [Fin.cast_refl, Lambda.Term.mapFree_id] using
-                  checkCertificate_swap certificateValid }
-      | atom hostRegion hostBinder =>
-          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
-              .atom hostRegion hostBinder := by rw [hostIndex]; exact hostKindSelected
-          exact False.elim (by
-            unfold RawOccurrenceCertificate.NodeValid at valid
-            simp [patternKind, hostKind] at valid)
-      | named hostRegion definition arity =>
-          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
-              .named hostRegion definition arity := by
-            rw [hostIndex]; exact hostKindSelected
-          exact False.elim (by
-            unfold RawOccurrenceCertificate.NodeValid at valid
-            simp [patternKind, hostKind] at valid)
   | atom patternRegion patternBinder =>
       cases hostKindSelected : problem.host.val.nodes
           (embedding.selection.selectedNodes.get index) with
-      | term hostRegion hostPorts hostTerm =>
-          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
-              .term hostRegion hostPorts hostTerm := by
-            rw [hostIndex]; exact hostKindSelected
-          exact False.elim (by
-            unfold RawOccurrenceCertificate.NodeValid at valid
-            simp [patternKind, hostKind] at valid)
       | atom hostRegion hostBinder =>
           have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
               .atom hostRegion hostBinder := by rw [hostIndex]; exact hostKindSelected
@@ -1309,19 +1238,62 @@ private noncomputable def nodes_correspond
           exact False.elim (by
             unfold RawOccurrenceCertificate.NodeValid at valid
             simp [patternKind, hostKind] at valid)
-  | named patternRegion patternDefinition patternArity =>
-      cases hostKindSelected : problem.host.val.nodes
-          (embedding.selection.selectedNodes.get index) with
-      | term hostRegion hostPorts hostTerm =>
+      | identity hostRegion hostArity =>
           have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
-              .term hostRegion hostPorts hostTerm := by
+              .identity hostRegion hostArity := by
             rw [hostIndex]; exact hostKindSelected
           exact False.elim (by
             unfold RawOccurrenceCertificate.NodeValid at valid
             simp [patternKind, hostKind] at valid)
+  | identity patternRegion patternArity =>
+      cases hostKindSelected : problem.host.val.nodes
+          (embedding.selection.selectedNodes.get index) with
       | atom hostRegion hostBinder =>
           have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
               .atom hostRegion hostBinder := by rw [hostIndex]; exact hostKindSelected
+          exact False.elim (by
+            unfold RawOccurrenceCertificate.NodeValid at valid
+            simp [patternKind, hostKind] at valid)
+      | identity hostRegion hostArity =>
+          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
+              .identity hostRegion hostArity := by
+            rw [hostIndex]; exact hostKindSelected
+          obtain ⟨regionValid, arityEq⟩ :=
+            valid.identity_elim patternKind hostKind
+          subst hostArity
+          have sourceNode : specialization.occurrenceFragment.diagram.nodes
+              index = .identity
+                (problem.host.val.fragmentParent
+                  specialization.occurrenceLayout hostRegion)
+                patternArity := by
+            change (problem.host.val.extractDiagramRaw embedding.selection
+              specialization.occurrenceLayout).nodes index = _
+            apply problem.host.val.extractDiagramRaw_node_identity
+            exact hostKindSelected
+          rw [sourceNode, targetIndex, patternKind]
+          apply CNode.CertifiedCorresponds.identity
+          exact specialization.regionForward_fragmentParent_of_mappedOwner
+            regionValid
+      | named hostRegion definition arity =>
+          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
+              .named hostRegion definition arity := by
+            rw [hostIndex]; exact hostKindSelected
+          exact False.elim (by
+            unfold RawOccurrenceCertificate.NodeValid at valid
+            simp [patternKind, hostKind] at valid)
+  | named patternRegion patternDefinition patternArity =>
+      cases hostKindSelected : problem.host.val.nodes
+          (embedding.selection.selectedNodes.get index) with
+      | atom hostRegion hostBinder =>
+          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
+              .atom hostRegion hostBinder := by rw [hostIndex]; exact hostKindSelected
+          exact False.elim (by
+            unfold RawOccurrenceCertificate.NodeValid at valid
+            simp [patternKind, hostKind] at valid)
+      | identity hostRegion hostArity =>
+          have hostKind : problem.host.val.nodes (embedding.raw.nodeMap content) =
+              .identity hostRegion hostArity := by
+            rw [hostIndex]; exact hostKindSelected
           exact False.elim (by
             unfold RawOccurrenceCertificate.NodeValid at valid
             simp [patternKind, hostKind] at valid)
@@ -1731,13 +1703,6 @@ private theorem required_port_is_covered
     ∃ wire, diagram.EndpointOccurs wire ⟨node, port⟩ := by
   specialize covered node
   cases nodeKind : diagram.nodes node with
-  | term region freePorts term =>
-      simp only [nodeKind] at covered
-      rw [ConcreteDiagram.requiresPort_term_iff diagram node port region
-        freePorts term nodeKind] at required
-      rcases required with rfl | ⟨index, rfl⟩
-      · exact covered.1
-      · exact covered.2 index
   | atom region binder =>
       cases binderKind : diagram.regions binder with
       | sheet =>
@@ -1750,6 +1715,12 @@ private theorem required_port_is_covered
             region binder parent arity nodeKind binderKind] at required
           obtain ⟨index, rfl⟩ := required
           exact covered index
+  | identity region arity =>
+      simp only [nodeKind] at covered
+      rw [ConcreteDiagram.requiresPort_identity_iff diagram node port region
+        arity nodeKind] at required
+      obtain ⟨index, rfl⟩ := required
+      exact covered index
   | named region definition arity =>
       simp only [nodeKind] at covered
       rw [ConcreteDiagram.requiresPort_named_iff diagram node port region
@@ -2000,7 +1971,7 @@ private theorem requiresPort_transport
   generalize targetEq : problem.pattern.val.diagram.nodes
       (specialization.nodesTotalEquiv node) = targetNode at corresponds ⊢
   cases corresponds with
-  | term sourceRegion targetRegion ports sourceTerm targetTerm regionEq certificate =>
+  | identity sourceRegion targetRegion arity regionEq =>
       exact required
   | named sourceRegion targetRegion definition arity regionEq =>
       exact required

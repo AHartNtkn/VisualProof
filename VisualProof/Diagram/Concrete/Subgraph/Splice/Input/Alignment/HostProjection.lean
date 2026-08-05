@@ -299,7 +299,7 @@ theorem compiledSpliceRootHostOfNonempty_denote_iff_coalesced
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hsite : input.site = input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
@@ -370,7 +370,7 @@ theorem compiledSpliceRootHostOfEmpty_denote_iff_coalesced
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hsite : input.site = input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
@@ -440,7 +440,7 @@ theorem compiledSpliceRootSourceOfNonempty_projects_coalesced
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hsite : input.site = input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
@@ -466,7 +466,7 @@ theorem compiledSpliceRootSourceOfEmpty_projects_coalesced
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hsite : input.site = input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
@@ -2438,7 +2438,7 @@ theorem compiledSpliceNestedHostOpen_denote_iff_coalesced
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hnested : input.site ≠ input.frame.val.root)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
@@ -2462,7 +2462,7 @@ theorem compiledSpliceNestedSourceOfNonempty_projects_coalesced
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hnested : input.site ≠ input.frame.val.root)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
@@ -2506,7 +2506,7 @@ theorem compiledSpliceNestedSourceOfEmpty_projects_coalesced
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hnested : input.site ≠ input.frame.val.root)
     (hzero : input.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary

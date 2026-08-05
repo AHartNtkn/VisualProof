@@ -20,7 +20,7 @@ structure FixedRelationWitness
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (binders : ConcreteElaboration.BinderContext trace.diagram rels)
     (relations : RelEnv model.Carrier rels) where
@@ -42,7 +42,7 @@ def fresh
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (binders : ConcreteElaboration.BinderContext trace.diagram rels)
     (relations : RelEnv model.Carrier rels) :
@@ -91,7 +91,7 @@ theorem compiledTargetAtom_denote_iff_fixed
     (payload : ComprehensionAbstractPayload input wrap comprehension
       occurrences)
     (occurrenceIndex : Fin occurrences.length)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext trace.diagram)

@@ -534,9 +534,9 @@ theorem spawnNodeRaw_compileNode?_old
   let spawned := spawnNodeRaw input node scope portCount port
   have hnode : spawned.nodes old.castSucc =
       match input.nodes old with
-      | .term region freePorts term =>
-          .term (id region) freePorts term
       | .atom region binder => .atom (id region) (id binder)
+      | .identity region arity =>
+          .identity (id region) arity
       | .named region definition arity =>
           .named (id region) definition arity := by
     rw [spawnNodeRaw_oldNode]

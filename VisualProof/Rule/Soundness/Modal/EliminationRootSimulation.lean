@@ -64,7 +64,7 @@ noncomputable def rootContextSimulation
     (boundary : List (Fin input.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.wires wire).scope = input.root)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection) :
     let source : CheckedOpenDiagram signature :=
@@ -249,7 +249,7 @@ theorem boundaryWitness
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.wires wire).scope = input.root)
     (direction : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin boundary.length → model.Carrier) :
     let source : CheckedOpenDiagram signature :=

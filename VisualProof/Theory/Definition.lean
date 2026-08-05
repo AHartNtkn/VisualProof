@@ -24,8 +24,8 @@ def weakenRight (checked : CheckedOpenDiagram signature) (suffix : List Nat) :
         have prior :=
           checked.property.diagram_well_formed.named_references_resolve node
         cases hnode : checked.val.diagram.nodes node with
-        | term => trivial
         | atom => trivial
+        | identity => trivial
         | named region definition arity =>
             simp only [hnode] at prior ⊢
             obtain ⟨hdefinition, hvalue⟩ :=
@@ -63,7 +63,7 @@ theorem weakenRight_elaborate_body
 
 theorem weakenRight_denote
     (checked : CheckedOpenDiagram signature) (suffix : List Nat)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (sourceNamed : NamedEnv model.Carrier signature)
     (targetNamed : NamedEnv model.Carrier (signature ++ suffix))
     (agrees : NamedEnv.Agrees (NamedRenaming.appendRight signature suffix)

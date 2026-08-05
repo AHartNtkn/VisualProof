@@ -6,14 +6,6 @@ open VisualProof
 open VisualProof.Theory
 open VisualProof.Diagram
 
-/-- Every lambda model has an inhabitant: evaluate the closed identity term.
-This is the exact nonemptiness needed when a concrete rewrite introduces a
-fresh existential wire. -/
-theorem lambdaModel_carrier_nonempty
-    (model : Lambda.LambdaModel) : Nonempty model.Carrier :=
-  ⟨model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
-    Lambda.Term 0 (Fin 0)) Fin.elim0⟩
-
 /-- The direction in which a concrete compiler simulation transports truth. -/
 inductive SimulationDirection
   | forward
@@ -132,7 +124,7 @@ def relationMap
 end IdentityBinderWitness
 
 /-- Semantic simulation of two intrinsic items under related environments. -/
-def ItemSimulation (model : Lambda.LambdaModel)
+def ItemSimulation (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : SimulationDirection)
     (relation : ContextIndexRelation sourceWires targetWires)
@@ -151,7 +143,7 @@ ports are related, even when the context relation is genuinely many-to-many
 and therefore cannot be represented by one global index-renaming function. -/
 theorem compileNode?_itemSimulation_of_related_ports
     {source target : ConcreteDiagram}
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : SimulationDirection)
     (sourceContext : WireContext source)
@@ -166,10 +158,10 @@ theorem compileNode?_itemSimulation_of_related_ports
     (binderMap : Fin source.regionCount → Fin target.regionCount)
     (nodeShape : target.nodes targetNode =
       match source.nodes sourceNode with
-      | .term region freePorts term =>
-          .term (regionMap region) freePorts term
       | .atom region binder =>
           .atom (regionMap region) (binderMap binder)
+      | .identity region arity =>
+          .identity (regionMap region) arity
       | .named region definition arity =>
           .named (regionMap region) definition arity)
     (portsRelated : ∀ port sourceIndex targetIndex,
@@ -193,64 +185,6 @@ theorem compileNode?_itemSimulation_of_related_ports
     ItemSimulation model named direction relation
       (sourceItem.renameRelations relationMap) targetItem := by
   cases sourceNodeShape : source.nodes sourceNode with
-  | term region freePorts term =>
-      have targetNodeShape :
-          target.nodes targetNode =
-            .term (regionMap region) freePorts term := by
-        simpa only [sourceNodeShape] using nodeShape
-      cases sourceOutputResult :
-          resolvePort? source sourceContext sourceNode .output with
-      | none =>
-          simp [compileNode?, sourceNodeShape, sourceOutputResult]
-            at sourceCompiled
-      | some sourceOutput =>
-          cases sourceFreeResult :
-              resolvePorts? source sourceContext sourceNode freePorts
-                (fun index => .free index) with
-          | none =>
-              simp [compileNode?, sourceNodeShape, sourceOutputResult,
-                sourceFreeResult] at sourceCompiled
-          | some sourceFree =>
-              simp [compileNode?, sourceNodeShape, sourceOutputResult,
-                sourceFreeResult] at sourceCompiled
-              subst sourceItem
-              cases targetOutputResult :
-                  resolvePort? target targetContext targetNode .output with
-              | none =>
-                  simp [compileNode?, targetNodeShape, targetOutputResult]
-                    at targetCompiled
-              | some targetOutput =>
-                  cases targetFreeResult :
-                      resolvePorts? target targetContext targetNode freePorts
-                        (fun index => .free index) with
-                  | none =>
-                      simp [compileNode?, targetNodeShape, targetOutputResult,
-                        targetFreeResult] at targetCompiled
-                  | some targetFree =>
-                      simp [compileNode?, targetNodeShape, targetOutputResult,
-                        targetFreeResult] at targetCompiled
-                      subst targetItem
-                      intro sourceEnv targetEnv relEnv environments
-                      have outputEq : sourceEnv sourceOutput =
-                          targetEnv targetOutput :=
-                        environments sourceOutput targetOutput
-                          (portsRelated .output sourceOutput targetOutput
-                            sourceOutputResult targetOutputResult)
-                      have freeEq : sourceEnv ∘ sourceFree =
-                          targetEnv ∘ targetFree := by
-                        funext index
-                        exact environments (sourceFree index) (targetFree index)
-                          (portsRelated (.free index) (sourceFree index)
-                            (targetFree index)
-                            (VisualProof.Data.Finite.sequenceFin_sound
-                              sourceFreeResult index)
-                            (VisualProof.Data.Finite.sequenceFin_sound
-                              targetFreeResult index))
-                      simp only [Item.renameRelations, denoteItem]
-                      rw [model.eval_mapFree sourceFree term sourceEnv,
-                        model.eval_mapFree targetFree term targetEnv,
-                        outputEq, freeEq]
-                      cases direction <;> exact id
   | atom region binder =>
       have targetNodeShape :
           target.nodes targetNode =
@@ -304,6 +238,65 @@ theorem compileNode?_itemSimulation_of_related_ports
                               targetArgumentsResult index))
                       rw [Item.renameRelations, denoteItem, argumentsEq]
                       cases direction <;> exact id
+  | identity region arity =>
+      have targetNodeShape :
+          target.nodes targetNode =
+            .identity (regionMap region) arity := by
+        simpa only [sourceNodeShape] using nodeShape
+      cases sourceArgumentsResult :
+          resolvePorts? source sourceContext sourceNode arity
+            (fun index => .arg index) with
+      | none =>
+          simp [compileNode?, sourceNodeShape, sourceArgumentsResult]
+            at sourceCompiled
+      | some sourceArguments =>
+          simp [compileNode?, sourceNodeShape, sourceArgumentsResult]
+            at sourceCompiled
+          subst sourceItem
+          cases targetArgumentsResult :
+              resolvePorts? target targetContext targetNode arity
+                (fun index => .arg index) with
+          | none =>
+              simp [compileNode?, targetNodeShape, targetArgumentsResult]
+                at targetCompiled
+          | some targetArguments =>
+              simp [compileNode?, targetNodeShape, targetArgumentsResult]
+                at targetCompiled
+              subst targetItem
+              intro sourceEnv targetEnv relEnv environments
+              have argumentsEq : sourceEnv ∘ sourceArguments =
+                  targetEnv ∘ targetArguments := by
+                funext index
+                exact environments (sourceArguments index)
+                  (targetArguments index)
+                  (portsRelated (.arg index) (sourceArguments index)
+                    (targetArguments index)
+                    (VisualProof.Data.Finite.sequenceFin_sound
+                      sourceArgumentsResult index)
+                    (VisualProof.Data.Finite.sequenceFin_sound
+                      targetArgumentsResult index))
+              simp only [Item.renameRelations, denoteItem]
+              have equivalent :
+                  (∀ left right,
+                    sourceEnv (sourceArguments left) =
+                      sourceEnv (sourceArguments right)) ↔
+                  (∀ left right,
+                    targetEnv (targetArguments left) =
+                      targetEnv (targetArguments right)) := by
+                have argumentEq (index : Fin arity) :
+                    sourceEnv (sourceArguments index) =
+                      targetEnv (targetArguments index) := by
+                  simpa [Function.comp_def] using congrFun argumentsEq index
+                constructor
+                · intro sourceEquality left right
+                  exact (argumentEq left).symm.trans
+                    ((sourceEquality left right).trans (argumentEq right))
+                · intro targetEquality left right
+                  exact (argumentEq left).trans
+                    ((targetEquality left right).trans (argumentEq right).symm)
+              cases direction with
+              | forward => exact equivalent.mp
+              | backward => exact equivalent.mpr
   | named region definition arity =>
       have targetNodeShape :
           target.nodes targetNode =
@@ -349,7 +342,7 @@ theorem compileNode?_itemSimulation_of_related_ports
                   cases direction <;> exact id
 
 /-- Semantic simulation of two intrinsic item sequences. -/
-def ItemSeqSimulation (model : Lambda.LambdaModel)
+def ItemSeqSimulation (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : SimulationDirection)
     (relation : ContextIndexRelation sourceWires targetWires)
@@ -365,7 +358,7 @@ def ItemSeqSimulation (model : Lambda.LambdaModel)
 
 /-- Semantic simulation of two intrinsic regions under related outer
 environments. -/
-def RegionSimulation (model : Lambda.LambdaModel)
+def RegionSimulation (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : SimulationDirection)
     (relation : ContextIndexRelation sourceOuter targetOuter)
@@ -415,7 +408,7 @@ def DirectionalLocalTransport
     (sourceContext : WireContext source) (targetContext : WireContext target)
     (sourceRegion : Fin source.regionCount) (targetRegion : Fin target.regionCount)
     (outer : ContextIndexRelation sourceContext.length targetContext.length)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relEnv : RelEnv model.Carrier rels)
     (sourceItems : ItemSeq signature
@@ -455,7 +448,7 @@ theorem directionalLocalTransport_of_agreement
     (extended : ContextIndexRelation
       (sourceContext.extend sourceRegion).length
       (targetContext.extend targetRegion).length)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceItems : ItemSeq signature (sourceContext.extend sourceRegion).length rels)
     (targetItems : ItemSeq signature (targetContext.extend targetRegion).length rels)
@@ -516,7 +509,7 @@ private def maskedCutItems (wires : Nat) : ItemSeq [0] wires [] :=
 /-- A cut whose body begins with a false conjunct is true without exposing a
 valuation or proof for anything later in that body. -/
 private theorem maskedCutItems_denote
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (env : Fin wires → model.Carrier)
     (relEnv : RelEnv model.Carrier []) :
     denoteItemSeq model (falseNamedEnv model.Carrier) env relEnv
@@ -534,14 +527,13 @@ example
     (sourceContext : WireContext source) (targetContext : WireContext target)
     (sourceRegion : Fin source.regionCount) (targetRegion : Fin target.regionCount)
     (outer : ContextIndexRelation sourceContext.length targetContext.length)
-    (model : Lambda.LambdaModel) :
+    (model : Model) :
     DirectionalLocalTransport (rels := []) .forward sourceContext targetContext
       sourceRegion targetRegion outer model (falseNamedEnv model.Carrier)
       PUnit.unit .nil (maskedCutItems (targetContext.extend targetRegion).length) := by
   intro sourceOuter targetOuter outerAgrees sourceLocal sourceDenotes
   let fallback : model.Carrier :=
-    model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
-      Lambda.Term 0 (Fin 0)) Fin.elim0
+    Classical.choice model.nonempty
   let targetLocal : Fin (exactScopeWires target targetRegion).length →
       model.Carrier := fun _ => fallback
   exact ⟨targetLocal, maskedCutItems_denote model _ PUnit.unit⟩
@@ -555,7 +547,7 @@ theorem finishRegion_denote
     (sourceContext : WireContext source) (targetContext : WireContext target)
     (sourceRegion : Fin source.regionCount) (targetRegion : Fin target.regionCount)
     (outer : ContextIndexRelation sourceContext.length targetContext.length)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceItems : ItemSeq signature (sourceContext.extend sourceRegion).length rels)
     (targetItems : ItemSeq signature (targetContext.extend targetRegion).length rels)
@@ -566,7 +558,7 @@ theorem finishRegion_denote
       (finishRegion source sourceContext sourceRegion sourceItems)
       (finishRegion target targetContext targetRegion targetItems) := by
   intro sourceOuter targetOuter relEnv agrees
-  letI : Nonempty model.Carrier := lambdaModel_carrier_nonempty model
+  letI : Nonempty model.Carrier := model.nonempty
   unfold finishRegion
   simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
   cases direction with
@@ -624,7 +616,7 @@ def DirectionalRootTransport (direction : SimulationDirection)
     (sourceAmbient sourceLocals : WireContext source)
     (targetAmbient targetLocals : WireContext target)
     (outer : ContextIndexRelation sourceAmbient.length targetAmbient.length)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceItems : ItemSeq signature
       (sourceAmbient ++ sourceLocals).length [])
@@ -662,7 +654,7 @@ theorem directionalRootTransport_of_agreement
     (combined : ContextIndexRelation
       (sourceAmbient ++ sourceLocals).length
       (targetAmbient ++ targetLocals).length)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceItems : ItemSeq signature (sourceAmbient ++ sourceLocals).length [])
     (targetItems : ItemSeq signature (targetAmbient ++ targetLocals).length [])
@@ -711,7 +703,7 @@ theorem finishRoot_denote
     (sourceAmbient sourceLocals : WireContext source)
     (targetAmbient targetLocals : WireContext target)
     (outer : ContextIndexRelation sourceAmbient.length targetAmbient.length)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceItems : ItemSeq signature (sourceAmbient ++ sourceLocals).length [])
     (targetItems : ItemSeq signature (targetAmbient ++ targetLocals).length [])
@@ -721,7 +713,7 @@ theorem finishRoot_denote
       (finishRoot sourceAmbient sourceLocals sourceItems)
       (finishRoot targetAmbient targetLocals targetItems) := by
   intro sourceOuter targetOuter relEnv agrees
-  letI : Nonempty model.Carrier := lambdaModel_carrier_nonempty model
+  letI : Nonempty model.Carrier := model.nonempty
   unfold finishRoot
   simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
   cases direction with
@@ -754,7 +746,7 @@ index relation, so this structure does not privilege embeddings over
 collapses or erase their concrete provenance. `Allowed` records the semantic
 direction available at a region; cuts flip it and bubbles preserve it. -/
 structure ConcreteSemanticSimulation (signature : List Nat)
-    (source target : ConcreteDiagram) (model : Lambda.LambdaModel)
+    (source target : ConcreteDiagram) (model : Model)
     (named : NamedEnv model.Carrier signature) where
   source_wellFormed : source.WellFormed signature
   target_wellFormed : target.WellFormed signature
@@ -1331,7 +1323,7 @@ inserted wrappers. -/
 theorem compileOccurrences_denote_of_pointwise
     {source target : ConcreteDiagram}
     {sourceRels targetRels : RelCtx}
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : SimulationDirection)
     (sourceRecurse : ∀ {rels : RelCtx},
@@ -1809,7 +1801,7 @@ theorem compileRegion_denote
 transport. -/
 structure RootContextSimulation
     {source target : ConcreteDiagram}
-    {model : Lambda.LambdaModel}
+    {model : Model}
     {named : NamedEnv model.Carrier signature}
     (simulation : ConcreteSemanticSimulation signature source target model named)
     (direction : SimulationDirection)
@@ -1949,7 +1941,7 @@ def DirectionalBoundaryWitness (direction : SimulationDirection)
     (target : OpenDiagram signature targetArity)
     (relation : ContextIndexRelation source.externalClasses
       target.externalClasses)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceArgs : Fin sourceArity → model.Carrier)
     (targetArgs : Fin targetArity → model.Carrier) :
@@ -1979,7 +1971,7 @@ theorem denoteOpen_lift
     (target : OpenDiagram signature targetArity)
     (relation : ContextIndexRelation source.externalClasses
       target.externalClasses)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceArgs : Fin sourceArity → model.Carrier)
     (targetArgs : Fin targetArity → model.Carrier)
@@ -2247,7 +2239,7 @@ relation, allowed root direction, and ordered boundary witness. -/
 theorem elaborateOpen_denote
     (sourceOpen : CheckedOpenDiagram signature)
     (targetOpen : CheckedOpenDiagram signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (simulation : ConcreteSemanticSimulation signature
       sourceOpen.val.diagram targetOpen.val.diagram model named)

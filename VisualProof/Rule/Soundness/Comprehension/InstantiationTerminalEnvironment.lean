@@ -192,7 +192,7 @@ theorem patternTerminalRegion_denotes_of_output
     (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)

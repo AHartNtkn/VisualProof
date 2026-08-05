@@ -565,7 +565,7 @@ noncomputable def rootContextSimulation
     (transport :
       (comprehensionAbstractInterfaceTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection) :
     let source : CheckedOpenDiagram signature :=
@@ -649,8 +649,7 @@ noncomputable def rootContextSimulation
       exact targetDirect (rootEq ▸ rootMember)
   · intro regular allowed sourceItems targetItems sourceCompiled targetCompiled
       itemSemantics
-    letI : Nonempty model.Carrier :=
-      ConcreteElaboration.lambdaModel_carrier_nonempty model
+    letI : Nonempty model.Carrier := model.nonempty
     apply ConcreteElaboration.directionalRootTransport_of_agreement direction
       source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires outer.indexRelation
@@ -1104,8 +1103,7 @@ noncomputable def rootContextSimulation
               (targetPartition.nodup_iff).1
                 (ConcreteElaboration.localOccurrences_nodup trace.diagram
                   (trace.regionMap wrap.val.anchor))
-            letI : Nonempty model.Carrier :=
-              ConcreteElaboration.lambdaModel_carrier_nonempty model
+            letI : Nonempty model.Carrier := model.nonempty
             have focusedItems :
                 ConcreteElaboration.ItemSeqSimulation model named .forward
                   combined.indexRelation
@@ -1383,7 +1381,7 @@ theorem boundaryWitness
       (comprehensionAbstractInterfaceTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped)
     (direction : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin boundary.length → model.Carrier) :
     let source : CheckedOpenDiagram signature :=
@@ -1547,7 +1545,7 @@ theorem open_denote
     (direction : ConcreteElaboration.SimulationDirection)
     (allowed : AbstractionAllowed input.val wrap.val.anchor direction
       input.val.root)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin boundary.length → model.Carrier) :
     let source : CheckedOpenDiagram signature :=

@@ -82,7 +82,7 @@ theorem compileOccurrenceFamilyAtomItems
 theorem occurrenceFamilyItems_denote_iff
     (indices : List ι)
     (items : ι → ItemSeq signature wireCount rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin wireCount → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
@@ -110,7 +110,7 @@ theorem occurrenceFamilyItems_denote_iff
 theorem occurrenceFamilyAtomItems_denote_iff
     (indices : List ι)
     (items : ι → Item signature wireCount rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin wireCount → model.Carrier)
     (relations : RelEnv model.Carrier rels) :

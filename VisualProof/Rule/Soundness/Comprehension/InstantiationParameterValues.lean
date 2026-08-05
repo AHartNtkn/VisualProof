@@ -26,7 +26,7 @@ noncomputable def terminalRelationOfParameterValues
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,
@@ -67,7 +67,7 @@ theorem terminalRelationOfValues_eq_parameterValues
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (parameterValues : Fin attachments.length → model.Carrier)
@@ -104,7 +104,7 @@ theorem terminalRelationOfParameterValues_eq
     (leftArguments : Fin payload.arity → Fin left.diagram.val.wireCount)
     (rightArguments : Fin payload.arity → Fin right.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,

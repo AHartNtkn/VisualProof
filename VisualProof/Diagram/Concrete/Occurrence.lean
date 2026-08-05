@@ -1,6 +1,4 @@
-import VisualProof.Diagram.BetaEtaIsomorphism
 import VisualProof.Diagram.Concrete.OpenIsomorphism
-import VisualProof.Lambda.Certificate
 
 namespace VisualProof.Diagram
 
@@ -8,20 +6,10 @@ open VisualProof
 
 namespace CNode
 
-/-- Proof-relevant node correspondence. A term pair is accepted only through
-its stored, kernel-checked certificate between positional closures. -/
+/-- Proof-relevant node correspondence for concrete diagram content. -/
 inductive CertifiedCorresponds
     (regions : FiniteEquiv (Fin sourceRegions) (Fin targetRegions)) :
     CNode sourceRegions → CNode targetRegions → Type
-  | term (sourceRegion : Fin sourceRegions)
-      (targetRegion : Fin targetRegions) (ports : Nat)
-      (sourceTerm targetTerm : Lambda.Term 0 (Fin ports))
-      (region_eq : regions sourceRegion = targetRegion)
-      (certificate : Lambda.CheckedCertificate
-        sourceTerm.closeOverPorts targetTerm.closeOverPorts) :
-      CertifiedCorresponds regions
-        (.term sourceRegion ports sourceTerm)
-        (.term targetRegion ports targetTerm)
   | atom (sourceRegion sourceBinder : Fin sourceRegions)
       (targetRegion targetBinder : Fin targetRegions)
       (region_eq : regions sourceRegion = targetRegion)
@@ -29,6 +17,12 @@ inductive CertifiedCorresponds
       CertifiedCorresponds regions
         (.atom sourceRegion sourceBinder)
         (.atom targetRegion targetBinder)
+  | identity (sourceRegion : Fin sourceRegions)
+      (targetRegion : Fin targetRegions) (arity : Nat)
+      (region_eq : regions sourceRegion = targetRegion) :
+      CertifiedCorresponds regions
+        (.identity sourceRegion arity)
+        (.identity targetRegion arity)
   | named (sourceRegion : Fin sourceRegions)
       (targetRegion : Fin targetRegions) (definition arity : Nat)
       (region_eq : regions sourceRegion = targetRegion) :
@@ -49,11 +43,10 @@ def CertifiedCorresponds.ofRenameEq
     CertifiedCorresponds regions source target := by
   subst target
   cases source with
-  | term region ports term =>
-      exact .term region (regions region) ports term term rfl
-        (Lambda.CheckedCertificate.refl term.closeOverPorts)
   | atom region binder =>
       exact .atom region binder (regions region) (regions binder) rfl rfl
+  | identity region arity =>
+      exact .identity region (regions region) arity rfl
   | named region definition arity =>
       exact .named region (regions region) definition arity rfl
 
@@ -70,16 +63,15 @@ def CertifiedCorresponds.precomposeRenameEq
     CertifiedCorresponds (first.trans second) source target := by
   subst middle
   cases source with
-  | term sourceRegion ports sourceTerm =>
-      cases certified with
-      | term _ targetRegion _ _ targetTerm regionEq certificate =>
-          exact .term sourceRegion targetRegion ports sourceTerm targetTerm
-            regionEq certificate
   | atom sourceRegion sourceBinder =>
       cases certified with
       | atom _ _ targetRegion targetBinder regionEq binderEq =>
           exact .atom sourceRegion sourceBinder targetRegion targetBinder
             regionEq binderEq
+  | identity sourceRegion arity =>
+      cases certified with
+      | identity _ targetRegion _ regionEq =>
+          exact .identity sourceRegion targetRegion arity regionEq
   | named sourceRegion definition arity =>
       cases certified with
       | named _ targetRegion _ _ regionEq =>
@@ -88,7 +80,7 @@ def CertifiedCorresponds.precomposeRenameEq
 end CNode
 
 /-- Concrete occurrence equivalence preserves the complete graph and ordered
-ports, but replaces exact term equality with checked positional certificates. -/
+ports. -/
 structure ConcreteOccurrenceEquiv (source target : ConcreteDiagram) where
   regionCount_eq : source.regionCount = target.regionCount
   nodeCount_eq : source.nodeCount = target.nodeCount

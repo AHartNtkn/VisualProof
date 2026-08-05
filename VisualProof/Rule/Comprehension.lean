@@ -1,4 +1,4 @@
-import VisualProof.Rule.Equational
+import VisualProof.Rule.Structural
 
 namespace VisualProof.Rule
 
@@ -76,8 +76,8 @@ def abstractNode? (input : CheckedDiagram signature)
     if original ∈ wrap.val.directNodes then some bubble
     else (domains.regions.index? owner).map Fin.castSucc
   match input.val.nodes original with
-  | .term owner freePorts term =>
-      (owner? owner).map fun mapped => .term mapped freePorts term
+  | .identity owner arity =>
+      (owner? owner).map fun mapped => .identity mapped arity
   | .atom owner binder => do
       let mappedOwner ← owner? owner
       let mappedBinder ← domains.regions.index? binder
@@ -451,7 +451,7 @@ theorem mem_boundAtoms_iff (input : CheckedDiagram signature)
       ∃ site, input.val.nodes node = .atom site bubble := by
   rw [boundAtoms, mem_filterFin]
   cases hnode : input.val.nodes node with
-  | term region freePorts term => simp
+  | identity region arity => simp
   | atom site binder =>
       simp only [decide_eq_true_eq]
       constructor
@@ -906,7 +906,7 @@ def instantiateCopies {signature : List Nat}
       | [] => .ok state
       | atom :: tail =>
           match state.diagram.val.nodes atom with
-          | .term .. | .named .. => .error .operationRejected
+          | .identity .. | .named .. => .error .operationRejected
           | .atom site candidate =>
               if candidate = state.bubble then
                 match instantiateArguments? state atom payload.arity with
@@ -1444,7 +1444,7 @@ theorem diagonalize_denotation
     {comprehension : CheckedOpenDiagram signature}
     {occurrence : AbstractionOccurrence input}
     (witness : AbstractionWitness input comprehension occurrence)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin occurrence.selection.touchingWires.length → model.Carrier) :
     witness.diagonal.denote model named
@@ -1490,7 +1490,7 @@ theorem comprehensionAbstract_sound
 theorem comprehensionInstantiate_sound
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (specialized quantified : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -1506,7 +1506,7 @@ theorem comprehensionInstantiate_sound
 theorem comprehensionAbstract_context_sound
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (specialized quantified : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)

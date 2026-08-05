@@ -514,17 +514,6 @@ theorem compileNode?_complete
     {node : Fin d.nodeCount} (hregion : (d.nodes node).region = region) :
     exists item, compileNode? signature d context binders node = some item := by
   cases hnode : d.nodes node with
-  | term nodeRegion freePorts term =>
-      obtain ⟨output, houtput⟩ := checked_resolvePort?_complete hwf hwires
-        (node := node) hregion (port := .output) (by
-          simp [ConcreteDiagram.RequiresPort, hnode])
-      obtain ⟨free, hfree⟩ := checked_resolvePorts?_complete hwf hwires
-        (node := node) hregion freePorts (fun index => .free index) (by
-          intro index
-          simp [ConcreteDiagram.RequiresPort, hnode]
-          exact ⟨index, rfl⟩)
-      exact ⟨Item.equation output (term.mapFree free), by
-        simp [compileNode?, hnode, houtput, hfree]⟩
   | atom nodeRegion binder =>
       have hnodeRegion : nodeRegion = region := by simpa [hnode] using hregion
       subst nodeRegion
@@ -539,6 +528,14 @@ theorem compileNode?_complete
           exact ⟨index, rfl⟩)
       exact ⟨Item.atom relation arguments, by
         simp [compileNode?, hnode, hrelation, harguments]⟩
+  | identity nodeRegion arity =>
+      obtain ⟨arguments, harguments⟩ := checked_resolvePorts?_complete hwf hwires
+        (node := node) hregion arity (fun index => .arg index) (by
+          intro index
+          simp [ConcreteDiagram.RequiresPort, hnode]
+          exact ⟨index, rfl⟩)
+      exact ⟨Item.identity arity arguments, by
+        simp [compileNode?, hnode, harguments]⟩
   | named nodeRegion definition arity =>
       obtain ⟨relation, hrelation⟩ := checked_namedRel?_complete hwf hnode
       obtain ⟨arguments, harguments⟩ := checked_resolvePorts?_complete hwf hwires

@@ -95,7 +95,7 @@ theorem survivor_items_entail_fixedRelation
       some arguments)
     (pending_eq : state.pendingAtoms = atom :: tail)
     (ownedNodup : state.ownedAtoms.Nodup)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
@@ -183,7 +183,7 @@ theorem site_sourceEnvironment_fiberConstant
     (ownedNodup : state.ownedAtoms.Nodup)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,

@@ -9,7 +9,7 @@ open VisualProof.Diagram
 theorem focusedPartition_regionSimulation
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)

@@ -14,7 +14,7 @@ theorem selectedOccurrence_denote_congr
     (input : CheckedDiagram signature)
     (occurrence : AbstractionOccurrence input)
     (witness : AbstractionWitness input comprehension occurrence)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (hostFuel : Nat)
     (hostContext : ConcreteElaboration.WireContext input.val)

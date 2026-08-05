@@ -68,7 +68,7 @@ noncomputable def doubleCutIntroRootContext
     (selection : CheckedSelection source.val.diagram)
     (targetWellFormed :
       (doubleCutIntroRaw source.val.diagram selection).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection) :
     let simulation := doubleCutIntroSimulation
@@ -333,7 +333,7 @@ theorem doubleCutIntroBoundaryWitness
     (targetWellFormed :
       (doubleCutIntroRaw source.val.diagram selection).WellFormed signature)
     (direction : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin source.val.boundary.length → model.Carrier) :
     let target : CheckedOpenDiagram signature :=

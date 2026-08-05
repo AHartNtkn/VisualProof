@@ -96,9 +96,9 @@ def promoteRegion? (domain : SurvivorDomain regions)
 
 def promoteNode? (domain : SurvivorDomain regions)
     (inner target : Fin regions) : CNode regions → Option (CNode domain.count)
-  | .term region freePorts term =>
+  | .identity region arity =>
       let owner := if region = inner then target else region
-      (domain.index? owner).map fun mapped => .term mapped freePorts term
+      (domain.index? owner).map fun mapped => .identity mapped arity
   | .atom region binder => do
       let owner := if region = inner then target else region
       let mappedOwner ← domain.index? owner

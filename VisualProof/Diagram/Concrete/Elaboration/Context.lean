@@ -689,13 +689,6 @@ theorem required_port_is_covered {d : ConcreteDiagram}
     exists wire, d.EndpointOccurs wire ⟨node, port⟩ := by
   specialize hcovered node
   cases hnode : d.nodes node with
-  | term region freePorts term =>
-      simp only [hnode] at hcovered
-      rw [ConcreteDiagram.requiresPort_term_iff d node port region freePorts term hnode]
-        at hrequired
-      rcases hrequired with rfl | ⟨index, rfl⟩
-      · exact hcovered.1
-      · exact hcovered.2 index
   | atom region binder =>
       cases hbinder : d.regions binder with
       | sheet => simp [ConcreteDiagram.RequiresPort, hnode, hbinder] at hrequired
@@ -706,6 +699,12 @@ theorem required_port_is_covered {d : ConcreteDiagram}
             parent arity hnode hbinder] at hrequired
           obtain ⟨index, rfl⟩ := hrequired
           exact hcovered index
+  | identity region arity =>
+      simp only [hnode] at hcovered
+      rw [ConcreteDiagram.requiresPort_identity_iff d node port region arity hnode]
+        at hrequired
+      obtain ⟨index, rfl⟩ := hrequired
+      exact hcovered index
   | named region definition arity =>
       simp only [hnode] at hcovered
       rw [ConcreteDiagram.requiresPort_named_iff d node port region definition arity hnode]

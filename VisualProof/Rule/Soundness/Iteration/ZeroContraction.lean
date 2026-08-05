@@ -33,7 +33,7 @@ structure ProperIterationRootAnchorContraction
         ).compilerLeaf.items) path
   flatReplacement : Region signature flatWitness.toFocus.holeWires
     flatWitness.toFocus.holeRels
-  flatEquivalent : ∀ (model : Lambda.LambdaModel)
+  flatEquivalent : ∀ (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (iterationCoalescedAnchorView input selection target hadmissible
@@ -117,7 +117,7 @@ structure ProperIterationRootAnchorContraction
     (replacement.renameRelations
       (Splice.Input.relationRenamingOfEq actualRelsEq))
     (iterationActualSpliceOfEmpty input selection target hadmissible)
-  equivalent : ∀ (model : Lambda.LambdaModel)
+  equivalent : ∀ (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (iterationCoalescedAnchorView input selection target hadmissible
@@ -202,7 +202,7 @@ structure ProperIterationRootOpenAnchorContraction
     (replacement.renameRelations
       (Splice.Input.relationRenamingOfEq actualRelsEq))
     (iterationActualSpliceOfEmpty input selection target hadmissible)
-  equivalent : ∀ (model : Lambda.LambdaModel)
+  equivalent : ∀ (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (iterationCoalescedOpenAnchorView input selection target hadmissible
@@ -298,7 +298,7 @@ theorem partitionedRoute_root_leaf_equiv
     {hostItems : ItemSeq signature (witness.toFocus.holeWires + hostLocal)
       witness.toFocus.holeRels}
     (bodyEq : witness.toFocus.body = Region.mk hostLocal hostItems)
-    (factor : ∀ (model : Lambda.LambdaModel)
+    (factor : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (env : Fin ((iterationCoalescedAnchorView input selection target
         hadmissible).compilerLeaf.inheritedWires.extend
@@ -311,7 +311,7 @@ theorem partitionedRoute_root_leaf_equiv
             ).compilerLeaf.items ↔
         denoteRegion model named env relEnv (Region.mk 0 selectedItems) ∧
         denoteRegion model named env relEnv (Region.mk 0 keptItems))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin ((iterationCoalescedAnchorView input selection target
       hadmissible).compilerLeaf.inheritedWires.extend
@@ -439,7 +439,7 @@ theorem properIterationRootAnchorLeaf_equiv
           ).compilerLeaf.items)}
     (alignment : RegionIso.ContextPathAlignment partitionIso
       (retained.appendRootItemsRight selectedItems))
-    (factor : ∀ (model : Lambda.LambdaModel)
+    (factor : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (env : Fin ((iterationCoalescedAnchorView input selection target
         hadmissible).compilerLeaf.inheritedWires.extend
@@ -452,7 +452,7 @@ theorem properIterationRootAnchorLeaf_equiv
             ).compilerLeaf.items ↔
         denoteRegion model named env relEnv (Region.mk 0 selectedItems) ∧
         denoteRegion model named env relEnv (Region.mk 0 keptItems))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin ((iterationCoalescedAnchorView input selection target
       hadmissible).compilerLeaf.inheritedWires.extend
@@ -601,7 +601,7 @@ theorem properIterationRootAnchorContraction_complete
       alignment.targetWitness.toFocus.holeWires
       alignment.targetWitness.toFocus.holeRels :=
     (targetActualRelsEq.symm ▸ actual).renameWires bridgeWire.symm
-  have itemsEquiv : ∀ (model : Lambda.LambdaModel)
+  have itemsEquiv : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (environment : Fin
         (anchorView.compilerLeaf.inheritedWires.extend
@@ -1195,7 +1195,7 @@ theorem ProperIterationRootOpenAnchorContraction.wholeOpen_equiv
       (input.val.wires wire).scope = input.val.root}
     (certificate : ProperIterationRootOpenAnchorContraction input selection
       target hadmissible sourceBoundary sourceRoot)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot

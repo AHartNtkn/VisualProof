@@ -1002,7 +1002,7 @@ noncomputable def simulation
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
       (Target source.val.diagram outer inner).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     ConcreteElaboration.ConcreteSemanticSimulation signature
       source.val.diagram (Target source.val.diagram outer inner) model named where
@@ -1916,7 +1916,7 @@ noncomputable def rootContext
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
       (Target source.val.diagram outer inner).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (orientation : Orientation) :
     let semanticSimulation := simulation source outer inner distinct ordered
@@ -2060,7 +2060,7 @@ private theorem boundaryWitness
     (allowed :
       Allowed source.val.diagram (source.val.diagram.wires inner).scope
         (direction orientation) source.val.diagram.root)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceArgs : Fin source.val.boundary.length → model.Carrier) :
     ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
@@ -2299,7 +2299,7 @@ private theorem orderedReceipt_sound
     (operationalIso := fun boundary sourceRoot mapped transport =>
       operationalIso realizes distinct ordered targetWellFormed boundary
         sourceRoot mapped transport)
-  intro boundary sourceRoot mapped transport valid args
+  intro model boundary sourceRoot mapped transport valid args
   let source : OpenProofState signature := {
     diagram := input
     boundary := boundary
@@ -2307,8 +2307,7 @@ private theorem orderedReceipt_sound
   }
   let target := operationalOpen source outer inner distinct ordered
     targetWellFormed
-  let model := Lambda.canonicalModel
-  let named := Theory.interpretDefinitions context.definitions
+  let named := Theory.interpretDefinitions model context.definitions
   let semanticSimulation := simulation source.asCheckedOpen outer inner
     distinct ordered targetWellFormed model named
   let rootSimulation := rootContext source.asCheckedOpen outer inner distinct

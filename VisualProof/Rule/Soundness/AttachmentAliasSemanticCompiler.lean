@@ -227,7 +227,7 @@ theorem oldNode_itemSimulation
       (materializedDiagram pattern.val attachment spine.bodyContainer)
       targetContext targetBinders
       (liftOldNode pattern.val attachment sourceNode) = some targetItem)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection) :
     ConcreteElaboration.ItemSimulation model named direction
@@ -313,7 +313,7 @@ theorem oldNode_itemSimulation_oldIndex
       (materializedDiagram pattern.val attachment spine.bodyContainer)
       targetContext targetBinders
       (liftOldNode pattern.val attachment sourceNode) = some targetItem)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection) :
     ConcreteElaboration.ItemSimulation model named direction

@@ -19,7 +19,7 @@ def FixedRegionSimulation
     {occurrences : List (AbstractionOccurrence input)}
     {raw : ConcreteDiagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
@@ -63,7 +63,7 @@ def FixedRegionSimulation
 meaning under the survivor context and binder maps. -/
 theorem focusedSurvivingNode_semantic
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext input.val)
@@ -132,8 +132,8 @@ theorem focusedSurvivingNode_semantic
 def reparentMappedNodeShape (owner : Fin targetRegions)
     (binderMap : Fin sourceRegions → Fin targetRegions) :
     CNode sourceRegions → CNode targetRegions
-  | .term _ freePorts term => .term owner freePorts term
   | .atom _ binder => .atom owner (binderMap binder)
+  | .identity _ arity => .identity owner arity
   | .named _ definition arity => .named owner definition arity
 
 /-- A surviving node selected directly at the wrap is reparented to the fresh
@@ -149,7 +149,7 @@ theorem node_shape_of_surviving_direct
   have result := trace.abstractNode?_targetNode node survives
   unfold abstractNode? at result
   cases sourceShape : input.val.nodes node with
-  | term owner freePorts term =>
+  | identity owner arity =>
       simp only [sourceShape, direct, if_pos, Option.map_some] at result
       simp only [reparentMappedNodeShape]
       exact (Option.some.inj result).symm
@@ -171,7 +171,7 @@ theorem node_shape_of_surviving_direct
 bubble context. -/
 theorem focusedSelectedNode_semantic
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceContext : ConcreteElaboration.WireContext input.val)
     (targetContext : ConcreteElaboration.WireContext trace.diagram)
@@ -199,7 +199,7 @@ theorem focusedSelectedNode_semantic
     (trace.targetNode node survives) (fun _ => trace.bubble) trace.regionMap
   · have shape := trace.node_shape_of_surviving_direct node survives direct
     cases sourceShape : input.val.nodes node with
-    | term owner freePorts term =>
+    | identity owner arity =>
         simpa only [sourceShape, reparentMappedNodeShape] using shape
     | atom owner binder =>
         simpa only [sourceShape, reparentMappedNodeShape] using shape
@@ -352,7 +352,7 @@ theorem focusedSelectedOccurrence_semantic
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceFuel targetFuel : Nat)
     (sourceContext : ConcreteElaboration.WireContext input.val)
@@ -654,7 +654,7 @@ theorem focusedSurvivingOccurrence_semantic
     {sourceRels targetRels : RelCtx}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (targetWellFormed : trace.diagram.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)

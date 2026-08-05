@@ -40,8 +40,8 @@ namespace CNode
 
 def rename (regions : FiniteEquiv (Fin sourceRegions) (Fin targetRegions)) :
     CNode sourceRegions -> CNode targetRegions
-  | .term region freePorts body => CNode.term (regions region) freePorts body
   | .atom region binder => CNode.atom (regions region) (regions binder)
+  | .identity region arity => CNode.identity (regions region) arity
   | .named region definition arity =>
       CNode.named (regions region) definition arity
 
@@ -378,15 +378,15 @@ theorem requiresPort_transport {source target : ConcreteDiagram}
   unfold ConcreteDiagram.RequiresPort at h ⊢
   rw [<- iso.nodes_eq node]
   cases hnode : source.nodes node with
-  | term =>
-      simp only [hnode] at h
-      simpa only [hnode, CNode.rename] using h
   | atom region binder =>
       simp only [hnode] at h
       simp only [CNode.rename]
       rw [<- iso.regions_eq binder]
       cases hbinder : source.regions binder <;>
         simp only [hbinder, CRegion.rename] at h ⊢ <;> exact h
+  | identity =>
+      simp only [hnode] at h
+      simpa only [hnode, CNode.rename] using h
   | named =>
       simp only [hnode] at h
       simpa only [hnode, CNode.rename] using h
@@ -441,7 +441,7 @@ theorem atomBindersAreBubbles_transport {source target : ConcreteDiagram}
   intro node
   have hnodes := iso.target_node_eq node
   cases hs : source.nodes (iso.nodes.symm node) with
-  | term =>
+  | identity =>
       rw [hs] at hnodes
       rw [hnodes]
       trivial
@@ -467,7 +467,7 @@ theorem atomBindersEnclose_transport {source target : ConcreteDiagram}
   intro node
   have hnodes := iso.target_node_eq node
   cases hs : source.nodes (iso.nodes.symm node) with
-  | term =>
+  | identity =>
       rw [hs] at hnodes
       rw [hnodes]
       trivial
@@ -491,11 +491,11 @@ theorem namedReferencesResolve_transport {source target : ConcreteDiagram}
   intro node
   have hnodes := iso.target_node_eq node
   cases hs : source.nodes (iso.nodes.symm node) with
-  | term =>
+  | atom =>
       rw [hs] at hnodes
       rw [hnodes]
       trivial
-  | atom =>
+  | identity =>
       rw [hs] at hnodes
       rw [hnodes]
       trivial
@@ -581,14 +581,6 @@ theorem requiredPortsAreCovered_transport {source target : ConcreteDiagram}
     simpa only [CEndpoint.rename, hnode] using mapped
   have hnodes := iso.target_node_eq node
   cases hs : source.nodes sourceNode with
-  | term region freePorts term =>
-      rw [hs] at hnodes
-      simp only [CNode.rename] at hnodes
-      rw [hnodes]
-      simp only
-      have hsource := h sourceNode
-      rw [hs] at hsource
-      exact ⟨covered hsource.1, fun index => covered (hsource.2 index)⟩
   | atom region binder =>
       rw [hs] at hnodes
       simp only [CNode.rename] at hnodes
@@ -616,6 +608,14 @@ theorem requiredPortsAreCovered_transport {source target : ConcreteDiagram}
           rw [hbinder] at hsource
           intro index
           exact covered (hsource index)
+  | identity region arity =>
+      rw [hs] at hnodes
+      simp only [CNode.rename] at hnodes
+      rw [hnodes]
+      have hsource := h sourceNode
+      rw [hs] at hsource
+      intro index
+      exact covered (hsource index)
   | named region definition arity =>
       rw [hs] at hnodes
       simp only [CNode.rename] at hnodes

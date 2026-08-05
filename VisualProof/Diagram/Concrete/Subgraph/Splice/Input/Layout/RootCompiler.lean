@@ -1442,8 +1442,8 @@ theorem compileFrameNode_at_region_of_maps
   · change layout.plugNode (layout.frameNode node) = _
     rw [layout.plugNode_frameNode]
     cases hsource : input.coalesceFrameRaw.nodes node with
-    | term region freePorts term =>
-        change input.frame.val.nodes node = .term region freePorts term
+    | identity region arity =>
+        change input.frame.val.nodes node = .identity region arity
           at hsource
         rw [hsource]
         rfl

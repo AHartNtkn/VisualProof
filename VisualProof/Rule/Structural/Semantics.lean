@@ -1,4 +1,4 @@
-import VisualProof.Rule.Structural.InconsistentCut
+import VisualProof.Rule.Structural.Iteration
 import VisualProof.Diagram.ContextReachability
 
 namespace VisualProof.Rule
@@ -11,7 +11,7 @@ open Diagram
 theorem positive_erasure_sound
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (kept erased : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -23,7 +23,7 @@ theorem positive_erasure_sound
 theorem negative_insertion_sound
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (kept inserted : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -43,7 +43,7 @@ theorem identity_diagonal_entails_independent
 theorem identity_join_sound
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (separate joined : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -59,7 +59,7 @@ theorem identity_join_sound
 theorem identity_sever_sound
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (joined separate : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -81,7 +81,7 @@ theorem ancestorCopy_sound
       ancestorRels descendantRels)
     (ancestor : Region signature ancestorWires ancestorRels)
     (body copy : Region signature descendantWires descendantRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -129,7 +129,7 @@ theorem spliceAt_contraction_sound
     (material : Region signature materialWires materialRels)
     (wireMap : Fin materialWires → Fin (outerWires + hostLocal))
     (relationMap : RelationRenaming materialRels hostRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier hostRels)
@@ -173,7 +173,7 @@ theorem ancestorSpliceCopy_sound
     (material : Region signature materialWires materialRels)
     (wireMap : Fin materialWires → Fin (descendantWires + hostLocal))
     (relationMap : RelationRenaming materialRels descendantRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -238,7 +238,7 @@ theorem spliceAt_contraction_renamed_sound
     (relationMap : RelationRenaming materialRels hostRels)
     (outerMap : Fin outerWires → Fin targetWires)
     (hostRelationMap : RelationRenaming hostRels targetRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin targetWires → model.Carrier)
     (rels : RelEnv model.Carrier targetRels)
@@ -276,7 +276,7 @@ theorem fill_spliceAt_contraction_sound
     (material : Region signature materialWires materialRels)
     (wireMap : Fin materialWires → Fin (holeWires + hostLocal))
     (relationMap : RelationRenaming materialRels holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -306,7 +306,7 @@ def doubleCutRegion (body : Region signature wires rels) :
 
 theorem denote_doubleCutRegion
     (body : Region signature wires rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
@@ -329,7 +329,7 @@ theorem denote_doubleCutRegion
 theorem doubleCut_equiv
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (body : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels) :
@@ -344,7 +344,7 @@ conjunct's existentially scoped wires.  This is the intrinsic law used by
 concrete double-cut elimination when inner-cut wires are promoted outward. -/
 theorem conjoin_doubleCutRegion_equiv
     (kept selected : Region signature wires rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
@@ -362,7 +362,7 @@ theorem adjoin_doubleCutRegion_equiv
     (hostLocal : Nat)
     (hostItems : ItemSeq signature (outer + hostLocal) rels)
     (selected : Region signature (outer + hostLocal) rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
@@ -393,7 +393,7 @@ def vacuousBubbleRegion (arity : Nat)
 
 theorem denote_vacuousBubbleRegion
     (arity : Nat) (body : Region signature wires rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
@@ -423,7 +423,7 @@ theorem denote_vacuousBubbleRegion
 theorem vacuousRelation_equiv
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (arity : Nat) (body : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels) :

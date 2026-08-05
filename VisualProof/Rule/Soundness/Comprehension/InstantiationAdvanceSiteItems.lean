@@ -66,7 +66,7 @@ theorem advance_site_items_denote
             state site arguments).plugLayout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin sourceContext.length → model.Carrier)
     (targetEnv : Fin targetContext.length → model.Carrier)

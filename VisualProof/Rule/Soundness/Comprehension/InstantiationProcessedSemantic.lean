@@ -26,7 +26,7 @@ def ProcessedAtomsDenote
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity) : Prop :=
   ∀ {rels : RelCtx}
@@ -53,7 +53,7 @@ theorem initial_processedAtomsDenote
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity) :
     ProcessedAtomsDenote payload (initialInstantiationState payload) model named
@@ -77,7 +77,7 @@ theorem ProcessedAtomsDenote.removed
       attachments binders)
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (processed : ProcessedAtomsDenote payload state model named relationValue) :

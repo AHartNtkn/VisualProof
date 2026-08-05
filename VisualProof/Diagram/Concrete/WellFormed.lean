@@ -37,7 +37,6 @@ instance (d : ConcreteDiagram) : Decidable (AtomBindersAreBubbles d) := by
   unfold AtomBindersAreBubbles
   apply @Nat.decidableForallFin _ _ (fun node => ?_)
   cases hnode : d.nodes node with
-  | term => exact isTrue trivial
   | atom _ binder =>
       cases hbinder : d.regions binder with
       | sheet =>
@@ -49,6 +48,7 @@ instance (d : ConcreteDiagram) : Decidable (AtomBindersAreBubbles d) := by
             rintro ⟨parent, arity, h⟩
             simp [hbinder] at h)
       | bubble parent arity => exact isTrue ⟨parent, arity, hbinder⟩
+  | identity => exact isTrue trivial
   | named => exact isTrue trivial
 
 def AtomBindersEnclose (d : ConcreteDiagram) : Prop :=
@@ -61,8 +61,8 @@ instance (d : ConcreteDiagram) : Decidable (AtomBindersEnclose d) := by
   unfold AtomBindersEnclose
   apply @Nat.decidableForallFin _ _ (fun node => ?_)
   cases hnode : d.nodes node with
-  | term => exact isTrue trivial
   | atom region binder => exact inferInstance
+  | identity => exact isTrue trivial
   | named => exact isTrue trivial
 
 def NamedReferencesResolve (signature : List Nat)
@@ -77,8 +77,8 @@ instance (signature : List Nat) (d : ConcreteDiagram) :
   unfold NamedReferencesResolve
   apply @Nat.decidableForallFin _ _ (fun node => ?_)
   cases hnode : d.nodes node with
-  | term => exact isTrue trivial
   | atom => exact isTrue trivial
+  | identity => exact isTrue trivial
   | named _ definition arity => exact inferInstance
 
 def EndpointsAreValid (d : ConcreteDiagram) : Prop :=
@@ -112,16 +112,15 @@ instance (d : ConcreteDiagram) : Decidable (WireEndpointsAreDisjoint d) := by
 def RequiredPortsAreCovered (d : ConcreteDiagram) : Prop :=
   forall node : Fin d.nodeCount,
     match d.nodes node with
-    | .term _ freePorts _ =>
-        (exists wire, d.EndpointOccurs wire ⟨node, .output⟩) /\
-          forall index : Fin freePorts,
-            exists wire, d.EndpointOccurs wire ⟨node, .free index⟩
     | .atom _ binder =>
         match d.regions binder with
         | .bubble _ arity =>
             forall index : Fin arity,
               exists wire, d.EndpointOccurs wire ⟨node, .arg index⟩
         | _ => True
+    | .identity _ arity =>
+        forall index : Fin arity,
+          exists wire, d.EndpointOccurs wire ⟨node, .arg index⟩
     | .named _ _ arity =>
         forall index : Fin arity,
           exists wire, d.EndpointOccurs wire ⟨node, .arg index⟩
@@ -130,16 +129,6 @@ instance (d : ConcreteDiagram) : Decidable (RequiredPortsAreCovered d) := by
   unfold RequiredPortsAreCovered
   apply @Nat.decidableForallFin _ _ (fun node => ?_)
   cases hnode : d.nodes node with
-  | term _ freePorts _ =>
-      let outputCovered : Decidable
-          (exists wire, d.EndpointOccurs wire ⟨node, .output⟩) :=
-        @Nat.decidableExistsFin _ _ (fun wire => inferInstance)
-      let freePortsCovered : Decidable
-          (forall index : Fin freePorts,
-            exists wire, d.EndpointOccurs wire ⟨node, .free index⟩) :=
-        @Nat.decidableForallFin _ _ (fun index =>
-          @Nat.decidableExistsFin _ _ (fun wire => inferInstance))
-      exact @instDecidableAnd _ _ outputCovered freePortsCovered
   | atom _ binder =>
       simp only
       cases hbinder : d.regions binder with
@@ -153,6 +142,9 @@ instance (d : ConcreteDiagram) : Decidable (RequiredPortsAreCovered d) := by
           simp only
           exact @Nat.decidableForallFin _ _ (fun index =>
             @Nat.decidableExistsFin _ _ (fun wire => inferInstance))
+  | identity _ arity =>
+      exact @Nat.decidableForallFin _ _ (fun index =>
+        @Nat.decidableExistsFin _ _ (fun wire => inferInstance))
   | named _ _ arity =>
       exact @Nat.decidableForallFin _ _ (fun index =>
         @Nat.decidableExistsFin _ _ (fun wire => inferInstance))

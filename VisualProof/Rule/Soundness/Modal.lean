@@ -1054,10 +1054,10 @@ theorem doubleCutIntroRaw_regular_nodeShape
     (nodeRegion : (input.nodes node).region = region) :
     (doubleCutIntroRaw input selection).nodes node =
       match input.nodes node with
-      | .term owner freePorts term =>
-          .term (Fin.castAdd 2 owner) freePorts term
       | .atom owner binder =>
           .atom (Fin.castAdd 2 owner) (Fin.castAdd 2 binder)
+      | .identity owner arity =>
+          .identity (Fin.castAdd 2 owner) arity
       | .named owner definition arity =>
           .named (Fin.castAdd 2 owner) definition arity := by
   have nodeNotSelected : node ∉ selection.val.directNodes := by
@@ -1074,10 +1074,10 @@ theorem doubleCutIntroRaw_selected_nodeShape
     (selected : node ∈ selection.val.directNodes) :
     (doubleCutIntroRaw input selection).nodes node =
       match input.nodes node with
-      | .term _ freePorts term =>
-          .term (doubleCutInner input) freePorts term
       | .atom _ binder =>
           .atom (doubleCutInner input) (Fin.castAdd 2 binder)
+      | .identity _ arity =>
+          .identity (doubleCutInner input) arity
       | .named _ definition arity =>
           .named (doubleCutInner input) definition arity := by
   rw [doubleCutIntroRaw_node, if_pos selected]
@@ -1089,10 +1089,10 @@ theorem doubleCutIntroRaw_unselected_nodeShape
     (unselected : node ∉ selection.val.directNodes) :
     (doubleCutIntroRaw input selection).nodes node =
       match input.nodes node with
-      | .term owner freePorts term =>
-          .term (Fin.castAdd 2 owner) freePorts term
       | .atom owner binder =>
           .atom (Fin.castAdd 2 owner) (Fin.castAdd 2 binder)
+      | .identity owner arity =>
+          .identity (Fin.castAdd 2 owner) arity
       | .named owner definition arity =>
           .named (Fin.castAdd 2 owner) definition arity := by
   rw [doubleCutIntroRaw_node, if_neg unselected]
@@ -1240,7 +1240,7 @@ theorem finishRegion_noWires_denote
     (empty :
       ConcreteElaboration.exactScopeWires diagram region = [])
     (items : ItemSeq signature (context.extend region).length rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
@@ -1305,7 +1305,7 @@ theorem finishRegion_noWires_denote
 
 private theorem doubleCutIntro_compileNode_itemSimulation
     (input : ConcreteDiagram) (selection : CheckedSelection input)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext input)
@@ -1324,10 +1324,10 @@ private theorem doubleCutIntro_compileNode_itemSimulation
     (nodeShape :
       (doubleCutIntroRaw input selection).nodes node =
         match input.nodes node with
-        | .term owner freePorts term =>
-            .term (regionMap owner) freePorts term
         | .atom owner binder =>
             .atom (regionMap owner) (Fin.castAdd 2 binder)
+        | .identity owner arity =>
+            .identity (regionMap owner) arity
         | .named owner definition arity =>
             .named (regionMap owner) definition arity)
     (sourceItem : Item signature sourceContext.length sourceRels)
@@ -1371,7 +1371,7 @@ theorem doubleCutIntro_compileOccurrence_itemSimulation
     (sourceWellFormed : input.WellFormed signature)
     (targetWellFormed :
       (doubleCutIntroRaw input selection).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
@@ -1405,10 +1405,10 @@ theorem doubleCutIntro_compileOccurrence_itemSimulation
       occurrence = .node node →
       (doubleCutIntroRaw input selection).nodes node =
         match input.nodes node with
-        | .term owner freePorts term =>
-            .term (regionMap owner) freePorts term
         | .atom owner binder =>
             .atom (regionMap owner) (Fin.castAdd 2 binder)
+        | .identity owner arity =>
+            .identity (regionMap owner) arity
         | .named owner definition arity =>
             .named (regionMap owner) definition arity)
     (regionShape : ∀ child,
@@ -1685,7 +1685,7 @@ theorem compileOccurrences_denote_perm
     (targetCompiled :
       ConcreteElaboration.compileOccurrencesWith? signature diagram recurse
         context binders targetOccurrences = some targetItems)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
@@ -1774,7 +1774,7 @@ noncomputable def doubleCutIntroSimulation
     (selection : CheckedSelection input.val)
     (targetWellFormed :
       (doubleCutIntroRaw input.val selection).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     ConcreteElaboration.ConcreteSemanticSimulation signature input.val
       (doubleCutIntroRaw input.val selection) model named where

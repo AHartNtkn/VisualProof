@@ -113,7 +113,7 @@ noncomputable def proxyRelationsOfCover
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
     (cover : binderContext.Covers state.bubble)
     (relationEnvironment : RelEnv model.Carrier rels)
@@ -137,7 +137,7 @@ theorem proxyRelationsOfCover_fixed
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
     (cover : binderContext.Covers state.bubble)
     (relationEnvironment : RelEnv model.Carrier rels) :
@@ -210,7 +210,7 @@ noncomputable def proxyRelationsOfParentCover
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
     (parent : Fin state.diagram.val.regionCount)
     (bubbleShape : state.diagram.val.regions state.bubble =
@@ -239,7 +239,7 @@ theorem proxyRelationsOfParentCover_fixed
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
     (parent : Fin state.diagram.val.regionCount)
     (bubbleShape : state.diagram.val.regions state.bubble =

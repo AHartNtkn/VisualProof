@@ -25,7 +25,7 @@ noncomputable def finalBubblePresentation
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
     (scopes : ParameterScopesAtBubble state)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     {rels : RelCtx}
     (outer : ConcreteElaboration.WireContext state.diagram.val)
@@ -156,7 +156,7 @@ noncomputable def initialBubblePresentationOfFinal
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       (initialInstantiationState payload) result)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -195,7 +195,7 @@ noncomputable def initialBubblePresentationOfFinalFocus
       (initialInstantiationState payload) result)
     (targets : BinderTargetsAtBubble payload result)
     (scopes : ParameterScopesAtBubble result)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     {rels : RelCtx}
     (outer : ConcreteElaboration.WireContext result.diagram.val)

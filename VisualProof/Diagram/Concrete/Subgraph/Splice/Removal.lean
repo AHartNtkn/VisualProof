@@ -2387,7 +2387,7 @@ theorem PlugLayout.removePlugNode_frame_eq
   have hsourceReindexed := ConcreteDiagram.removeRaw_node_reindexed
     input.frame selection sourceDomains node
   cases hkind : input.frame.val.nodes (sourceDomains.nodes.origin node) with
-  | term region freePorts term =>
+  | identity region arity =>
       have hsourceRegion := sourceDomains.nodeRegion_survives
         (sourceDomains.nodes.origin_survives node)
       simp only [hkind, CNode.region] at hsourceRegion
@@ -2406,7 +2406,7 @@ theorem PlugLayout.removePlugNode_frame_eq
         ← Option.some.inj htargetReindexed]
       simp only [PlugLayout.mapFrameNode, CNode.rename]
       exact congrArg (fun mappedRegion =>
-        CNode.term mappedRegion freePorts term) (by
+        CNode.identity mappedRegion arity) (by
           simpa only [sourceDomains.regions.origin_index] using
             layout.removePlugRegionEquiv_frame_index selection mapped hcheck
               site_eq_anchor sourceDomains targetDomains
@@ -2558,7 +2558,7 @@ theorem PlugLayout.removePlugNode_pattern_eq
     layout.mappedNode_pattern_survives selection mapped hcheck site_eq_anchor
       targetDomains node
   cases hkind : input.pattern.val.diagram.nodes node with
-  | term region freePorts term =>
+  | identity region arity =>
       have htargetRegion := targetDomains.nodeRegion_survives htargetNode
       change targetDomains.regions.survives
         (layout.plugNode (layout.patternNode node)).region = true
@@ -2572,7 +2572,7 @@ theorem PlugLayout.removePlugNode_pattern_eq
       rw [← Option.some.inj htargetReindexed]
       simp only [PlugLayout.mapPatternNode, CNode.rename]
       exact congrArg (fun mappedRegion =>
-        CNode.term mappedRegion freePorts term)
+        CNode.identity mappedRegion arity)
         (layout.removePlugRegionEquiv_body_index selection mapped hcheck
           site_eq_anchor sourceDomains targetDomains siteSurvives
           attachmentsSurvive binderTargetsSurvive region htargetRegion)

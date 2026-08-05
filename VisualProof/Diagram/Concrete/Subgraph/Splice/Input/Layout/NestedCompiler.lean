@@ -2434,7 +2434,7 @@ theorem compiledWholeRootDenotationOfNonempty
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outputOuter → model.Carrier)
     (relEnv : RelEnv model.Carrier outputRels) :
@@ -2497,7 +2497,7 @@ theorem compiledOpenWholeRootDenotationOfNonempty
     (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin arity → model.Carrier) :
     let source :=
@@ -2726,7 +2726,7 @@ theorem compiledWholeRootDenotationOfEmpty
         ConcreteElaboration.BinderContext.empty
         (ConcreteElaboration.localOccurrences input.pattern.val.diagram
           input.pattern.val.diagram.root) = some patternItems)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outputOuter → model.Carrier)
     (relEnv : RelEnv model.Carrier outputRels) :
@@ -2791,7 +2791,7 @@ theorem compiledOpenWholeRootDenotationOfEmpty
         ConcreteElaboration.BinderContext.empty
         (ConcreteElaboration.localOccurrences input.pattern.val.diagram
           input.pattern.val.diagram.root) = some patternItems)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin arity → model.Carrier) :
     let source :=

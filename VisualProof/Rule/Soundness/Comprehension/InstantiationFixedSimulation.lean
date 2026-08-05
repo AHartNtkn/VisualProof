@@ -243,7 +243,7 @@ def FixedAdvanceRegionSimulation
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -367,7 +367,7 @@ theorem fixedRelationAt_pullback_frame
             state site arguments).plugLayout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (relationValue : Relation model.Carrier payload.arity)
     (targetRelEnv : RelEnv model.Carrier targetRels)
     (targetFixed : FixedRelationAt payload
@@ -425,7 +425,7 @@ theorem proxyRelationsAt_pullback_frame
             state site arguments).plugLayout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (targetRelEnv : RelEnv model.Carrier targetRels)
@@ -480,7 +480,7 @@ theorem proxyRelationsAt_host_pullback
         site arguments).plugLayout.plugRaw
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion site) outputWitness)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (outputRelEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)

@@ -105,7 +105,7 @@ theorem aliasConsistent_iff {source target : OpenDiagram signature arity}
 
 theorem preservesDenotation {source target : OpenDiagram signature arity}
     (iso : OpenDiagramIso source target)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin arity -> model.Carrier) :
     denoteOpen model named source args -> denoteOpen model named target args := by
@@ -123,7 +123,7 @@ theorem preservesDenotation {source target : OpenDiagram signature arity}
 
 theorem denoteOpen_iff {source target : OpenDiagram signature arity}
     (iso : OpenDiagramIso source target)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin arity -> model.Carrier) :
     denoteOpen model named source args <-> denoteOpen model named target args := by

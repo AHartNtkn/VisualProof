@@ -276,7 +276,7 @@ theorem Region.ContextPath.denote_fill_iff_filledRootItems
     (proper : path ≠ [])
     (replacement : Region signature witness.toFocus.holeWires
       witness.toFocus.holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin wires → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
@@ -301,7 +301,7 @@ theorem Region.ContextPath.appendRootItemsRight_fill_equiv
     (witness : Region.ContextPath (Region.mk 0 items) (index :: rest))
     (replacement : Region signature witness.toFocus.holeWires
       witness.toFocus.holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
@@ -623,13 +623,13 @@ theorem RegionIso.transport_equivalence
     (beforeIso : RegionIso signature wire rels sourceBefore targetBefore)
     (afterIso : RegionIso signature wire rels sourceAfter targetAfter)
     (sourceEquivalent :
-      ∀ (model : Lambda.LambdaModel)
+      ∀ (model : Model)
         (named : NamedEnv model.Carrier signature)
         (env : Fin sourceWires → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
         denoteRegion model named env relEnv sourceBefore ↔
           denoteRegion model named env relEnv sourceAfter)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (targetEnv : Fin targetWires → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :

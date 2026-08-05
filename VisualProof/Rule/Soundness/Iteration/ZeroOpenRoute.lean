@@ -707,7 +707,7 @@ theorem properIterationRootOpen_compiledSource_equiv
     (certificate : ProperIterationRootOpenAnchorContraction input selection target
       hadmissible sourceBoundary sourceRoot)
     (alignment : ProperIterationRootOpenTargetAlignment certificate)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
@@ -817,7 +817,7 @@ theorem properIterationRootOpen_output_equiv
       (Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary
       sourceRoot)
     (alignment : ProperIterationRootOpenTargetAlignment certificate)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
     let source : OpenProofState signature := {

@@ -23,7 +23,7 @@ def BubblePresentation.OuterAligned
     {origin : CheckedDiagram signature}
     {state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
-    {model : Lambda.LambdaModel}
+    {model : Model}
     {named : NamedEnv model.Carrier signature}
     {relationValue : Relation model.Carrier payload.arity}
     {values : ∀ index,
@@ -54,7 +54,7 @@ theorem coalescedBubblePresentation_of_target_outerAligned
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -124,7 +124,7 @@ theorem bubblePresentation_of_coalesced_outerAligned
       payload state site arguments).Admissible)
     (respects : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).AttachmentsRespectBoundary)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -203,7 +203,7 @@ structure AlignedBubblePresentation
     {origin : CheckedDiagram signature}
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -232,7 +232,7 @@ theorem alignedBubblePresentation_nonempty_of_trace
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -385,7 +385,7 @@ noncomputable def alignedBubblePresentation_of_trace
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,

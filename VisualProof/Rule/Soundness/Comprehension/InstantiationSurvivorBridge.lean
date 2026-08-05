@@ -16,7 +16,7 @@ theorem survivor_simulation_of_authoritative
     {sourceOrigin targetOrigin : CheckedDiagram signature}
     (sourceState : InstantiationState sourceOrigin sourceParameters sourceProxies)
     (targetState : InstantiationState targetOrigin targetParameters targetProxies)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceRemoved : ∀ {rels : RelCtx}
       (region : Fin sourceState.diagram.val.regionCount)

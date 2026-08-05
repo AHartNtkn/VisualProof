@@ -126,7 +126,7 @@ noncomputable def semanticSimulation
     (trace : VacuousElimTrace input outer raw)
     (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
     (targetWellFormed : input.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (freshForward : FreshRelationSelector trace targetWellFormed model) :
     ConcreteElaboration.ConcreteSemanticSimulation signature
@@ -315,8 +315,8 @@ noncomputable def semanticSimulation
     all_goals
       have sourceShape : input.nodes sourceNode =
           match trace.sourceDiagram.nodes sourceNode with
-          | .term owner freePorts term =>
-              .term (trace.origin owner) freePorts term
+          | .identity owner arity =>
+              .identity (trace.origin owner) arity
           | .atom owner binder =>
               .atom (trace.origin owner) (trace.origin binder)
           | .named owner definition arity =>

@@ -22,7 +22,7 @@ noncomputable def semanticSimulation
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     ConcreteElaboration.ConcreteSemanticSimulation signature input.val
       trace.diagram model named where
@@ -143,8 +143,7 @@ noncomputable def semanticSimulation
       reachable regular allowed sourceExact targetExact sourceBindersCover
       targetBindersCover sourceEnumeration targetEnumeration sourceItems
       targetItems sourceCompiled targetCompiled itemSemantics relationEnvironment
-    letI : Nonempty model.Carrier :=
-      ConcreteElaboration.lambdaModel_carrier_nonempty model
+    letI : Nonempty model.Carrier := model.nonempty
     apply ConcreteElaboration.directionalLocalTransport_of_agreement direction
       sourceContext targetContext region (trace.regionMap region)
       context.down.indexRelation
@@ -558,8 +557,7 @@ noncomputable def semanticSimulation
               (targetPartition.nodup_iff).1
                 (ConcreteElaboration.localOccurrences_nodup trace.diagram
                   (trace.regionMap wrap.val.anchor))
-            letI : Nonempty model.Carrier :=
-              ConcreteElaboration.lambdaModel_carrier_nonempty model
+            letI : Nonempty model.Carrier := model.nonempty
             intro sourceEnvironment targetEnvironment targetRelations
               environments
             rw [ConcreteElaboration.finishRegion_renameRelations]

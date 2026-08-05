@@ -1,11 +1,3 @@
-import VisualProof.Lambda.Syntax
-import VisualProof.Lambda.Rename
-import VisualProof.Lambda.Substitute
-import VisualProof.Lambda.Reduction
-import VisualProof.Lambda.Certificate
-import VisualProof.Lambda.Normalize
-import VisualProof.Lambda.Quotient
-import VisualProof.Lambda.NormalSeparation
 import VisualProof.Theory.Signature
 import VisualProof.Theory.Definition
 import VisualProof.Theory.Semantics
@@ -18,7 +10,6 @@ import VisualProof.Diagram.Context
 import VisualProof.Diagram.Isomorphism
 import VisualProof.Diagram.Algebra
 import VisualProof.Diagram.OpenIsomorphism
-import VisualProof.Diagram.BetaEtaIsomorphism
 import VisualProof.Diagram.Concrete
 import VisualProof.Diagram.Concrete.Occurrence
 import VisualProof.Diagram.Concrete.OccurrenceEmbedding
@@ -28,11 +19,9 @@ import VisualProof.Diagram.Concrete.Matcher
 import VisualProof.Correspondence.StepTags
 import VisualProof.Rule.Step
 import VisualProof.Rule.Structural
-import VisualProof.Rule.Equational
 import VisualProof.Rule.Comprehension
 import VisualProof.Rule.Named
 import VisualProof.Rule.Soundness
-import VisualProof.Rule.Soundness.InconsistentCut
 import VisualProof.Rule.Soundness.All
 import VisualProof.Proof.Replay
 import VisualProof.Proof.Theorem

@@ -925,7 +925,7 @@ private theorem terminalRelationsMatch_materialized_iff
     (certificate : Splice.AttachmentAliasMaterialization.Certificate
       comprehension attachment payload.binderSpine)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (terminalRels :
@@ -1071,7 +1071,7 @@ theorem terminalRelationOfParameterValues_materialized_iff
         arguments)
       payload.binderSpine)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,
@@ -2011,7 +2011,7 @@ theorem terminalRelationOfParameterValues_materialized
         arguments)
       payload.binderSpine)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (parameterValues : Fin attachments.length → model.Carrier)
     (values : ∀ index,

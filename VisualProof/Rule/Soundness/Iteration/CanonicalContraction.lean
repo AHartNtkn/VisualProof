@@ -133,13 +133,13 @@ theorem RegionIso.source_equiv_of_target_equiv
     {targetBefore targetAfter : Region signature targetWires rels}
     (beforeIso : RegionIso signature wire rels sourceBefore targetBefore)
     (afterIso : RegionIso signature wire rels sourceAfter targetAfter)
-    (targetEquiv : ∀ (model : Lambda.LambdaModel)
+    (targetEquiv : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (environment : Fin targetWires → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
       denoteRegion model named environment relEnv targetBefore ↔
         denoteRegion model named environment relEnv targetAfter)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin sourceWires → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
@@ -175,7 +175,7 @@ theorem RegionIso.castRelsEqBoth
 theorem denoteRegion_castRels_iff
     {source target : RelCtx} (equality : source = target)
     (region : Region signature wires source)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin wires → model.Carrier)
     (targetRelEnv : RelEnv model.Carrier target) :
@@ -295,7 +295,7 @@ structure ProperIterationAnchorContraction
         ).compilerLeaf.items) path
   flatReplacement : Region signature flatWitness.toFocus.holeWires
     flatWitness.toFocus.holeRels
-  flatEquivalent : ∀ (model : Lambda.LambdaModel)
+  flatEquivalent : ∀ (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (iterationCoalescedAnchorView input selection target hadmissible
@@ -381,7 +381,7 @@ structure ProperIterationAnchorContraction
       (Splice.Input.relationRenamingOfEq actualRelsEq))
     (iterationActualSpliceOfNonempty input selection target hadmissible
       hnonempty)
-  equivalent : ∀ (model : Lambda.LambdaModel)
+  equivalent : ∀ (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (iterationCoalescedAnchorView input selection target hadmissible
@@ -491,7 +491,7 @@ structure ProperIterationOpenAnchorContraction
       (Splice.Input.relationRenamingOfEq actualRelsEq))
     (iterationActualSpliceOfNonempty input selection target hadmissible
       hnonempty)
-  equivalent : ∀ (model : Lambda.LambdaModel)
+  equivalent : ∀ (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (iterationCoalescedOpenAnchorView input selection target hadmissible
@@ -1214,7 +1214,7 @@ theorem partitionedRoute_leaf_equiv
     {hostItems : ItemSeq signature (witness.toFocus.holeWires + hostLocal)
       witness.toFocus.holeRels}
     (bodyEq : witness.toFocus.body = Region.mk hostLocal hostItems)
-    (factor : ∀ (model : Lambda.LambdaModel)
+    (factor : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (env : Fin ((iterationCoalescedAnchorView input selection target
         hadmissible).compilerLeaf.inheritedWires.extend
@@ -1227,7 +1227,7 @@ theorem partitionedRoute_leaf_equiv
             ).compilerLeaf.items ↔
         denoteRegion model named env relEnv (Region.mk 0 selectedItems) ∧
         denoteRegion model named env relEnv (Region.mk 0 keptItems))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin ((iterationCoalescedAnchorView input selection target
       hadmissible).compilerLeaf.inheritedWires.extend
@@ -1357,7 +1357,7 @@ theorem partitionedAlignment_leaf_equiv
       (retained.appendRootItemsRight selectedItems))
     (replacement : Region signature retained.toFocus.holeWires
       retained.toFocus.holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -1437,7 +1437,7 @@ theorem partitionedAlignment_actual_leaf_equiv
       RegionIso signature actualWire actualRels
         (sourceReplacement.renameRelations
           (Splice.Input.relationRenamingOfEq actualRelsEq)) actual)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -1558,7 +1558,7 @@ theorem properIterationAnchorLeaf_equiv
           ).compilerLeaf.items)}
     (alignment : RegionIso.ContextPathAlignment partitionIso
       (retained.appendRootItemsRight selectedItems))
-    (factor : ∀ (model : Lambda.LambdaModel)
+    (factor : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (env : Fin ((iterationCoalescedAnchorView input selection target
         hadmissible).compilerLeaf.inheritedWires.extend
@@ -1571,7 +1571,7 @@ theorem properIterationAnchorLeaf_equiv
             ).compilerLeaf.items ↔
         denoteRegion model named env relEnv (Region.mk 0 selectedItems) ∧
         denoteRegion model named env relEnv (Region.mk 0 keptItems))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin ((iterationCoalescedAnchorView input selection target
       hadmissible).compilerLeaf.inheritedWires.extend
@@ -1692,14 +1692,14 @@ theorem Splice.Region.ContextPath.CompilerLeaf.body_equiv_of_items
     (leaf : Splice.Region.ContextPath.CompilerLeaf diagram site witness)
     (targetItems : ItemSeq signature
       (leaf.inheritedWires.extend site).length witness.toFocus.holeRels)
-    (itemsEquiv : ∀ (model : Lambda.LambdaModel)
+    (itemsEquiv : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (environment : Fin (leaf.inheritedWires.extend site).length →
         model.Carrier)
       (relEnv : RelEnv model.Carrier witness.toFocus.holeRels),
       denoteItemSeq model named environment relEnv leaf.items ↔
         denoteItemSeq model named environment relEnv targetItems)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin witness.toFocus.holeWires → model.Carrier)
     (relEnv : RelEnv model.Carrier witness.toFocus.holeRels) :
@@ -1758,14 +1758,14 @@ theorem Splice.Region.ContextPath.CompilerLeaf.body_equiv_of_region
     (leaf : Splice.Region.ContextPath.CompilerLeaf diagram site witness)
     (targetRegion : Region signature
       (leaf.inheritedWires.extend site).length witness.toFocus.holeRels)
-    (itemsEquiv : ∀ (model : Lambda.LambdaModel)
+    (itemsEquiv : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (environment : Fin (leaf.inheritedWires.extend site).length →
         model.Carrier)
       (relEnv : RelEnv model.Carrier witness.toFocus.holeRels),
       denoteItemSeq model named environment relEnv leaf.items ↔
         denoteRegion model named environment relEnv targetRegion)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin witness.toFocus.holeWires → model.Carrier)
     (relEnv : RelEnv model.Carrier witness.toFocus.holeRels) :
@@ -1877,7 +1877,7 @@ theorem Splice.Region.ContextPath.CompilerLeaf.body_equiv_of_relocal_fill
     (nonempty : path ≠ [])
     (replacement : Region signature witness.toFocus.holeWires
       witness.toFocus.holeRels)
-    (itemsEquiv : ∀ (model : Lambda.LambdaModel)
+    (itemsEquiv : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (environment : Fin (leaf.inheritedWires.extend site).length →
         model.Carrier)
@@ -1885,7 +1885,7 @@ theorem Splice.Region.ContextPath.CompilerLeaf.body_equiv_of_relocal_fill
       denoteItemSeq model named environment relEnv leaf.items ↔
         denoteRegion model named environment relEnv
           (witness.toFocus.context.fill replacement))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin rootWitness.toFocus.holeWires → model.Carrier)
     (relEnv : RelEnv model.Carrier rootWitness.toFocus.holeRels) :
@@ -1979,7 +1979,7 @@ theorem properIterationAnchorContraction_complete
       alignment.targetWitness.toFocus.holeWires
       alignment.targetWitness.toFocus.holeRels :=
     (targetActualRelsEq.symm ▸ actual).renameWires bridgeWire.symm
-  have itemsEquiv : ∀ (model : Lambda.LambdaModel)
+  have itemsEquiv : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (environment : Fin
         (anchorView.compilerLeaf.inheritedWires.extend
@@ -2577,7 +2577,7 @@ theorem ProperIterationOpenAnchorContraction.wholeOpen_equiv
       (input.val.wires wire).scope = input.val.root}
     (certificate : ProperIterationOpenAnchorContraction input selection target
       hadmissible hnonempty sourceBoundary sourceRoot)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot

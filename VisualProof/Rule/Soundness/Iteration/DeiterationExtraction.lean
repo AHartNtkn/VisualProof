@@ -846,23 +846,23 @@ theorem deiterationExtract_nodes_eq
   simp only [ConcreteDiagram.extractOpenRaw]
   rw [deiterationExtractNodeEquiv_index input selection witness index]
   cases originalKind : input.val.nodes originalNode with
-  | term region freePorts term =>
+  | identity region arity =>
       have ownerSurvives : domains.regions.survives region = true := by
         have core := domains.nodeRegion_survives nodeSurvives
         rw [originalKind] at core
         exact core
-      have removedKind := ConcreteDiagram.removeRaw_term input selection domains
+      have removedKind := ConcreteDiagram.removeRaw_identity input selection domains
         nodeSurvives originalKind
       rw [nodeIndex] at removedKind
       have targetKind : input.val.nodes
           (witness.justifier.selectedNodes.get targetIndex) =
-            .term region freePorts term := by
+            .identity region arity := by
         rw [← originalGet]
         exact originalKind
-      rw [ConcreteDiagram.extractDiagramRaw_node_term _ retained sourceLayout
-          index _ _ _ removedKind,
-        ConcreteDiagram.extractDiagramRaw_node_term _ witness.justifier
-          targetLayout targetIndex region freePorts term targetKind]
+      rw [ConcreteDiagram.extractDiagramRaw_node_identity _ retained sourceLayout
+          index _ _ removedKind,
+        ConcreteDiagram.extractDiagramRaw_node_identity _ witness.justifier
+          targetLayout targetIndex region arity targetKind]
       simp only [CNode.rename]
       congr 1
       exact deiteration_fragmentParent_origin input selection witness

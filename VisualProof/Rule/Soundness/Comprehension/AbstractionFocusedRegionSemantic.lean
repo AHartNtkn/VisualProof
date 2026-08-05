@@ -22,7 +22,7 @@ theorem fixedRegionSimulation
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     ∀ (direction : ConcreteElaboration.SimulationDirection)
       (sourceFuel targetFuel : Nat)
@@ -310,8 +310,7 @@ theorem fixedRegionSimulation
                       survivorMaps sourceSurvivorItems targetSurvivorItems
                       sourceSurvivorCompiled (by
                         simpa [targetSurvivors] using targetSurvivorCompiled)
-                  letI : Nonempty model.Carrier :=
-                    ConcreteElaboration.lambdaModel_carrier_nonempty model
+                  letI : Nonempty model.Carrier := model.nonempty
                   intro sourceEnvironment targetEnvironment targetRelations
                     environments fixed
                   rw [ConcreteElaboration.finishRegion_renameRelations]

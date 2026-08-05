@@ -76,9 +76,9 @@ theorem focusedKeptNode_shape
         (originalRegion ▸ enclosed)) = finalNode) :
     input.val.nodes originalNode =
       match elimTrace.sourceDiagram.nodes finalNode with
-      | .term owner freePorts term =>
-          .term (copyTrace.reverseRegionMap elimTrace finalWellFormed owner)
-            freePorts term
+      | .identity owner arity =>
+          .identity (copyTrace.reverseRegionMap elimTrace finalWellFormed owner)
+            arity
       | .atom owner binder =>
           .atom (copyTrace.reverseRegionMap elimTrace finalWellFormed owner)
             (copyTrace.reverseRegionMap elimTrace finalWellFormed binder)
@@ -105,22 +105,21 @@ theorem focusedKeptNode_shape
     (copyTrace.droppedNodeMap originalNode outside)
     (copyTrace.regionMap payload.parent) droppedOwner
   cases originalShape : input.val.nodes originalNode with
-  | term owner freePorts term =>
+  | identity owner arity =>
       have ownerEq : owner = payload.parent := by
         simpa [originalShape, CNode.region] using originalRegion
       subst owner
       rw [originalShape] at droppedShape
       simp only [mapNodeShape] at droppedShape
       cases finalShape : elimTrace.sourceDiagram.nodes finalNode with
-      | term finalOwner' finalFreePorts finalTerm =>
+      | identity finalOwner' finalArity =>
           have finalOwnerEq : finalOwner' =
               elimTrace.targetIndex finalWellFormed := by
             simpa [finalShape, CNode.region] using finalOwner
           subst finalOwner'
           have finalShapeDropped : elimTrace.promotion.nodes
               (copyTrace.droppedNodeMap originalNode outside) =
-                .term (elimTrace.targetIndex finalWellFormed) finalFreePorts
-                  finalTerm := by
+                .identity (elimTrace.targetIndex finalWellFormed) finalArity := by
             rw [droppedEq]
             exact finalShape
           simp only [CNode.region] at finalOwner
@@ -169,15 +168,14 @@ theorem focusedKeptNode_shape
       rw [originalShape] at droppedShape
       simp only [mapNodeShape] at droppedShape
       cases finalShape : elimTrace.sourceDiagram.nodes finalNode with
-      | term finalOwner' finalFreePorts finalTerm =>
+      | identity finalOwner' finalArity =>
           have finalOwnerEq : finalOwner' =
               elimTrace.targetIndex finalWellFormed := by
             simpa [finalShape, CNode.region] using finalOwner
           subst finalOwner'
           have finalShapeDropped : elimTrace.promotion.nodes
               (copyTrace.droppedNodeMap originalNode outside) =
-                .term (elimTrace.targetIndex finalWellFormed) finalFreePorts
-                  finalTerm := by
+                .identity (elimTrace.targetIndex finalWellFormed) finalArity := by
             rw [droppedEq]
             exact finalShape
           rw [finalShapeDropped, droppedShape] at promotedShape
@@ -223,15 +221,14 @@ theorem focusedKeptNode_shape
       rw [originalShape] at droppedShape
       simp only [mapNodeShape] at droppedShape
       cases finalShape : elimTrace.sourceDiagram.nodes finalNode with
-      | term finalOwner' finalFreePorts finalTerm =>
+      | identity finalOwner' finalArity =>
           have finalOwnerEq : finalOwner' =
               elimTrace.targetIndex finalWellFormed := by
             simpa [finalShape, CNode.region] using finalOwner
           subst finalOwner'
           have finalShapeDropped : elimTrace.promotion.nodes
               (copyTrace.droppedNodeMap originalNode outside) =
-                .term (elimTrace.targetIndex finalWellFormed) finalFreePorts
-                  finalTerm := by
+                .identity (elimTrace.targetIndex finalWellFormed) finalArity := by
             rw [droppedEq]
             exact finalShape
           rw [finalShapeDropped, droppedShape] at promotedShape
@@ -511,7 +508,7 @@ theorem focusedKeptNode_itemSimulation
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext

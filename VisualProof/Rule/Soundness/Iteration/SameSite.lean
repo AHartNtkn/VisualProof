@@ -368,7 +368,7 @@ theorem close_flatSplice_denote_iff_spliceAt
     (material : Region signature patternWires patternRels)
     (wireMap : Fin patternWires → Fin full)
     (relationMap : RelationRenaming patternRels hostRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin outer → model.Carrier)
     (relations : RelEnv model.Carrier hostRels) :
@@ -408,7 +408,7 @@ theorem sameSite_terminal_available
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     let spliceInput := iterationInput input selection target
     let layout : FragmentLayout input.val selection := {}
@@ -555,7 +555,7 @@ theorem sameSite_root_available
     (targetEq : target = selection.val.anchor)
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     let spliceInput := iterationInput input selection target
     let anchorView := iterationCoalescedAnchorView input selection target
@@ -635,7 +635,7 @@ theorem sameSite_flat_equiv_nonempty
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     let spliceInput := iterationInput input selection target
     let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
@@ -695,7 +695,7 @@ theorem sameSite_flat_equiv_zero
     (targetEq : target = selection.val.anchor)
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     let spliceInput := iterationInput input selection target
     let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
@@ -754,7 +754,7 @@ theorem sameSite_hostBody_equiv_nonempty
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (Splice.Input.compiledSpliceHostView
@@ -812,7 +812,7 @@ theorem sameSite_hostBody_equiv_zero
     (targetEq : target = selection.val.anchor)
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (Splice.Input.compiledSpliceHostView
@@ -871,7 +871,7 @@ theorem sameSite_coalescedFocus_equiv_nonempty
     (sourceBoundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.val.wires wire).scope = input.val.root)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (Splice.Input.compiledSpliceCoalescedOpenView
@@ -973,7 +973,7 @@ theorem sameSite_coalescedFocus_equiv_zero
     (sourceBoundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.val.wires wire).scope = input.val.root)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin
       (Splice.Input.compiledSpliceCoalescedOpenView
@@ -1076,7 +1076,7 @@ theorem sameSite_nested_compiledSource_equiv_nonempty
     (hnested : target ≠ input.val.root)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
@@ -1142,7 +1142,7 @@ theorem sameSite_nested_compiledSource_equiv_zero
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hnested : target ≠ input.val.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
@@ -1211,7 +1211,7 @@ theorem sameSite_nested_output_equiv_nonempty
     (hnested : target ≠ input.val.root)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
     let source : OpenProofState signature := {
@@ -1285,7 +1285,7 @@ theorem sameSite_nested_output_equiv_zero
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hnested : target ≠ input.val.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
     let source : OpenProofState signature := {
@@ -1356,7 +1356,7 @@ theorem sameSite_root_compiledSource_equiv_nonempty
     (hsite : target = input.val.root)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
@@ -1652,7 +1652,7 @@ theorem sameSite_root_compiledSource_equiv_zero
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hsite : target = input.val.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
@@ -1953,7 +1953,7 @@ theorem sameSite_root_output_equiv_nonempty
     (hroot : target = input.val.root)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
     let source : OpenProofState signature := {
@@ -2027,7 +2027,7 @@ theorem sameSite_root_output_equiv_zero
     (targetNotSelected : ¬ selection.val.SelectsRegion target)
     (hroot : target = input.val.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
     let source : OpenProofState signature := {

@@ -93,12 +93,11 @@ theorem drop_compileNode_origin
         binders ((instantiationAtomDomain state).origin node) := by
   cases hnode : state.diagram.val.nodes
       ((instantiationAtomDomain state).origin node) with
-  | term region freePorts term =>
+  | identity region arity =>
       simp only [ConcreteElaboration.compileNode?, InstantiationDrop.raw_node,
         hnode]
-      rw [drop_resolvePort_origin state context node .output]
-      rw [drop_resolvePorts_origin state context node freePorts
-        (fun index => .free index)]
+      rw [drop_resolvePorts_origin state context node arity
+        (fun index => .arg index)]
       rfl
   | atom region binder =>
       simp only [ConcreteElaboration.compileNode?, InstantiationDrop.raw_node,

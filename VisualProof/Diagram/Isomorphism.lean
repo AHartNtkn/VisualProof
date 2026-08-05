@@ -91,17 +91,6 @@ mutual
       (rels : RelCtx) ->
       Item signature sourceWires rels ->
       Item signature targetWires rels -> Prop
-    | equation {sourceWires targetWires : Nat}
-        {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-        {rels : RelCtx}
-        {sourceOutput : Fin sourceWires} {targetOutput : Fin targetWires}
-        {sourceTerm : Lambda.Term 0 (Fin sourceWires)}
-        {targetTerm : Lambda.Term 0 (Fin targetWires)}
-        (output_eq : ambient sourceOutput = targetOutput)
-        (term_eq : sourceTerm.mapFree ambient = targetTerm) :
-        ItemIso signature ambient rels
-          (.equation sourceOutput sourceTerm)
-          (.equation targetOutput targetTerm)
     | atom {sourceWires targetWires arity : Nat}
         {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
         {rels : RelCtx}
@@ -111,6 +100,14 @@ mutual
         (arguments_eq : ambient.toFun ∘ sourceArguments = targetArguments) :
         ItemIso signature ambient rels
           (.atom relation sourceArguments) (.atom relation targetArguments)
+    | identity {sourceWires targetWires arity : Nat}
+        {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+        {rels : RelCtx}
+        {sourceArguments : Fin arity -> Fin sourceWires}
+        {targetArguments : Fin arity -> Fin targetWires}
+        (arguments_eq : ambient.toFun ∘ sourceArguments = targetArguments) :
+        ItemIso signature ambient rels
+          (.identity arity sourceArguments) (.identity arity targetArguments)
     | named {sourceWires targetWires arity : Nat}
         {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
         {rels : RelCtx}
@@ -432,14 +429,6 @@ private theorem regionIsoReflCase
   intro i
   simpa only [FiniteEquiv.refl_apply] using itemsIH i
 
-private theorem equationIsoReflCase
-    {signature : List Nat} {wires : Nat} {rels : RelCtx}
-    (output : Fin wires) (term : Lambda.Term 0 (Fin wires)) :
-    ItemIsoReflMotive (signature := signature) rels (.equation output term) := by
-  apply ItemIso.equation
-  · rfl
-  · exact Lambda.Term.mapFree_id term
-
 private theorem atomIsoReflCase
     {signature : List Nat} {wires arity : Nat} {rels : RelCtx}
     (relation : RelVar rels arity) (arguments : Fin arity -> Fin wires) :
@@ -453,6 +442,15 @@ private theorem namedIsoReflCase
     (relation : NamedRel signature arity) (arguments : Fin arity -> Fin wires) :
     ItemIsoReflMotive rels (.named relation arguments) := by
   apply ItemIso.named relation
+  funext i
+  rfl
+
+private theorem identityIsoReflCase
+    {signature : List Nat} {wires : Nat} {rels : RelCtx}
+    (arity : Nat) (arguments : Fin arity -> Fin wires) :
+    ItemIsoReflMotive (signature := signature) rels
+      (.identity arity arguments) := by
+  apply ItemIso.identity
   funext i
   rfl
 
@@ -493,7 +491,7 @@ private theorem regionIsoReflRec
     (motive_1 := fun _ rels region => RegionIsoReflMotive rels region)
     (motive_2 := fun _ rels item => ItemIsoReflMotive rels item)
     (motive_3 := fun _ rels items => ItemSeqIsoReflMotive rels items)
-    regionIsoReflCase equationIsoReflCase atomIsoReflCase namedIsoReflCase
+    regionIsoReflCase atomIsoReflCase identityIsoReflCase namedIsoReflCase
     cutIsoReflCase bubbleIsoReflCase nilIsoReflCase consIsoReflCase region
 
 private theorem itemIsoReflRec
@@ -502,7 +500,7 @@ private theorem itemIsoReflRec
     (motive_1 := fun _ rels region => RegionIsoReflMotive rels region)
     (motive_2 := fun _ rels item => ItemIsoReflMotive rels item)
     (motive_3 := fun _ rels items => ItemSeqIsoReflMotive rels items)
-    regionIsoReflCase equationIsoReflCase atomIsoReflCase namedIsoReflCase
+    regionIsoReflCase atomIsoReflCase identityIsoReflCase namedIsoReflCase
     cutIsoReflCase bubbleIsoReflCase nilIsoReflCase consIsoReflCase item
 
 private theorem itemSeqIsoReflRec
@@ -512,7 +510,7 @@ private theorem itemSeqIsoReflRec
     (motive_1 := fun _ rels region => RegionIsoReflMotive rels region)
     (motive_2 := fun _ rels item => ItemIsoReflMotive rels item)
     (motive_3 := fun _ rels items => ItemSeqIsoReflMotive rels items)
-    regionIsoReflCase equationIsoReflCase atomIsoReflCase namedIsoReflCase
+    regionIsoReflCase atomIsoReflCase identityIsoReflCase namedIsoReflCase
     cutIsoReflCase bubbleIsoReflCase nilIsoReflCase consIsoReflCase items
 
 theorem RegionIso.refl (region : Region signature wires rels) :
@@ -580,28 +578,6 @@ private theorem regionIsoSymmCase
   rw [← extendWireEquiv_symm]
   exact itemsIH
 
-private theorem equationIsoSymmCase
-    {signature : List Nat} {sourceWires targetWires : Nat}
-    {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    {rels : RelCtx}
-    {sourceOutput : Fin sourceWires} {targetOutput : Fin targetWires}
-    {sourceTerm : Lambda.Term 0 (Fin sourceWires)}
-    {targetTerm : Lambda.Term 0 (Fin targetWires)}
-    (output_eq : ambient sourceOutput = targetOutput)
-    (term_eq : sourceTerm.mapFree ambient = targetTerm) :
-    ItemIsoSymmMotive (signature := signature) ambient rels
-      (.equation (signature := signature) sourceOutput sourceTerm)
-      (.equation (signature := signature) targetOutput targetTerm)
-      (.equation (signature := signature) output_eq term_eq) := by
-  apply ItemIso.equation (signature := signature)
-  · simpa [output_eq] using ambient.left_inv sourceOutput
-  · subst targetTerm
-    rw [Lambda.Term.mapFree_comp]
-    have inverse_comp : ambient.symm.toFun ∘ ambient.toFun = id := by
-      funext i
-      exact ambient.left_inv i
-    rw [inverse_comp, Lambda.Term.mapFree_id]
-
 private theorem atomIsoSymmCase
     {signature : List Nat} {sourceWires targetWires arity : Nat}
     {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
@@ -628,6 +604,21 @@ private theorem namedIsoSymmCase
     ItemIsoSymmMotive ambient rels (.named relation sourceArguments)
       (.named relation targetArguments) (.named relation arguments_eq) := by
   apply ItemIso.named relation
+  funext i
+  rw [← arguments_eq]
+  exact ambient.left_inv (sourceArguments i)
+
+private theorem identityIsoSymmCase
+    {signature : List Nat} {sourceWires targetWires arity : Nat}
+    {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {rels : RelCtx}
+    {sourceArguments : Fin arity -> Fin sourceWires}
+    {targetArguments : Fin arity -> Fin targetWires}
+    (arguments_eq : ambient.toFun ∘ sourceArguments = targetArguments) :
+    ItemIsoSymmMotive (signature := signature) ambient rels
+      (.identity arity sourceArguments) (.identity arity targetArguments)
+      (.identity arguments_eq) := by
+  apply ItemIso.identity
   funext i
   rw [← arguments_eq]
   exact ambient.left_inv (sourceArguments i)
@@ -683,7 +674,7 @@ private theorem regionIsoSymmRec
     (motive_1 := RegionIsoSymmMotive)
     (motive_2 := ItemIsoSymmMotive)
     (motive_3 := ItemSeqIsoSymmMotive)
-    regionIsoSymmCase equationIsoSymmCase atomIsoSymmCase namedIsoSymmCase
+    regionIsoSymmCase atomIsoSymmCase identityIsoSymmCase namedIsoSymmCase
     cutIsoSymmCase bubbleIsoSymmCase permuteIsoSymmCase iso
 
 private theorem itemSeqIsoSymmRec
@@ -696,7 +687,7 @@ private theorem itemSeqIsoSymmRec
     (motive_1 := RegionIsoSymmMotive)
     (motive_2 := ItemIsoSymmMotive)
     (motive_3 := ItemSeqIsoSymmMotive)
-    regionIsoSymmCase equationIsoSymmCase atomIsoSymmCase namedIsoSymmCase
+    regionIsoSymmCase atomIsoSymmCase identityIsoSymmCase namedIsoSymmCase
     cutIsoSymmCase bubbleIsoSymmCase permuteIsoSymmCase iso
 
 theorem RegionIso.symm
@@ -788,33 +779,6 @@ private theorem regionIsoTransCase
       rw [← extendWireEquiv_trans]
       exact itemsIH secondItems
 
-private theorem equationIsoTransCase
-    {signature : List Nat} {sourceWires middleWires : Nat}
-    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
-    {rels : RelCtx}
-    {sourceOutput : Fin sourceWires} {middleOutput : Fin middleWires}
-    {sourceTerm : Lambda.Term 0 (Fin sourceWires)}
-    {middleTerm : Lambda.Term 0 (Fin middleWires)}
-    (firstOutput : firstWire sourceOutput = middleOutput)
-    (firstTerm : sourceTerm.mapFree firstWire = middleTerm) :
-    ItemIsoTransMotive (signature := signature) firstWire rels
-      (.equation (signature := signature) sourceOutput sourceTerm)
-      (.equation (signature := signature) middleOutput middleTerm)
-      (.equation (signature := signature) firstOutput firstTerm) := by
-  intro targetWires secondWire target second
-  cases second with
-  | equation secondOutput secondTerm =>
-      apply ItemIso.equation (signature := signature)
-      · exact (congrArg secondWire firstOutput).trans secondOutput
-      · calc
-          sourceTerm.mapFree (firstWire.trans secondWire) =
-              (sourceTerm.mapFree firstWire).mapFree secondWire := by
-                rw [Lambda.Term.mapFree_comp]
-                rfl
-          _ = middleTerm.mapFree secondWire :=
-            congrArg (fun term => term.mapFree secondWire) firstTerm
-          _ = _ := secondTerm
-
 private theorem atomIsoTransCase
     {signature : List Nat} {sourceWires middleWires arity : Nat}
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
@@ -850,6 +814,27 @@ private theorem namedIsoTransCase
   cases second with
   | named _ secondArguments =>
       apply ItemIso.named relation
+      calc
+        (firstWire.trans secondWire).toFun ∘ sourceArguments =
+            secondWire.toFun ∘ (firstWire.toFun ∘ sourceArguments) := rfl
+        _ = secondWire.toFun ∘ middleArguments :=
+          congrArg (Function.comp secondWire.toFun) firstArguments
+        _ = _ := secondArguments
+
+private theorem identityIsoTransCase
+    {signature : List Nat} {sourceWires middleWires arity : Nat}
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {rels : RelCtx}
+    {sourceArguments : Fin arity -> Fin sourceWires}
+    {middleArguments : Fin arity -> Fin middleWires}
+    (firstArguments : firstWire.toFun ∘ sourceArguments = middleArguments) :
+    ItemIsoTransMotive (signature := signature) firstWire rels
+      (.identity arity sourceArguments) (.identity arity middleArguments)
+      (.identity firstArguments) := by
+  intro targetWires secondWire target second
+  cases second with
+  | identity secondArguments =>
+      apply ItemIso.identity
       calc
         (firstWire.trans secondWire).toFun ∘ sourceArguments =
             secondWire.toFun ∘ (firstWire.toFun ∘ sourceArguments) := rfl
@@ -920,7 +905,7 @@ private theorem regionIsoTransRec
     (motive_1 := RegionIsoTransMotive)
     (motive_2 := ItemIsoTransMotive)
     (motive_3 := ItemSeqIsoTransMotive)
-    regionIsoTransCase equationIsoTransCase atomIsoTransCase namedIsoTransCase
+    regionIsoTransCase atomIsoTransCase identityIsoTransCase namedIsoTransCase
     cutIsoTransCase bubbleIsoTransCase permuteIsoTransCase first second
 
 private theorem itemSeqIsoTransRec
@@ -935,7 +920,7 @@ private theorem itemSeqIsoTransRec
     (motive_1 := RegionIsoTransMotive)
     (motive_2 := ItemIsoTransMotive)
     (motive_3 := ItemSeqIsoTransMotive)
-    regionIsoTransCase equationIsoTransCase atomIsoTransCase namedIsoTransCase
+    regionIsoTransCase atomIsoTransCase identityIsoTransCase namedIsoTransCase
     cutIsoTransCase bubbleIsoTransCase permuteIsoTransCase first second
 
 private theorem itemIsoTransRec
@@ -950,7 +935,7 @@ private theorem itemIsoTransRec
     (motive_1 := RegionIsoTransMotive)
     (motive_2 := ItemIsoTransMotive)
     (motive_3 := ItemSeqIsoTransMotive)
-    regionIsoTransCase equationIsoTransCase atomIsoTransCase namedIsoTransCase
+    regionIsoTransCase atomIsoTransCase identityIsoTransCase namedIsoTransCase
     cutIsoTransCase bubbleIsoTransCase permuteIsoTransCase first second
 
 theorem RegionIso.trans
@@ -987,7 +972,7 @@ theorem ItemSeqIso.trans
   itemSeqIsoTransRec first second
 
 theorem denoteItemSeq_iff_get
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (rels : RelEnv model.Carrier relCtx)
     (items : ItemSeq signature wires relCtx) :
@@ -1019,7 +1004,7 @@ private def RegionDenotationMotive {signature : List Nat}
     (rels : RelCtx) (left : Region signature sourceWires rels)
     (right : Region signature targetWires rels)
     (_ : RegionIso signature wire rels left right) : Prop :=
-  forall (model : Lambda.LambdaModel)
+  forall (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin sourceWires -> model.Carrier)
     (targetEnv : Fin targetWires -> model.Carrier)
@@ -1034,7 +1019,7 @@ private def ItemDenotationMotive {signature : List Nat}
     (rels : RelCtx) (left : Item signature sourceWires rels)
     (right : Item signature targetWires rels)
     (_ : ItemIso signature wire rels left right) : Prop :=
-  forall (model : Lambda.LambdaModel)
+  forall (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin sourceWires -> model.Carrier)
     (targetEnv : Fin targetWires -> model.Carrier)
@@ -1049,7 +1034,7 @@ private def ItemSeqDenotationMotive {signature : List Nat}
     (rels : RelCtx) (left : ItemSeq signature sourceWires rels)
     (right : ItemSeq signature targetWires rels)
     (_ : ItemSeqIso signature wire rels left right) : Prop :=
-  forall (model : Lambda.LambdaModel)
+  forall (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin sourceWires -> model.Carrier)
     (targetEnv : Fin targetWires -> model.Carrier)
@@ -1095,24 +1080,6 @@ private theorem regionDenotationCase
     · intro _
       rfl
 
-private theorem equationDenotationCase
-    {signature : List Nat} {sourceWires targetWires : Nat}
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)} {rels : RelCtx}
-    {sourceOutput : Fin sourceWires} {targetOutput : Fin targetWires}
-    {sourceTerm : Lambda.Term 0 (Fin sourceWires)}
-    {targetTerm : Lambda.Term 0 (Fin targetWires)}
-    (output_eq : wire sourceOutput = targetOutput)
-    (term_eq : sourceTerm.mapFree wire = targetTerm) :
-    ItemDenotationMotive (signature := signature) wire rels
-      (.equation sourceOutput sourceTerm) (.equation targetOutput targetTerm)
-      (.equation output_eq term_eq) := by
-  intro model named sourceEnv targetEnv relEnv henv
-  subst targetOutput
-  subst targetTerm
-  have env_eq : targetEnv ∘ wire.toFun = sourceEnv := funext henv
-  simp only [denoteItem]
-  rw [model.eval_mapFree wire.toFun, env_eq, henv]
-
 private theorem atomDenotationCase
     {signature : List Nat} {sourceWires targetWires arity : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)} {rels : RelCtx}
@@ -1152,6 +1119,32 @@ private theorem namedDenotationCase
     exact henv (sourceArguments i)
   simp only [denoteItem]
   rw [arguments_env_eq]
+
+private theorem identityDenotationCase
+    {signature : List Nat} {sourceWires targetWires arity : Nat}
+    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)} {rels : RelCtx}
+    {sourceArguments : Fin arity -> Fin sourceWires}
+    {targetArguments : Fin arity -> Fin targetWires}
+    (arguments_eq : wire.toFun ∘ sourceArguments = targetArguments) :
+    ItemDenotationMotive (signature := signature) wire rels
+      (.identity arity sourceArguments) (.identity arity targetArguments)
+      (.identity arguments_eq) := by
+  intro model named sourceEnv targetEnv relEnv henv
+  subst targetArguments
+  simp only [denoteItem_identity]
+  constructor
+  · intro sourceDenotes left right
+    calc
+      targetEnv (wire (sourceArguments left)) =
+          sourceEnv (sourceArguments left) := henv _
+      _ = sourceEnv (sourceArguments right) := sourceDenotes left right
+      _ = targetEnv (wire (sourceArguments right)) := (henv _).symm
+  · intro targetDenotes left right
+    calc
+      sourceEnv (sourceArguments left) =
+          targetEnv (wire (sourceArguments left)) := (henv _).symm
+      _ = targetEnv (wire (sourceArguments right)) := targetDenotes left right
+      _ = sourceEnv (sourceArguments right) := henv _
 
 private theorem cutDenotationCase
     {signature : List Nat} {sourceWires targetWires : Nat}
@@ -1221,7 +1214,7 @@ private theorem regionDenotationRec
     (motive_1 := RegionDenotationMotive)
     (motive_2 := ItemDenotationMotive)
     (motive_3 := ItemSeqDenotationMotive)
-    regionDenotationCase equationDenotationCase atomDenotationCase
+    regionDenotationCase atomDenotationCase identityDenotationCase
     namedDenotationCase cutDenotationCase bubbleDenotationCase
     permuteDenotationCase hiso
 
@@ -1235,7 +1228,7 @@ private theorem itemDenotationRec
     (motive_1 := RegionDenotationMotive)
     (motive_2 := ItemDenotationMotive)
     (motive_3 := ItemSeqDenotationMotive)
-    regionDenotationCase equationDenotationCase atomDenotationCase
+    regionDenotationCase atomDenotationCase identityDenotationCase
     namedDenotationCase cutDenotationCase bubbleDenotationCase
     permuteDenotationCase hiso
 
@@ -1249,7 +1242,7 @@ private theorem itemSeqDenotationRec
     (motive_1 := RegionDenotationMotive)
     (motive_2 := ItemDenotationMotive)
     (motive_3 := ItemSeqDenotationMotive)
-    regionDenotationCase equationDenotationCase atomDenotationCase
+    regionDenotationCase atomDenotationCase identityDenotationCase
     namedDenotationCase cutDenotationCase bubbleDenotationCase
     permuteDenotationCase hiso
 
@@ -1258,7 +1251,7 @@ theorem RegionIso.denotation
     {left : Region signature sourceWires rels}
     {right : Region signature targetWires rels}
     (hiso : RegionIso signature wire rels left right)
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin sourceWires -> model.Carrier)
     (targetEnv : Fin targetWires -> model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -1272,7 +1265,7 @@ theorem ItemIso.denotation
     {left : Item signature sourceWires rels}
     {right : Item signature targetWires rels}
     (hiso : ItemIso signature wire rels left right)
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin sourceWires -> model.Carrier)
     (targetEnv : Fin targetWires -> model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -1286,7 +1279,7 @@ theorem ItemSeqIso.denotation
     {left : ItemSeq signature sourceWires rels}
     {right : ItemSeq signature targetWires rels}
     (hiso : ItemSeqIso signature wire rels left right)
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin sourceWires -> model.Carrier)
     (targetEnv : Fin targetWires -> model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -1305,7 +1298,7 @@ end Core
 theorem iso_denotation
     {left right : Region signature wires rels}
     (hiso : Core.Isomorphic left right)
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier signature)
+    (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
     denoteRegion model named env relEnv left <->
@@ -1325,68 +1318,6 @@ def swapFinTwo : FiniteEquiv (Fin 2) (Fin 2) where
     intro i
     have hi : i = 0 \/ i = 1 := by omega
     rcases hi with rfl | rfl <;> rfl
-
-def twoItemSwapSource : Region [] 0 [] :=
-  .mk 1 (.cons (.equation 0 (.port 0))
-    (.cons (.equation 0 (.app (.port 0) (.port 0))) .nil))
-
-def twoItemSwapTarget : Region [] 0 [] :=
-  .mk 1 (.cons (.equation 0 (.app (.port 0) (.port 0)))
-    (.cons (.equation 0 (.port 0)) .nil))
-
-theorem twoItemSwap_isomorphic :
-    Core.Isomorphic twoItemSwapSource twoItemSwapTarget := by
-  unfold Core.Isomorphic twoItemSwapSource twoItemSwapTarget
-  refine RegionIso.mk (FiniteEquiv.refl (Fin 1)) ?_
-  refine ItemSeqIso.permute (by
-    simpa [ItemSeq.length] using swapFinTwo) ?_
-  intro i
-  change Fin 2 at i
-  have hi : i = 0 \/ i = 1 := by omega
-  rcases hi with rfl | rfl
-  · apply ItemIso.equation
-    · apply Fin.ext
-      rfl
-    · rfl
-  · apply ItemIso.equation
-    · apply Fin.ext
-      rfl
-    · rfl
-
-theorem twoItemSwap_denotation
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier [])
-    (env : Fin 0 -> model.Carrier) (relEnv : RelEnv model.Carrier []) :
-    denoteRegion model named env relEnv twoItemSwapSource <->
-      denoteRegion model named env relEnv twoItemSwapTarget :=
-  iso_denotation twoItemSwap_isomorphic model named env relEnv
-
-def twoLocalWireSwapSource : Region [] 0 [] :=
-  .mk 2 (.cons (.equation 0 (.port 1)) .nil)
-
-def twoLocalWireSwapTarget : Region [] 0 [] :=
-  .mk 2 (.cons (.equation 1 (.port 0)) .nil)
-
-theorem twoLocalWireSwap_isomorphic :
-    Core.Isomorphic twoLocalWireSwapSource twoLocalWireSwapTarget := by
-  unfold Core.Isomorphic twoLocalWireSwapSource twoLocalWireSwapTarget
-  refine RegionIso.mk swapFinTwo ?_
-  refine ItemSeqIso.permute (by
-    simpa [ItemSeq.length] using FiniteEquiv.refl (Fin 1)) ?_
-  intro i
-  change Fin 1 at i
-  have hi : i = 0 := by omega
-  subst i
-  apply ItemIso.equation
-  · apply Fin.ext
-    rfl
-  · rfl
-
-theorem twoLocalWireSwap_denotation
-    (model : Lambda.LambdaModel) (named : NamedEnv model.Carrier [])
-    (env : Fin 0 -> model.Carrier) (relEnv : RelEnv model.Carrier []) :
-    denoteRegion model named env relEnv twoLocalWireSwapSource <->
-      denoteRegion model named env relEnv twoLocalWireSwapTarget :=
-  iso_denotation twoLocalWireSwap_isomorphic model named env relEnv
 
 end IsomorphismExamples
 

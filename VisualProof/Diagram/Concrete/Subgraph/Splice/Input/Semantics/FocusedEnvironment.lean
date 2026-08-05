@@ -57,7 +57,7 @@ def patternAttachmentAssignment
 the open-pattern denotation at the ordered attachment values. -/
 theorem denote_patternAttachmentAssignment
     (input : Input signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (values : input.wireQuotient.Carrier → model.Carrier) :
     denoteRegion (relCtx := []) model named values PUnit.unit
@@ -380,7 +380,7 @@ theorem pattern_denote_of_patternRootItems
     (outputLeaf : Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hzero : input.binderSpine.proxyCount = 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → model.Carrier)
@@ -503,7 +503,7 @@ splice input, so the result can be transported occurrence-by-occurrence into
 the concrete focused context. -/
 theorem patternRootItems_of_pattern_denote
     (input : Input signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (values : input.wireQuotient.Carrier → model.Carrier)
     (denotes : input.pattern.denote model named (fun position =>

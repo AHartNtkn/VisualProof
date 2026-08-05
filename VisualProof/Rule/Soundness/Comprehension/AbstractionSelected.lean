@@ -213,7 +213,7 @@ theorem occurrenceFragment_denote_iff_relation
     (input : CheckedDiagram signature)
     (occurrence : AbstractionOccurrence input)
     (witness : AbstractionWitness input comprehension occurrence)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin occurrence.selection.touchingWires.length →
       model.Carrier) :
@@ -261,7 +261,7 @@ theorem selectedOccurrence_denote_relation
     (input : CheckedDiagram signature)
     (occurrence : AbstractionOccurrence input)
     (witness : AbstractionWitness input comprehension occurrence)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (hostFuel : Nat)
     (hostContext : ConcreteElaboration.WireContext input.val)

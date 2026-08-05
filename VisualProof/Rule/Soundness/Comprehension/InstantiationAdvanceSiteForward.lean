@@ -35,7 +35,7 @@ theorem coalesced_survivor_items_entail_fixedRelation
     (ownedNodup : state.ownedAtoms.Nodup)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (quotientWireValue : Fin
       (instantiateSpliceInput comprehension attachments binders payload state
@@ -194,7 +194,7 @@ theorem advance_site_child_denotes_fixed_forward
             state site arguments).plugLayout.frameRegion
             (sourceEnumeration.binder relation.index)) =
         some ⟨arity, relationMap relation⟩)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -535,7 +535,7 @@ theorem advance_site_items_denote_forward
     (targetBinders : ConcreteElaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw targetRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceEnv : Fin sourceContext.length → model.Carrier)
     (targetEnv : Fin targetContext.length → model.Carrier)

@@ -412,8 +412,8 @@ theorem nodeMap_shape
     (node : Fin state.diagram.val.nodeCount) :
     result.diagram.val.nodes (trace.nodeMap node) =
       match state.diagram.val.nodes node with
-      | .term owner freePorts term =>
-          .term (trace.regionMap owner) freePorts term
+      | .identity owner arity =>
+          .identity (trace.regionMap owner) arity
       | .atom owner binder =>
           .atom (trace.regionMap owner) (trace.regionMap binder)
       | .named owner definition arity =>
@@ -435,8 +435,8 @@ theorem nodeMap_shape
           (Splice.Input.checkInput_sound plan.checkedInputChecked).2
       have rawShape : advanced.diagram.val.nodes (layout.frameNode node) =
           match state.diagram.val.nodes node with
-          | .term owner freePorts term =>
-              .term (layout.frameRegion owner) freePorts term
+          | .identity owner arity =>
+              .identity (layout.frameRegion owner) arity
           | .atom owner binder =>
               .atom (layout.frameRegion owner) (layout.frameRegion binder)
           | .named owner definition arity =>
@@ -452,9 +452,9 @@ theorem nodeMap_shape
           next.diagram.val.nodes
               (Fin.cast (by rw [next_eq]; rfl) (layout.frameNode node)) =
             match state.diagram.val.nodes node with
-            | .term owner freePorts term =>
-                .term (Fin.cast (by rw [next_eq]; rfl)
-                  (layout.frameRegion owner)) freePorts term
+            | .identity owner arity =>
+                .identity (Fin.cast (by rw [next_eq]; rfl)
+                  (layout.frameRegion owner)) arity
             | .atom owner binder =>
                 .atom (Fin.cast (by rw [next_eq]; rfl)
                     (layout.frameRegion owner))
@@ -469,7 +469,7 @@ theorem nodeMap_shape
       have oneStep := transported plan.next plan.next_eq
       rw [oneStep] at mapped
       cases shape : state.diagram.val.nodes node with
-      | term owner freePorts term =>
+      | identity owner arity =>
           simpa [nodeMap, regionMap, shape] using mapped
       | atom owner binder =>
           simpa [nodeMap, regionMap, shape] using mapped

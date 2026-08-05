@@ -147,11 +147,11 @@ private noncomputable def deiterationMapPatternNode_corresponds
   let targetLayout := (Splice.Decomposition.originalFragmentInput
     (deiterationDecomposition input selection)).plugLayout
   cases certified with
-  | term sourceRegion targetRegion ports sourceTerm targetTerm regionEq certificate =>
-      exact .term (sourceLayout.bodyRegion sourceRegion)
-        (targetLayout.bodyRegion targetRegion) ports sourceTerm targetTerm
+  | identity sourceRegion targetRegion arity regionEq =>
+      exact .identity (sourceLayout.bodyRegion sourceRegion)
+        (targetLayout.bodyRegion targetRegion) arity
         ((deiterationOutputRegionEquiv_body input selection witness sourceRegion).trans
-          (congrArg targetLayout.bodyRegion regionEq)) certificate
+          (congrArg targetLayout.bodyRegion regionEq))
   | atom sourceRegion sourceBinder targetRegion targetBinder regionEq binderEq =>
       exact .atom (sourceLayout.bodyRegion sourceRegion)
         (sourceLayout.binderRegion sourceBinder)

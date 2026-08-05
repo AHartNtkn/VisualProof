@@ -81,7 +81,7 @@ theorem coalescedAnchor_factor_and_route
         Nonempty (CompiledRouteResult
           (spliceInput.coalesceFrame hadmissible) hereLeaf
           (keptOccurrences input.val selection) keptItems route) ∧
-        ∀ (model : Lambda.LambdaModel)
+        ∀ (model : Model)
           (named : NamedEnv model.Carrier signature)
           (env : Fin (leaf.inheritedWires.extend
             selection.val.anchor).length → model.Carrier)

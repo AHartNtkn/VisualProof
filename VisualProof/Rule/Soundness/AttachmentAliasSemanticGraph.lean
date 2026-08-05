@@ -291,10 +291,10 @@ theorem aliasEndpoint_not_old
   intro occurs
   unfold ConcreteDiagram.EndpointOccurs at occurs
   have occurs' : liftOldEndpoint pattern attachment endpoint ∈
-      [{ node := aliasNode pattern attachment aliasIndex, port := .free 0 }] := by
+      [{ node := aliasNode pattern attachment aliasIndex, port := .arg 1 }] := by
     simpa only [materializedDiagram, aliasWire, Fin.addCases_right] using occurs
   have occursEq : liftOldEndpoint pattern attachment endpoint =
-      { node := aliasNode pattern attachment aliasIndex, port := .free 0 } :=
+      { node := aliasNode pattern attachment aliasIndex, port := .arg 1 } :=
     List.mem_singleton.mp occurs'
   have impossible := congrArg (fun value :
     CEndpoint (pattern.diagram.nodeCount + aliasCount pattern attachment) =>

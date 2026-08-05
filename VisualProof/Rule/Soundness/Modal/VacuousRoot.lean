@@ -70,7 +70,7 @@ theorem rootTransport_of_itemSimulation
     (selection : CheckedSelection source.val.diagram) (arity : Nat)
     (targetWellFormed :
       (vacuousIntroRaw source.val.diagram selection arity).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceItems : ItemSeq signature source.val.rootWires.length [])
@@ -161,7 +161,7 @@ noncomputable def vacuousIntroRootContext
     (selection : CheckedSelection source.val.diagram) (arity : Nat)
     (targetWellFormed :
       (vacuousIntroRaw source.val.diagram selection arity).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection) :
     let input : CheckedDiagram signature :=
@@ -294,7 +294,7 @@ theorem vacuousIntroBoundaryWitness
     (targetWellFormed :
       (vacuousIntroRaw source.val.diagram selection arity).WellFormed signature)
     (direction : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin source.val.boundary.length → model.Carrier) :
     let input : CheckedDiagram signature :=

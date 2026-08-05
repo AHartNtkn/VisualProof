@@ -271,7 +271,7 @@ private theorem reindexNode_region
     (hreindex : domain.reindexNode? source = some target) :
     target.region = domain.index source.region ownerSurvives := by
   cases source with
-  | term region ports term =>
+  | identity region arity =>
       simp only [SurvivorDomain.reindexNode?] at hreindex
       rw [domain.index?_index region ownerSurvives] at hreindex
       cases hreindex
@@ -420,8 +420,8 @@ theorem deiterationRetainedRequest_valid
       simpa [original] using domains.nodes.index_origin mapped
     rw [← mappedEq]
     cases hnode : input.val.nodes original with
-    | term region ports term =>
-        rw [ConcreteDiagram.removeRaw_term input selection domains
+    | identity region arity =>
+        rw [ConcreteDiagram.removeRaw_identity input selection domains
           nodeSurvives hnode]
         simpa [hnode, request, deiterationRetainedRequest, domains] using
           ownerIndexEq
@@ -811,8 +811,8 @@ theorem deiterationRetained_usesExternalBinder_iff
     · have originalSurvives := domains.nodes.origin_survives node
       have nodeIndex := domains.nodes.index_origin node
       cases hnode : input.val.nodes (domains.nodes.origin node) with
-      | term region freePorts term =>
-          rw [← nodeIndex, ConcreteDiagram.removeRaw_term input selection
+      | identity region arity =>
+          rw [← nodeIndex, ConcreteDiagram.removeRaw_identity input selection
             domains originalSurvives hnode] at atom
           simpa [hnode] using atom
       | named region definition arity =>
@@ -846,7 +846,7 @@ theorem deiterationRetained_usesExternalBinder_iff
       exact deiterationRetainedRequest_selectsNode_of_original input selection
         witness selectedNodeProp
     · cases hnode : input.val.nodes originalNode with
-      | term region freePorts term => simpa [hnode] using atom
+      | identity region arity => simpa [hnode] using atom
       | named region definition arity => simpa [hnode] using atom
       | atom region originalBinder =>
           simp only [hnode] at atom

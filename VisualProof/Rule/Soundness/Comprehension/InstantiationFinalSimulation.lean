@@ -205,7 +205,7 @@ noncomputable def finalSemanticSimulation
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed signature)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     ConcreteElaboration.ConcreteSemanticSimulation signature
       elimTrace.sourceDiagram input.val model named where
@@ -321,8 +321,7 @@ noncomputable def finalSemanticSimulation
       atRegion regular allowed sourceExact targetExact sourceBindersCover
       targetBindersCover sourceEnumeration targetEnumeration sourceItems
       targetItems sourceCompiled targetCompiled itemSemantics relationEnvironment
-    letI : Nonempty model.Carrier :=
-      ConcreteElaboration.lambdaModel_carrier_nonempty model
+    letI : Nonempty model.Carrier := model.nonempty
     apply ConcreteElaboration.directionalLocalTransport_of_agreement
       direction sourceContext targetContext region
       (copyTrace.reverseRegionMap elimTrace finalWellFormed region)
@@ -961,8 +960,7 @@ noncomputable def finalSemanticSimulation
                           bindersAgree sourceCompiledDrop
                           targetBubbleCompiledRegion
                       let fallback : model.Carrier :=
-                        Classical.choice
-                          (ConcreteElaboration.lambdaModel_carrier_nonempty model)
+                        Classical.choice model.nonempty
                       let wireValue :=
                         InstantiationSemantic.exactContextWireValue
                           (sourceContext.extend
@@ -1085,8 +1083,7 @@ noncomputable def finalSemanticSimulation
                           terminalSelectedCompiled terminalFocusEnvironment
                           targetRelations fresh terminalBubbleDenote
                       let fallback : model.Carrier :=
-                        Classical.choice
-                          (ConcreteElaboration.lambdaModel_carrier_nonempty model)
+                        Classical.choice model.nonempty
                       let terminalWireValue :=
                         InstantiationSemantic.exactContextWireValue
                           (sourceContext.extend

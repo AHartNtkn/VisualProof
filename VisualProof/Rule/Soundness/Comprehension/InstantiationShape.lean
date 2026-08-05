@@ -15,8 +15,8 @@ def mapRegionShape (map : Fin source → Fin target) :
 
 def mapNodeShape (map : Fin source → Fin target) :
     CNode source → CNode target
-  | .term region freePorts term => .term (map region) freePorts term
   | .atom region binder => .atom (map region) (map binder)
+  | .identity region arity => .identity (map region) arity
   | .named region definition arity => .named (map region) definition arity
 
 @[simp] theorem mapRegionShape_comp

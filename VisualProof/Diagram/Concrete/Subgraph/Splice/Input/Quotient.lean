@@ -142,7 +142,7 @@ is the semantic extraction needed when a replacement presentation coalesces
 more retained wires than the source presentation. -/
 theorem quotientWire_value_eq_of_pattern_denotes
     (input : Input signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (frameValue : Fin input.frame.val.wireCount → model.Carrier)
     (args : Fin input.pattern.val.boundary.length → model.Carrier)
@@ -756,7 +756,7 @@ theorem coalesceFrameRaw_wellFormed (input : Input signature)
     change Fin input.frame.val.nodeCount at node
     have hold := input.frame.property.atom_binders_are_bubbles node
     cases hnode : input.frame.val.nodes node with
-    | term => simp [coalesceFrameRaw_nodes, hnode]
+    | identity => simp [coalesceFrameRaw_nodes, hnode]
     | named => simp [coalesceFrameRaw_nodes, hnode]
     | atom region binder =>
         simp only [hnode] at hold
@@ -766,7 +766,7 @@ theorem coalesceFrameRaw_wellFormed (input : Input signature)
     change Fin input.frame.val.nodeCount at node
     simp only [coalesceFrameRaw_nodes]
     cases hnode : input.frame.val.nodes node with
-    | term => trivial
+    | identity => trivial
     | named => trivial
     | atom region binder =>
         simp only
@@ -778,8 +778,8 @@ theorem coalesceFrameRaw_wellFormed (input : Input signature)
     change Fin input.frame.val.nodeCount at node
     have hold := input.frame.property.named_references_resolve node
     cases hnode : input.frame.val.nodes node with
-    | term => simp [coalesceFrameRaw_nodes, hnode]
     | atom => simp [coalesceFrameRaw_nodes, hnode]
+    | identity => simp [coalesceFrameRaw_nodes, hnode]
     | named region definition arity =>
         simp only [hnode] at hold
         simpa [coalesceFrameRaw_nodes, hnode] using hold
@@ -794,7 +794,7 @@ theorem coalesceFrameRaw_wellFormed (input : Input signature)
       wire endpoint hwire
     unfold ConcreteDiagram.RequiresPort at hvalid ⊢
     cases hnode : input.frame.val.nodes endpoint.node with
-    | term =>
+    | identity =>
         simp [coalesceFrameRaw_nodes, hnode] at hvalid ⊢
         exact hvalid
     | named =>
@@ -842,15 +842,6 @@ theorem coalesceFrameRaw_wellFormed (input : Input signature)
     have hcovered := input.frame.property.required_ports_are_covered node
     simp only [coalesceFrameRaw_nodes, coalesceFrameRaw_regions]
     cases hnode : input.frame.val.nodes node with
-    | term region freePorts term =>
-        simp only [hnode] at hcovered ⊢
-        rcases hcovered.1 with ⟨wire, houtput⟩
-        refine ⟨⟨input.quotientWire wire,
-          input.endpointOccurs_quotient wire _ houtput⟩, ?_⟩
-        intro index
-        obtain ⟨wire, hport⟩ := hcovered.2 index
-        exact ⟨input.quotientWire wire,
-          input.endpointOccurs_quotient wire _ hport⟩
     | atom region binder =>
         simp only [hnode] at hcovered ⊢
         cases hbinder : input.frame.val.regions binder with
@@ -862,6 +853,12 @@ theorem coalesceFrameRaw_wellFormed (input : Input signature)
             obtain ⟨wire, hport⟩ := hcovered index
             exact ⟨input.quotientWire wire,
               input.endpointOccurs_quotient wire _ hport⟩
+    | identity region arity =>
+        simp only [hnode] at hcovered ⊢
+        intro index
+        obtain ⟨wire, hport⟩ := hcovered index
+        exact ⟨input.quotientWire wire,
+          input.endpointOccurs_quotient wire _ hport⟩
     | named region definition arity =>
         simp only [hnode] at hcovered ⊢
         intro index

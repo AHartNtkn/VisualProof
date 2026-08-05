@@ -22,14 +22,14 @@ theorem spawnNodeRaw_finishRegion_site_projects
     (targetNodup : (target.extend scope).Nodup)
     (sourceItems : ItemSeq signature (source.extend scope).length rels)
     (targetItems : ItemSeq signature (target.extend scope).length rels)
-    (hproject : ∀ (model : Lambda.LambdaModel)
+    (hproject : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (rawEnv : Fin (target.extend scope).length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
       denoteItemSeq model named rawEnv relEnv targetItems →
         denoteItemSeq model named rawEnv relEnv
           (sourceItems.renameWires (embedding.extend scope).index))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin target.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
@@ -162,7 +162,7 @@ theorem spawnNodeRaw_finishRegion_site_reflects
     (targetNodup : (target.extend scope).Nodup)
     (sourceItems : ItemSeq signature (source.extend scope).length rels)
     (targetItems : ItemSeq signature (target.extend scope).length rels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin target.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -248,7 +248,7 @@ theorem spawnNodeRaw_finishRoot_site_projects
     (sourceItems : ItemSeq signature source.rootWires.length [])
     (targetItems : ItemSeq signature
       (spawnNodeRawOpen source node scope portCount port).rootWires.length [])
-    (hproject : ∀ (model : Lambda.LambdaModel)
+    (hproject : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (rawEnv : Fin
         (spawnNodeRawOpen source node scope portCount port).rootWires.length →
@@ -258,7 +258,7 @@ theorem spawnNodeRaw_finishRoot_site_projects
           (sourceItems.renameWires
             (spawnNodeRawOpenRootEmbedding source node scope portCount port
               hroot).index))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin
       (spawnNodeRawOpen source node scope portCount port).exposedWires.length →
@@ -329,7 +329,7 @@ theorem spawnNodeRaw_finishRoot_away_projects
     (sourceItems : ItemSeq signature source.rootWires.length [])
     (targetItems : ItemSeq signature
       (spawnNodeRawOpen source node scope portCount port).rootWires.length [])
-    (hproject : ∀ (model : Lambda.LambdaModel)
+    (hproject : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (rawEnv : Fin
         (spawnNodeRawOpen source node scope portCount port).rootWires.length →
@@ -339,7 +339,7 @@ theorem spawnNodeRaw_finishRoot_away_projects
           (sourceItems.renameWires
             (spawnNodeRawOpenRootEmbeddingAway source node scope portCount port
               hne).index))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin
       (spawnNodeRawOpen source node scope portCount port).exposedWires.length →
@@ -412,7 +412,7 @@ theorem spawnNodeRaw_finishRoot_away_reflects
     (sourceItems : ItemSeq signature source.rootWires.length [])
     (targetItems : ItemSeq signature
       (spawnNodeRawOpen source node scope portCount port).rootWires.length [])
-    (hproject : ∀ (model : Lambda.LambdaModel)
+    (hproject : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (rawEnv : Fin
         (spawnNodeRawOpen source node scope portCount port).rootWires.length →
@@ -422,7 +422,7 @@ theorem spawnNodeRaw_finishRoot_away_reflects
             (spawnNodeRawOpenRootEmbeddingAway source node scope portCount port
               hne).index) →
         denoteItemSeq (relCtx := []) model named rawEnv PUnit.unit targetItems)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin
       (spawnNodeRawOpen source node scope portCount port).exposedWires.length →
@@ -516,7 +516,7 @@ theorem spawnNodeRaw_compileRegion_site_projects
     (htargetBody : ConcreteElaboration.compileRegion? signature
       (spawnNodeRaw input node scope portCount port)
       (fuel + 1) scope target binders = some targetBody) :
-    ∀ (model : Lambda.LambdaModel)
+    ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin target.length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
@@ -657,7 +657,7 @@ theorem spawnNodeRaw_compileRoot_site_projects
       (spawnNodeRawOpen source.val node scope portCount port).exposedWires
       (spawnNodeRawOpen source.val node scope portCount port).hiddenWires =
         some targetBody) :
-    ∀ (model : Lambda.LambdaModel)
+    ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin
         (spawnNodeRawOpen source.val node scope portCount port).exposedWires.length →
@@ -919,7 +919,7 @@ theorem spawnNodeRaw_finishRoot_site_reflects
     (sourceItems : ItemSeq signature source.rootWires.length [])
     (targetItems : ItemSeq signature
       (spawnNodeRawOpen source node scope portCount port).rootWires.length [])
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin
       (spawnNodeRawOpen source node scope portCount port).exposedWires.length →
@@ -1117,13 +1117,13 @@ theorem finishRegion_denote_mono
     (region : Fin d.regionCount)
     (sourceItems targetItems : ItemSeq signature
       (context.extend region).length rels)
-    (hitems : ∀ (model : Lambda.LambdaModel)
+    (hitems : ∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (env : Fin (context.extend region).length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
       denoteItemSeq model named env relEnv sourceItems →
         denoteItemSeq model named env relEnv targetItems)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (outerEnv : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
@@ -1168,7 +1168,7 @@ def SpawnRegionSiteReflection
       ConcreteElaboration.compileRegion? signature
           (spawnNodeRaw input node scope portCount port)
           (fuel + 1) scope target binders = some targetBody →
-      ∀ (model : Lambda.LambdaModel)
+      ∀ (model : Model)
         (named : NamedEnv model.Carrier signature)
         (outerEnv : Fin target.length → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
@@ -1206,7 +1206,7 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
       (htargetBody : ConcreteElaboration.compileRegion? signature
         (spawnNodeRaw input node scope portCount port)
         (fuel + 1) start target binders = some targetBody),
-      ((∀ (model : Lambda.LambdaModel)
+      ((∀ (model : Model)
         (named : NamedEnv model.Carrier signature)
         (outerEnv : Fin target.length → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
@@ -1214,7 +1214,7 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
         denoteRegion model named outerEnv relEnv targetBody →
           denoteRegion model named (outerEnv ∘ embedding.index) relEnv
             sourceBody) ∧
-      (∀ (model : Lambda.LambdaModel)
+      (∀ (model : Model)
         (named : NamedEnv model.Carrier signature)
         (outerEnv : Fin target.length → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
@@ -1224,7 +1224,7 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
           denoteRegion model named outerEnv relEnv targetBody)) ∧
       (SpawnRegionSiteReflection (signature := signature) input node scope
           portCount port →
-        ( (∀ (model : Lambda.LambdaModel)
+        ( (∀ (model : Model)
             (named : NamedEnv model.Carrier signature)
             (outerEnv : Fin target.length → model.Carrier)
             (relEnv : RelEnv model.Carrier rels),
@@ -1232,7 +1232,7 @@ private theorem spawnNodeRaw_compileRegion_route_kernel
             denoteRegion model named (outerEnv ∘ embedding.index) relEnv
                 sourceBody →
               denoteRegion model named outerEnv relEnv targetBody) ∧
-          (∀ (model : Lambda.LambdaModel)
+          (∀ (model : Model)
             (named : NamedEnv model.Carrier signature)
             (outerEnv : Fin target.length → model.Carrier)
             (relEnv : RelEnv model.Carrier rels),
@@ -1836,7 +1836,7 @@ theorem spawnNodeRaw_compileRegion_route_projects
     (htargetBody : ConcreteElaboration.compileRegion? signature
       (spawnNodeRaw input node scope portCount port)
       (fuel + 1) start target binders = some targetBody) :
-    (∀ (model : Lambda.LambdaModel)
+    (∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin target.length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
@@ -1844,7 +1844,7 @@ theorem spawnNodeRaw_compileRegion_route_projects
       denoteRegion model named outerEnv relEnv targetBody →
         denoteRegion model named (outerEnv ∘ embedding.index) relEnv
           sourceBody) ∧
-    (∀ (model : Lambda.LambdaModel)
+    (∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin target.length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
@@ -1887,7 +1887,7 @@ theorem spawnNodeRaw_compileRegion_route_reflects
     (htargetBody : ConcreteElaboration.compileRegion? signature
       (spawnNodeRaw input node scope portCount port)
       (fuel + 1) start target binders = some targetBody) :
-    (∀ (model : Lambda.LambdaModel)
+    (∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin target.length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
@@ -1895,7 +1895,7 @@ theorem spawnNodeRaw_compileRegion_route_reflects
       denoteRegion model named (outerEnv ∘ embedding.index) relEnv
           sourceBody →
         denoteRegion model named outerEnv relEnv targetBody) ∧
-    (∀ (model : Lambda.LambdaModel)
+    (∀ (model : Model)
       (named : NamedEnv model.Carrier signature)
       (outerEnv : Fin target.length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),

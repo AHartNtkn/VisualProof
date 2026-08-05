@@ -1,6 +1,5 @@
 import VisualProof.Theory.Semantics
 import VisualProof.Diagram.Concrete.Subgraph.Splice
-import VisualProof.Lambda.NormalSeparation
 import VisualProof.Rule.NamedReference
 
 namespace VisualProof.Rule
@@ -261,7 +260,6 @@ inductive Orientation
 
 /-- Canonical logical rule inventory, in serialized `ProofStep` order. -/
 inductive StepTag
-  | openTermSpawn
   | relationSpawn
   | boundRelationSpawn
   | wireJoin
@@ -271,15 +269,6 @@ inductive StepTag
   | deiteration
   | doubleCutIntro
   | doubleCutElim
-  | inconsistentCutElim
-  | conversion
-  | congruenceJoin
-  | anchoredWireSplit
-  | anchoredWireContract
-  | headStrip
-  | closedTermIntro
-  | fusion
-  | fission
   | comprehensionInstantiate
   | comprehensionAbstract
   | theorem
@@ -290,15 +279,13 @@ inductive StepTag
   deriving DecidableEq, Repr
 
 def StepTag.all : List StepTag :=
-  [.openTermSpawn, .relationSpawn, .boundRelationSpawn, .wireJoin,
+  [.relationSpawn, .boundRelationSpawn, .wireJoin,
     .erasure, .wireSever, .iteration, .deiteration,
-    .doubleCutIntro, .doubleCutElim, .inconsistentCutElim,
-    .conversion, .congruenceJoin,
-    .anchoredWireSplit, .anchoredWireContract, .headStrip, .closedTermIntro,
-    .fusion, .fission, .comprehensionInstantiate, .comprehensionAbstract,
+    .doubleCutIntro, .doubleCutElim,
+    .comprehensionInstantiate, .comprehensionAbstract,
     .theorem, .vacuousIntro, .vacuousElim, .relUnfold, .relFold]
 
-theorem StepTag.all_length : StepTag.all.length = 26 := by
+theorem StepTag.all_length : StepTag.all.length = 16 := by
   native_decide
 
 theorem StepTag.all_nodup : StepTag.all.Nodup := by
@@ -314,14 +301,11 @@ inductive SemanticMode
 
 /-- Whether a rule is genuinely one-way or a polarity-blind equivalence. -/
 def StepTag.semanticMode : StepTag → SemanticMode
-  | .openTermSpawn | .relationSpawn | .boundRelationSpawn | .wireJoin
+  | .relationSpawn | .boundRelationSpawn | .wireJoin
   | .erasure | .wireSever | .comprehensionInstantiate
-  | .comprehensionAbstract | .headStrip | .theorem => .directed
+  | .comprehensionAbstract | .theorem => .directed
   | .iteration | .deiteration | .doubleCutIntro | .doubleCutElim
-  | .inconsistentCutElim
-  | .conversion | .congruenceJoin | .anchoredWireSplit
-  | .anchoredWireContract | .closedTermIntro
-  | .fusion | .fission | .vacuousIntro | .vacuousElim
+  | .vacuousIntro | .vacuousElim
   | .relUnfold | .relFold => .equivalent
 
 def DirectedImplication (orientation : Orientation)
@@ -345,11 +329,9 @@ inductive StepError
   | incomparableScopes
   | binderEscape
   | arityMismatch
-  | invalidCertificate
   | occurrenceMismatch
   | boundaryMismatch
   | nonVacuousBinder
-  | openTermRequired
   | unknownDefinition
   | unknownTheorem
   | binderKindOrArityMismatch
@@ -794,7 +776,7 @@ def OpenProofState.asCheckedOpen (state : OpenProofState signature) :
 }⟩
 
 def OpenProofState.denote (state : OpenProofState signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : Diagram.NamedEnv model.Carrier signature)
     (args : Fin state.boundary.length → model.Carrier) : Prop :=
   state.asCheckedOpen.denote model named args
@@ -1119,7 +1101,7 @@ theorem operationalOpen_denote_iff_result
     (operational : Diagram.CheckedOpenDiagram signature)
     (operationalIso : Diagram.OpenConcreteIso operational.val
       (realizes.rawResultOpen mapped))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : Diagram.NamedEnv model.Carrier signature)
     (args : Fin boundary.length → model.Carrier) :
     let target : OpenProofState signature := {
@@ -1453,210 +1435,6 @@ structure ComprehensionInstantiatePayload
     input.val.Encloses (binderTargets index) bubble ∧
       binderTargets index ≠ bubble
 
-/-- Every structural gate for inconsistent-cut elimination is intrinsic to the
-payload. A zero-port concrete term is closed in the concrete diagram's native
-free-port representation. -/
-structure InconsistentCutPayload
-    (input : Diagram.CheckedDiagram signature)
-    (region : Fin input.val.regionCount)
-    (first second : Fin input.val.nodeCount) where
-  parent : Fin input.val.regionCount
-  region_is_cut : input.val.regions region = .cut parent
-  distinct : first ≠ second
-  firstTerm : Lambda.Term 0 (Fin 0)
-  firstNode : input.val.nodes first = .term region 0 firstTerm
-  secondTerm : Lambda.Term 0 (Fin 0)
-  secondNode : input.val.nodes second = .term region 0 secondTerm
-  outputWire : Fin input.val.wireCount
-  firstOutput : input.val.EndpointOccurs outputWire
-    { node := first, port := .output }
-  secondOutput : input.val.EndpointOccurs outputWire
-    { node := second, port := .output }
-  certificate : Lambda.NormalSeparationCertificate
-  selection : Diagram.CheckedSelection input.val
-  selection_eq : selection.val = {
-    anchor := parent
-    childRoots := [region]
-    directNodes := []
-    explicitWires := []
-  }
-
-structure ConversionPayload (input : Diagram.CheckedDiagram signature)
-    (node : Fin input.val.nodeCount) where
-  region : Fin input.val.regionCount
-  oldFreePorts : Nat
-  oldTerm : Lambda.Term 0 (Fin oldFreePorts)
-  node_eq : input.val.nodes node = .term region oldFreePorts oldTerm
-  newFreePorts : Nat
-  newTerm : Lambda.Term 0 (Fin newFreePorts)
-  commonPorts : Nat
-  oldPort : Fin oldFreePorts → Fin commonPorts
-  newPort : Fin newFreePorts → Fin commonPorts
-  oldPort_injective : Function.Injective oldPort
-  newPort_injective : Function.Injective newPort
-  commonPorts_covered : ∀ common,
-    (∃ old, oldPort old = common) ∨ (∃ new, newPort new = common)
-  certificate : Lambda.Certificate
-  certificate_valid : Lambda.checkCertificate
-    (oldTerm.mapFree oldPort) (newTerm.mapFree newPort) certificate = true
-  attachments : List (Fin newFreePorts × Fin input.val.wireCount)
-  attachments_functional : ∀ port first second,
-    (port, first) ∈ attachments → (port, second) ∈ attachments → first = second
-  attachments_new_only : ∀ port wire,
-    (port, wire) ∈ attachments →
-      ¬ ∃ old, oldPort old = newPort port
-  attachments_visible : ∀ port wire, (port, wire) ∈ attachments →
-    input.val.Encloses (input.val.wires wire).scope region
-
-/-- Proof-bearing refinement of the sound head-strip gate. A free head is not
-rigid under arbitrary lambda-model assignments, so both aligned heads must be
-the same bound de Bruijn variable. -/
-structure HeadStripPayload (input : Diagram.CheckedDiagram signature)
-    (first second : Fin input.val.nodeCount) where
-  distinct : first ≠ second
-  region : Fin input.val.regionCount
-  firstFreePorts : Nat
-  firstTerm : Lambda.Term 0 (Fin firstFreePorts)
-  firstNode : input.val.nodes first = .term region firstFreePorts firstTerm
-  secondFreePorts : Nat
-  secondTerm : Lambda.Term 0 (Fin secondFreePorts)
-  secondNode : input.val.nodes second = .term region secondFreePorts secondTerm
-  commonPorts : Nat
-  firstPort : Fin firstFreePorts → Fin commonPorts
-  secondPort : Fin secondFreePorts → Fin commonPorts
-  firstPort_injective : Function.Injective firstPort
-  secondPort_injective : Function.Injective secondPort
-  commonPorts_covered : ∀ common,
-    (∃ first, firstPort first = common) ∨
-      (∃ second, secondPort second = common)
-  shared_port_alignment : ∀ left right leftWire rightWire,
-    firstPort left = secondPort right →
-      input.val.EndpointOccurs leftWire { node := first, port := .free left } →
-      input.val.EndpointOccurs rightWire { node := second, port := .free right } →
-      leftWire = rightWire
-  firstOriginalSpine : Lambda.HeadSpine 0 (Fin firstFreePorts)
-  secondOriginalSpine : Lambda.HeadSpine 0 (Fin secondFreePorts)
-  firstOriginalSpine_eq : Lambda.headSpine firstTerm = some firstOriginalSpine
-  secondOriginalSpine_eq : Lambda.headSpine secondTerm = some secondOriginalSpine
-  sameBinders : firstOriginalSpine.binders = secondOriginalSpine.binders
-  headIndex : Fin firstOriginalSpine.binders
-  firstHead : firstOriginalSpine.head = .bound headIndex
-  secondHead : secondOriginalSpine.head =
-    .bound (Fin.cast sameBinders headIndex)
-  sameArgumentCount : firstOriginalSpine.args.length =
-    secondOriginalSpine.args.length
-  outputWire : Fin input.val.wireCount
-  outputBinary : (input.val.wires outputWire).endpoints.length = 2
-  /-- The wire's existential attachment is local, so its only user-visible
-  attachments are the two explicit term outputs certified by `outputBinary`. -/
-  noAdditionalExistentialAttachment :
-    (input.val.wires outputWire).scope = region
-  firstOutput : input.val.EndpointOccurs outputWire
-    { node := first, port := .output }
-  secondOutput : input.val.EndpointOccurs outputWire
-    { node := second, port := .output }
-
-def HeadStripPayload.firstSpine
-    (payload : HeadStripPayload input first second) :
-    Lambda.HeadSpine 0 (Fin payload.commonPorts) :=
-  payload.firstOriginalSpine.mapFree payload.firstPort
-
-def HeadStripPayload.secondSpine
-    (payload : HeadStripPayload input first second) :
-    Lambda.HeadSpine 0 (Fin payload.commonPorts) :=
-  payload.secondOriginalSpine.mapFree payload.secondPort
-
-theorem HeadStripPayload.firstSpine_eq
-    (payload : HeadStripPayload input first second) :
-    Lambda.headSpine (payload.firstTerm.mapFree payload.firstPort) =
-      some payload.firstSpine :=
-  Lambda.headSpine_mapFree payload.firstOriginalSpine_eq payload.firstPort
-
-theorem HeadStripPayload.secondSpine_eq
-    (payload : HeadStripPayload input first second) :
-    Lambda.headSpine (payload.secondTerm.mapFree payload.secondPort) =
-      some payload.secondSpine :=
-  Lambda.headSpine_mapFree payload.secondOriginalSpine_eq payload.secondPort
-
-theorem HeadStripPayload.mappedSameBinders
-    (payload : HeadStripPayload input first second) :
-    payload.firstSpine.binders = payload.secondSpine.binders :=
-  payload.sameBinders
-
-theorem HeadStripPayload.mappedFirstHead
-    (payload : HeadStripPayload input first second) :
-    payload.firstSpine.head = .bound payload.headIndex := by
-  unfold HeadStripPayload.firstSpine
-  dsimp only [Lambda.HeadSpine.mapFree]
-  rw [payload.firstHead]
-  rfl
-
-theorem HeadStripPayload.mappedSecondHead
-    (payload : HeadStripPayload input first second) :
-    payload.secondSpine.head =
-      .bound (Fin.cast payload.mappedSameBinders payload.headIndex) := by
-  unfold HeadStripPayload.secondSpine
-  dsimp only [Lambda.HeadSpine.mapFree]
-  rw [payload.secondHead]
-  rfl
-
-theorem HeadStripPayload.mappedSameArgumentCount
-    (payload : HeadStripPayload input first second) :
-    payload.firstSpine.args.length = payload.secondSpine.args.length := by
-  simpa [HeadStripPayload.firstSpine, HeadStripPayload.secondSpine,
-    Lambda.HeadSpine.mapFree] using payload.sameArgumentCount
-
-theorem HeadStripPayload.headCorresponds
-    (payload : HeadStripPayload input first second) :
-    payload.firstSpine.head.Corresponds payload.secondSpine.head := by
-  unfold HeadStripPayload.firstSpine HeadStripPayload.secondSpine
-  dsimp only [Lambda.HeadSpine.mapFree]
-  rw [payload.firstHead, payload.secondHead]
-  simp only [Lambda.Head.mapFree]
-  exact .bound payload.headIndex.val payload.headIndex.isLt
-    (by simpa only [payload.sameBinders] using payload.headIndex.isLt)
-
-structure CongruencePayload (input : Diagram.CheckedDiagram signature)
-    (first second : Fin input.val.nodeCount) where
-  distinct : first ≠ second
-  region : Fin input.val.regionCount
-  firstFreePorts : Nat
-  firstTerm : Lambda.Term 0 (Fin firstFreePorts)
-  firstNode : input.val.nodes first = .term region firstFreePorts firstTerm
-  secondFreePorts : Nat
-  secondTerm : Lambda.Term 0 (Fin secondFreePorts)
-  secondNode : input.val.nodes second = .term region secondFreePorts secondTerm
-  commonPorts : Nat
-  firstPort : Fin firstFreePorts → Fin commonPorts
-  secondPort : Fin secondFreePorts → Fin commonPorts
-  firstPort_injective : Function.Injective firstPort
-  secondPort_injective : Function.Injective secondPort
-  commonPorts_covered : ∀ common,
-    (∃ first, firstPort first = common) ∨
-      (∃ second, secondPort second = common)
-  certificate : Lambda.Certificate
-  certificate_valid : Lambda.checkCertificate
-    (firstTerm.mapFree firstPort) (secondTerm.mapFree secondPort)
-      certificate = true
-  shared_port_alignment : ∀ left right leftWire rightWire,
-    firstPort left = secondPort right →
-      input.val.EndpointOccurs leftWire { node := first, port := .free left } →
-      input.val.EndpointOccurs rightWire { node := second, port := .free right } →
-      leftWire = rightWire
-  firstOutput : Fin input.val.wireCount
-  secondOutput : Fin input.val.wireCount
-  firstOutput_occurs : input.val.EndpointOccurs firstOutput
-    { node := first, port := .output }
-  secondOutput_occurs : input.val.EndpointOccurs secondOutput
-    { node := second, port := .output }
-  outputsDistinct : firstOutput ≠ secondOutput
-  firstScopeDepth :
-    concreteCutDepth input.val (input.val.wires firstOutput).scope =
-      concreteCutDepth input.val region
-  secondScopeDepth :
-    concreteCutDepth input.val (input.val.wires secondOutput).scope =
-      concreteCutDepth input.val region
-
 /-- An exact pinned occurrence of one named-reference node together with the
 checked definition body that will replace it. -/
 structure RelUnfoldPayload (input : Diagram.CheckedDiagram signature)
@@ -1711,8 +1489,6 @@ Finite references cannot be stale, and selection closure is already validated.
 -/
 inductive Step (context : ProofContext signature)
     (input : Diagram.CheckedDiagram signature)
-  | openTermSpawn (region : Fin input.val.regionCount) (freePorts : Nat)
-      (term : Lambda.Term 0 (Fin freePorts))
   | relationSpawn (region : Fin input.val.regionCount)
       (definition arity : Nat)
   | boundRelationSpawn (region binder : Fin input.val.regionCount)
@@ -1727,26 +1503,6 @@ inductive Step (context : ProofContext signature)
       (witness : DeiterationWitness input selection)
   | doubleCutIntro (selection : Diagram.CheckedSelection input.val)
   | doubleCutElim (region : Fin input.val.regionCount)
-  | inconsistentCutElim (region : Fin input.val.regionCount)
-      (first second : Fin input.val.nodeCount)
-      (payload : InconsistentCutPayload input region first second)
-  | conversion (node : Fin input.val.nodeCount)
-      (payload : ConversionPayload input node)
-  | congruenceJoin (first second : Fin input.val.nodeCount)
-      (payload : CongruencePayload input first second)
-  | anchoredWireSplit (wire : Fin input.val.wireCount)
-      (witness : Fin input.val.nodeCount)
-      (endpoints : List (Diagram.CEndpoint input.val.nodeCount))
-      (target : Fin input.val.regionCount)
-  | anchoredWireContract (redundant survivor : Fin input.val.nodeCount)
-      (certificate : Lambda.Certificate)
-  | headStrip (first second : Fin input.val.nodeCount)
-      (payload : HeadStripPayload input first second)
-  | closedTermIntro (region : Fin input.val.regionCount)
-      (term : Lambda.Term 0 (Fin 0))
-  | fusion (wire : Fin input.val.wireCount)
-  | fission (node : Fin input.val.nodeCount)
-      (path : List Lambda.PathSegment)
   | comprehensionInstantiate (bubble : Fin input.val.regionCount)
       (comprehension : Diagram.CheckedOpenDiagram signature)
       (attachments : List (Fin input.val.wireCount))
@@ -1779,7 +1535,6 @@ inductive Step (context : ProofContext signature)
       (body_eq : payload.body.val = (context.definitionEntry definition).body.val)
 
 def Step.tag : Step context input → StepTag
-  | .openTermSpawn .. => .openTermSpawn
   | .relationSpawn .. => .relationSpawn
   | .boundRelationSpawn .. => .boundRelationSpawn
   | .wireJoin .. => .wireJoin
@@ -1789,15 +1544,6 @@ def Step.tag : Step context input → StepTag
   | .deiteration .. => .deiteration
   | .doubleCutIntro .. => .doubleCutIntro
   | .doubleCutElim .. => .doubleCutElim
-  | .inconsistentCutElim .. => .inconsistentCutElim
-  | .conversion .. => .conversion
-  | .congruenceJoin .. => .congruenceJoin
-  | .anchoredWireSplit .. => .anchoredWireSplit
-  | .anchoredWireContract .. => .anchoredWireContract
-  | .headStrip .. => .headStrip
-  | .closedTermIntro .. => .closedTermIntro
-  | .fusion .. => .fusion
-  | .fission .. => .fission
   | .comprehensionInstantiate .. => .comprehensionInstantiate
   | .comprehensionAbstract .. => .comprehensionAbstract
   | .theorem .. => .theorem

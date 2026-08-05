@@ -21,7 +21,7 @@ def theoremSideState (side : CheckedOpenDiagram signature) :
 
 @[simp] theorem theoremSideState_denote
     (side : CheckedOpenDiagram signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin side.val.boundary.length → model.Carrier) :
     (theoremSideState side).denote model named args =
@@ -49,27 +49,27 @@ isomorphism.  Every replay step reaches this proof through
 `Rule.applyStep_sound`; there is no theorem-checker soundness parameter. -/
 theorem checkedTheorem_sound
     (checked : CheckedTheorem context)
-    (valid : context.Valid) :
-    checked.schema.Valid
-      (Theory.interpretDefinitions context.definitions) := by
+    (valid : context.Valid model) :
+    checked.schema.Valid model
+      (Theory.interpretDefinitions model context.definitions) := by
   intro args leftDenotes
-  let named := Theory.interpretDefinitions context.definitions
+  let named := Theory.interpretDefinitions model context.definitions
   have forwardSound := replay_sound checked.forwardProgram
     checked.forwardReplay valid
   have backwardSound := replay_sound checked.backwardProgram
     checked.backwardReplay valid
-  have forwardDenotes : checked.forwardFinish.denote Lambda.canonicalModel named
+  have forwardDenotes : checked.forwardFinish.denote model named
       (transportArgs forwardSound.boundaryLength args) :=
     forwardSound.sound args leftDenotes
-  have meetDenotes : checked.backwardFinish.denote Lambda.canonicalModel named
+  have meetDenotes : checked.backwardFinish.denote model named
       (transportArgs checked.meet.boundary_length_eq.symm
         (transportArgs forwardSound.boundaryLength args)) := by
     exact (checked.meet.denote_iff
       checked.forwardFinish.asCheckedOpen.property
-      checked.backwardFinish.asCheckedOpen.property Lambda.canonicalModel named
+      checked.backwardFinish.asCheckedOpen.property model named
       (transportArgs forwardSound.boundaryLength args)).mp forwardDenotes
   let rightArgs : Fin checked.schema.right.val.boundary.length →
-      Lambda.Individual :=
+      model.Carrier :=
     transportArgs checked.schema.sameBoundaryArity.symm args
   have hbackwardArgs :
       transportArgs backwardSound.boundaryLength rightArgs =
@@ -79,7 +79,7 @@ theorem checkedTheorem_sound
     apply congrArg args
     apply Fin.ext
     rfl
-  have backwardInput : checked.backwardFinish.denote Lambda.canonicalModel named
+  have backwardInput : checked.backwardFinish.denote model named
       (transportArgs backwardSound.boundaryLength rightArgs) := by
     exact hbackwardArgs.symm ▸ meetDenotes
   exact backwardSound.sound rightArgs backwardInput
@@ -100,11 +100,11 @@ theorem CheckedTheorem.register_definitions
 theorem CheckedTheorem.register_valid
     {signature : List Nat} {context : ProofContext signature}
     (checked : CheckedTheorem context)
-    (valid : context.Valid) : checked.register.Valid := by
+    (valid : context.Valid model) : checked.register.Valid model := by
   refine ⟨?_⟩
   change ∀ index : Fin (context.theorems ++ [checked.schema]).length,
     ((context.theorems ++ [checked.schema]).get index).Valid
-      (Theory.interpretDefinitions context.definitions)
+      model (Theory.interpretDefinitions model context.definitions)
   intro index
   by_cases hprior : index.val < context.theorems.length
   · let prior : Fin context.theorems.length := ⟨index.val, hprior⟩
@@ -128,10 +128,10 @@ theorem CheckedTheorem.register_valid
 ordered context. -/
 theorem citation_sound
     {signature : List Nat} {context : ProofContext signature}
-    (valid : context.Valid)
+    (valid : context.Valid model)
     (index : Fin context.theorems.length) :
     (context.theorems.get index).Valid
-      (Theory.interpretDefinitions context.definitions) :=
+      model (Theory.interpretDefinitions model context.definitions) :=
   valid.theorems index
 
 end VisualProof.Proof

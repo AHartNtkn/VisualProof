@@ -212,7 +212,7 @@ theorem extractionCompileNode_itemSimulationAtMaterial
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fragmentContext : ConcreteElaboration.WireContext

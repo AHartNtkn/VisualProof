@@ -26,7 +26,7 @@ def TerminalRelationsMatch
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (relEnv : RelEnv model.Carrier
@@ -87,7 +87,7 @@ theorem terminalRelationsMatch_unique
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (left right : RelEnv model.Carrier
@@ -135,7 +135,7 @@ theorem terminalOutputRelations_match
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    {model : Lambda.LambdaModel}
+    {model : Model}
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     {outputBody : Region signature outputOuter outputRels}
@@ -245,7 +245,7 @@ noncomputable def terminalRelationOfValues
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (values : ∀ index,
@@ -292,7 +292,7 @@ theorem terminalRelationOfValues_eq
     (leftArguments : Fin payload.arity → Fin left.diagram.val.wireCount)
     (rightArguments : Fin payload.arity → Fin right.diagram.val.wireCount)
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (leftWire : Fin left.diagram.val.wireCount → model.Carrier)
     (rightWire : Fin right.diagram.val.wireCount → model.Carrier)
@@ -330,7 +330,7 @@ theorem terminalRelationOfValues_of_output
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))

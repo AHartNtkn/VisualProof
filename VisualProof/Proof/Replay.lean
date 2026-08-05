@@ -75,27 +75,27 @@ The equality records that the same ordered boundary positions survive, while
 `sound` records the implication in the selected proof orientation. -/
 structure ReplayEntailment (orientation : Orientation)
     (source target : OpenProofState signature)
-    (named : NamedEnv Lambda.Individual signature) : Prop where
+    (model : Model) (named : NamedEnv model.Carrier signature) : Prop where
   boundaryLength : target.boundary.length = source.boundary.length
-  sound : ∀ args : Fin source.boundary.length → Lambda.Individual,
+  sound : ∀ args : Fin source.boundary.length → model.Carrier,
     DirectedImplication orientation
-      (source.denote Lambda.canonicalModel named args)
-      (target.denote Lambda.canonicalModel named
+      (source.denote model named args)
+      (target.denote model named
         (transportArgs boundaryLength args))
 
 namespace ReplayEntailment
 
 theorem refl (orientation : Orientation) (state : OpenProofState signature)
-    (named : NamedEnv Lambda.Individual signature) :
-    ReplayEntailment orientation state state named := by
+    (model : Model) (named : NamedEnv model.Carrier signature) :
+    ReplayEntailment orientation state state model named := by
   refine ⟨rfl, ?_⟩
   intro args
   cases orientation <;> exact id
 
 theorem trans
-    (first : ReplayEntailment orientation source middle named)
-    (second : ReplayEntailment orientation middle target named) :
-    ReplayEntailment orientation source target named := by
+    (first : ReplayEntailment orientation source middle model named)
+    (second : ReplayEntailment orientation middle target model named) :
+    ReplayEntailment orientation source target model named := by
   refine ⟨second.boundaryLength.trans first.boundaryLength, ?_⟩
   intro args
   have htransport := transportArgs_trans first.boundaryLength
@@ -109,7 +109,7 @@ theorem trans
       simpa only [htransport] using targetDenotes
   | backward =>
       intro targetDenotes
-      have targetDenotes' : target.denote Lambda.canonicalModel named
+      have targetDenotes' : target.denote model named
           (transportArgs second.boundaryLength
             (transportArgs first.boundaryLength args)) := by
         simpa only [htransport] using targetDenotes
@@ -133,9 +133,9 @@ private theorem directedEntailment_implication
 dispatcher theorem; replay has no separately supplied soundness authority. -/
 theorem applyOpenStep_sound
     (happly : applyOpenStep context orientation input action = .ok result)
-    (valid : context.Valid) :
-    ReplayEntailment orientation input result
-      (Theory.interpretDefinitions context.definitions) := by
+    (valid : context.Valid model) :
+    ReplayEntailment orientation input result model
+      (Theory.interpretDefinitions model context.definitions) := by
   unfold applyOpenStep at happly
   split at happly
   · contradiction
@@ -147,7 +147,7 @@ theorem applyOpenStep_sound
         receipt.transportOpen_result input.boundary
           input.boundary_root_scoped transported htransport
       cases happly
-      have stepSound := Rule.applyStep_sound hstep input.boundary
+      have stepSound := Rule.applyStep_sound hstep model input.boundary
         input.boundary_root_scoped mapped hboundary valid
       refine ⟨receipt.interface.transportBoundary_length hboundary, ?_⟩
       intro args
@@ -158,15 +158,15 @@ target implications; backward replay composes target-to-source implications. -/
 theorem replay_sound
     (program : Program context orientation input)
     (hreplay : replay context orientation input program = .ok finish)
-    (valid : context.Valid) :
-    ReplayEntailment orientation input finish
-      (Theory.interpretDefinitions context.definitions) := by
+    (valid : context.Valid model) :
+    ReplayEntailment orientation input finish model
+      (Theory.interpretDefinitions model context.definitions) := by
   induction program with
   | done input =>
       simp [replay] at hreplay
       cases hreplay
       exact ReplayEntailment.refl orientation finish
-        (Theory.interpretDefinitions context.definitions)
+        model (Theory.interpretDefinitions model context.definitions)
   | @step input action next ih =>
       simp only [replay] at hreplay
       split at hreplay
@@ -180,13 +180,13 @@ theorem replay_sound
 theorem forward_replay_sound
     (program : Program context .forward input)
     (hreplay : replay context .forward input program = .ok finish)
-    (valid : context.Valid) :
+    (valid : context.Valid model) :
     ∃ length_eq : finish.boundary.length = input.boundary.length,
-      ∀ args : Fin input.boundary.length → Lambda.Individual,
-        input.denote Lambda.canonicalModel
-            (Theory.interpretDefinitions context.definitions) args →
-          finish.denote Lambda.canonicalModel
-            (Theory.interpretDefinitions context.definitions)
+      ∀ args : Fin input.boundary.length → model.Carrier,
+        input.denote model
+            (Theory.interpretDefinitions model context.definitions) args →
+          finish.denote model
+            (Theory.interpretDefinitions model context.definitions)
             (transportArgs length_eq args) := by
   let sound := replay_sound program hreplay valid
   exact ⟨sound.boundaryLength, sound.sound⟩
@@ -196,14 +196,14 @@ the transported assignment entails denotation of the original goal. -/
 theorem backward_replay_sound
     (program : Program context .backward goal)
     (hreplay : replay context .backward goal program = .ok reduced)
-    (valid : context.Valid) :
+    (valid : context.Valid model) :
     ∃ length_eq : reduced.boundary.length = goal.boundary.length,
-      ∀ args : Fin goal.boundary.length → Lambda.Individual,
-        reduced.denote Lambda.canonicalModel
-            (Theory.interpretDefinitions context.definitions)
+      ∀ args : Fin goal.boundary.length → model.Carrier,
+        reduced.denote model
+            (Theory.interpretDefinitions model context.definitions)
             (transportArgs length_eq args) →
-          goal.denote Lambda.canonicalModel
-            (Theory.interpretDefinitions context.definitions) args := by
+          goal.denote model
+            (Theory.interpretDefinitions model context.definitions) args := by
   let sound := replay_sound program hreplay valid
   exact ⟨sound.boundaryLength, sound.sound⟩
 

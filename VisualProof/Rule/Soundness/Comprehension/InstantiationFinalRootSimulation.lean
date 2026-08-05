@@ -53,7 +53,7 @@ noncomputable def finalRootContextSimulation
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection) :
     let source : CheckedOpenDiagram signature :=
@@ -149,8 +149,7 @@ noncomputable def finalRootContextSimulation
           (ConcreteDiagram.Encloses.refl input.val payload.parent))
   · intro regular allowed sourceItems targetItems sourceCompiled
       targetCompiled itemSemantics
-    letI : Nonempty model.Carrier :=
-      ConcreteElaboration.lambdaModel_carrier_nonempty model
+    letI : Nonempty model.Carrier := model.nonempty
     apply ConcreteElaboration.directionalRootTransport_of_agreement direction
       source.val.exposedWires source.val.hiddenWires target.val.exposedWires
       target.val.hiddenWires outer.indexRelation combined.indexRelation model
@@ -283,8 +282,7 @@ noncomputable def finalRootContextSimulation
       rw [relationMapEq, ItemSeq.renameRelations_id] at itemTransport
       exact itemTransport
     rw [relationMapEq, Region.renameRelations_id]
-    letI : Nonempty model.Carrier :=
-      ConcreteElaboration.lambdaModel_carrier_nonempty model
+    letI : Nonempty model.Carrier := model.nonempty
     exact ConcreteElaboration.finishRoot_denote .forward
       source.val.exposedWires source.val.hiddenWires target.val.exposedWires
       target.val.hiddenWires outer.indexRelation model named sourceItems
@@ -309,7 +307,7 @@ theorem finalBoundaryWitness
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
     (direction : ConcreteElaboration.SimulationDirection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin boundary.length → model.Carrier) :
     let source : CheckedOpenDiagram signature :=
@@ -376,8 +374,7 @@ theorem finalBoundaryWitness
       exact outer.targetEnvironment_agrees sourceAssignment.classes
   | backward =>
       intro targetAssignment targetArgsEq targetDenotes
-      letI : Nonempty model.Carrier :=
-        ConcreteElaboration.lambdaModel_carrier_nonempty model
+      letI : Nonempty model.Carrier := model.nonempty
       let fallback : model.Carrier := Classical.choice inferInstance
       let sourceClasses := outer.sourceEnvironment sourceExposedNodup
         targetExposedNodup wireInjective fallback targetAssignment.classes
@@ -433,7 +430,7 @@ theorem finalOpen_denote
     (allowed : FinalAllowed elimTrace.sourceDiagram
       (elimTrace.targetIndex finalWellFormed) direction
       elimTrace.sourceDiagram.root)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin boundary.length → model.Carrier) :
     let source : CheckedOpenDiagram signature :=

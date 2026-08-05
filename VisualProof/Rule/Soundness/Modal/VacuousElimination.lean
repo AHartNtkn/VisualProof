@@ -146,7 +146,7 @@ theorem promotedNode_region_eq_targetIndex_iff
         (input.nodes node).region = bubble := by
   have result := trace.promotion.node_result node
   cases nodeShape : input.nodes node with
-  | term owner freePorts term =>
+  | identity owner arity =>
       rw [nodeShape] at result
       simp only [promoteNode?] at result
       rw [Option.map_eq_some_iff] at result
@@ -201,7 +201,7 @@ theorem promotedNode_region_eq_regular_iff
       (input.nodes node).region = trace.origin region := by
   have result := trace.promotion.node_result node
   cases nodeShape : input.nodes node with
-  | term owner freePorts term =>
+  | identity owner arity =>
       rw [nodeShape] at result
       simp only [promoteNode?] at result
       rw [Option.map_eq_some_iff] at result
@@ -258,7 +258,7 @@ theorem regular_nodeShape
     (nodeRegion : (trace.promotion.nodes node).region = region) :
     input.nodes node =
       match trace.promotion.nodes node with
-      | .term owner freePorts term => .term (trace.origin owner) freePorts term
+      | .identity owner arity => .identity (trace.origin owner) arity
       | .atom owner binder => .atom (trace.origin owner) (trace.origin binder)
       | .named owner definition arity =>
           .named (trace.origin owner) definition arity := by
@@ -267,7 +267,7 @@ theorem regular_nodeShape
     (trace.promotedNode_region_eq_regular_iff
       wellFormed node region regular).1 nodeRegion
   cases originalShape : input.nodes node with
-  | term owner freePorts term =>
+  | identity owner arity =>
       rw [originalShape] at result ownerEq
       simp only [CNode.region, promoteNode?] at result ownerEq
       rw [Option.map_eq_some_iff] at result
@@ -312,12 +312,12 @@ theorem focused_nodeShape
     (ownerEq : (input.nodes node).region = owner) :
     input.nodes node =
       match trace.promotion.nodes node with
-      | .term _ freePorts term => .term owner freePorts term
+      | .identity _ arity => .identity owner arity
       | .atom _ binder => .atom owner (trace.origin binder)
       | .named _ definition arity => .named owner definition arity := by
   have result := trace.promotion.node_result node
   cases originalShape : input.nodes node with
-  | term originalOwner freePorts term =>
+  | identity originalOwner arity =>
       rw [originalShape] at result ownerEq
       simp only [CNode.region, promoteNode?] at result ownerEq
       rw [Option.map_eq_some_iff] at result
@@ -896,7 +896,7 @@ trace-wide relation witness. -/
 def FreshRelationSelector
     (trace : VacuousElimTrace input bubble raw)
     (targetWellFormed : input.WellFormed signature)
-    (model : Lambda.LambdaModel) :=
+    (model : Model) :=
   ∀ {sourceRels targetRels : RelCtx}
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
     (targetContext : ConcreteElaboration.WireContext input)
@@ -1878,7 +1878,7 @@ theorem regular_localOccurrences
 theorem compileNode_itemSimulation
     (trace : VacuousElimTrace input bubble raw)
     (wellFormed : input.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
@@ -1892,7 +1892,7 @@ theorem compileNode_itemSimulation
       Fin input.regionCount)
     (nodeShape : input.nodes node =
       match trace.sourceDiagram.nodes node with
-      | .term owner freePorts term => .term (regionMap owner) freePorts term
+      | .identity owner arity => .identity (regionMap owner) arity
       | .atom owner binder => .atom (regionMap owner) (trace.origin binder)
       | .named owner definition arity =>
           .named (regionMap owner) definition arity)

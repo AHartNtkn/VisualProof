@@ -168,9 +168,9 @@ theorem extractionNode_shape
     (node : Fin layout.nodeCount) :
     input.val.nodes (selection.selectedNodes.get node) =
       match (input.val.extractDiagramRaw selection layout).nodes node with
-      | .term region freePorts term =>
-          .term (extractionRegionOrigin input selection layout region)
-            freePorts term
+      | .identity region arity =>
+          .identity (extractionRegionOrigin input selection layout region)
+            arity
       | .atom region binder =>
           .atom (extractionRegionOrigin input selection layout region)
             (extractionBinderOrigin input selection layout binder)
@@ -180,9 +180,9 @@ theorem extractionNode_shape
   have howner := extractionRegionOrigin_fragmentParent_of_selectedNode input
     selection layout node
   cases hnode : input.val.nodes (selection.selectedNodes.get node) with
-  | term region freePorts term =>
-      rw [input.val.extractDiagramRaw_node_term selection layout node region
-        freePorts term hnode]
+  | identity region arity =>
+      rw [input.val.extractDiagramRaw_node_identity selection layout node region
+        arity hnode]
       simp only
       simp only [hnode, CNode.region] at howner
       rw [howner]
@@ -321,7 +321,7 @@ theorem extractionCompileNode_itemSimulation
     (input : CheckedDiagram signature)
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (fragmentContext : ConcreteElaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
@@ -365,9 +365,9 @@ theorem extractionCompileNode_itemSimulation
   · have howner := extractionRegionOrigin_fragmentParent_of_selectedNode input
       selection layout node
     cases hnode : input.val.nodes (selection.selectedNodes.get node) with
-    | term region freePorts term =>
-        rw [input.val.extractDiagramRaw_node_term selection layout node region
-          freePorts term hnode]
+    | identity region arity =>
+        rw [input.val.extractDiagramRaw_node_identity selection layout node region
+          arity hnode]
         simp only
         simp only [hnode, CNode.region] at howner
         rw [howner]

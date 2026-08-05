@@ -24,7 +24,7 @@ theorem properIterationOrderedRoot_compiledSource_equiv_nonempty
       (iterationActualSpliceOfNonempty input selection target hadmissible
         hnonempty))
     (alignment : ProperIterationOrderedRootTargetAlignment certificate)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
@@ -151,7 +151,7 @@ theorem properIterationOrderedRoot_compiledSource_equiv_zero
       hadmissible sourceBoundary sourceRoot
       (iterationActualSpliceOfEmpty input selection target hadmissible))
     (alignment : ProperIterationOrderedRootTargetAlignment certificate)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin
       (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
@@ -282,7 +282,7 @@ theorem properIterationOrderedRoot_output_equiv_nonempty
       (iterationActualSpliceOfNonempty input selection target
         (Splice.Input.spliceChecked_sound hsplice).2.1 hnonempty))
     (alignment : ProperIterationOrderedRootTargetAlignment certificate)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
     let source : OpenProofState signature := {
@@ -360,7 +360,7 @@ theorem properIterationOrderedRoot_output_equiv_zero
       (iterationActualSpliceOfEmpty input selection target
         (Splice.Input.spliceChecked_sound hsplice).2.1))
     (alignment : ProperIterationOrderedRootTargetAlignment certificate)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (args : Fin sourceBoundary.length → model.Carrier) :
     let source : OpenProofState signature := {

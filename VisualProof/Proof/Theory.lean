@@ -34,7 +34,7 @@ def context (definitions : Theory.VerifiedDefinitions signature)
 theorem context_valid
     {theorems : List (TheoremSchema signature)}
     (verified : VerifiedTheorems definitions theorems) :
-    (verified.context definitions).Valid := by
+    (verified.context definitions).Valid model := by
   induction verified with
   | empty =>
       exact ⟨fun index => Fin.elim0 index⟩
@@ -60,14 +60,15 @@ def context (theory : VerifiedTheory signature) : ProofContext signature := {
 /-- Ordered-theory soundness: all registered citations denote valid open
 implications in the structurally interpreted definition environment. -/
 theorem sound (theory : VerifiedTheory signature)
-    : theory.context.Valid := by
+    (model : Model) : theory.context.Valid model := by
   exact theory.verification.context_valid
 
 theorem theorem_sound (theory : VerifiedTheory signature)
+    (model : Model)
     (index : Fin theory.theorems.length) :
     (theory.theorems.get index).Valid
-      (Theory.interpretDefinitions theory.definitions) :=
-  theory.sound.theorems index
+      model (Theory.interpretDefinitions model theory.definitions) :=
+  (theory.sound model).theorems index
 
 end VerifiedTheory
 
@@ -76,10 +77,11 @@ verified context entails semantic validity, including citations of any earlier
 registered theorem. -/
 theorem verifiedTheory_sound
     (theory : VerifiedTheory signature)
+    (model : Model)
     (schema : TheoremSchema signature) (member : schema ∈ theory.theorems) :
-    schema.Valid (Theory.interpretDefinitions theory.definitions) := by
+    schema.Valid model (Theory.interpretDefinitions model theory.definitions) := by
   obtain ⟨index, hget⟩ := List.mem_iff_get.mp member
   rw [← hget]
-  exact theory.theorem_sound index
+  exact theory.theorem_sound model index
 
 end VisualProof.Proof

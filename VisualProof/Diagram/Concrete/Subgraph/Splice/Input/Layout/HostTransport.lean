@@ -274,7 +274,7 @@ theorem plugRaw_atom_binders_are_bubbles (layout : PlugLayout input)
   · have hold := input.frame.property.atom_binders_are_bubbles frameNode
     simp only [plugRaw, plugNode, Fin.addCases_left]
     cases hnode : input.frame.val.nodes frameNode with
-    | term => trivial
+    | identity => trivial
     | named => trivial
     | atom region binder =>
         simp only [hnode] at hold
@@ -287,7 +287,7 @@ theorem plugRaw_atom_binders_are_bubbles (layout : PlugLayout input)
         patternNode
     simp only [plugRaw, plugNode, Fin.addCases_right]
     cases hnode : input.pattern.val.diagram.nodes patternNode with
-    | term => trivial
+    | identity => trivial
     | named => trivial
     | atom region binder =>
         simp only [hnode] at hold
@@ -575,7 +575,7 @@ theorem plugRaw_atom_binders_enclose (layout : PlugLayout input)
   · have hold := input.frame.property.atom_binders_enclose frameNode
     simp only [plugRaw, plugNode, Fin.addCases_left]
     cases hnode : input.frame.val.nodes frameNode with
-    | term => trivial
+    | identity => trivial
     | named => trivial
     | atom region binder =>
         simp only [hnode] at hold
@@ -586,7 +586,7 @@ theorem plugRaw_atom_binders_enclose (layout : PlugLayout input)
         patternNode
     simp only [plugRaw, plugNode, Fin.addCases_right]
     cases hnode : input.pattern.val.diagram.nodes patternNode with
-    | term => trivial
+    | identity => trivial
     | named => trivial
     | atom region binder =>
         simp only [hnode] at hold
@@ -628,7 +628,7 @@ theorem plugRaw_requiresPort_frame (layout : PlugLayout input)
   simp only [plugRaw]
   rw [layout.plugNode_frameNode]
   cases hnode : input.frame.val.nodes node with
-  | term => simpa only [hnode, mapFrameNode] using hrequires
+  | identity => simpa only [hnode, mapFrameNode] using hrequires
   | named => simpa only [hnode, mapFrameNode] using hrequires
   | atom region binder =>
       simp only [hnode, mapFrameNode] at hrequires ⊢
@@ -646,7 +646,7 @@ theorem plugRaw_requiresPort_pattern (layout : PlugLayout input)
   simp only [plugRaw]
   rw [layout.plugNode_patternNode]
   cases hnode : input.pattern.val.diagram.nodes node with
-  | term => simpa only [hnode, mapPatternNode] using hrequires
+  | identity => simpa only [hnode, mapPatternNode] using hrequires
   | named => simpa only [hnode, mapPatternNode] using hrequires
   | atom region binder =>
       simp only [hnode, mapPatternNode] at hrequires ⊢
@@ -759,21 +759,15 @@ theorem plugRaw_required_ports_are_covered (signature : List Nat)
   · have hold := input.frame.property.required_ports_are_covered frameNode
     simp only [plugRaw, plugNode, Fin.addCases_left]
     cases hnode : input.frame.val.nodes frameNode with
-    | term region freePorts term =>
+    | identity region arity =>
         simp only [hnode, mapFrameNode] at hold ⊢
-        obtain ⟨outputWire, houtput⟩ := hold.1
-        refine ⟨⟨layout.quotientBlockWire
-          (input.quotientWire outputWire), ?_⟩, ?_⟩
-        · simpa [mapFrameEndpoint] using
-            plugRaw_endpointOccurs_frame signature input layout
-              outputWire ⟨frameNode, .output⟩ houtput
-        · intro index
-          obtain ⟨sourceWire, hsource⟩ := hold.2 index
-          refine ⟨layout.quotientBlockWire
-            (input.quotientWire sourceWire), ?_⟩
-          simpa [mapFrameEndpoint] using
-            plugRaw_endpointOccurs_frame signature input layout
-              sourceWire ⟨frameNode, .free index⟩ hsource
+        intro index
+        obtain ⟨sourceWire, hsource⟩ := hold index
+        refine ⟨layout.quotientBlockWire
+          (input.quotientWire sourceWire), ?_⟩
+        simpa [mapFrameEndpoint] using
+          plugRaw_endpointOccurs_frame signature input layout
+            sourceWire ⟨frameNode, .arg index⟩ hsource
     | named region definition arity =>
         simp only [hnode, mapFrameNode] at hold ⊢
         intro index
@@ -803,19 +797,13 @@ theorem plugRaw_required_ports_are_covered (signature : List Nat)
         patternNode
     simp only [plugRaw, plugNode, Fin.addCases_right]
     cases hnode : input.pattern.val.diagram.nodes patternNode with
-    | term region freePorts term =>
+    | identity region arity =>
         simp only [hnode, mapPatternNode] at hold ⊢
-        obtain ⟨outputWire, houtput⟩ := hold.1
-        obtain ⟨plugOutput, hplugOutput⟩ :=
-          plugRaw_endpointOccurs_pattern signature input layout outputWire
-            ⟨patternNode, .output⟩ houtput
-        refine ⟨⟨plugOutput, by
-          simpa [mapPatternEndpoint] using hplugOutput⟩, ?_⟩
         intro index
-        obtain ⟨sourceWire, hsource⟩ := hold.2 index
+        obtain ⟨sourceWire, hsource⟩ := hold index
         obtain ⟨plugWire, hplug⟩ :=
           plugRaw_endpointOccurs_pattern signature input layout sourceWire
-            ⟨patternNode, .free index⟩ hsource
+            ⟨patternNode, .arg index⟩ hsource
         exact ⟨plugWire, by simpa [mapPatternEndpoint] using hplug⟩
     | named region definition arity =>
         simp only [hnode, mapPatternNode] at hold ⊢

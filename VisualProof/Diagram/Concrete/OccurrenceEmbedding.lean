@@ -1,5 +1,4 @@
 import VisualProof.Diagram.Concrete.Subgraph.Extract
-import VisualProof.Lambda.Certificate
 
 namespace VisualProof.Diagram
 
@@ -88,21 +87,6 @@ def ContentNode.origin (problem : OccurrenceProblem signature)
     (node : problem.ContentNode) : problem.PatternNode :=
   FilteredFiber.origin problem.contentNodeBool node
 
-def contentTermNodeBool (problem : OccurrenceProblem signature)
-    (node : problem.PatternNode) : Bool :=
-  problem.contentNodeBool node &&
-    match problem.pattern.val.diagram.nodes node with
-    | .term _ _ _ => true
-    | _ => false
-
-/-- The intrinsic certificate domain: exactly the term nodes in the content. -/
-abbrev ContentTermNode (problem : OccurrenceProblem signature) :=
-  FilteredFiber problem.contentTermNodeBool
-
-def ContentTermNode.origin (problem : OccurrenceProblem signature)
-    (node : problem.ContentTermNode) : problem.PatternNode :=
-  FilteredFiber.origin problem.contentTermNodeBool node
-
 def boundaryWireBool (problem : OccurrenceProblem signature)
     (wire : problem.PatternWire) : Bool :=
   decide (wire ∈ problem.pattern.val.boundary)
@@ -138,7 +122,6 @@ structure RawOccurrenceCertificate (problem : OccurrenceProblem signature) where
   nodeMap : problem.ContentNode → problem.HostNode
   wireMap : problem.PatternWire → problem.HostWire
   attachment : Fin problem.pattern.val.boundary.length → problem.HostWire
-  termCertificate : problem.ContentTermNode → Lambda.Certificate
 
 namespace RawOccurrenceCertificate
 
@@ -151,11 +134,6 @@ def regionImage? (raw : RawOccurrenceCertificate problem)
 def nodeImage? (raw : RawOccurrenceCertificate problem)
     (node : problem.PatternNode) : Option problem.HostNode :=
   (FilteredFiber.index? problem.contentNodeBool node).map raw.nodeMap
-
-def termCertificate? (raw : RawOccurrenceCertificate problem)
-    (node : problem.PatternNode) : Option Lambda.Certificate :=
-  (FilteredFiber.index? problem.contentTermNodeBool node).map
-    raw.termCertificate
 
 def mapEndpoint? (raw : RawOccurrenceCertificate problem)
     (endpoint : CEndpoint problem.pattern.val.diagram.nodeCount) :
@@ -278,22 +256,7 @@ private def AtomBinderValid (raw : RawOccurrenceCertificate problem)
     ((∀ proxy, source ≠ problem.binderSpine.proxy proxy) ∧
       raw.regionImage? source = some target)
 
-private def TermNodeValid (raw : RawOccurrenceCertificate problem)
-    (sourceIndex : problem.PatternNode)
-    (sourcePorts targetPorts : Nat)
-    (sourceTerm : Lambda.Term 0 (Fin sourcePorts))
-    (targetTerm : Lambda.Term 0 (Fin targetPorts)) : Prop :=
-  if portsEq : targetPorts = sourcePorts then
-    match raw.termCertificate? sourceIndex with
-    | none => False
-    | some certificate =>
-        Lambda.checkCertificate sourceTerm.closeOverPorts
-          ((targetTerm.mapFree (Fin.cast portsEq)).closeOverPorts)
-          certificate = true
-  else
-    False
-
-/-- Node ownership and constructor data, with positional beta-eta certificates. -/
+/-- Node ownership and constructor data. -/
 def NodeValid (raw : RawOccurrenceCertificate problem)
     (node : problem.ContentNode) : Prop :=
   let sourceIndex := node.origin problem
@@ -301,12 +264,10 @@ def NodeValid (raw : RawOccurrenceCertificate problem)
   let target := problem.host.val.nodes (raw.nodeMap node)
   raw.mappedRegionOwner? source.region = some target.region ∧
     match source, target with
-    | .term _ sourcePorts sourceTerm,
-        .term _ targetPorts targetTerm =>
-        raw.TermNodeValid sourceIndex sourcePorts targetPorts
-          sourceTerm targetTerm
     | .atom _ sourceBinder, .atom _ targetBinder =>
         raw.AtomBinderValid sourceBinder targetBinder
+    | .identity _ sourceArity, .identity _ targetArity =>
+        sourceArity = targetArity
     | .named _ sourceDefinition sourceArity,
         .named _ targetDefinition targetArity =>
         sourceDefinition = targetDefinition ∧ sourceArity = targetArity
@@ -317,35 +278,6 @@ namespace NodeValid
 variable {problem : OccurrenceProblem signature}
   {raw : RawOccurrenceCertificate problem}
   {node : problem.ContentNode}
-
-/-- Public proof-relevant elimination for a validated term-node image.  The
-checker-internal predicate remains hidden; downstream occurrence equivalences
-receive exactly the owner equality and checked positional beta-eta witness
-that certification promises. -/
-theorem term_elim
-    (valid : raw.NodeValid node)
-    (source_eq : problem.pattern.val.diagram.nodes (node.origin problem) =
-      .term sourceRegion sourcePorts sourceTerm)
-    (target_eq : problem.host.val.nodes (raw.nodeMap node) =
-      .term targetRegion targetPorts targetTerm) :
-    raw.mappedRegionOwner? sourceRegion = some targetRegion ∧
-      ∃ portsEq : targetPorts = sourcePorts, ∃ certificate,
-        raw.termCertificate? (node.origin problem) = some certificate ∧
-          Lambda.checkCertificate sourceTerm.closeOverPorts
-            ((targetTerm.mapFree (Fin.cast portsEq)).closeOverPorts)
-            certificate = true := by
-  unfold NodeValid at valid
-  simp only [source_eq, target_eq, CNode.region] at valid
-  rcases valid with ⟨howner, hterm⟩
-  refine ⟨howner, ?_⟩
-  unfold TermNodeValid at hterm
-  split at hterm
-  · rename_i portsEq
-    split at hterm
-    · contradiction
-    · rename_i certificate hcertificate
-      exact ⟨portsEq, certificate, hcertificate, hterm⟩
-  · contradiction
 
 /-- Public proof-relevant elimination for a validated atom-node image. -/
 theorem atom_elim
@@ -364,6 +296,18 @@ theorem atom_elim
   unfold NodeValid at valid
   simp only [source_eq, target_eq, CNode.region] at valid
   simpa only [AtomBinderValid] using valid
+
+/-- Public proof-relevant elimination for a validated identity-node image. -/
+theorem identity_elim
+    (valid : raw.NodeValid node)
+    (source_eq : problem.pattern.val.diagram.nodes (node.origin problem) =
+      .identity sourceRegion sourceArity)
+    (target_eq : problem.host.val.nodes (raw.nodeMap node) =
+      .identity targetRegion targetArity) :
+    raw.mappedRegionOwner? sourceRegion = some targetRegion ∧
+      sourceArity = targetArity := by
+  unfold NodeValid at valid
+  simpa only [source_eq, target_eq, CNode.region] using valid
 
 /-- Public proof-relevant elimination for a validated named-node image. -/
 theorem named_elim
@@ -588,17 +532,6 @@ private instance (raw : RawOccurrenceCertificate problem)
     (@instDecidableAnd _ _
       (decidableForallFin internalPredicate fun _ => inferInstance)
       inferInstance)
-
-private instance (raw : RawOccurrenceCertificate problem)
-    (sourceIndex : problem.PatternNode) (sourcePorts targetPorts : Nat)
-    (sourceTerm : Lambda.Term 0 (Fin sourcePorts))
-    (targetTerm : Lambda.Term 0 (Fin targetPorts)) :
-    Decidable (raw.TermNodeValid sourceIndex sourcePorts targetPorts
-      sourceTerm targetTerm) := by
-  unfold TermNodeValid
-  split
-  · cases raw.termCertificate? sourceIndex <;> infer_instance
-  · infer_instance
 
 private instance (raw : RawOccurrenceCertificate problem)
     (node : problem.ContentNode) : Decidable (raw.NodeValid node) := by

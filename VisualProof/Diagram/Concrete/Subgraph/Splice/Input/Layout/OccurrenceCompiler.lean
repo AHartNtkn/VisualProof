@@ -54,8 +54,8 @@ theorem compileHostNode_at_site
   · change layout.plugNode (layout.frameNode node) = _
     rw [layout.plugNode_frameNode]
     cases hsource : input.coalesceFrameRaw.nodes node with
-    | term region freePorts term =>
-        change input.frame.val.nodes node = .term region freePorts term
+    | identity region arity =>
+        change input.frame.val.nodes node = .identity region arity
           at hsource
         rw [hsource]
         rfl
@@ -156,7 +156,7 @@ theorem compilePatternNode_at_site
   · change layout.plugNode (layout.patternNode node) = _
     rw [layout.plugNode_patternNode]
     cases hsource : input.pattern.val.diagram.nodes node with
-    | term => rfl
+    | identity => rfl
     | atom => rfl
     | named => rfl
   · intro port
@@ -742,7 +742,7 @@ theorem compilePatternRootNode_at_site
   · change layout.plugNode (layout.patternNode node) = _
     rw [layout.plugNode_patternNode]
     cases hsource : input.pattern.val.diagram.nodes node with
-    | term => rfl
+    | identity => rfl
     | atom => rfl
     | named => rfl
   · intro port
@@ -922,7 +922,7 @@ theorem compilePatternNode_at_material
   · change layout.plugNode (layout.patternNode node) = _
     rw [layout.plugNode_patternNode]
     cases hsource : input.pattern.val.diagram.nodes node with
-    | term => rfl
+    | identity => rfl
     | atom => rfl
     | named => rfl
   · intro port

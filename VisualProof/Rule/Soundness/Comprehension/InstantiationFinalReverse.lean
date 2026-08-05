@@ -1066,9 +1066,9 @@ theorem reverse_node_shape_of_regular
         (copyTrace.reverseNodeMap elimTrace finalWellFormed finalRegion regular
           finalNode nodeRegion) =
       match elimTrace.sourceDiagram.nodes finalNode with
-      | .term owner freePorts term =>
-          .term (copyTrace.reverseRegionMap elimTrace finalWellFormed owner)
-            freePorts term
+      | .identity owner arity =>
+          .identity (copyTrace.reverseRegionMap elimTrace finalWellFormed owner)
+            arity
       | .atom owner binder =>
           .atom (copyTrace.reverseRegionMap elimTrace finalWellFormed owner)
             (copyTrace.reverseRegionMap elimTrace finalWellFormed binder)
@@ -1089,7 +1089,7 @@ theorem reverse_node_shape_of_regular
   rw [originalSpec.2] at forwardShape
   change input.val.nodes originalNode = _
   cases originalShape : input.val.nodes originalNode with
-  | term originalOwner freePorts term =>
+  | identity originalOwner arity =>
       have ownerEq : originalOwner = originalRegion := by
         have shapeRegion := congrArg CNode.region originalShape
         exact shapeRegion.symm.trans originalSpec.1

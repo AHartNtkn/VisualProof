@@ -8,14 +8,14 @@ open Diagram
 open Theory
 
 /-- A checked open comprehension with `arity` relation arguments followed by
-fixed parameter positions denotes an actual relation in every lambda model. -/
+fixed parameter positions denotes an actual relation in every model. -/
 def interpretedComprehension
     {signature : List Nat}
     (comprehension : CheckedOpenDiagram signature)
     (arity parameterCount : Nat)
     (boundarySplit :
       comprehension.val.boundary.length = arity + parameterCount)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (parameters : Fin parameterCount → model.Carrier) :
     Relation model.Carrier arity :=
@@ -29,7 +29,7 @@ theorem interpretedComprehension_apply
     (arity parameterCount : Nat)
     (boundarySplit :
       comprehension.val.boundary.length = arity + parameterCount)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (parameters : Fin parameterCount → model.Carrier)
     (arguments : Fin arity → model.Carrier) :
@@ -51,7 +51,7 @@ def ComprehensionInstantiatePayload.interpretedRelation
       List (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (parameters : Fin attachments.length → model.Carrier) :
     Relation model.Carrier payload.arity :=
@@ -69,7 +69,7 @@ theorem ComprehensionInstantiatePayload.interpretedRelation_apply
       List (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
     (payload : ComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (parameters : Fin attachments.length → model.Carrier)
     (arguments : Fin payload.arity → model.Carrier) :
@@ -84,7 +84,7 @@ witness. Repeated argument positions remain repeated function applications. -/
 def abstractionRelation
     {signature : List Nat}
     (comprehension : CheckedOpenDiagram signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature) :
     Relation model.Carrier comprehension.val.boundary.length :=
   fun arguments => comprehension.denote model named arguments
@@ -92,7 +92,7 @@ def abstractionRelation
 theorem abstractionRelation_apply
     {signature : List Nat}
     (comprehension : CheckedOpenDiagram signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (arguments :
       Fin comprehension.val.boundary.length → model.Carrier) :
@@ -108,7 +108,7 @@ theorem AbstractionWitness.diagonal_denote_iff_relation
     {comprehension : CheckedOpenDiagram signature}
     {occurrence : AbstractionOccurrence input}
     (witness : AbstractionWitness input comprehension occurrence)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment :
       Fin occurrence.selection.touchingWires.length → model.Carrier) :
@@ -124,7 +124,7 @@ positive abstraction. -/
 theorem abstractionRelation_witness
     {signature : List Nat}
     (comprehension : CheckedOpenDiagram signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (body :
       Relation model.Carrier comprehension.val.boundary.length → Prop)

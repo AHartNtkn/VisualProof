@@ -41,7 +41,7 @@ theorem compileOccurrences_simulation_of_equiv
     (positionSpec : ∀ index,
       targetOccurrences.get (positions index) =
         mapOccurrence (sourceOccurrences.get index))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (relation : ConcreteElaboration.ContextIndexRelation sourceContext.length

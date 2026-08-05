@@ -415,7 +415,7 @@ theorem node_shape_of_surviving_not_direct
   have result := trace.abstractNode?_targetNode node survives
   unfold abstractNode? at result
   cases sourceShape : input.val.nodes node with
-  | term owner freePorts term =>
+  | identity owner arity =>
       have ownerSurvives : trace.domains.regions.survives owner = true := by
         simpa [sourceShape] using trace.nodeOwner_survives node survives
       simp only [sourceShape, notDirect, if_false,

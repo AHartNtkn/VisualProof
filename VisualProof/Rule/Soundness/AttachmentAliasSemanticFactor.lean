@@ -34,7 +34,7 @@ theorem compiledAliases_value_eq
       (materializedDiagram pattern attachment bodyContainer) recurse context
       binders (aliases.map fun aliasIndex =>
         .node (aliasNode pattern attachment aliasIndex)) = some items)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -42,10 +42,10 @@ theorem compiledAliases_value_eq
     ∀ aliasIndex, aliasIndex ∈ aliases → ∀ output input,
       ConcreteElaboration.resolvePort?
           (materializedDiagram pattern attachment bodyContainer) context
-          (aliasNode pattern attachment aliasIndex) .output = some output →
+          (aliasNode pattern attachment aliasIndex) (.arg 0) = some output →
       ConcreteElaboration.resolvePort?
           (materializedDiagram pattern attachment bodyContainer) context
-          (aliasNode pattern attachment aliasIndex) (.free 0) = some input →
+          (aliasNode pattern attachment aliasIndex) (.arg 1) = some input →
       env output = env input := by
   induction aliases generalizing items with
   | nil => simp
@@ -140,7 +140,7 @@ theorem aliasOccurrences_factor_collapse
     (compiled : ConcreteElaboration.compileOccurrencesWith? signature
       (materializedDiagram pattern.val attachment spine.bodyContainer) recurse
       targetContext binders (aliasOccurrences pattern.val attachment) = some items)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (targetEnv : Fin targetContext.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -180,24 +180,24 @@ theorem aliasOccurrences_factor_collapse
     obtain ⟨output, outputResult⟩ :=
       ConcreteElaboration.checked_resolvePort?_complete targetWellFormed
         (context := targetContext) (region := spine.bodyContainer)
-        (node := aliasNode pattern.val attachment aliasIndex) (port := .output)
+        (node := aliasNode pattern.val attachment aliasIndex) (port := .arg 0)
         targetExact.covers (by
           rw [show (materializedDiagram pattern.val attachment
               spine.bodyContainer).nodes
                 (aliasNode pattern.val attachment aliasIndex) =
-              .term spine.bodyContainer 1 (.port 0) by
+              .identity spine.bodyContainer 2 by
             simp [materializedDiagram, aliasNode]]
           rfl) (by
           simp [ConcreteDiagram.RequiresPort, materializedDiagram, aliasNode])
     obtain ⟨input, inputResult⟩ :=
       ConcreteElaboration.checked_resolvePort?_complete targetWellFormed
         (context := targetContext) (region := spine.bodyContainer)
-        (node := aliasNode pattern.val attachment aliasIndex) (port := .free 0)
+        (node := aliasNode pattern.val attachment aliasIndex) (port := .arg 1)
         targetExact.covers (by
           rw [show (materializedDiagram pattern.val attachment
               spine.bodyContainer).nodes
                 (aliasNode pattern.val attachment aliasIndex) =
-              .term spine.bodyContainer 1 (.port 0) by
+              .identity spine.bodyContainer 2 by
             simp [materializedDiagram, aliasNode]]
           rfl) (by
           simp [ConcreteDiagram.RequiresPort, materializedDiagram, aliasNode])
@@ -216,7 +216,7 @@ theorem aliasOccurrences_factor_collapse
             (aliasWire pattern.val attachment aliasIndex) = {
               scope := pattern.val.diagram.root
               endpoints := [⟨aliasNode pattern.val attachment aliasIndex,
-                .free 0⟩]
+                .arg 1⟩]
             } by simp [materializedDiagram, aliasWire]]
       simp
     have inputIndexEq : input = targetIndex := by

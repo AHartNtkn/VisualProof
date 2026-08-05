@@ -134,8 +134,8 @@ mutual
 
   def Item.renameNamed (rho : NamedRenaming source target) :
       Item source wires rels → Item target wires rels
-    | .equation output term => .equation output term
     | .atom relation arguments => .atom relation arguments
+    | .identity arity arguments => .identity arity arguments
     | .named relation arguments => .named (rho.named relation) arguments
     | .cut body => .cut (body.renameNamed rho)
     | .bubble arity body => .bubble arity (body.renameNamed rho)
@@ -161,7 +161,7 @@ def NamedEnv.Agrees (rho : NamedRenaming source target)
 
 mutual
   theorem denoteRegion_renameNamed
-      (model : Lambda.LambdaModel)
+      (model : Model)
       (rho : NamedRenaming source target)
       (sourceNamed : NamedEnv model.Carrier source)
       (targetNamed : NamedEnv model.Carrier target)
@@ -185,7 +185,7 @@ mutual
               (extendWireEnv env localEnv) rels items).mpr hitems⟩
 
   theorem denoteItem_renameNamed
-      (model : Lambda.LambdaModel)
+      (model : Model)
       (rho : NamedRenaming source target)
       (sourceNamed : NamedEnv model.Carrier source)
       (targetNamed : NamedEnv model.Carrier target)
@@ -196,8 +196,8 @@ mutual
       denoteItem model targetNamed env rels (item.renameNamed rho) ↔
         denoteItem model sourceNamed env rels item := by
     cases item with
-    | equation => rfl
     | atom => rfl
+    | identity => rfl
     | named relation arguments =>
         simpa [Item.renameNamed, denoteItem_named] using
           agrees _ relation (env ∘ arguments)
@@ -220,7 +220,7 @@ mutual
               env (relation, rels) body).mpr hbody⟩
 
   theorem denoteItemSeq_renameNamed
-      (model : Lambda.LambdaModel)
+      (model : Model)
       (rho : NamedRenaming source target)
       (sourceNamed : NamedEnv model.Carrier source)
       (targetNamed : NamedEnv model.Carrier target)
@@ -241,7 +241,7 @@ mutual
 end
 
 theorem denoteOpen_renameNamed
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (rho : NamedRenaming source target)
     (sourceNamed : NamedEnv model.Carrier source)
     (targetNamed : NamedEnv model.Carrier target)
@@ -955,7 +955,7 @@ theorem Region.ContextPath.relocal_zero_fill
 
 /-- Follow an intrinsic child-item path and return the unique typed context and
 focused region together with a reconstruction equation.  A path step must name
-a cut or bubble item; equations and atoms cannot contain a region. -/
+a cut or bubble item; atoms and named relations cannot contain a region. -/
 def Region.contextAtPath? :
     (region : Region signature wires rels) →
       List Nat → Option (Region.ContextFocus region)
@@ -992,7 +992,7 @@ def Region.contextAtPath? :
               simp only [DiagramContext.fill]
               rw [nested.rebuild, ← hitem, focus.rebuild]
           }
-      | .equation .. | .atom .. | .named .. => none
+      | .atom .. | .identity .. | .named .. => none
 
 theorem Region.contextAtPath?_castWiresEq
     (equality : source = target)
@@ -1050,7 +1050,7 @@ private theorem extendWireEnv_rename
 
 mutual
   theorem denoteRegion_renameWires
-      (model : Lambda.LambdaModel)
+      (model : Model)
       (named : NamedEnv model.Carrier signature)
       (rho : Fin source → Fin target)
       (env : Fin target → model.Carrier)
@@ -1078,7 +1078,7 @@ mutual
           exact hitems
 
   theorem denoteItem_renameWires
-      (model : Lambda.LambdaModel)
+      (model : Model)
       (named : NamedEnv model.Carrier signature)
       (rho : Fin source → Fin target)
       (env : Fin target → model.Carrier)
@@ -1087,12 +1087,10 @@ mutual
       denoteItem model named env rels (item.renameWires rho) ↔
         denoteItem model named (env ∘ rho) rels item := by
     cases item with
-    | equation output term =>
-        simp only [Item.renameWires, denoteItem_equation,
-          Function.comp_apply]
-        rw [model.eval_mapFree]
     | atom relation arguments =>
         simp [Item.renameWires, denoteItem_atom, Function.comp_def]
+    | identity arity arguments =>
+        simp [Item.renameWires, denoteItem_identity, Function.comp_def]
     | named relation arguments =>
         simp [Item.renameWires, denoteItem_named, Function.comp_def]
     | cut body =>
@@ -1113,7 +1111,7 @@ mutual
               (relation, rels) body).2 hbody⟩
 
   theorem denoteItemSeq_renameWires
-      (model : Lambda.LambdaModel)
+      (model : Model)
       (named : NamedEnv model.Carrier signature)
       (rho : Fin source → Fin target)
       (env : Fin target → model.Carrier)
@@ -1169,7 +1167,7 @@ private theorem extendWireEnv_adjoinMaterial
     simp [extendWireEnv]
 
 theorem Region.denote_adjoinAt
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -1213,7 +1211,7 @@ theorem Region.denote_adjoinAt
           simpa [localEnv, extendWireEnv_adjoinMaterial] using hmaterial
 
 theorem Region.adjoinAt_mono
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -1232,7 +1230,7 @@ theorem Region.adjoinAt_mono
   exact ⟨hostEnv, hitems, entails _ hmaterial⟩
 
 theorem Region.adjoinAt_equiv
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -1252,7 +1250,7 @@ theorem Region.adjoinAt_equiv
       (fun siteEnv => (equivalent siteEnv).mpr)
 
 theorem Region.denote_conjoin
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier)
     (rels : RelEnv model.Carrier relCtx)
@@ -1309,7 +1307,7 @@ theorem Region.denote_conjoin
               exact hsecond
 
 @[simp] theorem Region.denote_blank
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier)
     (rels : RelEnv model.Carrier relCtx) :
@@ -1319,7 +1317,7 @@ theorem Region.denote_conjoin
 theorem DiagramContext.fill_conjoin_left_even
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (first second : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -1334,7 +1332,7 @@ theorem DiagramContext.fill_conjoin_left_even
 theorem DiagramContext.fill_conjoin_right_even
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (first second : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -1349,7 +1347,7 @@ theorem DiagramContext.fill_conjoin_right_even
 theorem DiagramContext.fill_conjoin_left_odd
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (first second : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -1364,7 +1362,7 @@ theorem DiagramContext.fill_conjoin_left_odd
 theorem DiagramContext.fill_conjoin_right_odd
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (first second : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -1380,7 +1378,7 @@ theorem DiagramContext.fill_conjoin_right_odd
 theorem DiagramContext.fill_equiv
     (ctx : DiagramContext signature outerWires holeWires outerRels holeRels)
     (first second : Region signature holeWires holeRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -1428,7 +1426,7 @@ independent equality convention. -/
 theorem OpenDiagram.denote_substituteBoundary
     (diagram : OpenDiagram signature arity)
     (assignment : BoundaryAssignment diagram (Fin wires))
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin wires → model.Carrier) :
     denoteRegion (relCtx := []) model named env PUnit.unit
@@ -1498,7 +1496,7 @@ theorem RelEnv.Agrees.lift
 
 mutual
   theorem denoteRegion_renameRelations
-      (model : Lambda.LambdaModel)
+      (model : Model)
       (named : NamedEnv model.Carrier signature)
       (rho : RelationRenaming source target)
       (sourceEnv : RelEnv model.Carrier source)
@@ -1522,7 +1520,7 @@ mutual
               agrees (extendWireEnv env localEnv) items).mpr hitems⟩
 
   theorem denoteItem_renameRelations
-      (model : Lambda.LambdaModel)
+      (model : Model)
       (named : NamedEnv model.Carrier signature)
       (rho : RelationRenaming source target)
       (sourceEnv : RelEnv model.Carrier source)
@@ -1533,10 +1531,10 @@ mutual
       denoteItem model named env targetEnv (item.renameRelations rho) ↔
         denoteItem model named env sourceEnv item := by
     cases item with
-    | equation output term => rfl
     | atom relation arguments =>
         simp only [Item.renameRelations, denoteItem_atom]
         rw [← agrees _ relation]
+    | identity => rfl
     | named relation arguments => rfl
     | cut body =>
         simp only [Item.renameRelations, cut_denotes_negation]
@@ -1561,7 +1559,7 @@ mutual
               env body).mpr hbody⟩
 
   theorem denoteItemSeq_renameRelations
-      (model : Lambda.LambdaModel)
+      (model : Model)
       (named : NamedEnv model.Carrier signature)
       (rho : RelationRenaming source target)
       (sourceEnv : RelEnv model.Carrier source)
@@ -1585,7 +1583,7 @@ end
 conjuncts used by every splice-backed rule: the unchanged host items and the
 pattern material evaluated after wire and lexical-relation substitution. -/
 theorem Region.denote_spliceAt
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (hostRelEnv : RelEnv model.Carrier hostRels)
@@ -1618,7 +1616,7 @@ substitution, and lexical-relation substitution. This is the shared local
 semantic core for replacement rules whose concrete carrier is compiled by the
 splice subsystem. -/
 theorem Region.denote_spliceAt_mono
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (hostRelEnv : RelEnv model.Carrier hostRels)
@@ -1648,7 +1646,7 @@ theorem Region.denote_spliceAt_mono
 /-- `denote_spliceAt_mono` after the outer-wire and lexical-relation
 transports used by the concrete compiler. -/
 theorem Region.denote_spliceAt_mono_renamed
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin targetOuter → model.Carrier)
     (targetRelEnv : RelEnv model.Carrier targetRels)
@@ -1689,7 +1687,7 @@ theorem Region.denote_spliceAt_mono_renamed
 
 /-- Splicing material only strengthens the unchanged host at the splice site. -/
 theorem Region.denote_spliceAt_host
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (hostRelEnv : RelEnv model.Carrier hostRels)
@@ -1709,7 +1707,7 @@ theorem Region.denote_spliceAt_host
 /-- Host projection is stable under the relation and outer-wire transports
 used by the concrete splice compiler. -/
 theorem Region.denote_spliceAt_host_renamed
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin targetOuter → model.Carrier)
     (targetRelEnv : RelEnv model.Carrier targetRels)
@@ -1739,7 +1737,7 @@ theorem Region.denote_spliceAt_host_renamed
 /-- Adding a block of semantically unused local wires does not change a
 region's denotation. -/
 theorem Region.denote_addUnusedLocals_iff
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (rels : RelEnv model.Carrier relCtx)
@@ -1768,9 +1766,7 @@ theorem Region.denote_addUnusedLocals_iff
     rw [henv] at hitems
     exact hitems
   · rintro ⟨original, hitems⟩
-    let fallback : model.Carrier :=
-      model.eval (Lambda.Term.lam (Lambda.Term.bvar 0) :
-        Lambda.Term 0 (Fin 0)) Fin.elim0
+    let fallback : model.Carrier := Classical.choice model.nonempty
     let expanded : Fin (hostLocal + extra) → model.Carrier :=
       Fin.addCases original (fun _ => fallback)
     refine ⟨expanded, ?_⟩
@@ -1792,7 +1788,7 @@ theorem Region.denote_addUnusedLocals_iff
 block is semantically covariant.  This is the normalized root counterpart of
 `denote_spliceAt_host`. -/
 theorem Region.denote_mk_append_left
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outer → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
@@ -1809,7 +1805,7 @@ theorem Region.denote_mk_append_left
 /-- At even cut depth, host projection remains covariant through the context. -/
 theorem DiagramContext.fill_spliceAt_host_even
     (ctx : DiagramContext signature outerWires siteWires outerRels hostRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -1830,7 +1826,7 @@ theorem DiagramContext.fill_spliceAt_host_even
 /-- At odd cut depth, host projection reverses through the context. -/
 theorem DiagramContext.fill_spliceAt_host_odd
     (ctx : DiagramContext signature outerWires siteWires outerRels hostRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -1852,7 +1848,7 @@ theorem DiagramContext.fill_spliceAt_host_odd
 covariant through both the splice site and its enclosing diagram context. -/
 theorem DiagramContext.fill_spliceAt_mono_even
     (ctx : DiagramContext signature outerWires siteWires outerRels hostRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -1882,7 +1878,7 @@ theorem DiagramContext.fill_spliceAt_mono_even
 contravariantly by the enclosing diagram context. -/
 theorem DiagramContext.fill_spliceAt_mono_odd
     (ctx : DiagramContext signature outerWires siteWires outerRels hostRels)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (env : Fin outerWires → model.Carrier)
     (rels : RelEnv model.Carrier outerRels)
@@ -2112,8 +2108,8 @@ mutual
       (item.renameWires wire).renameRelations relation =
         (item.renameRelations relation).renameWires wire := by
     cases item with
-    | equation output term => rfl
     | atom rel arguments => rfl
+    | identity arity arguments => rfl
     | named rel arguments => rfl
     | cut body =>
         exact congrArg Item.cut
@@ -2219,10 +2215,10 @@ theorem RegionIso.renameWiresEquiv
     intro index
     simpa only [Region.renameWires, hwire, FiniteEquiv.refl_apply] using
       itemsIH (extendWireEquiv wire (FiniteEquiv.refl (Fin localWires))) index
-  · intro source rels output term target wire
-    exact ItemIso.equation rfl rfl
   · intro source rels arity relation arguments target wire
     exact ItemIso.atom relation rfl
+  · intro source rels arity arguments target wire
+    exact ItemIso.identity rfl
   · intro source rels arity relation arguments target wire
     exact ItemIso.named relation rfl
   · intro source rels body bodyIH target wire
@@ -2265,10 +2261,10 @@ theorem RegionIso.renameRelations
           (source.renameRelations rho) (target.renameRelations rho))
     (fun {_ _ _ _} {_} {_} {_} {_} localEquiv _ itemsIH {_} rho =>
       RegionIso.mk localEquiv (itemsIH rho))
-    (fun {_ _} {_} {_} {_} {_} {_} {_} output_eq term_eq {_} _ =>
-      ItemIso.equation output_eq term_eq)
     (fun {_ _ _} {_} {_} relation {_} {_} arguments_eq {_} rho =>
       ItemIso.atom (rho relation) arguments_eq)
+    (fun {_ _ _} {_} {_} {_} {_} arguments_eq {_} _ =>
+      ItemIso.identity arguments_eq)
     (fun {_ _ _} {_} {_} relation {_} {_} arguments_eq {_} _ =>
       ItemIso.named relation arguments_eq)
     (fun {_ _} {_} {_} {_} {_} _ bodyIH {_} rho =>
@@ -2336,10 +2332,10 @@ theorem ItemSeqIso.renameWiresEquiv
     intro index
     simpa only [Region.renameWires, hwire] using
       nestedIH (extendWireEquiv wire (FiniteEquiv.refl (Fin localWires))) index
-  · intro source rels output term target wire
-    exact ItemIso.equation rfl rfl
   · intro source rels arity relation arguments target wire
     exact ItemIso.atom relation rfl
+  · intro source rels arity arguments target wire
+    exact ItemIso.identity rfl
   · intro source rels arity relation arguments target wire
     exact ItemIso.named relation rfl
   · intro source rels body bodyIH target wire
@@ -2388,10 +2384,10 @@ theorem ItemIso.renameWiresEquiv
     intro index
     simpa only [Region.renameWires, hwire] using
       nestedIH (extendWireEquiv wire (FiniteEquiv.refl (Fin localWires))) index
-  · intro source rels output term target wire
-    exact ItemIso.equation rfl rfl
   · intro source rels arity relation arguments target wire
     exact ItemIso.atom relation rfl
+  · intro source rels arity arguments target wire
+    exact ItemIso.identity rfl
   · intro source rels arity relation arguments target wire
     exact ItemIso.named relation rfl
   · intro source rels body bodyIH target wire
@@ -2946,26 +2942,5 @@ theorem DiagramContextIso.root
     RegionIso signature outerWire outerRels sourceRoot targetRoot := by
   rw [← sourceRebuild, ← targetRebuild]
   exact alignment.fill site
-
-namespace AlgebraExamples
-
-def oneLocalWire : Region [] 0 [] :=
-  .mk 1 (.cons (.equation 0 (.port 0)) .nil)
-
-def twoLocalWires : Region [] 0 [] :=
-  .mk 2 (.cons (.equation 1 (.port 0)) .nil)
-
-theorem reorderedLocalBlocks :
-    RegionIso [] (FiniteEquiv.refl (Fin 0)) []
-      (oneLocalWire.conjoin twoLocalWires)
-      (twoLocalWires.conjoin oneLocalWire) :=
-  RegionIso.conjoin_comm oneLocalWire twoLocalWires
-
-theorem localBlockUnit :
-    RegionIso [] (FiniteEquiv.refl (Fin 0)) [] oneLocalWire
-      (oneLocalWire.conjoin Region.blank) :=
-  RegionIso.conjoin_blank_right oneLocalWire
-
-end AlgebraExamples
 
 end VisualProof.Diagram

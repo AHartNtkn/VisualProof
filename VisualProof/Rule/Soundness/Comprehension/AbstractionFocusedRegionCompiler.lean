@@ -30,7 +30,7 @@ theorem compileOccurrences_perm_denote_iff
       diagram recurse context binders sourceOccurrences = some sourceItems)
     (targetCompiled : ConcreteElaboration.compileOccurrencesWith? signature
       diagram recurse context binders targetOccurrences = some targetItems)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (environment : Fin context.length → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
@@ -104,7 +104,7 @@ theorem focusedSurvivingSources_semantic
     {sourceRels targetRels : RelCtx}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (targetWellFormed : trace.diagram.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
@@ -250,7 +250,7 @@ theorem focusedSelectedSurvivingSources_semantic
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (sourceFuel targetFuel : Nat)
     (sourceContext : ConcreteElaboration.WireContext input.val)

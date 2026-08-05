@@ -10,7 +10,7 @@ theorem compileOccurrence_itemSimulation
     (trace : VacuousElimTrace input bubble raw)
     (sourceWellFormed : trace.sourceDiagram.WellFormed signature)
     (targetWellFormed : input.WellFormed signature)
-    (model : Lambda.LambdaModel)
+    (model : Model)
     (named : NamedEnv model.Carrier signature)
     (direction : ConcreteElaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
@@ -40,7 +40,7 @@ theorem compileOccurrence_itemSimulation
     (nodeShape : ∀ node, occurrence = .node node →
       input.nodes node =
         match trace.sourceDiagram.nodes node with
-        | .term owner freePorts term => .term (regionMap owner) freePorts term
+        | .identity owner arity => .identity (regionMap owner) arity
         | .atom owner binder => .atom (regionMap owner) (trace.origin binder)
         | .named owner definition arity =>
             .named (regionMap owner) definition arity)
