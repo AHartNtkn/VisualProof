@@ -112,67 +112,6 @@ theorem proofDependentBoundaryWitness_backward
         (target.boundary (Fin.cast sameArity position)) :=
       (targetAssignment.agrees (Fin.cast sameArity position)).symm
 
-namespace StrictAliasPartitionExamples
-
-/-- Two ordered boundary positions remain distinct structurally, while the
-active body proves their semantic values equal. -/
-def equalityFineBoundary : OpenDiagram [] 2 where
-  externalClasses := 2
-  boundary := id
-  boundary_surjective := fun external => ⟨external, rfl⟩
-  body := .mk 0 (.cons (.identity 2 id) .nil)
-
-/-- Active denotation, rather than an unconditional premise, supplies the
-equality needed to inhabit the strictly coarser aliased boundary. -/
-theorem equalityFineBoundary_entails_aliased
-    (model : Model)
-    (named : NamedEnv model.Carrier [])
-    (args : Fin 2 → model.Carrier) :
-    denoteOpen model named equalityFineBoundary args →
-      denoteOpen model named aliasedBinaryBoundaryExample args := by
-  rintro ⟨sourceAssignment, rfl, sourceLocal, sourceItems⟩
-  have sourceEquality : sourceAssignment.args 0 =
-      sourceAssignment.args 1 := by
-    have itemEquality :
-        sourceAssignment.classes (equalityFineBoundary.boundary 1) =
-          sourceAssignment.classes (equalityFineBoundary.boundary 0) := by
-      simpa [equalityFineBoundary] using
-        sourceItems.1 (1 : Fin 2) (0 : Fin 2)
-    exact (sourceAssignment.agrees 0).symm |>.trans
-      (itemEquality.symm.trans (sourceAssignment.agrees 1))
-  obtain ⟨targetAssignment, htargetArgs⟩ :=
-    (boundaryAssignment_iff_aliasConsistent
-      aliasedBinaryBoundaryExample sourceAssignment.args).2
-        ((aliasedBinaryBoundaryExample_consistency_iff _).2 sourceEquality)
-  exact ⟨targetAssignment, htargetArgs, Fin.elim0, True.intro⟩
-
-example (model : Model)
-    (named : NamedEnv model.Carrier [])
-    (args : Fin 2 → model.Carrier) :
-    Diagram.ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
-      .forward
-      equalityFineBoundary aliasedBinaryBoundaryExample
-      (orderedBoundaryRelation equalityFineBoundary
-        aliasedBinaryBoundaryExample rfl)
-      model named args args := by
-  exact proofDependentBoundaryWitness_forward equalityFineBoundary
-    aliasedBinaryBoundaryExample rfl model named args
-      (equalityFineBoundary_entails_aliased model named args)
-
-example (model : Model)
-    (named : NamedEnv model.Carrier [])
-    (args : Fin 2 → model.Carrier) :
-    Diagram.ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
-      .backward
-      aliasedBinaryBoundaryExample equalityFineBoundary
-      (orderedBoundaryRelation aliasedBinaryBoundaryExample
-        equalityFineBoundary rfl)
-      model named args args := by
-  exact proofDependentBoundaryWitness_backward aliasedBinaryBoundaryExample
-    equalityFineBoundary rfl model named args
-      (equalityFineBoundary_entails_aliased model named args)
-
-end StrictAliasPartitionExamples
 
 /-- The compiler-simulation direction induced by replay orientation. -/
 def replaySimulationDirection : Orientation →

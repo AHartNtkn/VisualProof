@@ -1,6 +1,5 @@
 import VisualProof.Diagram.Concrete.Elaboration.Context
 import VisualProof.Diagram.Concrete.Open
-import VisualProof.Diagram.Concrete.Examples
 import VisualProof.Diagram.Concrete.OpenIsomorphism
 import VisualProof.Diagram.Concrete.Occurrence
 import VisualProof.Diagram.OpenIsomorphism

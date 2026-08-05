@@ -371,15 +371,6 @@ theorem spliceFrameInterfaceTransport_boundary_eq
     simpa [sourceIndex] using heq.symm
   · contradiction
 
-theorem spliceFrameInterfaceTransport_transitive_coalesces :
-    (spliceFrameInterfaceTransport
-      Diagram.Splice.Examples.transitiveInput).transportBoundary
-        [⟨0, by native_decide⟩, ⟨1, by native_decide⟩,
-          ⟨2, by native_decide⟩, ⟨0, by native_decide⟩] =
-      some [⟨0, by native_decide⟩, ⟨0, by native_decide⟩,
-        ⟨0, by native_decide⟩, ⟨0, by native_decide⟩] := by
-  native_decide
-
 def applyWireJoin (orientation : Orientation)
     (input : CheckedDiagram signature)
     (first second : Fin input.val.wireCount) :

@@ -1305,20 +1305,5 @@ theorem iso_denotation
       denoteRegion model named env relEnv right :=
   hiso.denotation model named env env relEnv (fun _ => rfl)
 
-namespace IsomorphismExamples
-
-def swapFinTwo : FiniteEquiv (Fin 2) (Fin 2) where
-  toFun i := ⟨1 - i.val, by omega⟩
-  invFun i := ⟨1 - i.val, by omega⟩
-  left_inv := by
-    intro i
-    have hi : i = 0 \/ i = 1 := by omega
-    rcases hi with rfl | rfl <;> rfl
-  right_inv := by
-    intro i
-    have hi : i = 0 \/ i = 1 := by omega
-    rcases hi with rfl | rfl <;> rfl
-
-end IsomorphismExamples
 
 end VisualProof.Diagram

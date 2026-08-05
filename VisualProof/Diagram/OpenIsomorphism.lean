@@ -133,58 +133,5 @@ theorem denoteOpen_iff {source target : OpenDiagram signature arity}
 
 end OpenDiagramIso
 
-namespace OpenIsomorphismExamples
-
-private def repeatedAliasSourceBoundary : Fin 3 -> Fin 2
-  | ⟨0, _⟩ => 0
-  | ⟨1, _⟩ => 1
-  | ⟨2, _⟩ => 0
-
-def repeatedAliasSource : OpenDiagram [] 3 where
-  externalClasses := 2
-  boundary := repeatedAliasSourceBoundary
-  boundary_surjective := by
-    intro c
-    have hc : c = 0 ∨ c = 1 := by omega
-    rcases hc with rfl | rfl
-    · exact ⟨0, rfl⟩
-    · exact ⟨1, rfl⟩
-  body := .mk 0 .nil
-
-def repeatedAliasTarget : OpenDiagram [] 3 where
-  externalClasses := 2
-  boundary := IsomorphismExamples.swapFinTwo ∘ repeatedAliasSource.boundary
-  boundary_surjective := by
-    intro c
-    obtain ⟨sourceClass, sourceClass_eq⟩ :=
-      repeatedAliasSource.boundary_surjective
-        (IsomorphismExamples.swapFinTwo.invFun c)
-    refine ⟨sourceClass, ?_⟩
-    change IsomorphismExamples.swapFinTwo
-        (repeatedAliasSource.boundary sourceClass) = c
-    rw [sourceClass_eq]
-    exact IsomorphismExamples.swapFinTwo.right_inv c
-  body := .mk 0 .nil
-
-def repeatedAliasIso : OpenDiagramIso repeatedAliasSource repeatedAliasTarget where
-  external := IsomorphismExamples.swapFinTwo
-  boundary := fun _ => rfl
-  body := by
-    refine RegionIso.mk (FiniteEquiv.refl (Fin 0)) ?_
-    refine ItemSeqIso.permute (FiniteEquiv.refl (Fin 0)) ?_
-    intro i
-    exact Fin.elim0 i
-
-theorem repeatedAliasIso_ordered_pins (i : Fin 3) :
-    repeatedAliasIso.external (repeatedAliasSource.boundary i) =
-      repeatedAliasTarget.boundary i :=
-  repeatedAliasIso.boundary i
-
-theorem repeatedAliasIso_preserves_repeated_positions :
-    repeatedAliasSource.boundary 0 = repeatedAliasSource.boundary 2 /\
-      repeatedAliasTarget.boundary 0 = repeatedAliasTarget.boundary 2 := by
-  constructor <;> rfl
-
-end OpenIsomorphismExamples
 
 end VisualProof.Diagram

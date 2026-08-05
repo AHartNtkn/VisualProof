@@ -491,54 +491,6 @@ theorem directionalLocalTransport_of_agreement
           (extendedEnvironment targetContext targetRegion targetOuter targetLocal)
           relEnv extendedAgrees targetDenotes⟩
 
-namespace MaskedCutTransportValidation
-
-private def falseRelation : NamedRel [0] 0 where
-  index := 0
-  hasArity := rfl
-
-private def falseNamedEnv (D : Type) : NamedEnv D [0] :=
-  fun _ _ _ => False
-
-private def maskedCutItems (wires : Nat) : ItemSeq [0] wires [] :=
-  .cons
-    (.cut (.mk 0
-      (.cons (.named falseRelation (fun index => Fin.elim0 index)) .nil)))
-    .nil
-
-/-- A cut whose body begins with a false conjunct is true without exposing a
-valuation or proof for anything later in that body. -/
-private theorem maskedCutItems_denote
-    (model : Model)
-    (env : Fin wires → model.Carrier)
-    (relEnv : RelEnv model.Carrier []) :
-    denoteItemSeq model (falseNamedEnv model.Carrier) env relEnv
-      (maskedCutItems wires) := by
-  constructor
-  · rintro ⟨localEnv, bodyHead, bodyTail⟩
-    exact bodyHead
-  · trivial
-
-/-- The implication-shaped contract accepts the masked cut directly.  It
-chooses only the enclosing region's existential valuation; no valuation from
-inside the negative branch is required or manufactured. -/
-example
-    {source target : ConcreteDiagram}
-    (sourceContext : WireContext source) (targetContext : WireContext target)
-    (sourceRegion : Fin source.regionCount) (targetRegion : Fin target.regionCount)
-    (outer : ContextIndexRelation sourceContext.length targetContext.length)
-    (model : Model) :
-    DirectionalLocalTransport (rels := []) .forward sourceContext targetContext
-      sourceRegion targetRegion outer model (falseNamedEnv model.Carrier)
-      PUnit.unit .nil (maskedCutItems (targetContext.extend targetRegion).length) := by
-  intro sourceOuter targetOuter outerAgrees sourceLocal sourceDenotes
-  let fallback : model.Carrier :=
-    Classical.choice model.nonempty
-  let targetLocal : Fin (exactScopeWires target targetRegion).length →
-      model.Carrier := fun _ => fallback
-  exact ⟨targetLocal, maskedCutItems_denote model _ PUnit.unit⟩
-
-end MaskedCutTransportValidation
 
 /-- Lift the authoritative local implication through `finishRegion`. -/
 theorem finishRegion_denote

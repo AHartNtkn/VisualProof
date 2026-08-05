@@ -92,32 +92,4 @@ theorem boundaryAssignment_iff_aliasConsistent
     apply halias
     exact boundaryRepresentative_mapsTo d (d.boundary i)
 
-def aliasedBinaryBoundaryExample : OpenDiagram [] 2 where
-  externalClasses := 1
-  boundary := fun _ => 0
-  boundary_surjective := by
-    intro c
-    refine ⟨0, ?_⟩
-    apply Fin.ext
-    omega
-  body := .mk 0 .nil
-
-theorem aliasedBinaryBoundaryExample_shape :
-    aliasedBinaryBoundaryExample.externalClasses = 1 /\
-      aliasedBinaryBoundaryExample.boundary =
-        (fun _ : Fin 2 => (0 : Fin 1)) := by
-  exact ⟨rfl, rfl⟩
-
-theorem aliasedBinaryBoundaryExample_consistency_iff
-    (args : Fin 2 -> D) :
-    AliasConsistent aliasedBinaryBoundaryExample args <-> args 0 = args 1 := by
-  constructor
-  · intro h
-    exact h 0 1 rfl
-  · intro h i j _
-    have hi : i = 0 \/ i = 1 := by omega
-    have hj : j = 0 \/ j = 1 := by omega
-    rcases hi with rfl | rfl <;> rcases hj with rfl | rfl <;>
-      simp_all
-
 end VisualProof.Diagram

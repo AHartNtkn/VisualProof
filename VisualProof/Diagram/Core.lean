@@ -62,34 +62,4 @@ def append : ItemSeq signature wires rels -> ItemSeq signature wires rels ->
 
 end ItemSeq
 
-def cutExample : Item [] 0 [] :=
-  .cut (.mk 0 .nil)
-
-theorem cutExample_constructible :
-    cutExample = Item.cut (Region.mk 0 .nil) := rfl
-
-def binaryIdentityExample : Item [] 2 [] :=
-  .identity 2 id
-
-theorem binaryIdentityExample_constructible :
-    binaryIdentityExample = Item.identity 2 id := rfl
-
-private def binaryHead : RelVar [2] 2 where
-  index := 0
-  hasArity := rfl
-
-def binaryBubbleAtomExample : Item [] 2 [] :=
-  .bubble 2 (.mk 0 (.cons (.atom binaryHead id) .nil))
-
-theorem binaryBubbleAtomExample_constructible :
-    binaryBubbleAtomExample =
-      Item.bubble 2
-        (Region.mk 0 (ItemSeq.cons (Item.atom binaryHead id) .nil)) := rfl
-
-def bareLocalWireExample : Region [] 0 [] :=
-  .mk 1 .nil
-
-theorem bareLocalWireExample_constructible :
-    bareLocalWireExample = Region.mk 1 .nil := rfl
-
 end VisualProof.Diagram

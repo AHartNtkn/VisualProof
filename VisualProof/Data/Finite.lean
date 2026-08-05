@@ -457,30 +457,6 @@ def pullback {α : Fin n -> Sort u} (p : Fin n -> Bool)
 
 end FilteredFiber
 
-namespace FilteredFiber.Examples
-
-def keepEvenFour (index : Fin 4) : Bool := index.val % 2 == 0
-
-theorem keepEvenFour_count : (filterFin keepEvenFour).length = 2 := by
-  decide
-
-def keepEvenFourFirst : FilteredFiber keepEvenFour := ⟨0, by decide⟩
-
-def keepEvenFourSecond : FilteredFiber keepEvenFour := ⟨1, by decide⟩
-
-theorem keepEvenFour_origins :
-    origin keepEvenFour keepEvenFourFirst = 0 ∧
-    origin keepEvenFour keepEvenFourSecond = 2 := by
-  decide
-
-theorem keepEvenFour_indices :
-    index? keepEvenFour 0 = some keepEvenFourFirst ∧
-    index? keepEvenFour 1 = none ∧
-    index? keepEvenFour 2 = some keepEvenFourSecond ∧
-    index? keepEvenFour 3 = none := by
-  decide
-
-end FilteredFiber.Examples
 
 def sequenceFin : {n : Nat} -> (Fin n -> Option α) -> Option (Fin n -> α)
   | 0, _ => some Fin.elim0
@@ -816,28 +792,5 @@ theorem least
 
 end FinitePartition
 
-namespace FinitePartition.Examples
-
-def fourEdges : List (Fin 4 × Fin 4) :=
-  [(0, 1), (1, 2)]
-
-theorem four_transitive :
-    (FinitePartition.ofEdges fourEdges).related 0 2 = true := by
-  decide
-
-theorem four_three_separate :
-    (FinitePartition.ofEdges fourEdges).related 0 3 = false ∧
-    (FinitePartition.ofEdges fourEdges).related 1 3 = false ∧
-    (FinitePartition.ofEdges fourEdges).related 2 3 = false := by
-  decide
-
-theorem four_representatives :
-    (FinitePartition.ofEdges fourEdges).representative 0 = 0 ∧
-    (FinitePartition.ofEdges fourEdges).representative 1 = 0 ∧
-    (FinitePartition.ofEdges fourEdges).representative 2 = 0 ∧
-    (FinitePartition.ofEdges fourEdges).representative 3 = 3 := by
-  decide
-
-end FinitePartition.Examples
 
 end VisualProof.Data.Finite

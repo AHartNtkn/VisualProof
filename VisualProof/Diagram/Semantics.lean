@@ -193,17 +193,6 @@ theorem two_item_sequence_denotes_conjunction
         denoteItem model named env rels second := by
   simp
 
-theorem bareLocalWireExample_denotes_iff_nonempty
-    (model : Model) (named : NamedEnv model.Carrier []) :
-    denoteRegion (relCtx := []) model named Fin.elim0 PUnit.unit
-        bareLocalWireExample <->
-      Nonempty model.Carrier := by
-  constructor
-  · rintro ⟨localEnv, _⟩
-    exact ⟨localEnv 0⟩
-  · rintro ⟨value⟩
-    exact ⟨fun _ => value, trivial⟩
-
 theorem unary_bubble_denotes_exists
     (model : Model) (named : NamedEnv model.Carrier signature)
     (env : Fin wires -> model.Carrier)
@@ -225,17 +214,6 @@ theorem denoteOpen_iff_assignment
           denoteRegion (relCtx := []) model named assignment.classes PUnit.unit
             diagram.body := by
   rfl
-
-theorem aliasedBinaryBoundaryExample_rejects_unequal
-    (model : Model) (named : NamedEnv model.Carrier [])
-    (args : Fin 2 -> model.Carrier) (unequal : args 0 ≠ args 1) :
-    Not (denoteOpen model named aliasedBinaryBoundaryExample args) := by
-  rintro ⟨assignment, hargs, _⟩
-  apply unequal
-  rw [← hargs]
-  exact (aliasedBinaryBoundaryExample_consistency_iff assignment.args).mp
-    ((boundaryAssignment_iff_aliasConsistent
-      aliasedBinaryBoundaryExample assignment.args).mp ⟨assignment, rfl⟩)
 
 theorem double_cut_denotes_iff
     (model : Model) (named : NamedEnv model.Carrier signature)

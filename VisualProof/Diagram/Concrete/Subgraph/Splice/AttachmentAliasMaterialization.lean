@@ -833,40 +833,6 @@ theorem check_success {signature : List Nat}
     certificate.result.val = raw pattern.val attachment spine.bodyContainer := by
   rfl
 
-namespace Examples
-
-private def bare : ConcreteDiagram where
-  regionCount := 1
-  nodeCount := 0
-  wireCount := 1
-  root := 0
-  regions := fun _ => .sheet
-  nodes := nofun
-  wires := fun _ => { scope := 0, endpoints := [] }
-
-private def repeated (length : Nat) : OpenConcreteDiagram where
-  diagram := bare
-  boundary := List.replicate length ⟨0, by decide⟩
-
-private def aa : Fin (repeated 2).boundary.length → Nat := fun _ => 0
-
-private def abb : Fin (repeated 3).boundary.length → Nat := fun position =>
-  if position.val = 0 then 0 else 1
-
-private def abbc : Fin (repeated 4).boundary.length → Nat := fun position =>
-  if position.val = 0 then 0 else if position.val = 3 then 2 else 1
-
-example : aliasCount (repeated 2) aa = 0 := by decide
-example : aliasCount (repeated 3) abb = 1 := by decide
-example : aliasCount (repeated 4) abbc = 2 := by decide
-
-example : rawBoundaryWire (repeated 2) aa ⟨0, by decide⟩ =
-    rawBoundaryWire (repeated 2) aa ⟨1, by decide⟩ := by decide
-
-example : rawBoundaryWire (repeated 3) abb ⟨1, by decide⟩ =
-    rawBoundaryWire (repeated 3) abb ⟨2, by decide⟩ := by decide
-
-end Examples
 
 end AttachmentAliasMaterialization
 

@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Concrete.Examples
+import VisualProof.Diagram.Concrete.Open
 import VisualProof.Diagram.Isomorphism
 
 namespace VisualProof.Diagram
@@ -680,67 +680,5 @@ def checked_transport {source target : ConcreteDiagram}
 
 end ConcreteIso
 
-namespace ConcreteExamples
-
-def nodeReverse : FiniteEquiv (Fin 2) (Fin 2) where
-  toFun := Fin.rev
-  invFun := Fin.rev
-  left_inv := Fin.rev_rev
-  right_inv := Fin.rev_rev
-
-@[simp] theorem nodeReverse_apply (node : Fin 2) :
-    nodeReverse node = Fin.rev node := rfl
-
-def validNestedRelabeled : ConcreteDiagram where
-  regionCount := validNested.regionCount
-  nodeCount := validNested.nodeCount
-  wireCount := validNested.wireCount
-  root := validNested.root
-  regions := validNested.regions
-  nodes := fun node =>
-    (validNested.nodes (nodeReverse.invFun node)).rename (.refl _)
-  wires := fun wire => {
-    scope := (validNested.wires wire).scope
-    endpoints := ((validNested.wires wire).endpoints.map
-      (CEndpoint.rename nodeReverse)).reverse
-  }
-
-def validNestedRelabeledIso :
-    ConcreteIso validNested validNestedRelabeled where
-  regionCount_eq := rfl
-  nodeCount_eq := rfl
-  wireCount_eq := rfl
-  regions := .refl _
-  nodes := nodeReverse
-  wires := .refl _
-  root_eq := rfl
-  regions_eq := by simp [validNestedRelabeled]
-  nodes_eq := by
-    intro node
-    change (validNested.nodes node).rename (.refl _) =
-      (validNested.nodes (Fin.rev (Fin.rev node))).rename (.refl _)
-    rw [Fin.rev_rev]
-  wire_scope_eq := by simp [validNestedRelabeled]
-  wire_endpoints_perm := by
-    intro wire
-    exact (List.reverse_perm _).symm
-
-theorem validNestedRelabeled_nontrivial :
-    (validNestedRelabeledIso.nodes (0 : Fin 2)).val = 1 := by
-  rfl
-
-theorem validNestedRelabeled_wellFormed :
-    validNestedRelabeled.WellFormed [] :=
-  validNestedRelabeledIso.wellFormed_transport
-    (checkWellFormed_iff.mp validNested_check)
-
-def validNestedRelabeledChecked : CheckedDiagram [] :=
-  validNestedRelabeledIso.checked_transport
-    ⟨validNested, checkWellFormed_iff.mp validNested_check⟩ rfl
-
-theorem validNestedRelabeled_checked_transport :
-    validNestedRelabeledChecked.val = validNestedRelabeled := rfl
-
-end ConcreteExamples
 
 end VisualProof.Diagram

@@ -1,4 +1,5 @@
-import VisualProof.Diagram.Concrete.Subgraph.Splice.Examples
+import VisualProof.Diagram.Concrete.Subgraph.Splice.Removal
+import VisualProof.Diagram.Concrete.Subgraph.Splice.Input.Discrete
 
 namespace VisualProof.Diagram.Splice.Input.PlugLayout
 

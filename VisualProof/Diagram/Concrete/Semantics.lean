@@ -1,5 +1,4 @@
 import VisualProof.Diagram.Concrete.Elaboration.Compile
-import VisualProof.Diagram.Concrete.Examples
 import VisualProof.Diagram.Semantics
 
 namespace VisualProof.Diagram
@@ -118,56 +117,5 @@ theorem denote_iff {source target : ConcreteDiagram}
     model named Fin.elim0 PUnit.unit
 
 end ConcreteIso
-
-namespace ConcreteExamples
-
-theorem repeatedBoundary_denote_rejects_unequal
-    (model : Model) (named : NamedEnv model.Carrier [])
-    (args : Fin repeatedBoundary.boundary.length → model.Carrier)
-    (hne : args ⟨0, by decide⟩ ≠ args ⟨1, by decide⟩) :
-    ¬ repeatedBoundaryChecked.denote model named args := by
-  rintro ⟨assignment, hargs, _⟩
-  apply hne
-  rw [← hargs]
-  calc
-    assignment.args ⟨0, by decide⟩ =
-        assignment.classes
-          (repeatedBoundaryChecked.elaborate.boundary ⟨0, by decide⟩) :=
-      (assignment.agrees ⟨0, by decide⟩).symm
-    _ = assignment.classes
-          (repeatedBoundaryChecked.elaborate.boundary ⟨1, by decide⟩) := by
-      congr 1
-    _ = assignment.args ⟨1, by decide⟩ :=
-      assignment.agrees ⟨1, by decide⟩
-
-theorem bareWire_denotes_iff_nonempty
-    (model : Model) (named : NamedEnv model.Carrier []) :
-    bareWireChecked.denote model named <-> Nonempty model.Carrier := by
-  rw [CheckedDiagram.denote_eq_intrinsic, bareWire_elaborate]
-  exact bareLocalWireExample_denotes_iff_nonempty model named
-
-theorem validNestedRelabeled_denote_iff
-    (model : Model) (named : NamedEnv model.Carrier []) :
-    validNested.denote (checkWellFormed_iff.mp validNested_check) model named ↔
-      validNestedRelabeled.denote validNestedRelabeled_wellFormed model named :=
-  validNestedRelabeledIso.denote_iff
-    (checkWellFormed_iff.mp validNested_check)
-    validNestedRelabeled_wellFormed model named
-
-end ConcreteExamples
-
-namespace OpenConcreteIsomorphismExamples
-
-theorem relabeledOpen_denote_iff
-    (model : Model)
-    (named : NamedEnv model.Carrier [1])
-    (args : Fin relabeledSource.boundary.length -> model.Carrier) :
-    relabeledSource.denote relabeledSource_wellFormed model named args <->
-      relabeledTarget.denote relabeledTarget_wellFormed model named
-        (args ∘ Fin.cast relabeledOpenIso.boundary_length_eq.symm) :=
-  relabeledOpenIso.denote_iff relabeledSource_wellFormed
-    relabeledTarget_wellFormed model named args
-
-end OpenConcreteIsomorphismExamples
 
 end VisualProof.Diagram

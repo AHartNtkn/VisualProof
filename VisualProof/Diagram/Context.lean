@@ -314,40 +314,4 @@ theorem context_anti
       denoteRegion model named env rels (ctx.fill a) :=
   (context_polarity ctx model named a b hab).2 env rels hOdd
 
-def holeContextExample : DiagramContext [] 0 0 [] [] := .hole
-
-theorem holeContextExample_cutDepth : holeContextExample.cutDepth = 0 := rfl
-
-theorem holeContextExample_fill (body : Region [] 0 []) :
-    holeContextExample.fill body = body := rfl
-
-def oneCutContextExample : DiagramContext [] 0 1 [] [] :=
-  .cut 1 .nil .nil .hole
-
-theorem oneCutContextExample_cutDepth : oneCutContextExample.cutDepth = 1 := rfl
-
-theorem oneCutContextExample_fill (body : Region [] 1 []) :
-    oneCutContextExample.fill body =
-      Region.mk 1 (.cons (.cut body) .nil) := rfl
-
-def nestedCutContextExample : DiagramContext [] 0 3 [] [] :=
-  .cut 1 .nil .nil (.cut 2 .nil .nil .hole)
-
-theorem nestedCutContextExample_cutDepth :
-    nestedCutContextExample.cutDepth = 2 := rfl
-
-theorem nestedCutContextExample_fill (body : Region [] 3 []) :
-    nestedCutContextExample.fill body =
-      Region.mk 1
-        (.cons (.cut (Region.mk 2 (.cons (.cut body) .nil))) .nil) := rfl
-
-def bubbleContextExample : DiagramContext [] 0 1 [] [2] :=
-  .bubble 1 .nil .nil 2 .hole
-
-theorem bubbleContextExample_cutDepth : bubbleContextExample.cutDepth = 0 := rfl
-
-theorem bubbleContextExample_fill (body : Region [] 1 [2]) :
-    bubbleContextExample.fill body =
-      Region.mk 1 (.cons (.bubble 2 body) .nil) := rfl
-
 end VisualProof.Diagram
