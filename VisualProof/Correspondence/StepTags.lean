@@ -16,7 +16,6 @@ def serializedName : StepTag → String
   | .doubleCutElim => "doubleCutElim"
   | .comprehensionInstantiate => "comprehensionInstantiate"
   | .comprehensionAbstract => "comprehensionAbstract"
-  | .theorem => "theorem"
   | .vacuousIntro => "vacuousIntro"
   | .vacuousElim => "vacuousElim"
 
@@ -26,7 +25,7 @@ theorem serializedName_injective : Function.Injective serializedName := by
   intro left right equality
   cases left <;> cases right <;> simp_all [serializedName]
 
-theorem serializedAll_length : serializedAll.length = 13 := by
+theorem serializedAll_length : serializedAll.length = 12 := by
   simpa [serializedAll] using StepTag.all_length
 
 theorem serializedAll_nodup : serializedAll.Nodup := by

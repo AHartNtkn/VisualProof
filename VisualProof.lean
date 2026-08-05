@@ -18,9 +18,9 @@ import VisualProof.Correspondence.StepTags
 import VisualProof.Rule.Step
 import VisualProof.Rule.Structural
 import VisualProof.Rule.Comprehension
-import VisualProof.Rule.Theorem
 import VisualProof.Rule.Soundness
 import VisualProof.Rule.Soundness.All
 import VisualProof.Proof.Replay
+import VisualProof.Proof.Schema
 import VisualProof.Proof.Theorem
 import VisualProof.Proof.Theory

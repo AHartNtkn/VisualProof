@@ -13,19 +13,19 @@ reinserted into the executor's exact removal result, transported to canonical
 reassembly by ordered occurrence equivalence, and then identified with the
 original host. -/
 theorem deiteration_sound_of_reinsert
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (selection : CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (receipt : StepReceipt input)
     (happly : applyDeiteration input selection witness = .ok receipt)
     (reinsertSound :
-      SuccessfulReceiptSound context orientation
+      SuccessfulReceiptSound orientation
         (deiterationRemoved input selection)
         (.iteration (deiterationRetainedSelection input selection witness)
           (deiterationReinsertTarget input selection))
         (deiterationReinsertReceipt input selection witness)) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.deiteration selection witness) receipt := by
   have realizes := applyDeiteration_realizes input selection witness receipt
     happly
@@ -35,7 +35,7 @@ theorem deiteration_sound_of_reinsert
         realizes.rawResultOpen_wellFormed sourceRoot htransport⟩)
     (operationalIso := fun _boundary _sourceRoot mapped _htransport =>
       OpenConcreteIso.refl (realizes.rawResultOpen mapped))
-  intro model boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport args
   let rawMapped := realizes.targetBoundary mapped
   have hexpected :
       (removeWireInterfaceTransport input selection).transportBoundary boundary =
@@ -87,7 +87,7 @@ theorem deiteration_sound_of_reinsert
       ((removeWireInterfaceTransport input selection)
         |>.transportBoundary_length hexpected)
   have hReinsert := reinsertSound model rawMapped rawRoot reinsertMapped
-    hReinsertTransport valid removedArgs
+    hReinsertTransport removedArgs
   let removed : OpenProofState  := {
     diagram := deiterationRemoved input selection
     boundary := rawMapped

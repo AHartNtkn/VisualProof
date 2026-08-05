@@ -1805,13 +1805,13 @@ private def severOperationalIso
 its checked orientation and the cut polarity of the split wire's binding
 scope, at every ordered open boundary. -/
 theorem applyWireSever_sound
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (wire : Fin input.val.wireCount)
     (keep : List (CEndpoint input.val.nodeCount))
     (receipt : StepReceipt input)
     (happly : applyWireSever orientation input wire keep = .ok receipt) :
-    SuccessfulReceiptSound context orientation input (.wireSever wire keep)
+    SuccessfulReceiptSound orientation input (.wireSever wire keep)
       receipt := by
   have realizes := applyWireSever_realizes happly
   have success := applyWireSever_success orientation input wire keep receipt
@@ -1827,7 +1827,7 @@ theorem applyWireSever_sound
       } wire keep targetWellFormed)
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       severOperationalIso realizes boundary sourceRoot mapped htransport)
-  intro model boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport args
   let source : OpenProofState  := {
     diagram := input
     boundary := boundary
@@ -2099,14 +2099,14 @@ private theorem joinWireRaw_scope
 
 /-- Every successful wire-join receipt preserves ordered-open semantics. -/
 theorem applyWireJoin_sound
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (first second : Fin input.val.wireCount)
     (receipt : StepReceipt input)
     (happly : applyWireJoin orientation input first second = .ok receipt) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.wireJoin first second) receipt := by
-  exact WireJoinSoundness.wireJoinReceipt_sound context orientation input
+  exact WireJoinSoundness.wireJoinReceipt_sound orientation input
     first second receipt happly
 
 private def iterationOperationalOpen
@@ -2158,7 +2158,7 @@ private def iterationOperationalIso
 
 /-- Receipt bridge for the proper nested, nonempty iteration case. -/
 private theorem applyIteration_sound_proper_nonempty
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (target : Fin input.val.regionCount)
@@ -2168,7 +2168,7 @@ private theorem applyIteration_sound_proper_nonempty
     (anchorNeRoot : selection.val.anchor ≠ input.val.root)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.iteration selection target) receipt := by
   have realizes := applyIteration_realizes happly
   have success := applyIteration_success input selection target receipt happly
@@ -2181,7 +2181,7 @@ private theorem applyIteration_sound_proper_nonempty
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
         htransport)
-  intro model boundary sourceRoot mapped htransport _valid args
+  intro model boundary sourceRoot mapped htransport args
   obtain ⟨certificate⟩ :=
     IterationSoundness.properIterationOpenAnchorContraction_complete input
       selection target hadmissible success.1 success.2.1 targetNe hnonempty
@@ -2195,7 +2195,7 @@ private theorem applyIteration_sound_proper_nonempty
 
 /-- Receipt bridge for the proper nested, empty-spine iteration case. -/
 private theorem applyIteration_sound_proper_zero
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (target : Fin input.val.regionCount)
@@ -2205,7 +2205,7 @@ private theorem applyIteration_sound_proper_zero
     (anchorNeRoot : selection.val.anchor ≠ input.val.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount =
       0) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.iteration selection target) receipt := by
   have realizes := applyIteration_realizes happly
   have success := applyIteration_success input selection target receipt happly
@@ -2218,7 +2218,7 @@ private theorem applyIteration_sound_proper_zero
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
         htransport)
-  intro model boundary sourceRoot mapped htransport _valid args
+  intro model boundary sourceRoot mapped htransport args
   obtain ⟨certificate⟩ :=
     IterationSoundness.properIterationRootOpenAnchorContraction_complete input
       selection target hadmissible success.1 success.2.1 targetNe hzero
@@ -2233,7 +2233,7 @@ private theorem applyIteration_sound_proper_zero
 
 /-- Receipt bridge for a proper root-anchor, nonempty-spine iteration. -/
 private theorem applyIteration_sound_root_nonempty
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (target : Fin input.val.regionCount)
@@ -2243,7 +2243,7 @@ private theorem applyIteration_sound_root_nonempty
     (hanchor : selection.val.anchor = input.val.root)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.iteration selection target) receipt := by
   have realizes := applyIteration_realizes happly
   have success := applyIteration_success input selection target receipt happly
@@ -2256,7 +2256,7 @@ private theorem applyIteration_sound_root_nonempty
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
         htransport)
-  intro model boundary sourceRoot mapped htransport _valid args
+  intro model boundary sourceRoot mapped htransport args
   obtain ⟨closed⟩ :=
     IterationSoundness.properIterationAnchorContraction_complete input
       selection target hadmissible success.1 success.2.1 targetNe hnonempty
@@ -2275,7 +2275,7 @@ private theorem applyIteration_sound_root_nonempty
 
 /-- Receipt bridge for a proper root-anchor, empty-spine iteration. -/
 private theorem applyIteration_sound_root_zero
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (target : Fin input.val.regionCount)
@@ -2284,7 +2284,7 @@ private theorem applyIteration_sound_root_zero
     (targetNe : target ≠ selection.val.anchor)
     (hanchor : selection.val.anchor = input.val.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.iteration selection target) receipt := by
   have realizes := applyIteration_realizes happly
   have success := applyIteration_success input selection target receipt happly
@@ -2297,7 +2297,7 @@ private theorem applyIteration_sound_root_zero
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
         htransport)
-  intro model boundary sourceRoot mapped htransport _valid args
+  intro model boundary sourceRoot mapped htransport args
   obtain ⟨closed⟩ :=
     IterationSoundness.properIterationRootAnchorContraction_complete input
       selection target hadmissible success.1 success.2.1 targetNe hzero
@@ -2315,14 +2315,14 @@ private theorem applyIteration_sound_root_zero
 
 /-- Receipt bridge for every executor-accepted same-site iteration. -/
 private theorem applyIteration_sound_same
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (receipt : StepReceipt input)
     (happly : applyIteration input selection target = .ok receipt)
     (targetEq : target = selection.val.anchor) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.iteration selection target) receipt := by
   have realizes := applyIteration_realizes happly
   have success := applyIteration_success input selection target receipt happly
@@ -2335,7 +2335,7 @@ private theorem applyIteration_sound_same
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       iterationOperationalIso realizes hadmissible boundary sourceRoot mapped
         htransport)
-  intro model boundary sourceRoot mapped htransport _valid args
+  intro model boundary sourceRoot mapped htransport args
   by_cases hroot : target = input.val.root
   · by_cases hnonempty :
         (iterationInput input selection target).binderSpine.proxyCount ≠ 0
@@ -2372,53 +2372,53 @@ private theorem applyIteration_sound_same
 
 /-- Every successful iteration receipt preserves ordered-open semantics. -/
 theorem applyIteration_sound
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (receipt : StepReceipt input)
     (happly : applyIteration input selection target = .ok receipt) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.iteration selection target) receipt := by
   by_cases targetNe : target ≠ selection.val.anchor
   · by_cases anchorNeRoot : selection.val.anchor ≠ input.val.root
     · by_cases hnonempty :
         (iterationInput input selection target).binderSpine.proxyCount ≠ 0
-      · exact applyIteration_sound_proper_nonempty context orientation input
+      · exact applyIteration_sound_proper_nonempty orientation input
           selection target receipt happly targetNe anchorNeRoot hnonempty
       · have hzero :
             (iterationInput input selection target).binderSpine.proxyCount = 0 :=
           Nat.eq_zero_of_not_pos (fun positive =>
             hnonempty (Nat.ne_of_gt positive))
-        exact applyIteration_sound_proper_zero context orientation input
+        exact applyIteration_sound_proper_zero orientation input
           selection target receipt happly targetNe anchorNeRoot hzero
     · have hanchor : selection.val.anchor = input.val.root := by
         exact Classical.byContradiction (fun distinct =>
           anchorNeRoot distinct)
       by_cases hnonempty :
           (iterationInput input selection target).binderSpine.proxyCount ≠ 0
-      · exact applyIteration_sound_root_nonempty context orientation input
+      · exact applyIteration_sound_root_nonempty orientation input
           selection target receipt happly targetNe hanchor hnonempty
       · have hzero :
             (iterationInput input selection target).binderSpine.proxyCount = 0 :=
           Nat.eq_zero_of_not_pos (fun positive =>
             hnonempty (Nat.ne_of_gt positive))
-        exact applyIteration_sound_root_zero context orientation input
+        exact applyIteration_sound_root_zero orientation input
           selection target receipt happly targetNe hanchor hzero
   · have targetEq : target = selection.val.anchor := by
       exact Classical.byContradiction (fun distinct => targetNe distinct)
-    exact applyIteration_sound_same context orientation input selection target
+    exact applyIteration_sound_same orientation input selection target
       receipt happly targetEq
 
 /-- The certified survivor occurrence can always be copied back into the
 deiteration hole, and the public iteration theorem supplies its complete
 ordered-open semantic equivalence for every anchor and binder-spine case. -/
 private theorem deiterationReinsert_sound
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (witness : DeiterationWitness input selection) :
-    SuccessfulReceiptSound context orientation
+    SuccessfulReceiptSound orientation
       (IterationSoundness.deiterationRemoved input selection)
       (.iteration
         (IterationSoundness.deiterationRetainedSelection input selection
@@ -2426,7 +2426,7 @@ private theorem deiterationReinsert_sound
         (IterationSoundness.deiterationReinsertTarget input selection))
       (IterationSoundness.deiterationReinsertReceipt input selection
         witness) :=
-  applyIteration_sound context orientation
+  applyIteration_sound orientation
     (IterationSoundness.deiterationRemoved input selection)
     (IterationSoundness.deiterationRetainedSelection input selection witness)
     (IterationSoundness.deiterationReinsertTarget input selection)
@@ -2435,26 +2435,26 @@ private theorem deiterationReinsert_sound
 
 /-- Every successful deiteration receipt preserves ordered-open semantics. -/
 theorem applyDeiteration_sound
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (witness : DeiterationWitness input selection)
     (receipt : StepReceipt input)
     (happly : applyDeiteration input selection witness = .ok receipt) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.deiteration selection witness) receipt := by
-  exact IterationSoundness.deiteration_sound_of_reinsert context orientation
+  exact IterationSoundness.deiteration_sound_of_reinsert orientation
     input selection witness receipt happly
-    (deiterationReinsert_sound context orientation input selection witness)
+    (deiterationReinsert_sound orientation input selection witness)
 
 /-- Every successful double-cut introduction receipt is equivalent. -/
 theorem applyDoubleCutIntro_sound
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (receipt : StepReceipt input)
     (happly : applyDoubleCutIntro input selection = .ok receipt) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.doubleCutIntro selection) receipt := by
   have realizes := applyDoubleCutIntro_realizes happly
   have targetWellFormed :
@@ -2478,7 +2478,7 @@ theorem applyDoubleCutIntro_sound
       realizes.operationalIso_to_rawResultOpen htransport boundary
         (ModalSoundness.doubleCutIntroInterfaceTransport_transportBoundary
           input.val selection boundary sourceRoot))
-  intro model boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport args
   let source : OpenProofState  := {
     diagram := input
     boundary := boundary
@@ -2519,12 +2519,12 @@ theorem applyDoubleCutIntro_sound
 
 /-- Every successful double-cut elimination receipt is equivalent. -/
 theorem applyDoubleCutElim_sound
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (region : Fin input.val.regionCount)
     (receipt : StepReceipt input)
     (happly : applyDoubleCutElim input region = .ok receipt) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.doubleCutElim region) receipt := by
   obtain ⟨raw, hraw, realizes⟩ := applyDoubleCutElim_realizes happly
   let trace := doubleCutElimTrace hraw
@@ -2573,7 +2573,7 @@ theorem applyDoubleCutElim_sound
           input.property boundary sourceRoot))
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := operational) (operationalIso := operationalIso)
-  intro model boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport args
   let source : OpenProofState  := {
     diagram := input
     boundary := boundary
@@ -2618,12 +2618,12 @@ theorem applyDoubleCutElim_sound
 
 /-- Every successful vacuous-cut introduction receipt is equivalent. -/
 theorem applyVacuousIntro_sound
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val) (arity : Nat)
     (receipt : StepReceipt input)
     (happly : applyVacuousIntro input selection arity = .ok receipt) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.vacuousIntro selection arity) receipt := by
   have realizes := applyVacuousIntro_realizes happly
   have targetWellFormed :
@@ -2647,7 +2647,7 @@ theorem applyVacuousIntro_sound
       realizes.operationalIso_to_rawResultOpen htransport boundary
         (VacuousSoundness.vacuousIntroInterfaceTransport_transportBoundary
           input.val selection arity boundary sourceRoot))
-  intro model boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport args
   let source : OpenProofState  := {
     diagram := input
     boundary := boundary
@@ -2689,12 +2689,12 @@ theorem applyVacuousIntro_sound
 
 /-- Every successful vacuous-cut elimination receipt is equivalent. -/
 theorem applyVacuousElim_sound
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : CheckedDiagram )
     (region : Fin input.val.regionCount)
     (receipt : StepReceipt input)
     (happly : applyVacuousElim input region = .ok receipt) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.vacuousElim region) receipt := by
   obtain ⟨raw, hraw, realizes⟩ := applyVacuousElim_realizes happly
   let trace := vacuousElimTrace hraw
@@ -2743,7 +2743,7 @@ theorem applyVacuousElim_sound
           input.property boundary sourceRoot))
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := operational) (operationalIso := operationalIso)
-  intro model boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport args
   let source : OpenProofState  := {
     diagram := input
     boundary := boundary

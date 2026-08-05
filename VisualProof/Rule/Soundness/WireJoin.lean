@@ -2266,7 +2266,6 @@ private def operationalIso
   simpa [rawEq] using expected
 
 private theorem orderedReceipt_sound
-    (context : ProofContext )
     (orientation : Orientation)
     (input : CheckedDiagram )
     (stepFirst stepSecond outer inner : Fin input.val.wireCount)
@@ -2280,7 +2279,7 @@ private theorem orderedReceipt_sound
       (input.val.wires outer).scope (input.val.wires inner).scope)
     (polarity : spawnPolarity orientation
       (concreteCutDepth input.val (input.val.wires inner).scope)) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.wireJoin stepFirst stepSecond) receipt := by
   have targetWellFormed :
       (Target input.val outer inner).WellFormed  :=
@@ -2295,7 +2294,7 @@ private theorem orderedReceipt_sound
     (operationalIso := fun boundary sourceRoot mapped transport =>
       operationalIso realizes distinct ordered targetWellFormed boundary
         sourceRoot mapped transport)
-  intro model boundary sourceRoot mapped transport valid args
+  intro model boundary sourceRoot mapped transport args
   let source : OpenProofState  := {
     diagram := input
     boundary := boundary
@@ -2337,14 +2336,13 @@ private theorem orderedReceipt_sound
 
 /-- Every successful wire-join receipt preserves ordered-open semantics. -/
 theorem wireJoinReceipt_sound
-    (context : ProofContext )
     (orientation : Orientation)
     (input : CheckedDiagram )
     (first second : Fin input.val.wireCount)
     (receipt : StepReceipt input)
     (applyResult :
       applyWireJoin orientation input first second = .ok receipt) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.wireJoin first second) receipt := by
   unfold applyWireJoin at applyResult
   split at applyResult
@@ -2359,7 +2357,7 @@ theorem wireJoinReceipt_sound
         · contradiction
         · rename_i checked checkResult
           cases applyResult
-          apply orderedReceipt_sound context orientation input first second
+          apply orderedReceipt_sound orientation input first second
             first second _ _ distinct ordered polarity
           exact StepReceipt.ofChecked_realizes _ _ _ _ checked checkResult
       · contradiction
@@ -2371,7 +2369,7 @@ theorem wireJoinReceipt_sound
           · contradiction
           · rename_i checked checkResult
             cases applyResult
-            apply orderedReceipt_sound context orientation input first second
+            apply orderedReceipt_sound orientation input first second
               second first _ _
                 (fun equality => distinct equality.symm)
                 reverseOrdered polarity

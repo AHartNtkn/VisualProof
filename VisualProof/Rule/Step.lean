@@ -268,7 +268,6 @@ inductive StepTag
   | doubleCutElim
   | comprehensionInstantiate
   | comprehensionAbstract
-  | theorem
   | vacuousIntro
   | vacuousElim
   deriving DecidableEq, Repr
@@ -278,9 +277,9 @@ def StepTag.all : List StepTag :=
     .erasure, .wireSever, .iteration, .deiteration,
     .doubleCutIntro, .doubleCutElim,
     .comprehensionInstantiate, .comprehensionAbstract,
-    .theorem, .vacuousIntro, .vacuousElim]
+    .vacuousIntro, .vacuousElim]
 
-theorem StepTag.all_length : StepTag.all.length = 13 := by
+theorem StepTag.all_length : StepTag.all.length = 12 := by
   native_decide
 
 theorem StepTag.all_nodup : StepTag.all.Nodup := by
@@ -298,7 +297,7 @@ inductive SemanticMode
 def StepTag.semanticMode : StepTag → SemanticMode
   | .boundRelationSpawn | .wireJoin
   | .erasure | .wireSever | .comprehensionInstantiate
-  | .comprehensionAbstract | .theorem => .directed
+  | .comprehensionAbstract => .directed
   | .iteration | .deiteration | .doubleCutIntro | .doubleCutElim
   | .vacuousIntro | .vacuousElim => .equivalent
 
@@ -326,7 +325,6 @@ inductive StepError
   | occurrenceMismatch
   | boundaryMismatch
   | nonVacuousBinder
-  | unknownTheorem
   | binderKindOrArityMismatch
   | binderDoesNotEnclose
   | selfWire
@@ -1175,19 +1173,6 @@ theorem StepReceipt.transportOpen_result {input : Diagram.CheckedDiagram }
     cases hopen
     exact ⟨mapped, htransport, rfl⟩
 
-inductive Direction
-  | forward
-  | reverse
-  deriving DecidableEq, Repr
-
-structure TheoremSchema where
-  left : Diagram.CheckedOpenDiagram
-  right : Diagram.CheckedOpenDiagram
-  sameBoundaryArity : left.val.boundary.length = right.val.boundary.length
-
-structure ProofContext where
-  theorems : List (TheoremSchema )
-
 structure AbstractionOccurrence (input : Diagram.CheckedDiagram ) where
   selection : Diagram.CheckedSelection input.val
   args : List (Fin input.val.wireCount)
@@ -1245,29 +1230,6 @@ theorem pinnedSelectedFragment_wellFormed
       (selectedLayout input selection)
     simp [Diagram.ConcreteDiagram.extractBoundaryRaw]
 
-/-- The canonical declaration that an ordinary open diagram has no proxy prefix. -/
-def emptyBinderSpine (pattern : Diagram.CheckedOpenDiagram ) :
-    Diagram.BinderSpine pattern.val.diagram where
-  proxyCount := 0
-  proxy := nofun
-  arity := nofun
-  bodyContainer := pattern.val.diagram.root
-  proxy_injective := fun index => Fin.elim0 index
-  proxy_ne_root := fun index => Fin.elim0 index
-  body_eq_root_of_empty := fun _ => rfl
-  body_eq_terminal_of_nonempty := fun h => False.elim (h rfl)
-  proxy_region := fun index => Fin.elim0 index
-
-def emptyTerminalBody (pattern : Diagram.CheckedOpenDiagram ) :
-    (emptyBinderSpine pattern).TerminalBodyContract pattern.val where
-  root_direct_child := fun h => False.elim (h rfl)
-  nonterminal_direct_child := fun index => Fin.elim0 index
-  root_has_no_nodes := fun h => False.elim (h rfl)
-  nonterminal_has_no_nodes := fun index => Fin.elim0 index
-  root_has_no_nonboundary_wires := fun h => False.elim (h rfl)
-  nonterminal_has_no_nonboundary_wires := fun index => Fin.elim0 index
-  boundary_is_root_scoped := pattern.property.boundary_is_root_scoped
-
 private def selectedProxy (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (index : Fin (selectedLayout input selection).proxyCount) :
@@ -1300,28 +1262,6 @@ structure DeiterationWitness (input : Diagram.CheckedDiagram )
     node ∈ justifier.selectedNodes → node ∉ selection.selectedNodes
   internalWires_disjoint : ∀ wire,
     wire ∈ justifier.internalWires → wire ∉ selection.internalWires
-
-/--
-An exact occurrence whose boundary positions are pinned to a caller-supplied
-host argument list. `position` may repeat, so intrinsic boundary aliases are
-represented without inventing new host wires; surjectivity prevents silently
-discarding a crossing wire.
--/
-structure PinnedOccurrence (input : Diagram.CheckedDiagram )
-    (selection : Diagram.CheckedSelection input.val)
-    (pattern : Diagram.CheckedOpenDiagram )
-    (args : List (Fin input.val.wireCount)) where
-  args_length : args.length = pattern.val.boundary.length
-  position : Fin pattern.val.boundary.length →
-    Fin selection.touchingWires.length
-  argument_alignment : ∀ index,
-    selection.touchingWires.get (position index) =
-      args.get (Fin.cast args_length.symm index)
-  all_touching_used : Function.Surjective position
-  externalBinders_empty : selection.externalBinders = []
-  occurrence : Diagram.OpenConcreteIso
-    (pinnedSelectedFragment input selection pattern.val.boundary.length position)
-    pattern.val
 
 /--
 One abstraction occurrence together with a concrete diagonalized relation and
@@ -1408,31 +1348,11 @@ structure ComprehensionInstantiatePayload
     input.val.Encloses (binderTargets index) bubble ∧
       binderTargets index ≠ bubble
 
-/-- Proof-bearing refinement of a cited theorem side at one exact occurrence. -/
-structure TheoremPayload (input : Diagram.CheckedDiagram )
-    (selection : Diagram.CheckedSelection input.val)
-    (args : List (Fin input.val.wireCount)) where
-  source : Diagram.CheckedOpenDiagram
-  target : Diagram.CheckedOpenDiagram
-  sameBoundaryArity : source.val.boundary.length = target.val.boundary.length
-  occurrence : PinnedOccurrence input selection source args
-
-def theoremSidesMatch (schema : TheoremSchema ) (direction : Direction)
-    (payload : TheoremPayload input selection args) : Prop :=
-  match direction with
-  | .forward =>
-      payload.source.val = schema.left.val ∧
-        payload.target.val = schema.right.val
-  | .reverse =>
-      payload.source.val = schema.right.val ∧
-        payload.target.val = schema.left.val
-
 /--
 Proof-bearing refinement of one serialized step against its current input.
 Finite references cannot be stale, and selection closure is already validated.
 -/
-inductive Step (context : ProofContext )
-    (input : Diagram.CheckedDiagram )
+inductive Step (input : Diagram.CheckedDiagram )
   | boundRelationSpawn (region binder : Fin input.val.regionCount)
       (arity : Nat)
   | wireJoin (first second : Fin input.val.wireCount)
@@ -1457,17 +1377,11 @@ inductive Step (context : ProofContext )
       (comprehension : Diagram.CheckedOpenDiagram )
       (occurrences : List (AbstractionOccurrence input))
       (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
-  | theorem (theoremIndex : Fin context.theorems.length)
-      (selection : Diagram.CheckedSelection input.val)
-      (args : List (Fin input.val.wireCount)) (direction : Direction)
-      (payload : TheoremPayload input selection args)
-      (registered : theoremSidesMatch (context.theorems.get theoremIndex)
-        direction payload)
   | vacuousIntro (selection : Diagram.CheckedSelection input.val)
       (arity : Nat)
   | vacuousElim (region : Fin input.val.regionCount)
 
-def Step.tag : Step context input → StepTag
+def Step.tag : Step input → StepTag
   | .boundRelationSpawn .. => .boundRelationSpawn
   | .wireJoin .. => .wireJoin
   | .erasure .. => .erasure
@@ -1478,11 +1392,10 @@ def Step.tag : Step context input → StepTag
   | .doubleCutElim .. => .doubleCutElim
   | .comprehensionInstantiate .. => .comprehensionInstantiate
   | .comprehensionAbstract .. => .comprehensionAbstract
-  | .theorem .. => .theorem
   | .vacuousIntro .. => .vacuousIntro
   | .vacuousElim .. => .vacuousElim
 
-theorem Step.tag_mem_all (step : Step context input) :
+theorem Step.tag_mem_all (step : Step input) :
     step.tag ∈ StepTag.all := StepTag.mem_all step.tag
 
 end VisualProof.Rule

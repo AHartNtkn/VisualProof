@@ -1,4 +1,4 @@
-import VisualProof.Rule.Theorem
+import VisualProof.Rule.Comprehension
 
 namespace VisualProof.Rule
 
@@ -31,8 +31,8 @@ theorem OpenProofState.closed_denote_iff
     exact ⟨assignment, rfl, by simpa using hbody⟩
 
 /-- The sole checked dispatcher for the complete calculus. -/
-def applyStep (context : ProofContext ) (orientation : Orientation)
-    (input : CheckedDiagram ) (step : Step context input) :
+def applyStep (orientation : Orientation)
+    (input : CheckedDiagram ) (step : Step input) :
     Except StepError (StepReceipt input) :=
   match step with
   | .boundRelationSpawn region binder arity =>
@@ -57,44 +57,30 @@ def applyStep (context : ProofContext ) (orientation : Orientation)
   | .comprehensionAbstract wrap comprehension occurrences payload =>
       applyComprehensionAbstract orientation input wrap comprehension
         occurrences payload
-  | .theorem theoremIndex selection args direction payload _ =>
-      applyTheorem orientation input theoremIndex.val selection args direction payload
   | .vacuousIntro selection arity =>
       applyVacuousIntro input selection arity
   | .vacuousElim region =>
       applyVacuousElim input region
-def TheoremSchema.Valid (schema : TheoremSchema )
-    (model : Model) : Prop :=
-  ∀ args : Fin schema.left.val.boundary.length → model.Carrier,
-    schema.left.denote model  args →
-      schema.right.denote model
-        (args ∘ Fin.cast schema.sameBoundaryArity.symm)
-
-structure ProofContext.Valid (context : ProofContext )
-    (model : Model) : Prop where
-  theorems : ∀ index : Fin context.theorems.length,
-    (context.theorems.get index).Valid model
-
-def SuccessfulStepSound (context : ProofContext )
-    (orientation : Orientation) (input result : CheckedDiagram )
-    (step : Step context input) : Prop :=
-  ∀ model, context.Valid model →
+def SuccessfulStepSound (orientation : Orientation)
+    (input result : CheckedDiagram )
+    (step : Step input) : Prop :=
+  ∀ model,
     DirectedEntailment step.tag orientation
       (input.denote model)
       (result.denote model)
 
 /-- Boundary-parametric soundness of an interface-bearing successful result.
-This is the theorem strength required by replay and theorem registration;
-closed soundness is its empty-boundary specialization. -/
-def SuccessfulReceiptSound (context : ProofContext )
-    (orientation : Orientation) (input : CheckedDiagram )
-    (step : Step context input) (receipt : StepReceipt input) : Prop :=
+This is the theorem strength required by replay; closed soundness is its
+empty-boundary specialization. -/
+def SuccessfulReceiptSound (orientation : Orientation)
+    (input : CheckedDiagram )
+    (step : Step input) (receipt : StepReceipt input) : Prop :=
   ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin receipt.result.val.wireCount))
     (htransport : receipt.interface.transportBoundary boundary = some mapped),
-    context.Valid model → ∀ args : Fin boundary.length → model.Carrier,
+    ∀ args : Fin boundary.length → model.Carrier,
       let source : OpenProofState  := {
         diagram := input
         boundary := boundary
@@ -126,7 +112,7 @@ theorem of_equivalence
           (input.val.wires wire).scope = input.val.root)
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
-        context.Valid model → ∀ args : Fin boundary.length → model.Carrier,
+        ∀ args : Fin boundary.length → model.Carrier,
           let source : OpenProofState  := {
             diagram := input
             boundary := boundary
@@ -142,10 +128,9 @@ theorem of_equivalence
             target.denote model
               (args ∘ Fin.cast
                 (receipt.interface.transportBoundary_length htransport))) :
-    SuccessfulReceiptSound context orientation input step receipt := by
-  intro model boundary sourceRoot mapped htransport valid args
-  have hequivalent := equivalent model boundary sourceRoot mapped htransport
-    valid args
+    SuccessfulReceiptSound orientation input step receipt := by
+  intro model boundary sourceRoot mapped htransport args
+  have hequivalent := equivalent model boundary sourceRoot mapped htransport args
   unfold DirectedEntailment
   rw [mode]
   exact hequivalent
@@ -160,7 +145,7 @@ theorem of_forward
           (input.val.wires wire).scope = input.val.root)
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
-        context.Valid model → ∀ args : Fin boundary.length → model.Carrier,
+        ∀ args : Fin boundary.length → model.Carrier,
           let source : OpenProofState  := {
             diagram := input
             boundary := boundary
@@ -176,9 +161,9 @@ theorem of_forward
             target.denote model
               (args ∘ Fin.cast
                 (receipt.interface.transportBoundary_length htransport))) :
-    SuccessfulReceiptSound context .forward input step receipt := by
-  intro model boundary sourceRoot mapped htransport valid args
-  have hentails := entails model boundary sourceRoot mapped htransport valid args
+    SuccessfulReceiptSound .forward input step receipt := by
+  intro model boundary sourceRoot mapped htransport args
+  have hentails := entails model boundary sourceRoot mapped htransport args
   unfold DirectedEntailment DirectedImplication
   rw [mode]
   exact hentails
@@ -193,7 +178,7 @@ theorem of_backward
           (input.val.wires wire).scope = input.val.root)
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
-        context.Valid model → ∀ args : Fin boundary.length → model.Carrier,
+        ∀ args : Fin boundary.length → model.Carrier,
           let source : OpenProofState  := {
             diagram := input
             boundary := boundary
@@ -209,9 +194,9 @@ theorem of_backward
               (args ∘ Fin.cast
                 (receipt.interface.transportBoundary_length htransport)) →
             source.denote model args) :
-    SuccessfulReceiptSound context .backward input step receipt := by
-  intro model boundary sourceRoot mapped htransport valid args
-  have hentails := entails model boundary sourceRoot mapped htransport valid args
+    SuccessfulReceiptSound .backward input step receipt := by
+  intro model boundary sourceRoot mapped htransport args
+  have hentails := entails model boundary sourceRoot mapped htransport args
   unfold DirectedEntailment DirectedImplication
   rw [mode]
   exact hentails
@@ -220,9 +205,8 @@ theorem of_backward
 open result.  The realized receipt supplies the sole normalization from that
 ordered operational boundary to the checked target boundary. -/
 theorem of_realized_operational
-    {context : ProofContext }
     {orientation : Orientation} {input : Diagram.CheckedDiagram }
-    {step : Step context input} {receipt : StepReceipt input}
+    {step : Step input} {receipt : StepReceipt input}
     {raw : Diagram.ConcreteDiagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : InterfaceTransport input.val raw}
@@ -250,7 +234,7 @@ theorem of_realized_operational
           (input.val.wires wire).scope = input.val.root)
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
-        context.Valid model → ∀ args : Fin boundary.length → model.Carrier,
+        ∀ args : Fin boundary.length → model.Carrier,
           let source : OpenProofState  := {
             diagram := input
             boundary := boundary
@@ -264,11 +248,11 @@ theorem of_realized_operational
               (args ∘ Fin.cast (iso.boundary_length_eq.trans
                 ((realizes.rawResultOpen_boundary_length mapped).trans
                   (receipt.interface.transportBoundary_length htransport)))))) :
-    SuccessfulReceiptSound context orientation input step receipt := by
-  intro model boundary sourceRoot mapped htransport valid args
+    SuccessfulReceiptSound orientation input step receipt := by
+  intro model boundary sourceRoot mapped htransport args
   let op := operational boundary sourceRoot mapped htransport
   let iso := operationalIso boundary sourceRoot mapped htransport
-  have hsound := sound model boundary sourceRoot mapped htransport valid args
+  have hsound := sound model boundary sourceRoot mapped htransport args
   have hnormalize := realizes.operationalOpen_denote_iff_result sourceRoot
     htransport op iso model args
   unfold DirectedEntailment at hsound ⊢
@@ -326,9 +310,8 @@ private def spawnOperationalIso
 /-- Common receipt theorem for the three append-only spawn forms.  The
 operation-specific public theorems only supply their node and success facts. -/
 private theorem spawnReceipt_sound
-    {context : ProofContext }
     (orientation : Orientation) (input : Diagram.CheckedDiagram )
-    (step : Step context input) (receipt : StepReceipt input)
+    (step : Step input) (receipt : StepReceipt input)
     (node : Diagram.CNode input.val.regionCount)
     (scope : Fin input.val.regionCount) (portCount : Nat)
     (port : Fin portCount → Diagram.CPort)
@@ -340,7 +323,7 @@ private theorem spawnReceipt_sound
     (polarity : spawnPolarity orientation
       (concreteCutDepth input.val scope))
     (mode : step.tag.semanticMode = .directed) :
-    SuccessfulReceiptSound context orientation input step receipt := by
+    SuccessfulReceiptSound orientation input step receipt := by
   have htarget : (spawnNodeRaw input.val node scope portCount port).WellFormed
        := realizes.result_eq ▸ receipt.result.property
   apply SuccessfulReceiptSound.of_realized_operational realizes
@@ -352,7 +335,7 @@ private theorem spawnReceipt_sound
       } node scope portCount port htarget)
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       spawnOperationalIso realizes boundary sourceRoot mapped htransport)
-  intro model boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport args
   let source : OpenProofState  := {
     diagram := input
     boundary := boundary
@@ -387,13 +370,13 @@ private theorem spawnReceipt_sound
 /-- Every successful bound-relation spawn receipt has the directed semantics
 selected by its checked orientation and site polarity. -/
 theorem applyBoundRelationSpawn_sound
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : Diagram.CheckedDiagram )
     (region binder : Fin input.val.regionCount) (arity : Nat)
     (receipt : StepReceipt input)
     (happly : applyBoundRelationSpawn orientation input region binder arity =
       .ok receipt) :
-    SuccessfulReceiptSound context orientation input
+    SuccessfulReceiptSound orientation input
       (.boundRelationSpawn region binder arity) receipt := by
   have realizes := applyBoundRelationSpawn_realizes happly
   have success := applyBoundRelationSpawn_success orientation input region binder
@@ -575,12 +558,12 @@ private def erasureOperationalIso
 Forward erasure uses even polarity; backward replay uses odd polarity and is
 therefore insertion under an odd number of cuts. -/
 theorem applyErasure_sound
-    (context : ProofContext ) (orientation : Orientation)
+    (orientation : Orientation)
     (input : Diagram.CheckedDiagram )
     (selection : Diagram.CheckedSelection input.val)
     (receipt : StepReceipt input)
     (happly : applyErasure orientation input selection = .ok receipt) :
-    SuccessfulReceiptSound context orientation input (.erasure selection)
+    SuccessfulReceiptSound orientation input (.erasure selection)
       receipt := by
   have realizes := applyErasure_realizes orientation input selection receipt
     happly
@@ -591,7 +574,7 @@ theorem applyErasure_sound
       erasureOperationalOpen realizes boundary sourceRoot mapped htransport)
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       erasureOperationalIso realizes boundary sourceRoot mapped htransport)
-  intro model boundary sourceRoot mapped htransport valid args
+  intro model boundary sourceRoot mapped htransport args
   let rawMapped := realizes.targetBoundary mapped
   have hexpected :
       (removeWireInterfaceTransport input selection).transportBoundary
@@ -768,10 +751,10 @@ theorem applyErasure_sound
 
 theorem SuccessfulReceiptSound.closed
     (receipt : StepReceipt input)
-    (sound : SuccessfulReceiptSound context orientation input step receipt) :
-    SuccessfulStepSound context orientation input receipt.result step := by
-  intro model valid
-  have hopen := sound model [] (by simp) [] rfl valid Fin.elim0
+    (sound : SuccessfulReceiptSound orientation input step receipt) :
+    SuccessfulStepSound orientation input receipt.result step := by
+  intro model
+  have hopen := sound model [] (by simp) [] rfl Fin.elim0
   change DirectedEntailment step.tag orientation
     ((OpenProofState.closed input).denote model Fin.elim0)
     ((OpenProofState.closed receipt.result).denote model Fin.elim0) at hopen

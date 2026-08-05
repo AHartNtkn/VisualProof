@@ -14,8 +14,8 @@ the source audit.
 #print axioms VisualProof.Diagram.denoteItem_identity
 
 #print axioms VisualProof.Rule.applyComprehensionInstantiate_sound
-#print axioms VisualProof.Rule.applyTheorem_sound
 #print axioms VisualProof.Rule.applyStep_sound
+#print axioms VisualProof.Proof.replay_sound
 #print axioms VisualProof.Proof.checkedTheorem_sound
 #print axioms VisualProof.Proof.verifiedTheory_sound
 
