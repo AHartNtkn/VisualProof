@@ -17,7 +17,9 @@
 - A rule-specific theorem owns Region-level mathematics whenever removing boundary arguments and assignments leaves its premise and proof unchanged. Boundary-visible conclusions are then obtained through one generic open-body lift; do not create one bespoke open semantic proof per compiler or rule case.
 - Keep genuinely open claims open: boundary quotient and alias laws, open substitution, boundary-preserving isomorphism, theorem interfaces, and concrete boundary transport. Do not mechanically convert every `denoteOpen` theorem to `denoteRegion`.
 - Every rule family is a `Prop` relation. `Rule.Step` is the exhaustive inductive union of those family relations, not an executor request, result, trace, or closure.
-- `Step.sound` states the required implication explicitly by orientation. It does not use a wrapper whose name encodes direction.
+- Every abstract rule family is stated once in its positive-context form. Negative context applies the converse relation. An invertible family admits both the base relation and its converse at either polarity; invertibility is proved semantically rather than asserted by making the base relation syntactically symmetric.
+- Abstract rule relations and `Step` have no execution `Orientation` parameter. `Step source target` always supports the ordinary implication from `source` to `target`.
+- Concrete execution retains the operational split between the two members of each rule pair. Refinement proves that the selected operation realizes the base relation or its converse at the application region's single polarity.
 - `Step.sound` and every family soundness theorem must have a dependency closure containing no concrete diagram, matcher, executor, error, receipt, trace, carrier-numbering, or compiler declaration.
 - Local rules use typed context decomposition modulo recursive diagram isomorphism. Context soundness must account for cut polarity; arbitrary contexts are not assumed monotone.
 - Iteration, substitution, comprehension, and any other simultaneous or whole-diagram rule retain their simplest mathematical relation. They are not forced through one universal replacement relation.
@@ -38,7 +40,7 @@
 | `VisualProof/Diagram/Semantics.lean` | Structural recursive denotation plus the single generic Region-to-open semantic lift |
 | `VisualProof/Diagram/Context.lean` | Region-level typed one-hole contexts, filling, cut polarity, semantic transport |
 | `VisualProof/Diagram/Occurrence.lean` | Relational occurrence as context decomposition modulo isomorphism |
-| `VisualProof/Rule/Relation.lean` | Shared relation shape and orientation, with no execution data |
+| `VisualProof/Rule/Relation.lean` | Shared relation shape, converse, symmetric closure, and polarity action, with no execution data |
 | `VisualProof/Rule/{Primitive,Structural,Identity,Erasure,Iteration,Substitution,Comprehension,Quantifier}.lean` | Mathematical rule-family relations and witnesses |
 | `VisualProof/Rule/Step.lean` | Inductive union of the rule-family relations |
 | `VisualProof/Rule/Soundness.lean` | Per-family imports and exhaustive `Step.sound` |
@@ -50,6 +52,7 @@
 
 | Existing theorem family | Final ownership |
 |---|---|
+| Executable operation pairs, `Orientation`, `StepTag.semanticMode`, and direction-specific polarity checks | Keep only in concrete execution and refinement; abstract families contain one positive relation and obtain the other member by converse |
 | Boundary representatives, alias consistency, boundary assignments, open substitution, and `OpenDiagramIso` denotation | Remain in the open-diagram kernel; their subject is the ordered-position-to-wire-class quotient |
 | `denote_replaceOpenBody_mono` and `denote_replaceOpenBody_iff` in concrete splice tracing | Move their implementation-independent content beside `denoteOpen` as the single generic unchanged-boundary lift from Region implication/equivalence |
 | `regionIso_fill_denotation` and its cast variant in concrete splice tracing | Move the general statement into recursive context/isomorphism algebra; it is Region mathematics despite its current location |
@@ -57,7 +60,7 @@
 | `comprehensionInstantiate_sound` and `comprehensionAbstract_context_sound` | Reuse as Region/context-level comprehension owners |
 | `diagonalize_denotation` | Split into abstract Region substitution/diagonalization, the generic open substitution theorem, and concrete diagonal-representation refinement |
 | Iteration `wholeOpen_equiv`, `sameSite_*`, contraction, route, and anchor theorems that first prove a `bodyEquiv` | Extract the declarative Region-level iteration law; retain open compiler conclusions only as refinement corollaries |
-| `DirectionalBoundaryWitness`, heterogeneous `denoteOpen_lift`, rule-specific boundary witnesses, and compiled open-source equivalences | Keep under refinement ownership because they compare positional interfaces, alias partitions, or concrete compiler products |
+| The current direction-specific boundary witness, heterogeneous `denoteOpen_lift`, rule-specific boundary witnesses, and compiled open-source equivalences | Keep under refinement ownership because they compare positional interfaces, alias partitions, or concrete compiler products; name the retained refinement structure `BoundaryWitness` |
 | `TheoremSchema.Valid` and the final checked-theorem statement | Keep genuinely open, but make represented recursive open diagrams their operands and derive validity through replay refinement plus `Step.sound` |
 | Concrete elaboration, compiler simulation, boundary witnesses, splice/reassembly equivalences, receipts, and replay | Keep boundary-visible, but move under concrete/refinement ownership; they certify an abstract step rather than define rule soundness |
 
@@ -248,11 +251,8 @@ Prove the explicit theorem, without a direction-named wrapper:
 theorem DiagramContext.denote_fill
     (context : DiagramContext ow hw or hr)
     (h : ∀ env rels,
-      match context.polarity with
-      | .positive => denoteRegion model env rels before →
-          denoteRegion model env rels after
-      | .negative => denoteRegion model env rels after →
-          denoteRegion model env rels before) :
+      denoteRegion model env rels before →
+        denoteRegion model env rels after) :
     ∀ outerEnv outerRels,
       match context.polarity with
       | .positive =>
@@ -274,8 +274,6 @@ structure Occurrence
   context : DiagramContext host.externalClasses holeWires [] holeRels
   host_iso : OpenDiagramIso host
     (host.withBody (context.fill pattern))
-  polarity : Polarity
-  polarity_eq : polarity = context.polarity
 ```
 
 Add isomorphism transport theorems for host and pattern. Do not prove occurrence uniqueness; automorphisms may yield multiple valid decompositions.
@@ -300,44 +298,40 @@ git commit -m "Define recursive diagram occurrences"
 
 **Interfaces:**
 - Consumes: recursive open diagrams, contexts, occurrences, and isomorphism.
-- Produces: `Orientation`, `Rule`, `Contextual`, and an execution-free `Step` relation.
+- Produces: `Rule`, relational converse and symmetric closure, polarity action, `Contextual`, and an execution-free `Step` relation.
 
 - [ ] **Step 1: Define the shared relation shapes**
 
 ```lean
 namespace VisualProof.Rule
 
-inductive Orientation
-  | forward
-  | backward
-
 abbrev Rule :=
-  {arity : Nat} → Orientation → OpenDiagram arity → OpenDiagram arity → Prop
+  {arity : Nat} → OpenDiagram arity → OpenDiagram arity → Prop
+
+def converse (relation : α → α → Prop) : α → α → Prop :=
+  fun before after => relation after before
+
+def symmetric (relation : α → α → Prop) : α → α → Prop :=
+  fun before after => relation before after ∨ relation after before
+
+def atPolarity (polarity : Polarity)
+    (relation : α → α → Prop) : α → α → Prop :=
+  match polarity with
+  | .positive => relation
+  | .negative => converse relation
 
 def Contextual
     (local : ∀ {wires rels},
-      Orientation → Region wires rels → Region wires rels → Prop)
-    (orientation : Orientation)
+      Region wires rels → Region wires rels → Prop)
     (source target : OpenDiagram arity) : Prop :=
   ∃ wires rels before after
     (occurrence : Occurrence before source),
-      local orientation before after ∧
-      occurrence.polarity =
-        (match orientation with
-         | .forward => .positive
-         | .backward => .negative) ∧
+      atPolarity occurrence.context.polarity local before after ∧
       OpenDiagramIso target
         (source.withBody (occurrence.context.fill after))
 ```
 
-Define the legality relation in the same module:
-
-```lean
-def Allowed : Orientation → Polarity → Prop
-  | .forward, .positive => True
-  | .backward, .negative => True
-  | _, _ => False
-```
+For a one-way family, use `Contextual local`. For an invertible family, first prove that every `local before after` gives semantic equivalence, then use `Contextual (symmetric local)`. Do not add a Boolean invertibility flag, an abstract orientation, or a legality predicate selecting between the paired operations.
 
 - [ ] **Step 2: Define the family-level union**
 
@@ -345,15 +339,15 @@ Replace the current `Step (input : CheckedDiagram)` with:
 
 ```lean
 inductive Step :
-    Orientation → OpenDiagram arity → OpenDiagram arity → Prop
-  | primitive : Primitive orientation source target → Step orientation source target
-  | structural : Structural orientation source target → Step orientation source target
-  | identity : Identity orientation source target → Step orientation source target
-  | erasure : Erasure orientation source target → Step orientation source target
-  | iteration : Iteration orientation source target → Step orientation source target
-  | substitution : Substitution orientation source target → Step orientation source target
-  | comprehension : Comprehension orientation source target → Step orientation source target
-  | quantifier : Quantifier orientation source target → Step orientation source target
+    OpenDiagram arity → OpenDiagram arity → Prop
+  | primitive : Primitive source target → Step source target
+  | structural : Structural source target → Step source target
+  | identity : Identity source target → Step source target
+  | erasure : Erasure source target → Step source target
+  | iteration : Iteration source target → Step source target
+  | substitution : Substitution source target → Step source target
+  | comprehension : Comprehension source target → Step source target
+  | quantifier : Quantifier source target → Step source target
 ```
 
 Do not add tags, inventories, semantic modes, requests, errors, receipts, selections, or concrete witnesses to this module.
@@ -363,9 +357,9 @@ Do not add tags, inventories, semantic modes, requests, errors, receipts, select
 ```lean
 theorem Step.iso
     (hs : OpenDiagramIso source source')
-    (h : Step orientation source target)
+    (h : Step source target)
     (ht : OpenDiagramIso target target') :
-    Step orientation source' target'
+    Step source' target'
 ```
 
 This theorem depends on per-family isomorphism transport and is completed after Tasks 4 and 5; its declaration may not contain `sorry` until those definitions and transport theorems are complete.
@@ -407,29 +401,18 @@ Use this shape for every constructor listed below:
 namespace Erasure
 
 inductive Local :
-    Orientation → Region wires rels → Region wires rels → Prop
+    Region wires rels → Region wires rels → Prop
   | erase
-      (erasable : Erasable removable)
-      (allowed : Allowed orientation polarity) :
-      Local orientation (conjoin retained removable) retained
+      (erasable : Erasable removable) :
+      Local (conjoin retained removable) retained
 
-def Rel : Rule := fun orientation source target =>
-  Contextual (@Local) orientation source target
+def Rel : Rule := fun source target =>
+  Contextual (@Local) source target
 
 end Erasure
 ```
 
-The family constructors are:
-
-| Family | Constructors | Relation form |
-|---|---|---|
-| `Primitive` | `spawn` | local relation plus scope and binder legality |
-| `Structural` | `doubleCutIntro`, `doubleCutElim` | local relation with polarity legality |
-| `Identity` | `join`, `sever` | local relation with ordered endpoint/gluing evidence |
-| `Erasure` | `erase` | local relation with an `Erasable` witness |
-| `Quantifier` | `intro`, `elim` | binder-local relation with freshness and capture evidence |
-
-Each constructor owns a recursive source, recursive target, and its mathematical legality witnesses. Do not share a universal graph-replacement payload.
+Within every family, define only the positive-context mathematical relation. Do not copy the two executable operation names into two abstract constructors. If the pair is invertible, expose the family relation through `Contextual (symmetric Local)` after proving local semantic equivalence; otherwise expose it through `Contextual Local`, whose negative-context applications are supplied by `atPolarity`. Each constructor owns a recursive source, recursive target, and genuine mathematical legality witnesses such as scope, freshness, gluing, and capture avoidance. Do not add direction-selection evidence or share a universal graph-replacement payload.
 
 - [ ] **Step 2: Prove isomorphism transport for each family**
 
@@ -438,9 +421,9 @@ Each module provides:
 ```lean
 theorem Erasure.iso
     (hs : OpenDiagramIso source source')
-    (h : Erasure orientation source target)
+    (h : Erasure source target)
     (ht : OpenDiagramIso target target') :
-    Erasure orientation source' target'
+    Erasure source' target'
 ```
 
 - [ ] **Step 3: RED/GREEN the Region-level semantic owner for each family**
@@ -449,18 +432,13 @@ After its relation and dependencies compile without incomplete definitions, stat
 
 ```lean
 theorem Erasure.Local.sound
-    (h : Erasure.Local orientation before after) :
+    (h : Erasure.Local before after) :
     ∀ model env relEnv,
-    match orientation with
-    | .forward =>
-        denoteRegion model env relEnv before →
-          denoteRegion model env relEnv after
-    | .backward =>
-        denoteRegion model env relEnv after →
-          denoteRegion model env relEnv before
+      denoteRegion model env relEnv before →
+        denoteRegion model env relEnv after
 ```
 
-Use the same ownership rule for primitive, structural, identity, and quantifier mathematics. Each owning proof has no boundary arguments, `BoundaryAssignment`, open compiler witness, or concrete certificate.
+For every invertible family, strengthen its owning theorem to `denoteRegion ... before ↔ denoteRegion ... after`; this theorem, not syntactic symmetry of `Local`, licenses `symmetric Local`. Use the same ownership rule for primitive, structural, identity, and quantifier mathematics. Each owning proof has no boundary arguments, `BoundaryAssignment`, open compiler witness, concrete certificate, execution orientation, or polarity-legality witness.
 
 - [ ] **Step 4: Derive contextual and open family soundness**
 
@@ -468,12 +446,9 @@ First derive Region-level contextual soundness with `DiagramContext.denote_fill`
 
 ```lean
 theorem Erasure.sound
-    (h : Erasure orientation source target) :
-    match orientation with
-    | .forward => ∀ model args,
-        denoteOpen model source args → denoteOpen model target args
-    | .backward => ∀ model args,
-        denoteOpen model target args → denoteOpen model source args
+    (h : Erasure source target) :
+    ∀ model args,
+      denoteOpen model source args → denoteOpen model target args
 ```
 
 The open proof performs no rule-specific semantic reasoning: destruct the occurrence; transport through source isomorphism; apply the Region-level contextual theorem; invoke `OpenDiagram.denote_body`; transport through target isomorphism. This open theorem is a family interface consumed by `Step.sound`, not the owner of the mathematical rule proof.
@@ -508,73 +483,27 @@ Commit one family at a time with `git commit -m "Prove <family> relation sound"`
 - [ ] **Step 1: Define iteration as its mathematical whole-diagram relation**
 
 ```lean
-inductive Iteration :
-    Orientation → OpenDiagram arity → OpenDiagram arity → Prop
+inductive Iteration.Base :
+    OpenDiagram arity → OpenDiagram arity → Prop
   | iterate
       (occurrences : IterationOccurrences source)
       (nonoverlap : occurrences.Nonoverlapping)
       (scope : occurrences.WellScoped)
       (result : Iterate source occurrences = target) :
-      Iteration .forward source target
-  | deiterate
-      (occurrences : IterationOccurrences target)
-      (nonoverlap : occurrences.Nonoverlapping)
-      (scope : occurrences.WellScoped)
-      (result : Iterate target occurrences = source) :
-      Iteration .backward source target
+      Base source target
+
+def Iteration : Rule := symmetric Iteration.Base
 ```
 
-The witness refers to recursive occurrences and the resulting recursive diagram. It does not refer to selection indices, traversal, extraction, splice traces, or executor state.
+The witness refers to recursive occurrences and the resulting recursive diagram. It does not refer to selection indices, traversal, extraction, splice traces, executor state, or the separate executable deiteration operation. Iteration is invertible, so its abstract family is the symmetric closure of the single positive relation; its soundness owner proves equivalence for `Iteration.Base`.
 
 - [ ] **Step 2: Define simultaneous substitution**
 
-```lean
-structure Substitution.Site (source : OpenDiagram arity) where
-  wires : Nat
-  rels : RelCtx
-  before : Region wires rels
-  after : Region wires rels
-  occurrence : Occurrence before source
-  replacement : Substitutes before after
-
-structure Substitution.Witness
-    (orientation : Orientation)
-    (source target : OpenDiagram arity) : Prop where
-  sites : List (Substitution.Site source)
-  nonoverlap : Nonoverlapping sites
-  ordered : OrderedSites sites
-  fresh : FreshReplacements sites
-  capture_free : CaptureFree sites
-  result : SubstituteAll source sites = target
-  allowed : Allowed orientation (SitesPolarity sites)
-
-def Substitution (orientation : Orientation)
-    (source target : OpenDiagram arity) : Prop :=
-  Nonempty (Substitution.Witness orientation source target)
-```
-
-Use indexed or vector-valued `Filling` in the final Lean definition so each hole's wire and relation indices are preserved.
+Define one positive-context `Substitution.Base` relation at the operation's focused `Region`. Its witness contains the quantified source form, all bound applications being replaced, indexed replacement data preserving every site's wire and relation contexts, simultaneous filling, freshness, and capture avoidance. Define `Substitution source target` by locating that focused region once and applying `atPolarity` to `Substitution.Base` using the focus context's polarity. The converse is not a second abstract substitution constructor.
 
 - [ ] **Step 3: Define comprehension independently**
 
-```lean
-structure Comprehension.Witness
-    (orientation : Orientation)
-    (source target : OpenDiagram arity) : Prop where
-  occurrences : OccurrenceFamily source
-  nonoverlap : occurrences.Nonoverlapping
-  interface : OrderedInterface occurrences
-  fresh : FreshBinder source
-  capture_free : CaptureFree occurrences
-  result : Comprehend source occurrences interface fresh = target
-  allowed : Allowed orientation occurrences.polarity
-
-def Comprehension (orientation : Orientation)
-    (source target : OpenDiagram arity) : Prop :=
-  Nonempty (Comprehension.Witness orientation source target)
-```
-
-Do not reuse substitution's witness merely because both are simultaneous.
+Define one positive-context `Comprehension.Base` relation at the operation's wrapping `Region`. Its witness contains the selected nonoverlapping occurrences, their ordered interface, the fresh binder, capture-avoidance evidence, and the resulting comprehended region. Define `Comprehension source target` by locating the wrapping region once and applying `atPolarity` to `Comprehension.Base` using that context's polarity. Do not compute a polarity for each selected occurrence: comprehension abstraction has one controlling wrap region. Do not reuse substitution's witness merely because both relations are simultaneous.
 
 - [ ] **Step 4: Extract one mathematical owner per family, then RED/GREEN family soundness**
 
@@ -586,7 +515,7 @@ For substitution and comprehension, make recursive renaming, simultaneous fillin
 2. `OpenDiagram.denote_substituteBoundary` for the positional lift;
 3. a later refinement theorem proving that the concrete diagonal witness represents that substitution.
 
-Each family then exposes the open implication required by `Step.sound` by using the generic Region-to-open lift from Task 1. Compiler, occurrence extraction, and splice correctness appear only in refinement. Do not create a Region duplicate for every existing `wholeOpen_equiv` or compiled-source theorem.
+Each family then exposes the ordinary open implication required by `Step.sound` by using polarity-aware context transport and the generic Region-to-open lift from Task 1. An invertible family proves equivalence for its positive base relation before admitting the converse. Compiler, occurrence extraction, the executor's paired operation names, and splice correctness appear only in refinement. Do not create a Region duplicate for every existing `wholeOpen_equiv` or compiled-source theorem.
 
 - [ ] **Step 5: Validate and commit by family**
 
@@ -622,19 +551,16 @@ Each case delegates to the corresponding family `iso` theorem.
 
 ```lean
 theorem Step.sound
-    (h : Step orientation source target) :
-    match orientation with
-    | .forward => ∀ model args,
-        denoteOpen model source args → denoteOpen model target args
-    | .backward => ∀ model args,
-        denoteOpen model target args → denoteOpen model source args
+    (h : Step source target) :
+    ∀ model args,
+      denoteOpen model source args → denoteOpen model target args
 ```
 
 At RED, all definitions and family soundness theorems in the dependency closure are complete; the only new `sorry` is the proof of `Step.sound`.
 
 - [ ] **Step 3: GREEN by cases on `h`**
 
-The proof has one case per family constructor and delegates directly to that family's soundness theorem. It performs no execution, matching, translation, or concrete semantic reasoning.
+The proof has one case per family constructor and delegates directly to that family's soundness theorem. Converse selection has already occurred inside the family relation from context polarity, and invertible converse cases use that family's equivalence theorem. The proof performs no execution, matching, translation, or concrete semantic reasoning.
 
 - [ ] **Step 4: Add kernel and dependency audits**
 
@@ -675,7 +601,7 @@ git commit -m "Prove relational step soundness"
 
 **Interfaces:**
 - Consumes: core signature/boundary data needed to type flat representations.
-- Produces: `Concrete.Diagram`, `Concrete.OpenDiagram`, `Concrete.Checked`, `Concrete.Occurrence`, `Concrete.Match`, `Concrete.Step`, `Concrete.Error`, `Concrete.Receipt`, `Concrete.execute`.
+- Produces: `Concrete.Diagram`, `Concrete.OpenDiagram`, `Concrete.Checked`, `Concrete.Occurrence`, `Concrete.Match`, `Concrete.Orientation`, `Concrete.Step`, `Concrete.Error`, `Concrete.Receipt`, `Concrete.execute`.
 
 - [ ] **Step 1: Move concrete types without compatibility aliases**
 
@@ -709,14 +635,18 @@ No abstract `Occurrence` is defined by this function.
 Move the current request constructors from the former execution-indexed `Rule.Step` into `Concrete.Step`, preserving their checked finite references. Move `StepError` to `Concrete.Error`, `StepReceipt` to `Concrete.Receipt`, and `applyStep` to:
 
 ```lean
+inductive Concrete.Orientation
+  | forward
+  | backward
+
 def Concrete.execute
-    (orientation : Rule.Orientation)
+    (orientation : Concrete.Orientation)
     (input : Concrete.Checked)
     (request : Concrete.Step input) :
     Except Concrete.Error (Concrete.Receipt input)
 ```
 
-These declarations do not export semantic theorems.
+`Concrete.Step` retains the separate named constructors needed to execute both members of each operational pair. `Concrete.Orientation` records which operational endpoint is the logical antecedent. Neither distinction occurs in `Rule.Step`. These declarations do not export semantic theorems.
 
 - [ ] **Step 4: Compile the concrete layer independently**
 
@@ -898,14 +828,17 @@ git commit -m "Prove concrete matcher correctness"
 
 ```lean
 def Requested
-    (orientation : Rule.Orientation)
+    (orientation : Concrete.Orientation)
     (source : Diagram.OpenDiagram arity)
     (request : Concrete.Step concrete)
     (target : Diagram.OpenDiagram arity) : Prop :=
-  Rule.Step orientation source target ∧ RequestWitness request source target
+  (match orientation with
+   | .forward => Rule.Step source target
+   | .backward => Rule.Step target source) ∧
+  RequestWitness orientation request source target
 ```
 
-`RequestWitness` relates concrete indices/selections to the mathematical witnesses of the appropriate family. It contains no denotation.
+`RequestWitness` relates the named executable half and its concrete indices/selections to the positive abstract relation or its converse at the selected region's polarity. It contains no denotation. Every existing operation has one controlling region; no per-occurrence polarity list is introduced for comprehension or any other operation.
 
 - [ ] **Step 2: RED/GREEN execution soundness**
 
@@ -914,7 +847,9 @@ theorem execute_sound
     (sourceRep : Represents sourceConcrete.asOpen source)
     (success : Concrete.execute orientation sourceConcrete request = .ok receipt) :
     ∃ target,
-      Rule.Step orientation source target ∧
+      (match orientation with
+       | .forward => Rule.Step source target
+       | .backward => Rule.Step target source) ∧
       Represents receipt.result.asOpen target
 ```
 
@@ -922,7 +857,7 @@ The migrated compiler, traversal, splice, attachment, and carrier-numbering proo
 
 Classify the existing open theorem towers while migrating them:
 
-- `DirectionalBoundaryWitness`, heterogeneous `denoteOpen_lift`, open elaboration simulation, and rule-specific boundary witnesses remain refinement infrastructure because they compare positional interfaces or transport alias partitions.
+- `BoundaryWitness`, heterogeneous `denoteOpen_lift`, open elaboration simulation, and rule-specific boundary witnesses remain refinement infrastructure because they compare positional interfaces or transport alias partitions.
 - iteration `wholeOpen_equiv`, same-site, route, anchor, contraction, compiled-source, splice, and reassembly theorems become representation or `RequestWitness` lemmas. Their Region `bodyEquiv` argument is supplied by the abstract iteration theorem from Task 5.
 - concrete comprehension diagonal, attachment, and terminal-environment theorems prove that the generated concrete target represents the abstract substitution or comprehension result.
 - receipt and replay theorems consume `execute_sound` and `Step.sound`; they never serve as the owning proof of a rule family.
@@ -934,7 +869,9 @@ The generic unchanged-interface lift belongs to `Diagram.Semantics`; the heterog
 ```lean
 theorem execute_complete
     (sourceRep : Represents sourceConcrete.asOpen source)
-    (step : Rule.Step orientation source target) :
+    (step : match orientation with
+      | .forward => Rule.Step source target
+      | .backward => Rule.Step target source) :
     ∃ request receipt,
       Concrete.execute orientation sourceConcrete request = .ok receipt ∧
       Represents receipt.result.asOpen target
@@ -1004,7 +941,9 @@ theorem applyOpenStep_sound
     (success : applyOpenStep orientation input action = .ok result) :
     ∃ target,
       Represents result.asOpen target ∧
-      Rule.Step orientation source target
+      match orientation with
+      | .forward => Rule.Step source target
+      | .backward => Rule.Step target source
 ```
 
 - [ ] **Step 2: Prove multi-step replay by composing `Rule.Step.sound` results**
@@ -1121,6 +1060,9 @@ git commit -m "Complete recursive rewrite authority"
 - [ ] Occurrence is decomposition evidence, not matcher output.
 - [ ] Whole-diagram and simultaneous rules own their mathematics.
 - [ ] `Step` is a proposition-valued family union with no fixed-count claim.
+- [ ] Each paired rule has one positive-context abstract relation; negative polarity uses its converse, and invertible families admit both directions through a proved equivalence.
+- [ ] Abstract family relations and `Step` contain no execution orientation or direction-legality predicate.
+- [ ] Concrete execution retains the named operational split, and refinement maps each half to the base relation or its converse at one controlling region polarity.
 - [ ] `Step.sound` is proved exhaustively and has no concrete dependencies.
 - [ ] Concrete matching and execution prove refinement into `Step`.
 - [ ] Representation uniqueness concludes isomorphism, not equality.
