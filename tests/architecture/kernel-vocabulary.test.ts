@@ -75,7 +75,6 @@ const removedTestRuleLiterals = new Set<string>([
 
 const negativeCodecFixture = 'tests/kernel/proof/json.test.ts'
 const vocabularyGuard = 'tests/architecture/kernel-vocabulary.test.ts'
-const leanSemanticsGuard = 'tests/architecture/lean-semantics.test.ts'
 
 const absentAuthorityPaths = [
   'src/kernel/diagram/canonical/shape.ts',
@@ -538,10 +537,8 @@ describe('Phase-1 kernel vocabulary conformance', () => {
     const offenders = [...evidence.errors]
     for (const file of tsFilesUnder('tests')) {
       // Execution ruling: the guard must spell the displaced names it rejects;
-      // those declarations are test machinery, not application authority. The
-      // Lean-semantics guard spells them for the same reason: its literals are
-      // negative not-toContain assertions over Lean sources.
-      if (file === vocabularyGuard || file === leanSemanticsGuard) continue
+      // those declarations are test machinery, not application authority.
+      if (file === vocabularyGuard) continue
       const parsed = parseTypeScript(file)
       for (const literal of exactStringLiteralNodes(parsed)) {
         if (
