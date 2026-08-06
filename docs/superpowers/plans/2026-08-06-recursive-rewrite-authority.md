@@ -23,6 +23,7 @@
 - `Step.sound` and every family soundness theorem must have a dependency closure containing no concrete diagram, matcher, executor, error, receipt, trace, carrier-numbering, or compiler declaration.
 - Local rules use typed context decomposition modulo recursive diagram isomorphism. Context soundness must account for cut polarity; arbitrary contexts are not assumed monotone.
 - Iteration, substitution, comprehension, and any other simultaneous or whole-diagram rule retain their simplest mathematical relation. They are not forced through one universal replacement relation.
+- The concrete boundary exposes an explicit fallible `Concrete.translate` from unchecked flat open diagrams to recursive open diagrams. Translation is validation followed by total elaboration; `Represents` is successful translation modulo open-diagram isomorphism.
 - `Represents`, matcher correctness, and execution correctness live only in `VisualProof.Refinement`.
 - Representation and execution completeness are proved with explicit quantifiers over requests and targets; rejection correctness applies only to fully specified domain-invalid requests, never resource or infrastructure failures.
 - Do not encode or assert a fixed number of rules. Coverage is by `Step` constructors and family soundness cases.
@@ -44,7 +45,7 @@
 | `VisualProof/Rule/{Primitive,Structural,Identity,Erasure,Iteration,Substitution,Comprehension,Quantifier}.lean` | Mathematical rule-family relations and witnesses |
 | `VisualProof/Rule/Step.lean` | Inductive union of the rule-family relations |
 | `VisualProof/Rule/Soundness.lean` | Per-family imports and exhaustive `Step.sound` |
-| `VisualProof/Concrete/{Diagram,Occurrence,Match,Step}.lean` | Flat checked representation, search, requests, receipts, errors, execution |
+| `VisualProof/Concrete/{Diagram,Translate,Occurrence,Match,Step}.lean` | Flat checked representation, validation and translation, search, requests, receipts, errors, execution |
 | `VisualProof/Refinement/{Represents,Match,Step}.lean` | Representation laws, matcher correctness, execution correctness |
 | `VisualProof/Proof/{Replay,Theorem}.lean` | Proof programs that consume concrete execution plus refinement and abstract soundness |
 
@@ -53,6 +54,7 @@
 | Existing theorem family | Final ownership |
 |---|---|
 | Executable operation pairs, `Orientation`, `StepTag.semanticMode`, and direction-specific polarity checks | Keep only in concrete execution and refinement; abstract families contain one positive relation and obtain the other member by converse |
+| Checked concrete elaboration and raw well-formedness checking | Compose behind the explicit fallible `Concrete.translate`; characterize `Represents` as its graph modulo `OpenDiagramIso` |
 | Boundary representatives, alias consistency, boundary assignments, open substitution, and `OpenDiagramIso` denotation | Remain in the open-diagram kernel; their subject is the ordered-position-to-wire-class quotient |
 | `denote_replaceOpenBody_mono` and `denote_replaceOpenBody_iff` in concrete splice tracing | Move their implementation-independent content beside `denoteOpen` as the single generic unchanged-boundary lift from Region implication/equivalence |
 | `regionIso_fill_denotation` and its cast variant in concrete splice tracing | Move the general statement into recursive context/isomorphism algebra; it is Region mathematics despite its current location |
@@ -601,7 +603,7 @@ git commit -m "Prove relational step soundness"
 
 **Interfaces:**
 - Consumes: core signature/boundary data needed to type flat representations.
-- Produces: `Concrete.Diagram`, `Concrete.OpenDiagram`, `Concrete.Checked`, `Concrete.Occurrence`, `Concrete.Match`, `Concrete.Orientation`, `Concrete.Step`, `Concrete.Error`, `Concrete.Receipt`, `Concrete.execute`.
+- Produces: `Concrete.Diagram`, `Concrete.OpenDiagram`, `Concrete.Checked`, `Concrete.checkOpen`, `Concrete.Occurrence`, `Concrete.Match`, `Concrete.Orientation`, `Concrete.Step`, `Concrete.Error`, `Concrete.Receipt`, `Concrete.execute`.
 
 - [ ] **Step 1: Move concrete types without compatibility aliases**
 
@@ -617,6 +619,15 @@ Move the complete structures and predicates from `VisualProof/Diagram/Concrete/C
 | `Diagram.OpenConcreteDiagram.WellFormed` | `Concrete.OpenDiagram.WellFormed` |
 
 Rename dependents mechanically; do not leave aliases behind.
+
+Move the executable open-diagram validator with the types and expose its proof-bearing result:
+
+```lean
+def Concrete.checkOpen (concrete : Concrete.OpenDiagram) :
+    Except Concrete.WFError concrete.WellFormed
+```
+
+Successful checking returns the proof consumed by total elaboration and does not construct a second diagram. `Concrete.translate` maps `Concrete.WFError` into the common `Concrete.Error` at the public translation boundary.
 
 - [ ] **Step 2: Move matcher/search declarations**
 
@@ -646,7 +657,7 @@ def Concrete.execute
     Except Concrete.Error (Concrete.Receipt input)
 ```
 
-`Concrete.Step` retains the separate named constructors needed to execute both members of each operational pair. `Concrete.Orientation` records which operational endpoint is the logical antecedent. Neither distinction occurs in `Rule.Step`. These declarations do not export semantic theorems.
+Add `Concrete.Error.invalidDiagram (error : Concrete.WFError)` for translation validation failures. `Concrete.Step` retains the separate named constructors needed to execute both members of each operational pair. `Concrete.Orientation` records which operational endpoint is the logical antecedent. Neither distinction occurs in `Rule.Step`. These declarations do not export semantic theorems.
 
 - [ ] **Step 4: Compile the concrete layer independently**
 
@@ -669,30 +680,63 @@ git commit -m "Separate concrete rewriting implementation"
 ### Task 8: Define representation and prove its laws
 
 **Files:**
+- Create: `VisualProof/Concrete/Translate.lean`
 - Create: `VisualProof/Refinement/Represents.lean`
 - Migrate: `VisualProof/Diagram/Concrete/Elaboration/Compile/Certified.lean`
 - Migrate: `VisualProof/Diagram/Concrete/Elaboration/Simulation.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
-- Consumes: `Concrete.Checked`, `Concrete.OpenDiagram`, recursive `OpenDiagram`, elaboration/translation, and recursive isomorphism.
-- Produces: `Represents`, checked representation existence, meaning uniqueness modulo isomorphism, and representation coverage.
+- Consumes: `Concrete.checkOpen`, `Concrete.CheckedOpen`, total checked elaboration, recursive `OpenDiagram`, and recursive isomorphism.
+- Produces: fallible `Concrete.translate`, its checked-input equation, `Represents`, checked representation existence, meaning uniqueness modulo isomorphism, and representation coverage.
 
-- [ ] **Step 1: Define the relation independently of execution**
+- [ ] **Step 1: Expose fallible translation from unchecked flat syntax**
+
+Keep elaboration total on a checked input:
+
+```lean
+def Concrete.elaborate
+    (checked : Concrete.CheckedOpen) :
+    Diagram.OpenDiagram checked.val.boundary.length
+```
+
+Define the public translation boundary by composing validation and elaboration:
+
+```lean
+def Concrete.translate (concrete : Concrete.OpenDiagram) :
+    Except Concrete.Error
+      (Diagram.OpenDiagram concrete.boundary.length) :=
+  match Concrete.checkOpen concrete with
+  | .error error => .error (.invalidDiagram error)
+  | .ok valid => .ok (Concrete.elaborate ⟨concrete, valid⟩)
+```
+
+The boundary length is already determined by the input, so translation does not return an existential arity. `Concrete.Error.invalidDiagram` retains the original `Concrete.WFError`.
+
+- [ ] **Step 2: RED/GREEN the checked translation equation**
+
+```lean
+theorem Concrete.translate_checked
+    (checked : Concrete.CheckedOpen) :
+    Concrete.translate checked.val = .ok (Concrete.elaborate checked)
+```
+
+The proof uses the validator's success theorem and proof irrelevance. It establishes that `translate` is exactly validation followed by the existing total elaboration.
+
+- [ ] **Step 3: Define representation through translation modulo isomorphism**
 
 ```lean
 def Represents
     (concrete : Concrete.OpenDiagram)
     (diagram : Diagram.OpenDiagram concrete.boundary.length) : Prop :=
-  ∃ checked : concrete.diagram.WellFormed,
-    Diagram.OpenDiagramIso
-      (Concrete.elaborate ⟨concrete, checked⟩)
-      diagram
+  ∃ translated,
+    Concrete.translate concrete = .ok translated ∧
+    Diagram.OpenDiagramIso translated diagram
 ```
 
-The final definition must also expose that the boundary list and its repeated entries correspond positionwise; this may be carried by `OpenDiagramIso` if that theorem already proves it.
+`OpenDiagramIso` carries the pointwise ordered-boundary correspondence and repeated aliases. `Represents` therefore permits noncanonical class numbering without weakening translation failure or boundary identity.
 
-- [ ] **Step 2: RED/GREEN checked representation existence**
+- [ ] **Step 4: RED/GREEN checked representation existence**
 
 ```lean
 theorem checked_represents
@@ -700,7 +744,7 @@ theorem checked_represents
     ∃ diagram, Represents concrete.val diagram
 ```
 
-- [ ] **Step 3: RED/GREEN meaning uniqueness**
+- [ ] **Step 5: RED/GREEN meaning uniqueness**
 
 ```lean
 theorem represents_unique
@@ -711,7 +755,7 @@ theorem represents_unique
 
 The conclusion is isomorphism, never Lean equality.
 
-- [ ] **Step 4: RED/GREEN representation coverage**
+- [ ] **Step 6: RED/GREEN representation coverage**
 
 Because the flat format is intended to implement the complete calculus, prove:
 
@@ -723,14 +767,15 @@ theorem representation_complete
         Represents concrete.val (diagram.castArity h.symm)
 ```
 
-- [ ] **Step 5: Validate and commit**
+- [ ] **Step 7: Validate and commit**
 
 ```bash
+lake env lean -DwarningAsError=true VisualProof/Concrete/Translate.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Represents.lean
 lake env lean -DwarningAsError=true VisualProof/Audit.lean
 lake build
 git diff --check
-git add VisualProof/Refinement/Represents.lean VisualProof/Concrete/Elaboration VisualProof.lean VisualProof/Audit.lean
+git add VisualProof/Concrete/Translate.lean VisualProof/Refinement/Represents.lean VisualProof/Concrete/Elaboration VisualProof.lean VisualProof/Audit.lean
 git commit -m "Prove concrete representation laws"
 ```
 
@@ -822,7 +867,7 @@ git commit -m "Prove concrete matcher correctness"
 
 **Interfaces:**
 - Consumes: `Concrete.execute`, `Concrete.Step`, `Concrete.Receipt`, `Represents`, matcher correctness, family relations, and `Rule.Step`.
-- Produces: `execute_sound`, `execute_complete`, and `execute_rejects_only_invalid`.
+- Produces: `execute_sound`, exact `execute_translates`, `execute_complete`, and `execute_rejects_only_invalid`.
 
 - [ ] **Step 1: Define request meaning without semantic claims**
 
@@ -854,6 +899,21 @@ theorem execute_sound
 ```
 
 The migrated compiler, traversal, splice, attachment, and carrier-numbering proofs discharge `RequestWitness` and target representation only.
+
+Also expose the exact commuting form for the canonical translated representatives:
+
+```lean
+theorem execute_translates
+    (success : Concrete.execute orientation sourceConcrete request = .ok receipt) :
+    ∃ source target,
+      Concrete.translate sourceConcrete.asOpen.val = .ok source ∧
+      Concrete.translate receipt.result.asOpen.val = .ok target ∧
+      match orientation with
+      | .forward => Rule.Step source target
+      | .backward => Rule.Step target source
+```
+
+Prove `execute_translates` from `Concrete.translate_checked`, `execute_sound`, representation uniqueness, and `Step.iso`. Keep `execute_sound` as the primary theorem because callers may choose any isomorphic recursive representatives; the exact translation equation is a corollary, not a replacement for `Represents`.
 
 Classify the existing open theorem towers while migrating them:
 
@@ -997,6 +1057,7 @@ There must be no public or internal declaration of:
 import VisualProof.Diagram.Semantics
 import VisualProof.Diagram.Occurrence
 import VisualProof.Rule.Soundness
+import VisualProof.Concrete.Translate
 import VisualProof.Concrete.Step
 import VisualProof.Refinement.Represents
 import VisualProof.Refinement.Match
@@ -1011,6 +1072,7 @@ import VisualProof.Proof.Theory
 ```lean
 #print axioms VisualProof.Diagram.Isomorphic.denote_iff
 #print axioms VisualProof.Rule.Step.sound
+#print axioms VisualProof.Concrete.translate_checked
 #print axioms VisualProof.Refinement.checked_represents
 #print axioms VisualProof.Refinement.represents_unique
 #print axioms VisualProof.Refinement.representation_complete
@@ -1065,6 +1127,8 @@ git commit -m "Complete recursive rewrite authority"
 - [ ] Concrete execution retains the named operational split, and refinement maps each half to the base relation or its converse at one controlling region polarity.
 - [ ] `Step.sound` is proved exhaustively and has no concrete dependencies.
 - [ ] Concrete matching and execution prove refinement into `Step`.
+- [ ] `Concrete.translate` is the explicit fallible unchecked-flat-to-recursive boundary, and checked elaboration is its successful total core.
+- [ ] `Represents` means successful translation modulo `OpenDiagramIso`; execution exposes both relational refinement and an exact translation commuting corollary.
 - [ ] Representation uniqueness concludes isomorphism, not equality.
 - [ ] Completeness and rejection theorems have the precise qualifiers stated above.
 - [ ] Replay inherits semantics through refinement plus `Step.sound`.
