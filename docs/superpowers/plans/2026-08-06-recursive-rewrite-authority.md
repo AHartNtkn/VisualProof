@@ -22,11 +22,20 @@
 - Concrete execution retains the operational split between the two members of each rule pair. Refinement proves that the selected operation realizes the base relation or its converse at the application region's single polarity.
 - `Step.sound` and every family soundness theorem must have a dependency closure containing no concrete diagram, matcher, executor, error, receipt, trace, carrier-numbering, or compiler declaration.
 - Local rules use typed context decomposition modulo recursive diagram isomorphism. Context soundness must account for cut polarity; arbitrary contexts are not assumed monotone.
-- Iteration, substitution, comprehension, and any other simultaneous or whole-diagram rule retain their simplest mathematical relation. They are not forced through one universal replacement relation.
+- Iteration, comprehension abstraction/substitution, and any other simultaneous or whole-diagram rule retain their simplest mathematical relation. They are not forced through one universal replacement relation.
 - The concrete boundary exposes an explicit fallible `Concrete.translate` from unchecked flat open diagrams to recursive open diagrams. Translation is validation followed by total elaboration; `Represents` is successful translation modulo open-diagram isomorphism.
 - `Represents`, matcher correctness, and execution correctness live only in `VisualProof.Refinement`.
 - Representation and execution completeness are proved with explicit quantifiers over requests and targets; rejection correctness applies only to fully specified domain-invalid requests, never resource or infrastructure failures.
-- Do not encode or assert a fixed number of rules. Coverage is by `Step` constructors and family soundness cases.
+- The rule inventory is fixed. The abstract calculus has exactly the six relations listed below, and concrete execution retains exactly the twelve existing operations paired with them. `Step.sound` and execution refinement are exhaustive over these inventories; do not add, regroup, or reclassify rule constructors.
+
+| Abstract relation | Existing concrete operation pair |
+|---|---|
+| `Erasure` | `erasure` / `boundRelationSpawn` |
+| `WireSever` | `wireSever` / `wireJoin` |
+| `Iteration` | `iteration` / `deiteration` |
+| `DoubleCut` | `doubleCutIntro` / `doubleCutElim` |
+| `Comprehension` | `comprehensionAbstract` / `comprehensionInstantiate` (also called substitution in prose) |
+| `Vacuity` | `vacuousIntro` / `vacuousElim` |
 - Follow theorem-driven RED/GREEN: complete every definition in an owning theorem's dependency closure; introduce `sorry` only in that theorem proof; compile RED; replace it with a kernel-checked proof; compile GREEN; commit.
 - Do not preserve the execution-indexed rule model through aliases, adapters, compatibility modules, or re-exports.
 
@@ -42,7 +51,7 @@
 | `VisualProof/Diagram/Context.lean` | Region-level typed one-hole contexts, filling, cut polarity, semantic transport |
 | `VisualProof/Diagram/Occurrence.lean` | Relational occurrence as context decomposition modulo isomorphism |
 | `VisualProof/Rule/Relation.lean` | Shared relation shape, converse, symmetric closure, and polarity action, with no execution data |
-| `VisualProof/Rule/{Primitive,Structural,Identity,Erasure,Iteration,Substitution,Comprehension,Quantifier}.lean` | Mathematical rule-family relations and witnesses |
+| `VisualProof/Rule/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean` | The six mathematical rule relations and their witnesses |
 | `VisualProof/Rule/Step.lean` | Inductive union of the rule-family relations |
 | `VisualProof/Rule/Soundness.lean` | Per-family imports and exhaustive `Step.sound` |
 | `VisualProof/Concrete/{Diagram,Translate,Occurrence,Match,Step}.lean` | Flat checked representation, validation and translation, search, requests, receipts, errors, execution |
@@ -53,14 +62,14 @@
 
 | Existing theorem family | Final ownership |
 |---|---|
-| Executable operation pairs, `Orientation`, `StepTag.semanticMode`, and direction-specific polarity checks | Keep only in concrete execution and refinement; abstract families contain one positive relation and obtain the other member by converse |
+| The twelve constructors `boundRelationSpawn`, `wireJoin`, `erasure`, `wireSever`, `iteration`, `deiteration`, `doubleCutIntro`, `doubleCutElim`, `comprehensionInstantiate`, `comprehensionAbstract`, `vacuousIntro`, and `vacuousElim`, together with `Orientation`, `StepTag.semanticMode`, and direction-specific polarity checks | Keep the exact twelve-operation roster only in concrete execution and refinement; map each named pair to one of the six abstract relations above |
 | Checked concrete elaboration and raw well-formedness checking | Compose behind the explicit fallible `Concrete.translate`; characterize `Represents` as its graph modulo `OpenDiagramIso` |
 | Boundary representatives, alias consistency, boundary assignments, open substitution, and `OpenDiagramIso` denotation | Remain in the open-diagram kernel; their subject is the ordered-position-to-wire-class quotient |
 | `denote_replaceOpenBody_mono` and `denote_replaceOpenBody_iff` in concrete splice tracing | Move their implementation-independent content beside `denoteOpen` as the single generic unchanged-boundary lift from Region implication/equivalence |
 | `regionIso_fill_denotation` and its cast variant in concrete splice tracing | Move the general statement into recursive context/isomorphism algebra; it is Region mathematics despite its current location |
 | `positive_erasure_sound`, `negative_insertion_sound`, identity join/sever, ancestor copy, contextual contraction, double-cut, and vacuous-bubble laws in `Rule/Structural/Semantics.lean` | Reuse as Region-level mathematical owners; family soundness derives from them |
 | `comprehensionInstantiate_sound` and `comprehensionAbstract_context_sound` | Reuse as Region/context-level comprehension owners |
-| `diagonalize_denotation` | Split into abstract Region substitution/diagonalization, the generic open substitution theorem, and concrete diagonal-representation refinement |
+| `diagonalize_denotation` | Split into the instantiation side of the abstract comprehension relation at Region level, the generic open substitution theorem, and concrete diagonal-representation refinement |
 | Iteration `wholeOpen_equiv`, `sameSite_*`, contraction, route, and anchor theorems that first prove a `bodyEquiv` | Extract the declarative Region-level iteration law; retain open compiler conclusions only as refinement corollaries |
 | The current direction-specific boundary witness, heterogeneous `denoteOpen_lift`, rule-specific boundary witnesses, and compiled open-source equivalences | Keep under refinement ownership because they compare positional interfaces, alias partitions, or concrete compiler products; name the retained refinement structure `BoundaryWitness` |
 | `TheoremSchema.Valid` and the final checked-theorem statement | Keep genuinely open, but make represented recursive open diagrams their operands and derive validity through replay refinement plus `Step.sound` |
@@ -342,17 +351,15 @@ Replace the current `Step (input : CheckedDiagram)` with:
 ```lean
 inductive Step :
     OpenDiagram arity → OpenDiagram arity → Prop
-  | primitive : Primitive source target → Step source target
-  | structural : Structural source target → Step source target
-  | identity : Identity source target → Step source target
   | erasure : Erasure source target → Step source target
+  | wireSever : WireSever source target → Step source target
   | iteration : Iteration source target → Step source target
-  | substitution : Substitution source target → Step source target
+  | doubleCut : DoubleCut source target → Step source target
   | comprehension : Comprehension source target → Step source target
-  | quantifier : Quantifier source target → Step source target
+  | vacuity : Vacuity source target → Step source target
 ```
 
-Do not add tags, inventories, semantic modes, requests, errors, receipts, selections, or concrete witnesses to this module.
+These six constructors are the complete abstract inventory. Do not add classification constructors, tags, semantic modes, requests, errors, receipts, selections, or concrete witnesses to this module.
 
 - [ ] **Step 3: Add isomorphism closure**
 
@@ -379,17 +386,15 @@ git commit -m "Define relational proof steps"
 ### Task 4: State and prove the local rule families
 
 **Files:**
-- Create: `VisualProof/Rule/Primitive.lean`
-- Replace: `VisualProof/Rule/Structural.lean`
-- Create: `VisualProof/Rule/Identity.lean`
 - Create: `VisualProof/Rule/Erasure.lean`
-- Create: `VisualProof/Rule/Quantifier.lean`
+- Create: `VisualProof/Rule/WireSever.lean`
+- Create: `VisualProof/Rule/DoubleCut.lean`
+- Create: `VisualProof/Rule/Vacuity.lean`
 - Modify: `VisualProof/Rule/Structural/Semantics.lean`
-- Create: `VisualProof/Rule/Soundness/Primitive.lean`
-- Replace: `VisualProof/Rule/Soundness/Structural.lean`
-- Create: `VisualProof/Rule/Soundness/Identity.lean`
 - Create: `VisualProof/Rule/Soundness/Erasure.lean`
-- Create: `VisualProof/Rule/Soundness/Quantifier.lean`
+- Create: `VisualProof/Rule/Soundness/WireSever.lean`
+- Create: `VisualProof/Rule/Soundness/DoubleCut.lean`
+- Create: `VisualProof/Rule/Soundness/Vacuity.lean`
 
 **Interfaces:**
 - Consumes: `Rule.Contextual`, recursive syntax, polarity, scope, freshness, and isomorphism.
@@ -397,7 +402,7 @@ git commit -m "Define relational proof steps"
 
 - [ ] **Step 1: Define each local relation from mathematical witnesses only**
 
-Use this shape for every constructor listed below:
+Use this shape for `Erasure`; define `WireSever`, `DoubleCut`, and `Vacuity` with the same separation between a recursive local relation and its contextual closure:
 
 ```lean
 namespace Erasure
@@ -414,7 +419,14 @@ def Rel : Rule := fun source target =>
 end Erasure
 ```
 
-Within every family, define only the positive-context mathematical relation. Do not copy the two executable operation names into two abstract constructors. If the pair is invertible, expose the family relation through `Contextual (symmetric Local)` after proving local semantic equivalence; otherwise expose it through `Contextual Local`, whose negative-context applications are supplied by `atPolarity`. Each constructor owns a recursive source, recursive target, and genuine mathematical legality witnesses such as scope, freshness, gluing, and capture avoidance. Do not add direction-selection evidence or share a universal graph-replacement payload.
+The four local families are exactly:
+
+- `Erasure.Local`, with positive form removing selected recursive material; `boundRelationSpawn` refines the converse insertion case.
+- `WireSever.Local`, with positive form separating a wire according to the mathematical endpoint partition; `wireJoin` refines its converse.
+- `DoubleCut.Local`, with `doubleCutIntro` and `doubleCutElim` refining its two directions.
+- `Vacuity.Local`, with `vacuousIntro` and `vacuousElim` refining its two directions.
+
+Define only the positive-context mathematical relation for each family. Do not copy the two executable operation names into two abstract constructors. `DoubleCut` and `Vacuity` are invertible, so expose them through `Contextual (symmetric Local)` only after proving local semantic equivalence. Expose `Erasure` and `WireSever` through `Contextual Local`; their negative-context applications are supplied by `atPolarity`. Each constructor owns a recursive source, recursive target, and genuine mathematical legality witnesses such as scope, freshness, gluing, and capture avoidance. Do not add direction-selection evidence or share a universal graph-replacement payload.
 
 - [ ] **Step 2: Prove isomorphism transport for each family**
 
@@ -440,7 +452,7 @@ theorem Erasure.Local.sound
         denoteRegion model env relEnv after
 ```
 
-For every invertible family, strengthen its owning theorem to `denoteRegion ... before ↔ denoteRegion ... after`; this theorem, not syntactic symmetry of `Local`, licenses `symmetric Local`. Use the same ownership rule for primitive, structural, identity, and quantifier mathematics. Each owning proof has no boundary arguments, `BoundaryAssignment`, open compiler witness, concrete certificate, execution orientation, or polarity-legality witness.
+For `DoubleCut` and `Vacuity`, strengthen the owning theorem to `denoteRegion ... before ↔ denoteRegion ... after`; this theorem, not syntactic symmetry of `Local`, licenses `symmetric Local`. Each owning proof has no boundary arguments, `BoundaryAssignment`, open compiler witness, concrete certificate, execution orientation, or polarity-legality witness.
 
 - [ ] **Step 4: Derive contextual and open family soundness**
 
@@ -457,7 +469,7 @@ The open proof performs no rule-specific semantic reasoning: destruct the occurr
 
 - [ ] **Step 5: Validate and commit each independently reviewable family**
 
-For each `Family` in `Primitive Structural Identity Erasure Quantifier`:
+For each `Family` in `Erasure WireSever DoubleCut Vacuity`:
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Rule/Family.lean
@@ -470,10 +482,8 @@ Commit one family at a time with `git commit -m "Prove <family> relation sound"`
 
 **Files:**
 - Create: `VisualProof/Rule/Iteration.lean`
-- Create: `VisualProof/Rule/Substitution.lean`
 - Replace: `VisualProof/Rule/Comprehension.lean`
 - Create: `VisualProof/Rule/Soundness/Iteration.lean`
-- Create: `VisualProof/Rule/Soundness/Substitution.lean`
 - Create: `VisualProof/Rule/Soundness/Comprehension.lean`
 - Replace directory: `VisualProof/Rule/Soundness/Comprehension/`
 - Extract Region-level iteration laws from: `VisualProof/Rule/Soundness/Iteration/**/*.lean`
@@ -499,33 +509,27 @@ def Iteration : Rule := symmetric Iteration.Base
 
 The witness refers to recursive occurrences and the resulting recursive diagram. It does not refer to selection indices, traversal, extraction, splice traces, executor state, or the separate executable deiteration operation. Iteration is invertible, so its abstract family is the symmetric closure of the single positive relation; its soundness owner proves equivalence for `Iteration.Base`.
 
-- [ ] **Step 2: Define simultaneous substitution**
+- [ ] **Step 2: Define comprehension abstraction and substitution as one relation**
 
-Define one positive-context `Substitution.Base` relation at the operation's focused `Region`. Its witness contains the quantified source form, all bound applications being replaced, indexed replacement data preserving every site's wire and relation contexts, simultaneous filling, freshness, and capture avoidance. Define `Substitution source target` by locating that focused region once and applying `atPolarity` to `Substitution.Base` using the focus context's polarity. The converse is not a second abstract substitution constructor.
+Define one positive-context `Comprehension.Base` relation at the operation's wrapping `Region`. Its witness contains both recursive sides of the transformation: the selected nonoverlapping occurrences and their ordered interfaces, the fresh binder and quantified form, the simultaneous boundary substitution that recovers the occurrences, and the required freshness and capture-avoidance evidence. Define `Comprehension source target` by locating the wrapping region once and applying `atPolarity` to `Comprehension.Base` using that context's polarity. `comprehensionAbstract` refines the abstraction direction; `comprehensionInstantiate`, also called substitution in prose, refines the converse. Do not create a separate `Substitution` relation, constructor, witness, module, theorem family, or refinement family. Do not compute a polarity for each selected occurrence: the operation has one controlling wrap region.
 
-- [ ] **Step 3: Define comprehension independently**
-
-Define one positive-context `Comprehension.Base` relation at the operation's wrapping `Region`. Its witness contains the selected nonoverlapping occurrences, their ordered interface, the fresh binder, capture-avoidance evidence, and the resulting comprehended region. Define `Comprehension source target` by locating the wrapping region once and applying `atPolarity` to `Comprehension.Base` using that context's polarity. Do not compute a polarity for each selected occurrence: comprehension abstraction has one controlling wrap region. Do not reuse substitution's witness merely because both relations are simultaneous.
-
-- [ ] **Step 4: Extract one mathematical owner per family, then RED/GREEN family soundness**
+- [ ] **Step 3: Extract one mathematical owner per family, then RED/GREEN family soundness**
 
 For iteration, extract the Region/context proposition currently proved as `bodyEquiv` inside contraction, same-site, route, and anchor compiler theorems. State and prove that proposition from the declarative iteration witness; do not retain compiler certificates, compiled sources, routes, anchors, or splice traces in its premises.
 
-For substitution and comprehension, make recursive renaming, simultaneous filling, freshness, and capture avoidance the theorem premises. Reuse `comprehensionInstantiate_sound` and `comprehensionAbstract_context_sound` as Region/context owners. Split the current diagonalization result into:
+For comprehension, make recursive renaming, simultaneous filling, freshness, and capture avoidance the theorem premises. Reuse `comprehensionInstantiate_sound` and `comprehensionAbstract_context_sound` as the two directions of the same Region/context owner. Split the current diagonalization result into:
 
-1. a Region-level substitution/diagonalization theorem;
+1. the Region-level instantiation/substitution side of the comprehension theorem;
 2. `OpenDiagram.denote_substituteBoundary` for the positional lift;
 3. a later refinement theorem proving that the concrete diagonal witness represents that substitution.
 
 Each family then exposes the ordinary open implication required by `Step.sound` by using polarity-aware context transport and the generic Region-to-open lift from Task 1. An invertible family proves equivalence for its positive base relation before admitting the converse. Compiler, occurrence extraction, the executor's paired operation names, and splice correctness appear only in refinement. Do not create a Region duplicate for every existing `wholeOpen_equiv` or compiled-source theorem.
 
-- [ ] **Step 5: Validate and commit by family**
+- [ ] **Step 4: Validate and commit by family**
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Rule/Iteration.lean
 lake env lean -DwarningAsError=true VisualProof/Rule/Soundness/Iteration.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Substitution.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Soundness/Substitution.lean
 lake env lean -DwarningAsError=true VisualProof/Rule/Comprehension.lean
 lake env lean -DwarningAsError=true VisualProof/Rule/Soundness/Comprehension.lean
 ```
@@ -854,14 +858,12 @@ git commit -m "Prove concrete matcher correctness"
 
 **Files:**
 - Create: `VisualProof/Refinement/Step.lean`
-- Create: `VisualProof/Refinement/Step/Primitive.lean`
-- Create: `VisualProof/Refinement/Step/Structural.lean`
-- Create: `VisualProof/Refinement/Step/Identity.lean`
 - Create: `VisualProof/Refinement/Step/Erasure.lean`
+- Create: `VisualProof/Refinement/Step/WireSever.lean`
 - Create: `VisualProof/Refinement/Step/Iteration.lean`
-- Create: `VisualProof/Refinement/Step/Substitution.lean`
+- Create: `VisualProof/Refinement/Step/DoubleCut.lean`
 - Create: `VisualProof/Refinement/Step/Comprehension.lean`
-- Create: `VisualProof/Refinement/Step/Quantifier.lean`
+- Create: `VisualProof/Refinement/Step/Vacuity.lean`
 - Migrate implementation proofs from: `VisualProof/Rule/Soundness/**/*.lean`
 - Modify: `VisualProof/Audit.lean`
 
@@ -884,6 +886,17 @@ def Requested
 ```
 
 `RequestWitness` relates the named executable half and its concrete indices/selections to the positive abstract relation or its converse at the selected region's polarity. It contains no denotation. Every existing operation has one controlling region; no per-occurrence polarity list is introduced for comprehension or any other operation.
+
+The case split is exact:
+
+- `erasure` and `boundRelationSpawn` refine `Erasure`;
+- `wireSever` and `wireJoin` refine `WireSever`;
+- `iteration` and `deiteration` refine `Iteration`;
+- `doubleCutIntro` and `doubleCutElim` refine `DoubleCut`;
+- `comprehensionAbstract` and `comprehensionInstantiate` refine `Comprehension`;
+- `vacuousIntro` and `vacuousElim` refine `Vacuity`.
+
+Do not route these cases through broader classifications. `comprehensionInstantiate` is the substitution direction of `Comprehension`, not a separate refinement family.
 
 - [ ] **Step 2: RED/GREEN execution soundness**
 
@@ -919,7 +932,7 @@ Classify the existing open theorem towers while migrating them:
 
 - `BoundaryWitness`, heterogeneous `denoteOpen_lift`, open elaboration simulation, and rule-specific boundary witnesses remain refinement infrastructure because they compare positional interfaces or transport alias partitions.
 - iteration `wholeOpen_equiv`, same-site, route, anchor, contraction, compiled-source, splice, and reassembly theorems become representation or `RequestWitness` lemmas. Their Region `bodyEquiv` argument is supplied by the abstract iteration theorem from Task 5.
-- concrete comprehension diagonal, attachment, and terminal-environment theorems prove that the generated concrete target represents the abstract substitution or comprehension result.
+- concrete comprehension diagonal, attachment, and terminal-environment theorems prove that the generated concrete target represents the corresponding abstraction or substitution direction of `Comprehension`.
 - receipt and replay theorems consume `execute_sound` and `Step.sound`; they never serve as the owning proof of a rule family.
 
 The generic unchanged-interface lift belongs to `Diagram.Semantics`; the heterogeneous boundary simulations in this task remain concrete/refinement theorems. Do not conflate those two responsibilities merely because both conclude with `denoteOpen`.
@@ -1121,7 +1134,8 @@ git commit -m "Complete recursive rewrite authority"
 - [ ] Contextual replacement accounts for polarity and capture avoidance.
 - [ ] Occurrence is decomposition evidence, not matcher output.
 - [ ] Whole-diagram and simultaneous rules own their mathematics.
-- [ ] `Step` is a proposition-valued family union with no fixed-count claim.
+- [ ] `Step` is the proposition-valued union of exactly `Erasure`, `WireSever`, `Iteration`, `DoubleCut`, `Comprehension`, and `Vacuity`.
+- [ ] Concrete execution retains exactly the twelve existing operations, and refinement exhaustively maps each named pair to its corresponding abstract relation.
 - [ ] Each paired rule has one positive-context abstract relation; negative polarity uses its converse, and invertible families admit both directions through a proved equivalence.
 - [ ] Abstract family relations and `Step` contain no execution orientation or direction-legality predicate.
 - [ ] Concrete execution retains the named operational split, and refinement maps each half to the base relation or its converse at one controlling region polarity.
