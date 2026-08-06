@@ -1,200 +1,105 @@
 # Recursive Rewrite Authority Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **Execution:** Use `superpowers:subagent-driven-development` with one bounded worker task at a time, followed by plan-compliance and code-quality review. Track the same tasks in the GoalBuddy board.
 
-**Goal:** Make recursive open diagrams, relational rules, and structural semantics the mathematical authority, with flat diagrams and execution certified separately by representation and refinement theorems.
+**Goal:** Make recursive diagrams, relational rewrite rules, and recursively defined semantics the mathematical authority. Flat diagrams and executable rewriting are correct exactly when translation and execution refine that authority.
 
-**Architecture:** `VisualProof.Diagram` owns recursive syntax, ordered open boundaries, renaming, isomorphism, contexts, and denotation. `VisualProof.Rule` owns proposition-valued rule families, their union `Step`, and semantic proofs stated only over recursive diagrams. `VisualProof.Concrete` owns flat data and proof-bearing executable requests; `VisualProof.Refinement` proves representation and execution completeness and that every successful execution realizes `Step`.
+**Stack:** Lean 4, Lake, the existing `VisualProof` package.
 
-**Tech Stack:** Lean 4, Lake, the existing `VisualProof` library.
+## Non-negotiable architecture
 
-## Global Constraints
+- `Region` is the only recursive diagram syntax.
+- `OpenDiagram arity` is a nonrecursive mathematical interface: one `Region externalClasses []`, an ordered map from `Fin arity` boundary positions to external wire classes, and surjectivity. Repeated positions may alias; order and multiplicity are preserved.
+- Rule-specific mathematics is stated over `Region` whenever no ordered boundary fact is involved. Rules that can change the boundary quotient are stated directly over `OpenDiagram`.
+- A local occurrence is evidence that a recursive host body is isomorphic to a typed `DiagramContext` filled with a `Region`. It is not a search result.
+- Every rule is a proposition-valued relation. The abstract inventory is exactly `Erasure`, `WireSever`, `Iteration`, `DoubleCut`, `Comprehension`, and `Vacuity`.
+- Each pair has one positive-context relation. A negative controlling context uses its converse. `Iteration`, `DoubleCut`, and `Vacuity` may admit both directions at either polarity only after their base transformation is proved semantically invertible.
+- Abstract relations and `Rule.Step` have no execution orientation. `Step source target` means the ordinary implication from `source` to `target`.
+- Concrete execution retains exactly the twelve operation constructors: `boundRelationSpawn`, `wireJoin`, `erasure`, `wireSever`, `iteration`, `deiteration`, `doubleCutIntro`, `doubleCutElim`, `comprehensionInstantiate`, `comprehensionAbstract`, `vacuousIntro`, and `vacuousElim`.
+- The concrete operation split does not define the abstract rule split. Refinement maps each operation to the base relation or its converse at the one controlling region polarity.
+- Lean contains no occurrence matcher, search status, candidate enumeration, search frontier, or matcher theorem. Requests contain the selected finite data and proofs that execution consumes.
+- `Concrete.translate` is the public fallible conversion from unchecked flat open syntax. `Represents` is its graph modulo `OpenDiagramIso`.
+- Representation completeness and one-step execution completeness are required for the whole calculus.
+- `Rule.Step.sound` has no dependency on flat diagrams, translation, execution, errors, receipts, compiler traversal, or carrier numbering.
+- TypeScript is outside implementation and validation scope.
+- Do not introduce names prefixed with `Direct`, `Directed`, `Abstract`, or `Recursive` merely to distinguish the new authority.
+- No compatibility aliases, transitional public wrappers, or parallel semantic authorities remain after their owning migration task.
 
-- TypeScript is outside the implementation, planning, and validation scope.
-- Use ordinary names inside namespaces. Do not create symbol names prefixed with `Direct`, `Directed`, `Abstract`, or `Recursive` merely to distinguish layers.
-- `Region` is the sole recursive syntax and the owner of recursive semantic arguments. `OpenDiagram` is a thin, nonrecursive mathematical boundary object: it records ordered boundary positions and their surjection onto the ambient wire classes of one closed-relation-context `Region`.
-- Bound-wire renaming, boundary order, and repeated boundary aliases remain explicit. Boundary positions are occurrences; aliases never identify or reorder positions.
-- A rule-specific theorem owns Region-level mathematics whenever removing boundary arguments and assignments leaves its premise and proof unchanged. Boundary-visible conclusions are then obtained through one generic open-body lift; do not create one bespoke open semantic proof per compiler or rule case.
-- Keep genuinely open claims open: boundary quotient and alias laws, open substitution, boundary-preserving isomorphism, theorem interfaces, and concrete boundary transport. Do not mechanically convert every `denoteOpen` theorem to `denoteRegion`.
-- Every rule family is a `Prop` relation. `Rule.Step` is the exhaustive inductive union of those family relations, not an executor request, result, trace, or closure.
-- Every abstract rule family is stated once in its positive-context form. Negative context applies the converse relation. An invertible family admits both the base relation and its converse at either polarity; invertibility is proved semantically rather than asserted by making the base relation syntactically symmetric.
-- Abstract rule relations and `Step` have no execution `Orientation` parameter. `Step source target` always supports the ordinary implication from `source` to `target`.
-- Concrete execution retains the operational split between the two members of each rule pair. Refinement proves that the selected operation realizes the base relation or its converse at the application region's single polarity.
-- `Step.sound` and every family soundness theorem must have a dependency closure containing no concrete diagram, executor, error, receipt, trace, carrier-numbering, or compiler declaration.
-- Local rules use typed context decomposition modulo recursive diagram isomorphism. Context soundness must account for cut polarity; arbitrary contexts are not assumed monotone.
-- Iteration, comprehension abstraction/substitution, and any other simultaneous or whole-diagram rule retain their simplest mathematical relation. They are not forced through one universal replacement relation.
-- The concrete boundary exposes an explicit fallible `Concrete.translate` from unchecked flat open diagrams to recursive open diagrams. Translation is validation followed by total elaboration; `Represents` is successful translation modulo open-diagram isomorphism.
-- `Represents` and execution correctness live only in `VisualProof.Refinement`.
-- Representation completeness and execution completeness are unconditional deliverables: every recursive open diagram has a concrete representation, and every abstract step can be realized by a concrete request and successful execution. Rejection correctness applies only to fully specified domain-invalid requests, never resource or infrastructure failures.
-- The Lean formalization contains no concrete matcher, occurrence-search problem, candidate enumeration, search frontier, fuel-bounded search, or matcher correctness theorem. Every operation that requires occurrence evidence receives it through `Concrete.Step`; execution validates and consumes the supplied selection, interface, embedding, scope, aliasing, and legality data without search.
-- The rule inventory is fixed. The abstract calculus has exactly the six relations listed below, and concrete execution retains exactly the twelve existing operations paired with them. `Step.sound` and execution refinement are exhaustive over these inventories; do not add, regroup, or reclassify rule constructors.
+## Completeness consequences
 
-| Abstract relation | Existing concrete operation pair |
-|---|---|
-| `Erasure` | `erasure` / `boundRelationSpawn` |
-| `WireSever` | `wireSever` / `wireJoin` |
-| `Iteration` | `iteration` / `deiteration` |
-| `DoubleCut` | `doubleCutIntro` / `doubleCutElim` |
-| `Comprehension` | `comprehensionAbstract` / `comprehensionInstantiate` (also called substitution in prose) |
-| `Vacuity` | `vacuousIntro` / `vacuousElim` |
-- Follow theorem-driven RED/GREEN: complete every definition in an owning theorem's dependency closure; introduce `sorry` only in that theorem proof; compile RED; replace it with a kernel-checked proof; compile GREEN; commit.
-- Do not preserve the execution-indexed rule model through aliases, adapters, compatibility modules, or re-exports.
+Two implementation changes follow logically from the required theorems.
 
-## Target Module Ownership
+1. Execution operates on checked open states, not only closed checked diagrams. Otherwise `execute_complete` can cover only arity zero.
+2. The constructor named `boundRelationSpawn` must accept a supplied checked open diagram and insertion occurrence sufficient to realize the full converse of `Erasure`. Its present atom-only payload cannot realize arbitrary negative-context insertion, so keeping that payload would make one-step execution completeness false. The twelve-constructor roster and constructor name stay fixed; this constructor's payload becomes general enough for its assigned relation.
 
-| Module | Responsibility |
-|---|---|
-| `VisualProof/Diagram/Core.lean` | Finite recursive `Region`, `Item`, and `ItemSeq` syntax |
-| `VisualProof/Diagram/Boundary.lean` | Thin nonrecursive `OpenDiagram`, ordered positions, and repeated-alias assignment |
-| `VisualProof/Diagram/Rename.lean` | Bound-wire and boundary renaming/substitution |
-| `VisualProof/Diagram/Isomorphism.lean` | Structural isomorphism and alpha-renaming laws |
-| `VisualProof/Diagram/Semantics.lean` | Structural recursive denotation plus the single generic Region-to-open semantic lift |
-| `VisualProof/Diagram/Context.lean` | Region-level typed one-hole contexts, filling, cut polarity, semantic transport |
-| `VisualProof/Diagram/Occurrence.lean` | Relational occurrence as context decomposition modulo isomorphism |
-| `VisualProof/Rule/Relation.lean` | Shared relation shape, converse, symmetric closure, and polarity action, with no execution data |
-| `VisualProof/Rule/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean` | The six mathematical rule relations and their witnesses |
-| `VisualProof/Rule/Step.lean` | Inductive union of the rule-family relations |
-| `VisualProof/Rule/Soundness.lean` | Per-family imports and exhaustive `Step.sound` |
-| `VisualProof/Concrete/{Diagram,Translate,Occurrence,Step}.lean` | Flat checked representation, validation and translation, supplied occurrence certificates, requests, receipts, errors, execution |
-| `VisualProof/Refinement/{Represents,Step}.lean` | Representation completeness and execution soundness/completeness |
-| `VisualProof/Proof/{Replay,Theorem}.lean` | Proof programs that consume concrete execution plus refinement and abstract soundness |
+Iteration remains a one-selected-occurrence/one-target transformation, matching the existing operation. The abstract relation does not invent a simultaneous list operation.
 
-## Existing Theorem Disposition
+## Interface precision rule
 
-| Existing theorem family | Final ownership |
-|---|---|
-| The twelve constructors `boundRelationSpawn`, `wireJoin`, `erasure`, `wireSever`, `iteration`, `deiteration`, `doubleCutIntro`, `doubleCutElim`, `comprehensionInstantiate`, `comprehensionAbstract`, `vacuousIntro`, and `vacuousElim`, together with `Orientation`, `StepTag.semanticMode`, and direction-specific polarity checks | Keep the exact twelve-operation roster only in concrete execution and refinement; map each named pair to one of the six abstract relations above |
-| `OccurrenceProblem`, `RawOccurrenceCertificate`, `OpenOccurrenceEmbedding`, `SearchStatus`, `CandidateMaps`, `MatchResult`, `findOccurrences`, and their soundness/completeness theorems | Remove from the formalization; steps carry the required occurrence evidence and execution performs no search |
-| Checked concrete elaboration and raw well-formedness checking | Compose behind the explicit fallible `Concrete.translate`; characterize `Represents` as its graph modulo `OpenDiagramIso` |
-| Boundary representatives, alias consistency, boundary assignments, open substitution, and `OpenDiagramIso` denotation | Remain in the open-diagram kernel; their subject is the ordered-position-to-wire-class quotient |
-| `denote_replaceOpenBody_mono` and `denote_replaceOpenBody_iff` in concrete splice tracing | Move their implementation-independent content beside `denoteOpen` as the single generic unchanged-boundary lift from Region implication/equivalence |
-| `regionIso_fill_denotation` and its cast variant in concrete splice tracing | Move the general statement into recursive context/isomorphism algebra; it is Region mathematics despite its current location |
-| `positive_erasure_sound`, `negative_insertion_sound`, identity join/sever, ancestor copy, contextual contraction, double-cut, and vacuous-bubble laws in `Rule/Structural/Semantics.lean` | Reuse as Region-level mathematical owners; family soundness derives from them |
-| `comprehensionInstantiate_sound` and `comprehensionAbstract_context_sound` | Reuse as Region/context-level comprehension owners |
-| `diagonalize_denotation` | Split into the instantiation side of the abstract comprehension relation at Region level, the generic open substitution theorem, and concrete diagonal-representation refinement |
-| Iteration `wholeOpen_equiv`, `sameSite_*`, contraction, route, and anchor theorems that first prove a `bodyEquiv` | Extract the declarative Region-level iteration law; retain open compiler conclusions only as refinement corollaries |
-| The current direction-specific boundary witness, heterogeneous `denoteOpen_lift`, rule-specific boundary witnesses, and compiled open-source equivalences | Keep under refinement ownership because they compare positional interfaces, alias partitions, or concrete compiler products; name the retained refinement structure `BoundaryWitness` |
-| `TheoremSchema.Valid` and the final checked-theorem statement | Keep genuinely open, but make represented recursive open diagrams their operands and derive validity through replay refinement plus `Step.sound` |
-| Concrete elaboration, compiler simulation, boundary witnesses, splice/reassembly equivalences, receipts, and replay | Keep boundary-visible, but move under concrete/refinement ownership; they certify an abstract step rather than define rule soundness |
+Code blocks below are acceptance signatures, not sketches. Every identifier in a block either already exists or is introduced earlier in the plan. Prose describing an internal witness is a mathematical construction requirement, not purported Lean syntax. Its owning Worker must complete and compile that definition, then obtain review, before any theorem using it enters RED.
 
-The migration test is semantic, not textual: if deleting `args`, `boundary`, and `BoundaryAssignment` leaves the real hypothesis and proof unchanged, the owning theorem belongs over `Region`. If a theorem compares ordered arguments, alias partitions, or boundary transport, its open statement is genuine.
+Lean's indexed `Fin` and `RelVar` syntax provides scope and capture safety. Do not add a name-based freshness predicate unless a later mathematical statement actually requires names and supplies freshness for both the context and the inserted term.
 
-Do not mechanically replace the conclusion of every existing open theorem. For each rule family, introduce one declarative Region-level owner, derive any unchanged-interface open corollary through the generic lift, and retain specialized compiler-facing open theorems only when they prove representation or boundary transport. The migration is broad across rule families but narrow in new mathematics; iteration and splice contain the largest repeated open proof towers.
+## Final module ownership
+
+| Layer | Modules | Responsibility |
+|---|---|---|
+| Diagram | `VisualProof/Diagram/{Core,Boundary,Rename,Isomorphism,OpenIsomorphism,Semantics,Context,Occurrence}.lean` | Recursive syntax, open interface, renaming, isomorphism, denotation, contexts, occurrence evidence |
+| Rules | `VisualProof/Rule/{Relation,Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity,Step,Soundness}.lean` and family soundness modules | Six relations, union, recursive semantic proofs |
+| Concrete | `VisualProof/Concrete/{Diagram,Open,WellFormed,Translate,Occurrence,Step}.lean` plus implementation submodules | Flat syntax, checking, supplied selections, compilation, execution |
+| Refinement | `VisualProof/Refinement/{Represents,Step}.lean` plus family submodules | Translation/encoding laws and execution refinement/completeness |
+| Proof | `VisualProof/Proof/{Replay,Schema,Theorem,Theory}.lean` | Replay and theorem validity inherited from refinement and `Step.sound` |
+
+## Theorem-development protocol
+
+For every owning theorem:
+
+1. Complete and compile every definition in its dependency closure.
+2. Add `by sorry` only as that theorem's proof and compile with `-DwarningAsError=false` to establish RED.
+3. Confirm the only new `sorry` is that theorem proof.
+4. Replace it with a kernel-checked proof and compile with `-DwarningAsError=true` for GREEN.
+5. Run the task's broader build and source scan before committing.
+
+No fixture theorem, `example`, or `#check` is added to simulate RED/GREEN.
 
 ---
 
-### Task 1: Stabilize recursive diagrams, isomorphism, and structural semantics
+### Task 1: Stabilize the diagram kernel and generic open lift
 
 **Files:**
-- Modify: `VisualProof/Diagram/Core.lean`
-- Modify: `VisualProof/Diagram/Boundary.lean`
-- Modify: `VisualProof/Diagram/Rename.lean`
-- Modify: `VisualProof/Diagram/Isomorphism.lean`
-- Modify: `VisualProof/Diagram/OpenIsomorphism.lean`
-- Modify: `VisualProof/Diagram/Semantics.lean`
-- Extract generic lemmas from: `VisualProof/Diagram/Concrete/Subgraph/Splice/Trace.lean`
 
-**Interfaces:**
-- Consumes: existing `Region`, `Item`, `ItemSeq`, `OpenDiagram`, `BoundaryAssignment`, and `denoteOpen`.
-- Produces: the final recursive syntax; thin open-interface completion; structural `Isomorphic`; open-diagram isomorphism; renaming, substitution, freshness, denotation invariance, and one generic Region-to-open semantic lift.
+- Modify `VisualProof/Diagram/Boundary.lean`
+- Modify `VisualProof/Diagram/Isomorphism.lean`
+- Modify `VisualProof/Diagram/OpenIsomorphism.lean`
+- Modify `VisualProof/Diagram/Semantics.lean`
 
-- [ ] **Step 1: Make the mathematical identities explicit in the existing recursive syntax**
+**Work:**
 
-Keep `Region`, `Item`, and `ItemSeq` finite and structurally recursive. Keep `OpenDiagram.boundary : Fin arity → Fin externalClasses`; do not replace it with a set or map. Add the general alias law:
-
-```lean
-theorem BoundaryAssignment.equal_of_alias
-    (assignment : BoundaryAssignment d D)
-    (h : d.boundary i = d.boundary j) :
-    assignment.args i = assignment.args j
-```
-
-Order is already intrinsic in the `Fin arity` domain. Do not add any quotient, `Finset`, sorting, or deduplication of boundary positions.
-
-Add the boundary-preserving body replacement used by occurrence filling and generic semantic lifting:
-
-```lean
-def OpenDiagram.withBody
-    (diagram : OpenDiagram arity)
-    (body : Region diagram.externalClasses []) : OpenDiagram arity := {
-  diagram with body := body
-}
-```
-
-`withBody` is not recursive syntax and introduces no second context type. It preserves the existing ordered boundary and alias partition exactly.
-
-- [ ] **Step 2: Complete renaming and substitution definitions before RED**
-
-Ensure `Rename.lean` contains total definitions for bound-wire renaming, relation-variable renaming, boundary substitution, support, freshness, and capture avoidance. Definitions must recurse on `Region`/`Item`/`ItemSeq` and must not call concrete elaboration or canonicalization.
-
-- [ ] **Step 3: RED/GREEN structural isomorphism laws**
-
-Own these production theorem shapes in `Isomorphism.lean`:
-
-```lean
-theorem Isomorphic.refl (d : Region wires rels) : Isomorphic d d
-theorem Isomorphic.symm : Isomorphic a b → Isomorphic b a
-theorem Isomorphic.trans : Isomorphic a b → Isomorphic b c → Isomorphic a c
-
-theorem Isomorphic.rename
-    (h : Isomorphic a b) :
-    Isomorphic (a.rename wires rels) (b.rename wires rels)
-
-theorem Isomorphic.substitute
-    (h : Isomorphic a b) :
-    Isomorphic (a.substitute σ) (b.substitute σ)
-```
-
-For each owning theorem: introduce only its proof as `by sorry`, compile the file, confirm the remaining `sorry` is that theorem proof, then replace it with the kernel proof and recompile.
-
-- [ ] **Step 4: RED/GREEN denotation invariance**
-
-Keep denotation defined by mutual structural recursion in `Semantics.lean`. Prove:
-
-```lean
-theorem Isomorphic.denote_iff
-    (h : Isomorphic a b)
-    (model : Model)
-    (env : Fin wires → model.Carrier)
-    (rels : RelEnv model.Carrier relCtx) :
-    denoteRegion model env rels a ↔ denoteRegion model env rels b
-
-theorem OpenDiagramIso.denote_iff
-    (h : OpenDiagramIso source target)
-    (model : Model)
-    (args : Fin arity → model.Carrier) :
-    denoteOpen model source args ↔ denoteOpen model target args
-```
-
-`OpenDiagramIso` must preserve boundary positions pointwise or carry an explicit `Fin` equivalence used to transport `args`; alias equality alone cannot authorize a permutation.
-
-- [ ] **Step 5: Extract the single generic open-body lift**
-
-Move the mathematical content of the current `denote_replaceOpenBody_mono` and `denote_replaceOpenBody_iff` out of concrete splice tracing and prove it once beside open semantics:
+- Add `OpenDiagram.withBody`, preserving `externalClasses`, `boundary`, and `boundary_surjective` definitionally.
+- Add `BoundaryAssignment.equal_of_alias`.
+- Retain the existing `Core.Isomorphic` relation and its existing reflexive, symmetric, transitive, and denotation results. Add only missing congruence theorems for the existing `Region.renameWires` and `Region.renameRelations`; there is no generic `Region.substitute` operation.
+- Retain `OpenDiagramIso.denoteOpen_iff`; do not recreate it under another name.
+- Add the one unchanged-interface semantic lift:
 
 ```lean
 theorem OpenDiagram.denote_body
-    (h : ∀ env,
+    {diagram : OpenDiagram arity}
+    {before after : Region diagram.externalClasses []}
+    {model : Model}
+    {args : Fin arity → model.Carrier}
+    (h : ∀ env : Fin diagram.externalClasses → model.Carrier,
       denoteRegion model env PUnit.unit before →
-        denoteRegion model env PUnit.unit after) :
+      denoteRegion model env PUnit.unit after) :
     denoteOpen model (diagram.withBody before) args →
-      denoteOpen model (diagram.withBody after) args
-
-theorem OpenDiagram.denote_body_iff
-    (h : ∀ env,
-      denoteRegion model env PUnit.unit before ↔
-        denoteRegion model env PUnit.unit after) :
-    denoteOpen model (diagram.withBody before) args ↔
-      denoteOpen model (diagram.withBody after) args
+    denoteOpen model (diagram.withBody after) args
 ```
 
-Every unchanged-interface rule lift uses these theorems. Rule-specific compiler certificates, splice traces, and boundary reconstructions may prove their Region premise or target representation, but they do not re-prove this semantic passage.
+Prove the analogous `denote_body_iff` with an `↔` premise and conclusion.
 
-- [ ] **Step 6: Validate and commit**
-
-Run:
+**Validation:**
 
 ```bash
+lake env lean -DwarningAsError=true VisualProof/Diagram/Boundary.lean
 lake env lean -DwarningAsError=true VisualProof/Diagram/Isomorphism.lean
 lake env lean -DwarningAsError=true VisualProof/Diagram/OpenIsomorphism.lean
 lake env lean -DwarningAsError=true VisualProof/Diagram/Semantics.lean
@@ -202,85 +107,52 @@ lake build
 git diff --check
 ```
 
-Commit:
+Commit only these paths as `Establish recursive diagram interface laws`.
 
-```bash
-git add VisualProof/Diagram/Core.lean VisualProof/Diagram/Boundary.lean VisualProof/Diagram/Rename.lean VisualProof/Diagram/Isomorphism.lean VisualProof/Diagram/OpenIsomorphism.lean VisualProof/Diagram/Semantics.lean
-git commit -m "Establish recursive diagram semantics"
-```
-
-### Task 2: Define contexts and relational occurrence evidence
+### Task 2: Complete contexts, polarity, and occurrence evidence
 
 **Files:**
-- Modify: `VisualProof/Diagram/Context.lean`
-- Create: `VisualProof/Diagram/Occurrence.lean`
-- Modify: `VisualProof/Diagram/Algebra.lean`
-- Modify: `VisualProof.lean`
 
-**Interfaces:**
-- Consumes: `Region`, `OpenDiagram`, `Isomorphic`, `OpenDiagramIso`, and structural denotation.
-- Produces: Region-level `DiagramContext.fill`, `Occurrence`, isomorphism transport, capture laws, and polarity-aware semantic transport.
+- Modify `VisualProof/Diagram/Context.lean`
+- Modify `VisualProof/Diagram/ContextReachability.lean`
+- Modify `VisualProof/Diagram/Rename.lean`
+- Modify `VisualProof/Diagram/Algebra.lean`
+- Modify `VisualProof/Diagram/Isomorphism.lean`
+- Modify `VisualProof/Diagram/OpenIsomorphism.lean`
+- Create `VisualProof/Diagram/Occurrence.lean`
+- Modify `VisualProof.lean`
 
-- [ ] **Step 1: Complete one-hole filling and polarity definitions**
-
-Retain the recursive `DiagramContext` shape. It contains only recursive frames and a Region hole; do not add boundary positions or an `OpenContext`. The open interface is attached once, after filling, by `OpenDiagram.withBody` from Task 1.
+**Definitions:**
 
 ```lean
+def RelationRenaming.weaken (head : Nat) :
+    RelationRenaming rels (head :: rels) :=
+  fun relation => ⟨relation.index.succ, relation.hasArity⟩
+
+def RelationRenaming.empty :
+    RelationRenaming [] rels :=
+  fun relation => Fin.elim0 relation.index
+
 inductive Polarity
   | positive
   | negative
 
-def DiagramContext.polarity (context : DiagramContext ow hw or hr) : Polarity :=
+def DiagramContext.polarity
+    (context : DiagramContext outerWires holeWires outerRels holeRels) :
+    Polarity :=
   if context.cutDepth % 2 = 0 then .positive else .negative
-```
 
-- [ ] **Step 2: RED/GREEN context isomorphism and capture laws**
+def DiagramContext.outerRelation :
+    (context :
+      DiagramContext outerWires holeWires outerRels holeRels) →
+    RelationRenaming outerRels holeRels
+  | .hole => fun relation => relation
+  | .cut _ _ _ child => child.outerRelation
+  | .bubble _ _ _ arity child =>
+      fun relation =>
+        child.outerRelation
+          (RelationRenaming.weaken arity relation)
 
-Prove:
-
-```lean
-theorem DiagramContext.fill_iso
-    (h : Isomorphic a b) :
-    Isomorphic (context.fill a) (context.fill b)
-
-theorem OpenDiagram.withBody_fill_iso
-    (h : Isomorphic a b) :
-    OpenDiagramIso
-      (host.withBody (context.fill a))
-      (host.withBody (context.fill b))
-
-theorem DiagramContext.fill_fresh
-    (h : FreshFor name body) :
-    FreshFor name (context.fill body)
-```
-
-Do not assert that implication is preserved by every context.
-
-- [ ] **Step 3: RED/GREEN polarity-aware semantic transport**
-
-Prove the explicit theorem, without a direction-named wrapper:
-
-```lean
-theorem DiagramContext.denote_fill
-    (context : DiagramContext ow hw or hr)
-    (h : ∀ env rels,
-      denoteRegion model env rels before →
-        denoteRegion model env rels after) :
-    ∀ outerEnv outerRels,
-      match context.polarity with
-      | .positive =>
-          denoteRegion model outerEnv outerRels (context.fill before) →
-          denoteRegion model outerEnv outerRels (context.fill after)
-      | .negative =>
-          denoteRegion model outerEnv outerRels (context.fill after) →
-          denoteRegion model outerEnv outerRels (context.fill before)
-```
-
-- [ ] **Step 4: Define occurrence as relational decomposition evidence**
-
-In `Occurrence.lean`:
-
-```lean
 structure Occurrence
     (pattern : Region holeWires holeRels)
     (host : OpenDiagram arity) : Prop where
@@ -289,37 +161,92 @@ structure Occurrence
     (host.withBody (context.fill pattern))
 ```
 
-Add isomorphism transport theorems for host and pattern. Do not prove occurrence uniqueness; automorphisms may yield multiple valid decompositions.
+Introduce `RelationRenaming.weaken` and `RelationRenaming.empty` in `Rename.lean`. Move the existing `DiagramContext.outerRelation` from `ContextReachability.lean` into `Context.lean`; do not duplicate it. Update `ContextReachability.lean` to consume the moved declaration.
 
-- [ ] **Step 5: Validate and commit**
+**Theorems:**
 
-```bash
-lake env lean -DwarningAsError=true VisualProof/Diagram/Context.lean
-lake env lean -DwarningAsError=true VisualProof/Diagram/Occurrence.lean
-lake build
-git diff --check
-git add VisualProof/Diagram/Context.lean VisualProof/Diagram/Occurrence.lean VisualProof/Diagram/Algebra.lean VisualProof.lean
-git commit -m "Define recursive diagram occurrences"
-```
-
-### Task 3: Replace execution-indexed steps with relational rule infrastructure
-
-**Files:**
-- Create: `VisualProof/Rule/Relation.lean`
-- Replace: `VisualProof/Rule/Step.lean`
-- Modify: `VisualProof.lean`
-
-**Interfaces:**
-- Consumes: recursive open diagrams, contexts, occurrences, and isomorphism.
-- Produces: `Rule`, relational converse and symmetric closure, polarity action, `Contextual`, and an execution-free `Step` relation.
-
-- [ ] **Step 1: Define the shared relation shapes**
+- Keep `DiagramContext.fill_equiv` as the existing semantic equivalence theorem. Separately prove structural transport in `Isomorphism.lean`, which already sits above `Context.lean` in the import graph:
 
 ```lean
-namespace VisualProof.Rule
+theorem DiagramContext.fill_iso
+    (context : DiagramContext outerWires holeWires outerRels holeRels)
+    {before after : Region holeWires holeRels}
+    (h : Core.Isomorphic before after) :
+    Core.Isomorphic (context.fill before) (context.fill after)
+```
 
-abbrev Rule :=
-  {arity : Nat} → OpenDiagram arity → OpenDiagram arity → Prop
+Prove unchanged-interface transport in `OpenIsomorphism.lean`:
+
+```lean
+theorem OpenDiagram.withBody_iso
+    {diagram : OpenDiagram arity}
+    {before after : Region diagram.externalClasses []}
+    (h : Core.Isomorphic before after) :
+    OpenDiagramIso
+      (diagram.withBody before)
+      (diagram.withBody after)
+```
+
+Package the existing `context_mono` and `context_anti` results:
+
+```lean
+theorem DiagramContext.denote_fill
+    (context :
+      DiagramContext outerWires holeWires outerRels holeRels)
+    {before after : Region holeWires holeRels}
+    (model : Model)
+    (h : ∀
+      (env : Fin holeWires → model.Carrier)
+      (rels : RelEnv model.Carrier holeRels),
+      denoteRegion model env rels before →
+      denoteRegion model env rels after) :
+    ∀ (env : Fin outerWires → model.Carrier)
+      (rels : RelEnv model.Carrier outerRels),
+      match context.polarity with
+      | .positive =>
+          denoteRegion model env rels (context.fill before) →
+          denoteRegion model env rels (context.fill after)
+      | .negative =>
+          denoteRegion model env rels (context.fill after) →
+          denoteRegion model env rels (context.fill before)
+```
+
+Prove occurrence transport:
+
+```lean
+theorem Occurrence.transportHost
+    (occurrence : Occurrence pattern host)
+    (iso : OpenDiagramIso host host') :
+    Occurrence pattern host'
+
+theorem Occurrence.transportPattern
+    (occurrence : Occurrence pattern host)
+    (iso : Core.Isomorphic pattern pattern') :
+    Occurrence pattern' host
+```
+
+Do not assert occurrence uniqueness.
+- Express every capture claim through typed wire/relation renaming. No `FreshFor` declaration or theorem is introduced.
+
+**Validation:** compile all six paths separately, run `lake build`, `git diff --check`, scan the modified dependency closure for `sorry`, and commit them as `Define recursive occurrence evidence`.
+
+### Task 3: Define shared relational infrastructure
+
+**Files:**
+
+- Create `VisualProof/Rule/Relation.lean`
+- Modify `VisualProof.lean`
+
+**Definitions:**
+
+```lean
+abbrev LocalRule : Type :=
+  ∀ {wires : Nat} {rels : RelCtx},
+    Region wires rels → Region wires rels → Prop
+
+abbrev Rule : Type :=
+  ∀ {arity : Nat},
+    OpenDiagram arity → OpenDiagram arity → Prop
 
 def converse (relation : α → α → Prop) : α → α → Prop :=
   fun before after => relation after before
@@ -333,26 +260,761 @@ def atPolarity (polarity : Polarity)
   | .positive => relation
   | .negative => converse relation
 
-def Contextual
-    (local : ∀ {wires rels},
-      Region wires rels → Region wires rels → Prop)
-    (source target : OpenDiagram arity) : Prop :=
-  ∃ wires rels before after
-    (occurrence : Occurrence before source),
-      atPolarity occurrence.context.polarity local before after ∧
-      OpenDiagramIso target
-        (source.withBody (occurrence.context.fill after))
+def Contextual (local : LocalRule) : Rule :=
+  fun {arity} source target =>
+    ∃ (wires : Nat) (rels : RelCtx)
+      (before after : Region wires rels)
+      (occurrence : Occurrence before source),
+      atPolarity occurrence.context.polarity
+          (@local wires rels) before after ∧
+        OpenDiagramIso target
+          (source.withBody (occurrence.context.fill after))
 ```
 
-For a one-way family, use `Contextual local`. For an invertible family, first prove that every `local before after` gives semantic equivalence, then use `Contextual (symmetric local)`. Do not add a Boolean invertibility flag, an abstract orientation, or a legality predicate selecting between the paired operations.
+Add relation and contextual isomorphism transport. Do not define `Step` yet.
 
-- [ ] **Step 2: Define the family-level union**
+**Validation:** compile `Relation.lean`, build, scan the new file for `sorry`, and commit as `Define relational rewrite infrastructure`.
 
-Replace the current `Step (input : CheckedDiagram)` with:
+### Task 4: Define all six rule bases completely
+
+**Files:**
+
+- Create `VisualProof/Rule/Erasure.lean`
+- Create `VisualProof/Rule/WireSever.lean`
+- Create `VisualProof/Rule/Iteration.lean`
+- Create `VisualProof/Rule/DoubleCut.lean`
+- Create `VisualProof/Rule/Comprehension/Relation.lean`
+- Create `VisualProof/Rule/Vacuity.lean`
+- Modify `VisualProof/Rule/Comprehension.lean` only after its operational declarations have a concrete destination in Task 6
+
+This task defines the noninvertible family relations and the bases of the three invertible families. It contains no semantic theorem and imports no concrete module.
+
+#### Erasure
 
 ```lean
-inductive Step :
-    OpenDiagram arity → OpenDiagram arity → Prop
+namespace Erasure
+
+inductive Local : LocalRule
+  | erase
+      (kept removed : Region wires rels) :
+      Local (kept.conjoin removed) kept
+
+end Erasure
+
+def Erasure : Rule :=
+  Contextual Erasure.Local
+
+theorem Erasure.iso
+    (sourceIso : OpenDiagramIso source source')
+    (step : Erasure source target)
+    (targetIso : OpenDiagramIso target target') :
+    Erasure source' target'
+```
+
+#### Wire severing
+
+Define the collapse that identifies the newly added local wire with the selected existing wire:
+
+```lean
+namespace WireSever
+
+def collapseLocal
+    (wires localWires : Nat)
+    (joined : Fin (wires + localWires)) :
+    Fin (wires + (localWires + 1)) →
+      Fin (wires + localWires)
+```
+
+`collapseLocal` is identity on the old prefix and maps the final fresh wire to `joined`.
+
+```lean
+inductive Local : LocalRule
+  | sever
+      (joined : Fin (wires + localWires))
+      (separate :
+        ItemSeq (wires + (localWires + 1)) rels) :
+      Local
+        (.mk localWires
+          (separate.renameWires
+            (collapseLocal wires localWires joined)))
+        (.mk (localWires + 1) separate)
+
+structure Open
+    (source target : OpenDiagram arity) : Prop where
+  one_more :
+    target.externalClasses = source.externalClasses + 1
+  collapse :
+    Fin target.externalClasses →
+      Fin source.externalClasses
+  collapse_surjective :
+    Function.Surjective collapse
+  boundary :
+    ∀ position,
+      collapse (target.boundary position) =
+        source.boundary position
+  body :
+    Core.Isomorphic source.body
+      (target.body.renameWires collapse)
+
+end WireSever
+
+def WireSever : Rule :=
+  fun source target =>
+    Contextual WireSever.Local source target ∨
+      WireSever.Open source target
+
+theorem WireSever.iso
+    (sourceIso : OpenDiagramIso source source')
+    (step : WireSever source target)
+    (targetIso : OpenDiagramIso target target') :
+    WireSever source' target'
+```
+
+The local constructor permits any partition of the joined wire's occurrences: renaming both separated classes through `collapseLocal` recovers the joined source. The open constructor is required because `source.withBody` cannot express a changed boundary alias partition. `one_more` and the surjective collapse say that exactly one external class has been split independently of class numbering; `boundary` preserves ordered positions while allowing their alias partition to become finer.
+
+#### Iteration base
+
+Iteration uses a separate interface carrier so endpoint isomorphism transport does not depend on either endpoint's external-class numbering:
+
+```lean
+namespace Iteration
+
+structure Base
+    (source target : OpenDiagram arity) : Prop where
+  interface : OpenDiagram arity
+  ancestorWires : Nat
+  descendantWires : Nat
+  ancestorRels : RelCtx
+  descendantRels : RelCtx
+  outer :
+    DiagramContext interface.externalClasses ancestorWires
+      [] ancestorRels
+  descendant :
+    DiagramContext ancestorWires descendantWires
+      ancestorRels descendantRels
+  selected :
+    Region ancestorWires ancestorRels
+  remainder :
+    Region descendantWires descendantRels
+  source_iso :
+    OpenDiagramIso source
+      (interface.withBody
+        (outer.fill
+          (selected.conjoin
+            (descendant.fill remainder))))
+  target_iso :
+    OpenDiagramIso target
+      (interface.withBody
+        (outer.fill
+          (selected.conjoin
+            (descendant.fill
+              (((selected.renameWires descendant.outerWire)
+                  .renameRelations descendant.outerRelation)
+                .conjoin remainder)))))
+
+theorem Base.iso
+    (sourceIso : OpenDiagramIso source source')
+    (step : Base source target)
+    (targetIso : OpenDiagramIso target target') :
+    Base source' target'
+
+end Iteration
+```
+
+There is one selected occurrence and one target. Do not define `Iteration` until Task 5 proves `Iteration.Base.sound_iff`.
+
+#### Double-cut base
+
+```lean
+namespace DoubleCut
+
+def wrap (body : Region wires rels) :
+    Region wires rels :=
+  .mk 0
+    (.cons
+      (.cut (.mk 0 (.cons (.cut body) .nil)))
+      .nil)
+
+inductive Local : LocalRule
+  | introduce
+      (body : Region wires rels) :
+      Local body (wrap body)
+
+end DoubleCut
+```
+
+Do not define `DoubleCut` until Task 5 proves `DoubleCut.Local.sound_iff`.
+
+#### Comprehension instantiation
+
+Define closed open diagrams as semantic relations:
+
+```lean
+def OpenDiagram.asRelation
+    (model : Model)
+    (pattern : OpenDiagram arity) :
+    Relation model.Carrier arity :=
+  fun args => denoteOpen model pattern args
+```
+
+Define the structural mapping used while removing the newly bound head relation:
+
+```lean
+namespace Comprehension
+
+inductive Image (targetRels : RelCtx) : Nat → Type
+  | variable
+      (relation : RelVar targetRels arity) :
+      Image targetRels arity
+  | diagram
+      (pattern : OpenDiagram arity) :
+      Image targetRels arity
+
+abbrev Mapping (sourceRels targetRels : RelCtx) :=
+  {arity : Nat} →
+    RelVar sourceRels arity →
+    Image targetRels arity
+
+def Image.weaken
+    (head : Nat)
+    {arity : Nat} :
+    Image targetRels arity →
+      Image (head :: targetRels) arity
+  | .variable relation =>
+      .variable
+        (RelationRenaming.weaken head relation)
+  | .diagram pattern =>
+      .diagram pattern
+
+def Mapping.lift
+    (mapping : Mapping sourceRels targetRels)
+    (head : Nat) :
+    Mapping (head :: sourceRels) (head :: targetRels)
+
+def Mapping.instantiateHead
+    (pattern : OpenDiagram relationArity) :
+    Mapping (relationArity :: rels) rels
+
+def singleton
+    (item : Item wires rels) :
+    Region wires rels :=
+  .mk 0 (.cons item .nil)
+```
+
+`Mapping.lift` maps the newly nested head variable to itself and applies `Image.weaken` to inherited variables. `Mapping.instantiateHead` maps the distinguished head to `.diagram pattern` and each tail variable to its predecessor in `rels`; its head case transports `pattern` with `OpenDiagram.castArity` when required by the dependent equality in `RelVar`.
+
+A substituted item returns a `Region`, because a relation atom may expand to an arbitrary open diagram:
+
+```lean
+namespace Instantiation
+
+mutual
+  inductive RegionResult :
+      {sourceRels targetRels : RelCtx} →
+      Mapping sourceRels targetRels →
+      {wires : Nat} →
+      Region wires sourceRels →
+      Region wires targetRels →
+      Prop
+    | mk
+        {mapping : Mapping sourceRels targetRels}
+        {localWires : Nat}
+        {items : ItemSeq (wires + localWires) sourceRels}
+        {result : Region (wires + localWires) targetRels}
+        (items_result :
+          ItemsResult mapping items result) :
+        RegionResult mapping
+          (.mk localWires items)
+          (Region.adjoinAt localWires .nil result)
+
+  inductive ItemsResult :
+      {sourceRels targetRels : RelCtx} →
+      Mapping sourceRels targetRels →
+      {wires : Nat} →
+      ItemSeq wires sourceRels →
+      Region wires targetRels →
+      Prop
+    | nil
+        {mapping : Mapping sourceRels targetRels} :
+        ItemsResult mapping .nil Region.blank
+    | cons
+        {mapping : Mapping sourceRels targetRels}
+        {item : Item wires sourceRels}
+        {tail : ItemSeq wires sourceRels}
+        {itemResult tailResult : Region wires targetRels}
+        (item_result :
+          ItemResult mapping item itemResult)
+        (tail_result :
+          ItemsResult mapping tail tailResult) :
+        ItemsResult mapping
+          (.cons item tail)
+          (itemResult.conjoin tailResult)
+
+  inductive ItemResult :
+      {sourceRels targetRels : RelCtx} →
+      Mapping sourceRels targetRels →
+      {wires : Nat} →
+      Item wires sourceRels →
+      Region wires targetRels →
+      Prop
+    | atomVariable
+        {mapping : Mapping sourceRels targetRels}
+        {arity : Nat}
+        {relation : RelVar sourceRels arity}
+        {arguments : Fin arity → Fin wires}
+        (mapped : RelVar targetRels arity)
+        (image :
+          mapping relation = Image.variable mapped) :
+        ItemResult mapping
+          (.atom relation arguments)
+          (singleton (.atom mapped arguments))
+
+    | atomDiagram
+        {mapping : Mapping sourceRels targetRels}
+        {arity : Nat}
+        {relation : RelVar sourceRels arity}
+        {arguments : Fin arity → Fin wires}
+        (pattern : OpenDiagram arity)
+        (image :
+          mapping relation = Image.diagram pattern)
+        (assignment :
+          BoundaryAssignment pattern (Fin wires))
+        (arguments_eq :
+          assignment.args = arguments) :
+        ItemResult mapping
+          (.atom relation arguments)
+          ((pattern.substituteBoundary assignment).renameRelations
+            RelationRenaming.empty)
+
+    | identity
+        {mapping : Mapping sourceRels targetRels}
+        (arity : Nat)
+        (arguments : Fin arity → Fin wires) :
+        ItemResult mapping
+          (.identity arity arguments)
+          (singleton (.identity arity arguments))
+
+    | cut
+        {mapping : Mapping sourceRels targetRels}
+        {body : Region wires sourceRels}
+        {result : Region wires targetRels}
+        (body_result :
+          RegionResult mapping body result) :
+        ItemResult mapping
+          (.cut body)
+          (singleton (.cut result))
+
+    | bubble
+        {mapping : Mapping sourceRels targetRels}
+        (arity : Nat)
+        {body : Region wires (arity :: sourceRels)}
+        {result : Region wires (arity :: targetRels)}
+        (body_result :
+          RegionResult (mapping.lift arity) body result) :
+        ItemResult mapping
+          (.bubble arity body)
+          (singleton (.bubble arity result))
+end
+
+end Instantiation
+
+def Instantiates
+    (pattern : OpenDiagram relationArity)
+    (quantified : Region wires (relationArity :: rels))
+    (specialized : Region wires rels) :
+    Prop :=
+  Instantiation.RegionResult
+    (Mapping.instantiateHead pattern)
+    quantified specialized
+
+structure Local
+    (specialized quantified : Region wires rels) : Prop where
+  arity : Nat
+  pattern : OpenDiagram arity
+  body : Region wires (arity :: rels)
+  instantiates :
+    Instantiates pattern body specialized
+  quantified_iso :
+    Core.Isomorphic quantified
+      (singleton (.bubble arity body))
+
+end Comprehension
+
+def Comprehension : Rule :=
+  Contextual Comprehension.Local
+
+theorem Comprehension.iso
+    (sourceIso : OpenDiagramIso source source')
+    (step : Comprehension source target)
+    (targetIso : OpenDiagramIso target target') :
+    Comprehension source' target'
+```
+
+`RegionResult.mk` retains the quantified body's original local-wire block and appends local wires introduced by expanded patterns through `Region.adjoinAt`. `ItemsResult.cons` supplies simultaneous replacement without an executable occurrence search.
+
+#### Vacuity base
+
+```lean
+namespace Vacuity
+
+def wrap
+    (arity : Nat)
+    (body : Region wires rels) :
+    Region wires rels :=
+  .mk 0
+    (.cons
+      (.bubble arity
+        (body.renameRelations
+          (RelationRenaming.weaken arity)))
+      .nil)
+
+inductive Local : LocalRule
+  | introduce
+      (arity : Nat)
+      (body : Region wires rels) :
+      Local body (wrap arity body)
+
+end Vacuity
+```
+
+Do not define `Vacuity` until Task 5 proves `Vacuity.Local.sound_iff`.
+
+**Required compile gate:** each public relation module must contain complete definitions, no `sorry`, and no import from `VisualProof.Diagram.Concrete`, `VisualProof.Concrete`, the incumbent operational `Rule.Step`, or executor soundness modules.
+
+**Validation:** compile each relation module separately, run `lake build` and `git diff --check`, and commit each family independently.
+
+### Task 5: Isolate recursive semantic laws and prove family soundness
+
+**Files:**
+
+- Create `VisualProof/Rule/Laws.lean`
+- Create `VisualProof/Rule/Soundness/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean`
+- Modify direct importers of `VisualProof/Rule/Structural/Semantics.lean`
+
+Move the implementation-independent Region theorems for conjunction erasure, wire collapse, ancestor copying, double cut, and vacuous bubbles into `Rule/Laws.lean`. `Rule/Laws.lean` may import only recursive diagram syntax, renaming, context, algebra, isomorphism, and semantics. The operational structural module retains only concrete implementation material and imports the pure laws it uses.
+
+Add the generic contextual theorem:
+
+```lean
+theorem Contextual.sound
+    {local : LocalRule}
+    (localSound :
+      ∀ {wires rels}
+        {before after : Region wires rels},
+        local before after →
+        ∀ (model : Model)
+          (env : Fin wires → model.Carrier)
+          (relEnv : RelEnv model.Carrier rels),
+          denoteRegion model env relEnv before →
+          denoteRegion model env relEnv after)
+    (step : Contextual local source target) :
+    ∀ (model : Model)
+      (args : Fin arity → model.Carrier),
+      denoteOpen model source args →
+      denoteOpen model target args
+```
+
+Its proof decomposes the occurrence, uses `DiagramContext.denote_fill`, applies `OpenDiagram.denote_body`, and transports through the source and target open isomorphisms.
+
+#### Erasure
+
+```lean
+theorem Erasure.Local.sound
+    (step : Erasure.Local before after) :
+    ∀ (model : Model)
+      (env : Fin wires → model.Carrier)
+      (relEnv : RelEnv model.Carrier rels),
+      denoteRegion model env relEnv before →
+      denoteRegion model env relEnv after
+
+theorem Erasure.sound
+    (step : Erasure source target) :
+    ∀ (model : Model)
+      (args : Fin arity → model.Carrier),
+      denoteOpen model source args →
+      denoteOpen model target args
+```
+
+#### Wire severing
+
+```lean
+theorem WireSever.Local.sound
+    (step : WireSever.Local before after) :
+    ∀ (model : Model)
+      (env : Fin wires → model.Carrier)
+      (relEnv : RelEnv model.Carrier rels),
+      denoteRegion model env relEnv before →
+      denoteRegion model env relEnv after
+
+theorem WireSever.Open.sound
+    (step : WireSever.Open source target) :
+    ∀ (model : Model)
+      (args : Fin arity → model.Carrier),
+      denoteOpen model source args →
+      denoteOpen model target args
+
+theorem WireSever.sound
+    (step : WireSever source target) :
+    ∀ (model : Model)
+      (args : Fin arity → model.Carrier),
+      denoteOpen model source args →
+      denoteOpen model target args
+```
+
+`WireSever.Local.sound` chooses the same semantic value for the fresh local wire as for `joined`. `WireSever.Open.sound` transports a source boundary assignment by composing its class assignment with `collapse`; the position-indexed boundary equation proves agreement.
+
+#### Iteration
+
+```lean
+theorem Iteration.Base.sound_iff
+    (step : Iteration.Base source target) :
+    ∀ (model : Model)
+      (args : Fin arity → model.Carrier),
+      denoteOpen model source args ↔
+      denoteOpen model target args
+```
+
+The copied relation and wire environments are exactly `descendant.outerRelation` and `descendant.outerWire`. Only after this theorem is GREEN, define:
+
+```lean
+def Iteration : Rule :=
+  symmetric Iteration.Base
+
+theorem Iteration.iso
+    (sourceIso : OpenDiagramIso source source')
+    (step : Iteration source target)
+    (targetIso : OpenDiagramIso target target') :
+    Iteration source' target'
+
+theorem Iteration.sound
+    (step : Iteration source target) :
+    ∀ (model : Model)
+      (args : Fin arity → model.Carrier),
+      denoteOpen model source args →
+      denoteOpen model target args
+```
+
+#### Double cut
+
+```lean
+theorem DoubleCut.Local.sound_iff
+    (step : DoubleCut.Local before after) :
+    ∀ (model : Model)
+      (env : Fin wires → model.Carrier)
+      (relEnv : RelEnv model.Carrier rels),
+      denoteRegion model env relEnv before ↔
+      denoteRegion model env relEnv after
+```
+
+Only after this theorem is GREEN, define:
+
+```lean
+def DoubleCut : Rule :=
+  Contextual (symmetric DoubleCut.Local)
+
+theorem DoubleCut.iso
+    (sourceIso : OpenDiagramIso source source')
+    (step : DoubleCut source target)
+    (targetIso : OpenDiagramIso target target') :
+    DoubleCut source' target'
+
+theorem DoubleCut.sound
+    (step : DoubleCut source target) :
+    ∀ (model : Model)
+      (args : Fin arity → model.Carrier),
+      denoteOpen model source args →
+      denoteOpen model target args
+```
+
+#### Comprehension
+
+The recursive owner states exactly which semantic relation witnesses the new existential binder:
+
+```lean
+theorem Comprehension.Instantiates.sound
+    (step :
+      Comprehension.Instantiates pattern quantified specialized) :
+    ∀ (model : Model)
+      (env : Fin wires → model.Carrier)
+      (relEnv : RelEnv model.Carrier rels),
+      denoteRegion model env relEnv specialized →
+      denoteRegion model env
+        (OpenDiagram.asRelation model pattern, relEnv)
+        quantified
+
+theorem Comprehension.Local.sound
+    (step : Comprehension.Local specialized quantified) :
+    ∀ (model : Model)
+      (env : Fin wires → model.Carrier)
+      (relEnv : RelEnv model.Carrier rels),
+      denoteRegion model env relEnv specialized →
+      denoteRegion model env relEnv quantified
+
+theorem Comprehension.sound
+    (step : Comprehension source target) :
+    ∀ (model : Model)
+      (args : Fin arity → model.Carrier),
+      denoteOpen model source args →
+      denoteOpen model target args
+```
+
+Prove `Instantiates.sound` by mutual induction over `Instantiation.RegionResult`, `ItemsResult`, and `ItemResult`. The diagram-atom case uses `OpenDiagram.denote_substituteBoundary`; the bubble case uses `Mapping.lift`. `Local.sound` chooses `OpenDiagram.asRelation model pattern` as the bubble witness and transports through `quantified_iso`.
+
+#### Vacuity
+
+```lean
+theorem Vacuity.Local.sound_iff
+    (step : Vacuity.Local before after) :
+    ∀ (model : Model)
+      (env : Fin wires → model.Carrier)
+      (relEnv : RelEnv model.Carrier rels),
+      denoteRegion model env relEnv before ↔
+      denoteRegion model env relEnv after
+```
+
+Only after this theorem is GREEN, define:
+
+```lean
+def Vacuity : Rule :=
+  Contextual (symmetric Vacuity.Local)
+
+theorem Vacuity.iso
+    (sourceIso : OpenDiagramIso source source')
+    (step : Vacuity source target)
+    (targetIso : OpenDiagramIso target target') :
+    Vacuity source' target'
+
+theorem Vacuity.sound
+    (step : Vacuity source target) :
+    ∀ (model : Model)
+      (args : Fin arity → model.Carrier),
+      denoteOpen model source args →
+      denoteOpen model target args
+```
+
+Run RED/GREEN separately for each owner and family theorem. Compile all six modules, run `lake build`, verify their dependency closures contain no concrete modules, and commit each family separately.
+
+### Task 6: Move flat representation and execution to `Concrete`
+
+This is one atomic import migration: intermediate public wrappers are not permitted, and the build must pass at the task boundary.
+
+**Destination manifest:**
+
+| Current responsibility | Final destination |
+|---|---|
+| flat core/open/well-formed types | `VisualProof/Concrete/{Diagram,Open,WellFormed}.lean` |
+| checked elaboration/compiler/simulation | `VisualProof/Concrete/Elaboration/**` |
+| finite selection, extraction, removal, splice, reassembly | `VisualProof/Concrete/Subgraph/**` |
+| concrete isomorphism and occurrence equivalence | `VisualProof/Concrete/{Isomorphism,Occurrence}.lean` |
+| provenance and interface transport | `VisualProof/Concrete/Transport.lean` |
+| operational structural and comprehension functions | `VisualProof/Concrete/Operation/**` |
+| requests, orientation, errors, receipts, executor | `VisualProof/Concrete/Step.lean` |
+| proof-state execution support | `VisualProof/Concrete/State.lean` |
+
+Update every importing Lean module and the Lean executable targets in `lakefile.toml` in the same task. Do not leave namespace aliases or old-path re-exports.
+
+Define checked open execution state with the boundary arity in its type:
+
+```lean
+structure Concrete.State (arity : Nat) where
+  checked : Concrete.CheckedOpen
+  boundary_length : checked.val.boundary.length = arity
+
+def Concrete.State.diagram (source : Concrete.State arity) :
+    Concrete.Checked :=
+  ⟨source.checked.val.diagram,
+    source.checked.property.diagram_well_formed⟩
+```
+
+Move the existing proof-bearing payload structures first, changing their input from `CheckedDiagram` to `State arity` and using `source.checked.val.diagram` for finite graph indices. Define the two generalized request payloads before `Concrete.Step`:
+
+```lean
+structure Concrete.WireSeverBoundary
+    {arity : Nat} (source : Concrete.State arity)
+    (wire : Fin source.checked.val.diagram.wireCount) where
+  side : Fin arity → Bool
+  other : ∀ position,
+    source.checked.val.boundary.get
+        (Fin.cast source.boundary_length.symm position) ≠ wire →
+      side position = false
+
+structure Concrete.Insertion
+    {arity : Nat} (source : Concrete.State arity) where
+  input : Concrete.Splice.Input
+  frame_eq : input.frame = source.diagram
+  admissible : input.Admissible
+```
+
+`Concrete.Splice.Input` already contains the checked open material, target region, ordered attachment map, binder spine, terminal-body contract, and binder targets. `admissible` supplies attachment visibility, binder matching, injectivity, and scope. Consequently `Insertion` realizes arbitrary insertion rather than only one bound atom.
+
+Then move the twelve-constructor `Concrete.Step (source : State arity)` mechanically. Ten constructors retain their current dependent fields. The changed constructors are:
+
+```lean
+| boundRelationSpawn (insertion : Concrete.Insertion source)
+| wireSever
+    (wire : Fin source.checked.val.diagram.wireCount)
+    (keep : List (Concrete.CEndpoint source.checked.val.diagram.nodeCount))
+    (boundary : Concrete.WireSeverBoundary source wire)
+```
+
+For boundary positions denoting the severed wire, `WireSeverBoundary.side` chooses the old or fresh target wire. The `other` field canonicalizes irrelevant choices; the operation realization theorem proves those positions retain their original wire. This partition is supplied by the request, not discovered by execution.
+
+Define the complete `Concrete.Error` once. Preserve every current domain error, add open-validation errors, and classify errors with a proposition `Concrete.Error.DomainInvalid`. Do not add speculative cancellation, resource, unsupported-operation, or internal-error constructors unless the executor can actually return them.
+Give `DomainInvalid` one constructor for each error that certifies a malformed or illegal fully specified request. It has no constructor for a failed target well-formedness check or any error that does not establish request invalidity. Complete and compile that classification before any rejection theorem refers to it.
+
+Replace source-wire-only interface transport with position-aware boundary transport:
+
+```lean
+structure Concrete.BoundaryTransport
+    {arity : Nat} (source target : Concrete.State arity) where
+  image : Fin arity → Fin target.checked.val.diagram.wireCount
+  target_boundary : ∀ position,
+    target.checked.val.boundary.get
+      (Fin.cast target.boundary_length.symm position) = image position
+```
+
+Operation-specific realization theorems connect each `image position` to the source boundary position. The position index permits `wireSever` to split repeated aliases.
+
+Define receipts only after `State` and boundary transport:
+
+```lean
+structure Concrete.Receipt {arity : Nat}
+    (source : Concrete.State arity) where
+  target : Concrete.State arity
+  provenance : WireProvenance source.checked.val.diagram
+    target.checked.val.diagram
+  boundary : Concrete.BoundaryTransport source target
+```
+
+The final executor shape is:
+
+```lean
+def Concrete.execute
+    (orientation : Concrete.Orientation)
+    {arity : Nat}
+    (source : Concrete.State arity)
+    (request : Concrete.Step source) :
+    Except Concrete.Error (Concrete.Receipt source)
+```
+
+Execution consumes supplied occurrence certificates and never calls search.
+
+The final Lean tree contains no occurrence-search modules or aggregate imports. Structural occurrence equivalence used by supplied requests remains.
+
+**Validation:** compile every new aggregate, run `lake build`, run `rg` checks for old import paths and search declarations, run `git diff --check`, then commit the explicit migrated paths and `lakefile.toml` as `Separate concrete rewrite execution`.
+
+### Task 7: Define the exhaustive abstract `Step`
+
+**Files:**
+
+- Replace the operational contents of `VisualProof/Rule/Step.lean`
+- Replace `VisualProof/Rule/Soundness.lean`
+- Modify `VisualProof.lean`
+
+After all family relations and concrete request declarations exist, define:
+
+```lean
+inductive Step : OpenDiagram arity → OpenDiagram arity → Prop
   | erasure : Erasure source target → Step source target
   | wireSever : WireSever source target → Step source target
   | iteration : Iteration source target → Step source target
@@ -361,719 +1023,334 @@ inductive Step :
   | vacuity : Vacuity source target → Step source target
 ```
 
-These six constructors are the complete abstract inventory. Do not add classification constructors, tags, semantic modes, requests, errors, receipts, selections, or concrete witnesses to this module.
-
-- [ ] **Step 3: Add isomorphism closure**
-
-```lean
-theorem Step.iso
-    (hs : OpenDiagramIso source source')
-    (h : Step source target)
-    (ht : OpenDiagramIso target target') :
-    Step source' target'
-```
-
-This theorem depends on per-family isomorphism transport and is completed after Tasks 4 and 5; its declaration may not contain `sorry` until those definitions and transport theorems are complete.
-
-- [ ] **Step 4: Compile structural setup and commit**
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Rule/Relation.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Step.lean
-git diff --check
-git add VisualProof/Rule/Relation.lean VisualProof/Rule/Step.lean VisualProof.lean
-git commit -m "Define relational proof steps"
-```
-
-### Task 4: State and prove the local rule families
-
-**Files:**
-- Create: `VisualProof/Rule/Erasure.lean`
-- Create: `VisualProof/Rule/WireSever.lean`
-- Create: `VisualProof/Rule/DoubleCut.lean`
-- Create: `VisualProof/Rule/Vacuity.lean`
-- Modify: `VisualProof/Rule/Structural/Semantics.lean`
-- Create: `VisualProof/Rule/Soundness/Erasure.lean`
-- Create: `VisualProof/Rule/Soundness/WireSever.lean`
-- Create: `VisualProof/Rule/Soundness/DoubleCut.lean`
-- Create: `VisualProof/Rule/Soundness/Vacuity.lean`
-
-**Interfaces:**
-- Consumes: `Rule.Contextual`, recursive syntax, polarity, scope, freshness, and isomorphism.
-- Produces: proposition-valued local relations and one soundness theorem per family.
-
-- [ ] **Step 1: Define each local relation from mathematical witnesses only**
-
-Use this shape for `Erasure`; define `WireSever`, `DoubleCut`, and `Vacuity` with the same separation between a recursive local relation and its contextual closure:
-
-```lean
-namespace Erasure
-
-inductive Local :
-    Region wires rels → Region wires rels → Prop
-  | erase
-      (erasable : Erasable removable) :
-      Local (conjoin retained removable) retained
-
-def Rel : Rule := fun source target =>
-  Contextual (@Local) source target
-
-end Erasure
-```
-
-The four local families are exactly:
-
-- `Erasure.Local`, with positive form removing selected recursive material; `boundRelationSpawn` refines the converse insertion case.
-- `WireSever.Local`, with positive form separating a wire according to the mathematical endpoint partition; `wireJoin` refines its converse.
-- `DoubleCut.Local`, with `doubleCutIntro` and `doubleCutElim` refining its two directions.
-- `Vacuity.Local`, with `vacuousIntro` and `vacuousElim` refining its two directions.
-
-Define only the positive-context mathematical relation for each family. Do not copy the two executable operation names into two abstract constructors. `DoubleCut` and `Vacuity` are invertible, so expose them through `Contextual (symmetric Local)` only after proving local semantic equivalence. Expose `Erasure` and `WireSever` through `Contextual Local`; their negative-context applications are supplied by `atPolarity`. Each constructor owns a recursive source, recursive target, and genuine mathematical legality witnesses such as scope, freshness, gluing, and capture avoidance. Do not add direction-selection evidence or share a universal graph-replacement payload.
-
-- [ ] **Step 2: Prove isomorphism transport for each family**
-
-Each module provides:
-
-```lean
-theorem Erasure.iso
-    (hs : OpenDiagramIso source source')
-    (h : Erasure source target)
-    (ht : OpenDiagramIso target target') :
-    Erasure source' target'
-```
-
-- [ ] **Step 3: RED/GREEN the Region-level semantic owner for each family**
-
-After its relation and dependencies compile without incomplete definitions, state the mathematical theorem over the local `Region` relation and arbitrary environments. Reuse the existing Region theorems in `Rule/Structural/Semantics.lean` rather than cloning their proofs. The owning shape is:
-
-```lean
-theorem Erasure.Local.sound
-    (h : Erasure.Local before after) :
-    ∀ model env relEnv,
-      denoteRegion model env relEnv before →
-        denoteRegion model env relEnv after
-```
-
-For `DoubleCut` and `Vacuity`, strengthen the owning theorem to `denoteRegion ... before ↔ denoteRegion ... after`; this theorem, not syntactic symmetry of `Local`, licenses `symmetric Local`. Each owning proof has no boundary arguments, `BoundaryAssignment`, open compiler witness, concrete certificate, execution orientation, or polarity-legality witness.
-
-- [ ] **Step 4: Derive contextual and open family soundness**
-
-First derive Region-level contextual soundness with `DiagramContext.denote_fill`. Then derive the boundary-visible family theorem:
-
-```lean
-theorem Erasure.sound
-    (h : Erasure source target) :
-    ∀ model args,
-      denoteOpen model source args → denoteOpen model target args
-```
-
-The open proof performs no rule-specific semantic reasoning: destruct the occurrence; transport through source isomorphism; apply the Region-level contextual theorem; invoke `OpenDiagram.denote_body`; transport through target isomorphism. This open theorem is a family interface consumed by `Step.sound`, not the owner of the mathematical rule proof.
-
-- [ ] **Step 5: Validate and commit each independently reviewable family**
-
-For each `Family` in `Erasure WireSever DoubleCut Vacuity`:
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Rule/Family.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Soundness/Family.lean
-```
-
-Commit one family at a time with `git commit -m "Prove <family> relation sound"`.
-
-### Task 5: State and prove whole-diagram and simultaneous rule families
-
-**Files:**
-- Create: `VisualProof/Rule/Iteration.lean`
-- Replace: `VisualProof/Rule/Comprehension.lean`
-- Create: `VisualProof/Rule/Soundness/Iteration.lean`
-- Create: `VisualProof/Rule/Soundness/Comprehension.lean`
-- Replace directory: `VisualProof/Rule/Soundness/Comprehension/`
-- Extract Region-level iteration laws from: `VisualProof/Rule/Soundness/Iteration/**/*.lean`
-
-**Interfaces:**
-- Consumes: recursive diagrams, relational occurrences, renaming, freshness, capture avoidance, and denotation.
-- Produces: family-owned whole-diagram relations and soundness proofs independent of concrete compilation.
-
-- [ ] **Step 1: Define iteration as its mathematical whole-diagram relation**
-
-```lean
-inductive Iteration.Base :
-    OpenDiagram arity → OpenDiagram arity → Prop
-  | iterate
-      (occurrences : IterationOccurrences source)
-      (nonoverlap : occurrences.Nonoverlapping)
-      (scope : occurrences.WellScoped)
-      (result : Iterate source occurrences = target) :
-      Base source target
-
-def Iteration : Rule := symmetric Iteration.Base
-```
-
-The witness refers to recursive occurrences and the resulting recursive diagram. It does not refer to selection indices, traversal, extraction, splice traces, executor state, or the separate executable deiteration operation. Iteration is invertible, so its abstract family is the symmetric closure of the single positive relation; its soundness owner proves equivalence for `Iteration.Base`.
-
-- [ ] **Step 2: Define comprehension abstraction and substitution as one relation**
-
-Define one positive-context `Comprehension.Base` relation at the operation's wrapping `Region`. Its witness contains both recursive sides of the transformation: the selected nonoverlapping occurrences and their ordered interfaces, the fresh binder and quantified form, the simultaneous boundary substitution that recovers the occurrences, and the required freshness and capture-avoidance evidence. Define `Comprehension source target` by locating the wrapping region once and applying `atPolarity` to `Comprehension.Base` using that context's polarity. `comprehensionAbstract` refines the abstraction direction; `comprehensionInstantiate`, also called substitution in prose, refines the converse. Do not create a separate `Substitution` relation, constructor, witness, module, theorem family, or refinement family. Do not compute a polarity for each selected occurrence: the operation has one controlling wrap region.
-
-- [ ] **Step 3: Extract one mathematical owner per family, then RED/GREEN family soundness**
-
-For iteration, extract the Region/context proposition currently proved as `bodyEquiv` inside contraction, same-site, route, and anchor compiler theorems. State and prove that proposition from the declarative iteration witness; do not retain compiler certificates, compiled sources, routes, anchors, or splice traces in its premises.
-
-For comprehension, make recursive renaming, simultaneous filling, freshness, and capture avoidance the theorem premises. Reuse `comprehensionInstantiate_sound` and `comprehensionAbstract_context_sound` as the two directions of the same Region/context owner. Split the current diagonalization result into:
-
-1. the Region-level instantiation/substitution side of the comprehension theorem;
-2. `OpenDiagram.denote_substituteBoundary` for the positional lift;
-3. a later refinement theorem proving that the concrete diagonal witness represents that substitution.
-
-Each family then exposes the ordinary open implication required by `Step.sound` by using polarity-aware context transport and the generic Region-to-open lift from Task 1. An invertible family proves equivalence for its positive base relation before admitting the converse. Compiler, occurrence extraction, the executor's paired operation names, and splice correctness appear only in refinement. Do not create a Region duplicate for every existing `wholeOpen_equiv` or compiled-source theorem.
-
-- [ ] **Step 4: Validate and commit by family**
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Rule/Iteration.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Soundness/Iteration.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Comprehension.lean
-lake env lean -DwarningAsError=true VisualProof/Rule/Soundness/Comprehension.lean
-```
-
-Commit each family separately.
-
-### Task 6: Prove the exhaustive abstract step theorem
-
-**Files:**
-- Modify: `VisualProof/Rule/Step.lean`
-- Replace: `VisualProof/Rule/Soundness.lean`
-- Remove: `VisualProof/Rule/Soundness/All.lean`
-- Modify: `VisualProof.lean`
-- Modify: `VisualProof/Audit.lean`
-
-**Interfaces:**
-- Consumes: every family relation and soundness theorem.
-- Produces: `Step.iso` and `Step.sound` with no concrete dependency.
-
-- [ ] **Step 1: Complete `Step.iso` by constructor exhaustion**
-
-Each case delegates to the corresponding family `iso` theorem.
-
-- [ ] **Step 2: RED the owning theorem**
+Prove `Step.iso` by family transport. RED/GREEN:
 
 ```lean
 theorem Step.sound
-    (h : Step source target) :
-    ∀ model args,
+    (step : Step source target) :
+    ∀ (model : Model) (args : Fin arity → model.Carrier),
       denoteOpen model source args → denoteOpen model target args
 ```
 
-At RED, all definitions and family soundness theorems in the dependency closure are complete; the only new `sorry` is the proof of `Step.sound`.
+The proof is six constructor cases delegating to family soundness. Validate the dependency list with `lake env lean --deps VisualProof/Rule/Soundness.lean`; it must stop at recursive diagram and rule modules. Commit as `Prove relational step soundness`.
 
-- [ ] **Step 3: GREEN by cases on `h`**
-
-The proof has one case per family constructor and delegates directly to that family's soundness theorem. Converse selection has already occurred inside the family relation from context polarity, and invertible converse cases use that family's equivalence theorem. The proof performs no execution, translation, or concrete semantic reasoning.
-
-- [ ] **Step 4: Add kernel and dependency audits**
-
-Update the existing `VisualProof/Audit.lean` to import `VisualProof.Rule.Soundness` and issue:
-
-```lean
-#print axioms VisualProof.Rule.Step.sound
-```
-
-Run:
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Rule/Soundness.lean
-lake env lean -DwarningAsError=true VisualProof/Audit.lean
-lake env lean --deps VisualProof/Rule/Soundness.lean
-```
-
-The resolved dependency list must not include `VisualProof.Diagram.Concrete`, `VisualProof.Concrete`, or `VisualProof.Refinement`.
-
-- [ ] **Step 5: Commit**
-
-```bash
-git add VisualProof/Rule/Step.lean VisualProof/Rule/Soundness.lean VisualProof/Rule/Soundness/All.lean VisualProof.lean VisualProof/Audit.lean
-git commit -m "Prove relational step soundness"
-```
-
-### Task 7: Move flat data and executable rewriting into the concrete namespace
+### Task 8: Define translation, encoding, and representation
 
 **Files:**
-- Create: `VisualProof/Concrete/Diagram.lean`
-- Create: `VisualProof/Concrete/Occurrence.lean`
-- Create: `VisualProof/Concrete/Step.lean`
-- Migrate remaining implementation files from: `VisualProof/Diagram/Concrete/**/*.lean`
-- Remove: `VisualProof/Diagram/Concrete/OccurrenceEmbedding.lean`
-- Remove: `VisualProof/Diagram/Concrete/OccurrenceExtraction.lean`
-- Remove: `VisualProof/Diagram/Concrete/OccurrenceSelection.lean`
-- Remove: `VisualProof/Diagram/Concrete/Matcher.lean`
-- Remove directory: `VisualProof/Diagram/Concrete/Matcher/`
-- Migrate operational declarations from: `VisualProof/Rule/Step.lean`
-- Migrate executor from: `VisualProof/Rule/Soundness.lean`
-- Modify: `VisualProof.lean`
 
-**Interfaces:**
-- Consumes: core signature/boundary data needed to type flat representations.
-- Produces: `Concrete.Diagram`, `Concrete.OpenDiagram`, `Concrete.Checked`, `Concrete.checkOpen`, `Concrete.Occurrence`, `Concrete.Orientation`, `Concrete.Step`, `Concrete.Error`, `Concrete.Receipt`, `Concrete.execute`.
+- Create `VisualProof/Concrete/Translate.lean`
+- Create `VisualProof/Concrete/Encode.lean`
+- Create `VisualProof/Refinement/Represents.lean`
+- Modify `VisualProof.lean`
 
-- [ ] **Step 1: Move concrete types without compatibility aliases**
-
-Move the complete structures and predicates from `VisualProof/Diagram/Concrete/Core.lean`, `VisualProof/Diagram/Concrete/Open.lean`, and `VisualProof/Diagram/Concrete/WellFormed.lean` into `VisualProof/Concrete/Diagram.lean`. Preserve every field and invariant while renaming only by namespace:
-
-| Current declaration | Final declaration |
-|---|---|
-| `Diagram.ConcreteDiagram` | `Concrete.Diagram` |
-| `Diagram.OpenConcreteDiagram` | `Concrete.OpenDiagram` |
-| `Diagram.CheckedDiagram` | `Concrete.Checked` |
-| `Diagram.CheckedOpenDiagram` | `Concrete.CheckedOpen` |
-| `Diagram.ConcreteDiagram.WellFormed` | `Concrete.Diagram.WellFormed` |
-| `Diagram.OpenConcreteDiagram.WellFormed` | `Concrete.OpenDiagram.WellFormed` |
-
-Rename dependents mechanically; do not leave aliases behind.
-
-Move the executable open-diagram validator with the types and expose its proof-bearing result:
+Implement an actual open validator. It checks the underlying flat diagram and proves every boundary wire is in root scope. Its error records either the existing well-formedness error or the offending boundary position. The dependent success value is a proof about the exact input, so input preservation is definitional:
 
 ```lean
 def Concrete.checkOpen (concrete : Concrete.OpenDiagram) :
-    Except Concrete.WFError concrete.WellFormed
+    Except Concrete.Error concrete.WellFormed
+
+theorem Concrete.checkOpen_complete
+    (valid : concrete.WellFormed) :
+    Concrete.checkOpen concrete = .ok valid
 ```
 
-Successful checking returns the proof consumed by total elaboration and does not construct a second diagram. `Concrete.translate` maps `Concrete.WFError` into the common `Concrete.Error` at the public translation boundary.
-
-- [ ] **Step 2: Remove the concrete matcher subsystem**
-
-Remove `OccurrenceProblem`, `RawOccurrenceCertificate`, `OpenOccurrenceEmbedding`, `SearchStatus`, `CandidateMaps`, `MatchResult`, candidate enumeration, frontiers, `findOccurrences`, and their supporting extraction and selection APIs. Remove their aggregate imports from `VisualProof.lean` and their audit entries. Do not migrate or replace them with another search API.
-
-Retain `ConcreteOccurrenceEquiv` and `OpenOccurrenceEquiv` from the current `VisualProof/Diagram/Concrete/Occurrence.lean`, because concrete steps use them as supplied structural evidence. Move only those reusable relations and their algebra to `VisualProof/Concrete/Occurrence.lean`.
-
-- [ ] **Step 3: Move requests, errors, receipts, and execution**
-
-Move the current request constructors from the former execution-indexed `Rule.Step` into `Concrete.Step`, preserving their checked finite references. Move `StepError` to `Concrete.Error`, `StepReceipt` to `Concrete.Receipt`, and `applyStep` to:
-
-```lean
-inductive Concrete.Orientation
-  | forward
-  | backward
-
-def Concrete.execute
-    (orientation : Concrete.Orientation)
-    (input : Concrete.Checked)
-    (request : Concrete.Step input) :
-    Except Concrete.Error (Concrete.Receipt input)
-```
-
-Add `Concrete.Error.invalidDiagram (error : Concrete.WFError)` for translation validation failures. `Concrete.Step` retains the separate named constructors needed to execute both members of each operational pair. `Concrete.Orientation` records which operational endpoint is the logical antecedent. Neither distinction occurs in `Rule.Step`. These declarations do not export semantic theorems.
-
-Move the existing proof-bearing `DeiterationWitness`, `AbstractionOccurrence`, `AbstractionWitness`, `ComprehensionAbstractPayload`, and `ComprehensionInstantiatePayload` with `Concrete.Step`. A request contains the selected occurrence and every interface, embedding, scope, aliasing, freshness, nonoverlap, and capture-avoidance fact needed by that operation. Execution checks or consumes those fields directly and does not invoke occurrence search.
-
-- [ ] **Step 4: Compile the concrete layer independently**
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Concrete/Diagram.lean
-lake env lean -DwarningAsError=true VisualProof/Concrete/Occurrence.lean
-lake env lean -DwarningAsError=true VisualProof/Concrete/Step.lean
-lake build
-```
-
-- [ ] **Step 5: Commit**
-
-Stage every migrated Lean file under `VisualProof/Concrete/` and every removed old path, then commit:
-
-```bash
-git commit -m "Separate concrete rewriting implementation"
-```
-
-### Task 8: Define representation and prove its laws
-
-**Files:**
-- Create: `VisualProof/Concrete/Translate.lean`
-- Create: `VisualProof/Refinement/Represents.lean`
-- Migrate: `VisualProof/Diagram/Concrete/Elaboration/Compile/Certified.lean`
-- Migrate: `VisualProof/Diagram/Concrete/Elaboration/Simulation.lean`
-- Modify: `VisualProof.lean`
-
-**Interfaces:**
-- Consumes: `Concrete.checkOpen`, `Concrete.CheckedOpen`, total checked elaboration, recursive `OpenDiagram`, and recursive isomorphism.
-- Produces: fallible `Concrete.translate`, its checked-input equation, `Represents`, checked representation existence, meaning uniqueness modulo isomorphism, and representation coverage.
-
-- [ ] **Step 1: Expose fallible translation from unchecked flat syntax**
-
-Keep elaboration total on a checked input:
-
-```lean
-def Concrete.elaborate
-    (checked : Concrete.CheckedOpen) :
-    Diagram.OpenDiagram checked.val.boundary.length
-```
-
-Define the public translation boundary by composing validation and elaboration:
+Keep elaboration total on `Concrete.CheckedOpen`. Define translation exactly as open validation followed by elaboration:
 
 ```lean
 def Concrete.translate (concrete : Concrete.OpenDiagram) :
-    Except Concrete.Error
-      (Diagram.OpenDiagram concrete.boundary.length) :=
+    Except Concrete.Error (OpenDiagram concrete.boundary.length) :=
   match Concrete.checkOpen concrete with
-  | .error error => .error (.invalidDiagram error)
+  | .error error => .error error
   | .ok valid => .ok (Concrete.elaborate ⟨concrete, valid⟩)
-```
 
-The boundary length is already determined by the input, so translation does not return an existential arity. `Concrete.Error.invalidDiagram` retains the original `Concrete.WFError`.
-
-- [ ] **Step 2: RED/GREEN the checked translation equation**
-
-```lean
-theorem Concrete.translate_checked
-    (checked : Concrete.CheckedOpen) :
+theorem Concrete.translate_checked (checked : Concrete.CheckedOpen) :
     Concrete.translate checked.val = .ok (Concrete.elaborate checked)
 ```
 
-The proof uses the validator's success theorem and proof irrelevance. It establishes that `translate` is exactly validation followed by the existing total elaboration.
-
-- [ ] **Step 3: Define representation through translation modulo isomorphism**
+Define:
 
 ```lean
 def Represents
     (concrete : Concrete.OpenDiagram)
-    (diagram : Diagram.OpenDiagram concrete.boundary.length) : Prop :=
+    (diagram : OpenDiagram concrete.boundary.length) : Prop :=
   ∃ translated,
     Concrete.translate concrete = .ok translated ∧
-    Diagram.OpenDiagramIso translated diagram
+    OpenDiagramIso translated diagram
 ```
 
-`OpenDiagramIso` carries the pointwise ordered-boundary correspondence and repeated aliases. `Represents` therefore permits noncanonical class numbering without weakening translation failure or boundary identity.
-
-- [ ] **Step 4: RED/GREEN checked representation existence**
+For indexed execution states define:
 
 ```lean
-theorem checked_represents
-    (concrete : Concrete.CheckedOpen) :
-    ∃ diagram, Represents concrete.val diagram
+def StateRepresents
+    (state : Concrete.State arity)
+    (diagram : OpenDiagram arity) : Prop :=
+  Represents state.checked.val
+    (diagram.castArity state.boundary_length.symm)
+
+def Concrete.State.translate (state : Concrete.State arity) :
+    Except Concrete.Error (OpenDiagram arity) :=
+  (Concrete.translate state.checked.val).map
+    (fun diagram => diagram.castArity state.boundary_length)
 ```
 
-- [ ] **Step 5: RED/GREEN meaning uniqueness**
+Implement the encoder as an indexed checked state:
+
+```lean
+def Concrete.encode (diagram : OpenDiagram arity) : Concrete.State arity
+
+theorem encode_represents (diagram : OpenDiagram arity) :
+    StateRepresents (Concrete.encode diagram) diagram
+```
+
+Its implementation recursively allocates finite region/node/wire indices and emits the ordered boundary list from `OpenDiagram.boundary`. Prove:
+
+- the encoded flat open diagram is well formed;
+- `Concrete.State.translate (Concrete.encode diagram)` succeeds with a diagram isomorphic to `diagram`, with the same ordered positions and alias partition;
+- every checked input represents its elaboration:
+
+```lean
+theorem checked_represents (concrete : Concrete.CheckedOpen) :
+    Represents concrete.val (Concrete.elaborate concrete)
+```
+
+- representation uniqueness concludes `OpenDiagramIso`:
 
 ```lean
 theorem represents_unique
-    (first : Represents concrete d₁)
-    (second : Represents concrete d₂) :
-    Diagram.OpenDiagramIso d₁ d₂
+    (first : Represents concrete firstDiagram)
+    (second : Represents concrete secondDiagram) :
+    OpenDiagramIso firstDiagram secondDiagram
 ```
 
-The conclusion is isomorphism, never Lean equality.
-
-- [ ] **Step 6: RED/GREEN representation coverage**
-
-Because the flat format is intended to implement the complete calculus, prove:
+- representation completeness follows from `encode` with the exact raw form:
 
 ```lean
-theorem representation_complete
-    (diagram : Diagram.OpenDiagram arity) :
-    ∃ concrete : Concrete.CheckedOpen,
-      ∃ h : concrete.val.boundary.length = arity,
-        Represents concrete.val (diagram.castArity h.symm)
+theorem representation_complete (diagram : OpenDiagram arity) :
+    ∃ (concrete : Concrete.OpenDiagram)
+      (arity_eq : concrete.boundary.length = arity),
+      Represents concrete (diagram.castArity arity_eq.symm)
 ```
 
-- [ ] **Step 7: Validate and commit**
+Run RED/GREEN for the round trip and the three representation theorems. Compile, build, kernel-audit, and commit as `Prove concrete representation laws`.
 
-```bash
-lake env lean -DwarningAsError=true VisualProof/Concrete/Translate.lean
-lake env lean -DwarningAsError=true VisualProof/Refinement/Represents.lean
-lake env lean -DwarningAsError=true VisualProof/Audit.lean
-lake build
-git diff --check
-git add VisualProof/Concrete/Translate.lean VisualProof/Refinement/Represents.lean VisualProof/Concrete/Elaboration VisualProof.lean VisualProof/Audit.lean
-git commit -m "Prove concrete representation laws"
-```
-
-### Task 9: Prove execution refinement, completeness, and rejection correctness
+### Task 9: Prove execution soundness family by family
 
 **Files:**
-- Create: `VisualProof/Refinement/Step.lean`
-- Create: `VisualProof/Refinement/Step/Erasure.lean`
-- Create: `VisualProof/Refinement/Step/WireSever.lean`
-- Create: `VisualProof/Refinement/Step/Iteration.lean`
-- Create: `VisualProof/Refinement/Step/DoubleCut.lean`
-- Create: `VisualProof/Refinement/Step/Comprehension.lean`
-- Create: `VisualProof/Refinement/Step/Vacuity.lean`
-- Migrate implementation proofs from: `VisualProof/Rule/Soundness/**/*.lean`
-- Modify: `VisualProof/Audit.lean`
 
-**Interfaces:**
-- Consumes: `Concrete.execute`, `Concrete.Step`, `Concrete.Receipt`, `Represents`, family relations, and `Rule.Step`.
-- Produces: `execute_sound`, exact `execute_translates`, `execute_complete`, and `execute_rejects_only_invalid`.
+- Create `VisualProof/Refinement/Step/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean`
+- Create `VisualProof/Refinement/Step.lean`
+- Move implementation proof towers from their operational rule locations into the matching refinement subtree
 
-- [ ] **Step 1: Define request meaning without semantic claims**
+For each of the twelve request constructors, prove that successful execution translates to the assigned family relation. Compiler traversal, finite indices, splice traces, attachment partitions, carrier numbering, and receipts may appear only here or below `Concrete`.
 
-```lean
-def Requested
-    (orientation : Concrete.Orientation)
-    (source : Diagram.OpenDiagram arity)
-    (request : Concrete.Step concrete)
-    (target : Diagram.OpenDiagram arity) : Prop :=
-  (match orientation with
-   | .forward => Rule.Step source target
-   | .backward => Rule.Step target source) ∧
-  RequestWitness orientation request source target
-```
+The family table is exhaustive:
 
-`RequestWitness` relates the named executable half and its concrete indices/selections to the positive abstract relation or its converse at the selected region's polarity. It contains no denotation. Every existing operation has one controlling region; no per-occurrence polarity list is introduced for comprehension or any other operation.
+| Relation | Concrete constructors |
+|---|---|
+| `Erasure` | `erasure`, `boundRelationSpawn` |
+| `WireSever` | `wireSever`, `wireJoin` |
+| `Iteration` | `iteration`, `deiteration` |
+| `DoubleCut` | `doubleCutIntro`, `doubleCutElim` |
+| `Comprehension` | `comprehensionAbstract`, `comprehensionInstantiate` |
+| `Vacuity` | `vacuousIntro`, `vacuousElim` |
 
-The case split is exact:
-
-- `erasure` and `boundRelationSpawn` refine `Erasure`;
-- `wireSever` and `wireJoin` refine `WireSever`;
-- `iteration` and `deiteration` refine `Iteration`;
-- `doubleCutIntro` and `doubleCutElim` refine `DoubleCut`;
-- `comprehensionAbstract` and `comprehensionInstantiate` refine `Comprehension`;
-- `vacuousIntro` and `vacuousElim` refine `Vacuity`.
-
-Do not route these cases through broader classifications. `comprehensionInstantiate` is the substitution direction of `Comprehension`, not a separate refinement family.
-
-- [ ] **Step 2: RED/GREEN execution soundness**
+The public aggregate theorem is stated over a checked open state and any represented source:
 
 ```lean
 theorem execute_sound
-    (sourceRep : Represents sourceConcrete.asOpen source)
-    (success : Concrete.execute orientation sourceConcrete request = .ok receipt) :
-    ∃ target,
+    {arity : Nat}
+    {source : Concrete.State arity}
+    {sourceDiagram : OpenDiagram arity}
+    {orientation : Concrete.Orientation}
+    {request : Concrete.Step source}
+    {receipt : Concrete.Receipt source}
+    (sourceRep : StateRepresents source sourceDiagram)
+    (success : Concrete.execute orientation source request = .ok receipt) :
+    ∃ targetDiagram : OpenDiagram arity,
       (match orientation with
-       | .forward => Rule.Step source target
-       | .backward => Rule.Step target source) ∧
-      Represents receipt.result.asOpen target
+       | .forward => Rule.Step sourceDiagram targetDiagram
+       | .backward => Rule.Step targetDiagram sourceDiagram) ∧
+      StateRepresents receipt.target targetDiagram
 ```
 
-The migrated compiler, traversal, splice, attachment, and carrier-numbering proofs discharge `RequestWitness` and target representation only.
+The family-specific successful-execution theorems produce the existential `targetDiagram`; representation uniqueness and `Step.iso` allow callers to replace it by another recursive representative of the same concrete target.
 
-Also expose the exact commuting form for the canonical translated representatives:
+Also prove the canonical commuting corollary with the indexed state translation:
 
 ```lean
 theorem execute_translates
-    (success : Concrete.execute orientation sourceConcrete request = .ok receipt) :
-    ∃ source target,
-      Concrete.translate sourceConcrete.asOpen.val = .ok source ∧
-      Concrete.translate receipt.result.asOpen.val = .ok target ∧
+    {arity : Nat}
+    {source : Concrete.State arity}
+    {orientation : Concrete.Orientation}
+    {request : Concrete.Step source}
+    {receipt : Concrete.Receipt source}
+    (success : Concrete.execute orientation source request = .ok receipt) :
+    ∃ sourceDiagram targetDiagram,
+      source.translate = .ok sourceDiagram ∧
+      receipt.target.translate = .ok targetDiagram ∧
       match orientation with
-      | .forward => Rule.Step source target
-      | .backward => Rule.Step target source
+      | .forward => Rule.Step sourceDiagram targetDiagram
+      | .backward => Rule.Step targetDiagram sourceDiagram
 ```
 
-Prove `execute_translates` from `Concrete.translate_checked`, `execute_sound`, representation uniqueness, and `Step.iso`. Keep `execute_sound` as the primary theorem because callers may choose any isomorphic recursive representatives; the exact translation equation is a corollary, not a replacement for `Represents`.
+It follows from `execute_sound`, translation success for checked states, representation uniqueness, and `Step.iso`; it does not re-prove a rule.
 
-Classify the existing open theorem towers while migrating them:
+Validate and commit each family separately, then the aggregate.
 
-- `BoundaryWitness`, heterogeneous `denoteOpen_lift`, open elaboration simulation, and rule-specific boundary witnesses remain refinement infrastructure because they compare positional interfaces or transport alias partitions.
-- iteration `wholeOpen_equiv`, same-site, route, anchor, contraction, compiled-source, splice, and reassembly theorems become representation or `RequestWitness` lemmas. Their Region `bodyEquiv` argument is supplied by the abstract iteration theorem from Task 5.
-- concrete comprehension diagonal, attachment, and terminal-environment theorems prove that the generated concrete target represents the corresponding abstraction or substitution direction of `Comprehension`.
-- receipt and replay theorems consume `execute_sound` and `Step.sound`; they never serve as the owning proof of a rule family.
+### Task 10: Prove request reflection and execution completeness
 
-The generic unchanged-interface lift belongs to `Diagram.Semantics`; the heterogeneous boundary simulations in this task remain concrete/refinement theorems. Do not conflate those two responsibilities merely because both conclude with `denoteOpen`.
+**Files:**
 
-- [ ] **Step 3: RED/GREEN execution completeness**
+- Create `VisualProof/Refinement/Complete/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean`
+- Create `VisualProof/Refinement/Complete.lean`
+
+For each family, prove an occurrence-reflection theorem: given `StateRepresents source sourceDiagram` and a family witness on `sourceDiagram`, construct the dependent checked finite selection, embedding, boundary assignment, scope proof, and operation payload needed by the corresponding `Concrete.Step` constructor. This is an existence proof over finite data, not a matcher or executable search function.
+
+Define the common completeness property once:
+
+```lean
+def Implemented (relation : Rule) : Prop :=
+  ∀ {arity : Nat}
+    {source : Concrete.State arity}
+    {sourceDiagram targetDiagram : OpenDiagram arity}
+    (orientation : Concrete.Orientation),
+    StateRepresents source sourceDiagram →
+    (match orientation with
+     | .forward => relation sourceDiagram targetDiagram
+     | .backward => relation targetDiagram sourceDiagram) →
+    ∃ (request : Concrete.Step source) (receipt : Concrete.Receipt source),
+      Concrete.execute orientation source request = .ok receipt ∧
+      StateRepresents receipt.target targetDiagram
+
+theorem Erasure.complete : Implemented Erasure
+theorem WireSever.complete : Implemented WireSever
+theorem Iteration.complete : Implemented Iteration
+theorem DoubleCut.complete : Implemented DoubleCut
+theorem Comprehension.complete : Implemented Comprehension
+theorem Vacuity.complete : Implemented Vacuity
+```
+
+The erasure converse case uses the generalized `boundRelationSpawn` payload from Task 6. The open wire-sever case reflects the explicit boundary class split. The comprehension case reflects its simultaneous `Instantiates` derivation into the supplied list of checked occurrences.
+
+After each request constructor theorem compiles, prove:
 
 ```lean
 theorem execute_complete
-    (sourceRep : Represents sourceConcrete.asOpen source)
+    {arity : Nat}
+    {source : Concrete.State arity}
+    {sourceDiagram targetDiagram : OpenDiagram arity}
+    (orientation : Concrete.Orientation)
+    (sourceRep : StateRepresents source sourceDiagram)
     (step : match orientation with
-      | .forward => Rule.Step source target
-      | .backward => Rule.Step target source) :
-    ∃ request receipt,
-      Concrete.execute orientation sourceConcrete request = .ok receipt ∧
-      Represents receipt.result.asOpen target
+      | .forward => Rule.Step sourceDiagram targetDiagram
+      | .backward => Rule.Step targetDiagram sourceDiagram) :
+    ∃ (request : Concrete.Step source) (receipt : Concrete.Receipt source),
+      Concrete.execute orientation source request = .ok receipt ∧
+      StateRepresents receipt.target targetDiagram
 ```
 
-The request is existential because the executor is deterministic only after a request supplies the chosen abstract application.
+No theorem in this task may call or define a matcher. Validate family modules and the aggregate, build, and commit as `Prove concrete execution completeness`.
 
-- [ ] **Step 4: Separate domain rejection from operational failure**
+### Task 11: Prove rejection correctness for domain-invalid requests
 
-Define `Concrete.Error.invalid` for fully specified domain-invalid requests separately from unsupported operations, cancellation, resource limits, and internal failures. Prove only:
+**Files:**
+
+- Modify `VisualProof/Concrete/Step.lean`
+- Create `VisualProof/Refinement/Rejection.lean`
+
+Define request meaning in `VisualProof.Refinement.Rejection`, not in `Concrete`: it depends on both concrete requests and abstract family relations. Its definition is exhaustive recursion over the twelve concrete constructors, relating the supplied data to the corresponding family witness.
+
+```lean
+def Means
+    {arity : Nat}
+    {source : Concrete.State arity}
+    {sourceDiagram : OpenDiagram arity}
+    (sourceRep : StateRepresents source sourceDiagram)
+    (request : Concrete.Step source)
+    (orientation : Concrete.Orientation)
+    (targetDiagram : OpenDiagram arity) : Prop
+```
+
+Implement `Means` by pattern matching on all twelve constructors. The branches, in constructor order, produce the Erasure converse, WireSever converse, Erasure base, WireSever base, Iteration base, Iteration converse, DoubleCut introduction, DoubleCut elimination, Comprehension instantiation, Comprehension abstraction, Vacuity introduction, and Vacuity elimination witnesses. Every branch body is a proposition defined from the relevant representation, selection/occurrence correspondence, controlling polarity, and family relation. Complete and compile all twelve bodies before RED.
+
+Prove:
 
 ```lean
 theorem execute_rejects_only_invalid
-    (sourceRep : Represents sourceConcrete.asOpen source)
-    (rejected : Concrete.execute orientation sourceConcrete request =
-      .error .invalid) :
-    ¬ ∃ target, Requested orientation source request target
+    {arity : Nat}
+    {source : Concrete.State arity}
+    {sourceDiagram : OpenDiagram arity}
+    {orientation : Concrete.Orientation}
+    {request : Concrete.Step source}
+    {error : Concrete.Error}
+    (sourceRep : StateRepresents source sourceDiagram)
+    (failure : Concrete.execute orientation source request = .error error)
+    (invalid : error.DomainInvalid) :
+    ¬ ∃ targetDiagram, Means sourceRep request orientation targetDiagram
 ```
 
-- [ ] **Step 5: Derive semantic preservation as a corollary**
+This theorem says nothing about errors outside `DomainInvalid`. Validate, build, and commit as `Prove concrete rejection correctness`.
 
-```lean
-theorem execute_preserves
-    (sourceRep : Represents sourceConcrete.asOpen source)
-    (success : Concrete.execute orientation sourceConcrete request = .ok receipt) :
-    ∃ target,
-      Represents receipt.result.asOpen target ∧
-      match orientation with
-      | .forward => ∀ model args,
-          denoteOpen model source args → denoteOpen model target args
-      | .backward => ∀ model args,
-          denoteOpen model target args → denoteOpen model source args
-```
-
-The proof is exactly `execute_sound` followed by `Rule.Step.sound`; it contains no rule-specific semantic argument.
-
-- [ ] **Step 6: Validate and commit**
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Refinement/Step.lean
-lake env lean -DwarningAsError=true VisualProof/Audit.lean
-lake build
-git diff --check
-git add VisualProof/Refinement/Step.lean VisualProof/Refinement/Step VisualProof/Concrete/Step.lean VisualProof/Audit.lean
-git commit -m "Prove concrete execution refinement"
-```
-
-### Task 10: Make replay and theorem checking factor through refinement
+### Task 12: Factor replay and theorem validity through refinement
 
 **Files:**
-- Modify: `VisualProof/Proof/Replay.lean`
-- Modify: `VisualProof/Proof/Schema.lean`
-- Modify: `VisualProof/Proof/Theorem.lean`
-- Modify: `VisualProof/Proof/Theory.lean`
 
-**Interfaces:**
-- Consumes: concrete execution, `execute_sound`, `Step.sound`, representation uniqueness, and open-diagram isomorphism.
-- Produces: replay and checked-theorem soundness without a concrete semantic authority.
+- Modify `VisualProof/Proof/Replay.lean`
+- Modify `VisualProof/Proof/Schema.lean`
+- Modify `VisualProof/Proof/Theorem.lean`
+- Modify `VisualProof/Proof/Theory.lean`
 
-- [ ] **Step 1: Replace replay's semantic record with represented recursive states**
+Replay stores concrete checked open states and requests. Its correctness theorem obtains a recursive step from `execute_sound`, aligns adjacent representatives using `represents_unique` and `Step.iso`, and composes `Step.sound`. The theorem schema remains open because it quantifies over ordered boundary arguments.
 
-The replay theorem should expose represented recursive endpoints and state the implication explicitly:
+No proof-layer theorem performs rule-specific semantic reasoning. Compile all four modules, run `lake build`, kernel-audit the checked-theorem result, and commit as `Factor proof replay through refinement`.
 
-```lean
-theorem applyOpenStep_sound
-    (sourceRep : Represents input.asOpen source)
-    (success : applyOpenStep orientation input action = .ok result) :
-    ∃ target,
-      Represents result.asOpen target ∧
-      match orientation with
-      | .forward => Rule.Step source target
-      | .backward => Rule.Step target source
-```
-
-- [ ] **Step 2: Prove multi-step replay by composing `Rule.Step.sound` results**
-
-Keep program execution concrete. The semantic proof inducts over the program, obtains each abstract step through refinement, uses representation uniqueness to align adjacent recursive representatives, and composes the explicit implications.
-
-- [ ] **Step 3: RED/GREEN `checkedTheorem_sound`**
-
-The theorem schema remains genuinely open: its proposition quantifies arguments in ordered boundary positions, including repeated aliases, and transports those arguments positionwise between its sides. Its operands are represented recursive `OpenDiagram`s rather than concrete diagrams. The proof uses replay refinement, `Step.sound`, and open-diagram isomorphism. It does not import concrete denotation or executor-specific family soundness.
-
-- [ ] **Step 4: Validate and commit**
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Proof/Replay.lean
-lake env lean -DwarningAsError=true VisualProof/Proof/Theorem.lean
-lake build
-git diff --check
-git add VisualProof/Proof/Replay.lean VisualProof/Proof/Schema.lean VisualProof/Proof/Theorem.lean VisualProof/Proof/Theory.lean
-git commit -m "Factor proof replay through refinement"
-```
-
-### Task 11: Remove the old authority and run the final Lean audit
+### Task 13: Final authority and repository audit
 
 **Files:**
-- Remove superseded paths under: `VisualProof/Diagram/Concrete/`
-- Remove superseded paths under: `VisualProof/Rule/Soundness/`
-- Modify: `VisualProof.lean`
-- Modify: `VisualProof/Audit.lean`
-- Modify: `lakefile.toml`
 
-**Interfaces:**
-- Consumes: all completed abstract and refinement layers.
-- Produces: one public import graph and final kernel/build evidence.
+- Modify `VisualProof.lean`
+- Modify `VisualProof/Audit.lean`
+- Modify `lakefile.toml`
+- Remove only superseded Lean paths identified by `rg` after all imports have moved
 
-- [ ] **Step 1: Remove every superseded declaration and import path**
+**Audit:**
 
-There must be no public or internal declaration of:
-
-- an execution-indexed `VisualProof.Rule.Step`;
-- rule tags or a fixed rule inventory as mathematical authority;
-- semantic modes or direction-named implication wrappers;
-- executor receipts/errors inside `VisualProof.Rule`;
-- concrete denotation as a separately proved rule-soundness authority;
-- concrete occurrence search, candidate enumeration, search status, or matcher result types;
-- compatibility aliases or re-exports for the former paths.
-
-- [ ] **Step 2: Make the public import graph explicit**
-
-`VisualProof.lean` imports the layers in this order:
-
-```lean
-import VisualProof.Diagram.Semantics
-import VisualProof.Diagram.Occurrence
-import VisualProof.Rule.Soundness
-import VisualProof.Concrete.Translate
-import VisualProof.Concrete.Step
-import VisualProof.Refinement.Represents
-import VisualProof.Refinement.Step
-import VisualProof.Proof.Theory
-```
-
-- [ ] **Step 3: Audit theorem axioms and dependency direction**
-
-`VisualProof/Audit.lean` prints axioms for:
-
-```lean
-#print axioms VisualProof.Diagram.Isomorphic.denote_iff
-#print axioms VisualProof.Rule.Step.sound
-#print axioms VisualProof.Concrete.translate_checked
-#print axioms VisualProof.Refinement.checked_represents
-#print axioms VisualProof.Refinement.represents_unique
-#print axioms VisualProof.Refinement.representation_complete
-#print axioms VisualProof.Refinement.execute_sound
-#print axioms VisualProof.Refinement.execute_complete
-#print axioms VisualProof.Refinement.execute_rejects_only_invalid
-#print axioms VisualProof.Proof.checkedTheorem_sound
-```
-
-No output may contain `sorryAx` or an unapproved project axiom.
-
-- [ ] **Step 4: Run the complete Lean validation**
+1. `VisualProof.lean` imports diagram semantics/occurrence, rule soundness, concrete translation/execution, refinement, then proof modules in that order.
+2. `lake env lean --deps VisualProof/Rule/Soundness.lean` contains no path under `VisualProof/Concrete`, `VisualProof/Refinement`, or the flat-diagram implementation tree.
+3. `rg -n '\bsorry\b|sorryAx' VisualProof` reports no task-owned production proof.
+4. `rg` reports no occurrence-search declaration, import, candidate enumeration, search status, or matcher theorem.
+5. `#print axioms` for `Step.sound`, translation round trip, representation uniqueness/completeness, execution soundness/completeness, rejection correctness, and checked-theorem soundness contains no `sorryAx` or unapproved project axiom.
+6. Run:
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Rule/Soundness.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Represents.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Step.lean
+lake env lean -DwarningAsError=true VisualProof/Refinement/Complete.lean
+lake env lean -DwarningAsError=true VisualProof/Refinement/Rejection.lean
 lake env lean -DwarningAsError=true VisualProof/Proof/Theorem.lean
 lake env lean -DwarningAsError=true VisualProof/Audit.lean
-lake env lean --deps VisualProof/Rule/Soundness.lean
 lake build
 git diff --check
 ```
 
-The `Rule/Soundness.lean` dependency closure must stop at recursive diagrams, contexts, rule relations, and structural semantics. The refinement closure may additionally include concrete diagrams, execution, compiler traversal, and bookkeeping.
+Stage only task-owned paths explicitly and commit as `Complete recursive rewrite authority`.
 
-- [ ] **Step 5: Commit the completed migration**
+## Acceptance checklist
 
-```bash
-git add VisualProof VisualProof.lean lakefile.toml
-git commit -m "Complete recursive rewrite authority"
-```
-
-## Plan Acceptance Checklist
-
-- [ ] Recursive syntax and denotation compile without concrete imports.
-- [ ] `Region` is the only recursive diagram syntax; `OpenDiagram` contains only the ordered boundary quotient and one closed-relation-context Region body.
-- [ ] Ordered boundary positions and repeated aliases are preserved propositionally.
-- [ ] Rule-specific recursive semantics are owned by Region-level theorems and lifted through one generic open-body theorem.
-- [ ] Boundary quotient, open substitution, open isomorphism, theorem-interface, and heterogeneous boundary-transport theorems remain genuinely open.
-- [ ] Iteration and splice compiler theorem towers are refinement evidence for one declarative Region-level iteration law, not parallel semantic authorities.
-- [ ] Isomorphism is structural/alpha equivalence, not semantic equality or concrete canonicalization.
-- [ ] Contextual replacement accounts for polarity and capture avoidance.
-- [ ] Occurrence is decomposition evidence supplied by a rule or concrete request, never search output.
-- [ ] Whole-diagram and simultaneous rules own their mathematics.
-- [ ] `Step` is the proposition-valued union of exactly `Erasure`, `WireSever`, `Iteration`, `DoubleCut`, `Comprehension`, and `Vacuity`.
-- [ ] Concrete execution retains exactly the twelve existing operations, and refinement exhaustively maps each named pair to its corresponding abstract relation.
-- [ ] Each paired rule has one positive-context abstract relation; negative polarity uses its converse, and invertible families admit both directions through a proved equivalence.
-- [ ] Abstract family relations and `Step` contain no execution orientation or direction-legality predicate.
-- [ ] Concrete execution retains the named operational split, and refinement maps each half to the base relation or its converse at one controlling region polarity.
-- [ ] `Step.sound` is proved exhaustively and has no concrete dependencies.
-- [ ] Concrete execution consumes supplied occurrence evidence and proves refinement into `Step` without search.
-- [ ] `Concrete.translate` is the explicit fallible unchecked-flat-to-recursive boundary, and checked elaboration is its successful total core.
-- [ ] `Represents` means successful translation modulo `OpenDiagramIso`; execution exposes both relational refinement and an exact translation commuting corollary.
-- [ ] Representation uniqueness concludes isomorphism, not equality.
-- [ ] `representation_complete` proves that every recursive open diagram has a concrete representation.
-- [ ] `execute_complete` proves that every abstract step can be realized by a concrete request and successful execution.
-- [ ] Rejection correctness is limited to fully specified domain-invalid requests.
-- [ ] Replay inherits semantics through refinement plus `Step.sound`.
-- [ ] No compatibility authority remains.
-- [ ] Every owning theorem passes RED/GREEN and final kernel audit.
+- [ ] `Region` is the only recursive syntax; `OpenDiagram` is only the ordered open interface.
+- [ ] Occurrence is relational context decomposition, never search output.
+- [ ] The six family relations are complete and contain only mathematical witnesses.
+- [ ] Positive-context rules, converse under negative polarity, and proved invertibility are the only direction mechanisms in the abstract layer.
+- [ ] `Step` has exactly six constructors and `Step.sound` is ordinary implication.
+- [ ] `Step.sound` has no concrete dependency.
+- [ ] Concrete execution has exactly twelve operation constructors over checked open state.
+- [ ] Requests supply every selected occurrence and legality witness; execution performs no search.
+- [ ] `Concrete.translate` is validation followed by elaboration.
+- [ ] `Represents` is successful translation modulo `OpenDiagramIso`.
+- [ ] `Concrete.encode` proves representation completeness.
+- [ ] Every successful concrete operation refines its assigned family relation.
+- [ ] Every abstract step reflects to a concrete request and successful one-step execution.
+- [ ] Rejection correctness is restricted to errors proved `DomainInvalid`.
+- [ ] Replay and theorem validity use refinement followed by `Step.sound`.
+- [ ] The final Lean tree has one semantic authority, no compatibility path, no matcher, no `sorry`, and a passing build.
