@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Make recursive open diagrams, relational rules, and structural semantics the mathematical authority, with flat diagrams, matching, and execution certified separately by representation and refinement theorems.
+**Goal:** Make recursive open diagrams, relational rules, and structural semantics the mathematical authority, with flat diagrams and execution certified separately by representation and refinement theorems.
 
-**Architecture:** `VisualProof.Diagram` owns recursive syntax, ordered open boundaries, renaming, isomorphism, contexts, and denotation. `VisualProof.Rule` owns proposition-valued rule families, their union `Step`, and semantic proofs stated only over recursive diagrams. `VisualProof.Concrete` owns flat data and algorithms; `VisualProof.Refinement` proves that checked representations, matches, and executions realize `Step`.
+**Architecture:** `VisualProof.Diagram` owns recursive syntax, ordered open boundaries, renaming, isomorphism, contexts, and denotation. `VisualProof.Rule` owns proposition-valued rule families, their union `Step`, and semantic proofs stated only over recursive diagrams. `VisualProof.Concrete` owns flat data and proof-bearing executable requests; `VisualProof.Refinement` proves representation and execution completeness and that every successful execution realizes `Step`.
 
 **Tech Stack:** Lean 4, Lake, the existing `VisualProof` library.
 
@@ -20,12 +20,13 @@
 - Every abstract rule family is stated once in its positive-context form. Negative context applies the converse relation. An invertible family admits both the base relation and its converse at either polarity; invertibility is proved semantically rather than asserted by making the base relation syntactically symmetric.
 - Abstract rule relations and `Step` have no execution `Orientation` parameter. `Step source target` always supports the ordinary implication from `source` to `target`.
 - Concrete execution retains the operational split between the two members of each rule pair. Refinement proves that the selected operation realizes the base relation or its converse at the application region's single polarity.
-- `Step.sound` and every family soundness theorem must have a dependency closure containing no concrete diagram, matcher, executor, error, receipt, trace, carrier-numbering, or compiler declaration.
+- `Step.sound` and every family soundness theorem must have a dependency closure containing no concrete diagram, executor, error, receipt, trace, carrier-numbering, or compiler declaration.
 - Local rules use typed context decomposition modulo recursive diagram isomorphism. Context soundness must account for cut polarity; arbitrary contexts are not assumed monotone.
 - Iteration, comprehension abstraction/substitution, and any other simultaneous or whole-diagram rule retain their simplest mathematical relation. They are not forced through one universal replacement relation.
 - The concrete boundary exposes an explicit fallible `Concrete.translate` from unchecked flat open diagrams to recursive open diagrams. Translation is validation followed by total elaboration; `Represents` is successful translation modulo open-diagram isomorphism.
-- `Represents`, matcher correctness, and execution correctness live only in `VisualProof.Refinement`.
-- Representation and execution completeness are proved with explicit quantifiers over requests and targets; rejection correctness applies only to fully specified domain-invalid requests, never resource or infrastructure failures.
+- `Represents` and execution correctness live only in `VisualProof.Refinement`.
+- Representation completeness and execution completeness are unconditional deliverables: every recursive open diagram has a concrete representation, and every abstract step can be realized by a concrete request and successful execution. Rejection correctness applies only to fully specified domain-invalid requests, never resource or infrastructure failures.
+- The Lean formalization contains no concrete matcher, occurrence-search problem, candidate enumeration, search frontier, fuel-bounded search, or matcher correctness theorem. Every operation that requires occurrence evidence receives it through `Concrete.Step`; execution validates and consumes the supplied selection, interface, embedding, scope, aliasing, and legality data without search.
 - The rule inventory is fixed. The abstract calculus has exactly the six relations listed below, and concrete execution retains exactly the twelve existing operations paired with them. `Step.sound` and execution refinement are exhaustive over these inventories; do not add, regroup, or reclassify rule constructors.
 
 | Abstract relation | Existing concrete operation pair |
@@ -54,8 +55,8 @@
 | `VisualProof/Rule/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean` | The six mathematical rule relations and their witnesses |
 | `VisualProof/Rule/Step.lean` | Inductive union of the rule-family relations |
 | `VisualProof/Rule/Soundness.lean` | Per-family imports and exhaustive `Step.sound` |
-| `VisualProof/Concrete/{Diagram,Translate,Occurrence,Match,Step}.lean` | Flat checked representation, validation and translation, search, requests, receipts, errors, execution |
-| `VisualProof/Refinement/{Represents,Match,Step}.lean` | Representation laws, matcher correctness, execution correctness |
+| `VisualProof/Concrete/{Diagram,Translate,Occurrence,Step}.lean` | Flat checked representation, validation and translation, supplied occurrence certificates, requests, receipts, errors, execution |
+| `VisualProof/Refinement/{Represents,Step}.lean` | Representation completeness and execution soundness/completeness |
 | `VisualProof/Proof/{Replay,Theorem}.lean` | Proof programs that consume concrete execution plus refinement and abstract soundness |
 
 ## Existing Theorem Disposition
@@ -63,6 +64,7 @@
 | Existing theorem family | Final ownership |
 |---|---|
 | The twelve constructors `boundRelationSpawn`, `wireJoin`, `erasure`, `wireSever`, `iteration`, `deiteration`, `doubleCutIntro`, `doubleCutElim`, `comprehensionInstantiate`, `comprehensionAbstract`, `vacuousIntro`, and `vacuousElim`, together with `Orientation`, `StepTag.semanticMode`, and direction-specific polarity checks | Keep the exact twelve-operation roster only in concrete execution and refinement; map each named pair to one of the six abstract relations above |
+| `OccurrenceProblem`, `RawOccurrenceCertificate`, `OpenOccurrenceEmbedding`, `SearchStatus`, `CandidateMaps`, `MatchResult`, `findOccurrences`, and their soundness/completeness theorems | Remove from the formalization; steps carry the required occurrence evidence and execution performs no search |
 | Checked concrete elaboration and raw well-formedness checking | Compose behind the explicit fallible `Concrete.translate`; characterize `Represents` as its graph modulo `OpenDiagramIso` |
 | Boundary representatives, alias consistency, boundary assignments, open substitution, and `OpenDiagramIso` denotation | Remain in the open-diagram kernel; their subject is the ordered-position-to-wire-class quotient |
 | `denote_replaceOpenBody_mono` and `denote_replaceOpenBody_iff` in concrete splice tracing | Move their implementation-independent content beside `denoteOpen` as the single generic unchanged-boundary lift from Region implication/equivalence |
@@ -566,7 +568,7 @@ At RED, all definitions and family soundness theorems in the dependency closure 
 
 - [ ] **Step 3: GREEN by cases on `h`**
 
-The proof has one case per family constructor and delegates directly to that family's soundness theorem. Converse selection has already occurred inside the family relation from context polarity, and invertible converse cases use that family's equivalence theorem. The proof performs no execution, matching, translation, or concrete semantic reasoning.
+The proof has one case per family constructor and delegates directly to that family's soundness theorem. Converse selection has already occurred inside the family relation from context polarity, and invertible converse cases use that family's equivalence theorem. The proof performs no execution, translation, or concrete semantic reasoning.
 
 - [ ] **Step 4: Add kernel and dependency audits**
 
@@ -598,16 +600,20 @@ git commit -m "Prove relational step soundness"
 **Files:**
 - Create: `VisualProof/Concrete/Diagram.lean`
 - Create: `VisualProof/Concrete/Occurrence.lean`
-- Create: `VisualProof/Concrete/Match.lean`
 - Create: `VisualProof/Concrete/Step.lean`
-- Migrate: `VisualProof/Diagram/Concrete/**/*.lean`
+- Migrate remaining implementation files from: `VisualProof/Diagram/Concrete/**/*.lean`
+- Remove: `VisualProof/Diagram/Concrete/OccurrenceEmbedding.lean`
+- Remove: `VisualProof/Diagram/Concrete/OccurrenceExtraction.lean`
+- Remove: `VisualProof/Diagram/Concrete/OccurrenceSelection.lean`
+- Remove: `VisualProof/Diagram/Concrete/Matcher.lean`
+- Remove directory: `VisualProof/Diagram/Concrete/Matcher/`
 - Migrate operational declarations from: `VisualProof/Rule/Step.lean`
 - Migrate executor from: `VisualProof/Rule/Soundness.lean`
 - Modify: `VisualProof.lean`
 
 **Interfaces:**
 - Consumes: core signature/boundary data needed to type flat representations.
-- Produces: `Concrete.Diagram`, `Concrete.OpenDiagram`, `Concrete.Checked`, `Concrete.checkOpen`, `Concrete.Occurrence`, `Concrete.Match`, `Concrete.Orientation`, `Concrete.Step`, `Concrete.Error`, `Concrete.Receipt`, `Concrete.execute`.
+- Produces: `Concrete.Diagram`, `Concrete.OpenDiagram`, `Concrete.Checked`, `Concrete.checkOpen`, `Concrete.Occurrence`, `Concrete.Orientation`, `Concrete.Step`, `Concrete.Error`, `Concrete.Receipt`, `Concrete.execute`.
 
 - [ ] **Step 1: Move concrete types without compatibility aliases**
 
@@ -633,17 +639,11 @@ def Concrete.checkOpen (concrete : Concrete.OpenDiagram) :
 
 Successful checking returns the proof consumed by total elaboration and does not construct a second diagram. `Concrete.translate` maps `Concrete.WFError` into the common `Concrete.Error` at the public translation boundary.
 
-- [ ] **Step 2: Move matcher/search declarations**
+- [ ] **Step 2: Remove the concrete matcher subsystem**
 
-The concrete matcher returns only concrete candidates:
+Remove `OccurrenceProblem`, `RawOccurrenceCertificate`, `OpenOccurrenceEmbedding`, `SearchStatus`, `CandidateMaps`, `MatchResult`, candidate enumeration, frontiers, `findOccurrences`, and their supporting extraction and selection APIs. Remove their aggregate imports from `VisualProof.lean` and their audit entries. Do not migrate or replace them with another search API.
 
-```lean
-def Concrete.match
-    (host pattern : Concrete.OpenDiagram) :
-    List (Concrete.Match host pattern)
-```
-
-No abstract `Occurrence` is defined by this function.
+Retain `ConcreteOccurrenceEquiv` and `OpenOccurrenceEquiv` from the current `VisualProof/Diagram/Concrete/Occurrence.lean`, because concrete steps use them as supplied structural evidence. Move only those reusable relations and their algebra to `VisualProof/Concrete/Occurrence.lean`.
 
 - [ ] **Step 3: Move requests, errors, receipts, and execution**
 
@@ -663,12 +663,13 @@ def Concrete.execute
 
 Add `Concrete.Error.invalidDiagram (error : Concrete.WFError)` for translation validation failures. `Concrete.Step` retains the separate named constructors needed to execute both members of each operational pair. `Concrete.Orientation` records which operational endpoint is the logical antecedent. Neither distinction occurs in `Rule.Step`. These declarations do not export semantic theorems.
 
+Move the existing proof-bearing `DeiterationWitness`, `AbstractionOccurrence`, `AbstractionWitness`, `ComprehensionAbstractPayload`, and `ComprehensionInstantiatePayload` with `Concrete.Step`. A request contains the selected occurrence and every interface, embedding, scope, aliasing, freshness, nonoverlap, and capture-avoidance fact needed by that operation. Execution checks or consumes those fields directly and does not invoke occurrence search.
+
 - [ ] **Step 4: Compile the concrete layer independently**
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Concrete/Diagram.lean
 lake env lean -DwarningAsError=true VisualProof/Concrete/Occurrence.lean
-lake env lean -DwarningAsError=true VisualProof/Concrete/Match.lean
 lake env lean -DwarningAsError=true VisualProof/Concrete/Step.lean
 lake build
 ```
@@ -783,78 +784,7 @@ git add VisualProof/Concrete/Translate.lean VisualProof/Refinement/Represents.le
 git commit -m "Prove concrete representation laws"
 ```
 
-### Task 9: Prove matcher correctness against relational occurrence
-
-**Files:**
-- Create: `VisualProof/Refinement/Match.lean`
-- Migrate proofs from: `VisualProof/Diagram/Concrete/Matcher/**/*.lean`
-- Migrate proofs from: `VisualProof/Diagram/Concrete/Occurrence*.lean`
-- Modify: `VisualProof/Audit.lean`
-
-**Interfaces:**
-- Consumes: `Represents`, recursive `Occurrence`, concrete matcher/candidates, and relevant concrete occurrence equivalence.
-- Produces: `match_sound` and `match_complete` modulo declared isomorphisms.
-
-- [ ] **Step 1: Define candidate meaning as a relation**
-
-```lean
-structure Concrete.Match.Represents
-    (candidate : Concrete.Match host pattern)
-    (occurrence : Diagram.Occurrence recursivePattern recursiveHost) : Prop where
-  host : Refinement.Represents candidate.host recursiveHost
-  pattern : Refinement.Represents candidate.pattern recursivePattern
-  interface : candidate.boundary.length = recursivePatternArity
-  order : BoundaryTransport candidate occurrence
-  scope : ScopeTransport candidate occurrence
-  embedding : EmbeddingTransport candidate occurrence
-  reconstruction : ReconstructionTransport candidate occurrence
-```
-
-`BoundaryTransport`, `ScopeTransport`, `EmbeddingTransport`, and `ReconstructionTransport` are declared in this module as propositions over the existing concrete candidate certificates and the fields of `Diagram.Occurrence`; each definition is completed before `match_sound` enters RED.
-
-Complete this definition before introducing either theorem.
-
-- [ ] **Step 2: RED/GREEN matcher soundness**
-
-```lean
-theorem match_sound
-    (hostRep : Represents host recursiveHost)
-    (patternRep : Represents pattern recursivePattern)
-    (found : candidate ∈ Concrete.match host pattern) :
-    ∃ occurrence : Diagram.Occurrence recursivePattern recursiveHost,
-      candidate.Represents occurrence
-```
-
-- [ ] **Step 3: RED/GREEN matcher completeness**
-
-```lean
-theorem match_complete
-    (hostRep : Represents host recursiveHost)
-    (patternRep : Represents pattern recursivePattern)
-    (occurrence : Diagram.Occurrence recursivePattern recursiveHost) :
-    ∃ candidate,
-      candidate ∈ Concrete.match host pattern ∧
-      candidate.Represents occurrence
-```
-
-Completeness may return an equivalent concrete match; it need not preserve carrier numbering or traversal order.
-
-- [ ] **Step 4: Cover ordered aliases, renaming, and nested scope propositionally**
-
-Prove general transport/reflection lemmas used by the two owning theorems. Do not add source-substring tests or example-only fixtures.
-
-- [ ] **Step 5: Validate and commit**
-
-```bash
-lake env lean -DwarningAsError=true VisualProof/Refinement/Match.lean
-lake env lean -DwarningAsError=true VisualProof/Audit.lean
-lake build
-git diff --check
-git add VisualProof/Refinement/Match.lean VisualProof/Concrete/Match.lean VisualProof/Concrete/Occurrence.lean VisualProof/Audit.lean
-git commit -m "Prove concrete matcher correctness"
-```
-
-### Task 10: Prove execution refinement, completeness, and rejection correctness
+### Task 9: Prove execution refinement, completeness, and rejection correctness
 
 **Files:**
 - Create: `VisualProof/Refinement/Step.lean`
@@ -868,7 +798,7 @@ git commit -m "Prove concrete matcher correctness"
 - Modify: `VisualProof/Audit.lean`
 
 **Interfaces:**
-- Consumes: `Concrete.execute`, `Concrete.Step`, `Concrete.Receipt`, `Represents`, matcher correctness, family relations, and `Rule.Step`.
+- Consumes: `Concrete.execute`, `Concrete.Step`, `Concrete.Receipt`, `Represents`, family relations, and `Rule.Step`.
 - Produces: `execute_sound`, exact `execute_translates`, `execute_complete`, and `execute_rejects_only_invalid`.
 
 - [ ] **Step 1: Define request meaning without semantic claims**
@@ -992,7 +922,7 @@ git add VisualProof/Refinement/Step.lean VisualProof/Refinement/Step VisualProof
 git commit -m "Prove concrete execution refinement"
 ```
 
-### Task 11: Make replay and theorem checking factor through refinement
+### Task 10: Make replay and theorem checking factor through refinement
 
 **Files:**
 - Modify: `VisualProof/Proof/Replay.lean`
@@ -1038,7 +968,7 @@ git add VisualProof/Proof/Replay.lean VisualProof/Proof/Schema.lean VisualProof/
 git commit -m "Factor proof replay through refinement"
 ```
 
-### Task 12: Remove the old authority and run the final Lean audit
+### Task 11: Remove the old authority and run the final Lean audit
 
 **Files:**
 - Remove superseded paths under: `VisualProof/Diagram/Concrete/`
@@ -1060,6 +990,7 @@ There must be no public or internal declaration of:
 - semantic modes or direction-named implication wrappers;
 - executor receipts/errors inside `VisualProof.Rule`;
 - concrete denotation as a separately proved rule-soundness authority;
+- concrete occurrence search, candidate enumeration, search status, or matcher result types;
 - compatibility aliases or re-exports for the former paths.
 
 - [ ] **Step 2: Make the public import graph explicit**
@@ -1073,7 +1004,6 @@ import VisualProof.Rule.Soundness
 import VisualProof.Concrete.Translate
 import VisualProof.Concrete.Step
 import VisualProof.Refinement.Represents
-import VisualProof.Refinement.Match
 import VisualProof.Refinement.Step
 import VisualProof.Proof.Theory
 ```
@@ -1089,8 +1019,6 @@ import VisualProof.Proof.Theory
 #print axioms VisualProof.Refinement.checked_represents
 #print axioms VisualProof.Refinement.represents_unique
 #print axioms VisualProof.Refinement.representation_complete
-#print axioms VisualProof.Refinement.match_sound
-#print axioms VisualProof.Refinement.match_complete
 #print axioms VisualProof.Refinement.execute_sound
 #print axioms VisualProof.Refinement.execute_complete
 #print axioms VisualProof.Refinement.execute_rejects_only_invalid
@@ -1104,7 +1032,6 @@ No output may contain `sorryAx` or an unapproved project axiom.
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Rule/Soundness.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Represents.lean
-lake env lean -DwarningAsError=true VisualProof/Refinement/Match.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Step.lean
 lake env lean -DwarningAsError=true VisualProof/Proof/Theorem.lean
 lake env lean -DwarningAsError=true VisualProof/Audit.lean
@@ -1113,7 +1040,7 @@ lake build
 git diff --check
 ```
 
-The `Rule/Soundness.lean` dependency closure must stop at recursive diagrams, contexts, rule relations, and structural semantics. The refinement closure may additionally include concrete diagrams, matching, execution, compiler traversal, and bookkeeping.
+The `Rule/Soundness.lean` dependency closure must stop at recursive diagrams, contexts, rule relations, and structural semantics. The refinement closure may additionally include concrete diagrams, execution, compiler traversal, and bookkeeping.
 
 - [ ] **Step 5: Commit the completed migration**
 
@@ -1132,7 +1059,7 @@ git commit -m "Complete recursive rewrite authority"
 - [ ] Iteration and splice compiler theorem towers are refinement evidence for one declarative Region-level iteration law, not parallel semantic authorities.
 - [ ] Isomorphism is structural/alpha equivalence, not semantic equality or concrete canonicalization.
 - [ ] Contextual replacement accounts for polarity and capture avoidance.
-- [ ] Occurrence is decomposition evidence, not matcher output.
+- [ ] Occurrence is decomposition evidence supplied by a rule or concrete request, never search output.
 - [ ] Whole-diagram and simultaneous rules own their mathematics.
 - [ ] `Step` is the proposition-valued union of exactly `Erasure`, `WireSever`, `Iteration`, `DoubleCut`, `Comprehension`, and `Vacuity`.
 - [ ] Concrete execution retains exactly the twelve existing operations, and refinement exhaustively maps each named pair to its corresponding abstract relation.
@@ -1140,11 +1067,13 @@ git commit -m "Complete recursive rewrite authority"
 - [ ] Abstract family relations and `Step` contain no execution orientation or direction-legality predicate.
 - [ ] Concrete execution retains the named operational split, and refinement maps each half to the base relation or its converse at one controlling region polarity.
 - [ ] `Step.sound` is proved exhaustively and has no concrete dependencies.
-- [ ] Concrete matching and execution prove refinement into `Step`.
+- [ ] Concrete execution consumes supplied occurrence evidence and proves refinement into `Step` without search.
 - [ ] `Concrete.translate` is the explicit fallible unchecked-flat-to-recursive boundary, and checked elaboration is its successful total core.
 - [ ] `Represents` means successful translation modulo `OpenDiagramIso`; execution exposes both relational refinement and an exact translation commuting corollary.
 - [ ] Representation uniqueness concludes isomorphism, not equality.
-- [ ] Completeness and rejection theorems have the precise qualifiers stated above.
+- [ ] `representation_complete` proves that every recursive open diagram has a concrete representation.
+- [ ] `execute_complete` proves that every abstract step can be realized by a concrete request and successful execution.
+- [ ] Rejection correctness is limited to fully specified domain-invalid requests.
 - [ ] Replay inherits semantics through refinement plus `Step.sound`.
 - [ ] No compatibility authority remains.
 - [ ] Every owning theorem passes RED/GREEN and final kernel audit.
