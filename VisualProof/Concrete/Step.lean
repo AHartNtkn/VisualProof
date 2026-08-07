@@ -724,6 +724,55 @@ theorem execute_doubleCutElim_success
     applyDoubleCutElim_realizes operationSuccess
   exact ⟨result, raw, rawSuccess, packed, realizes⟩
 
+/-- Structural inversion of a successful vacuous-binder introduction request. -/
+theorem execute_vacuousIntro_success
+    {arity : Nat}
+    {source : State arity}
+    {orientation : Orientation}
+    (selection : CheckedSelection source.checked.val.diagram)
+    (binderArity : Nat)
+    {receipt : Receipt source}
+    (success : execute orientation source
+      (.vacuousIntro selection binderArity) = .ok receipt) :
+    ∃ result : OperationReceipt source.diagram,
+      result.toReceipt source = some receipt ∧
+      result.Realizes
+        (vacuousIntroRaw source.checked.val.diagram selection binderArity)
+        (vacuousIntroWireProvenance source.checked.val.diagram selection
+          binderArity)
+        (vacuousIntroWireTransport source.checked.val.diagram selection
+          binderArity) := by
+  change finish source
+      (applyVacuousIntro source.diagram selection binderArity) = .ok receipt
+    at success
+  obtain ⟨result, operationSuccess, packed⟩ :=
+    (finish_eq_ok_iff source _ receipt).1 success
+  exact ⟨result, packed, applyVacuousIntro_realizes operationSuccess⟩
+
+/-- Structural inversion of a successful vacuous-binder elimination request. -/
+theorem execute_vacuousElim_success
+    {arity : Nat}
+    {source : State arity}
+    {orientation : Orientation}
+    (region : Fin source.checked.val.diagram.regionCount)
+    {receipt : Receipt source}
+    (success : execute orientation source (.vacuousElim region) =
+      .ok receipt) :
+    ∃ (result : OperationReceipt source.diagram)
+      (raw : Concrete.Diagram)
+      (rawSuccess : vacuousElimRaw? source.checked.val.diagram region =
+        some raw),
+      result.toReceipt source = some receipt ∧
+      result.Realizes raw (vacuousElimWireProvenance rawSuccess)
+        (vacuousElimWireTransport rawSuccess) := by
+  change finish source (applyVacuousElim source.diagram region) = .ok receipt
+    at success
+  obtain ⟨result, operationSuccess, packed⟩ :=
+    (finish_eq_ok_iff source _ receipt).1 success
+  obtain ⟨raw, rawSuccess, realizes⟩ :=
+    applyVacuousElim_realizes operationSuccess
+  exact ⟨result, raw, rawSuccess, packed, realizes⟩
+
 /-- Structural inversion of a successful supplied insertion. -/
 theorem execute_boundRelationSpawn_success
     {arity : Nat}
