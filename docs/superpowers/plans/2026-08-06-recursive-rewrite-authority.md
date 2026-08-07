@@ -267,12 +267,12 @@ def Contextual (local : LocalRule) : Rule :=
   fun {arity} source target =>
     ∃ (wires : Nat) (rels : RelCtx)
       (before after : Region wires rels)
-      (occurrence : Occurrence before source),
+      (occurrence : Occurrence before source)
+      (_targetIso : OpenDiagramIso target
+        (occurrence.interface.withBody
+          (occurrence.context.fill after))),
       atPolarity occurrence.context.polarity
-          (@local wires rels) before after ∧
-        OpenDiagramIso target
-          (occurrence.interface.withBody
-            (occurrence.context.fill after))
+        (@local wires rels) before after
 ```
 
 Add relation and contextual isomorphism transport. Do not define `Step` yet.
@@ -344,7 +344,7 @@ inductive Local : LocalRule
         (.mk (localWires + 1) separate)
 
 structure Open
-    (source target : OpenDiagram arity) : Prop where
+    (source target : OpenDiagram arity) where
   one_more :
     target.externalClasses = source.externalClasses + 1
   collapse :
@@ -365,7 +365,7 @@ end WireSever
 def WireSever : Rule :=
   fun source target =>
     Contextual WireSever.Local source target ∨
-      WireSever.Open source target
+      Nonempty (WireSever.Open source target)
 
 theorem WireSever.iso
     (sourceIso : OpenDiagramIso source source')
@@ -384,7 +384,7 @@ Iteration uses a separate interface carrier so endpoint isomorphism transport do
 namespace Iteration
 
 structure Base
-    (source target : OpenDiagram arity) : Prop where
+    (source target : OpenDiagram arity) where
   interface : OpenDiagram arity
   ancestorWires : Nat
   descendantWires : Nat
@@ -416,7 +416,7 @@ structure Base
                   .renameRelations descendant.outerRelation)
                 .conjoin remainder)))))
 
-theorem Base.iso
+def Base.iso
     (sourceIso : OpenDiagramIso source source')
     (step : Base source target)
     (targetIso : OpenDiagramIso target target') :
@@ -632,7 +632,7 @@ def Instantiates
     quantified specialized
 
 structure Local
-    (specialized quantified : Region wires rels) : Prop where
+    (specialized quantified : Region wires rels) where
   arity : Nat
   pattern : OpenDiagram arity
   body : Region wires (arity :: rels)
@@ -645,7 +645,8 @@ structure Local
 end Comprehension
 
 def Comprehension : Rule :=
-  Contextual Comprehension.Local
+  Contextual fun specialized quantified =>
+    Nonempty (Comprehension.Local specialized quantified)
 
 theorem Comprehension.iso
     (sourceIso : OpenDiagramIso source source')
@@ -782,7 +783,8 @@ The copied relation and wire environments are exactly `descendant.outerRelation`
 
 ```lean
 def Iteration : Rule :=
-  symmetric Iteration.Base
+  symmetric fun source target =>
+    Nonempty (Iteration.Base source target)
 
 theorem Iteration.iso
     (sourceIso : OpenDiagramIso source source')
