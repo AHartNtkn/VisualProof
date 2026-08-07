@@ -711,15 +711,18 @@ tasks:
       - "VisualProof/Rule/Soundness/All.lean"
       - "VisualProof/Rule/**/*.lean"
       - "VisualProof/Rule.lean"
+      - "VisualProof/Proof/**/*.lean"
       - "VisualProof/Audit.lean"
       - "VisualProof.lean"
       - "lakefile.toml"
+      - "scripts/audit-lean-authority.sh"
       - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-report.md"
     constraints:
       - "Concrete and Refinement are syntactic layers: no Model, denotation, semantic implication, semantic simulation, Step.sound, Rule.Soundness, or Proof declarations/imports in their source or dependency closures."
       - "Extract only compiler equations, carrier equivalences, boundary correspondences, recursive isomorphisms, receipt inversions, and rule witnesses required by refinement."
       - "Eliminate concrete-dependent semantic machinery and operational soundness aggregates; do not relocate, rename, wrap, re-export, or preserve them as parallel authorities."
       - "Split mixed diagram modules where necessary so structural Concrete/Refinement dependencies do not pull in semantics."
+      - "Migrate existing Proof consumers directly to Diagram semantics and aggregate Rule soundness only as needed to remove concrete semantic owners; do not add adapters or family-specific semantic reasoning."
       - "Map the twelve concrete constructors exhaustively to Erasure, WireSever, Iteration, DoubleCut, Comprehension, and Vacuity."
       - "Rule relations and all Rule soundness owners remain independent of Concrete and Refinement."
       - "Orientation selects the relation or its converse; do not add direction-named rule variants."
@@ -730,8 +733,9 @@ tasks:
     verify:
       - "strict structural-owner, family-refinement, and aggregate compilation"
       - "exact twelve-constructor coverage and six-family mapping audit"
-      - "recursive Rule-to-Concrete/Refinement dependency exclusion"
-      - "Concrete/Refinement source and recursive dependency exclusion of all semantic authority"
+      - "scripts/audit-lean-authority.sh rules recursive dependency exclusion"
+      - "scripts/audit-lean-authority.sh implementation semantic dependency exclusion"
+      - "scripts/audit-lean-authority.sh proof aggregate-boundary audit"
       - "proof-hole, project-axiom, matcher/search, compatibility-authority, and parallel-authority scans"
       - "lake build"
       - "git diff --check"
@@ -802,6 +806,17 @@ tasks:
     inputs:
       - "Approved T119 receipt"
       - "Plan Task 11"
+    allowed_files:
+      - "VisualProof/Concrete/Step.lean"
+      - "VisualProof/Concrete/Step/**/*.lean"
+      - "VisualProof/Concrete/Operation/**/*.lean"
+      - "VisualProof/Concrete/Subgraph/Splice/**/*.lean"
+      - "VisualProof/Refinement/Means.lean"
+      - "VisualProof/Refinement/Rejection.lean"
+      - "VisualProof/Refinement.lean"
+      - "VisualProof/Audit/**/*.lean"
+      - "VisualProof/Audit.lean"
+      - "scripts/audit-lean-authority.sh"
     constraints:
       - "Means must not mention execute results, receipts, errors, models, denotation, semantic implication, or soundness."
       - "Prove success of the exact supplied request from Means before deriving rejection correctness."
@@ -811,7 +826,7 @@ tasks:
     verify:
       - "strict Means, same-request completeness, and unconditional rejection compilation"
       - "exact twelve-constructor Means audit"
-      - "Means declaration and branch-body exclusion of execute results, receipts, errors, and semantics"
+      - "separate Means owner source scan and elaborated-value dependency exclusion of execute results, receipts, errors, and semantics"
       - "all-error theorem signature and kernel axiom audit"
       - "lake build and git diff --check"
     receipt: null
@@ -844,7 +859,7 @@ tasks:
       - "Lean only; TypeScript is outside scope."
     verify:
       - "strict Proof module compilation"
-      - "source/dependency audit proving thin compositional ownership"
+      - "recursive proof-mode import audit and elaborated-value audit proving thin compositional ownership"
       - "kernel axiom audit, lake build, and git diff --check"
     receipt: null
   - id: T124
@@ -877,8 +892,9 @@ tasks:
       - "Do not touch TypeScript."
     verify:
       - "strict owner compilation and full lake build"
-      - "bidirectional recursive dependency audit"
-      - "Concrete/Refinement semantic source scan"
+      - "scripts/audit-lean-authority.sh rules, implementation, and proof"
+      - "direct Concrete/Refinement semantic declaration and import scans"
+      - "recursive dependency roots include Concrete Translate/Encode/Step and Refinement Represents/Step/Complete/Rejection"
       - "Means and unconditional rejection signature audit"
       - "matcher/search, compatibility, proof-hole, and kernel-axiom audits"
       - "git diff --check"

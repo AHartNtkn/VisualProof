@@ -1091,7 +1091,7 @@ theorem Step.sound
       denoteOpen model source args → denoteOpen model target args
 ```
 
-The proof is six constructor cases delegating to family soundness. Validate the dependency list with `lake env lean --deps VisualProof/Rule/Soundness.lean`; it must stop at recursive diagram and rule modules. Commit as `Prove relational step soundness`.
+The proof is six constructor cases delegating to family soundness. Use `lake env lean --deps VisualProof/Rule/Soundness.lean` as a direct-import diagnostic and a recursive source-import traversal to verify the full closure stops at recursive diagram and rule modules. Commit as `Prove relational step soundness`.
 
 ### Task 8: Define translation, encoding, and representation
 
@@ -1222,11 +1222,20 @@ Run RED/GREEN for the round trip and the three representation theorems. Compile,
 
 - Create `VisualProof/Refinement/Step/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean`
 - Create `VisualProof/Refinement/Step.lean`
+- Create `scripts/audit-lean-authority.sh`, a Bash audit that recursively follows Lean source imports from fixed root sets and rejects forbidden layer dependencies
 - Split structural diagram declarations from semantic declarations wherever the concrete/refinement import closure currently mixes them
 - Extract only the compiler equations, carrier equivalences, boundary correspondences, recursive isomorphisms, receipt inversions, and recursive rule witnesses consumed by refinement
 - Remove concrete-dependent semantic declarations and operational semantic proof towers instead of relocating, renaming, wrapping, re-exporting, or retaining them as parallel authorities
 
-Before continuing family proofs, remediate the existing dependency boundary. `Concrete/**` and `Refinement/**` must have semantic-free source and import closures. In particular, remove concrete denotation APIs and concrete semantic simulation/soundness modules; split any mixed diagram module so structural consumers do not import models or denotation; replace imports of operational `Rule.Soundness` modules with focused structural owners; and remove the operational rule-soundness aggregates once their structural facts have been extracted. Preserve compliant execution inversions and structural proofs already established.
+Before continuing family proofs, remediate the existing dependency boundary. `Concrete/**` and `Refinement/**` must have semantic-free source and import closures. In particular, remove concrete denotation APIs and concrete semantic simulation/soundness modules; split any mixed diagram module so structural consumers do not import models or denotation; replace imports of operational `Rule.Soundness` modules with focused structural owners; and remove the operational rule-soundness aggregates once their structural facts have been extracted. Preserve compliant execution inversions and structural proofs already established. Migrate existing `Proof/**` consumers of concrete semantic APIs directly to the authoritative Diagram semantics and Rule soundness interfaces during this remediation; do not create an intermediate semantic adapter. Task 12 later narrows concrete-execution validity to the final thin composition.
+
+`scripts/audit-lean-authority.sh` has three modes and fails on a forbidden edge anywhere in the recursive source-import closure:
+
+- `rules`: start from all six relations, all six family soundness owners, `Rule.Step`, and `Rule.Soundness`; reject every `Concrete`, `Refinement`, and `Proof` import.
+- `implementation`: start from `Concrete.Step`, `Concrete.Translate`, `Concrete.Encode`, `Refinement.Represents`, `Refinement.Step`, and later completeness/rejection roots when present; reject `Model`, semantic Diagram modules, concrete semantic modules, `Rule.Soundness`, `Rule.Step.sound` owners, and `Proof`.
+- `proof`: require concrete-execution semantic owners to import the aggregate refinement and aggregate `Rule.Soundness` interfaces plus structural representation/isomorphism transport; reject direct family soundness, operational soundness, or concrete semantic imports.
+
+The script reports the full root-to-forbidden-import path. `lake env lean --deps` remains a useful direct-import diagnostic but is not accepted as proof of recursive closure purity.
 
 For each of the twelve request constructors, prove that successful execution translates to the assigned family relation. Compiler traversal, finite indices, splice traces, attachment partitions, carrier numbering, receipts, and recursive isomorphisms may appear only in this syntactic proof. Neither family modules nor the aggregate may state or prove a model, denotation, semantic implication, or rule-soundness result.
 
@@ -1294,9 +1303,8 @@ Validate and commit each family separately, then the aggregate. For every concre
 lake env lean -DwarningAsError=true VisualProof/Concrete/Step.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Represents.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Step.lean
-lake env lean --deps VisualProof/Rule/Soundness.lean
-lake env lean --deps VisualProof/Concrete/Step.lean
-lake env lean --deps VisualProof/Refinement/Step.lean
+scripts/audit-lean-authority.sh rules
+scripts/audit-lean-authority.sh implementation
 rg -n '^import VisualProof\.(Model|Diagram\.Semantics|Concrete\.Semantics|Rule\.Soundness|Proof)' VisualProof/Concrete VisualProof/Refinement
 rg -n '\b(Model|denoteOpen|denoteRegion|ConcreteSemanticSimulation|Step\.sound)\b' VisualProof/Concrete VisualProof/Refinement
 rg -n '\bsorry\b|sorryAx' VisualProof
@@ -1368,7 +1376,7 @@ lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/DoubleCut.le
 lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/Comprehension.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/Vacuity.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Complete.lean
-lake env lean --deps VisualProof/Refinement/Complete.lean
+scripts/audit-lean-authority.sh implementation
 rg -n '^import VisualProof\.(Model|Diagram\.Semantics|Concrete\.Semantics|Rule\.Soundness|Proof)' VisualProof/Refinement/Complete VisualProof/Refinement/Complete.lean
 rg -n '(matcher|candidate|search frontier|search status)' VisualProof/Refinement/Complete VisualProof/Refinement/Complete.lean
 lake build
@@ -1379,10 +1387,12 @@ git diff --check
 
 **Files:**
 
-- Modify `VisualProof/Concrete/Step.lean`
+- Modify `VisualProof/Concrete/Step.lean`, `VisualProof/Concrete/Step/**/*.lean`, and the concrete operation/request/splice legality modules reached by an actual failing `Means` branch
+- Create `VisualProof/Refinement/Means.lean`
 - Create `VisualProof/Refinement/Rejection.lean`
+- Modify `VisualProof/Audit.lean` and its Lean audit support
 
-Define request meaning in `VisualProof.Refinement.Rejection`, not in `Concrete`: it depends on both concrete requests and abstract family relations. Its definition is exhaustive recursion over the twelve concrete constructors, relating the supplied data to the corresponding family witness.
+Define request meaning in its own owner `VisualProof.Refinement.Means`, not in `Concrete`: it depends on both concrete requests and abstract family relations. Its definition is exhaustive recursion over the twelve concrete constructors, relating the supplied data to the corresponding family witness. `Refinement/Rejection.lean` imports this owner and contains same-request completeness and rejection correctness.
 
 ```lean
 def Means
@@ -1436,16 +1446,17 @@ Prove the result by contradicting `Means.execute`; it covers every error returne
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Concrete/Step.lean
+lake env lean -DwarningAsError=true VisualProof/Refinement/Means.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Rejection.lean
-lake env lean --deps VisualProof/Refinement/Rejection.lean
 rg -n 'DomainInvalid|invalid :.*DomainInvalid' VisualProof/Refinement/Rejection.lean
-rg -n '^import VisualProof\.(Model|Diagram\.Semantics|Concrete\.Semantics|Rule\.Soundness|Proof)' VisualProof/Refinement/Rejection.lean
+rg -n '\b(execute|Receipt|Error|Model|denoteOpen|denoteRegion|sound)\b' VisualProof/Refinement/Means.lean
+scripts/audit-lean-authority.sh implementation
 lake env lean -DwarningAsError=true VisualProof/Audit.lean
 lake build
 git diff --check
 ```
 
-The `DomainInvalid` scan must be empty. `VisualProof/Audit.lean` must expose kernel-checked signature and axiom checks for `Means`, `Means.execute`, and `execute_rejects_only_invalid`, including confirmation that `Means` itself has no execution-result, receipt, error, or semantic dependency.
+Both source scans must be empty. Lean audit support must recursively inspect the elaborated value expression of `Means` and fail if it depends on `Concrete.execute`, `Concrete.Receipt`, `Concrete.Error`, model/denotation constants, or soundness constants. `VisualProof/Audit.lean` must also expose kernel-checked signature and axiom checks for `Means.execute` and `execute_rejects_only_invalid`.
 
 ### Task 12: Factor replay and theorem validity through refinement
 
@@ -1465,14 +1476,14 @@ lake env lean -DwarningAsError=true VisualProof/Proof/Replay.lean
 lake env lean -DwarningAsError=true VisualProof/Proof/Schema.lean
 lake env lean -DwarningAsError=true VisualProof/Proof/Theorem.lean
 lake env lean -DwarningAsError=true VisualProof/Proof/Theory.lean
-rg -n '^import VisualProof\.Rule\.Soundness\.(Erasure|WireSever|Iteration|DoubleCut|Comprehension|Vacuity)' VisualProof/Proof
 rg -n '\.(boundRelationSpawn|wireJoin|erasure|wireSever|iteration|deiteration|doubleCutIntro|doubleCutElim|comprehensionInstantiate|comprehensionAbstract|vacuousIntro|vacuousElim)\b' VisualProof/Proof
-lake env lean --deps VisualProof/Proof/Theorem.lean
+scripts/audit-lean-authority.sh proof
+lake env lean -DwarningAsError=true VisualProof/Audit.lean
 lake build
 git diff --check
 ```
 
-The family-import and constructor-case scans must be empty in semantic proof bodies; the dependency closure must reach semantics through `Rule/Soundness.lean`, not through a family-specific implementation theorem.
+The constructor-case scan must be empty in semantic proof bodies. The proof-mode import audit must accept only aggregate `Refinement.execute_sound`, aggregate `Rule.Step.sound`, and structural representation/isomorphism transport at the concrete-validity theorem boundary. Lean audit support must inspect that theorem's elaborated value and reject dependencies on concrete semantic declarations, operational soundness declarations, or direct family soundness declarations.
 
 ### Task 13: Final authority and repository audit
 
@@ -1502,11 +1513,11 @@ lake env lean -DwarningAsError=true VisualProof/Refinement/Complete.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Rejection.lean
 lake env lean -DwarningAsError=true VisualProof/Proof/Theorem.lean
 lake env lean -DwarningAsError=true VisualProof/Audit.lean
-lake env lean --deps VisualProof/Rule/Soundness.lean
-lake env lean --deps VisualProof/Concrete/Step.lean
-lake env lean --deps VisualProof/Refinement/Step.lean
-lake env lean --deps VisualProof/Refinement/Complete.lean
-lake env lean --deps VisualProof/Refinement/Rejection.lean
+rg -n '^import VisualProof\.(Model|Diagram\.Semantics|Concrete\.Semantics|Rule\.Soundness|Proof)' VisualProof/Concrete VisualProof/Refinement
+rg -n '\b(Model|denoteOpen|denoteRegion|ConcreteSemanticSimulation|Step\.sound)\b' VisualProof/Concrete VisualProof/Refinement
+scripts/audit-lean-authority.sh rules
+scripts/audit-lean-authority.sh implementation
+scripts/audit-lean-authority.sh proof
 lake build
 git diff --check
 ```

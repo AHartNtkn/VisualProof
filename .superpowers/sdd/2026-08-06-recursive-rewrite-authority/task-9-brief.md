@@ -17,6 +17,11 @@ the structural declarations actually consumed by refinement, and eliminate
 concrete-dependent semantic machinery instead of moving, renaming, wrapping,
 re-exporting, or retaining it as a parallel authority.
 
+Create `scripts/audit-lean-authority.sh` as the reusable recursive source-import
+auditor. Its `rules`, `implementation`, and `proof` modes must report complete
+root-to-forbidden-import paths and enforce the three layer boundaries in this
+brief. Direct `lean --deps` output is not transitive evidence.
+
 ## Required remediation
 
 The following conditions must hold before the Task 9 aggregate is GREEN:
@@ -34,6 +39,9 @@ The following conditions must hold before the Task 9 aggregate is GREEN:
   retained elsewhere.
 - The pure six-family rule soundness owners and `Rule.Step.sound` remain in the
   Rule layer and remain independent of Concrete and Refinement.
+- Existing `Proof/**` consumers of concrete semantic APIs migrate directly to
+  Diagram semantics and aggregate Rule soundness during remediation, without an
+  adapter or family-specific concrete soundness theorem.
 - `Concrete.Error.DomainInvalid` is not an authority for later rejection
   correctness. Task 11 covers every executor error from exact-request
   completeness.
@@ -154,6 +162,9 @@ translation, representation uniqueness, and `Step.iso`. It does not invoke
 - Source checks proving no concrete semantic module, refinement semantic tower,
   operational soundness aggregate, matcher/search subsystem, compatibility
   authority, proof hole, or project axiom remains.
+- `scripts/audit-lean-authority.sh rules`, `implementation`, and `proof` all
+  pass and provide the recursive import evidence; Task 9 does not treat
+  `lean --deps` as a transitive audit.
 - Full `lake build` and `git diff --check`.
 - Write
   `.superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-report.md`.
