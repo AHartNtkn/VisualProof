@@ -399,6 +399,7 @@ structure Base
     (source target : OpenDiagram arity) where
   interface : OpenDiagram arity
   ancestorWires : Nat
+  anchorLocal : Nat
   descendantWires : Nat
   ancestorRels : RelCtx
   descendantRels : RelCtx
@@ -406,27 +407,29 @@ structure Base
     DiagramContext interface.externalClasses ancestorWires
       [] ancestorRels
   descendant :
-    DiagramContext ancestorWires descendantWires
+    DiagramContext (ancestorWires + anchorLocal) descendantWires
       ancestorRels descendantRels
   selected :
-    Region ancestorWires ancestorRels
+    Region (ancestorWires + anchorLocal) ancestorRels
   remainder :
     Region descendantWires descendantRels
   source_iso :
     OpenDiagramIso source
       (interface.withBody
         (outer.fill
-          (selected.conjoin
-            (descendant.fill remainder))))
+          (Region.adjoinAt anchorLocal .nil
+            (selected.conjoin
+              (descendant.fill remainder)))))
   target_iso :
     OpenDiagramIso target
       (interface.withBody
         (outer.fill
-          (selected.conjoin
-            (descendant.fill
-              (((selected.renameWires descendant.outerWire)
-                  .renameRelations descendant.outerRelation)
-                .conjoin remainder)))))
+          (Region.adjoinAt anchorLocal .nil
+            (selected.conjoin
+              (descendant.fill
+                (((selected.renameWires descendant.outerWire)
+                    .renameRelations descendant.outerRelation)
+                  .conjoin remainder))))))
 
 def Base.iso
     (sourceIso : OpenDiagramIso source source')
@@ -436,6 +439,12 @@ def Base.iso
 
 end Iteration
 ```
+
+`anchorLocal` binds the anchor-scoped witnesses once around both factors.
+Inside that binder block, selected and retained material share the full
+`ancestorWires + anchorLocal` carrier; witnesses owned only by the selected
+factor may remain local to `selected`.  This includes hidden root wires, which
+are recursive root locals rather than open external classes.
 
 There is one selected occurrence and one target. Do not define `Iteration` until Task 5 proves `Iteration.Base.sound_iff`.
 
@@ -453,8 +462,14 @@ def wrap (body : Region wires rels) :
 
 inductive Local : LocalRule
   | introduce
-      (body : Region wires rels) :
-      Local body (wrap body)
+      (hostLocal : Nat)
+      (hostItems : ItemSeq (wires + hostLocal) rels)
+      (body : Region materialWires materialRels)
+      (wireMap : Fin materialWires → Fin (wires + hostLocal))
+      (relationMap : RelationRenaming materialRels rels) :
+      Local
+        (Region.spliceAt hostLocal hostItems body wireMap relationMap)
+        (Region.spliceAt hostLocal hostItems (wrap body) wireMap relationMap)
 
 end DoubleCut
 ```
@@ -643,22 +658,26 @@ def Instantiates
     (Mapping.instantiateHead pattern)
     quantified specialized
 
-structure Local
-    (specialized quantified : Region wires rels) where
-  arity : Nat
-  pattern : OpenDiagram arity
-  body : Region wires (arity :: rels)
-  instantiates :
-    Instantiates pattern body specialized
-  quantified_iso :
-    Core.Isomorphic quantified
-      (singleton (.bubble arity body))
+inductive Local : LocalRule
+  | rewrite
+      (hostLocal : Nat)
+      (hostItems : ItemSeq (wires + hostLocal) rels)
+      (arity : Nat)
+      (pattern : OpenDiagram arity)
+      (body : Region materialWires (arity :: materialRels))
+      (specialized : Region materialWires materialRels)
+      (instantiates : Instantiates pattern body specialized)
+      (wireMap : Fin materialWires → Fin (wires + hostLocal))
+      (relationMap : RelationRenaming materialRels rels) :
+      Local
+        (Region.spliceAt hostLocal hostItems specialized wireMap relationMap)
+        (Region.spliceAt hostLocal hostItems
+          (singleton (.bubble arity body)) wireMap relationMap)
 
 end Comprehension
 
 def Comprehension : Rule :=
-  Contextual fun specialized quantified =>
-    Nonempty (Comprehension.Local specialized quantified)
+  Contextual Comprehension.Local
 
 theorem Comprehension.iso
     (sourceIso : OpenDiagramIso source source')
@@ -668,6 +687,9 @@ theorem Comprehension.iso
 ```
 
 `RegionResult.mk` retains the quantified body's original local-wire block and appends local wires introduced by expanded patterns through `Region.adjoinAt`. `ItemsResult.cons` supplies simultaneous replacement without an executable occurrence search.
+The `spliceAt` host frame retains unselected siblings and permits the selected
+material to share anchor-local witnesses.  Simultaneity remains entirely in
+`Instantiation.RegionResult`; no occurrence search is added.
 
 #### Vacuity base
 
@@ -687,9 +709,16 @@ def wrap
 
 inductive Local : LocalRule
   | introduce
+      (hostLocal : Nat)
+      (hostItems : ItemSeq (wires + hostLocal) rels)
       (arity : Nat)
-      (body : Region wires rels) :
-      Local body (wrap arity body)
+      (body : Region materialWires materialRels)
+      (wireMap : Fin materialWires → Fin (wires + hostLocal))
+      (relationMap : RelationRenaming materialRels rels) :
+      Local
+        (Region.spliceAt hostLocal hostItems body wireMap relationMap)
+        (Region.spliceAt hostLocal hostItems (wrap arity body)
+          wireMap relationMap)
 
 end Vacuity
 ```

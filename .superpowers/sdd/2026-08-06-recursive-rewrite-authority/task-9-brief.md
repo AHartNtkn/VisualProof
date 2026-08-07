@@ -51,6 +51,23 @@ the family refinement; `Region.denote_spliceAt_host` supplies the semantic
 proof and the existing contextual closure remains unchanged.  Do not restrict
 concrete selections to the disjoint `conjoin` special case.
 
+The same selected-sibling issue requires constructor-local `spliceAt` framing
+for `DoubleCut.Local`, `Vacuity.Local`, and `Comprehension.Local`: both endpoints
+splice their respective before/after material into one unchanged host with the
+same wire and relation maps.  Keep their existing contextual closures.  Prove
+the local semantic laws with `Region.denote_spliceAt_mono` and the existing
+material theorem.  Do not extend `DiagramContext`; its inherited-wire API is
+not the arbitrary material-to-site map required by splicing.
+
+`Iteration.Base` instead remains a direct whole-diagram relation, but must bind
+the anchor-local witness block once around both selected and retained factors.
+Add `anchorLocal`; make `selected` and `descendant` live over
+`ancestorWires + anchorLocal`; and wrap the current source and target factors in
+`Region.adjoinAt anchorLocal .nil`.  This represents shared hidden root wires
+and shared nested-anchor locals without changing the copying maps.  Its
+soundness proof lifts the existing ancestor-copy equivalence through
+`Region.adjoinAt_equiv`.
+
 ## Public theorems
 
 The aggregate theorem is:
