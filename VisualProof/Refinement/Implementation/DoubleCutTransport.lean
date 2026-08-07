@@ -70,6 +70,31 @@ def inner (input : Concrete.Diagram) : Fin (input.regionCount + 2) :=
     (selection : CheckedSelection input) :
     (doubleCutIntroRaw input selection).root = Fin.castAdd 2 input.root := rfl
 
+def targetOpen (source : Concrete.OpenDiagram)
+    (selection : CheckedSelection source.diagram) : Concrete.OpenDiagram := {
+  diagram := doubleCutIntroRaw source.diagram selection
+  boundary := source.boundary
+}
+
+@[simp] theorem targetOpen_exposedWires (source : Concrete.OpenDiagram)
+    (selection : CheckedSelection source.diagram) :
+    (targetOpen source selection).exposedWires = source.exposedWires := rfl
+
+theorem targetOpen_wellFormed
+    (source : Concrete.CheckedOpen)
+    (selection : CheckedSelection source.val.diagram)
+    (rawWellFormed : (doubleCutIntroRaw source.val.diagram selection).WellFormed) :
+    (targetOpen source.val selection).WellFormed := by
+  refine {
+    diagram_well_formed := rawWellFormed
+    boundary_is_root_scoped := ?_
+  }
+  intro wire member
+  change (liftCWireRegions 2 (source.val.diagram.wires wire)).scope =
+    Fin.castAdd 2 source.val.diagram.root
+  exact congrArg (Fin.castAdd 2)
+    (source.property.boundary_is_root_scoped wire member)
+
 theorem outer_ne_lift (input : Concrete.Diagram)
     (region : Fin input.regionCount) : outer input ≠ Fin.castAdd 2 region := by
   intro equality
@@ -182,6 +207,20 @@ theorem oldRegion_parent (input : Concrete.Diagram)
     exact congrArg (fun value : Fin (input.regionCount + 2) => value.val) equality
   · intro equality
     exact Fin.ext equality
+
+@[simp] theorem targetOpen_hiddenWires (source : Concrete.OpenDiagram)
+    (selection : CheckedSelection source.diagram) :
+    (targetOpen source selection).hiddenWires = source.hiddenWires := by
+  unfold Concrete.OpenDiagram.hiddenWires targetOpen
+  rw [root, exactScopeWires]
+  rfl
+
+@[simp] theorem targetOpen_rootWires (source : Concrete.OpenDiagram)
+    (selection : CheckedSelection source.diagram) :
+    (targetOpen source selection).rootWires = source.rootWires := by
+  unfold Concrete.OpenDiagram.rootWires
+  rw [targetOpen_exposedWires, targetOpen_hiddenWires]
+  rfl
 
 @[simp] theorem outer_exactScopeWires (input : Concrete.Diagram)
     (selection : CheckedSelection input) :
