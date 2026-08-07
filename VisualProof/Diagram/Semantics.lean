@@ -196,6 +196,42 @@ theorem denoteOpen_iff_assignment
             diagram.body := by
   rfl
 
+theorem OpenDiagram.denote_body
+    {diagram : OpenDiagram arity}
+    {before after : Region diagram.externalClasses []}
+    {model : Model}
+    {args : Fin arity → model.Carrier}
+    (h : ∀ env : Fin diagram.externalClasses → model.Carrier,
+      denoteRegion (relCtx := []) model env PUnit.unit before →
+      denoteRegion (relCtx := []) model env PUnit.unit after) :
+    denoteOpen model (diagram.withBody before) args →
+    denoteOpen model (diagram.withBody after) args := by
+  rintro ⟨assignment, hargs, hbefore⟩
+  let targetAssignment : BoundaryAssignment (diagram.withBody after)
+      model.Carrier := {
+    args := assignment.args
+    classes := assignment.classes
+    agrees := assignment.agrees
+  }
+  refine ⟨targetAssignment, hargs, ?_⟩
+  exact h assignment.classes hbefore
+
+theorem OpenDiagram.denote_body_iff
+    {diagram : OpenDiagram arity}
+    {before after : Region diagram.externalClasses []}
+    {model : Model}
+    {args : Fin arity → model.Carrier}
+    (h : ∀ env : Fin diagram.externalClasses → model.Carrier,
+      denoteRegion (relCtx := []) model env PUnit.unit before ↔
+      denoteRegion (relCtx := []) model env PUnit.unit after) :
+    denoteOpen model (diagram.withBody before) args ↔
+    denoteOpen model (diagram.withBody after) args := by
+  constructor
+  · exact OpenDiagram.denote_body (diagram := diagram)
+      (before := before) (after := after) fun env => (h env).mp
+  · exact OpenDiagram.denote_body (diagram := diagram)
+      (before := after) (after := before) fun env => (h env).mpr
+
 theorem double_cut_denotes_iff
     (model : Model)
     (env : Fin wires -> model.Carrier)

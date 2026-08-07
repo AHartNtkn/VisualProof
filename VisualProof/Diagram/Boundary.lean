@@ -10,6 +10,14 @@ structure OpenDiagram (arity : Nat) where
 
 namespace OpenDiagram
 
+/-- Replace an open diagram's body without changing its interface. -/
+def withBody (diagram : OpenDiagram arity)
+    (body : Region diagram.externalClasses []) : OpenDiagram arity where
+  externalClasses := diagram.externalClasses
+  boundary := diagram.boundary
+  boundary_surjective := diagram.boundary_surjective
+  body := body
+
 /-- Transport only the dependent arity index of an open diagram. -/
 def castArity (diagram : OpenDiagram sourceArity)
     (equality : sourceArity = targetArity) :
@@ -33,6 +41,18 @@ structure BoundaryAssignment (d : OpenDiagram arity) (D : Type u) where
   args : Fin arity -> D
   classes : Fin d.externalClasses -> D
   agrees : forall i, classes (d.boundary i) = args i
+
+theorem BoundaryAssignment.equal_of_alias
+    {d : OpenDiagram arity}
+    (assignment : BoundaryAssignment d D)
+    {left right : Fin arity}
+    (alias : d.boundary left = d.boundary right) :
+    assignment.args left = assignment.args right := by
+  calc
+    assignment.args left = assignment.classes (d.boundary left) :=
+      (assignment.agrees left).symm
+    _ = assignment.classes (d.boundary right) := congrArg assignment.classes alias
+    _ = assignment.args right := assignment.agrees right
 
 def AliasConsistent (d : OpenDiagram arity)
     (args : Fin arity -> D) : Prop :=
