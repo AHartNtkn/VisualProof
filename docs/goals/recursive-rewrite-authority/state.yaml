@@ -622,6 +622,7 @@ tasks:
     inputs:
       - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 8"
     allowed_files:
+      - "VisualProof/Diagram/OpenIsomorphism.lean"
       - "VisualProof/Concrete/Translate.lean"
       - "VisualProof/Concrete/Encode.lean"
       - "VisualProof/Concrete.lean"

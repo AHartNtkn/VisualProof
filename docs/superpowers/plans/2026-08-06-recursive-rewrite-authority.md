@@ -1047,10 +1047,25 @@ The proof is six constructor cases delegating to family soundness. Validate the 
 
 **Files:**
 
+- Modify `VisualProof/Diagram/OpenIsomorphism.lean`
 - Create `VisualProof/Concrete/Translate.lean`
 - Create `VisualProof/Concrete/Encode.lean`
 - Create `VisualProof/Refinement/Represents.lean`
 - Modify `VisualProof.lean`
+
+`OpenDiagramIso` is proof-relevant witness data in `Type`, while
+representation is a proposition. Define its propositional existence relation
+once at the diagram boundary:
+
+```lean
+def OpenDiagram.Isomorphic
+    (source target : OpenDiagram arity) : Prop :=
+  Nonempty (OpenDiagramIso source target)
+```
+
+Prove reflexivity, symmetry, and transitivity by the corresponding witness
+operations. Actual witness-consuming functions continue to take
+`OpenDiagramIso`; relational conclusions use `OpenDiagram.Isomorphic`.
 
 Implement an actual open validator. It checks the underlying flat diagram and proves every boundary wire is in root scope. Its error records either the existing well-formedness error or the offending boundary position. `Except` requires its success parameter in `Type`, so package the proposition in a proof-carrying type indexed by the exact input; input preservation remains definitional:
 
@@ -1093,7 +1108,7 @@ def Represents
     (diagram : OpenDiagram concrete.boundary.length) : Prop :=
   ∃ translated,
     Concrete.translate concrete = .ok translated ∧
-    OpenDiagramIso translated diagram
+    OpenDiagram.Isomorphic translated diagram
 ```
 
 For indexed execution states define:
@@ -1131,13 +1146,13 @@ theorem checked_represents (concrete : Concrete.CheckedOpen) :
     Represents concrete.val (Concrete.elaborate concrete)
 ```
 
-- representation uniqueness concludes `OpenDiagramIso`:
+- representation uniqueness concludes propositional isomorphism:
 
 ```lean
 theorem represents_unique
     (first : Represents concrete firstDiagram)
     (second : Represents concrete secondDiagram) :
-    OpenDiagramIso firstDiagram secondDiagram
+    OpenDiagram.Isomorphic firstDiagram secondDiagram
 ```
 
 - representation completeness follows from `encode` with the exact raw form:
@@ -1365,7 +1380,7 @@ Stage only task-owned paths explicitly and commit as `Complete recursive rewrite
 - [ ] Concrete execution has exactly twelve operation constructors over checked open state.
 - [ ] Requests supply every selected occurrence and legality witness; execution performs no search.
 - [ ] `Concrete.translate` is validation followed by elaboration.
-- [ ] `Represents` is successful translation modulo `OpenDiagramIso`.
+- [ ] `Represents` is successful translation modulo propositional open-diagram isomorphism.
 - [ ] `Concrete.encode` proves representation completeness.
 - [ ] Every successful concrete operation refines its assigned family relation.
 - [ ] Every abstract step reflects to a concrete request and successful one-step execution.
