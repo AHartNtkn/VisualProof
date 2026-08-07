@@ -22,7 +22,7 @@ private theorem allFin_succ_last (n : Nat) :
   ext
   rfl
 
-private theorem allFin_add (n m : Nat) :
+theorem allFin_add (n m : Nat) :
     allFin (n + m) =
       (allFin n).map (Fin.castAdd m) ++ (allFin m).map (Fin.natAdd n) := by
   induction m with
