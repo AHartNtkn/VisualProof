@@ -17,10 +17,9 @@ def BindersMapped
     (targetBinders : Concrete.Elaboration.BinderContext
       (vacuousIntroRaw input selection arity) targetRels)
     (relationMap : RelationRenaming sourceRels targetRels) : Prop :=
-  ∀ region binderArity sourceRelation,
-    sourceBinders region = some ⟨binderArity, sourceRelation⟩ →
-    targetBinders region.castSucc =
-      some ⟨binderArity, relationMap sourceRelation⟩
+  ∀ region, targetBinders region.castSucc =
+    (sourceBinders region).map fun relation =>
+      ⟨relation.1, relationMap relation.2⟩
 
 theorem BindersMapped.push
     (mapped : BindersMapped input selection arity sourceBinders targetBinders
@@ -30,11 +29,10 @@ theorem BindersMapped.push
       (sourceBinders.push child childArity)
       (targetBinders.push child.castSucc childArity)
       (RelationRenaming.lift relationMap childArity) := by
-  intro region binderArity sourceRelation sourceLookup
+  intro region
   by_cases equality : region = child
   · subst region
-    simp only [Concrete.Elaboration.BinderContext.push_self] at sourceLookup ⊢
-    cases Option.some.inj sourceLookup
+    simp only [Concrete.Elaboration.BinderContext.push_self, Option.map_some]
     rfl
   · have liftedNe : region.castSucc ≠ child.castSucc := by
       intro liftedEquality
@@ -44,19 +42,9 @@ theorem BindersMapped.push
         (fun value : Fin (input.regionCount + 1) => value.val)
         liftedEquality
     rw [Concrete.Elaboration.BinderContext.push_other _ childArity equality]
-      at sourceLookup
     rw [Concrete.Elaboration.BinderContext.push_other _ childArity liftedNe]
-    cases sourceEq : sourceBinders region with
-    | none => simp [sourceEq] at sourceLookup
-    | some sourceValue =>
-        rcases sourceValue with ⟨actualArity, actualRelation⟩
-        simp [sourceEq] at sourceLookup
-        rcases sourceLookup with ⟨arityEq, relationEq⟩
-        subst binderArity
-        have relationEq' := eq_of_heq relationEq
-        subst sourceRelation
-        rw [mapped region actualArity actualRelation sourceEq]
-        rfl
+    rw [mapped region]
+    cases sourceBinders region <;> rfl
 
 theorem BindersMapped.ofLifted
     (witness : LiftedBinderWitness input selection arity
@@ -64,10 +52,11 @@ theorem BindersMapped.ofLifted
       sourceBinders targetBinders) :
     BindersMapped input selection arity sourceBinders targetBinders
       witness.relationMap := by
-  intro region binderArity sourceRelation sourceLookup
+  intro region
   cases witness.relationContexts_eq
-  simpa [LiftedBinderWitness.relationMap] using
-    (eq_of_heq (witness.binders_eq region)).symm.trans sourceLookup
+  have equality := eq_of_heq (witness.binders_eq region)
+  rw [← equality]
+  cases sourceBinders region <;> rfl
 
 def bubbleRelationMap
     (witness : LiftedBinderWitness input selection arity
@@ -96,17 +85,14 @@ theorem BindersMapped.intoBubble
     BindersMapped input selection arity sourceBinders
       (targetBinders.push (bubbleRegion input) arity)
       (bubbleRelationMap witness) := by
-  intro region binderArity sourceRelation sourceLookup
+  intro region
   have liftedNe : region.castSucc ≠ bubbleRegion input :=
     (bubbleRegion_ne_lift input region).symm
   rw [Concrete.Elaboration.BinderContext.push_other _ arity liftedNe]
   cases witness.relationContexts_eq
-  have targetLookup : targetBinders region.castSucc =
-      some ⟨binderArity, sourceRelation⟩ := by
-    simpa using (eq_of_heq (witness.binders_eq region)).symm.trans sourceLookup
-  rw [targetLookup]
-  cases witness.relationContexts_eq
-  rfl
+  have equality := eq_of_heq (witness.binders_eq region)
+  rw [← equality]
+  cases sourceBinders region <;> rfl
 
 structure MappedBinderWitness
     (input : Concrete.Diagram) (selection : CheckedSelection input)
@@ -166,12 +152,12 @@ def intoBubble
       (targetBinders.push (bubbleRegion input) arity) where
   relationMap := bubbleRelationMap witness
   bindersMapped := by
-    intro region binderArity sourceRelation sourceLookup
+    intro region
     have liftedNe : region.castSucc ≠ bubbleRegion input :=
       (bubbleRegion_ne_lift input region).symm
     rw [Concrete.Elaboration.BinderContext.push_other _ arity liftedNe]
-    rw [witness.bindersMapped region binderArity sourceRelation sourceLookup]
-    rfl
+    rw [witness.bindersMapped region]
+    cases sourceBinders region <;> rfl
 
 theorem relationMap_push
     {sourceRels targetRels : RelCtx}
@@ -189,6 +175,56 @@ theorem relationMap_push
           (childArity :: targetRels)) := rfl
 
 end MappedBinderWitness
+
+theorem node_iso
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
+    (arity : Nat)
+    (sourceContext : Concrete.Elaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext
+      (vacuousIntroRaw input selection arity))
+    (context : LiftedContextWitness input selection arity
+      sourceContext targetContext)
+    {sourceRels targetRels : RelCtx}
+    (sourceBinders : Concrete.Elaboration.BinderContext input sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext
+      (vacuousIntroRaw input selection arity) targetRels)
+    (binders : MappedBinderWitness input selection arity sourceBinders
+      targetBinders)
+    (node : Fin input.nodeCount)
+    (regionMap : Fin input.regionCount → Fin (input.regionCount + 1))
+    (shape : (vacuousIntroRaw input selection arity).nodes node =
+      match input.nodes node with
+      | .atom owner binder => .atom (regionMap owner) binder.castSucc
+      | .identity owner nodeArity => .identity (regionMap owner) nodeArity)
+    {sourceItem : Item sourceContext.length sourceRels}
+    {targetItem : Item targetContext.length targetRels}
+    (sourceCompiled : Concrete.Elaboration.compileNode? input sourceContext
+      sourceBinders node = some sourceItem)
+    (targetCompiled : Concrete.Elaboration.compileNode?
+      (vacuousIntroRaw input selection arity) targetContext targetBinders node =
+        some targetItem) :
+    ItemIso
+      (FiniteEquiv.finCast (congrArg List.length context.contexts_eq))
+      targetRels (sourceItem.renameRelations binders.relationMap)
+      targetItem := by
+  let wireMap : Fin sourceContext.length → Fin targetContext.length :=
+    Fin.cast (congrArg List.length context.contexts_eq)
+  have mapped := Concrete.Elaboration.compileNode?_map
+    sourceContext targetContext sourceBinders targetBinders node node
+    regionMap Fin.castSucc wireMap binders.relationMap shape
+    (by
+      intro port
+      exact resolvePort input selection arity sourceContext targetContext
+        context node port)
+    (by
+      intro _owner binder _sourceAtom
+      exact binders.bindersMapped binder)
+  rw [sourceCompiled, targetCompiled] at mapped
+  simp only [Option.map_some, Option.some.injEq] at mapped
+  rw [mapped, Item.renameWires_renameRelations]
+  simpa [wireMap] using
+    ItemIso.renameWiresEquiv (sourceItem.renameRelations binders.relationMap)
+      (FiniteEquiv.finCast (congrArg List.length context.contexts_eq))
 
 
 end VisualProof.Refinement.Implementation.VacuityIntroCompile
