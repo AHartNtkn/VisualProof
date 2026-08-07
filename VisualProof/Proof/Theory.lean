@@ -12,7 +12,8 @@ inductive VerifiedTheorems : List TheoremSchema → Type
       VerifiedTheorems (prior ++ [checked.schema])
 
 /-- A collection of theorem schemas and their concrete replay certificates.
-Its semantic interpretation belongs to the refinement layer. -/
+Its semantic interpretation is established in the proof layer by composing
+execution refinement with aggregate rule soundness. -/
 structure VerifiedTheory where
   theorems : List TheoremSchema
   verification : VerifiedTheorems theorems

@@ -1,5 +1,7 @@
 import VisualProof.Proof.Schema
 import VisualProof.Proof.Replay
+import VisualProof.Refinement.Step
+import VisualProof.Rule.Soundness
 
 namespace VisualProof.Proof
 
@@ -17,8 +19,8 @@ def theoremSideState (side : Concrete.CheckedOpen) :
 
 /-- A theorem-shaped certificate consisting of dual programs replayed by the
 sole concrete executor, with endpoints meeting up to ordered open isomorphism.
-Semantic rule interpretation is supplied by refinement, not by this concrete
-execution certificate. -/
+Its semantic interpretation is established in the proof layer by composing
+execution refinement with aggregate rule soundness. -/
 structure CheckedTheorem where
   schema : TheoremSchema
   forwardFinish : State schema.left.val.boundary.length

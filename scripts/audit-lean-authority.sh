@@ -49,6 +49,8 @@ is_forbidden() {
          $imported == VisualProof.Concrete.*.Semantics.* ||
          $imported == VisualProof.Concrete.Elaboration.Simulation ||
          $imported == VisualProof.Refinement.Implementation.Soundness ||
+         $imported == VisualProof.Refinement.Implementation.* ||
+         $imported == VisualProof.Refinement.Step.* ||
          $imported == VisualProof.Rule.Soundness.* ]]
       ;;
   esac
@@ -61,6 +63,7 @@ is_opaque_proof_interface() {
 }
 
 declare -A seen=()
+declare -A reached=()
 violations=0
 
 report_source_matches() {
@@ -86,6 +89,7 @@ walk() {
     return
   fi
   seen[$key]=1
+  reached[$module]=1
 
   if is_opaque_proof_interface "$module"; then
     return
@@ -138,6 +142,7 @@ case "$mode" in
       VisualProof.Concrete.Translate
       VisualProof.Concrete.Encode
       VisualProof.Refinement.Represents
+      VisualProof.Refinement.Step
     )
     ;;
   proof)
@@ -168,6 +173,15 @@ for root in "${roots[@]}"; do
     walk "$root" "$root" "$root"
   fi
 done
+
+if [[ $mode == proof ]]; then
+  for interface in VisualProof.Refinement.Step VisualProof.Rule.Soundness; do
+    if [[ -z ${reached[$interface]+x} ]]; then
+      printf 'proof closure does not reach required aggregate: %s\n' "$interface"
+      violations=$((violations + 1))
+    fi
+  done
+fi
 
 if [[ $mode == implementation ]]; then
   report_source_matches forbidden-semantic-import \
