@@ -5,23 +5,23 @@ namespace VisualProof.Rule.IterationSoundness
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
-open VisualProof.Diagram.Splice.Input
+open VisualProof.Concrete.Splice.Input
 
 theorem compilerLeaf_sameDiagramFrame
-    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed )
+    {diagram : Concrete.Diagram} (hwf : diagram.WellFormed )
     {site : Fin diagram.regionCount}
     {sourceOuter sourceLocal targetOuter targetLocal : Nat}
     {rels : Theory.RelCtx}
     {sourceSeq : ItemSeq  (sourceOuter + sourceLocal) rels}
     {targetSeq : ItemSeq  (targetOuter + targetLocal) rels}
-    (sourceState : Splice.Region.ContextPath.CompilerLeaf diagram site
+    (sourceState : Concrete.Splice.Region.ContextPath.CompilerLeaf diagram site
       (.here (.mk sourceLocal sourceSeq)))
-    (targetState : Splice.Region.ContextPath.CompilerLeaf diagram site
+    (targetState : Concrete.Splice.Region.ContextPath.CompilerLeaf diagram site
       (.here (.mk targetLocal targetSeq)))
     (sourceLocalCanonical : sourceLocal =
-      (ConcreteElaboration.exactScopeWires diagram site).length)
+      (Concrete.Elaboration.exactScopeWires diagram site).length)
     (targetLocalCanonical : targetLocal =
-      (ConcreteElaboration.exactScopeWires diagram site).length)
+      (Concrete.Elaboration.exactScopeWires diagram site).length)
     (sourceItemsCanonical : HEq sourceSeq sourceState.canonicalBodyItems)
     (targetItemsCanonical : HEq targetSeq targetState.canonicalBodyItems)
     (inherited : FiniteEquiv (Fin sourceState.inheritedWires.length)
@@ -39,28 +39,28 @@ theorem compilerLeaf_sameDiagramFrame
         ((FiniteEquiv.finCast sourceLocalCanonical).trans
           (FiniteEquiv.finCast targetLocalCanonical.symm)))
       sourceIndex targetIndex) := by
-  let concreteIso := ConcreteIso.refl diagram
-  let extended := ConcreteElaboration.extendedContextEquiv concreteIso
+  let concreteIso := Concrete.Iso.refl diagram
+  let extended := Concrete.Elaboration.extendedContextEquiv concreteIso
     sourceState.inheritedWires targetState.inheritedWires inherited site
-  have inheritedAgree : ConcreteElaboration.WireContextsAgree concreteIso
+  have inheritedAgree : Concrete.Elaboration.WireContextsAgree concreteIso
       sourceState.inheritedWires targetState.inheritedWires inherited := by
     intro index
     simpa [concreteIso] using inheritedSpec index
-  have extendedAgree : ConcreteElaboration.WireContextsAgree concreteIso
+  have extendedAgree : Concrete.Elaboration.WireContextsAgree concreteIso
       (sourceState.inheritedWires.extend site)
       (targetState.inheritedWires.extend site) extended := by
     simpa [extended, concreteIso] using inheritedAgree.extend site
-  have bindersAgree : ConcreteElaboration.BinderContextsAgree concreteIso
+  have bindersAgree : Concrete.Elaboration.BinderContextsAgree concreteIso
       sourceState.binders targetState.binders := by
     intro binder
     simpa [concreteIso, bindersEq]
-  let occurrences := ConcreteElaboration.localOccurrences diagram site
+  let occurrences := Concrete.Elaboration.localOccurrences diagram site
   let occurrencePositions := FiniteEquiv.refl (Fin occurrences.length)
   have rawIso : ItemSeqIso  extended rels sourceState.items
       targetState.items := by
-    apply ConcreteElaboration.compileOccurrencesWith?_iso
-      (ConcreteElaboration.compileRegion?  diagram sourceState.fuel)
-      (ConcreteElaboration.compileRegion?  diagram targetState.fuel)
+    apply Concrete.Elaboration.compileOccurrencesWith?_iso
+      (Concrete.Elaboration.compileRegion?  diagram sourceState.fuel)
+      (Concrete.Elaboration.compileRegion?  diagram targetState.fuel)
       (sourceState.inheritedWires.extend site)
       (targetState.inheritedWires.extend site)
       sourceState.binders targetState.binders occurrences occurrences
@@ -68,72 +68,72 @@ theorem compilerLeaf_sameDiagramFrame
       occurrencePositions extended
     intro occurrenceIndex
     let sourceItemIndex : Fin sourceState.items.length := Fin.cast
-      (ConcreteElaboration.compileOccurrencesWith?_length
-        (ConcreteElaboration.compileRegion?  diagram sourceState.fuel)
+      (Concrete.Elaboration.compileOccurrencesWith?_length
+        (Concrete.Elaboration.compileRegion?  diagram sourceState.fuel)
         (sourceState.inheritedWires.extend site) sourceState.binders
         sourceState.itemsComputation).symm occurrenceIndex
     let targetItemIndex : Fin targetState.items.length := Fin.cast
-      (ConcreteElaboration.compileOccurrencesWith?_length
-        (ConcreteElaboration.compileRegion?  diagram targetState.fuel)
+      (Concrete.Elaboration.compileOccurrencesWith?_length
+        (Concrete.Elaboration.compileRegion?  diagram targetState.fuel)
         (targetState.inheritedWires.extend site) targetState.binders
         targetState.itemsComputation).symm occurrenceIndex
-    have sourceGet := ConcreteElaboration.compileOccurrencesWith?_get
-      (ConcreteElaboration.compileRegion?  diagram sourceState.fuel)
+    have sourceGet := Concrete.Elaboration.compileOccurrencesWith?_get
+      (Concrete.Elaboration.compileRegion?  diagram sourceState.fuel)
       (sourceState.inheritedWires.extend site) sourceState.binders
       sourceState.itemsComputation occurrenceIndex
-    have targetGet := ConcreteElaboration.compileOccurrencesWith?_get
-      (ConcreteElaboration.compileRegion?  diagram targetState.fuel)
+    have targetGet := Concrete.Elaboration.compileOccurrencesWith?_get
+      (Concrete.Elaboration.compileRegion?  diagram targetState.fuel)
       (targetState.inheritedWires.extend site) targetState.binders
       targetState.itemsComputation occurrenceIndex
-    have targetGet' : ConcreteElaboration.compileOccurrenceWith?
-        diagram (ConcreteElaboration.compileRegion?  diagram
+    have targetGet' : Concrete.Elaboration.compileOccurrenceWith?
+        diagram (Concrete.Elaboration.compileRegion?  diagram
           targetState.fuel)
         (targetState.inheritedWires.extend site) targetState.binders
-        (ConcreteElaboration.renameOccurrence concreteIso
+        (Concrete.Elaboration.renameOccurrence concreteIso
           (occurrences.get occurrenceIndex)) =
           some (targetState.items.get targetItemIndex) := by
       cases hoccurrence : occurrences.get occurrenceIndex with
       | node node =>
           rw [hoccurrence] at targetGet
-          simpa [concreteIso, ConcreteIso.refl, targetItemIndex,
-            ConcreteElaboration.renameOccurrence, FiniteEquiv.refl] using
+          simpa [concreteIso, Concrete.Iso.refl, targetItemIndex,
+            Concrete.Elaboration.renameOccurrence, FiniteEquiv.refl] using
               targetGet
       | child region =>
           rw [hoccurrence] at targetGet
-          simpa [concreteIso, ConcreteIso.refl, targetItemIndex,
-            ConcreteElaboration.renameOccurrence, FiniteEquiv.refl] using
+          simpa [concreteIso, Concrete.Iso.refl, targetItemIndex,
+            Concrete.Elaboration.renameOccurrence, FiniteEquiv.refl] using
               targetGet
     simpa [sourceItemIndex, targetItemIndex, occurrencePositions] using
-      ConcreteElaboration.compileOccurrenceWith?_equivariant concreteIso hwf
+      Concrete.Elaboration.compileOccurrenceWith?_equivariant concreteIso hwf
         extendedAgree targetState.wiresExact bindersAgree
         (occurrences.get occurrenceIndex) (List.get_mem _ _)
         sourceGet targetGet'
   subst sourceLocal
   subst targetLocal
   let localCount :=
-    (ConcreteElaboration.exactScopeWires diagram site).length
+    (Concrete.Elaboration.exactScopeWires diagram site).length
   let sourceCast : FiniteEquiv
       (Fin (sourceState.inheritedWires.extend site).length)
       (Fin (sourceOuter + localCount)) :=
-    (FiniteEquiv.finCast (ConcreteElaboration.WireContext.length_extend
+    (FiniteEquiv.finCast (Concrete.Elaboration.WireContext.length_extend
       sourceState.inheritedWires site)).trans
       (FiniteEquiv.finCast (congrArg (fun outer => outer + localCount)
         sourceState.inheritedLength))
   let targetCast : FiniteEquiv
       (Fin (targetState.inheritedWires.extend site).length)
       (Fin (targetOuter + localCount)) :=
-    (FiniteEquiv.finCast (ConcreteElaboration.WireContext.length_extend
+    (FiniteEquiv.finCast (Concrete.Elaboration.WireContext.length_extend
       targetState.inheritedWires site)).trans
       (FiniteEquiv.finCast (congrArg (fun outer => outer + localCount)
         targetState.inheritedLength))
   have sourceCanonicalEq : sourceSeq =
       sourceState.items.renameWires sourceCast := by
     have core := eq_of_heq sourceItemsCanonical
-    rw [Splice.Region.ContextPath.CompilerLeaf.canonicalBodyItems,
+    rw [Concrete.Splice.Region.ContextPath.CompilerLeaf.canonicalBodyItems,
       ItemSeq.castWiresEq_eq_renameWires,
       ItemSeq.castWiresEq_eq_renameWires] at core
     have comp := ItemSeq.renameWires_comp sourceState.items
-      (Fin.cast (ConcreteElaboration.WireContext.length_extend
+      (Fin.cast (Concrete.Elaboration.WireContext.length_extend
         sourceState.inheritedWires site))
       (Fin.cast (congrArg (fun outer => outer + localCount)
         sourceState.inheritedLength))
@@ -144,11 +144,11 @@ theorem compilerLeaf_sameDiagramFrame
   have targetCanonicalEq : targetSeq =
       targetState.items.renameWires targetCast := by
     have core := eq_of_heq targetItemsCanonical
-    rw [Splice.Region.ContextPath.CompilerLeaf.canonicalBodyItems,
+    rw [Concrete.Splice.Region.ContextPath.CompilerLeaf.canonicalBodyItems,
       ItemSeq.castWiresEq_eq_renameWires,
       ItemSeq.castWiresEq_eq_renameWires] at core
     have comp := ItemSeq.renameWires_comp targetState.items
-      (Fin.cast (ConcreteElaboration.WireContext.length_extend
+      (Fin.cast (Concrete.Elaboration.WireContext.length_extend
         targetState.inheritedWires site))
       (Fin.cast (congrArg (fun outer => outer + localCount)
         targetState.inheritedLength))
@@ -156,12 +156,12 @@ theorem compilerLeaf_sameDiagramFrame
       apply congrArg (targetState.items.renameWires ·)
       funext index
       rfl))
-  let sourceLength := ConcreteElaboration.compileOccurrencesWith?_length
-    (ConcreteElaboration.compileRegion?  diagram sourceState.fuel)
+  let sourceLength := Concrete.Elaboration.compileOccurrencesWith?_length
+    (Concrete.Elaboration.compileRegion?  diagram sourceState.fuel)
     (sourceState.inheritedWires.extend site) sourceState.binders
     sourceState.itemsComputation
-  let targetLength := ConcreteElaboration.compileOccurrencesWith?_length
-    (ConcreteElaboration.compileRegion?  diagram targetState.fuel)
+  let targetLength := Concrete.Elaboration.compileOccurrencesWith?_length
+    (Concrete.Elaboration.compileRegion?  diagram targetState.fuel)
     (targetState.inheritedWires.extend site) targetState.binders
     targetState.itemsComputation
   let rawPositions : FiniteEquiv (Fin sourceState.items.length)
@@ -173,12 +173,12 @@ theorem compilerLeaf_sameDiagramFrame
         (targetState.items.get (rawPositions index)) := by
     intro index
     let occurrenceIndex : Fin occurrences.length := Fin.cast sourceLength index
-    have sourceGet := ConcreteElaboration.compileOccurrencesWith?_get
-      (ConcreteElaboration.compileRegion?  diagram sourceState.fuel)
+    have sourceGet := Concrete.Elaboration.compileOccurrencesWith?_get
+      (Concrete.Elaboration.compileRegion?  diagram sourceState.fuel)
       (sourceState.inheritedWires.extend site) sourceState.binders
       sourceState.itemsComputation occurrenceIndex
-    have targetGet := ConcreteElaboration.compileOccurrencesWith?_get
-      (ConcreteElaboration.compileRegion?  diagram targetState.fuel)
+    have targetGet := Concrete.Elaboration.compileOccurrencesWith?_get
+      (Concrete.Elaboration.compileRegion?  diagram targetState.fuel)
       (targetState.inheritedWires.extend site) targetState.binders
       targetState.itemsComputation occurrenceIndex
     have sourcePosition : Fin.cast sourceLength.symm occurrenceIndex = index := by
@@ -190,25 +190,25 @@ theorem compilerLeaf_sameDiagramFrame
       rfl
     rw [sourcePosition] at sourceGet
     rw [targetPosition] at targetGet
-    have targetGet' : ConcreteElaboration.compileOccurrenceWith?
-        diagram (ConcreteElaboration.compileRegion?  diagram
+    have targetGet' : Concrete.Elaboration.compileOccurrenceWith?
+        diagram (Concrete.Elaboration.compileRegion?  diagram
           targetState.fuel)
         (targetState.inheritedWires.extend site) targetState.binders
-        (ConcreteElaboration.renameOccurrence concreteIso
+        (Concrete.Elaboration.renameOccurrence concreteIso
           (occurrences.get occurrenceIndex)) =
           some (targetState.items.get (rawPositions index)) := by
       cases hoccurrence : occurrences.get occurrenceIndex with
       | node node =>
           rw [hoccurrence] at targetGet
-          simpa [concreteIso, ConcreteIso.refl,
-            ConcreteElaboration.renameOccurrence, FiniteEquiv.refl] using
+          simpa [concreteIso, Concrete.Iso.refl,
+            Concrete.Elaboration.renameOccurrence, FiniteEquiv.refl] using
               targetGet
       | child region =>
           rw [hoccurrence] at targetGet
-          simpa [concreteIso, ConcreteIso.refl,
-            ConcreteElaboration.renameOccurrence, FiniteEquiv.refl] using
+          simpa [concreteIso, Concrete.Iso.refl,
+            Concrete.Elaboration.renameOccurrence, FiniteEquiv.refl] using
               targetGet
-    exact ConcreteElaboration.compileOccurrenceWith?_equivariant concreteIso
+    exact Concrete.Elaboration.compileOccurrenceWith?_equivariant concreteIso
       hwf extendedAgree targetState.wiresExact bindersAgree
       (occurrences.get occurrenceIndex) (List.get_mem _ _) sourceGet
       targetGet'
@@ -256,49 +256,49 @@ theorem compilerLeaf_sameDiagramFrame
     (compilerBodyOuterWire sourceState targetState inherited)
     ((FiniteEquiv.finCast (rfl : localCount = localCount)).trans
       (FiniteEquiv.finCast (rfl : localCount = localCount)))
-  have localWireEq : ConcreteElaboration.localWireEquiv concreteIso site =
+  have localWireEq : Concrete.Elaboration.localWireEquiv concreteIso site =
       FiniteEquiv.refl (Fin localCount) := by
     apply FiniteEquiv.ext
     intro index
     apply Fin.ext
-    have hget := ConcreteElaboration.localWireEquiv_spec concreteIso site index
-    simpa [concreteIso, ConcreteIso.refl, localCount, List.get_eq_getElem,
+    have hget := Concrete.Elaboration.localWireEquiv_spec concreteIso site index
+    simpa [concreteIso, Concrete.Iso.refl, localCount, List.get_eq_getElem,
       FiniteEquiv.refl] using
         (List.getElem_inj
-          (ConcreteElaboration.exactScopeWires_nodup diagram site)).mp hget
+          (Concrete.Elaboration.exactScopeWires_nodup diagram site)).mp hget
   have wireFactor : (sourceCast.symm.trans extended).trans targetCast =
       finalWire := by
     have sourceChildExtended : sourceOuter + localCount =
         (sourceState.inheritedWires.extend site).length :=
       (congrArg (fun outer => outer + localCount)
         sourceState.inheritedLength).symm.trans
-          (ConcreteElaboration.WireContext.length_extend
+          (Concrete.Elaboration.WireContext.length_extend
             sourceState.inheritedWires site).symm
     have targetChildExtended : targetOuter + localCount =
         (targetState.inheritedWires.extend site).length :=
       (congrArg (fun outer => outer + localCount)
         targetState.inheritedLength).symm.trans
-          (ConcreteElaboration.WireContext.length_extend
+          (Concrete.Elaboration.WireContext.length_extend
             targetState.inheritedWires site).symm
     have algebra := compilerBodyOuterWire_extend_algebra
       sourceChildExtended
-      (ConcreteElaboration.WireContext.length_extend
+      (Concrete.Elaboration.WireContext.length_extend
         sourceState.inheritedWires site)
       sourceState.inheritedLength (rfl : sourceOuter + localCount = _)
       (rfl : localCount = localCount)
       targetChildExtended
-      (ConcreteElaboration.WireContext.length_extend
+      (Concrete.Elaboration.WireContext.length_extend
         targetState.inheritedWires site)
       targetState.inheritedLength (rfl : targetOuter + localCount = _)
       (rfl : localCount = localCount) inherited
-      (ConcreteElaboration.localWireEquiv concreteIso site)
+      (Concrete.Elaboration.localWireEquiv concreteIso site)
     have extendedEq : extended =
-        (FiniteEquiv.finCast (ConcreteElaboration.WireContext.length_extend
+        (FiniteEquiv.finCast (Concrete.Elaboration.WireContext.length_extend
           sourceState.inheritedWires site)).trans
           ((extendWireEquiv inherited
-            (ConcreteElaboration.localWireEquiv concreteIso site)).trans
+            (Concrete.Elaboration.localWireEquiv concreteIso site)).trans
             (FiniteEquiv.finCast
-              (ConcreteElaboration.WireContext.length_extend
+              (Concrete.Elaboration.WireContext.length_extend
                 targetState.inheritedWires site)).symm) := by
       apply FiniteEquiv.ext
       intro index
@@ -334,27 +334,27 @@ wire law.  The context isomorphism alone permits arbitrary finite
 permutations; this refinement records that the chosen hole map preserves the
 authoritative concrete inherited-wire identities at the route terminal. -/
 structure SameDiagramCompilerTraceAlignment
-    {diagram : ConcreteDiagram}
+    {diagram : Concrete.Diagram}
     {start target : Fin diagram.regionCount}
     {sourcePath targetPath : List Nat}
-    {sourceRoute : Splice.RegionRoute diagram start target sourcePath}
-    {targetRoute : Splice.RegionRoute diagram start target targetPath}
+    {sourceRoute : Concrete.Splice.RegionRoute diagram start target sourcePath}
+    {targetRoute : Concrete.Splice.RegionRoute diagram start target targetPath}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
     {sourceBody : Region  sourceOuter rels}
     {targetBody : Region  targetOuter rels}
     {sourceWitness : Region.ContextPath sourceBody sourcePath}
     {targetWitness : Region.ContextPath targetBody targetPath}
-    (sourceState : Splice.Region.ContextPath.CompilerLeaf diagram start
+    (sourceState : Concrete.Splice.Region.ContextPath.CompilerLeaf diagram start
       (.here sourceBody))
-    (targetState : Splice.Region.ContextPath.CompilerLeaf diagram start
+    (targetState : Concrete.Splice.Region.ContextPath.CompilerLeaf diagram start
       (.here targetBody))
-    (sourceTrace : Splice.CompilerTrace  diagram sourceRoute
+    (sourceTrace : Concrete.Splice.CompilerTrace  diagram sourceRoute
       sourceWitness sourceState)
-    (targetTrace : Splice.CompilerTrace  diagram targetRoute
+    (targetTrace : Concrete.Splice.CompilerTrace  diagram targetRoute
       targetWitness targetState)
     (inherited : FiniteEquiv (Fin sourceState.inheritedWires.length)
       (Fin targetState.inheritedWires.length)) where
-  alignment : Splice.Input.PairedCompilerContextAlignment
+  alignment : Concrete.Splice.Input.PairedCompilerContextAlignment
     (compilerBodyOuterWire sourceState targetState inherited)
     sourceWitness targetWitness
   terminalInheritedWireSpec : ∀ index,
@@ -364,23 +364,23 @@ structure SameDiagramCompilerTraceAlignment
       sourceTrace.leaf.inheritedWires.get index
 
 theorem compilerTrace_sameRouteContextIso
-    {diagram : ConcreteDiagram} (hwf : diagram.WellFormed )
+    {diagram : Concrete.Diagram} (hwf : diagram.WellFormed )
     {start target : Fin diagram.regionCount}
     {sourcePath targetPath : List Nat}
-    {sourceRoute : Splice.RegionRoute diagram start target sourcePath}
-    {targetRoute : Splice.RegionRoute diagram start target targetPath}
+    {sourceRoute : Concrete.Splice.RegionRoute diagram start target sourcePath}
+    {targetRoute : Concrete.Splice.RegionRoute diagram start target targetPath}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
     {sourceBody : Region  sourceOuter rels}
     {targetBody : Region  targetOuter rels}
     {sourceWitness : Region.ContextPath sourceBody sourcePath}
     {targetWitness : Region.ContextPath targetBody targetPath}
-    (sourceState : Splice.Region.ContextPath.CompilerLeaf diagram start
+    (sourceState : Concrete.Splice.Region.ContextPath.CompilerLeaf diagram start
       (.here sourceBody))
-    (targetState : Splice.Region.ContextPath.CompilerLeaf diagram start
+    (targetState : Concrete.Splice.Region.ContextPath.CompilerLeaf diagram start
       (.here targetBody))
-    (sourceTrace : Splice.CompilerTrace  diagram sourceRoute
+    (sourceTrace : Concrete.Splice.CompilerTrace  diagram sourceRoute
       sourceWitness sourceState)
-    (targetTrace : Splice.CompilerTrace  diagram targetRoute
+    (targetTrace : Concrete.Splice.CompilerTrace  diagram targetRoute
       targetWitness targetState)
     (inherited : FiniteEquiv (Fin sourceState.inheritedWires.length)
       (Fin targetState.inheritedWires.length))
@@ -405,7 +405,7 @@ theorem compilerTrace_sameRouteContextIso
             terminalInheritedWireSpec := ?_
           }⟩
           intro index
-          simpa [Splice.CompilerTrace.leaf,
+          simpa [Concrete.Splice.CompilerTrace.leaf,
             compilerLeafInheritedWireOfHole, compilerBodyOuterWire,
             FiniteEquiv.finCast, List.get_eq_getElem] using
               inheritedSpec index
@@ -413,14 +413,14 @@ theorem compilerTrace_sameRouteContextIso
           targetState _ _ _ _ _ _ _ targetTailTrace =>
           intro inherited inheritedSpec
           exact False.elim
-            (ConcreteElaboration.checked_direct_child_not_encloses_parent
-              hwf targetParent (Splice.Input.RegionRoute.encloses targetTail hwf))
+            (Concrete.Elaboration.checked_direct_child_not_encloses_parent
+              hwf targetParent (Concrete.Splice.Input.RegionRoute.encloses targetTail hwf))
       | @bubble _ targetChild _ _ targetParent _ _ targetTail _ _ _ _ _ _ _ _ _ _
           targetState _ _ _ _ _ _ _ targetTailTrace =>
           intro inherited inheritedSpec
           exact False.elim
-            (ConcreteElaboration.checked_direct_child_not_encloses_parent
-              hwf targetParent (Splice.Input.RegionRoute.encloses targetTail hwf))
+            (Concrete.Elaboration.checked_direct_child_not_encloses_parent
+              hwf targetParent (Concrete.Splice.Input.RegionRoute.encloses targetTail hwf))
   | @cut sourceStart sourceChild _ sourceRest sourceParent sourcePosition
       sourcePositionEq sourceTail sourceOuter sourceLocal sourceRels sourceSeq
       sourceFocus sourceChildBody sourceAt sourceIsCut sourceNested sourceState
@@ -430,8 +430,8 @@ theorem compilerTrace_sameRouteContextIso
       | here targetState =>
           intro inherited inheritedSpec
           exact False.elim
-            (ConcreteElaboration.checked_direct_child_not_encloses_parent
-              hwf sourceParent (Splice.Input.RegionRoute.encloses sourceTail hwf))
+            (Concrete.Elaboration.checked_direct_child_not_encloses_parent
+              hwf sourceParent (Concrete.Splice.Input.RegionRoute.encloses sourceTail hwf))
       | @cut _ targetChild _ targetRest targetParent targetPosition
           targetPositionEq targetTail targetOuter targetLocal targetRels targetSeq
           targetFocus targetChildBody targetAt targetIsCut targetNested targetState
@@ -440,36 +440,36 @@ theorem compilerTrace_sameRouteContextIso
           targetTailTrace =>
           intro inherited inheritedSpec
           have hchildren : sourceChild = targetChild := by
-            have hsource := Splice.Input.RegionRoute.encloses sourceTail hwf
-            have htarget := Splice.Input.RegionRoute.encloses targetTail hwf
-            rcases ConcreteDiagram.enclosingRegions_comparable hsource htarget with
+            have hsource := Concrete.Splice.Input.RegionRoute.encloses sourceTail hwf
+            have htarget := Concrete.Splice.Input.RegionRoute.encloses targetTail hwf
+            rcases Concrete.Diagram.enclosingRegions_comparable hsource htarget with
                 hsourceTarget | htargetSource
-            · rcases ConcreteElaboration.encloses_direct_child targetParent
+            · rcases Concrete.Elaboration.encloses_direct_child targetParent
                   hsourceTarget with heq | hcycle
               · exact heq
               · exact False.elim
-                  (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                  (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                     hwf sourceParent hcycle)
-            · rcases ConcreteElaboration.encloses_direct_child sourceParent
+            · rcases Concrete.Elaboration.encloses_direct_child sourceParent
                   htargetSource with heq | hcycle
               · exact heq.symm
               · exact False.elim
-                  (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                  (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                     hwf targetParent hcycle)
           subst targetChild
           have hpositions : sourcePosition = targetPosition := by
             exact Option.some.inj (sourcePositionEq.symm.trans targetPositionEq)
           subst targetPosition
-          let concreteIso := ConcreteIso.refl diagram
-          let extended := ConcreteElaboration.extendedContextEquiv concreteIso
+          let concreteIso := Concrete.Iso.refl diagram
+          let extended := Concrete.Elaboration.extendedContextEquiv concreteIso
             sourceState.inheritedWires targetState.inheritedWires inherited
             sourceStart
-          have inheritedAgree : ConcreteElaboration.WireContextsAgree
+          have inheritedAgree : Concrete.Elaboration.WireContextsAgree
               concreteIso sourceState.inheritedWires
               targetState.inheritedWires inherited := by
             intro index
             simpa [concreteIso] using inheritedSpec index
-          have extendedAgree : ConcreteElaboration.WireContextsAgree
+          have extendedAgree : Concrete.Elaboration.WireContextsAgree
               concreteIso (sourceState.inheritedWires.extend sourceStart)
               (targetState.inheritedWires.extend sourceStart) extended := by
             simpa [extended, concreteIso] using inheritedAgree.extend sourceStart
@@ -519,29 +519,29 @@ theorem compilerTrace_sameRouteContextIso
             (FiniteEquiv.finCast sourceLocalCanonical).trans
               (FiniteEquiv.finCast targetLocalCanonical.symm)
           have localWireEq :
-              ConcreteElaboration.localWireEquiv concreteIso sourceStart =
+              Concrete.Elaboration.localWireEquiv concreteIso sourceStart =
                 FiniteEquiv.refl (Fin
-                  (ConcreteElaboration.exactScopeWires diagram
+                  (Concrete.Elaboration.exactScopeWires diagram
                     sourceStart).length) := by
             apply FiniteEquiv.ext
             intro index
             apply Fin.ext
-            have hget := ConcreteElaboration.localWireEquiv_spec concreteIso
+            have hget := Concrete.Elaboration.localWireEquiv_spec concreteIso
               sourceStart index
-            simpa [concreteIso, ConcreteIso.refl, List.get_eq_getElem,
+            simpa [concreteIso, Concrete.Iso.refl, List.get_eq_getElem,
               FiniteEquiv.refl] using
                 (List.getElem_inj
-                  (ConcreteElaboration.exactScopeWires_nodup diagram
+                  (Concrete.Elaboration.exactScopeWires_nodup diagram
                     sourceStart)).mp hget
           have extendedEq : extended =
               (FiniteEquiv.finCast
-                (ConcreteElaboration.WireContext.length_extend
+                (Concrete.Elaboration.WireContext.length_extend
                   sourceState.inheritedWires sourceStart)).trans
                 ((extendWireEquiv inherited
-                  (ConcreteElaboration.localWireEquiv concreteIso
+                  (Concrete.Elaboration.localWireEquiv concreteIso
                     sourceStart)).trans
                   (FiniteEquiv.finCast
-                    (ConcreteElaboration.WireContext.length_extend
+                    (Concrete.Elaboration.WireContext.length_extend
                       targetState.inheritedWires sourceStart)).symm) := by
             apply FiniteEquiv.ext
             intro index
@@ -555,15 +555,15 @@ theorem compilerTrace_sameRouteContextIso
                   localWire := by
             have algebra := compilerBodyOuterWire_extend_algebra
               sourceLengthEq
-              (ConcreteElaboration.WireContext.length_extend
+              (Concrete.Elaboration.WireContext.length_extend
                 sourceState.inheritedWires sourceStart)
               sourceState.inheritedLength sourceChildState.inheritedLength
               sourceLocalCanonical targetLengthEq
-              (ConcreteElaboration.WireContext.length_extend
+              (Concrete.Elaboration.WireContext.length_extend
                 targetState.inheritedWires sourceStart)
               targetState.inheritedLength targetChildState.inheritedLength
               targetLocalCanonical inherited
-              (ConcreteElaboration.localWireEquiv concreteIso sourceStart)
+              (Concrete.Elaboration.localWireEquiv concreteIso sourceStart)
             simpa [childInherited, extendedEq, localWire, localWireEq,
               concreteIso] using algebra
           have childContexts : DiagramContextIso
@@ -593,7 +593,7 @@ theorem compilerTrace_sameRouteContextIso
             sourceNested.toFocus.context
             (childAlignment.holeRelsEq.symm ▸
               targetNested.toFocus.context) childContexts
-          let alignment : Splice.Input.PairedCompilerContextAlignment
+          let alignment : Concrete.Splice.Input.PairedCompilerContextAlignment
               (compilerBodyOuterWire sourceState targetState inherited)
               (.cut sourceFocus sourceAt sourceIsCut sourceNested)
               (.cut targetFocus targetAt targetIsCut targetNested) := {
@@ -607,7 +607,7 @@ theorem compilerTrace_sameRouteContextIso
             alignment := alignment
             terminalInheritedWireSpec := by
               simpa [alignment, childAlignment,
-                Splice.CompilerTrace.leaf] using
+                Concrete.Splice.CompilerTrace.leaf] using
                   childResult.terminalInheritedWireSpec
           }⟩
       | @bubble _ targetChild _ targetRest targetParent targetPosition
@@ -618,25 +618,25 @@ theorem compilerTrace_sameRouteContextIso
           targetBinders targetFuel targetTailTrace =>
           intro inherited inheritedSpec
           have hchildren : sourceChild = targetChild := by
-            have hsource := Splice.Input.RegionRoute.encloses sourceTail hwf
-            have htarget := Splice.Input.RegionRoute.encloses targetTail hwf
-            rcases ConcreteDiagram.enclosingRegions_comparable hsource htarget with
+            have hsource := Concrete.Splice.Input.RegionRoute.encloses sourceTail hwf
+            have htarget := Concrete.Splice.Input.RegionRoute.encloses targetTail hwf
+            rcases Concrete.Diagram.enclosingRegions_comparable hsource htarget with
                 hsourceTarget | htargetSource
-            · rcases ConcreteElaboration.encloses_direct_child targetParent
+            · rcases Concrete.Elaboration.encloses_direct_child targetParent
                   hsourceTarget with heq | hcycle
               · exact heq
               · exact False.elim
-                  (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                  (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                     hwf sourceParent hcycle)
-            · rcases ConcreteElaboration.encloses_direct_child sourceParent
+            · rcases Concrete.Elaboration.encloses_direct_child sourceParent
                   htargetSource with heq | hcycle
               · exact heq.symm
               · exact False.elim
-                  (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                  (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                     hwf targetParent hcycle)
           subst targetChild
-          have hkind : CRegion.cut sourceStart =
-              CRegion.bubble sourceStart targetArity :=
+          have hkind : Concrete.CRegion.cut sourceStart =
+              Concrete.CRegion.bubble sourceStart targetArity :=
             sourceChildKind.symm.trans targetChildKind
           contradiction
   | @bubble sourceStart sourceChild _ sourceRest sourceParent sourcePosition
@@ -648,8 +648,8 @@ theorem compilerTrace_sameRouteContextIso
       | here targetState =>
           intro inherited inheritedSpec
           exact False.elim
-            (ConcreteElaboration.checked_direct_child_not_encloses_parent
-              hwf sourceParent (Splice.Input.RegionRoute.encloses sourceTail hwf))
+            (Concrete.Elaboration.checked_direct_child_not_encloses_parent
+              hwf sourceParent (Concrete.Splice.Input.RegionRoute.encloses sourceTail hwf))
       | @cut _ targetChild _ targetRest targetParent targetPosition
           targetPositionEq targetTail targetOuter targetLocal targetRels targetSeq
           targetFocus targetChildBody targetAt targetIsCut targetNested targetState
@@ -658,25 +658,25 @@ theorem compilerTrace_sameRouteContextIso
           targetTailTrace =>
           intro inherited inheritedSpec
           have hchildren : sourceChild = targetChild := by
-            have hsource := Splice.Input.RegionRoute.encloses sourceTail hwf
-            have htarget := Splice.Input.RegionRoute.encloses targetTail hwf
-            rcases ConcreteDiagram.enclosingRegions_comparable hsource htarget with
+            have hsource := Concrete.Splice.Input.RegionRoute.encloses sourceTail hwf
+            have htarget := Concrete.Splice.Input.RegionRoute.encloses targetTail hwf
+            rcases Concrete.Diagram.enclosingRegions_comparable hsource htarget with
                 hsourceTarget | htargetSource
-            · rcases ConcreteElaboration.encloses_direct_child targetParent
+            · rcases Concrete.Elaboration.encloses_direct_child targetParent
                   hsourceTarget with heq | hcycle
               · exact heq
               · exact False.elim
-                  (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                  (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                     hwf sourceParent hcycle)
-            · rcases ConcreteElaboration.encloses_direct_child sourceParent
+            · rcases Concrete.Elaboration.encloses_direct_child sourceParent
                   htargetSource with heq | hcycle
               · exact heq.symm
               · exact False.elim
-                  (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                  (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                     hwf targetParent hcycle)
           subst targetChild
-          have hkind : CRegion.bubble sourceStart sourceArity =
-              CRegion.cut sourceStart :=
+          have hkind : Concrete.CRegion.bubble sourceStart sourceArity =
+              Concrete.CRegion.cut sourceStart :=
             sourceChildKind.symm.trans targetChildKind
           contradiction
       | @bubble _ targetChild _ targetRest targetParent targetPosition
@@ -687,41 +687,41 @@ theorem compilerTrace_sameRouteContextIso
           targetBinders targetFuel targetTailTrace =>
           intro inherited inheritedSpec
           have hchildren : sourceChild = targetChild := by
-            have hsource := Splice.Input.RegionRoute.encloses sourceTail hwf
-            have htarget := Splice.Input.RegionRoute.encloses targetTail hwf
-            rcases ConcreteDiagram.enclosingRegions_comparable hsource htarget with
+            have hsource := Concrete.Splice.Input.RegionRoute.encloses sourceTail hwf
+            have htarget := Concrete.Splice.Input.RegionRoute.encloses targetTail hwf
+            rcases Concrete.Diagram.enclosingRegions_comparable hsource htarget with
                 hsourceTarget | htargetSource
-            · rcases ConcreteElaboration.encloses_direct_child targetParent
+            · rcases Concrete.Elaboration.encloses_direct_child targetParent
                   hsourceTarget with heq | hcycle
               · exact heq
               · exact False.elim
-                  (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                  (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                     hwf sourceParent hcycle)
-            · rcases ConcreteElaboration.encloses_direct_child sourceParent
+            · rcases Concrete.Elaboration.encloses_direct_child sourceParent
                   htargetSource with heq | hcycle
               · exact heq.symm
               · exact False.elim
-                  (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                  (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                     hwf targetParent hcycle)
           subst targetChild
-          have hkind : CRegion.bubble sourceStart sourceArity =
-              CRegion.bubble sourceStart targetArity :=
+          have hkind : Concrete.CRegion.bubble sourceStart sourceArity =
+              Concrete.CRegion.bubble sourceStart targetArity :=
             sourceChildKind.symm.trans targetChildKind
           have harity : sourceArity = targetArity := by injection hkind
           subst targetArity
           have hpositions : sourcePosition = targetPosition := by
             exact Option.some.inj (sourcePositionEq.symm.trans targetPositionEq)
           subst targetPosition
-          let concreteIso := ConcreteIso.refl diagram
-          let extended := ConcreteElaboration.extendedContextEquiv concreteIso
+          let concreteIso := Concrete.Iso.refl diagram
+          let extended := Concrete.Elaboration.extendedContextEquiv concreteIso
             sourceState.inheritedWires targetState.inheritedWires inherited
             sourceStart
-          have inheritedAgree : ConcreteElaboration.WireContextsAgree
+          have inheritedAgree : Concrete.Elaboration.WireContextsAgree
               concreteIso sourceState.inheritedWires
               targetState.inheritedWires inherited := by
             intro index
             simpa [concreteIso] using inheritedSpec index
-          have extendedAgree : ConcreteElaboration.WireContextsAgree
+          have extendedAgree : Concrete.Elaboration.WireContextsAgree
               concreteIso (sourceState.inheritedWires.extend sourceStart)
               (targetState.inheritedWires.extend sourceStart) extended := by
             simpa [extended, concreteIso] using inheritedAgree.extend sourceStart
@@ -753,7 +753,7 @@ theorem compilerTrace_sameRouteContextIso
               targetChildState.binders :=
             sourceBinders.trans
               ((congrArg (fun binders =>
-                ConcreteElaboration.BinderContext.push binders sourceChild
+                Concrete.Elaboration.BinderContext.push binders sourceChild
                   sourceArity) bindersEq).trans targetBinders.symm)
           obtain ⟨childResult⟩ := ih targetChildState targetTailTrace
             childBindersEq childInherited childInheritedSpec
@@ -774,29 +774,29 @@ theorem compilerTrace_sameRouteContextIso
             (FiniteEquiv.finCast sourceLocalCanonical).trans
               (FiniteEquiv.finCast targetLocalCanonical.symm)
           have localWireEq :
-              ConcreteElaboration.localWireEquiv concreteIso sourceStart =
+              Concrete.Elaboration.localWireEquiv concreteIso sourceStart =
                 FiniteEquiv.refl (Fin
-                  (ConcreteElaboration.exactScopeWires diagram
+                  (Concrete.Elaboration.exactScopeWires diagram
                     sourceStart).length) := by
             apply FiniteEquiv.ext
             intro index
             apply Fin.ext
-            have hget := ConcreteElaboration.localWireEquiv_spec concreteIso
+            have hget := Concrete.Elaboration.localWireEquiv_spec concreteIso
               sourceStart index
-            simpa [concreteIso, ConcreteIso.refl, List.get_eq_getElem,
+            simpa [concreteIso, Concrete.Iso.refl, List.get_eq_getElem,
               FiniteEquiv.refl] using
                 (List.getElem_inj
-                  (ConcreteElaboration.exactScopeWires_nodup diagram
+                  (Concrete.Elaboration.exactScopeWires_nodup diagram
                     sourceStart)).mp hget
           have extendedEq : extended =
               (FiniteEquiv.finCast
-                (ConcreteElaboration.WireContext.length_extend
+                (Concrete.Elaboration.WireContext.length_extend
                   sourceState.inheritedWires sourceStart)).trans
                 ((extendWireEquiv inherited
-                  (ConcreteElaboration.localWireEquiv concreteIso
+                  (Concrete.Elaboration.localWireEquiv concreteIso
                     sourceStart)).trans
                   (FiniteEquiv.finCast
-                    (ConcreteElaboration.WireContext.length_extend
+                    (Concrete.Elaboration.WireContext.length_extend
                       targetState.inheritedWires sourceStart)).symm) := by
             apply FiniteEquiv.ext
             intro index
@@ -810,15 +810,15 @@ theorem compilerTrace_sameRouteContextIso
                   localWire := by
             have algebra := compilerBodyOuterWire_extend_algebra
               sourceLengthEq
-              (ConcreteElaboration.WireContext.length_extend
+              (Concrete.Elaboration.WireContext.length_extend
                 sourceState.inheritedWires sourceStart)
               sourceState.inheritedLength sourceChildState.inheritedLength
               sourceLocalCanonical targetLengthEq
-              (ConcreteElaboration.WireContext.length_extend
+              (Concrete.Elaboration.WireContext.length_extend
                 targetState.inheritedWires sourceStart)
               targetState.inheritedLength targetChildState.inheritedLength
               targetLocalCanonical inherited
-              (ConcreteElaboration.localWireEquiv concreteIso sourceStart)
+              (Concrete.Elaboration.localWireEquiv concreteIso sourceStart)
             simpa [childInherited, extendedEq, localWire, localWireEq,
               concreteIso] using algebra
           have childContexts : DiagramContextIso
@@ -849,7 +849,7 @@ theorem compilerTrace_sameRouteContextIso
             sourceNested.toFocus.context
             (childAlignment.holeRelsEq.symm ▸
               targetNested.toFocus.context) childContexts
-          let alignment : Splice.Input.PairedCompilerContextAlignment
+          let alignment : Concrete.Splice.Input.PairedCompilerContextAlignment
               (compilerBodyOuterWire sourceState targetState inherited)
               (.bubble sourceFocus sourceAt sourceIsBubble sourceNested)
               (.bubble targetFocus targetAt targetIsBubble targetNested) := {
@@ -863,7 +863,7 @@ theorem compilerTrace_sameRouteContextIso
             alignment := alignment
             terminalInheritedWireSpec := by
               simpa [alignment, childAlignment,
-                Splice.CompilerTrace.leaf] using
+                Concrete.Splice.CompilerTrace.leaf] using
                   childResult.terminalInheritedWireSpec
           }⟩
 
@@ -877,9 +877,9 @@ def pairedCompilerContextAlignment_castBodies
     {sourcePath targetPath : List Nat}
     {sourceWitness : Region.ContextPath sourceBody' sourcePath}
     {targetWitness : Region.ContextPath targetBody' targetPath}
-    (alignment : Splice.Input.PairedCompilerContextAlignment wire
+    (alignment : Concrete.Splice.Input.PairedCompilerContextAlignment wire
       sourceWitness targetWitness) :
-    Splice.Input.PairedCompilerContextAlignment wire
+    Concrete.Splice.Input.PairedCompilerContextAlignment wire
       (sourceEq.symm ▸ sourceWitness) (targetEq.symm ▸ targetWitness) := by
   subst sourceBody'
   subst targetBody'
@@ -888,7 +888,7 @@ def pairedCompilerContextAlignment_castBodies
 /-- Caller-facing paired route result retaining the concrete terminal wire
 contexts selected by the two compiler traces. -/
 structure SameRouteCompilerLeafAlignment
-    {diagram : ConcreteDiagram} {start target : Fin diagram.regionCount}
+    {diagram : Concrete.Diagram} {start target : Fin diagram.regionCount}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
     {sourceBody : Region  sourceOuter rels}
     {targetBody : Region  targetOuter rels}
@@ -897,9 +897,9 @@ structure SameRouteCompilerLeafAlignment
     (outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)) where
   sourceWitness : Region.ContextPath sourceBody path
   targetWitness : Region.ContextPath targetBody path
-  alignment : Splice.Input.PairedCompilerContextAlignment outerWire
+  alignment : Concrete.Splice.Input.PairedCompilerContextAlignment outerWire
     sourceWitness targetWitness
-  sourceTerminalLeaf : Splice.Region.ContextPath.CompilerLeaf diagram target
+  sourceTerminalLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf diagram target
     sourceWitness
   sourceTerminalWires : List (Fin diagram.wireCount)
   targetTerminalWires : List (Fin diagram.wireCount)
@@ -916,25 +916,25 @@ structure SameRouteCompilerLeafAlignment
         (Fin.cast sourceTerminalLength.symm index)
   sourceTerminalCoherent : ∀ {sourcePath : List Nat}
       {sourceWitness' : Region.ContextPath sourceBody sourcePath}
-      {sourceState : Splice.Region.ContextPath.CompilerLeaf diagram start
+      {sourceState : Concrete.Splice.Region.ContextPath.CompilerLeaf diagram start
         (.here sourceBody)}
-      {sourceRoute : Splice.RegionRoute diagram start target sourcePath}
-      (sourceTrace : Splice.CompilerTrace  diagram sourceRoute
+      {sourceRoute : Concrete.Splice.RegionRoute diagram start target sourcePath}
+      (sourceTrace : Concrete.Splice.CompilerTrace  diagram sourceRoute
         sourceWitness' sourceState),
     sourceState.inheritedWires = sourceInitialWires →
       sourceTerminalWires = sourceTrace.leaf.inheritedWires
   targetTerminalCoherent : ∀ {targetPath : List Nat}
       {targetWitness' : Region.ContextPath targetBody targetPath}
-      {targetState : Splice.Region.ContextPath.CompilerLeaf diagram start
+      {targetState : Concrete.Splice.Region.ContextPath.CompilerLeaf diagram start
         (.here targetBody)}
-      {targetRoute : Splice.RegionRoute diagram start target targetPath}
-      (targetTrace : Splice.CompilerTrace  diagram targetRoute
+      {targetRoute : Concrete.Splice.RegionRoute diagram start target targetPath}
+      (targetTrace : Concrete.Splice.CompilerTrace  diagram targetRoute
         targetWitness' targetState),
     targetState.inheritedWires = targetInitialWires →
       targetTerminalWires = targetTrace.leaf.inheritedWires
 
 def SameRouteCompilerLeafAlignment.cast
-    {diagram : ConcreteDiagram} {start target : Fin diagram.regionCount}
+    {diagram : Concrete.Diagram} {start target : Fin diagram.regionCount}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
     {sourceBody sourceBody' : Region  sourceOuter rels}
     {targetBody targetBody' : Region  targetOuter rels}
@@ -958,17 +958,17 @@ def SameRouteCompilerLeafAlignment.cast
   exact result
 
 theorem compilerLeaf_sameRouteContextIso_with_terminal
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     {start target : Fin input.val.regionCount}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
     {sourceBody : Region  sourceOuter rels}
     {targetBody : Region  targetOuter rels}
-    (sourceLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (sourceLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here sourceBody))
-    (targetLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (targetLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here targetBody))
     {path : List Nat}
-    (route : Splice.RegionRoute input.val start target path)
+    (route : Concrete.Splice.RegionRoute input.val start target path)
     (inherited : FiniteEquiv (Fin sourceLeaf.inheritedWires.length)
       (Fin targetLeaf.inheritedWires.length))
     (inheritedSpec : ∀ index,
@@ -992,17 +992,17 @@ theorem compilerLeaf_sameRouteContextIso_with_terminal
     sourceLeaf.inheritedLength
   let targetTraceWitness := targetResult.witness.castWiresEq
     targetLeaf.inheritedLength
-  let sourceTraceState := Splice.compilerLeafHereCastWiresEq
+  let sourceTraceState := Concrete.Splice.compilerLeafHereCastWiresEq
     sourceResult.state sourceLeaf.inheritedLength
-  let targetTraceState := Splice.compilerLeafHereCastWiresEq
+  let targetTraceState := Concrete.Splice.compilerLeafHereCastWiresEq
     targetResult.state targetLeaf.inheritedLength
   have sourceBodyEq : sourceBody = Region.castWiresEq
       sourceLeaf.inheritedLength
-      (ConcreteElaboration.finishRegion input.val sourceLeaf.inheritedWires
+      (Concrete.Elaboration.finishRegion input.val sourceLeaf.inheritedWires
         start sourceLeaf.items) := sourceLeaf.bodyComputation
   have targetBodyEq : targetBody = Region.castWiresEq
       targetLeaf.inheritedLength
-      (ConcreteElaboration.finishRegion input.val targetLeaf.inheritedWires
+      (Concrete.Elaboration.finishRegion input.val targetLeaf.inheritedWires
         start targetLeaf.items) := targetLeaf.bodyComputation
   have sourceStateEq : sourceTraceState.inheritedWires =
       sourceLeaf.inheritedWires := by
@@ -1054,10 +1054,10 @@ theorem compilerLeaf_sameRouteContextIso_with_terminal
   let raw : SameRouteCompilerLeafAlignment
       (diagram := input.val) (start := start) (target := target)
       (sourceBody := Region.castWiresEq sourceLeaf.inheritedLength
-        (ConcreteElaboration.finishRegion input.val sourceLeaf.inheritedWires
+        (Concrete.Elaboration.finishRegion input.val sourceLeaf.inheritedWires
           start sourceLeaf.items))
       (targetBody := Region.castWiresEq targetLeaf.inheritedLength
-        (ConcreteElaboration.finishRegion input.val targetLeaf.inheritedWires
+        (Concrete.Elaboration.finishRegion input.val targetLeaf.inheritedWires
           start targetLeaf.items))
       (path := path)
       sourceLeaf.inheritedWires targetLeaf.inheritedWires
@@ -1087,13 +1087,13 @@ theorem compilerLeaf_sameRouteContextIso_with_terminal
     sourceTerminalCoherent := by
       intro sourcePath sourceWitness' sourceState sourceRoute sourceTrace'
         sourceInitialEq
-      apply Splice.Input.CompilerTrace.sameDiagramTerminalInherited
+      apply Concrete.Splice.Input.CompilerTrace.sameDiagramTerminalInherited
         input.property sourceTrace sourceTrace'
       exact sourceStateEq.trans sourceInitialEq.symm
     targetTerminalCoherent := by
       intro targetPath targetWitness' targetState targetRoute targetTrace'
         targetInitialEq
-      apply Splice.Input.CompilerTrace.sameDiagramTerminalInherited
+      apply Concrete.Splice.Input.CompilerTrace.sameDiagramTerminalInherited
         input.property targetTrace targetTrace'
       exact targetStateEq.trans targetInitialEq.symm
   }
@@ -1103,17 +1103,17 @@ theorem compilerLeaf_sameRouteContextIso_with_terminal
 /-- Context-only projection retained for callers that do not need the
 terminal concrete-coordinate law. -/
 theorem compilerLeaf_sameRouteContextIso
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     {start target : Fin input.val.regionCount}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
     {sourceBody : Region  sourceOuter rels}
     {targetBody : Region  targetOuter rels}
-    (sourceLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (sourceLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here sourceBody))
-    (targetLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (targetLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here targetBody))
     {path : List Nat}
-    (route : Splice.RegionRoute input.val start target path)
+    (route : Concrete.Splice.RegionRoute input.val start target path)
     (inherited : FiniteEquiv (Fin sourceLeaf.inheritedWires.length)
       (Fin targetLeaf.inheritedWires.length))
     (inheritedSpec : ∀ index,
@@ -1122,7 +1122,7 @@ theorem compilerLeaf_sameRouteContextIso
     (bindersEq : sourceLeaf.binders = targetLeaf.binders) :
     ∃ (sourceWitness : Region.ContextPath sourceBody path)
       (targetWitness : Region.ContextPath targetBody path),
-      Nonempty (Splice.Input.PairedCompilerContextAlignment
+      Nonempty (Concrete.Splice.Input.PairedCompilerContextAlignment
         (compilerBodyOuterWire sourceLeaf targetLeaf inherited)
         sourceWitness targetWitness) := by
   obtain ⟨result⟩ := compilerLeaf_sameRouteContextIso_with_terminal input
@@ -1131,18 +1131,18 @@ theorem compilerLeaf_sameRouteContextIso
 
 
 theorem compilerLeaf_sameRouteContextIso_of_relEq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     {start target : Fin input.val.regionCount}
     {sourceOuter targetOuter : Nat}
     {sourceRels targetRels : Theory.RelCtx}
     {sourceBody : Region  sourceOuter sourceRels}
     {targetBody : Region  targetOuter targetRels}
-    (sourceLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (sourceLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here sourceBody))
-    (targetLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (targetLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here targetBody))
     {path : List Nat}
-    (route : Splice.RegionRoute input.val start target path)
+    (route : Concrete.Splice.RegionRoute input.val start target path)
     (hrels : sourceRels = targetRels)
     (inherited : FiniteEquiv (Fin sourceLeaf.inheritedWires.length)
       (Fin targetLeaf.inheritedWires.length))
@@ -1152,7 +1152,7 @@ theorem compilerLeaf_sameRouteContextIso_of_relEq
     (hbinders : HEq sourceLeaf.binders targetLeaf.binders) :
     ∃ (sourceWitness : Region.ContextPath sourceBody path)
       (targetWitness : Region.ContextPath (hrels.symm ▸ targetBody) path),
-      Nonempty (Splice.Input.PairedCompilerContextAlignment
+      Nonempty (Concrete.Splice.Input.PairedCompilerContextAlignment
         (compilerLeafOuterWire (.here sourceBody) sourceLeaf
           (.here targetBody) targetLeaf inherited)
         sourceWitness targetWitness) := by
@@ -1165,7 +1165,7 @@ theorem compilerLeaf_sameRouteContextIso_of_relEq
 context paths at a fixed path are proof-irrelevant, so the compiler-produced
 target witness can be replaced without changing any route coordinate. -/
 structure SameRouteCompilerLeafAlignmentTo
-    {diagram : ConcreteDiagram} {start target : Fin diagram.regionCount}
+    {diagram : Concrete.Diagram} {start target : Fin diagram.regionCount}
     {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
     {terminalTargetRels : Theory.RelCtx}
     {sourceBody : Region  sourceOuter rels}
@@ -1176,9 +1176,9 @@ structure SameRouteCompilerLeafAlignmentTo
     (outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
     (targetWitness : Region.ContextPath targetBody path) where
   sourceWitness : Region.ContextPath sourceBody path
-  alignment : Splice.Input.PairedCompilerContextAlignment outerWire
+  alignment : Concrete.Splice.Input.PairedCompilerContextAlignment outerWire
     sourceWitness targetWitness
-  sourceTerminalLeaf : Splice.Region.ContextPath.CompilerLeaf diagram target
+  sourceTerminalLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf diagram target
     sourceWitness
   sourceTerminalWires : List (Fin diagram.wireCount)
   targetTerminalWires : List (Fin diagram.wireCount)
@@ -1195,36 +1195,36 @@ structure SameRouteCompilerLeafAlignmentTo
         (Fin.cast sourceTerminalLength.symm index)
   sourceTerminalCoherent : ∀ {sourcePath : List Nat}
       {sourceWitness' : Region.ContextPath sourceBody sourcePath}
-      {sourceState : Splice.Region.ContextPath.CompilerLeaf diagram start
+      {sourceState : Concrete.Splice.Region.ContextPath.CompilerLeaf diagram start
         (.here sourceBody)}
-      {sourceRoute : Splice.RegionRoute diagram start target sourcePath}
-      (sourceTrace : Splice.CompilerTrace  diagram sourceRoute
+      {sourceRoute : Concrete.Splice.RegionRoute diagram start target sourcePath}
+      (sourceTrace : Concrete.Splice.CompilerTrace  diagram sourceRoute
         sourceWitness' sourceState),
     sourceState.inheritedWires = sourceInitialWires →
       sourceTerminalWires = sourceTrace.leaf.inheritedWires
   targetTerminalCoherent : ∀ {targetPath : List Nat}
       {targetWitness' : Region.ContextPath terminalTargetBody targetPath}
-      {targetState : Splice.Region.ContextPath.CompilerLeaf diagram start
+      {targetState : Concrete.Splice.Region.ContextPath.CompilerLeaf diagram start
         (.here terminalTargetBody)}
-      {targetRoute : Splice.RegionRoute diagram start target targetPath}
-      (targetTrace : Splice.CompilerTrace  diagram targetRoute
+      {targetRoute : Concrete.Splice.RegionRoute diagram start target targetPath}
+      (targetTrace : Concrete.Splice.CompilerTrace  diagram targetRoute
         targetWitness' targetState),
     targetState.inheritedWires = targetInitialWires →
       targetTerminalWires = targetTrace.leaf.inheritedWires
 
 theorem compilerLeaf_sameRouteContextIso_toWitness_with_terminal_of_relEq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     {start target : Fin input.val.regionCount}
     {sourceOuter targetOuter : Nat}
     {sourceRels targetRels : Theory.RelCtx}
     {sourceBody : Region  sourceOuter sourceRels}
     {targetBody : Region  targetOuter targetRels}
-    (sourceLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (sourceLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here sourceBody))
-    (targetLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (targetLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here targetBody))
     {path : List Nat}
-    (route : Splice.RegionRoute input.val start target path)
+    (route : Concrete.Splice.RegionRoute input.val start target path)
     (hrels : sourceRels = targetRels)
     (inherited : FiniteEquiv (Fin sourceLeaf.inheritedWires.length)
       (Fin targetLeaf.inheritedWires.length))
@@ -1266,18 +1266,18 @@ theorem compilerLeaf_sameRouteContextIso_toWitness_with_terminal_of_relEq
   }⟩
 
 theorem compilerLeaf_sameRouteContextIso_toWitness_of_relEq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     {start target : Fin input.val.regionCount}
     {sourceOuter targetOuter : Nat}
     {sourceRels targetRels : Theory.RelCtx}
     {sourceBody : Region  sourceOuter sourceRels}
     {targetBody : Region  targetOuter targetRels}
-    (sourceLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (sourceLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here sourceBody))
-    (targetLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (targetLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here targetBody))
     {path : List Nat}
-    (route : Splice.RegionRoute input.val start target path)
+    (route : Concrete.Splice.RegionRoute input.val start target path)
     (hrels : sourceRels = targetRels)
     (inherited : FiniteEquiv (Fin sourceLeaf.inheritedWires.length)
       (Fin targetLeaf.inheritedWires.length))
@@ -1287,7 +1287,7 @@ theorem compilerLeaf_sameRouteContextIso_toWitness_of_relEq
     (hbinders : HEq sourceLeaf.binders targetLeaf.binders)
     (targetWitness : Region.ContextPath (hrels.symm ▸ targetBody) path) :
     ∃ sourceWitness : Region.ContextPath sourceBody path,
-      Nonempty (Splice.Input.PairedCompilerContextAlignment
+      Nonempty (Concrete.Splice.Input.PairedCompilerContextAlignment
         (compilerLeafOuterWire (.here sourceBody) sourceLeaf
           (.here targetBody) targetLeaf inherited)
         sourceWitness targetWitness) := by

@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionOccurrenceFamilySemantic
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -12,38 +15,38 @@ namespace AbstractionRawTrace
 outer generic simulation, this predicate records that the fresh target
 relation has the fixed comprehension interpretation. -/
 def FixedRegionSimulation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
     (region : Fin input.val.regionCount) : Prop :=
   forall {sourceRels targetRels : RelCtx}
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
     (sourceNodup : sourceContext.Nodup)
-    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
+    (sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels)
     (binderWitness : BinderWitness trace sourceBinders targetBinders)
     (sourceCover : sourceBinders.Covers region)
     (targetCover : targetBinders.Covers (trace.regionMap region))
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val sourceBinders region)
-    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (targetEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       trace.diagram targetBinders (trace.regionMap region))
     (sourceExact : (sourceContext.extend region).Exact region)
     (targetExact : (targetContext.extend (trace.regionMap region)).Exact
       (trace.regionMap region))
     (sourceBody : Region  sourceContext.length sourceRels)
     (targetBody : Region  targetContext.length targetRels),
-    ConcreteElaboration.compileRegion?  input.val sourceFuel region
+    Concrete.Elaboration.compileRegion?  input.val sourceFuel region
         sourceContext sourceBinders = some sourceBody ->
-    ConcreteElaboration.compileRegion?  trace.diagram targetFuel
+    Concrete.Elaboration.compileRegion?  trace.diagram targetFuel
         (trace.regionMap region) targetContext targetBinders = some targetBody ->
     forall (sourceEnvironment : Fin sourceContext.length -> model.Carrier)
       (targetEnvironment : Fin targetContext.length -> model.Carrier)
@@ -62,13 +65,13 @@ meaning under the survivor context and binder maps. -/
 theorem focusedSurvivingNode_semantic
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
     (sourceNodup : sourceContext.Nodup)
-    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
+    (sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels)
     (binderWitness : BinderWitness trace sourceBinders targetBinders)
     (parent : Fin input.val.regionCount)
     (notWrap : parent ≠ wrap.val.anchor)
@@ -77,19 +80,19 @@ theorem focusedSurvivingNode_semantic
     (survives : trace.domains.nodes.survives node = true)
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileNode?  input.val
+    (sourceCompiled : Concrete.Elaboration.compileNode?  input.val
       sourceContext sourceBinders node = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode?  trace.diagram
+    (targetCompiled : Concrete.Elaboration.compileNode?  trace.diagram
       targetContext targetBinders (trace.targetNode node survives) =
         some targetItem) :
-    ConcreteElaboration.ItemSimulation model  direction
+    Concrete.Elaboration.ItemSimulation model  direction
       context.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   have notDirect : node ∉ wrap.val.directNodes := by
     intro direct
     exact notWrap (nodeRegion.symm.trans
       (wrap.property.directNodes_at_anchor node direct))
-  apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+  apply Concrete.Elaboration.compileNode?_itemSimulation_of_related_ports
     model  direction sourceContext targetContext context.indexRelation
     sourceBinders targetBinders binderWitness.relationMap node
     (trace.targetNode node survives) trace.regionMap trace.regionMap
@@ -98,13 +101,13 @@ theorem focusedSurvivingNode_semantic
       simp only [sourceShape] at shape |- <;> exact shape
   · intro port sourceIndex targetIndex sourceResolved targetResolved
     obtain ⟨sourceWire, sourceOccurs, sourceGet⟩ :=
-      ConcreteElaboration.resolvePort?_sound sourceResolved
+      Concrete.Elaboration.resolvePort?_sound sourceResolved
     obtain ⟨targetWire, targetOccurs, targetGet⟩ :=
-      ConcreteElaboration.resolvePort?_sound targetResolved
+      Concrete.Elaboration.resolvePort?_sound targetResolved
     have originOccurs := trace.targetNode_endpoint_origin_occurs node survives
       targetWire port targetOccurs
     have wireEq : trace.domains.wires.origin targetWire = sourceWire :=
-      ConcreteElaboration.endpoint_wire_unique
+      Concrete.Elaboration.endpoint_wire_unique
         input.property.wire_endpoints_are_disjoint originOccurs sourceOccurs
     have targetGet' : targetContext.get targetIndex = targetWire := by
       simpa only [List.get_eq_getElem] using targetGet
@@ -162,27 +165,27 @@ bubble context. -/
 theorem focusedSelectedNode_semantic
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (model : Model)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
     (sourceNodup : sourceContext.Nodup)
-    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
+    (sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels)
     (binderWitness : BinderWitness trace sourceBinders targetBinders)
     (node : Fin input.val.nodeCount)
     (direct : node ∈ wrap.val.directNodes)
     (survives : trace.domains.nodes.survives node = true)
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileNode?  input.val
+    (sourceCompiled : Concrete.Elaboration.compileNode?  input.val
       sourceContext sourceBinders node = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode?  trace.diagram
+    (targetCompiled : Concrete.Elaboration.compileNode?  trace.diagram
       targetContext targetBinders (trace.targetNode node survives) =
         some targetItem) :
-    ConcreteElaboration.ItemSimulation model  .forward
+    Concrete.Elaboration.ItemSimulation model  .forward
       context.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
-  apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+  apply Concrete.Elaboration.compileNode?_itemSimulation_of_related_ports
     model  .forward sourceContext targetContext context.indexRelation
     sourceBinders targetBinders binderWitness.relationMap node
     (trace.targetNode node survives) (fun _ => trace.bubble) trace.regionMap
@@ -194,13 +197,13 @@ theorem focusedSelectedNode_semantic
         simpa only [sourceShape, reparentMappedNodeShape] using shape
   · intro port sourceIndex targetIndex sourceResolved targetResolved
     obtain ⟨sourceWire, sourceOccurs, sourceGet⟩ :=
-      ConcreteElaboration.resolvePort?_sound sourceResolved
+      Concrete.Elaboration.resolvePort?_sound sourceResolved
     obtain ⟨targetWire, targetOccurs, targetGet⟩ :=
-      ConcreteElaboration.resolvePort?_sound targetResolved
+      Concrete.Elaboration.resolvePort?_sound targetResolved
     have originOccurs := trace.targetNode_endpoint_origin_occurs node survives
       targetWire port targetOccurs
     have wireEq : trace.domains.wires.origin targetWire = sourceWire :=
-      ConcreteElaboration.endpoint_wire_unique
+      Concrete.Elaboration.endpoint_wire_unique
         input.property.wire_endpoints_are_disjoint originOccurs sourceOccurs
     have targetGet' : targetContext.get targetIndex = targetWire := by
       simpa only [List.get_eq_getElem] using targetGet
@@ -257,10 +260,10 @@ theorem region_shape_of_surviving_direct
 target wire retains the image of its original source scope. -/
 theorem bubble_exactScopeWires_nil
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw) :
-    ConcreteElaboration.exactScopeWires trace.diagram trace.bubble = [] := by
+    Concrete.Elaboration.exactScopeWires trace.diagram trace.bubble = [] := by
   apply List.eq_nil_iff_forall_not_mem.mpr
   intro targetWire member
-  have scopeEq := (ConcreteElaboration.mem_exactScopeWires trace.diagram
+  have scopeEq := (Concrete.Elaboration.mem_exactScopeWires trace.diagram
     trace.bubble targetWire).1 member
   let sourceWire := trace.domains.wires.origin targetWire
   have survives : trace.domains.wires.survives sourceWire = true :=
@@ -275,39 +278,39 @@ theorem bubble_exactScopeWires_nil
 
 @[simp] theorem extend_bubble_eq
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (context : ConcreteElaboration.WireContext trace.diagram) :
+    (context : Concrete.Elaboration.WireContext trace.diagram) :
     context.extend trace.bubble = context := by
-  simp [ConcreteElaboration.WireContext.extend,
+  simp [Concrete.Elaboration.WireContext.extend,
     trace.bubble_exactScopeWires_nil]
 
 def emptyBubbleEnvironment
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (D : Type) :
-    Fin (ConcreteElaboration.exactScopeWires trace.diagram
+    Fin (Concrete.Elaboration.exactScopeWires trace.diagram
       trace.bubble).length → D :=
   fun index => Fin.elim0
     (Fin.cast (congrArg List.length trace.bubble_exactScopeWires_nil) index)
 
 theorem extendedEnvironment_bubble_empty
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (context : ConcreteElaboration.WireContext trace.diagram)
+    (context : Concrete.Elaboration.WireContext trace.diagram)
     (environment : Fin context.length → D) :
-    ConcreteElaboration.extendedEnvironment context trace.bubble environment
+    Concrete.Elaboration.extendedEnvironment context trace.bubble environment
         (trace.emptyBubbleEnvironment D) =
       fun index => environment
         (Fin.cast (congrArg List.length (trace.extend_bubble_eq context))
           index) := by
   funext index
-  unfold ConcreteElaboration.extendedEnvironment emptyBubbleEnvironment
+  unfold Concrete.Elaboration.extendedEnvironment emptyBubbleEnvironment
   simp only [Function.comp_apply]
   let sourceLocal :
-      Fin (ConcreteElaboration.exactScopeWires trace.diagram
+      Fin (Concrete.Elaboration.exactScopeWires trace.diagram
         trace.bubble).length → D := trace.emptyBubbleEnvironment D
   let countEq :
-      (ConcreteElaboration.exactScopeWires trace.diagram
+      (Concrete.Elaboration.exactScopeWires trace.diagram
         trace.bubble).length = 0 :=
     congrArg List.length trace.bubble_exactScopeWires_nil
-  have transported := ModalSoundness.extendWireEnv_transport
+  have transported := VisualProof.Rule.ModalSoundness.extendWireEnv_transport
     (countEq := countEq.symm)
     (sourceLocal := sourceLocal)
     (targetLocal := (Fin.elim0 : Fin 0 → D))
@@ -315,7 +318,7 @@ theorem extendedEnvironment_bubble_empty
       intro impossible
       exact Fin.elim0 impossible)
     (sourceIndex := Fin.cast
-      (ConcreteElaboration.WireContext.length_extend context trace.bubble)
+      (Concrete.Elaboration.WireContext.length_extend context trace.bubble)
       index)
     (targetIndex := Fin.cast
       ((congrArg List.length (trace.extend_bubble_eq context)).trans
@@ -329,34 +332,34 @@ theorem extendedEnvironment_bubble_empty
 /-- Pointwise semantic transport for surviving material selected directly at
 the wrap and moved beneath the fresh abstraction bubble. -/
 theorem focusedSelectedOccurrence_semantic
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     {sourceRels targetRels : RelCtx}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed )
     (model : Model)
     (sourceFuel targetFuel : Nat)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
-    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
+    (sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels)
     (binderWitness : BinderWitness trace sourceBinders targetBinders)
     (sourceExact : sourceContext.Exact wrap.val.anchor)
     (targetExact : targetContext.Exact (trace.regionMap wrap.val.anchor))
     (sourceCover : sourceBinders.Covers wrap.val.anchor)
     (targetCover : targetBinders.Covers (trace.regionMap wrap.val.anchor))
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val sourceBinders wrap.val.anchor)
-    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (targetEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       trace.diagram targetBinders (trace.regionMap wrap.val.anchor))
     (allowed : AbstractionAllowed input.val wrap.val.anchor .forward
       wrap.val.anchor)
-    (recurseAt : ∀ (childDirection : ConcreteElaboration.SimulationDirection)
+    (recurseAt : ∀ (childDirection : Concrete.Elaboration.SimulationDirection)
       (child : Fin input.val.regionCount),
       child ∈ wrap.selectedRegions →
       trace.domains.regions.survives child = true →
@@ -364,21 +367,21 @@ theorem focusedSelectedOccurrence_semantic
       AbstractionAllowed input.val wrap.val.anchor childDirection child →
       FixedRegionSimulation trace model  childDirection sourceFuel
         targetFuel child)
-    (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (occurrence : Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount)
-    {targetOccurrence : ConcreteElaboration.LocalOccurrence
+    {targetOccurrence : Concrete.Elaboration.LocalOccurrence
       trace.diagram.regionCount trace.diagram.nodeCount}
     (selected : occurrence ∈
-      ModalSoundness.selectedOccurrences input.val wrap)
+      VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap)
     (mapped : trace.survivingOccurrence? occurrence = some targetOccurrence)
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length
       (comprehension.val.boundary.length :: targetRels))
-    (sourceCompiled : ConcreteElaboration.compileOccurrenceWith?
-      input.val (ConcreteElaboration.compileRegion?  input.val
+    (sourceCompiled : Concrete.Elaboration.compileOccurrenceWith?
+      input.val (Concrete.Elaboration.compileRegion?  input.val
         sourceFuel) sourceContext sourceBinders occurrence = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileOccurrenceWith?
-      trace.diagram (ConcreteElaboration.compileRegion?  trace.diagram
+    (targetCompiled : Concrete.Elaboration.compileOccurrenceWith?
+      trace.diagram (Concrete.Elaboration.compileRegion?  trace.diagram
         targetFuel) targetContext
           (targetBinders.push trace.bubble comprehension.val.boundary.length)
           targetOccurrence = some targetItem) :
@@ -393,7 +396,7 @@ theorem focusedSelectedOccurrence_semantic
         (occurrences := occurrences) (raw := raw) trace model
           (targetBinders.push trace.bubble comprehension.val.boundary.length)
           targetRelations →
-      ConcreteElaboration.SimulationDirection.forward.Entails
+      Concrete.Elaboration.SimulationDirection.forward.Entails
         (denoteItem model  sourceEnvironment targetRelations
           (sourceItem.renameRelations
             (binderWitness.intoFreshBubble
@@ -424,10 +427,10 @@ theorem focusedSelectedOccurrence_semantic
       bubbleParentMapped
     simpa using extended
   have targetBubbleCover : targetPushed.Covers trace.bubble := by
-    exact ConcreteElaboration.BinderContext.push_covers_bubble_child
+    exact Concrete.Elaboration.BinderContext.push_covers_bubble_child
       targetCover bubbleShape
   have targetBubbleEnumeration :
-      ConcreteElaboration.BinderContext.Enumeration trace.diagram targetPushed
+      Concrete.Elaboration.BinderContext.Enumeration trace.diagram targetPushed
         trace.bubble := by
     exact targetEnumeration.bubbleChild targetWellFormed bubbleShape
   cases occurrence with
@@ -437,7 +440,7 @@ theorem focusedSelectedOccurrence_semantic
         cases targetOccurrence with
         | child targetChild => simp at mapped
         | node targetNode =>
-            have targetEq := ConcreteElaboration.LocalOccurrence.node.inj
+            have targetEq := Concrete.Elaboration.LocalOccurrence.node.inj
               (Option.some.inj mapped)
             subst targetNode
             have direct :=
@@ -457,12 +460,12 @@ theorem focusedSelectedOccurrence_semantic
         cases targetOccurrence with
         | node targetNode => simp at mapped
         | child targetChild =>
-            have targetEq := ConcreteElaboration.LocalOccurrence.child.inj
+            have targetEq := Concrete.Elaboration.LocalOccurrence.child.inj
               (Option.some.inj mapped)
             subst targetChild
-            change ConcreteElaboration.compileOccurrenceWith?
+            change Concrete.Elaboration.compileOccurrenceWith?
               trace.diagram
-                (ConcreteElaboration.compileRegion?  trace.diagram
+                (Concrete.Elaboration.compileRegion?  trace.diagram
                   targetFuel) targetContext targetPushed
                 (.child (trace.targetRegion child survives)) = some targetItem
               at targetCompiled
@@ -472,7 +475,7 @@ theorem focusedSelectedOccurrence_semantic
               survives direct
             have childSelected : child ∈ wrap.selectedRegions :=
               (wrap.mem_selectedRegions child).2
-                ⟨child, direct, ConcreteDiagram.Encloses.refl input.val child⟩
+                ⟨child, direct, Concrete.Diagram.Encloses.refl input.val child⟩
             have childNotWrap : child ≠ wrap.val.anchor := by
               intro equal
               subst child
@@ -485,7 +488,7 @@ theorem focusedSelectedOccurrence_semantic
               (trace.targetRegion_parent_bubble_iff child survives).2 direct
             cases sourceKind : input.val.regions child with
             | sheet =>
-                simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind]
+                simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind]
                   at sourceCompiled
             | cut actualParent =>
                 have parentEq : actualParent = wrap.val.anchor := by
@@ -493,24 +496,24 @@ theorem focusedSelectedOccurrence_semantic
                   exact Option.some.inj sourceParent
                 subst actualParent
                 simp only [sourceKind, reparentRegionShape] at childShape
-                cases sourceResult : ConcreteElaboration.compileRegion?
+                cases sourceResult : Concrete.Elaboration.compileRegion?
                     input.val sourceFuel child sourceContext sourceBinders with
                 | none =>
-                    simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+                    simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind,
                       sourceResult] at sourceCompiled
                 | some sourceBody =>
-                    simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+                    simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind,
                       sourceResult] at sourceCompiled
                     subst sourceItem
-                    cases targetResult : ConcreteElaboration.compileRegion?
+                    cases targetResult : Concrete.Elaboration.compileRegion?
                          trace.diagram targetFuel
                         (trace.targetRegion child survives) targetContext
                         targetPushed with
                     | none =>
-                        simp [ConcreteElaboration.compileOccurrenceWith?, childShape,
+                        simp [Concrete.Elaboration.compileOccurrenceWith?, childShape,
                           targetResult] at targetCompiled
                     | some targetBody =>
-                        simp [ConcreteElaboration.compileOccurrenceWith?, childShape,
+                        simp [Concrete.Elaboration.compileOccurrenceWith?, childShape,
                           targetResult] at targetCompiled
                         subst targetItem
                         have childAllowed : AbstractionAllowed input.val
@@ -518,7 +521,7 @@ theorem focusedSelectedOccurrence_semantic
                           abstractionAllowed_cut input.val wrap.val.anchor
                             .forward child wrap.val.anchor sourceKind allowed
                         have targetResultMapped :
-                            ConcreteElaboration.compileRegion?
+                            Concrete.Elaboration.compileRegion?
                               trace.diagram targetFuel (trace.regionMap child)
                               targetContext targetPushed = some targetBody := by
                           rw [trace.regionMap_of_survives child survives]
@@ -527,11 +530,11 @@ theorem focusedSelectedOccurrence_semantic
                           survives childNotWrap childAllowed sourceContext
                           targetContext context sourceExact.nodup sourceBinders
                           targetPushed freshWitness
-                          (ConcreteElaboration.BinderContext.covers_cut_child
+                          (Concrete.Elaboration.BinderContext.covers_cut_child
                             sourceCover sourceKind)
                           (by
                             rw [trace.regionMap_of_survives child survives]
-                            exact ConcreteElaboration.BinderContext.covers_cut_child
+                            exact Concrete.Elaboration.BinderContext.covers_cut_child
                               targetBubbleCover childShape)
                           (sourceEnumeration.cutChild input.property sourceKind)
                           (by
@@ -560,24 +563,24 @@ theorem focusedSelectedOccurrence_semantic
                 let sourceChildBinders := sourceBinders.push child arity
                 let targetChildBinders := targetPushed.push
                   (trace.targetRegion child survives) arity
-                cases sourceResult : ConcreteElaboration.compileRegion?
+                cases sourceResult : Concrete.Elaboration.compileRegion?
                     input.val sourceFuel child sourceContext sourceChildBinders with
                 | none =>
-                    simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+                    simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind,
                       sourceChildBinders, sourceResult] at sourceCompiled
                 | some sourceBody =>
-                    simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+                    simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind,
                       sourceChildBinders, sourceResult] at sourceCompiled
                     subst sourceItem
-                    cases targetResult : ConcreteElaboration.compileRegion?
+                    cases targetResult : Concrete.Elaboration.compileRegion?
                          trace.diagram targetFuel
                         (trace.targetRegion child survives) targetContext
                         targetChildBinders with
                     | none =>
-                        simp [ConcreteElaboration.compileOccurrenceWith?, childShape,
+                        simp [Concrete.Elaboration.compileOccurrenceWith?, childShape,
                           targetChildBinders, targetResult] at targetCompiled
                     | some targetBody =>
-                        simp [ConcreteElaboration.compileOccurrenceWith?, childShape,
+                        simp [Concrete.Elaboration.compileOccurrenceWith?, childShape,
                           targetChildBinders, targetResult] at targetCompiled
                         subst targetItem
                         let childWitness : BinderWitness trace sourceChildBinders
@@ -588,7 +591,7 @@ theorem focusedSelectedOccurrence_semantic
                           abstractionAllowed_bubble input.val wrap.val.anchor
                             .forward child wrap.val.anchor arity sourceKind allowed
                         have targetResultMapped :
-                            ConcreteElaboration.compileRegion?
+                            Concrete.Elaboration.compileRegion?
                               trace.diagram targetFuel (trace.regionMap child)
                               targetContext targetChildBinders = some targetBody := by
                           rw [trace.regionMap_of_survives child survives]
@@ -597,11 +600,11 @@ theorem focusedSelectedOccurrence_semantic
                           survives childNotWrap childAllowed sourceContext
                           targetContext context sourceExact.nodup sourceChildBinders
                           targetChildBinders childWitness
-                          (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                          (Concrete.Elaboration.BinderContext.push_covers_bubble_child
                             sourceCover sourceKind)
                           (by
                             rw [trace.regionMap_of_survives child survives]
-                            exact ConcreteElaboration.BinderContext.push_covers_bubble_child
+                            exact Concrete.Elaboration.BinderContext.push_covers_bubble_child
                               targetBubbleCover childShape)
                           (sourceEnumeration.bubbleChild input.property sourceKind)
                           (by
@@ -630,37 +633,37 @@ theorem focusedSelectedOccurrence_semantic
 /-- Pointwise semantic transport for one surviving occurrence inside the
 selected material.  Child regions recurse under the fixed fresh relation. -/
 theorem focusedSurvivingOccurrence_semantic
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     {sourceRels targetRels : RelCtx}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (targetWellFormed : trace.diagram.WellFormed )
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
     (parent : Fin input.val.regionCount)
     (parentSurvives : trace.domains.regions.survives parent = true)
     (notWrap : parent ≠ wrap.val.anchor)
     (parentSelected : parent ∈ wrap.selectedRegions)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
-    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
+    (sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels)
     (binderWitness : BinderWitness trace sourceBinders targetBinders)
     (sourceExact : sourceContext.Exact parent)
     (targetExact : targetContext.Exact (trace.regionMap parent))
     (sourceCover : sourceBinders.Covers parent)
     (targetCover : targetBinders.Covers (trace.regionMap parent))
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val sourceBinders parent)
-    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (targetEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       trace.diagram targetBinders (trace.regionMap parent))
     (allowed : AbstractionAllowed input.val wrap.val.anchor direction parent)
-    (recurseAt : ∀ (childDirection : ConcreteElaboration.SimulationDirection)
+    (recurseAt : ∀ (childDirection : Concrete.Elaboration.SimulationDirection)
       (child : Fin input.val.regionCount),
       child ∈ wrap.selectedRegions →
       trace.domains.regions.survives child = true →
@@ -668,20 +671,20 @@ theorem focusedSurvivingOccurrence_semantic
       AbstractionAllowed input.val wrap.val.anchor childDirection child →
       FixedRegionSimulation trace model  childDirection sourceFuel
         targetFuel child)
-    (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (occurrence : Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount)
-    {targetOccurrence : ConcreteElaboration.LocalOccurrence
+    {targetOccurrence : Concrete.Elaboration.LocalOccurrence
       trace.diagram.regionCount trace.diagram.nodeCount}
     (localMember : occurrence ∈
-      ConcreteElaboration.localOccurrences input.val parent)
+      Concrete.Elaboration.localOccurrences input.val parent)
     (mapped : trace.survivingOccurrence? occurrence = some targetOccurrence)
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrenceWith?
-      input.val (ConcreteElaboration.compileRegion?  input.val
+    (sourceCompiled : Concrete.Elaboration.compileOccurrenceWith?
+      input.val (Concrete.Elaboration.compileRegion?  input.val
         sourceFuel) sourceContext sourceBinders occurrence = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileOccurrenceWith?
-      trace.diagram (ConcreteElaboration.compileRegion?  trace.diagram
+    (targetCompiled : Concrete.Elaboration.compileOccurrenceWith?
+      trace.diagram (Concrete.Elaboration.compileRegion?  trace.diagram
         targetFuel) targetContext targetBinders targetOccurrence =
           some targetItem) :
     ∀ (sourceEnvironment : Fin sourceContext.length → model.Carrier)
@@ -704,11 +707,11 @@ theorem focusedSurvivingOccurrence_semantic
         cases targetOccurrence with
         | child targetChild => simp at mapped
         | node targetNode =>
-            have targetEq := ConcreteElaboration.LocalOccurrence.node.inj
+            have targetEq := Concrete.Elaboration.LocalOccurrence.node.inj
               (Option.some.inj mapped)
             subst targetNode
             have nodeRegion :=
-              (ConcreteElaboration.mem_localOccurrences_node input.val parent
+              (Concrete.Elaboration.mem_localOccurrences_node input.val parent
                 node).1 localMember
             have semantic := trace.focusedSurvivingNode_semantic model
               direction sourceContext targetContext context sourceExact.nodup
@@ -726,11 +729,11 @@ theorem focusedSurvivingOccurrence_semantic
         cases targetOccurrence with
         | node targetNode => simp at mapped
         | child targetChild =>
-            have targetEq := ConcreteElaboration.LocalOccurrence.child.inj
+            have targetEq := Concrete.Elaboration.LocalOccurrence.child.inj
               (Option.some.inj mapped)
             subst targetChild
             have childParent :=
-              (ConcreteElaboration.mem_localOccurrences_child input.val parent
+              (Concrete.Elaboration.mem_localOccurrences_child input.val parent
                 child).1 localMember
             have notRoot : child ∉ wrap.val.childRoots := by
               intro root
@@ -753,11 +756,11 @@ theorem focusedSurvivingOccurrence_semantic
                 have positive : 0 < input.val.regionCount :=
                   Nat.lt_of_le_of_lt (Nat.zero_le child.val) child.isLt
                 omega⟩, ?_⟩
-              simp [ConcreteDiagram.climb, childParent]
+              simp [Concrete.Diagram.climb, childParent]
             have childSelected : child ∈ wrap.selectedRegions := by
               apply (wrap.mem_selectedRegions child).2
               exact ⟨root, rootMember,
-                ConcreteElaboration.checked_encloses_trans input.property
+                Concrete.Elaboration.checked_encloses_trans input.property
                   rootEnclosesParent parentEnclosesChild⟩
             have childNotWrap : child ≠ wrap.val.anchor := by
               intro equal
@@ -765,7 +768,7 @@ theorem focusedSurvivingOccurrence_semantic
               exact selection_anchor_not_selected input wrap childSelected
             cases sourceKind : input.val.regions child with
             | sheet =>
-                simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind]
+                simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind]
                   at sourceCompiled
             | cut actualParent =>
                 have parentEq : actualParent = parent := by
@@ -773,23 +776,23 @@ theorem focusedSurvivingOccurrence_semantic
                   exact Option.some.inj childParent
                 subst actualParent
                 simp only [sourceKind, mapRegionShape] at childShape
-                cases sourceResult : ConcreteElaboration.compileRegion?
+                cases sourceResult : Concrete.Elaboration.compileRegion?
                     input.val sourceFuel child sourceContext sourceBinders with
                 | none =>
-                    simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+                    simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind,
                       sourceResult] at sourceCompiled
                 | some sourceBody =>
-                    simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+                    simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind,
                       sourceResult] at sourceCompiled
                     subst sourceItem
-                    cases targetResult : ConcreteElaboration.compileRegion?
+                    cases targetResult : Concrete.Elaboration.compileRegion?
                         trace.diagram targetFuel (trace.targetRegion child survives)
                         targetContext targetBinders with
                     | none =>
-                        simp [ConcreteElaboration.compileOccurrenceWith?, childShape,
+                        simp [Concrete.Elaboration.compileOccurrenceWith?, childShape,
                           targetResult] at targetCompiled
                     | some targetBody =>
-                        simp [ConcreteElaboration.compileOccurrenceWith?, childShape,
+                        simp [Concrete.Elaboration.compileOccurrenceWith?, childShape,
                           targetResult] at targetCompiled
                         subst targetItem
                         have childAllowed : AbstractionAllowed input.val
@@ -797,7 +800,7 @@ theorem focusedSurvivingOccurrence_semantic
                           abstractionAllowed_cut input.val wrap.val.anchor direction
                             child parent sourceKind allowed
                         have targetResultMapped :
-                            ConcreteElaboration.compileRegion?  trace.diagram
+                            Concrete.Elaboration.compileRegion?  trace.diagram
                               targetFuel (trace.regionMap child) targetContext
                               targetBinders = some targetBody := by
                           rw [trace.regionMap_of_survives child survives]
@@ -806,11 +809,11 @@ theorem focusedSurvivingOccurrence_semantic
                           survives childNotWrap childAllowed sourceContext
                               targetContext context sourceExact.nodup sourceBinders
                               targetBinders binderWitness
-                              (ConcreteElaboration.BinderContext.covers_cut_child
+                              (Concrete.Elaboration.BinderContext.covers_cut_child
                                 sourceCover sourceKind)
                               (by
                                 rw [trace.regionMap_of_survives child survives]
-                                exact ConcreteElaboration.BinderContext.covers_cut_child
+                                exact Concrete.Elaboration.BinderContext.covers_cut_child
                                   targetCover childShape)
                               (sourceEnumeration.cutChild input.property sourceKind)
                               (by
@@ -843,23 +846,23 @@ theorem focusedSurvivingOccurrence_semantic
                 let sourcePushed := sourceBinders.push child arity
                 let targetPushed := targetBinders.push
                   (trace.targetRegion child survives) arity
-                cases sourceResult : ConcreteElaboration.compileRegion?
+                cases sourceResult : Concrete.Elaboration.compileRegion?
                     input.val sourceFuel child sourceContext sourcePushed with
                 | none =>
-                    simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+                    simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind,
                       sourcePushed, sourceResult] at sourceCompiled
                 | some sourceBody =>
-                    simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+                    simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind,
                       sourcePushed, sourceResult] at sourceCompiled
                     subst sourceItem
-                    cases targetResult : ConcreteElaboration.compileRegion?
+                    cases targetResult : Concrete.Elaboration.compileRegion?
                         trace.diagram targetFuel (trace.targetRegion child survives)
                         targetContext targetPushed with
                     | none =>
-                        simp [ConcreteElaboration.compileOccurrenceWith?, childShape,
+                        simp [Concrete.Elaboration.compileOccurrenceWith?, childShape,
                           targetPushed, targetResult] at targetCompiled
                     | some targetBody =>
-                        simp [ConcreteElaboration.compileOccurrenceWith?, childShape,
+                        simp [Concrete.Elaboration.compileOccurrenceWith?, childShape,
                           targetPushed, targetResult] at targetCompiled
                         subst targetItem
                         let childWitness : BinderWitness trace sourcePushed
@@ -869,7 +872,7 @@ theorem focusedSurvivingOccurrence_semantic
                           abstractionAllowed_bubble input.val wrap.val.anchor
                             direction child parent arity sourceKind allowed
                         have targetResultMapped :
-                            ConcreteElaboration.compileRegion?  trace.diagram
+                            Concrete.Elaboration.compileRegion?  trace.diagram
                               targetFuel (trace.regionMap child) targetContext
                               targetPushed = some targetBody := by
                           rw [trace.regionMap_of_survives child survives]
@@ -878,11 +881,11 @@ theorem focusedSurvivingOccurrence_semantic
                           survives childNotWrap childAllowed sourceContext
                               targetContext context sourceExact.nodup sourcePushed
                               targetPushed childWitness
-                              (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                              (Concrete.Elaboration.BinderContext.push_covers_bubble_child
                                 sourceCover sourceKind)
                               (by
                                 rw [trace.regionMap_of_survives child survives]
-                                exact ConcreteElaboration.BinderContext.push_covers_bubble_child
+                                exact Concrete.Elaboration.BinderContext.push_covers_bubble_child
                                   targetCover childShape)
                               (sourceEnumeration.bubbleChild input.property sourceKind)
                               (by
@@ -920,4 +923,4 @@ theorem focusedSurvivingOccurrence_semantic
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

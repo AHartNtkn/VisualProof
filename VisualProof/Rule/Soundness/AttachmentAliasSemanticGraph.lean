@@ -1,7 +1,9 @@
-import VisualProof.Diagram.Concrete.Elaboration.Simulation
-import VisualProof.Diagram.Concrete.Subgraph.Splice.AttachmentAliasMaterialization
+import VisualProof.Concrete.Elaboration.Simulation
+import VisualProof.Concrete.Subgraph.Splice.AttachmentAliasMaterialization
 
-namespace VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+namespace VisualProof.Concrete.Splice.AttachmentAliasMaterialization
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -14,28 +16,28 @@ namespace Semantic
 /-- Collapse every materialized wire to the source identity whose value it
 represents. Old identities are fixed; an alias identity collapses to the
 intrinsic boundary wire  by its ordered alias origin. -/
-def collapseWire (pattern : OpenConcreteDiagram)
+def collapseWire (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host) :
     Fin (pattern.diagram.wireCount + aliasCount pattern attachment) →
       Fin pattern.diagram.wireCount :=
   Fin.addCases id fun aliasIndex =>
     pattern.boundary.get (aliasOrigin pattern attachment aliasIndex)
 
-@[simp] theorem collapseWire_old (pattern : OpenConcreteDiagram)
+@[simp] theorem collapseWire_old (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (wire : Fin pattern.diagram.wireCount) :
     collapseWire pattern attachment (liftOldWire pattern attachment wire) =
       wire := by
   simp [collapseWire, liftOldWire]
 
-@[simp] theorem collapseWire_alias (pattern : OpenConcreteDiagram)
+@[simp] theorem collapseWire_alias (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (aliasIndex : Fin (aliasCount pattern attachment)) :
     collapseWire pattern attachment (aliasWire pattern attachment aliasIndex) =
       pattern.boundary.get (aliasOrigin pattern attachment aliasIndex) := by
   simp [collapseWire, aliasWire]
 
-theorem materialized_climb (pattern : OpenConcreteDiagram)
+theorem materialized_climb (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (bodyContainer : Fin pattern.diagram.regionCount) :
     ∀ steps region,
@@ -46,13 +48,13 @@ theorem materialized_climb (pattern : OpenConcreteDiagram)
   | zero => intro region; rfl
   | succ steps ih =>
       intro region
-      simp only [ConcreteDiagram.climb]
+      simp only [Concrete.Diagram.climb]
       rw [materialized_regions]
       cases hparent : (pattern.diagram.regions region).parent? with
       | none => simp [hparent]
       | some parent => simpa [hparent] using ih parent
 
-theorem materialized_encloses_iff (pattern : OpenConcreteDiagram)
+theorem materialized_encloses_iff (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (bodyContainer ancestor descendant : Fin pattern.diagram.regionCount) :
     (materializedDiagram pattern attachment bodyContainer).Encloses
@@ -61,7 +63,7 @@ theorem materialized_encloses_iff (pattern : OpenConcreteDiagram)
   constructor <;> rintro ⟨steps, climb⟩ <;>
     exact ⟨steps, by simpa only [materialized_climb] using climb⟩
 
-@[simp] theorem materialized_alias_scope (pattern : OpenConcreteDiagram)
+@[simp] theorem materialized_alias_scope (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (bodyContainer : Fin pattern.diagram.regionCount)
     (aliasIndex : Fin (aliasCount pattern attachment)) :
@@ -71,7 +73,7 @@ theorem materialized_encloses_iff (pattern : OpenConcreteDiagram)
   simp [materializedDiagram, aliasWire]
 
 theorem source_alias_scope
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -86,7 +88,7 @@ theorem source_alias_scope
       (aliasOrigin pattern.val attachment aliasIndex))
 
 theorem materialized_scope_collapse
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -115,12 +117,12 @@ theorem materialized_scope_collapse
 context, while retaining a canonical target occurrence for every old source
 wire. -/
 structure ContextCollapse
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram) where
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram) where
   indexMap : Fin expanded.length → Fin original.length
   get : ∀ index,
     original.get (indexMap index) =
@@ -133,14 +135,14 @@ structure ContextCollapse
 namespace ContextCollapse
 
 noncomputable def ofExact
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
     (region : Fin pattern.val.diagram.regionCount)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (expandedExact : expanded.Exact region)
     (originalExact : original.Exact region) :
     ContextCollapse pattern attachment spine expanded original := by
@@ -166,14 +168,14 @@ noncomputable def ofExact
       _ _).mpr
     simpa using visible
   let indexMap : Fin expanded.length → Fin original.length := fun index =>
-    Classical.choose (ConcreteElaboration.WireContext.lookup?_complete
+    Classical.choose (Concrete.Elaboration.WireContext.lookup?_complete
       ((originalExact.mem_iff
         (collapseWire pattern.val attachment (expanded.get index))).2
           (collapseVisible (expanded.get index)
             ((expandedExact.mem_iff (expanded.get index)).1
               (List.get_mem expanded index)))))
   let oldIndex : Fin original.length → Fin expanded.length := fun index =>
-    Classical.choose (ConcreteElaboration.WireContext.lookup?_complete
+    Classical.choose (Concrete.Elaboration.WireContext.lookup?_complete
       ((expandedExact.mem_iff
         (liftOldWire pattern.val attachment (original.get index))).2
           (oldVisible (original.get index)
@@ -183,9 +185,9 @@ noncomputable def ofExact
     indexMap := indexMap
     get := by
       intro index
-      exact ConcreteElaboration.WireContext.lookup?_sound
+      exact Concrete.Elaboration.WireContext.lookup?_sound
         (Classical.choose_spec
-          (ConcreteElaboration.WireContext.lookup?_complete
+          (Concrete.Elaboration.WireContext.lookup?_complete
             ((originalExact.mem_iff
               (collapseWire pattern.val attachment (expanded.get index))).2
                 (collapseVisible (expanded.get index)
@@ -194,9 +196,9 @@ noncomputable def ofExact
     oldIndex := oldIndex
     old_get := by
       intro index
-      exact ConcreteElaboration.WireContext.lookup?_sound
+      exact Concrete.Elaboration.WireContext.lookup?_sound
         (Classical.choose_spec
-          (ConcreteElaboration.WireContext.lookup?_complete
+          (Concrete.Elaboration.WireContext.lookup?_complete
             ((expandedExact.mem_iff
               (liftOldWire pattern.val attachment (original.get index))).2
                 (oldVisible (original.get index)
@@ -205,12 +207,12 @@ noncomputable def ofExact
   }
 
 theorem indexMap_oldIndex
-    {pattern : CheckedOpenDiagram }
+    {pattern : Concrete.CheckedOpen }
     {attachment : Fin pattern.val.boundary.length → Host}
     {spine : BinderSpine pattern.val.diagram}
-    {expanded : ConcreteElaboration.WireContext
+    {expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer)}
-    {original : ConcreteElaboration.WireContext pattern.val.diagram}
+    {original : Concrete.Elaboration.WireContext pattern.val.diagram}
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (originalNodup : original.Nodup) (index : Fin original.length) :
     collapse.indexMap (collapse.oldIndex index) = index := by
@@ -223,7 +225,7 @@ theorem indexMap_oldIndex
 end ContextCollapse
 
 /-- Lifting old endpoints is injective, including the port identity. -/
-theorem liftOldEndpoint_injective (pattern : OpenConcreteDiagram)
+theorem liftOldEndpoint_injective (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host) :
     Function.Injective (liftOldEndpoint pattern attachment) := by
   intro left right equality
@@ -242,7 +244,7 @@ theorem liftOldEndpoint_injective (pattern : OpenConcreteDiagram)
           rfl
 
 theorem oldEndpointOccurs_iff
-    (pattern : OpenConcreteDiagram)
+    (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (bodyContainer : Fin pattern.diagram.regionCount)
     (wire : Fin pattern.diagram.wireCount)
@@ -251,7 +253,7 @@ theorem oldEndpointOccurs_iff
         (liftOldWire pattern attachment wire)
         (liftOldEndpoint pattern attachment endpoint) ↔
       pattern.diagram.EndpointOccurs wire endpoint := by
-  unfold ConcreteDiagram.EndpointOccurs
+  unfold Concrete.Diagram.EndpointOccurs
   rw [materialized_old_wire_endpoints]
   constructor
   · intro member
@@ -279,7 +281,7 @@ theorem oldEndpointOccurs_iff
       (Or.inl (List.mem_map.mpr ⟨endpoint, occurs, rfl⟩))
 
 theorem aliasEndpoint_not_old
-    (pattern : OpenConcreteDiagram)
+    (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (bodyContainer : Fin pattern.diagram.regionCount)
     (aliasIndex : Fin (aliasCount pattern attachment))
@@ -288,7 +290,7 @@ theorem aliasEndpoint_not_old
         (aliasWire pattern attachment aliasIndex)
         (liftOldEndpoint pattern attachment endpoint) := by
   intro occurs
-  unfold ConcreteDiagram.EndpointOccurs at occurs
+  unfold Concrete.Diagram.EndpointOccurs at occurs
   have occurs' : liftOldEndpoint pattern attachment endpoint ∈
       [{ node := aliasNode pattern attachment aliasIndex, port := .arg 1 }] := by
     simpa only [materializedDiagram, aliasWire, Fin.addCases_right] using occurs
@@ -305,7 +307,7 @@ theorem aliasEndpoint_not_old
 /-- Every endpoint of a retained node is still owned by exactly one lifted
 old wire; freshly added alias wires never own retained-node ports. -/
 theorem oldEndpointOccurs_backward
-    (pattern : OpenConcreteDiagram)
+    (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (bodyContainer : Fin pattern.diagram.regionCount)
     (candidate : Fin (pattern.diagram.wireCount +
@@ -333,4 +335,4 @@ theorem oldEndpointOccurs_backward
 
 end Semantic
 
-end VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+end VisualProof.Concrete.Splice.AttachmentAliasMaterialization

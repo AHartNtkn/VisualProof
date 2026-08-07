@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Iteration.ExtractionRegionBinder
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -10,18 +12,18 @@ open VisualProof.Theory
 simulation.  It records lookup transport and the host ancestry needed to push
 the invariant through a direct bubble child. -/
 structure ExtractionBinderWitness
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (fragmentRegion : Fin layout.regionCount)
     (hostRegion : Fin input.val.regionCount)
     {fragmentRels hostRels : RelCtx}
-    (fragmentBinders : ConcreteElaboration.BinderContext
+    (fragmentBinders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) fragmentRels)
-    (fragmentEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (fragmentEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) fragmentBinders
       fragmentRegion)
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels) where
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels) where
   relationMap : RelationRenaming fragmentRels hostRels
   lookup : ∀ {arity} (relation : RelVar fragmentRels arity),
     hostBinders (extractionBinderOrigin input selection layout
@@ -34,16 +36,16 @@ structure ExtractionBinderWitness
       hostRegion
 
 noncomputable def ExtractionBinderWitness.terminal
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {fragmentRels hostRels : RelCtx}
-    (fragmentBinders : ConcreteElaboration.BinderContext
+    (fragmentBinders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) fragmentRels)
-    (fragmentEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (fragmentEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) fragmentBinders
       layout.bodyContainer)
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
     (hostCover : hostBinders.Covers selection.val.anchor) :
     ExtractionBinderWitness input selection layout layout.bodyContainer
       selection.val.anchor fragmentBinders fragmentEnumeration hostBinders where
@@ -73,18 +75,18 @@ def ExtractionBinderWitness.cutChild
     ExtractionBinderWitness input selection layout fragmentChild hostChild
       fragmentBinders
       (fragmentEnumeration.cutChild
-        (ConcreteDiagram.extractDiagramRaw_wellFormed input selection layout)
+        (Concrete.Diagram.extractDiagramRaw_wellFormed input selection layout)
         fragmentKind)
       hostBinders where
   relationMap := witness.relationMap
   lookup := witness.lookup
   originEncloses := by
     intro index
-    exact ConcreteElaboration.checked_encloses_trans input.property
+    exact Concrete.Elaboration.checked_encloses_trans input.property
       (witness.originEncloses index)
       (by
         refine ⟨⟨1, by have := hostChild.isLt; omega⟩, ?_⟩
-        simp [ConcreteDiagram.climb, hostKind, CRegion.parent?])
+        simp [Concrete.Diagram.climb, hostKind, CRegion.parent?])
 
 def ExtractionBinderWitness.bubbleChild
     (witness : ExtractionBinderWitness input selection layout fragmentParent
@@ -100,7 +102,7 @@ def ExtractionBinderWitness.bubbleChild
       (selection.selectedRegions.get material)
       (fragmentBinders.push (layout.materialRegion material) arity)
       (fragmentEnumeration.bubbleChild
-        (ConcreteDiagram.extractDiagramRaw_wellFormed input selection layout)
+        (Concrete.Diagram.extractDiagramRaw_wellFormed input selection layout)
         fragmentKind)
       (hostBinders.push (selection.selectedRegions.get material) arity) where
   relationMap := RelationRenaming.lift witness.relationMap arity
@@ -118,7 +120,7 @@ def ExtractionBinderWitness.bubbleChild
         some ⟨arity, RelationRenaming.lift witness.relationMap arity
           ⟨0, rfl⟩⟩
       rw [extractionBinderOrigin_materialRegion,
-        ConcreteElaboration.BinderContext.push_self]
+        Concrete.Elaboration.BinderContext.push_self]
       rfl
     · intro hasArity
       let sourceRelation : RelVar _ relationArity :=
@@ -134,7 +136,7 @@ def ExtractionBinderWitness.bubbleChild
               some hostParent := by
           simpa only [CRegion.parent?] using
             congrArg CRegion.parent? hostKind
-        exact ConcreteElaboration.checked_direct_child_not_encloses_parent
+        exact Concrete.Elaboration.checked_direct_child_not_encloses_parent
           input.property parentEq hostCandidateEncloses
       change (hostBinders.push (selection.selectedRegions.get material) arity)
           (extractionBinderOrigin input selection layout
@@ -142,7 +144,7 @@ def ExtractionBinderWitness.bubbleChild
         some ⟨relationArity,
           RelationRenaming.lift witness.relationMap arity
             ⟨tail.succ, hasArity⟩⟩
-      rw [ConcreteElaboration.BinderContext.push_other hostBinders arity
+      rw [Concrete.Elaboration.BinderContext.push_other hostBinders arity
         candidateNe, witness.lookup sourceRelation]
       rfl
   originEncloses := by
@@ -153,12 +155,12 @@ def ExtractionBinderWitness.bubbleChild
           (layout.materialRegion material))
         (selection.selectedRegions.get material)
       rw [extractionBinderOrigin_materialRegion]
-      exact ConcreteDiagram.Encloses.refl input.val _
+      exact Concrete.Diagram.Encloses.refl input.val _
     · change input.val.Encloses
         (extractionBinderOrigin input selection layout
           (fragmentEnumeration.binder tail))
         (selection.selectedRegions.get material)
-      exact ConcreteElaboration.checked_encloses_trans input.property
+      exact Concrete.Elaboration.checked_encloses_trans input.property
         (witness.originEncloses tail)
         (by
           have materialBound : material.val < selection.selectedRegions.length := by
@@ -170,6 +172,6 @@ def ExtractionBinderWitness.bubbleChild
           refine ⟨⟨1, by
             have := (selection.selectedRegions.get material).isLt
             omega⟩, ?_⟩
-          simp [ConcreteDiagram.climb, CRegion.parent?, hostKind'])
+          simp [Concrete.Diagram.climb, CRegion.parent?, hostKind'])
 
 end VisualProof.Rule.IterationSoundness

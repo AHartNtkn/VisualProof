@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationTerminalTrace
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -45,10 +47,10 @@ private theorem filterFin_survivor_origin
 while leaving the unchanged region carrier untouched. -/
 def dropOccurrenceOrigin
     (state : InstantiationState origin parameterCount proxyCount) :
-    ConcreteElaboration.LocalOccurrence
+    Concrete.Elaboration.LocalOccurrence
         (dropInstantiationAtomsRaw state).regionCount
         (dropInstantiationAtomsRaw state).nodeCount →
-      ConcreteElaboration.LocalOccurrence state.diagram.val.regionCount
+      Concrete.Elaboration.LocalOccurrence state.diagram.val.regionCount
         state.diagram.val.nodeCount
   | .node node => .node ((instantiationAtomDomain state).origin node)
   | .child region => .child region
@@ -57,7 +59,7 @@ def dropOccurrenceOrigin
 post-copy compaction; region occurrences are never removed. -/
 def dropOccurrenceSurvives
     (state : InstantiationState origin parameterCount proxyCount) :
-    ConcreteElaboration.LocalOccurrence state.diagram.val.regionCount
+    Concrete.Elaboration.LocalOccurrence state.diagram.val.regionCount
       state.diagram.val.nodeCount → Bool
   | .node node => (instantiationAtomDomain state).survives node
   | .child _ => true
@@ -69,9 +71,9 @@ child region. -/
 theorem dropInstantiationAtomsRaw_localOccurrences_origin
     (state : InstantiationState origin parameterCount proxyCount)
     (region : Fin state.diagram.val.regionCount) :
-    (ConcreteElaboration.localOccurrences (dropInstantiationAtomsRaw state)
+    (Concrete.Elaboration.localOccurrences (dropInstantiationAtomsRaw state)
         region).map (dropOccurrenceOrigin state) =
-      (ConcreteElaboration.localOccurrences state.diagram.val region).filter
+      (Concrete.Elaboration.localOccurrences state.diagram.val region).filter
         (dropOccurrenceSurvives state) := by
   let domain := instantiationAtomDomain state
   let sourceP : Fin state.diagram.val.nodeCount → Bool := fun node ↦
@@ -109,17 +111,17 @@ theorem dropInstantiationAtomsRaw_localOccurrences_origin
     simp [and_comm]
   have mappedNodes :
       ((filterFin targetP).map
-        (ConcreteElaboration.LocalOccurrence.node
+        (Concrete.Elaboration.LocalOccurrence.node
           (regions := state.diagram.val.regionCount))).map
           (dropOccurrenceOrigin state) =
         ((filterFin sourceP).map
-          (ConcreteElaboration.LocalOccurrence.node
+          (Concrete.Elaboration.LocalOccurrence.node
             (regions := state.diagram.val.regionCount))).filter
           (dropOccurrenceSurvives state) := by
     rw [List.filter_map]
     have predicateEq' :
         dropOccurrenceSurvives state ∘
-            (ConcreteElaboration.LocalOccurrence.node
+            (Concrete.Elaboration.LocalOccurrence.node
               (regions := state.diagram.val.regionCount)) =
           domain.survives := by
       funext node
@@ -129,89 +131,89 @@ theorem dropInstantiationAtomsRaw_localOccurrences_origin
     | nil => rfl
     | cons node tail ih =>
         simp only [List.map_cons]
-        change ConcreteElaboration.LocalOccurrence.node (domain.origin node) ::
-            (tail.map ConcreteElaboration.LocalOccurrence.node).map
+        change Concrete.Elaboration.LocalOccurrence.node (domain.origin node) ::
+            (tail.map Concrete.Elaboration.LocalOccurrence.node).map
               (dropOccurrenceOrigin state) =
-          ConcreteElaboration.LocalOccurrence.node (domain.origin node) ::
+          Concrete.Elaboration.LocalOccurrence.node (domain.origin node) ::
             (tail.map domain.origin).map
-              ConcreteElaboration.LocalOccurrence.node
+              Concrete.Elaboration.LocalOccurrence.node
         exact congrArg
           (fun rest =>
-            ConcreteElaboration.LocalOccurrence.node (domain.origin node) ::
+            Concrete.Elaboration.LocalOccurrence.node (domain.origin node) ::
               rest) ih
   let children := filterFin fun child : Fin state.diagram.val.regionCount ↦
     decide ((state.diagram.val.regions child).parent? = some region)
-  unfold ConcreteElaboration.localOccurrences
+  unfold Concrete.Elaboration.localOccurrences
   change (((filterFin targetP).map
-      (ConcreteElaboration.LocalOccurrence.node
+      (Concrete.Elaboration.LocalOccurrence.node
         (regions := state.diagram.val.regionCount))) ++
-    children.map (ConcreteElaboration.LocalOccurrence.child
+    children.map (Concrete.Elaboration.LocalOccurrence.child
       (nodes := domain.count))).map (dropOccurrenceOrigin state) = _
   rw [List.filter_append]
   have mappedAppend :
       ((((filterFin targetP).map
-          (ConcreteElaboration.LocalOccurrence.node
+          (Concrete.Elaboration.LocalOccurrence.node
             (regions := state.diagram.val.regionCount))) ++
-        (children.map (ConcreteElaboration.LocalOccurrence.child
+        (children.map (Concrete.Elaboration.LocalOccurrence.child
           (nodes := domain.count)))).map (dropOccurrenceOrigin state)) =
       (((filterFin targetP).map
-          (ConcreteElaboration.LocalOccurrence.node
+          (Concrete.Elaboration.LocalOccurrence.node
             (regions := state.diagram.val.regionCount))).map
           (dropOccurrenceOrigin state)) ++
-        ((children.map (ConcreteElaboration.LocalOccurrence.child
+        ((children.map (Concrete.Elaboration.LocalOccurrence.child
           (nodes := domain.count))).map (dropOccurrenceOrigin state)) := by
     exact List.map_append
   rw [mappedAppend]
   have mappedChildren :
-      (children.map (ConcreteElaboration.LocalOccurrence.child
+      (children.map (Concrete.Elaboration.LocalOccurrence.child
         (nodes := domain.count))).map (dropOccurrenceOrigin state) =
-      children.map (ConcreteElaboration.LocalOccurrence.child
+      children.map (Concrete.Elaboration.LocalOccurrence.child
         (nodes := state.diagram.val.nodeCount)) := by
     induction children with
     | nil => rfl
     | cons child tail ih =>
         simp only [List.map_cons]
-        change ConcreteElaboration.LocalOccurrence.child child ::
-            (tail.map ConcreteElaboration.LocalOccurrence.child).map
+        change Concrete.Elaboration.LocalOccurrence.child child ::
+            (tail.map Concrete.Elaboration.LocalOccurrence.child).map
               (dropOccurrenceOrigin state) =
-          ConcreteElaboration.LocalOccurrence.child child ::
-            tail.map ConcreteElaboration.LocalOccurrence.child
+          Concrete.Elaboration.LocalOccurrence.child child ::
+            tail.map Concrete.Elaboration.LocalOccurrence.child
         exact congrArg
           (fun rest =>
-            ConcreteElaboration.LocalOccurrence.child child :: rest) ih
+            Concrete.Elaboration.LocalOccurrence.child child :: rest) ih
   have filteredChildren :
-      (children.map (ConcreteElaboration.LocalOccurrence.child
+      (children.map (Concrete.Elaboration.LocalOccurrence.child
         (nodes := state.diagram.val.nodeCount))).filter
           (dropOccurrenceSurvives state) =
-      children.map (ConcreteElaboration.LocalOccurrence.child
+      children.map (Concrete.Elaboration.LocalOccurrence.child
         (nodes := state.diagram.val.nodeCount)) := by
     apply List.filter_eq_self.mpr
     intro occurrence member
     obtain ⟨child, _, rfl⟩ := List.mem_map.mp member
     rfl
   change
-    ((filterFin targetP).map ConcreteElaboration.LocalOccurrence.node).map
+    ((filterFin targetP).map Concrete.Elaboration.LocalOccurrence.node).map
           (dropOccurrenceOrigin state) ++
-        (children.map ConcreteElaboration.LocalOccurrence.child).map
+        (children.map Concrete.Elaboration.LocalOccurrence.child).map
           (dropOccurrenceOrigin state) =
-      ((filterFin sourceP).map ConcreteElaboration.LocalOccurrence.node).filter
+      ((filterFin sourceP).map Concrete.Elaboration.LocalOccurrence.node).filter
           (dropOccurrenceSurvives state) ++
-        (children.map ConcreteElaboration.LocalOccurrence.child).filter
+        (children.map Concrete.Elaboration.LocalOccurrence.child).filter
           (dropOccurrenceSurvives state)
   calc
     _ = ((filterFin sourceP).map
-          ConcreteElaboration.LocalOccurrence.node).filter
+          Concrete.Elaboration.LocalOccurrence.node).filter
             (dropOccurrenceSurvives state) ++
-        (children.map ConcreteElaboration.LocalOccurrence.child).map
+        (children.map Concrete.Elaboration.LocalOccurrence.child).map
           (dropOccurrenceOrigin state) :=
       congrArg
         (fun left => left ++
-          (children.map ConcreteElaboration.LocalOccurrence.child).map
+          (children.map Concrete.Elaboration.LocalOccurrence.child).map
             (dropOccurrenceOrigin state)) mappedNodes
     _ = _ := congrArg
       (fun right =>
         ((filterFin sourceP).map
-          ConcreteElaboration.LocalOccurrence.node).filter
+          Concrete.Elaboration.LocalOccurrence.node).filter
             (dropOccurrenceSurvives state) ++ right)
       (mappedChildren.trans filteredChildren.symm)
 

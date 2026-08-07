@@ -1,7 +1,9 @@
-import VisualProof.Diagram.Concrete.Elaboration.Simulation
+import VisualProof.Concrete.Elaboration.Simulation
 import VisualProof.Rule.Soundness
 
 namespace VisualProof.Rule
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -10,11 +12,11 @@ open Theory
 
 namespace WireJoinSoundness
 
-abbrev Target (input : ConcreteDiagram)
+abbrev Target (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) :=
   joinWireRaw input outer inner
 
-def wireMap (input : ConcreteDiagram)
+def wireMap (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner) :
     Fin input.wireCount → Fin (Target input outer inner).wireCount :=
   fun wire =>
@@ -26,7 +28,7 @@ def wireMap (input : ConcreteDiagram)
         simpa [joinWireDomain] using hwire)
 
 @[simp] theorem wireMap_inner
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner) :
     wireMap input outer inner distinct inner =
       (joinWireDomain input inner).index outer
@@ -34,7 +36,7 @@ def wireMap (input : ConcreteDiagram)
   simp [wireMap]
 
 @[simp] theorem wireMap_of_ne
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner wire : Fin input.wireCount) (distinct : outer ≠ inner)
     (hne : wire ≠ inner) :
     wireMap input outer inner distinct wire =
@@ -43,7 +45,7 @@ def wireMap (input : ConcreteDiagram)
   simp [wireMap, hne]
 
 theorem origin_wireMap
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner wire : Fin input.wireCount) (distinct : outer ≠ inner) :
     (joinWireDomain input inner).origin
         (wireMap input outer inner distinct wire) =
@@ -59,7 +61,7 @@ theorem origin_wireMap
       simpa [joinWireDomain] using hwire)
 
 theorem wireMap_surjective
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner) :
     Function.Surjective (wireMap input outer inner distinct) := by
   intro target
@@ -72,7 +74,7 @@ theorem wireMap_surjective
   exact (joinWireDomain input inner).index_origin target
 
 theorem wireMap_eq_iff
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner left right : Fin input.wireCount)
     (distinct : outer ≠ inner) :
     wireMap input outer inner distinct left =
@@ -109,34 +111,34 @@ theorem wireMap_eq_iff
           wireMap_of_ne input outer inner outer distinct distinct]
 
 @[simp] theorem target_regionCount
-    (input : ConcreteDiagram) (outer inner : Fin input.wireCount) :
+    (input : Concrete.Diagram) (outer inner : Fin input.wireCount) :
     (Target input outer inner).regionCount = input.regionCount :=
   rfl
 
 @[simp] theorem target_nodeCount
-    (input : ConcreteDiagram) (outer inner : Fin input.wireCount) :
+    (input : Concrete.Diagram) (outer inner : Fin input.wireCount) :
     (Target input outer inner).nodeCount = input.nodeCount :=
   rfl
 
 @[simp] theorem target_root
-    (input : ConcreteDiagram) (outer inner : Fin input.wireCount) :
+    (input : Concrete.Diagram) (outer inner : Fin input.wireCount) :
     (Target input outer inner).root = input.root :=
   rfl
 
 @[simp] theorem target_regions
-    (input : ConcreteDiagram) (outer inner : Fin input.wireCount)
+    (input : Concrete.Diagram) (outer inner : Fin input.wireCount)
     (region : Fin input.regionCount) :
     (Target input outer inner).regions region = input.regions region :=
   rfl
 
 @[simp] theorem target_nodes
-    (input : ConcreteDiagram) (outer inner : Fin input.wireCount)
+    (input : Concrete.Diagram) (outer inner : Fin input.wireCount)
     (node : Fin input.nodeCount) :
     (Target input outer inner).nodes node = input.nodes node :=
   rfl
 
 theorem target_wire_scope
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner wire : Fin input.wireCount) (distinct : outer ≠ inner) :
     ((Target input outer inner).wires
       (wireMap input outer inner distinct wire)).scope =
@@ -161,7 +163,7 @@ theorem target_wire_scope
     · simp [hwire, houter]
 
 theorem target_wire_scope_origin
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount)
     (targetWire : Fin (Target input outer inner).wireCount) :
     ((Target input outer inner).wires targetWire).scope =
@@ -184,7 +186,7 @@ theorem target_wire_scope_origin
   · rw [if_neg houter, if_neg houter]
 
 theorem target_climb
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount)
     (steps : Nat) (region : Fin input.regionCount) :
     (Target input outer inner).climb steps region =
@@ -194,29 +196,29 @@ theorem target_climb
   | succ steps induction =>
       cases parent : (input.regions region).parent? with
       | none =>
-          simp [ConcreteDiagram.climb, target_regions, parent]
+          simp [Concrete.Diagram.climb, target_regions, parent]
       | some directParent =>
-          simpa [ConcreteDiagram.climb, target_regions, parent] using
+          simpa [Concrete.Diagram.climb, target_regions, parent] using
             induction directParent
 
 theorem target_encloses_iff
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount)
     (ancestor descendant : Fin input.regionCount) :
     (Target input outer inner).Encloses ancestor descendant ↔
       input.Encloses ancestor descendant := by
-  unfold ConcreteDiagram.Encloses
+  unfold Concrete.Diagram.Encloses
   constructor <;> rintro ⟨steps, encloses⟩ <;>
     exact ⟨steps, by simpa [target_climb] using encloses⟩
 
 theorem endpointOccurs_map
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner wire : Fin input.wireCount) (distinct : outer ≠ inner)
     (endpoint : CEndpoint input.nodeCount)
     (occurs : input.EndpointOccurs wire endpoint) :
     (Target input outer inner).EndpointOccurs
       (wireMap input outer inner distinct wire) endpoint := by
-  unfold ConcreteDiagram.EndpointOccurs at occurs ⊢
+  unfold Concrete.Diagram.EndpointOccurs at occurs ⊢
   change endpoint ∈
     (if (joinWireDomain input inner).origin
           (wireMap input outer inner distinct wire) = outer then
@@ -236,7 +238,7 @@ theorem endpointOccurs_map
     · simpa [hwire, houter] using occurs
 
 theorem visible_map
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (wellFormed : input.WellFormed )
     (outer inner wire : Fin input.wireCount) (distinct : outer ≠ inner)
     (ordered :
@@ -251,12 +253,12 @@ theorem visible_map
   · subst wire
     rw [if_pos rfl]
     rw [target_encloses_iff]
-    exact ConcreteElaboration.checked_encloses_trans wellFormed ordered visible
+    exact Concrete.Elaboration.checked_encloses_trans wellFormed ordered visible
   · rw [if_neg hwire, target_encloses_iff]
     exact visible
 
 theorem visible_preimage
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (region : Fin input.regionCount)
     (targetWire : Fin (Target input outer inner).wireCount)
@@ -284,23 +286,23 @@ theorem visible_preimage
     exact (joinWireDomain input inner).index_origin targetWire
 
 def contextRelation
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
-    (sourceContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext input)
     (targetContext :
-      ConcreteElaboration.WireContext (Target input outer inner)) :
-    ConcreteElaboration.ContextIndexRelation
+      Concrete.Elaboration.WireContext (Target input outer inner)) :
+    Concrete.Elaboration.ContextIndexRelation
       sourceContext.length targetContext.length where
   Rel sourceIndex targetIndex :=
     wireMap input outer inner distinct (sourceContext.get sourceIndex) =
       targetContext.get targetIndex
 
 structure ContextWitness
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
-    (sourceContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext input)
     (targetContext :
-      ConcreteElaboration.WireContext (Target input outer inner)) where
+      Concrete.Elaboration.WireContext (Target input outer inner)) where
   indexMap : Fin sourceContext.length → Fin targetContext.length
   get : ∀ sourceIndex,
     targetContext.get (indexMap sourceIndex) =
@@ -308,15 +310,15 @@ structure ContextWitness
   surjective : Function.Surjective indexMap
 
 noncomputable def ContextWitness.ofExact
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (wellFormed : input.WellFormed )
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (ordered :
       input.Encloses (input.wires outer).scope (input.wires inner).scope)
     (region : Fin input.regionCount)
-    (sourceContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext input)
     (targetContext :
-      ConcreteElaboration.WireContext (Target input outer inner))
+      Concrete.Elaboration.WireContext (Target input outer inner))
     (sourceExact : sourceContext.Exact region)
     (targetExact : targetContext.Exact region) :
     ContextWitness input outer inner distinct sourceContext targetContext := by
@@ -326,7 +328,7 @@ noncomputable def ContextWitness.ofExact
       have sourceVisible := (sourceExact.mem_iff _).1 sourceMember
       have targetVisible := visible_map input wellFormed outer inner
         (sourceContext.get sourceIndex) distinct ordered region sourceVisible
-      exact ConcreteElaboration.WireContext.lookup?_complete
+      exact Concrete.Elaboration.WireContext.lookup?_complete
         ((targetExact.mem_iff _).2 targetVisible))
   have get : ∀ sourceIndex,
       targetContext.get (indexMap sourceIndex) =
@@ -338,9 +340,9 @@ noncomputable def ContextWitness.ofExact
     have targetVisible := visible_map input wellFormed outer inner
       (sourceContext.get sourceIndex) distinct ordered region sourceVisible
     have targetMember := (targetExact.mem_iff _).2 targetVisible
-    exact ConcreteElaboration.WireContext.lookup?_sound
+    exact Concrete.Elaboration.WireContext.lookup?_sound
       (Classical.choose_spec
-        (ConcreteElaboration.WireContext.lookup?_complete targetMember))
+        (Concrete.Elaboration.WireContext.lookup?_complete targetMember))
   refine ⟨indexMap, get, ?_⟩
   intro targetIndex
   have targetMember := List.get_mem targetContext targetIndex
@@ -350,12 +352,12 @@ noncomputable def ContextWitness.ofExact
       (targetContext.get targetIndex) targetVisible
   have sourceMember := (sourceExact.mem_iff _).2 sourceVisible
   obtain ⟨sourceIndex, lookup⟩ :=
-    ConcreteElaboration.WireContext.lookup?_complete sourceMember
+    Concrete.Elaboration.WireContext.lookup?_complete sourceMember
   refine ⟨sourceIndex, ?_⟩
   apply Fin.ext
   apply (List.getElem_inj targetExact.nodup).mp
   have sourceGet :=
-    ConcreteElaboration.WireContext.lookup?_sound lookup
+    Concrete.Elaboration.WireContext.lookup?_sound lookup
   have mappedGet :
       wireMap input outer inner distinct (sourceContext.get sourceIndex) =
         targetContext.get targetIndex :=
@@ -364,19 +366,19 @@ noncomputable def ContextWitness.ofExact
     (get sourceIndex).trans mappedGet
 
 noncomputable def localMap
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (region : Fin input.regionCount)
     (hne : region ≠ (input.wires inner).scope) :
-    Fin (ConcreteElaboration.exactScopeWires input region).length →
-      Fin (ConcreteElaboration.exactScopeWires
+    Fin (Concrete.Elaboration.exactScopeWires input region).length →
+      Fin (Concrete.Elaboration.exactScopeWires
         (Target input outer inner) region).length :=
   fun sourceIndex =>
     let sourceWire :=
-      (ConcreteElaboration.exactScopeWires input region).get sourceIndex
+      (Concrete.Elaboration.exactScopeWires input region).get sourceIndex
     let targetWire := wireMap input outer inner distinct sourceWire
     have sourceScope : (input.wires sourceWire).scope = region :=
-      (ConcreteElaboration.mem_exactScopeWires input region sourceWire).1
+      (Concrete.Elaboration.mem_exactScopeWires input region sourceWire).1
         (List.get_mem _ sourceIndex)
     have sourceNe : sourceWire ≠ inner := by
       intro equality
@@ -387,37 +389,37 @@ noncomputable def localMap
         if_neg sourceNe]
       exact sourceScope
     Classical.choose
-      (ConcreteElaboration.WireContext.lookup?_complete
-        ((ConcreteElaboration.mem_exactScopeWires
+      (Concrete.Elaboration.WireContext.lookup?_complete
+        ((Concrete.Elaboration.mem_exactScopeWires
           (Target input outer inner) region targetWire).2 targetScope))
 
 theorem localMap_get
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (region : Fin input.regionCount)
     (hne : region ≠ (input.wires inner).scope)
     (sourceIndex :
-      Fin (ConcreteElaboration.exactScopeWires input region).length) :
-    (ConcreteElaboration.exactScopeWires
+      Fin (Concrete.Elaboration.exactScopeWires input region).length) :
+    (Concrete.Elaboration.exactScopeWires
       (Target input outer inner) region).get
         (localMap input outer inner distinct region hne sourceIndex) =
       wireMap input outer inner distinct
-        ((ConcreteElaboration.exactScopeWires input region).get
+        ((Concrete.Elaboration.exactScopeWires input region).get
           sourceIndex) := by
-  exact ConcreteElaboration.WireContext.lookup?_sound
+  exact Concrete.Elaboration.WireContext.lookup?_sound
     (Classical.choose_spec
-      (ConcreteElaboration.WireContext.lookup?_complete
-        ((ConcreteElaboration.mem_exactScopeWires
+      (Concrete.Elaboration.WireContext.lookup?_complete
+        ((Concrete.Elaboration.mem_exactScopeWires
           (Target input outer inner) region
           (wireMap input outer inner distinct
-            ((ConcreteElaboration.exactScopeWires input region).get
+            ((Concrete.Elaboration.exactScopeWires input region).get
               sourceIndex))).2 (by
             have sourceScope :=
-              (ConcreteElaboration.mem_exactScopeWires input region
-                ((ConcreteElaboration.exactScopeWires input region).get
+              (Concrete.Elaboration.mem_exactScopeWires input region
+                ((Concrete.Elaboration.exactScopeWires input region).get
                   sourceIndex)).1 (List.get_mem _ sourceIndex)
             have sourceNe :
-                (ConcreteElaboration.exactScopeWires input region).get
+                (Concrete.Elaboration.exactScopeWires input region).get
                     sourceIndex ≠ inner := by
               intro equality
               rw [equality] at sourceScope
@@ -426,47 +428,47 @@ theorem localMap_get
             exact sourceScope))))
 
 theorem localMap_injective
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (region : Fin input.regionCount)
     (hne : region ≠ (input.wires inner).scope) :
     Function.Injective (localMap input outer inner distinct region hne) := by
   intro left right equality
   have targetGetEquality := congrArg
-    (List.get (ConcreteElaboration.exactScopeWires
+    (List.get (Concrete.Elaboration.exactScopeWires
       (Target input outer inner) region)) equality
   rw [localMap_get, localMap_get] at targetGetEquality
   have mapped :=
     (wireMap_eq_iff input outer inner
-      ((ConcreteElaboration.exactScopeWires input region).get left)
-      ((ConcreteElaboration.exactScopeWires input region).get right)
+      ((Concrete.Elaboration.exactScopeWires input region).get left)
+      ((Concrete.Elaboration.exactScopeWires input region).get right)
       distinct).1 targetGetEquality
   have sourceGetEquality :
-      (ConcreteElaboration.exactScopeWires input region).get left =
-        (ConcreteElaboration.exactScopeWires input region).get right := by
+      (Concrete.Elaboration.exactScopeWires input region).get left =
+        (Concrete.Elaboration.exactScopeWires input region).get right := by
     rcases mapped with same | outerInner | innerOuter
     · exact same
     · rcases outerInner with ⟨_, rightInner⟩
       have rightScope :=
-        (ConcreteElaboration.mem_exactScopeWires input region
-          ((ConcreteElaboration.exactScopeWires input region).get right)).1
+        (Concrete.Elaboration.mem_exactScopeWires input region
+          ((Concrete.Elaboration.exactScopeWires input region).get right)).1
           (List.get_mem _ right)
       rw [rightInner] at rightScope
       exact False.elim (hne rightScope.symm)
     · rcases innerOuter with ⟨leftInner, _⟩
       have leftScope :=
-        (ConcreteElaboration.mem_exactScopeWires input region
-          ((ConcreteElaboration.exactScopeWires input region).get left)).1
+        (Concrete.Elaboration.mem_exactScopeWires input region
+          ((Concrete.Elaboration.exactScopeWires input region).get left)).1
           (List.get_mem _ left)
       rw [leftInner] at leftScope
       exact False.elim (hne leftScope.symm)
   apply Fin.ext
   exact (List.getElem_inj
-    (ConcreteElaboration.exactScopeWires_nodup input region)).mp
+    (Concrete.Elaboration.exactScopeWires_nodup input region)).mp
       (by simpa only [List.get_eq_getElem] using sourceGetEquality)
 
 theorem localMap_surjective
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (region : Fin input.regionCount)
     (hne : region ≠ (input.wires inner).scope) :
@@ -474,11 +476,11 @@ theorem localMap_surjective
       (localMap input outer inner distinct region hne) := by
   intro targetIndex
   let targetWire :=
-    (ConcreteElaboration.exactScopeWires
+    (Concrete.Elaboration.exactScopeWires
       (Target input outer inner) region).get targetIndex
   have targetScope :
       ((Target input outer inner).wires targetWire).scope = region :=
-    (ConcreteElaboration.mem_exactScopeWires
+    (Concrete.Elaboration.mem_exactScopeWires
       (Target input outer inner) region targetWire).1
       (List.get_mem _ targetIndex)
   let sourceWire := (joinWireDomain input inner).origin targetWire
@@ -500,21 +502,21 @@ theorem localMap_surjective
     · simpa [houter] using targetScope
     · simpa [houter] using targetScope
   have sourceMember :=
-    (ConcreteElaboration.mem_exactScopeWires input region sourceWire).2
+    (Concrete.Elaboration.mem_exactScopeWires input region sourceWire).2
       sourceScope
   obtain ⟨sourceIndex, lookup⟩ :=
-    ConcreteElaboration.WireContext.lookup?_complete sourceMember
+    Concrete.Elaboration.WireContext.lookup?_complete sourceMember
   refine ⟨sourceIndex, ?_⟩
   have sourceGet :=
-    ConcreteElaboration.WireContext.lookup?_sound lookup
+    Concrete.Elaboration.WireContext.lookup?_sound lookup
   have targetGet :
-      (ConcreteElaboration.exactScopeWires
+      (Concrete.Elaboration.exactScopeWires
         (Target input outer inner) region).get
           (localMap input outer inner distinct region hne sourceIndex) =
         targetWire := by
     calc
       _ = wireMap input outer inner distinct
-          ((ConcreteElaboration.exactScopeWires input region).get
+          ((Concrete.Elaboration.exactScopeWires input region).get
             sourceIndex) :=
         localMap_get input outer inner distinct region hne sourceIndex
       _ = wireMap input outer inner distinct sourceWire :=
@@ -522,7 +524,7 @@ theorem localMap_surjective
       _ = targetWire := mapped
   apply Fin.ext
   exact (List.getElem_inj
-    (ConcreteElaboration.exactScopeWires_nodup
+    (Concrete.Elaboration.exactScopeWires_nodup
       (Target input outer inner) region)).mp (by
         simpa only [List.get_eq_getElem] using targetGet)
 
@@ -553,28 +555,28 @@ theorem ContextWitness.extend_index_inherited
     (sourceIndex : Fin sourceContext.length) :
     (witness.extend wellFormed ordered region sourceExact targetExact).indexMap
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend sourceContext
+          (Concrete.Elaboration.WireContext.length_extend sourceContext
             region).symm
           (Fin.castAdd
-            (ConcreteElaboration.exactScopeWires input region).length
+            (Concrete.Elaboration.exactScopeWires input region).length
             sourceIndex)) =
       Fin.cast
-        (ConcreteElaboration.WireContext.length_extend targetContext
+        (Concrete.Elaboration.WireContext.length_extend targetContext
           region).symm
         (Fin.castAdd
-          (ConcreteElaboration.exactScopeWires
+          (Concrete.Elaboration.exactScopeWires
             (Target input outer inner) region).length
           (witness.indexMap sourceIndex)) := by
   let sourceExtendedIndex : Fin (sourceContext.extend region).length :=
     Fin.cast
-      (ConcreteElaboration.WireContext.length_extend sourceContext region).symm
+      (Concrete.Elaboration.WireContext.length_extend sourceContext region).symm
       (Fin.castAdd
-        (ConcreteElaboration.exactScopeWires input region).length sourceIndex)
+        (Concrete.Elaboration.exactScopeWires input region).length sourceIndex)
   let targetExtendedIndex : Fin (targetContext.extend region).length :=
     Fin.cast
-      (ConcreteElaboration.WireContext.length_extend targetContext region).symm
+      (Concrete.Elaboration.WireContext.length_extend targetContext region).symm
       (Fin.castAdd
-        (ConcreteElaboration.exactScopeWires
+        (Concrete.Elaboration.exactScopeWires
           (Target input outer inner) region).length
         (witness.indexMap sourceIndex))
   change
@@ -584,11 +586,11 @@ theorem ContextWitness.extend_index_inherited
   have sourceGet :
       (sourceContext.extend region).get sourceExtendedIndex =
         sourceContext.get sourceIndex := by
-    simp [sourceExtendedIndex, ConcreteElaboration.WireContext.extend]
+    simp [sourceExtendedIndex, Concrete.Elaboration.WireContext.extend]
   have targetGet :
       (targetContext.extend region).get targetExtendedIndex =
         targetContext.get (witness.indexMap sourceIndex) := by
-    simp [targetExtendedIndex, ConcreteElaboration.WireContext.extend]
+    simp [targetExtendedIndex, Concrete.Elaboration.WireContext.extend]
   have mappedGet :=
     (witness.extend wellFormed ordered region sourceExact targetExact).get
       sourceExtendedIndex
@@ -613,24 +615,24 @@ theorem ContextWitness.extend_index_local_of_ne
     (sourceExact : (sourceContext.extend region).Exact region)
     (targetExact : (targetContext.extend region).Exact region)
     (sourceLocal :
-      Fin (ConcreteElaboration.exactScopeWires input region).length) :
+      Fin (Concrete.Elaboration.exactScopeWires input region).length) :
     (witness.extend wellFormed ordered region sourceExact targetExact).indexMap
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend sourceContext
+          (Concrete.Elaboration.WireContext.length_extend sourceContext
             region).symm
           (Fin.natAdd sourceContext.length sourceLocal)) =
       Fin.cast
-        (ConcreteElaboration.WireContext.length_extend targetContext
+        (Concrete.Elaboration.WireContext.length_extend targetContext
           region).symm
         (Fin.natAdd targetContext.length
           (localMap input outer inner distinct region hne sourceLocal)) := by
   let sourceExtendedIndex : Fin (sourceContext.extend region).length :=
     Fin.cast
-      (ConcreteElaboration.WireContext.length_extend sourceContext region).symm
+      (Concrete.Elaboration.WireContext.length_extend sourceContext region).symm
       (Fin.natAdd sourceContext.length sourceLocal)
   let targetExtendedIndex : Fin (targetContext.extend region).length :=
     Fin.cast
-      (ConcreteElaboration.WireContext.length_extend targetContext region).symm
+      (Concrete.Elaboration.WireContext.length_extend targetContext region).symm
       (Fin.natAdd targetContext.length
         (localMap input outer inner distinct region hne sourceLocal))
   change
@@ -639,14 +641,14 @@ theorem ContextWitness.extend_index_local_of_ne
   apply Fin.ext
   have sourceGet :
       (sourceContext.extend region).get sourceExtendedIndex =
-        (ConcreteElaboration.exactScopeWires input region).get sourceLocal := by
-    simp [sourceExtendedIndex, ConcreteElaboration.WireContext.extend]
+        (Concrete.Elaboration.exactScopeWires input region).get sourceLocal := by
+    simp [sourceExtendedIndex, Concrete.Elaboration.WireContext.extend]
   have targetGet :
       (targetContext.extend region).get targetExtendedIndex =
-        (ConcreteElaboration.exactScopeWires
+        (Concrete.Elaboration.exactScopeWires
           (Target input outer inner) region).get
             (localMap input outer inner distinct region hne sourceLocal) := by
-    simp [targetExtendedIndex, ConcreteElaboration.WireContext.extend]
+    simp [targetExtendedIndex, Concrete.Elaboration.WireContext.extend]
   have mappedGet :=
     (witness.extend wellFormed ordered region sourceExact targetExact).get
       sourceExtendedIndex
@@ -663,22 +665,22 @@ theorem ContextWitness.extend_index_local_of_ne
     simpa only [List.get_eq_getElem] using hget)
 
 noncomputable def localInverse
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (region : Fin input.regionCount)
     (hne : region ≠ (input.wires inner).scope)
-    (targetIndex : Fin (ConcreteElaboration.exactScopeWires
+    (targetIndex : Fin (Concrete.Elaboration.exactScopeWires
       (Target input outer inner) region).length) :
-    Fin (ConcreteElaboration.exactScopeWires input region).length :=
+    Fin (Concrete.Elaboration.exactScopeWires input region).length :=
   Classical.choose
     (localMap_surjective input outer inner distinct region hne targetIndex)
 
 theorem localInverse_spec
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (region : Fin input.regionCount)
     (hne : region ≠ (input.wires inner).scope)
-    (targetIndex : Fin (ConcreteElaboration.exactScopeWires
+    (targetIndex : Fin (Concrete.Elaboration.exactScopeWires
       (Target input outer inner) region).length) :
     localMap input outer inner distinct region hne
         (localInverse input outer inner distinct region hne targetIndex) =
@@ -687,12 +689,12 @@ theorem localInverse_spec
     (localMap_surjective input outer inner distinct region hne targetIndex)
 
 theorem localInverse_localMap
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (region : Fin input.regionCount)
     (hne : region ≠ (input.wires inner).scope)
     (sourceIndex :
-      Fin (ConcreteElaboration.exactScopeWires input region).length) :
+      Fin (Concrete.Elaboration.exactScopeWires input region).length) :
     localInverse input outer inner distinct region hne
         (localMap input outer inner distinct region hne sourceIndex) =
       sourceIndex := by
@@ -700,25 +702,25 @@ theorem localInverse_localMap
   exact localInverse_spec input outer inner distinct region hne _
 
 noncomputable def targetLocalOfSource
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (region : Fin input.regionCount)
     (hne : region ≠ (input.wires inner).scope)
     (sourceLocal :
-      Fin (ConcreteElaboration.exactScopeWires input region).length → D) :
-    Fin (ConcreteElaboration.exactScopeWires
+      Fin (Concrete.Elaboration.exactScopeWires input region).length → D) :
+    Fin (Concrete.Elaboration.exactScopeWires
       (Target input outer inner) region).length → D :=
   sourceLocal ∘ localInverse input outer inner distinct region hne
 
 @[simp] theorem targetLocalOfSource_localMap
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (region : Fin input.regionCount)
     (hne : region ≠ (input.wires inner).scope)
     (sourceLocal :
-      Fin (ConcreteElaboration.exactScopeWires input region).length → D)
+      Fin (Concrete.Elaboration.exactScopeWires input region).length → D)
     (sourceIndex :
-      Fin (ConcreteElaboration.exactScopeWires input region).length) :
+      Fin (Concrete.Elaboration.exactScopeWires input region).length) :
     targetLocalOfSource input outer inner distinct region hne sourceLocal
         (localMap input outer inner distinct region hne sourceIndex) =
       sourceLocal sourceIndex := by
@@ -738,16 +740,16 @@ noncomputable def sourceLocalOfTarget
     (sourceExact : (sourceContext.extend region).Exact region)
     (targetExact : (targetContext.extend region).Exact region)
     (targetOuter : Fin targetContext.length → D)
-    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+    (targetLocal : Fin (Concrete.Elaboration.exactScopeWires
       (Target input outer inner) region).length → D) :
-    Fin (ConcreteElaboration.exactScopeWires input region).length → D :=
+    Fin (Concrete.Elaboration.exactScopeWires input region).length → D :=
   fun sourceLocal =>
-    ConcreteElaboration.extendedEnvironment targetContext region
+    Concrete.Elaboration.extendedEnvironment targetContext region
       targetOuter targetLocal
       ((witness.extend wellFormed ordered region sourceExact
         targetExact).indexMap
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend sourceContext
+          (Concrete.Elaboration.WireContext.length_extend sourceContext
             region).symm
           (Fin.natAdd sourceContext.length sourceLocal)))
 
@@ -765,10 +767,10 @@ theorem ContextWitness.extendedEnvironment_forward
     (targetOuter : Fin targetContext.length → D)
     (outerAgrees : sourceOuter = targetOuter ∘ witness.indexMap)
     (sourceLocal :
-      Fin (ConcreteElaboration.exactScopeWires input region).length → D) :
-    ConcreteElaboration.extendedEnvironment sourceContext region
+      Fin (Concrete.Elaboration.exactScopeWires input region).length → D) :
+    Concrete.Elaboration.extendedEnvironment sourceContext region
         sourceOuter sourceLocal =
-      ConcreteElaboration.extendedEnvironment targetContext region
+      Concrete.Elaboration.extendedEnvironment targetContext region
           targetOuter
           (targetLocalOfSource input outer inner distinct region hne
             sourceLocal) ∘
@@ -776,10 +778,10 @@ theorem ContextWitness.extendedEnvironment_forward
           targetExact).indexMap := by
   funext sourceIndex
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend sourceContext region)
+    (Concrete.Elaboration.WireContext.length_extend sourceContext region)
     sourceIndex
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend sourceContext region).symm
+      (Concrete.Elaboration.WireContext.length_extend sourceContext region).symm
       split = sourceIndex := by
     apply Fin.ext
     rfl
@@ -787,13 +789,13 @@ theorem ContextWitness.extendedEnvironment_forward
   refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) split
   · have indexEq := witness.extend_index_inherited wellFormed ordered region
       sourceExact targetExact inherited
-    simp only [ConcreteElaboration.extendedEnvironment, Function.comp_apply,
+    simp only [Concrete.Elaboration.extendedEnvironment, Function.comp_apply,
       extendWireEnv]
     rw [indexEq]
     simpa [Function.comp_def] using congrFun outerAgrees inherited
   · have indexEq := witness.extend_index_local_of_ne wellFormed ordered region
       hne sourceExact targetExact localIndex
-    simp only [ConcreteElaboration.extendedEnvironment, Function.comp_apply,
+    simp only [Concrete.Elaboration.extendedEnvironment, Function.comp_apply,
       extendWireEnv]
     rw [indexEq]
     simp [targetLocalOfSource_localMap]
@@ -810,21 +812,21 @@ theorem ContextWitness.extendedEnvironment_backward
     (sourceOuter : Fin sourceContext.length → D)
     (targetOuter : Fin targetContext.length → D)
     (outerAgrees : sourceOuter = targetOuter ∘ witness.indexMap)
-    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+    (targetLocal : Fin (Concrete.Elaboration.exactScopeWires
       (Target input outer inner) region).length → D) :
-    ConcreteElaboration.extendedEnvironment sourceContext region sourceOuter
+    Concrete.Elaboration.extendedEnvironment sourceContext region sourceOuter
         (sourceLocalOfTarget witness wellFormed ordered region sourceExact
           targetExact targetOuter targetLocal) =
-      ConcreteElaboration.extendedEnvironment targetContext region
+      Concrete.Elaboration.extendedEnvironment targetContext region
           targetOuter targetLocal ∘
         (witness.extend wellFormed ordered region sourceExact
           targetExact).indexMap := by
   funext sourceIndex
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend sourceContext region)
+    (Concrete.Elaboration.WireContext.length_extend sourceContext region)
     sourceIndex
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend sourceContext region).symm
+      (Concrete.Elaboration.WireContext.length_extend sourceContext region).symm
       split = sourceIndex := by
     apply Fin.ext
     rfl
@@ -832,34 +834,34 @@ theorem ContextWitness.extendedEnvironment_backward
   refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) split
   · have indexEq := witness.extend_index_inherited wellFormed ordered region
       sourceExact targetExact inherited
-    simp only [ConcreteElaboration.extendedEnvironment, Function.comp_apply,
+    simp only [Concrete.Elaboration.extendedEnvironment, Function.comp_apply,
       extendWireEnv]
     rw [indexEq]
     simpa [Function.comp_def] using congrFun outerAgrees inherited
-  · simp [sourceLocalOfTarget, ConcreteElaboration.extendedEnvironment,
+  · simp [sourceLocalOfTarget, Concrete.Elaboration.extendedEnvironment,
       Function.comp_def, extendWireEnv]
 
-def direction : Orientation → ConcreteElaboration.SimulationDirection
+def direction : Orientation → Concrete.Elaboration.SimulationDirection
   | .forward => .forward
   | .backward => .backward
 
 def depthAllowed
-    (simulationDirection : ConcreteElaboration.SimulationDirection)
+    (simulationDirection : Concrete.Elaboration.SimulationDirection)
     (depth : Nat) : Prop :=
   match simulationDirection with
   | .forward => depth % 2 = 1
   | .backward => depth % 2 = 0
 
-def Allowed (input : ConcreteDiagram)
+def Allowed (input : Concrete.Diagram)
     (site : Fin input.regionCount)
-    (simulationDirection : ConcreteElaboration.SimulationDirection)
+    (simulationDirection : Concrete.Elaboration.SimulationDirection)
     (region : Fin input.regionCount) : Prop :=
-  ∀ {path depth} (route : Diagram.Splice.RegionRoute input region site path),
+  ∀ {path depth} (route : Concrete.Splice.RegionRoute input region site path),
     route.HasCutDepth depth → depthAllowed simulationDirection depth
 
 theorem allowed_cut
-    (input : ConcreteDiagram) (site : Fin input.regionCount)
-    (simulationDirection : ConcreteElaboration.SimulationDirection)
+    (input : Concrete.Diagram) (site : Fin input.regionCount)
+    (simulationDirection : Concrete.Elaboration.SimulationDirection)
     (child parent : Fin input.regionCount)
     (childKind : input.regions child = .cut parent)
     (allowed : Allowed input site simulationDirection parent) :
@@ -869,20 +871,20 @@ theorem allowed_cut
     rw [childKind]
     rfl
   obtain ⟨position, hposition⟩ := indexOf?_complete
-    ((ConcreteElaboration.mem_localOccurrences_child input parent child).2
+    ((Concrete.Elaboration.mem_localOccurrences_child input parent child).2
       hparent)
   let parentRoute :=
-    Diagram.Splice.RegionRoute.step hparent position hposition route
+    Concrete.Splice.RegionRoute.step hparent position hposition route
   have parentDepth : parentRoute.HasCutDepth (depth + 1) := by
-    exact Diagram.Splice.RegionRoute.HasCutDepth.cut
+    exact Concrete.Splice.RegionRoute.HasCutDepth.cut
       (hparent := hparent) (position := position) (hposition := hposition)
       childKind routeDepth
   have parity := allowed parentRoute parentDepth
   cases simulationDirection <;> simp [depthAllowed] at parity ⊢ <;> omega
 
 theorem allowed_bubble
-    (input : ConcreteDiagram) (site : Fin input.regionCount)
-    (simulationDirection : ConcreteElaboration.SimulationDirection)
+    (input : Concrete.Diagram) (site : Fin input.regionCount)
+    (simulationDirection : Concrete.Elaboration.SimulationDirection)
     (child parent : Fin input.regionCount) (arity : Nat)
     (childKind : input.regions child = .bubble parent arity)
     (allowed : Allowed input site simulationDirection parent) :
@@ -892,18 +894,18 @@ theorem allowed_bubble
     rw [childKind]
     rfl
   obtain ⟨position, hposition⟩ := indexOf?_complete
-    ((ConcreteElaboration.mem_localOccurrences_child input parent child).2
+    ((Concrete.Elaboration.mem_localOccurrences_child input parent child).2
       hparent)
   let parentRoute :=
-    Diagram.Splice.RegionRoute.step hparent position hposition route
+    Concrete.Splice.RegionRoute.step hparent position hposition route
   have parentDepth : parentRoute.HasCutDepth depth := by
-    exact Diagram.Splice.RegionRoute.HasCutDepth.bubble
+    exact Concrete.Splice.RegionRoute.HasCutDepth.bubble
       (hparent := hparent) (position := position) (hposition := hposition)
       childKind routeDepth
   exact allowed parentRoute parentDepth
 
 theorem allowed_root
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (site : Fin source.val.diagram.regionCount)
     (orientation : Orientation)
     (polarity : spawnPolarity orientation
@@ -912,9 +914,9 @@ theorem allowed_root
       source.val.diagram.root := by
   intro path depth route routeDepth
   let view := Classical.choice
-    (Diagram.Splice.openSiteView_complete source site)
+    (Concrete.Splice.openSiteView_complete source site)
   have pathEq : path = view.path :=
-    Diagram.Splice.Input.RegionRoute.path_unique
+    Concrete.Splice.Input.RegionRoute.path_unique
       source.property.diagram_well_formed route view.route
   subst path
   have routeEq : route = view.route := Subsingleton.elim _ _
@@ -926,32 +928,32 @@ theorem allowed_root
   cases orientation <;> exact polarity
 
 theorem allowed_forward_ne_site
-    (input : ConcreteDiagram) (site region : Fin input.regionCount)
+    (input : Concrete.Diagram) (site region : Fin input.regionCount)
     (allowed : Allowed input site .forward region) :
     region ≠ site := by
   intro equality
   subst region
-  have impossible := allowed (Diagram.Splice.RegionRoute.here site)
-    (Diagram.Splice.RegionRoute.HasCutDepth.here site)
+  have impossible := allowed (Concrete.Splice.RegionRoute.here site)
+    (Concrete.Splice.RegionRoute.HasCutDepth.here site)
   simp [depthAllowed] at impossible
 
 @[simp] theorem target_localOccurrences
-    (input : ConcreteDiagram) (outer inner : Fin input.wireCount)
+    (input : Concrete.Diagram) (outer inner : Fin input.wireCount)
     (region : Fin input.regionCount) :
-    ConcreteElaboration.localOccurrences (Target input outer inner) region =
-      ConcreteElaboration.localOccurrences input region := by
-  unfold ConcreteElaboration.localOccurrences
+    Concrete.Elaboration.localOccurrences (Target input outer inner) region =
+      Concrete.Elaboration.localOccurrences input region := by
+  unfold Concrete.Elaboration.localOccurrences
   simp only [target_nodeCount, target_regionCount, target_nodes,
     target_regions]
   rfl
 
 theorem resolvedPorts_related
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount) (distinct : outer ≠ inner)
     (targetWellFormed : (Target input outer inner).WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext input)
     (targetContext :
-      ConcreteElaboration.WireContext (Target input outer inner))
+      Concrete.Elaboration.WireContext (Target input outer inner))
     (witness : ContextWitness input outer inner distinct
       sourceContext targetContext)
     (targetNodup : targetContext.Nodup)
@@ -959,23 +961,23 @@ theorem resolvedPorts_related
     (sourceIndex : Fin sourceContext.length)
     (targetIndex : Fin targetContext.length)
     (sourceResolved :
-      ConcreteElaboration.resolvePort? input sourceContext node port =
+      Concrete.Elaboration.resolvePort? input sourceContext node port =
         some sourceIndex)
     (targetResolved :
-      ConcreteElaboration.resolvePort? (Target input outer inner)
+      Concrete.Elaboration.resolvePort? (Target input outer inner)
         targetContext node port = some targetIndex) :
-    (ConcreteElaboration.ContextIndexRelation.forwardMap witness.indexMap).Rel
+    (Concrete.Elaboration.ContextIndexRelation.forwardMap witness.indexMap).Rel
       sourceIndex targetIndex := by
   obtain ⟨sourceWire, sourceOccurs, sourceGet⟩ :=
-    ConcreteElaboration.resolvePort?_sound sourceResolved
+    Concrete.Elaboration.resolvePort?_sound sourceResolved
   obtain ⟨targetWire, targetOccurs, targetGet⟩ :=
-    ConcreteElaboration.resolvePort?_sound targetResolved
+    Concrete.Elaboration.resolvePort?_sound targetResolved
   have mappedOccurs :=
     endpointOccurs_map input outer inner sourceWire distinct
       ⟨node, port⟩ sourceOccurs
   have wireEq :
       wireMap input outer inner distinct sourceWire = targetWire :=
-    ConcreteElaboration.endpoint_wire_unique
+    Concrete.Elaboration.endpoint_wire_unique
       targetWellFormed.wire_endpoints_are_disjoint mappedOccurs targetOccurs
   have contextGet :
       targetContext.get (witness.indexMap sourceIndex) =
@@ -992,7 +994,7 @@ theorem resolvedPorts_related
     simpa only [List.get_eq_getElem] using contextGet)
 
 noncomputable def simulation
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
@@ -1002,7 +1004,7 @@ noncomputable def simulation
       (Target source.val.diagram outer inner).WellFormed )
     (model : Model)
     :
-    ConcreteElaboration.ConcreteSemanticSimulation
+    Concrete.Elaboration.ConcreteSemanticSimulation
       source.val.diagram (Target source.val.diagram outer inner) model  where
   source_wellFormed := source.property.diagram_well_formed
   target_wellFormed := targetWellFormed
@@ -1025,12 +1027,12 @@ noncomputable def simulation
     intro region regular
     simp
   BinderWitness := fun {sourceRels targetRels} sourceBinders targetBinders =>
-    ConcreteElaboration.IdentityBinderWitness
+    Concrete.Elaboration.IdentityBinderWitness
       (sourceRels := sourceRels) (targetRels := targetRels)
       source.val.diagram (Target source.val.diagram outer inner)
       sourceBinders targetBinders
   relationMap := fun witness =>
-    ConcreteElaboration.IdentityBinderWitness.relationMap witness
+    Concrete.Elaboration.IdentityBinderWitness.relationMap witness
   binders_empty := {
     relationContexts_eq := rfl
     binders_eq := HEq.rfl
@@ -1048,8 +1050,8 @@ noncomputable def simulation
     rcases witness with ⟨relationContextsEq, bindersEq⟩
     subst targetRels
     cases bindersEq
-    simpa [ConcreteElaboration.IdentityBinderWitness.relationMap,
-      ConcreteElaboration.identityRelationRenaming] using
+    simpa [Concrete.Elaboration.IdentityBinderWitness.relationMap,
+      Concrete.Elaboration.identityRelationRenaming] using
         (RelationRenaming.lift_id_fun
           (source := sourceRels) arity).symm
   Allowed := Allowed source.val.diagram
@@ -1069,7 +1071,7 @@ noncomputable def simulation
       sourceContext targetContext
   AtRegion := fun _ _ => True
   indexRelation := fun witness =>
-    ConcreteElaboration.ContextIndexRelation.forwardMap witness.indexMap
+    Concrete.Elaboration.ContextIndexRelation.forwardMap witness.indexMap
   extendContext := by
     intro sourceContext targetContext witness region regular sourceExact
       targetExact
@@ -1090,18 +1092,18 @@ noncomputable def simulation
       sourceContext targetContext witness sourceBinders targetBinders
       binderWitness region atRegion regular allowed sourceExact targetExact
       _ _ _ _ sourceItems targetItems sourceCompiled targetCompiled itemSemantics
-    refine ConcreteElaboration.directionalLocalTransport_of_agreement
+    refine Concrete.Elaboration.directionalLocalTransport_of_agreement
       simulationDirection sourceContext targetContext region region
-      (ConcreteElaboration.ContextIndexRelation.forwardMap witness.indexMap)
-      (ConcreteElaboration.ContextIndexRelation.forwardMap
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap witness.indexMap)
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap
         (witness.extend source.property.diagram_well_formed ordered region
           sourceExact targetExact).indexMap)
       model
       (sourceItems.renameRelations
-        (ConcreteElaboration.IdentityBinderWitness.relationMap binderWitness))
+        (Concrete.Elaboration.IdentityBinderWitness.relationMap binderWitness))
       targetItems ?_ itemSemantics
     intro sourceOuter targetOuter outerAgrees
-    rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+    rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap]
       at outerAgrees
     cases simulationDirection with
     | forward =>
@@ -1110,7 +1112,7 @@ noncomputable def simulation
           (source.val.diagram.wires inner).scope region allowed
         refine ⟨targetLocalOfSource source.val.diagram outer inner distinct
           region hne sourceLocal, ?_⟩
-        rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+        rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap]
         exact witness.extendedEnvironment_forward
           source.property.diagram_well_formed ordered region hne sourceExact
           targetExact sourceOuter targetOuter outerAgrees sourceLocal
@@ -1119,7 +1121,7 @@ noncomputable def simulation
         refine ⟨sourceLocalOfTarget witness
           source.property.diagram_well_formed ordered region sourceExact
           targetExact targetOuter targetLocal, ?_⟩
-        rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+        rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap]
         exact witness.extendedEnvironment_backward
           source.property.diagram_well_formed ordered region sourceExact
           targetExact sourceOuter targetOuter outerAgrees targetLocal
@@ -1132,13 +1134,13 @@ noncomputable def simulation
     subst targetRels
     cases bindersEq
     have nodeEq : sourceNode = targetNode :=
-      ConcreteElaboration.LocalOccurrence.node.inj nodeMapped
+      Concrete.Elaboration.LocalOccurrence.node.inj nodeMapped
     subst targetNode
-    apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+    apply Concrete.Elaboration.compileNode?_itemSimulation_of_related_ports
       model  simulationDirection sourceContext targetContext
-      (ConcreteElaboration.ContextIndexRelation.forwardMap witness.indexMap)
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap witness.indexMap)
       sourceBinders sourceBinders
-      (ConcreteElaboration.identityRelationRenaming sourceRels)
+      (Concrete.Elaboration.identityRelationRenaming sourceRels)
       sourceNode sourceNode id id
     · cases nodeShape : source.val.diagram.nodes sourceNode <;>
         simp [nodeShape, id]
@@ -1147,7 +1149,7 @@ noncomputable def simulation
         targetWellFormed sourceContext targetContext witness targetNodup
         sourceNode port sourceIndex targetIndex sourceResolved targetResolved
     · intro atomRegion binder arity sourceRelation nodeShape binderLookup
-      simpa [ConcreteElaboration.identityRelationRenaming] using binderLookup
+      simpa [Concrete.Elaboration.identityRelationRenaming] using binderLookup
     · exact sourceCompiled
     · exact targetCompiled
   focusedRegionKernel := by
@@ -1157,16 +1159,16 @@ noncomputable def simulation
     exact False.elim focused
 
 def targetOpenRaw
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (outer inner : Fin source.diagram.wireCount)
     (distinct : outer ≠ inner) :
-    OpenConcreteDiagram where
+    Concrete.OpenDiagram where
   diagram := Target source.diagram outer inner
   boundary := source.boundary.map
     (wireMap source.diagram outer inner distinct)
 
 theorem targetOpenRaw_wellFormed
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
@@ -1198,13 +1200,13 @@ theorem targetOpenRaw_wellFormed
             source.val.diagram.root := by
         rw [← sourceRoot]
         exact ordered
-      exact ConcreteElaboration.encloses_sheet_eq
+      exact Concrete.Elaboration.encloses_sheet_eq
         source.property.diagram_well_formed.root_is_sheet
         outerEnclosesRoot
     · simpa [hwire] using sourceRoot
 
 def targetOpen
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
@@ -1212,13 +1214,13 @@ def targetOpen
       (source.val.diagram.wires inner).scope)
     (targetWellFormed :
       (Target source.val.diagram outer inner).WellFormed ) :
-    CheckedOpenDiagram  :=
+    Concrete.CheckedOpen  :=
   ⟨targetOpenRaw source.val outer inner distinct,
     targetOpenRaw_wellFormed source outer inner distinct ordered
       targetWellFormed⟩
 
 theorem targetOpenRaw_exposed_mem_iff
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (outer inner : Fin source.diagram.wireCount)
     (distinct : outer ≠ inner)
     (targetWire : Fin (Target source.diagram outer inner).wireCount) :
@@ -1226,24 +1228,24 @@ theorem targetOpenRaw_exposed_mem_iff
         (targetOpenRaw source outer inner distinct).exposedWires ↔
       ∃ sourceWire ∈ source.exposedWires,
         wireMap source.diagram outer inner distinct sourceWire = targetWire := by
-  unfold OpenConcreteDiagram.exposedWires targetOpenRaw
+  unfold Concrete.OpenDiagram.exposedWires targetOpenRaw
   simp only [List.mem_eraseDups, List.mem_map]
 
 noncomputable def exposedMap
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (outer inner : Fin source.diagram.wireCount)
     (distinct : outer ≠ inner) :
     Fin source.exposedWires.length →
       Fin (targetOpenRaw source outer inner distinct).exposedWires.length :=
   fun sourceIndex =>
     Classical.choose
-      (ConcreteElaboration.WireContext.lookup?_complete
+      (Concrete.Elaboration.WireContext.lookup?_complete
         ((targetOpenRaw_exposed_mem_iff source outer inner distinct _).2
           ⟨source.exposedWires.get sourceIndex,
             List.get_mem _ sourceIndex, rfl⟩))
 
 theorem exposedMap_get
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (outer inner : Fin source.diagram.wireCount)
     (distinct : outer ≠ inner)
     (sourceIndex : Fin source.exposedWires.length) :
@@ -1251,15 +1253,15 @@ theorem exposedMap_get
         (exposedMap source outer inner distinct sourceIndex) =
       wireMap source.diagram outer inner distinct
         (source.exposedWires.get sourceIndex) := by
-  exact ConcreteElaboration.WireContext.lookup?_sound
+  exact Concrete.Elaboration.WireContext.lookup?_sound
     (Classical.choose_spec
-      (ConcreteElaboration.WireContext.lookup?_complete
+      (Concrete.Elaboration.WireContext.lookup?_complete
         ((targetOpenRaw_exposed_mem_iff source outer inner distinct _).2
           ⟨source.exposedWires.get sourceIndex,
             List.get_mem _ sourceIndex, rfl⟩)))
 
 theorem exposedMap_surjective
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (outer inner : Fin source.diagram.wireCount)
     (distinct : outer ≠ inner) :
     Function.Surjective (exposedMap source outer inner distinct) := by
@@ -1269,13 +1271,13 @@ theorem exposedMap_surjective
       ((targetOpenRaw source outer inner distinct).exposedWires.get
         targetIndex)).1 (List.get_mem _ targetIndex)
   obtain ⟨sourceIndex, lookup⟩ :=
-    ConcreteElaboration.WireContext.lookup?_complete sourceMember
+    Concrete.Elaboration.WireContext.lookup?_complete sourceMember
   refine ⟨sourceIndex, ?_⟩
   apply Fin.ext
   exact (List.getElem_inj
     (targetOpenRaw source outer inner distinct).exposedWires_nodup).mp (by
   have sourceGet :=
-    ConcreteElaboration.WireContext.lookup?_sound lookup
+    Concrete.Elaboration.WireContext.lookup?_sound lookup
   have chosenGet := exposedMap_get source outer inner distinct sourceIndex
   simpa only [List.get_eq_getElem] using
     chosenGet.trans
@@ -1283,7 +1285,7 @@ theorem exposedMap_surjective
         sourceGet).trans mapped))
 
 theorem exposedMap_injective_of_root_ne
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1328,7 +1330,7 @@ def leftIndex (left right : List α) :
   simp [leftIndex]
 
 noncomputable def rootWitness
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
@@ -1347,16 +1349,16 @@ noncomputable def rootWitness
     ((targetOpenRaw source.val outer inner distinct).exposedWires ++
       (targetOpenRaw source.val outer inner distinct).hiddenWires)
     (by
-      simpa only [OpenConcreteDiagram.rootWires] using
-        ConcreteElaboration.openRootWires_exact source.property)
+      simpa only [Concrete.OpenDiagram.rootWires] using
+        Concrete.Elaboration.openRootWires_exact source.property)
     (by
       let target := targetOpen source outer inner distinct ordered
         targetWellFormed
-      simpa only [OpenConcreteDiagram.rootWires] using
-        ConcreteElaboration.openRootWires_exact target.property)
+      simpa only [Concrete.OpenDiagram.rootWires] using
+        Concrete.Elaboration.openRootWires_exact target.property)
 
 theorem rootWitness_index_exposed
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
@@ -1402,13 +1404,13 @@ theorem rootWitness_index_exposed
   have targetNodup :
       ((targetOpenRaw source.val outer inner distinct).exposedWires ++
         (targetOpenRaw source.val outer inner distinct).hiddenWires).Nodup := by
-    simpa only [OpenConcreteDiagram.rootWires] using
+    simpa only [Concrete.OpenDiagram.rootWires] using
       (targetOpenRaw source.val outer inner distinct).rootWires_nodup
   exact (List.getElem_inj targetNodup).mp (by
     simpa only [List.get_eq_getElem] using hget)
 
 noncomputable def hiddenMap
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1420,11 +1422,11 @@ noncomputable def hiddenMap
     let targetWire :=
       wireMap source.val.diagram outer inner distinct sourceWire
     Classical.choose
-      (ConcreteElaboration.WireContext.lookup?_complete (by
-        apply (OpenConcreteDiagram.mem_hiddenWires
+      (Concrete.Elaboration.WireContext.lookup?_complete (by
+        apply (Concrete.OpenDiagram.mem_hiddenWires
           (targetOpenRaw source.val outer inner distinct) targetWire).2
         have sourceHidden :=
-          (OpenConcreteDiagram.mem_hiddenWires source.val sourceWire).1
+          (Concrete.OpenDiagram.mem_hiddenWires source.val sourceWire).1
             (List.get_mem source.val.hiddenWires sourceIndex)
         have sourceNe : sourceWire ≠ inner := by
           intro equality
@@ -1452,7 +1454,7 @@ noncomputable def hiddenMap
             exact rootNe innerRoot.symm))
 
 theorem hiddenMap_get
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1462,15 +1464,15 @@ theorem hiddenMap_get
         (hiddenMap source outer inner distinct rootNe sourceIndex) =
       wireMap source.val.diagram outer inner distinct
         (source.val.hiddenWires.get sourceIndex) := by
-  exact ConcreteElaboration.WireContext.lookup?_sound
+  exact Concrete.Elaboration.WireContext.lookup?_sound
     (Classical.choose_spec
-      (ConcreteElaboration.WireContext.lookup?_complete (by
-        apply (OpenConcreteDiagram.mem_hiddenWires
+      (Concrete.Elaboration.WireContext.lookup?_complete (by
+        apply (Concrete.OpenDiagram.mem_hiddenWires
           (targetOpenRaw source.val outer inner distinct)
           (wireMap source.val.diagram outer inner distinct
             (source.val.hiddenWires.get sourceIndex))).2
         have sourceHidden :=
-          (OpenConcreteDiagram.mem_hiddenWires source.val
+          (Concrete.OpenDiagram.mem_hiddenWires source.val
             (source.val.hiddenWires.get sourceIndex)).1
             (List.get_mem source.val.hiddenWires sourceIndex)
         have sourceNe : source.val.hiddenWires.get sourceIndex ≠ inner := by
@@ -1500,7 +1502,7 @@ theorem hiddenMap_get
             exact rootNe innerRoot.symm)))
 
 theorem hiddenMap_injective
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1520,13 +1522,13 @@ theorem hiddenMap_injective
     rcases collision with same | outerInner | innerOuter
     · exact same
     · have rightHidden :=
-        (OpenConcreteDiagram.mem_hiddenWires source.val
+        (Concrete.OpenDiagram.mem_hiddenWires source.val
           (source.val.hiddenWires.get right)).1
           (List.get_mem source.val.hiddenWires right)
       rw [outerInner.2] at rightHidden
       exact False.elim (rootNe rightHidden.1.symm)
     · have leftHidden :=
-        (OpenConcreteDiagram.mem_hiddenWires source.val
+        (Concrete.OpenDiagram.mem_hiddenWires source.val
           (source.val.hiddenWires.get left)).1
           (List.get_mem source.val.hiddenWires left)
       rw [innerOuter.1] at leftHidden
@@ -1536,7 +1538,7 @@ theorem hiddenMap_injective
     simpa only [List.get_eq_getElem] using sourceGetEquality)
 
 theorem hiddenMap_surjective
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1557,7 +1559,7 @@ theorem hiddenMap_surjective
       sourceNe]
     exact (joinWireDomain source.val.diagram inner).index_origin targetWire
   have targetHidden :=
-    (OpenConcreteDiagram.mem_hiddenWires
+    (Concrete.OpenDiagram.mem_hiddenWires
       (targetOpenRaw source.val outer inner distinct) targetWire).1
       (List.get_mem
         (targetOpenRaw source.val outer inner distinct).hiddenWires targetIndex)
@@ -1579,16 +1581,16 @@ theorem hiddenMap_surjective
         targetWire).2 ⟨sourceWire, sourceExposed, mapped⟩
     exact targetHidden.2 targetExposed
   have sourceMember : sourceWire ∈ source.val.hiddenWires :=
-    (OpenConcreteDiagram.mem_hiddenWires source.val sourceWire).2
+    (Concrete.OpenDiagram.mem_hiddenWires source.val sourceWire).2
       ⟨sourceRoot, sourceNotExposed⟩
   obtain ⟨sourceIndex, lookup⟩ :=
-    ConcreteElaboration.WireContext.lookup?_complete sourceMember
+    Concrete.Elaboration.WireContext.lookup?_complete sourceMember
   refine ⟨sourceIndex, ?_⟩
   apply Fin.ext
   exact (List.getElem_inj
     (targetOpenRaw source.val outer inner distinct).hiddenWires_nodup).mp (by
       have sourceGet :=
-        ConcreteElaboration.WireContext.lookup?_sound lookup
+        Concrete.Elaboration.WireContext.lookup?_sound lookup
       have chosenGet :=
         hiddenMap_get source outer inner distinct rootNe sourceIndex
       have hget :
@@ -1602,7 +1604,7 @@ theorem hiddenMap_surjective
       simpa only [List.get_eq_getElem] using hget)
 
 noncomputable def hiddenInverse
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1614,7 +1616,7 @@ noncomputable def hiddenInverse
     (hiddenMap_surjective source outer inner distinct rootNe targetIndex)
 
 theorem hiddenInverse_spec
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1628,7 +1630,7 @@ theorem hiddenInverse_spec
     (hiddenMap_surjective source outer inner distinct rootNe targetIndex)
 
 theorem hiddenInverse_hiddenMap
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1652,27 +1654,27 @@ def rightIndex (left right : List α) :
   simp [rightIndex]
 
 @[simp] theorem rootEnvironment_leftIndex
-    (left right : ConcreteElaboration.WireContext diagram)
+    (left right : Concrete.Elaboration.WireContext diagram)
     (outerEnv : Fin left.length → D)
     (localEnv : Fin right.length → D)
     (index : Fin left.length) :
-    ConcreteElaboration.rootEnvironment left right outerEnv localEnv
+    Concrete.Elaboration.rootEnvironment left right outerEnv localEnv
         (leftIndex left right index) =
       outerEnv index := by
-  simp [ConcreteElaboration.rootEnvironment, leftIndex, extendWireEnv]
+  simp [Concrete.Elaboration.rootEnvironment, leftIndex, extendWireEnv]
 
 @[simp] theorem rootEnvironment_rightIndex
-    (left right : ConcreteElaboration.WireContext diagram)
+    (left right : Concrete.Elaboration.WireContext diagram)
     (outerEnv : Fin left.length → D)
     (localEnv : Fin right.length → D)
     (index : Fin right.length) :
-    ConcreteElaboration.rootEnvironment left right outerEnv localEnv
+    Concrete.Elaboration.rootEnvironment left right outerEnv localEnv
         (rightIndex left right index) =
       localEnv index := by
-  simp [ConcreteElaboration.rootEnvironment, rightIndex, extendWireEnv]
+  simp [Concrete.Elaboration.rootEnvironment, rightIndex, extendWireEnv]
 
 theorem rootWitness_index_hidden
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
@@ -1720,13 +1722,13 @@ theorem rootWitness_index_hidden
   have targetNodup :
       ((targetOpenRaw source.val outer inner distinct).exposedWires ++
         (targetOpenRaw source.val outer inner distinct).hiddenWires).Nodup := by
-    simpa only [OpenConcreteDiagram.rootWires] using
+    simpa only [Concrete.OpenDiagram.rootWires] using
       (targetOpenRaw source.val outer inner distinct).rootWires_nodup
   exact (List.getElem_inj targetNodup).mp (by
     simpa only [List.get_eq_getElem] using hget)
 
 noncomputable def targetHiddenOfSource
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1736,7 +1738,7 @@ noncomputable def targetHiddenOfSource
   sourceHidden ∘ hiddenInverse source outer inner distinct rootNe
 
 @[simp] theorem targetHiddenOfSource_hiddenMap
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -1749,7 +1751,7 @@ noncomputable def targetHiddenOfSource
   simp [targetHiddenOfSource, hiddenInverse_hiddenMap]
 
 noncomputable def sourceHiddenOfTarget
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
@@ -1763,7 +1765,7 @@ noncomputable def sourceHiddenOfTarget
       Fin (targetOpenRaw source.val outer inner distinct).hiddenWires.length → D) :
     Fin source.val.hiddenWires.length → D :=
   fun sourceIndex =>
-    ConcreteElaboration.rootEnvironment
+    Concrete.Elaboration.rootEnvironment
       (targetOpenRaw source.val outer inner distinct).exposedWires
       (targetOpenRaw source.val outer inner distinct).hiddenWires
       targetOuter targetHidden
@@ -1773,7 +1775,7 @@ noncomputable def sourceHiddenOfTarget
           sourceIndex))
 
 theorem rootEnvironment_forward
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
@@ -1789,9 +1791,9 @@ theorem rootEnvironment_forward
     (outerAgrees :
       sourceOuter = targetOuter ∘ exposedMap source.val outer inner distinct)
     (sourceHidden : Fin source.val.hiddenWires.length → D) :
-    ConcreteElaboration.rootEnvironment source.val.exposedWires
+    Concrete.Elaboration.rootEnvironment source.val.exposedWires
         source.val.hiddenWires sourceOuter sourceHidden =
-      ConcreteElaboration.rootEnvironment
+      Concrete.Elaboration.rootEnvironment
           (targetOpenRaw source.val outer inner distinct).exposedWires
           (targetOpenRaw source.val outer inner distinct).hiddenWires
           targetOuter
@@ -1841,7 +1843,7 @@ theorem rootEnvironment_forward
       rootEnvironment_rightIndex, targetHiddenOfSource_hiddenMap]
 
 theorem rootEnvironment_backward
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
@@ -1856,11 +1858,11 @@ theorem rootEnvironment_backward
       sourceOuter = targetOuter ∘ exposedMap source.val outer inner distinct)
     (targetHidden :
       Fin (targetOpenRaw source.val outer inner distinct).hiddenWires.length → D) :
-    ConcreteElaboration.rootEnvironment source.val.exposedWires
+    Concrete.Elaboration.rootEnvironment source.val.exposedWires
         source.val.hiddenWires sourceOuter
         (sourceHiddenOfTarget source outer inner distinct ordered
           targetWellFormed targetOuter targetHidden) =
-      ConcreteElaboration.rootEnvironment
+      Concrete.Elaboration.rootEnvironment
           (targetOpenRaw source.val outer inner distinct).exposedWires
           (targetOpenRaw source.val outer inner distinct).hiddenWires
           targetOuter targetHidden ∘
@@ -1906,7 +1908,7 @@ theorem rootEnvironment_backward
     rfl
 
 noncomputable def rootContext
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
@@ -1918,7 +1920,7 @@ noncomputable def rootContext
     (orientation : Orientation) :
     let semanticSimulation := simulation source outer inner distinct ordered
       targetWellFormed model
-    ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
+    Concrete.Elaboration.ConcreteSemanticSimulation.RootContextSimulation
       semanticSimulation (direction orientation)
       source.val.exposedWires source.val.hiddenWires
       (targetOpenRaw source.val outer inner distinct).exposedWires
@@ -1926,7 +1928,7 @@ noncomputable def rootContext
   let semanticSimulation := simulation source outer inner distinct ordered
     targetWellFormed model
   refine {
-    outer := ConcreteElaboration.ContextIndexRelation.forwardMap
+    outer := Concrete.Elaboration.ContextIndexRelation.forwardMap
       (exposedMap source.val outer inner distinct)
     context := rootWitness source outer inner distinct ordered
       targetWellFormed
@@ -1942,14 +1944,14 @@ noncomputable def rootContext
   }
   · intro regular allowed sourceItems targetItems sourceCompiled
       targetCompiled itemSemantics
-    refine ConcreteElaboration.directionalRootTransport_of_agreement
+    refine Concrete.Elaboration.directionalRootTransport_of_agreement
       (direction orientation)
       source.val.exposedWires source.val.hiddenWires
       (targetOpenRaw source.val outer inner distinct).exposedWires
       (targetOpenRaw source.val outer inner distinct).hiddenWires
-      (ConcreteElaboration.ContextIndexRelation.forwardMap
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap
         (exposedMap source.val outer inner distinct))
-      (ConcreteElaboration.ContextIndexRelation.forwardMap
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap
         (rootWitness source outer inner distinct ordered
           targetWellFormed).indexMap)
       model
@@ -1957,7 +1959,7 @@ noncomputable def rootContext
         (semanticSimulation.relationMap semanticSimulation.binders_empty))
       targetItems ?_ itemSemantics
     intro sourceOuter targetOuter outerAgrees
-    rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+    rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap]
       at outerAgrees
     cases orientation with
     | forward =>
@@ -1966,7 +1968,7 @@ noncomputable def rootContext
           (source.val.diagram.wires inner).scope source.val.diagram.root allowed
         refine ⟨targetHiddenOfSource source outer inner distinct rootNe
           sourceHidden, ?_⟩
-        rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+        rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap]
         exact rootEnvironment_forward source outer inner distinct ordered
           targetWellFormed rootNe sourceOuter targetOuter outerAgrees
           sourceHidden
@@ -1974,14 +1976,14 @@ noncomputable def rootContext
         intro targetHidden
         refine ⟨sourceHiddenOfTarget source outer inner distinct ordered
           targetWellFormed targetOuter targetHidden, ?_⟩
-        rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+        rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap]
         exact rootEnvironment_backward source outer inner distinct ordered
           targetWellFormed sourceOuter targetOuter outerAgrees targetHidden
   · intro atRoot distinguished
     exact False.elim distinguished
 
 theorem boundaryLengthEq
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (outer inner : Fin source.diagram.wireCount)
     (distinct : outer ≠ inner) :
     (targetOpenRaw source outer inner distinct).boundary.length =
@@ -1989,7 +1991,7 @@ theorem boundaryLengthEq
   simp [targetOpenRaw]
 
 theorem boundaryClass_map
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (outer inner : Fin source.diagram.wireCount)
     (distinct : outer ≠ inner)
     (targetPosition :
@@ -2010,7 +2012,7 @@ theorem boundaryClass_map
   simp [sourcePosition, targetOpenRaw, List.get_eq_getElem]
 
 noncomputable def exposedInverse
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (outer inner : Fin source.diagram.wireCount)
     (distinct : outer ≠ inner)
     (targetIndex :
@@ -2020,7 +2022,7 @@ noncomputable def exposedInverse
     (exposedMap_surjective source outer inner distinct targetIndex)
 
 theorem exposedInverse_spec
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (outer inner : Fin source.diagram.wireCount)
     (distinct : outer ≠ inner)
     (targetIndex :
@@ -2032,7 +2034,7 @@ theorem exposedInverse_spec
     (exposedMap_surjective source outer inner distinct targetIndex)
 
 theorem exposedInverse_exposedMap
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (rootNe : source.val.diagram.root ≠
@@ -2045,7 +2047,7 @@ theorem exposedInverse_exposedMap
   exact exposedInverse_spec source.val outer inner distinct _
 
 private theorem boundaryWitness
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.val.diagram.Encloses
@@ -2059,11 +2061,11 @@ private theorem boundaryWitness
         (direction orientation) source.val.diagram.root)
     (model : Model)
     (sourceArgs : Fin source.val.boundary.length → model.Carrier) :
-    ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+    Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       (direction orientation) source.elaborate
       (targetOpen source outer inner distinct ordered
         targetWellFormed).elaborate
-      (ConcreteElaboration.ContextIndexRelation.forwardMap
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap
         (exposedMap source.val outer inner distinct))
       model  sourceArgs
       (sourceArgs ∘
@@ -2104,7 +2106,7 @@ private theorem boundaryWitness
           exact sourceAgrees
       }
       refine ⟨targetAssignment, rfl, ?_⟩
-      rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+      rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap]
       funext sourceClass
       simp [targetAssignment,
         exposedInverse_exposedMap source outer inner distinct rootNe]
@@ -2139,10 +2141,10 @@ private theorem boundaryWitness
           exact targetAgrees
       }
       refine ⟨sourceAssignment, rfl, ?_⟩
-      rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+      rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap]
 
 private theorem wireMap_index?
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner sourceWire : Fin input.wireCount)
     (distinct : outer ≠ inner) :
     (if sourceWire = inner then
@@ -2161,15 +2163,15 @@ private theorem wireMap_index?
       simpa [joinWireDomain] using sourceEq)
 
 private theorem interface_image_eq_wireMap_of_some
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner sourceWire : Fin input.wireCount)
     (distinct : outer ≠ inner)
     (mapped : Fin (Target input outer inner).wireCount)
     (image :
-      (joinWireInterfaceTransport input outer inner).image? sourceWire =
+      (joinWireWireTransport input outer inner).image? sourceWire =
         some mapped) :
     mapped = wireMap input outer inner distinct sourceWire := by
-  unfold joinWireInterfaceTransport InterfaceTransport.rootFiltered at image
+  unfold joinWireWireTransport WireTransport.rootFiltered at image
   dsimp only at image
   change
     (if sourceWire = inner then
@@ -2195,35 +2197,35 @@ private theorem interface_image_eq_wireMap_of_some
   · contradiction
 
 theorem interface_transportBoundary_eq_map
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount)
     (distinct : outer ≠ inner)
     (boundary : List (Fin input.wireCount))
     (mapped : List (Fin (Target input outer inner).wireCount))
     (transport :
-      (joinWireInterfaceTransport input outer inner).transportBoundary
+      (joinWireWireTransport input outer inner).transportBoundary
           boundary =
         some mapped) :
     mapped = boundary.map (wireMap input outer inner distinct) := by
   have image : ∀ sourceWire, sourceWire ∈ boundary →
-      (joinWireInterfaceTransport input outer inner).image? sourceWire =
+      (joinWireWireTransport input outer inner).image? sourceWire =
         some (wireMap input outer inner distinct sourceWire) := by
     intro sourceWire member
     obtain ⟨sourceIndex, sourceGet⟩ := List.mem_iff_get.mp member
     have point :=
-      (joinWireInterfaceTransport input outer inner).transportBoundary_get
+      (joinWireWireTransport input outer inner).transportBoundary_get
         transport sourceIndex
     have mappedEq := interface_image_eq_wireMap_of_some input outer inner
       (boundary.get sourceIndex) distinct _ point
     rw [← sourceGet]
     rw [point, mappedEq]
   have canonical :=
-    (joinWireInterfaceTransport input outer inner).transportBoundary_eq_map
+    (joinWireWireTransport input outer inner).transportBoundary_eq_map
       (wireMap input outer inner distinct) image
   exact Option.some.inj (transport.symm.trans canonical)
 
 private def operationalOpen
-    (source : OpenProofState )
+    (source : OperationState )
     (outer inner : Fin source.diagram.val.wireCount)
     (distinct : outer ≠ inner)
     (ordered : source.diagram.val.Encloses
@@ -2231,17 +2233,17 @@ private def operationalOpen
       (source.diagram.val.wires inner).scope)
     (targetWellFormed :
       (Target source.diagram.val outer inner).WellFormed ) :
-    CheckedOpenDiagram  :=
+    Concrete.CheckedOpen  :=
   targetOpen source.asCheckedOpen outer inner distinct ordered targetWellFormed
 
 private def operationalIso
-    {input : CheckedDiagram }
-    {receipt : StepReceipt input}
+    {input : Concrete.Checked }
+    {receipt : OperationReceipt input}
     {outer inner : Fin input.val.wireCount}
     (realizes : receipt.Realizes
       (Target input.val outer inner)
       (joinWireProvenance input.val outer inner)
-      (joinWireInterfaceTransport input.val outer inner))
+      (joinWireWireTransport input.val outer inner))
     (distinct : outer ≠ inner)
     (ordered : input.val.Encloses
       (input.val.wires outer).scope (input.val.wires inner).scope)
@@ -2251,7 +2253,7 @@ private def operationalIso
       (input.val.wires candidate).scope = input.val.root)
     (mapped : List (Fin receipt.result.val.wireCount))
     (transport : receipt.interface.transportBoundary boundary = some mapped) :
-    OpenConcreteIso
+    Concrete.OpenIso
       (operationalOpen {
         diagram := input
         boundary := boundary
@@ -2267,13 +2269,13 @@ private def operationalIso
 
 private theorem orderedReceipt_sound
     (orientation : Orientation)
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (stepFirst stepSecond outer inner : Fin input.val.wireCount)
-    (receipt : StepReceipt input)
+    (receipt : OperationReceipt input)
     (realizes : receipt.Realizes
       (Target input.val outer inner)
       (joinWireProvenance input.val outer inner)
-      (joinWireInterfaceTransport input.val outer inner))
+      (joinWireWireTransport input.val outer inner))
     (distinct : outer ≠ inner)
     (ordered : input.val.Encloses
       (input.val.wires outer).scope (input.val.wires inner).scope)
@@ -2295,7 +2297,7 @@ private theorem orderedReceipt_sound
       operationalIso realizes distinct ordered targetWellFormed boundary
         sourceRoot mapped transport)
   intro model boundary sourceRoot mapped transport args
-  let source : OpenProofState  := {
+  let source : OperationState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
@@ -2314,14 +2316,14 @@ private theorem orderedReceipt_sound
   have boundaryTransport := boundaryWitness source.asCheckedOpen outer inner
     distinct ordered targetWellFormed orientation allowed model  args
   have semantic :=
-    ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+    Concrete.Elaboration.ConcreteSemanticSimulation.elaborateOpen_denote
       source.asCheckedOpen target model  semanticSimulation
       (direction orientation) rootSimulation allowed args
       (args ∘ Fin.cast
         (boundaryLengthEq source.asCheckedOpen.val outer inner distinct))
       boundaryTransport
   dsimp only
-  unfold DirectedEntailment DirectedImplication
+  unfold OperationEntailment OperationImplication
   cases orientation with
   | forward =>
       intro sourceDenotes
@@ -2337,9 +2339,9 @@ private theorem orderedReceipt_sound
 /-- Every successful wire-join receipt preserves ordered-open semantics. -/
 theorem wireJoinReceipt_sound
     (orientation : Orientation)
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (first second : Fin input.val.wireCount)
-    (receipt : StepReceipt input)
+    (receipt : OperationReceipt input)
     (applyResult :
       applyWireJoin orientation input first second = .ok receipt) :
     SuccessfulReceiptSound orientation input
@@ -2359,7 +2361,7 @@ theorem wireJoinReceipt_sound
           cases applyResult
           apply orderedReceipt_sound orientation input first second
             first second _ _ distinct ordered polarity
-          exact StepReceipt.ofChecked_realizes _ _ _ _ checked checkResult
+          exact OperationReceipt.ofChecked_realizes _ _ _ _ checked checkResult
       · contradiction
     · split at applyResult
       · rename_i reverseOrdered
@@ -2373,7 +2375,7 @@ theorem wireJoinReceipt_sound
               second first _ _
                 (fun equality => distinct equality.symm)
                 reverseOrdered polarity
-            exact StepReceipt.ofChecked_realizes _ _ _ _ checked checkResult
+            exact OperationReceipt.ofChecked_realizes _ _ _ _ checked checkResult
         · contradiction
       · contradiction
 

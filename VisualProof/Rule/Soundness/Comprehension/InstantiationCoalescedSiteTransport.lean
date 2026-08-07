@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationCoalescedSiteEnviro
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -33,54 +35,54 @@ theorem quotientCompleteEnvironment_agrees
 /-- Recover the local part of a complete valuation on an extended compiler
 context. -/
 noncomputable def localEnvironmentOfComplete
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (complete : Fin (context.extend region).length → D) :
-    Fin (ConcreteElaboration.exactScopeWires diagram region).length → D :=
+    Fin (Concrete.Elaboration.exactScopeWires diagram region).length → D :=
   fun localIndex =>
     complete
       (Fin.cast
-        (ConcreteElaboration.WireContext.length_extend context region).symm
+        (Concrete.Elaboration.WireContext.length_extend context region).symm
         (Fin.natAdd context.length localIndex))
 
 theorem extendedEnvironment_localEnvironmentOfComplete
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (outerEnvironment : Fin context.length → D)
     (complete : Fin (context.extend region).length → D)
     (inherited : ∀ index,
       complete (context.outerIndex region index) = outerEnvironment index) :
-    ConcreteElaboration.extendedEnvironment context region outerEnvironment
+    Concrete.Elaboration.extendedEnvironment context region outerEnvironment
         (localEnvironmentOfComplete context region complete) =
       complete := by
   funext index
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend context region) index
+    (Concrete.Elaboration.WireContext.length_extend context region) index
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend context region).symm
+      (Concrete.Elaboration.WireContext.length_extend context region).symm
       split = index := by
     apply Fin.ext
     rfl
   rw [← recover]
   refine Fin.addCases (fun inheritedIndex => ?_)
     (fun localIndex => ?_) split
-  · simpa [ConcreteElaboration.extendedEnvironment, extendWireEnv] using
+  · simpa [Concrete.Elaboration.extendedEnvironment, extendWireEnv] using
       (inherited inheritedIndex).symm
-  · simp [ConcreteElaboration.extendedEnvironment,
+  · simp [Concrete.Elaboration.extendedEnvironment,
       localEnvironmentOfComplete, extendWireEnv]
 
 @[simp] theorem instantiation_extendedEnvironment_outer
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (outerEnvironment : Fin context.length → D)
     (localEnvironment : Fin
-      (ConcreteElaboration.exactScopeWires diagram region).length → D)
+      (Concrete.Elaboration.exactScopeWires diagram region).length → D)
     (index : Fin context.length) :
-    ConcreteElaboration.extendedEnvironment context region outerEnvironment
+    Concrete.Elaboration.extendedEnvironment context region outerEnvironment
         localEnvironment (context.outerIndex region index) =
       outerEnvironment index := by
-  unfold ConcreteElaboration.extendedEnvironment
-    ConcreteElaboration.WireContext.outerIndex
+  unfold Concrete.Elaboration.extendedEnvironment
+    Concrete.Elaboration.WireContext.outerIndex
   change extendWireEnv outerEnvironment localEnvironment
     (Fin.castAdd _ index) = outerEnvironment index
   exact Fin.addCases_left index
@@ -88,10 +90,10 @@ theorem extendedEnvironment_localEnvironmentOfComplete
 /-- A source site valuation constant on quotient fibers induces the target
 local valuation compatible with the already-related inherited environments. -/
 theorem site_targetLocal_exists
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (hadmissible : input.Admissible)
-    (sourceOuter : ConcreteElaboration.WireContext input.frame.val)
-    (targetOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.frame.val)
+    (targetOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
     (sourceExact : (sourceOuter.extend input.site).Exact input.site)
     (targetExact : (targetOuter.extend input.site).Exact input.site)
     (outerMap : Fin sourceOuter.length → Fin targetOuter.length)
@@ -103,7 +105,7 @@ theorem site_targetLocal_exists
     (targetOuterEnvironment : Fin targetOuter.length → D)
     (outerAgrees : sourceOuterEnvironment =
       targetOuterEnvironment ∘ outerMap)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires input.frame.val
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires input.frame.val
       input.site).length → D)
     (fiberConstant : ∀ left right,
       siteQuotientIndexMap input hadmissible
@@ -112,14 +114,14 @@ theorem site_targetLocal_exists
         siteQuotientIndexMap input hadmissible
           (sourceOuter.extend input.site) (targetOuter.extend input.site)
           sourceExact targetExact right →
-      ConcreteElaboration.extendedEnvironment sourceOuter input.site
+      Concrete.Elaboration.extendedEnvironment sourceOuter input.site
           sourceOuterEnvironment sourceLocal left =
-        ConcreteElaboration.extendedEnvironment sourceOuter input.site
+        Concrete.Elaboration.extendedEnvironment sourceOuter input.site
           sourceOuterEnvironment sourceLocal right) :
     ∃ targetLocal,
-      ConcreteElaboration.extendedEnvironment sourceOuter input.site
+      Concrete.Elaboration.extendedEnvironment sourceOuter input.site
           sourceOuterEnvironment sourceLocal =
-        ConcreteElaboration.extendedEnvironment targetOuter input.site
+        Concrete.Elaboration.extendedEnvironment targetOuter input.site
             targetOuterEnvironment targetLocal ∘
           siteQuotientIndexMap input hadmissible
             (sourceOuter.extend input.site) (targetOuter.extend input.site)
@@ -127,7 +129,7 @@ theorem site_targetLocal_exists
   let completeMap := siteQuotientIndexMap input hadmissible
     (sourceOuter.extend input.site) (targetOuter.extend input.site)
     sourceExact targetExact
-  let sourceComplete := ConcreteElaboration.extendedEnvironment sourceOuter
+  let sourceComplete := Concrete.Elaboration.extendedEnvironment sourceOuter
     input.site sourceOuterEnvironment sourceLocal
   let targetComplete := quotientCompleteEnvironment completeMap
     (siteQuotientIndexMap_surjective input hadmissible
@@ -176,10 +178,10 @@ theorem site_targetLocal_exists
 /-- Conversely, any target site valuation pulls back along the canonical
 quotient map to a compatible source local valuation. -/
 theorem site_sourceLocal_exists
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (hadmissible : input.Admissible)
-    (sourceOuter : ConcreteElaboration.WireContext input.frame.val)
-    (targetOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.frame.val)
+    (targetOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
     (sourceExact : (sourceOuter.extend input.site).Exact input.site)
     (targetExact : (targetOuter.extend input.site).Exact input.site)
     (outerMap : Fin sourceOuter.length → Fin targetOuter.length)
@@ -190,12 +192,12 @@ theorem site_sourceLocal_exists
     (targetOuterEnvironment : Fin targetOuter.length → D)
     (outerAgrees : sourceOuterEnvironment =
       targetOuterEnvironment ∘ outerMap)
-    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+    (targetLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → D) :
     ∃ sourceLocal,
-      ConcreteElaboration.extendedEnvironment sourceOuter input.site
+      Concrete.Elaboration.extendedEnvironment sourceOuter input.site
           sourceOuterEnvironment sourceLocal =
-        ConcreteElaboration.extendedEnvironment targetOuter input.site
+        Concrete.Elaboration.extendedEnvironment targetOuter input.site
             targetOuterEnvironment targetLocal ∘
           siteQuotientIndexMap input hadmissible
             (sourceOuter.extend input.site) (targetOuter.extend input.site)
@@ -203,7 +205,7 @@ theorem site_sourceLocal_exists
   let completeMap := siteQuotientIndexMap input hadmissible
     (sourceOuter.extend input.site) (targetOuter.extend input.site)
     sourceExact targetExact
-  let targetComplete := ConcreteElaboration.extendedEnvironment targetOuter
+  let targetComplete := Concrete.Elaboration.extendedEnvironment targetOuter
     input.site targetOuterEnvironment targetLocal
   let sourceComplete := targetComplete ∘ completeMap
   have sourceInherited : ∀ index,

@@ -2,13 +2,15 @@ import VisualProof.Rule.Soundness.Iteration.ExtractionOccurrence
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
 
 /-- The extracted iteration pattern has no repeated boundary wire identities. -/
 theorem iterationPattern_boundary_get_injective
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount) :
     Function.Injective
@@ -20,7 +22,7 @@ theorem iterationPattern_boundary_get_injective
 /-- Iteration attaches distinct extracted boundary positions to the
 corresponding distinct touching host wires. -/
 theorem iterationAttachment_injective
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount) :
     Function.Injective (iterationInput input selection target).attachment := by
@@ -43,7 +45,7 @@ theorem iterationAttachment_injective
 /-- Extraction-generated iteration inputs have a discrete attachment
 partition: the splice compiler never coalesces two retained frame wires. -/
 theorem iterationAttachmentPartition_related_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (left right : Fin input.val.wireCount) :
@@ -65,7 +67,7 @@ theorem iterationAttachmentPartition_related_iff
     exact FinitePartition.related_refl _ _
 
 theorem iterationAttachmentPartition_representative
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (wire : Fin input.val.wireCount) :
@@ -80,7 +82,7 @@ theorem iterationAttachmentPartition_representative
 /-- Canonical identification of the iteration quotient carrier with the
 unchanged frame-wire carrier. -/
 def iterationQuotientWireEquiv
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount) :
     FiniteEquiv
@@ -101,7 +103,7 @@ def iterationQuotientWireEquiv
       wire _
 
 private theorem iterationQuotientWire_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (quotient : (iterationInput input selection target).wireQuotient.Carrier) :
@@ -126,10 +128,10 @@ private theorem iterationQuotientWire_eq
       (iterationInput input selection target).wireQuotient.origin_survives quotient
     exact (FinitePartition.quotientDomain_survives_iff
       (iterationInput input selection target).attachmentPartition _).1 survives
-  simpa only [Splice.Input.quotientWire, iterationQuotientWireEquiv] using classEq
+  simpa only [Concrete.Splice.Input.quotientWire, iterationQuotientWireEquiv] using classEq
 
 private theorem iterationClassWire_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (quotient : (iterationInput input selection target).wireQuotient.Carrier)
@@ -144,7 +146,7 @@ private theorem iterationClassWire_eq
         (iterationQuotientWire_eq input selection target quotient).symm
 
 private theorem iterationClassWires_eq_singleton
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (quotient : (iterationInput input selection target).wireQuotient.Carrier) :
@@ -178,7 +180,7 @@ private theorem iterationClassWires_eq_singleton
           simp at nodup
 
 theorem iterationCoalescedScope_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (quotient : (iterationInput input selection target).wireQuotient.Carrier) :
@@ -189,29 +191,29 @@ theorem iterationCoalescedScope_eq
       (iterationInput input selection target).firstClassWire quotient =
         iterationQuotientWireEquiv input selection target quotient :=
     iterationClassWire_eq input selection target quotient _ (List.get_mem _ _)
-  unfold Splice.Input.coalescedScope
+  unfold Concrete.Splice.Input.coalescedScope
   dsimp only
   rw [firstEq]
   split
   · rw [iterationClassWires_eq_singleton input selection target quotient]
-    simp [iterationInput, Splice.Input.outermostFrom,
-      Splice.Input.chooseOuter, ConcreteDiagram.Encloses.refl]
+    simp [iterationInput, Concrete.Splice.Input.outermostFrom,
+      Concrete.Splice.Input.chooseOuter, Concrete.Diagram.Encloses.refl]
   · rfl
 
 theorem iterationCoalescedEndpoints_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (quotient : (iterationInput input selection target).wireQuotient.Carrier) :
     (iterationInput input selection target).coalescedEndpoints quotient =
       (input.val.wires
         (iterationQuotientWireEquiv input selection target quotient)).endpoints := by
-  rw [Splice.Input.coalescedEndpoints,
+  rw [Concrete.Splice.Input.coalescedEndpoints,
     iterationClassWires_eq_singleton input selection target quotient]
   simp [iterationInput]
 
 @[simp] theorem iterationQuotientWireEquiv_quotientWire
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (wire : Fin input.val.wireCount) :
@@ -234,10 +236,10 @@ private theorem fin_count_eq_of_equiv
 coalesced frame used by the splice compiler is isomorphic to the original
 input diagram, with regions and nodes fixed pointwise. -/
 noncomputable def iterationCoalescedFrameIso
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount) :
-    ConcreteIso (iterationInput input selection target).coalesceFrameRaw
+    Concrete.Iso (iterationInput input selection target).coalesceFrameRaw
       input.val where
   regionCount_eq := rfl
   nodeCount_eq := rfl
@@ -258,34 +260,34 @@ noncomputable def iterationCoalescedFrameIso
   wire_scope_eq := by
     intro quotient
     simpa only [FiniteEquiv.refl_apply,
-      Splice.Input.coalesceFrameRaw_wire] using
+      Concrete.Splice.Input.coalesceFrameRaw_wire] using
       iterationCoalescedScope_eq input selection target quotient
   wire_endpoints_perm := by
     intro quotient
-    rw [Splice.Input.coalesceFrameRaw_wire,
+    rw [Concrete.Splice.Input.coalesceFrameRaw_wire,
       iterationCoalescedEndpoints_eq input selection target quotient]
     change ((input.val.wires
       (iterationQuotientWireEquiv input selection target quotient)).endpoints.map
         (CEndpoint.rename (.refl _))).Perm
       (input.val.wires
         (iterationQuotientWireEquiv input selection target quotient)).endpoints
-    exact (ConcreteIso.refl input.val).wire_endpoints_perm
+    exact (Concrete.Iso.refl input.val).wire_endpoints_perm
       (iterationQuotientWireEquiv input selection target quotient)
 
 /-- The canonical coalesced open frame for iteration is the original open
 frame, including the caller's ordered and potentially repeated boundary. -/
 noncomputable def iterationCoalescedOpenIso
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (boundary : List (Fin input.val.wireCount)) :
-    OpenConcreteIso
-      (Splice.Input.PlugLayout.coalescedOpenRoot
+    Concrete.OpenIso
+      (Concrete.Splice.Input.PlugLayout.coalescedOpenRoot
         (iterationInput input selection target) boundary)
       { diagram := input.val, boundary := boundary } where
   diagram := iterationCoalescedFrameIso input selection target
   boundary := by
-    simp only [Splice.Input.PlugLayout.coalescedOpenRoot, List.map_map]
+    simp only [Concrete.Splice.Input.PlugLayout.coalescedOpenRoot, List.map_map]
     change boundary.map
         (iterationQuotientWireEquiv input selection target ∘
           (iterationInput input selection target).quotientWire) = boundary

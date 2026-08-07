@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationSurvivorCompiler
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -12,66 +14,66 @@ namespace InstantiationSemantic
 filtered sequence.  Forward simulation forgets rejected conjuncts.  Backward
 simulation reinserts them only from caller-supplied semantic certificates. -/
 theorem compileOccurrencesWith_filter_simulation
-    (diagram : ConcreteDiagram)
+    (diagram : Concrete.Diagram)
     (sourceRecurse targetRecurse : ∀ {rels : RelCtx},
       (region : Fin diagram.regionCount) →
-      (context : ConcreteElaboration.WireContext diagram) →
-      ConcreteElaboration.BinderContext diagram rels →
+      (context : Concrete.Elaboration.WireContext diagram) →
+      Concrete.Elaboration.BinderContext diagram rels →
       Option (Region  context.length rels))
-    (context : ConcreteElaboration.WireContext diagram)
-    (binders : ConcreteElaboration.BinderContext diagram rels)
-    (keep : ConcreteElaboration.LocalOccurrence diagram.regionCount
+    (context : Concrete.Elaboration.WireContext diagram)
+    (binders : Concrete.Elaboration.BinderContext diagram rels)
+    (keep : Concrete.Elaboration.LocalOccurrence diagram.regionCount
       diagram.nodeCount → Bool)
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
-    (relation : ConcreteElaboration.ContextIndexRelation
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (relation : Concrete.Elaboration.ContextIndexRelation
       context.length context.length)
-    (occurrences : List (ConcreteElaboration.LocalOccurrence
+    (occurrences : List (Concrete.Elaboration.LocalOccurrence
       diagram.regionCount diagram.nodeCount))
     (pointwise : ∀ occurrence, occurrence ∈ occurrences →
       keep occurrence = true →
       ∀ sourceItem targetItem,
-        ConcreteElaboration.compileOccurrenceWith?  diagram
+        Concrete.Elaboration.compileOccurrenceWith?  diagram
             sourceRecurse context binders occurrence = some sourceItem →
-        ConcreteElaboration.compileOccurrenceWith?  diagram
+        Concrete.Elaboration.compileOccurrenceWith?  diagram
             targetRecurse context binders occurrence = some targetItem →
-        ConcreteElaboration.ItemSimulation model  direction relation
+        Concrete.Elaboration.ItemSimulation model  direction relation
           sourceItem targetItem)
     (removed : ∀ occurrence, occurrence ∈ occurrences →
       keep occurrence = false →
       ∀ sourceItem,
-        ConcreteElaboration.compileOccurrenceWith?  diagram
+        Concrete.Elaboration.compileOccurrenceWith?  diagram
             sourceRecurse context binders occurrence = some sourceItem →
         ∀ sourceEnv targetEnv relEnv,
           relation.EnvironmentsAgree sourceEnv targetEnv →
           denoteItem model  sourceEnv relEnv sourceItem)
     (sourceItems targetItems : ItemSeq  context.length rels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (sourceCompiled : Concrete.Elaboration.compileOccurrencesWith?
       diagram sourceRecurse context binders occurrences = some sourceItems)
-    (targetCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (targetCompiled : Concrete.Elaboration.compileOccurrencesWith?
       diagram targetRecurse context binders (occurrences.filter keep) =
         some targetItems) :
-    ConcreteElaboration.ItemSeqSimulation model  direction relation
+    Concrete.Elaboration.ItemSeqSimulation model  direction relation
       sourceItems targetItems := by
   induction occurrences generalizing sourceItems targetItems with
   | nil =>
-      simp only [ConcreteElaboration.compileOccurrencesWith?,
+      simp only [Concrete.Elaboration.compileOccurrencesWith?,
         List.filter_nil] at sourceCompiled targetCompiled
       cases sourceCompiled
       cases targetCompiled
       intro sourceEnv targetEnv relEnv agrees
       cases direction <;>
-        simp [ConcreteElaboration.SimulationDirection.Entails]
+        simp [Concrete.Elaboration.SimulationDirection.Entails]
   | cons occurrence tail ih =>
-      simp only [ConcreteElaboration.compileOccurrencesWith?]
+      simp only [Concrete.Elaboration.compileOccurrencesWith?]
         at sourceCompiled
       cases sourceHeadResult :
-          ConcreteElaboration.compileOccurrenceWith?  diagram
+          Concrete.Elaboration.compileOccurrenceWith?  diagram
             sourceRecurse context binders occurrence with
       | none => simp [sourceHeadResult] at sourceCompiled
       | some sourceHead =>
           cases sourceTailResult :
-              ConcreteElaboration.compileOccurrencesWith?  diagram
+              Concrete.Elaboration.compileOccurrencesWith?  diagram
                 sourceRecurse context binders tail with
           | none => simp [sourceHeadResult, sourceTailResult] at sourceCompiled
           | some sourceTail =>
@@ -79,17 +81,17 @@ theorem compileOccurrencesWith_filter_simulation
               subst sourceItems
               have tailPointwise : ∀ current, current ∈ tail →
                   keep current = true → ∀ sourceItem targetItem,
-                  ConcreteElaboration.compileOccurrenceWith?  diagram
+                  Concrete.Elaboration.compileOccurrenceWith?  diagram
                       sourceRecurse context binders current = some sourceItem →
-                  ConcreteElaboration.compileOccurrenceWith?  diagram
+                  Concrete.Elaboration.compileOccurrenceWith?  diagram
                       targetRecurse context binders current = some targetItem →
-                  ConcreteElaboration.ItemSimulation model  direction
+                  Concrete.Elaboration.ItemSimulation model  direction
                     relation sourceItem targetItem := by
                 intro current member
                 exact pointwise current (by simp [member])
               have tailRemoved : ∀ current, current ∈ tail →
                   keep current = false → ∀ sourceItem,
-                  ConcreteElaboration.compileOccurrenceWith?  diagram
+                  Concrete.Elaboration.compileOccurrenceWith?  diagram
                       sourceRecurse context binders current = some sourceItem →
                   ∀ sourceEnv targetEnv relEnv,
                     relation.EnvironmentsAgree sourceEnv targetEnv →
@@ -117,15 +119,15 @@ theorem compileOccurrencesWith_filter_simulation
               | true =>
                   simp only [List.filter_cons, kept, ↓reduceIte]
                     at targetCompiled
-                  simp only [ConcreteElaboration.compileOccurrencesWith?]
+                  simp only [Concrete.Elaboration.compileOccurrencesWith?]
                     at targetCompiled
                   cases targetHeadResult :
-                      ConcreteElaboration.compileOccurrenceWith?
+                      Concrete.Elaboration.compileOccurrenceWith?
                         diagram targetRecurse context binders occurrence with
                   | none => simp [targetHeadResult] at targetCompiled
                   | some targetHead =>
                       cases targetTailResult :
-                          ConcreteElaboration.compileOccurrencesWith?
+                          Concrete.Elaboration.compileOccurrencesWith?
                             diagram targetRecurse context binders
                               (tail.filter keep) with
                       | none =>

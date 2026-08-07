@@ -1,8 +1,11 @@
-import VisualProof.Rule.Comprehension.Semantics
+import VisualProof.Concrete.Operation.Comprehension.Semantics
 import VisualProof.Rule.Soundness.Comprehension.AbstractionEnvironment
 import VisualProof.Rule.Soundness.Iteration.ExtractionTerminalSemantic
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -12,22 +15,22 @@ open VisualProof.Theory
 namespace AbstractionRawTrace
 
 def occurrenceLayout
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input) :
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input) :
     FragmentLayout input.val occurrence.selection := {}
 
 theorem occurrenceLayout_proxyCount_zero
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence) :
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence) :
     (occurrenceLayout input occurrence).proxyCount = 0 := by
   change occurrence.selection.externalBinders.length = 0
   rw [witness.externalBinders_empty]
   rfl
 
 theorem occurrenceFragment_eq_selectedFragment
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input) :
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input) :
     input.val.extractOpenRaw occurrence.selection
         (occurrenceLayout input occurrence) =
       selectedFragment input occurrence.selection := by
@@ -35,28 +38,28 @@ theorem occurrenceFragment_eq_selectedFragment
   congr 1
 
 theorem occurrenceFragment_wellFormed
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input) :
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input) :
     (input.val.extractOpenRaw occurrence.selection
       (occurrenceLayout input occurrence)).WellFormed  :=
-  ConcreteDiagram.extractOpenRaw_wellFormed input occurrence.selection
+  Concrete.Diagram.extractOpenRaw_wellFormed input occurrence.selection
     (occurrenceLayout input occurrence)
 
 noncomputable def touchingIndex
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (context : ConcreteElaboration.WireContext input.val)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (context : Concrete.Elaboration.WireContext input.val)
     (exact : context.Exact occurrence.selection.val.anchor)
     (position : Fin occurrence.selection.touchingWires.length) :
     Fin context.length :=
   Classical.choose (indexOf?_complete ((exact.mem_iff _).2
-    (ConcreteDiagram.touchingWire_scope_encloses_anchor input
+    (Concrete.Diagram.touchingWire_scope_encloses_anchor input
       occurrence.selection position)))
 
 theorem touchingIndex_get
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (context : ConcreteElaboration.WireContext input.val)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (context : Concrete.Elaboration.WireContext input.val)
     (exact : context.Exact occurrence.selection.val.anchor)
     (position : Fin occurrence.selection.touchingWires.length) :
     context.get (touchingIndex input occurrence context exact position) =
@@ -64,23 +67,23 @@ theorem touchingIndex_get
   unfold touchingIndex
   exact indexOf?_sound (Classical.choose_spec (indexOf?_complete
     ((exact.mem_iff _).2
-      (ConcreteDiagram.touchingWire_scope_encloses_anchor input
+      (Concrete.Diagram.touchingWire_scope_encloses_anchor input
         occurrence.selection position))))
 
 noncomputable def touchingEnvironment
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (context : ConcreteElaboration.WireContext input.val)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (context : Concrete.Elaboration.WireContext input.val)
     (exact : context.Exact occurrence.selection.val.anchor)
     (environment : Fin context.length → D) :
     Fin occurrence.selection.touchingWires.length → D :=
   environment ∘ touchingIndex input occurrence context exact
 
 noncomputable def exposedHostIndex
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence)
-    (context : ConcreteElaboration.WireContext input.val)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence)
+    (context : Concrete.Elaboration.WireContext input.val)
     (exact : context.Exact occurrence.selection.val.anchor) :
     Fin (input.val.extractOpenRaw occurrence.selection
       (occurrenceLayout input occurrence)).exposedWires.length →
@@ -97,18 +100,18 @@ noncomputable def exposedHostIndex
     have bodyEq := FragmentLayout.bodyContainer_eq_root_of_proxyCount_eq_zero
       (occurrenceLayout input occurrence)
       (occurrenceLayout_proxyCount_zero input occurrence witness)
-    apply IterationSoundness.fragmentWireOrigin_scope_encloses_anchor input
+    apply VisualProof.Rule.IterationSoundness.fragmentWireOrigin_scope_encloses_anchor input
       occurrence.selection (occurrenceLayout input occurrence)
       ((input.val.extractOpenRaw occurrence.selection
         (occurrenceLayout input occurrence)).exposedWires.get index)
     rw [rootScope, bodyEq]
-    exact ConcreteDiagram.Encloses.refl _ _)))
+    exact Concrete.Diagram.Encloses.refl _ _)))
 
 theorem exposedHostIndex_get
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence)
-    (context : ConcreteElaboration.WireContext input.val)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence)
+    (context : Concrete.Elaboration.WireContext input.val)
     (exact : context.Exact occurrence.selection.val.anchor)
     (index : Fin (input.val.extractOpenRaw occurrence.selection
       (occurrenceLayout input occurrence)).exposedWires.length) :
@@ -131,18 +134,18 @@ theorem exposedHostIndex_get
       have bodyEq := FragmentLayout.bodyContainer_eq_root_of_proxyCount_eq_zero
         (occurrenceLayout input occurrence)
         (occurrenceLayout_proxyCount_zero input occurrence witness)
-      apply IterationSoundness.fragmentWireOrigin_scope_encloses_anchor input
+      apply VisualProof.Rule.IterationSoundness.fragmentWireOrigin_scope_encloses_anchor input
         occurrence.selection (occurrenceLayout input occurrence)
         ((input.val.extractOpenRaw occurrence.selection
           (occurrenceLayout input occurrence)).exposedWires.get index)
       rw [rootScope, bodyEq]
-      exact ConcreteDiagram.Encloses.refl _ _))))
+      exact Concrete.Diagram.Encloses.refl _ _))))
 
 noncomputable def fragmentOuterEnvironment
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence)
-    (context : ConcreteElaboration.WireContext input.val)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence)
+    (context : Concrete.Elaboration.WireContext input.val)
     (exact : context.Exact occurrence.selection.val.anchor)
     (environment : Fin context.length → D) :
     Fin (input.val.extractOpenRaw occurrence.selection
@@ -150,17 +153,17 @@ noncomputable def fragmentOuterEnvironment
   environment ∘ exposedHostIndex input occurrence witness context exact
 
 theorem fragmentOuterEnvironment_boundary
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence)
-    (context : ConcreteElaboration.WireContext input.val)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence)
+    (context : Concrete.Elaboration.WireContext input.val)
     (exact : context.Exact occurrence.selection.val.anchor)
     (environment : Fin context.length → D)
     (position : Fin occurrence.selection.touchingWires.length) :
     fragmentOuterEnvironment input occurrence witness context exact environment
         ((input.val.extractOpenRaw occurrence.selection
           (occurrenceLayout input occurrence)).boundaryClass
-            (Fin.cast (ConcreteDiagram.extractBoundaryRaw_length input.val
+            (Fin.cast (Concrete.Diagram.extractBoundaryRaw_length input.val
               occurrence.selection (occurrenceLayout input occurrence)).symm
               position)) =
       touchingEnvironment input occurrence context exact environment position := by
@@ -171,28 +174,28 @@ theorem fragmentOuterEnvironment_boundary
   change context.get (exposedHostIndex input occurrence witness context exact
       ((input.val.extractOpenRaw occurrence.selection
         (occurrenceLayout input occurrence)).boundaryClass
-          (Fin.cast (ConcreteDiagram.extractBoundaryRaw_length input.val
+          (Fin.cast (Concrete.Diagram.extractBoundaryRaw_length input.val
             occurrence.selection (occurrenceLayout input occurrence)).symm
             position))) =
     context.get (touchingIndex input occurrence context exact position)
   rw [exposedHostIndex_get, touchingIndex_get]
-  have boundarySound := OpenConcreteDiagram.boundaryClass_sound
+  have boundarySound := Concrete.OpenDiagram.boundaryClass_sound
     (input.val.extractOpenRaw occurrence.selection
       (occurrenceLayout input occurrence))
-    (Fin.cast (ConcreteDiagram.extractBoundaryRaw_length input.val
+    (Fin.cast (Concrete.Diagram.extractBoundaryRaw_length input.val
       occurrence.selection (occurrenceLayout input occurrence)).symm position)
   rw [boundarySound]
-  simpa [ConcreteDiagram.extractOpenRaw, ConcreteDiagram.extractBoundaryRaw,
-    ConcreteDiagram.fragmentWireOrigin, FragmentLayout.boundaryWire]
+  simpa [Concrete.Diagram.extractOpenRaw, Concrete.Diagram.extractBoundaryRaw,
+    Concrete.Diagram.fragmentWireOrigin, FragmentLayout.boundaryWire]
 
 theorem fragmentOuterEnvironment_agrees
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence)
-    (context : ConcreteElaboration.WireContext input.val)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence)
+    (context : Concrete.Elaboration.WireContext input.val)
     (exact : context.Exact occurrence.selection.val.anchor)
     (environment : Fin context.length → D) :
-    (IterationSoundness.extractionContextRelation input occurrence.selection
+    (VisualProof.Rule.IterationSoundness.extractionContextRelation input occurrence.selection
       (occurrenceLayout input occurrence)
       (input.val.extractOpenRaw occurrence.selection
         (occurrenceLayout input occurrence)).exposedWires context
@@ -210,9 +213,9 @@ theorem fragmentOuterEnvironment_agrees
   exact related
 
 theorem occurrenceFragment_denote_iff_relation
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence)
     (model : Model)
     (environment : Fin occurrence.selection.touchingWires.length →
       model.Carrier) :
@@ -220,19 +223,19 @@ theorem occurrenceFragment_denote_iff_relation
         (occurrenceLayout input occurrence)).denote
         (occurrenceFragment_wellFormed input occurrence) model
         (environment ∘ Fin.cast
-          (ConcreteDiagram.extractBoundaryRaw_length input.val
+          (Concrete.Diagram.extractBoundaryRaw_length input.val
             occurrence.selection (occurrenceLayout input occurrence))) ↔
       abstractionRelation  comprehension model
         (environment ∘ witness.assignment.args) := by
   let fragment := input.val.extractOpenRaw occurrence.selection
     (occurrenceLayout input occurrence)
-  let occurrenceIso : OpenConcreteIso fragment witness.diagonal.val := by
+  let occurrenceIso : Concrete.OpenIso fragment witness.diagonal.val := by
     dsimp only [fragment]
     rw [occurrenceFragment_eq_selectedFragment input occurrence]
     exact witness.exactOccurrence
   let sourceArgs : Fin fragment.boundary.length → model.Carrier :=
     environment ∘ Fin.cast
-      (ConcreteDiagram.extractBoundaryRaw_length input.val
+      (Concrete.Diagram.extractBoundaryRaw_length input.val
         occurrence.selection (occurrenceLayout input occurrence))
   have argsEq :
       sourceArgs ∘ Fin.cast occurrenceIso.boundary_length_eq.symm =
@@ -257,23 +260,23 @@ of the single comprehension relation to that occurrence's ordered host wires.
 The theorem consumes the actual selected compiler block, including hidden
 root-wire witnesses, rather than an intrinsic replacement surrogate. -/
 theorem selectedOccurrence_denote_relation
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence)
     (model : Model)
     (hostFuel : Nat)
-    (hostContext : ConcreteElaboration.WireContext input.val)
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
-    (hostEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (hostContext : Concrete.Elaboration.WireContext input.val)
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
+    (hostEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val hostBinders occurrence.selection.val.anchor)
     (hostCover : hostBinders.Covers occurrence.selection.val.anchor)
     (hostExact : hostContext.Exact occurrence.selection.val.anchor)
     (hostItems : ItemSeq  hostContext.length hostRels)
     (hostCompiled :
-      ConcreteElaboration.compileOccurrencesWith?  input.val
-        (ConcreteElaboration.compileRegion?  input.val hostFuel)
+      Concrete.Elaboration.compileOccurrencesWith?  input.val
+        (Concrete.Elaboration.compileRegion?  input.val hostFuel)
         hostContext hostBinders
-        (ModalSoundness.selectedOccurrences input.val occurrence.selection) =
+        (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val occurrence.selection) =
           some hostItems)
     (hostEnvironment : Fin hostContext.length → model.Carrier)
     (relationEnvironment : RelEnv model.Carrier hostRels)
@@ -284,11 +287,11 @@ theorem selectedOccurrence_denote_relation
         hostEnvironment ∘ witness.assignment.args) := by
   let fragment := input.val.extractOpenRaw occurrence.selection
     (occurrenceLayout input occurrence)
-  let checkedFragment : CheckedOpenDiagram  :=
+  let checkedFragment : Concrete.CheckedOpen  :=
     ⟨fragment, occurrenceFragment_wellFormed input occurrence⟩
-  let compiled := Splice.Input.compiledSpliceOpenRootItems checkedFragment
+  let compiled := Concrete.Splice.Input.compiledSpliceOpenRootItems checkedFragment
   have selectedSimulation :=
-    IterationSoundness.extractionCompileRoot_selected_denote input
+    VisualProof.Rule.IterationSoundness.extractionCompileRoot_selected_denote input
       occurrence.selection (occurrenceLayout input occurrence)
       (occurrenceLayout_proxyCount_zero input occurrence witness)
       model  hostFuel hostContext hostBinders hostEnumeration hostCover
@@ -302,16 +305,16 @@ theorem selectedOccurrence_denote_relation
     (fragmentOuterEnvironment_agrees input occurrence witness hostContext
       hostExact hostEnvironment) hostDenotes
   let relationMap : RelationRenaming [] hostRels :=
-    Splice.Input.PlugLayout.emptyRelationRenaming hostRels
+    Concrete.Splice.Input.PlugLayout.emptyRelationRenaming hostRels
   have fragmentBodyDenotes : denoteRegion (relCtx := []) model  fragmentOuter
       (PUnit.unit : RelEnv model.Carrier [])
-      (ConcreteElaboration.finishRoot fragment.exposedWires
+      (Concrete.Elaboration.finishRoot fragment.exposedWires
         fragment.hiddenWires compiled.items) := by
     exact (denoteRegion_renameRelations model  relationMap
       (PUnit.unit : RelEnv model.Carrier []) relationEnvironment
       (RelEnv.pullback_agrees relationMap relationEnvironment)
       fragmentOuter
-      (ConcreteElaboration.finishRoot fragment.exposedWires
+      (Concrete.Elaboration.finishRoot fragment.exposedWires
         fragment.hiddenWires compiled.items)).mp (by
           simpa [relationMap] using fragmentRenamedDenotes)
   let touching := touchingEnvironment input occurrence hostContext hostExact
@@ -319,14 +322,14 @@ theorem selectedOccurrence_denote_relation
   have fragmentDenotes : fragment.denote
       (occurrenceFragment_wellFormed input occurrence) model
       (touching ∘ Fin.cast
-        (ConcreteDiagram.extractBoundaryRaw_length input.val
+        (Concrete.Diagram.extractBoundaryRaw_length input.val
           occurrence.selection (occurrenceLayout input occurrence))) := by
     change checkedFragment.denote model  _
-    rw [CheckedOpenDiagram.denote_eq_intrinsic]
+    rw [Concrete.CheckedOpen.denote_eq_intrinsic]
     unfold denoteOpen
     refine ⟨{
       args := touching ∘ Fin.cast
-        (ConcreteDiagram.extractBoundaryRaw_length input.val
+        (Concrete.Diagram.extractBoundaryRaw_length input.val
           occurrence.selection (occurrenceLayout input occurrence))
       classes := fragmentOuter
       agrees := ?_
@@ -334,7 +337,7 @@ theorem selectedOccurrence_denote_relation
     · intro position
       have boundary := fragmentOuterEnvironment_boundary input occurrence
         witness hostContext hostExact hostEnvironment
-        (Fin.cast (ConcreteDiagram.extractBoundaryRaw_length input.val
+        (Fin.cast (Concrete.Diagram.extractBoundaryRaw_length input.val
           occurrence.selection (occurrenceLayout input occurrence)) position)
       simpa [checkedFragment, fragment, touching, Function.comp_apply] using
         boundary
@@ -345,4 +348,4 @@ theorem selectedOccurrence_denote_relation
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

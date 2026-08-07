@@ -1,6 +1,8 @@
 import VisualProof.Rule.Soundness.AttachmentAliasSemanticConcreteSimulation
 
-namespace VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+namespace VisualProof.Concrete.Splice.AttachmentAliasMaterialization
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -12,7 +14,7 @@ variable {Host : Type} [DecidableEq Host]
 namespace Semantic
 
 @[simp] theorem collapseWire_rawBoundaryWire
-    (pattern : OpenConcreteDiagram)
+    (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (position : Fin pattern.boundary.length) :
     collapseWire pattern attachment
@@ -27,7 +29,7 @@ namespace Semantic
       exact congrArg Prod.fst (pairOrigin_key pattern attachment position)
 
 theorem collapseWire_mem_boundary_of_mem_rawBoundary
-    (pattern : OpenConcreteDiagram)
+    (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (bodyContainer : Fin pattern.diagram.regionCount)
     (wire : Fin (pattern.diagram.wireCount + aliasCount pattern attachment))
@@ -42,7 +44,7 @@ theorem collapseWire_mem_boundary_of_mem_rawBoundary
 /-- The exposed target classes collapse onto source exposed classes, while
 every source class has its canonical lifted-old representative. -/
 noncomputable def exposedCollapse
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram) :
     ContextCollapse pattern attachment spine
@@ -51,49 +53,49 @@ noncomputable def exposedCollapse
   let target := raw pattern.val attachment spine.bodyContainer
   let indexMap : Fin target.exposedWires.length →
       Fin pattern.val.exposedWires.length := fun index =>
-    Classical.choose (ConcreteElaboration.WireContext.lookup?_complete (by
-      rw [OpenConcreteDiagram.mem_exposedWires]
+    Classical.choose (Concrete.Elaboration.WireContext.lookup?_complete (by
+      rw [Concrete.OpenDiagram.mem_exposedWires]
       have targetMember : target.exposedWires.get index ∈ target.boundary :=
-        (OpenConcreteDiagram.mem_exposedWires target _).mp
+        (Concrete.OpenDiagram.mem_exposedWires target _).mp
           (List.get_mem target.exposedWires index)
       exact collapseWire_mem_boundary_of_mem_rawBoundary pattern.val attachment
         spine.bodyContainer _ targetMember))
   let oldIndex : Fin pattern.val.exposedWires.length →
       Fin target.exposedWires.length := fun index =>
-    Classical.choose (ConcreteElaboration.WireContext.lookup?_complete (by
-      rw [OpenConcreteDiagram.mem_exposedWires]
+    Classical.choose (Concrete.Elaboration.WireContext.lookup?_complete (by
+      rw [Concrete.OpenDiagram.mem_exposedWires]
       apply liftOldWire_mem_raw_boundary pattern.val attachment
         spine.bodyContainer
-      exact (OpenConcreteDiagram.mem_exposedWires pattern.val _).mp
+      exact (Concrete.OpenDiagram.mem_exposedWires pattern.val _).mp
         (List.get_mem pattern.val.exposedWires index)))
   exact {
     indexMap := indexMap
     get := by
       intro index
-      exact ConcreteElaboration.WireContext.lookup?_sound
-        (Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete
+      exact Concrete.Elaboration.WireContext.lookup?_sound
+        (Classical.choose_spec (Concrete.Elaboration.WireContext.lookup?_complete
           (by
-            rw [OpenConcreteDiagram.mem_exposedWires]
+            rw [Concrete.OpenDiagram.mem_exposedWires]
             have targetMember : target.exposedWires.get index ∈ target.boundary :=
-              (OpenConcreteDiagram.mem_exposedWires target _).mp
+              (Concrete.OpenDiagram.mem_exposedWires target _).mp
                 (List.get_mem target.exposedWires index)
             exact collapseWire_mem_boundary_of_mem_rawBoundary pattern.val
               attachment spine.bodyContainer _ targetMember)))
     oldIndex := oldIndex
     old_get := by
       intro index
-      exact ConcreteElaboration.WireContext.lookup?_sound
-        (Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete
+      exact Concrete.Elaboration.WireContext.lookup?_sound
+        (Classical.choose_spec (Concrete.Elaboration.WireContext.lookup?_complete
           (by
-            rw [OpenConcreteDiagram.mem_exposedWires]
+            rw [Concrete.OpenDiagram.mem_exposedWires]
             apply liftOldWire_mem_raw_boundary pattern.val attachment
               spine.bodyContainer
-            exact (OpenConcreteDiagram.mem_exposedWires pattern.val _).mp
+            exact (Concrete.OpenDiagram.mem_exposedWires pattern.val _).mp
               (List.get_mem pattern.val.exposedWires index))))
   }
 
 noncomputable def rootCollapse
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -107,14 +109,14 @@ noncomputable def rootCollapse
     pattern.val.diagram.root
     (raw pattern.val attachment spine.bodyContainer).rootWires
     pattern.val.rootWires
-    (ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+    (Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
       ⟨raw pattern.val attachment spine.bodyContainer, {
         diagram_well_formed := targetWellFormed
         boundary_is_root_scoped := by
           exact (AttachmentAliasMaterialization.terminalBody pattern attachment
             spine contract).boundary_is_root_scoped
       }⟩)
-    (ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+    (Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
       pattern)
 
 def combinedOuterIndex (ambient locals : List α)
@@ -138,25 +140,25 @@ def combinedLocalIndex (ambient locals : List α)
   simp [combinedLocalIndex, List.get_eq_getElem, List.getElem_append_right]
 
 @[simp] theorem rootEnvironment_combinedOuterIndex
-    (ambient locals : ConcreteElaboration.WireContext diagram)
+    (ambient locals : Concrete.Elaboration.WireContext diagram)
     (outer : Fin ambient.length → D) (localEnv : Fin locals.length → D)
     (index : Fin ambient.length) :
-    ConcreteElaboration.rootEnvironment ambient locals outer localEnv
+    Concrete.Elaboration.rootEnvironment ambient locals outer localEnv
         (combinedOuterIndex ambient locals index) = outer index := by
-  simp [ConcreteElaboration.rootEnvironment, combinedOuterIndex, extendWireEnv,
+  simp [Concrete.Elaboration.rootEnvironment, combinedOuterIndex, extendWireEnv,
     Fin.addCases_left]
 
 @[simp] theorem rootEnvironment_combinedLocalIndex
-    (ambient locals : ConcreteElaboration.WireContext diagram)
+    (ambient locals : Concrete.Elaboration.WireContext diagram)
     (outer : Fin ambient.length → D) (localEnv : Fin locals.length → D)
     (index : Fin locals.length) :
-    ConcreteElaboration.rootEnvironment ambient locals outer localEnv
+    Concrete.Elaboration.rootEnvironment ambient locals outer localEnv
         (combinedLocalIndex ambient locals index) = localEnv index := by
-  simp [ConcreteElaboration.rootEnvironment, combinedLocalIndex, extendWireEnv,
+  simp [Concrete.Elaboration.rootEnvironment, combinedLocalIndex, extendWireEnv,
     Fin.addCases_right]
 
 theorem rootCollapse_indexMap_outer
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -193,7 +195,7 @@ theorem rootCollapse_indexMap_outer
         pattern.val.exposedWires.get
           ((exposedCollapse pattern attachment spine).indexMap index) :=
     combinedOuterIndex_get _ _ _
-  simp only [OpenConcreteDiagram.rootWires] at combinedGet
+  simp only [Concrete.OpenDiagram.rootWires] at combinedGet
   exact (List.getElem_inj pattern.val.rootWires_nodup).mp (by
     change (pattern.val.exposedWires ++ pattern.val.hiddenWires).get _ = _
     exact combinedGet.trans
@@ -201,7 +203,7 @@ theorem rootCollapse_indexMap_outer
         (exposedGet.symm.trans sourceOuterGet.symm)))
 
 theorem rootCollapse_oldIndex_outer
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -236,7 +238,7 @@ theorem rootCollapse_oldIndex_outer
         (raw pattern.val attachment spine.bodyContainer).exposedWires.get
           ((exposedCollapse pattern attachment spine).oldIndex index) :=
     combinedOuterIndex_get _ _ _
-  simp only [OpenConcreteDiagram.rootWires] at combinedGet
+  simp only [Concrete.OpenDiagram.rootWires] at combinedGet
   rw [sourceOuterGet] at combinedGet
   exact (List.getElem_inj
     (raw pattern.val attachment spine.bodyContainer).rootWires_nodup).mp (by
@@ -245,7 +247,7 @@ theorem rootCollapse_oldIndex_outer
       exact combinedGet.trans (exposedGet.symm.trans targetOuterGet.symm))
 
 noncomputable def forwardTargetLocal
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -256,7 +258,7 @@ noncomputable def forwardTargetLocal
     (sourceLocal : Fin pattern.val.hiddenWires.length → D) :
     Fin (raw pattern.val attachment spine.bodyContainer).hiddenWires.length → D :=
   fun index =>
-    ConcreteElaboration.rootEnvironment pattern.val.exposedWires
+    Concrete.Elaboration.rootEnvironment pattern.val.exposedWires
       pattern.val.hiddenWires sourceOuter sourceLocal
       ((rootCollapse pattern attachment spine contract targetWellFormed).indexMap
         (combinedLocalIndex
@@ -264,7 +266,7 @@ noncomputable def forwardTargetLocal
           (raw pattern.val attachment spine.bodyContainer).hiddenWires index))
 
 noncomputable def backwardSourceLocal
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -277,7 +279,7 @@ noncomputable def backwardSourceLocal
       (raw pattern.val attachment spine.bodyContainer).hiddenWires.length → D) :
     Fin pattern.val.hiddenWires.length → D :=
   fun index =>
-    ConcreteElaboration.rootEnvironment
+    Concrete.Elaboration.rootEnvironment
       (raw pattern.val attachment spine.bodyContainer).exposedWires
       (raw pattern.val attachment spine.bodyContainer).hiddenWires
       targetOuter targetLocal
@@ -286,7 +288,7 @@ noncomputable def backwardSourceLocal
           index))
 
 theorem forwardRootEnvironment_agrees
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -299,10 +301,10 @@ theorem forwardRootEnvironment_agrees
     (outerAgrees : sourceOuter ∘
         (exposedCollapse pattern attachment spine).indexMap = targetOuter)
     (sourceLocal : Fin pattern.val.hiddenWires.length → D) :
-    ConcreteElaboration.rootEnvironment pattern.val.exposedWires
+    Concrete.Elaboration.rootEnvironment pattern.val.exposedWires
         pattern.val.hiddenWires sourceOuter sourceLocal ∘
         (rootCollapse pattern attachment spine contract targetWellFormed).indexMap =
-      ConcreteElaboration.rootEnvironment
+      Concrete.Elaboration.rootEnvironment
         (raw pattern.val attachment spine.bodyContainer).exposedWires
         (raw pattern.val attachment spine.bodyContainer).hiddenWires
         targetOuter
@@ -342,7 +344,7 @@ theorem forwardRootEnvironment_agrees
     rfl
 
 theorem backwardRootEnvironment_agrees
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -356,11 +358,11 @@ theorem backwardRootEnvironment_agrees
       (exposedCollapse pattern attachment spine).oldIndex)
     (targetLocal : Fin
       (raw pattern.val attachment spine.bodyContainer).hiddenWires.length → D) :
-    ConcreteElaboration.rootEnvironment pattern.val.exposedWires
+    Concrete.Elaboration.rootEnvironment pattern.val.exposedWires
         pattern.val.hiddenWires sourceOuter
         (backwardSourceLocal pattern attachment spine contract targetWellFormed
           targetOuter targetLocal) =
-      ConcreteElaboration.rootEnvironment
+      Concrete.Elaboration.rootEnvironment
         (raw pattern.val attachment spine.bodyContainer).exposedWires
         (raw pattern.val attachment spine.bodyContainer).hiddenWires
         targetOuter targetLocal ∘
@@ -395,4 +397,4 @@ theorem backwardRootEnvironment_agrees
 
 end Semantic
 
-end VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+end VisualProof.Concrete.Splice.AttachmentAliasMaterialization

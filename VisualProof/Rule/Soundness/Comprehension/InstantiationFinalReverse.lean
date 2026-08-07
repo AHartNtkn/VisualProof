@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalOccurrences
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -10,20 +12,20 @@ namespace InstantiationTrace
 /-- A final region is regular precisely when it has a pointwise-preserved
 source-frame preimage.  Copied material and the promoted focus have none. -/
 def FinalRegularPreimage
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -38,20 +40,20 @@ def FinalRegularPreimage
 regular final region chooses its unique frame origin; all opaque material is
 sent to the original parent focus. -/
 noncomputable def reverseRegionMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -63,20 +65,20 @@ noncomputable def reverseRegionMap
       finalRegion then Classical.choose preimage else payload.parent
 
 theorem reverseRegionMap_spec
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -93,20 +95,20 @@ theorem reverseRegionMap_spec
   exact Classical.choose_spec regular
 
 theorem finalRegionMap_injective_of_frameRegular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -120,11 +122,11 @@ theorem finalRegionMap_injective_of_frameRegular
   have firstNeBubble : first ≠ bubble := by
     intro equal
     subst first
-    exact firstRegular.1 (ConcreteDiagram.Encloses.refl input.val bubble)
+    exact firstRegular.1 (Concrete.Diagram.Encloses.refl input.val bubble)
   have secondNeBubble : second ≠ bubble := by
     intro equal
     subst second
-    exact secondRegular.1 (ConcreteDiagram.Encloses.refl input.val bubble)
+    exact secondRegular.1 (Concrete.Diagram.Encloses.refl input.val bubble)
   have firstOrigin := copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
     finalWellFormed first firstNeBubble
   have secondOrigin := copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
@@ -133,20 +135,20 @@ theorem finalRegionMap_injective_of_frameRegular
   rw [← firstOrigin, ← secondOrigin, mapped]
 
 @[simp] theorem reverseRegionMap_finalRegionMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -166,20 +168,20 @@ theorem finalRegionMap_injective_of_frameRegular
     finalWellFormed chosen.1 regular chosen.2
 
 theorem finalRegionMap_reverseRegionMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -197,20 +199,20 @@ theorem finalRegionMap_reverseRegionMap
 authoritative original root, including the case where the quantified parent
 itself is the root focus. -/
 theorem reverseRegionMap_root
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -235,12 +237,12 @@ theorem reverseRegionMap_root
       · exact candidateRegular.2 candidateParent
       · subst candidate
         exact candidateRegular.1
-          (ConcreteDiagram.Encloses.refl input.val bubble)
+          (Concrete.Diagram.Encloses.refl input.val bubble)
     simp [reverseRegionMap, noPreimage, rootFocus]
   · have rootRegular : FrameRegular payload input.val.root := by
       constructor
       · intro enclosed
-        have bubbleRoot := ConcreteElaboration.encloses_sheet_eq
+        have bubbleRoot := Concrete.Elaboration.encloses_sheet_eq
           input.property.root_is_sheet enclosed
         have bubbleShape := payload.bubble_eq
         have sameShape := congrArg input.val.regions bubbleRoot
@@ -253,20 +255,20 @@ theorem reverseRegionMap_root
       input.val.root rootRegular
 
 @[simp] theorem reverseRegionMap_targetIndex
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -282,17 +284,17 @@ theorem reverseRegionMap_root
     · exact candidateRegular.2 candidateParent
     · subst candidate
       exact candidateRegular.1
-        (ConcreteDiagram.Encloses.refl input.val bubble)
+        (Concrete.Diagram.Encloses.refl input.val bubble)
   simp [reverseRegionMap, noPreimage]
 
 theorem reverseRegionMap_child_of_frameRegular_parent
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -301,7 +303,7 @@ theorem reverseRegionMap_child_of_frameRegular_parent
     (parentRegular : FrameRegular payload parent)
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -322,12 +324,12 @@ theorem reverseRegionMap_child_of_frameRegular_parent
       · exact candidateRegular.2 candidateParent
       · subst candidate
         exact candidateRegular.1
-          (ConcreteDiagram.Encloses.refl input.val bubble)
+          (Concrete.Diagram.Encloses.refl input.val bubble)
     simp [reverseRegionMap, noPreimage]
   · have childRegular : FrameRegular payload child := by
       constructor
       · intro enclosed
-        rcases ConcreteElaboration.encloses_direct_child childParent enclosed with
+        rcases Concrete.Elaboration.encloses_direct_child childParent enclosed with
           bubbleEq | parentEnclosed
         · have childBubble : child = bubble := bubbleEq.symm
           have direct := childParent
@@ -344,20 +346,20 @@ theorem reverseRegionMap_child_of_frameRegular_parent
 forward and reverse region transport.  The original parent focus is handled
 by the opaque fallback; every other enclosing binder is itself regular. -/
 theorem reverseRegionMap_finalRegionMap_of_enclosing_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -381,32 +383,32 @@ theorem reverseRegionMap_finalRegionMap_of_enclosing_regular
       · exact candidateRegular.2 candidateParent
       · subst candidate
         exact candidateRegular.1
-          (ConcreteDiagram.Encloses.refl input.val bubble)
+          (Concrete.Diagram.Encloses.refl input.val bubble)
     simp [reverseRegionMap, noPreimage]
   · have binderRegular : FrameRegular payload binder := by
       constructor
       · intro bubbleEnclosesBinder
-        exact regular.1 (ConcreteElaboration.checked_encloses_trans
+        exact regular.1 (Concrete.Elaboration.checked_encloses_trans
           input.property bubbleEnclosesBinder encloses)
       · exact binderFocus
     exact copyTrace.reverseRegionMap_finalRegionMap elimTrace finalWellFormed
       binder binderRegular
 
 theorem finalNodeMap_injective
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     {first second : Fin input.val.nodeCount}
@@ -429,20 +431,20 @@ theorem finalNodeMap_injective
 /-- A final node at a regular final region has a certified original frame
 node preimage. -/
 def FinalNodePreimage
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -465,20 +467,20 @@ def FinalNodePreimage
 chosen only when certified; arbitrary off-region nodes use a harmless child
 fallback, while child occurrences always use the total reverse region map. -/
 noncomputable def reverseOccurrenceMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -486,9 +488,9 @@ noncomputable def reverseOccurrenceMap
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion) :
-    ConcreteElaboration.LocalOccurrence elimTrace.sourceDiagram.regionCount
+    Concrete.Elaboration.LocalOccurrence elimTrace.sourceDiagram.regionCount
         elimTrace.sourceDiagram.nodeCount →
-      ConcreteElaboration.LocalOccurrence input.val.regionCount
+      Concrete.Elaboration.LocalOccurrence input.val.regionCount
         input.val.nodeCount
   | .child child =>
       .child (copyTrace.reverseRegionMap elimTrace finalWellFormed child)
@@ -501,20 +503,20 @@ noncomputable def reverseOccurrenceMap
         .child (copyTrace.reverseRegionMap elimTrace finalWellFormed finalRegion)
 
 theorem finalNode_preimage_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -535,10 +537,10 @@ theorem finalNode_preimage_of_regular
     finalWellFormed finalRegion regular
   have finalOccurrences := copyTrace.final_localOccurrences_of_regular elimTrace
     finalWellFormed originalRegion originalRegular
-  have finalMember : ConcreteElaboration.LocalOccurrence.node finalNode ∈
-      ConcreteElaboration.localOccurrences elimTrace.sourceDiagram
+  have finalMember : Concrete.Elaboration.LocalOccurrence.node finalNode ∈
+      Concrete.Elaboration.localOccurrences elimTrace.sourceDiagram
         (copyTrace.finalRegionMap elimTrace finalWellFormed originalRegion) := by
-    apply (ConcreteElaboration.mem_localOccurrences_node _ _ _).2
+    apply (Concrete.Elaboration.mem_localOccurrences_node _ _ _).2
     exact nodeRegion.trans mappedRegion.symm
   rw [finalOccurrences] at finalMember
   obtain ⟨originalOccurrence, originalMember, mapped⟩ :=
@@ -546,36 +548,36 @@ theorem finalNode_preimage_of_regular
   cases originalOccurrence with
   | node originalNode =>
       have originalNodeRegion :=
-        (ConcreteElaboration.mem_localOccurrences_node input.val originalRegion
+        (Concrete.Elaboration.mem_localOccurrences_node input.val originalRegion
           originalNode).1 originalMember
       refine ⟨originalNode, originalNodeRegion, ?_⟩
-      have mapped' : ConcreteElaboration.LocalOccurrence.node
+      have mapped' : Concrete.Elaboration.LocalOccurrence.node
           (regions := elimTrace.sourceDiagram.regionCount)
           (copyTrace.finalNodeMap elimTrace originalNode
             (node_outside_bubble_of_regular payload originalRegion
               originalRegular originalNode originalNodeRegion)) =
-          ConcreteElaboration.LocalOccurrence.node
+          Concrete.Elaboration.LocalOccurrence.node
             (regions := elimTrace.sourceDiagram.regionCount) finalNode := by
         simpa [finalFrameOccurrenceMap, originalNodeRegion] using mapped
-      exact ConcreteElaboration.LocalOccurrence.node.inj mapped'
+      exact Concrete.Elaboration.LocalOccurrence.node.inj mapped'
   | child originalChild =>
       simp [finalFrameOccurrenceMap] at mapped
 
 theorem reverseOccurrenceMap_node_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -596,20 +598,20 @@ theorem reverseOccurrenceMap_node_of_regular
 
 /-- The original node selected by the certified reverse occurrence map. -/
 noncomputable def reverseNodeMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -624,20 +626,20 @@ noncomputable def reverseNodeMap
     finalWellFormed finalRegion regular finalNode nodeRegion)
 
 @[simp] theorem reverseOccurrenceMap_node_eq
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -657,20 +659,20 @@ noncomputable def reverseNodeMap
   simp [reverseOccurrenceMap, reverseNodeMap, preimage]
 
 @[simp] theorem reverseOccurrenceMap_child
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -685,30 +687,30 @@ noncomputable def reverseNodeMap
   rfl
 
 theorem reverseOccurrenceMap_finalFrameOccurrenceMap_of_mem
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
     (originalRegion : Fin input.val.regionCount)
     (originalRegular : FrameRegular payload originalRegion)
-    (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (occurrence : Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount)
     (member : occurrence ∈
-      ConcreteElaboration.localOccurrences input.val originalRegion) :
+      Concrete.Elaboration.localOccurrences input.val originalRegion) :
     let finalRegion := copyTrace.finalRegionMap elimTrace finalWellFormed
       originalRegion
     let finalRegular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
@@ -728,7 +730,7 @@ theorem reverseOccurrenceMap_finalFrameOccurrenceMap_of_mem
   cases occurrence with
   | node originalNode =>
       have nodeRegion :=
-        (ConcreteElaboration.mem_localOccurrences_node input.val originalRegion
+        (Concrete.Elaboration.mem_localOccurrences_node input.val originalRegion
           originalNode).1 member
       let outside := node_outside_bubble_of_regular payload originalRegion
         originalRegular originalNode nodeRegion
@@ -740,16 +742,16 @@ theorem reverseOccurrenceMap_finalFrameOccurrenceMap_of_mem
         · rfl
       rw [show copyTrace.finalFrameOccurrenceMap elimTrace finalWellFormed
           originalRegion originalRegular
-          (ConcreteElaboration.LocalOccurrence.node originalNode) =
-          ConcreteElaboration.LocalOccurrence.node finalNode by
+          (Concrete.Elaboration.LocalOccurrence.node originalNode) =
+          Concrete.Elaboration.LocalOccurrence.node finalNode by
         simp [finalFrameOccurrenceMap, nodeRegion, finalNode, outside]]
       change (if actualPreimage : copyTrace.FinalNodePreimage elimTrace
           finalWellFormed finalRegion finalRegular finalNode then
-          ConcreteElaboration.LocalOccurrence.node
+          Concrete.Elaboration.LocalOccurrence.node
             (Classical.choose actualPreimage)
-        else ConcreteElaboration.LocalOccurrence.child
+        else Concrete.Elaboration.LocalOccurrence.child
           (copyTrace.reverseRegionMap elimTrace finalWellFormed finalRegion)) =
-        ConcreteElaboration.LocalOccurrence.node originalNode
+        Concrete.Elaboration.LocalOccurrence.node originalNode
       rw [dif_pos preimage]
       have chosenSpec := Classical.choose_spec preimage
       have chosenRegion := chosenSpec.1
@@ -761,36 +763,36 @@ theorem reverseOccurrenceMap_finalFrameOccurrenceMap_of_mem
       have chosenEq : Classical.choose preimage = originalNode :=
         copyTrace.finalNodeMap_injective elimTrace chosenOutside outside
           chosenMapped
-      exact congrArg ConcreteElaboration.LocalOccurrence.node chosenEq
+      exact congrArg Concrete.Elaboration.LocalOccurrence.node chosenEq
   | child originalChild =>
       have childParent :=
-        (ConcreteElaboration.mem_localOccurrences_child input.val originalRegion
+        (Concrete.Elaboration.mem_localOccurrences_child input.val originalRegion
           originalChild).1 member
-      change ConcreteElaboration.LocalOccurrence.child
+      change Concrete.Elaboration.LocalOccurrence.child
           (copyTrace.reverseRegionMap elimTrace finalWellFormed
             (copyTrace.finalRegionMap elimTrace finalWellFormed originalChild)) =
-        ConcreteElaboration.LocalOccurrence.child originalChild
-      exact congrArg ConcreteElaboration.LocalOccurrence.child
+        Concrete.Elaboration.LocalOccurrence.child originalChild
+      exact congrArg Concrete.Elaboration.LocalOccurrence.child
         (reverseRegionMap_child_of_frameRegular_parent originalRegular copyTrace
           elimTrace finalWellFormed childParent)
 
 /-- Reverse occurrence transport recovers the authoritative original ordered
 traversal at every regular final region. -/
 theorem reverse_localOccurrences
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -798,9 +800,9 @@ theorem reverse_localOccurrences
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
     (regular : copyTrace.FinalRegularPreimage elimTrace finalWellFormed
       finalRegion) :
-    ConcreteElaboration.localOccurrences input.val
+    Concrete.Elaboration.localOccurrences input.val
         (copyTrace.reverseRegionMap elimTrace finalWellFormed finalRegion) =
-      (ConcreteElaboration.localOccurrences elimTrace.sourceDiagram
+      (Concrete.Elaboration.localOccurrences elimTrace.sourceDiagram
         finalRegion).map
         (copyTrace.reverseOccurrenceMap elimTrace finalWellFormed finalRegion
           regular) := by
@@ -814,7 +816,7 @@ theorem reverse_localOccurrences
     finalWellFormed originalRegion originalRegular
   rw [mappedRegion] at forward
   rw [forward]
-  let occurrences := ConcreteElaboration.localOccurrences input.val
+  let occurrences := Concrete.Elaboration.localOccurrences input.val
     originalRegion
   have pointwise : ∀ occurrence ∈ occurrences,
       copyTrace.reverseOccurrenceMap elimTrace finalWellFormed finalRegion
@@ -832,7 +834,7 @@ theorem reverse_localOccurrences
           (copyTrace.reverseOccurrenceMap elimTrace finalWellFormed finalRegion
             regular) = occurrences := by
     have mapPointwise : ∀ values : List
-        (ConcreteElaboration.LocalOccurrence input.val.regionCount
+        (Concrete.Elaboration.LocalOccurrence input.val.regionCount
           input.val.nodeCount),
         (∀ occurrence ∈ values,
           copyTrace.reverseOccurrenceMap elimTrace finalWellFormed finalRegion
@@ -871,20 +873,20 @@ theorem reverse_localOccurrences
 /-- Every final child of a regular frame region is the image of one original
 direct child, and the total reverse map recovers that same child. -/
 theorem finalChild_preimage_of_regular_parent
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -908,10 +910,10 @@ theorem finalChild_preimage_of_regular_parent
     finalWellFormed finalParent regular).1
   have mappedParent := copyTrace.finalRegionMap_reverseRegionMap elimTrace
     finalWellFormed finalParent regular
-  have finalMember : ConcreteElaboration.LocalOccurrence.child finalChild ∈
-      ConcreteElaboration.localOccurrences elimTrace.sourceDiagram
+  have finalMember : Concrete.Elaboration.LocalOccurrence.child finalChild ∈
+      Concrete.Elaboration.localOccurrences elimTrace.sourceDiagram
         (copyTrace.finalRegionMap elimTrace finalWellFormed originalParent) := by
-    apply (ConcreteElaboration.mem_localOccurrences_child _ _ _).2
+    apply (Concrete.Elaboration.mem_localOccurrences_child _ _ _).2
     exact childParent.trans (congrArg some mappedParent.symm)
   have forward := copyTrace.final_localOccurrences_of_regular elimTrace
     finalWellFormed originalParent originalRegular
@@ -921,19 +923,19 @@ theorem finalChild_preimage_of_regular_parent
   cases originalOccurrence with
   | node originalNode =>
       have originalRegion :=
-        (ConcreteElaboration.mem_localOccurrences_node input.val originalParent
+        (Concrete.Elaboration.mem_localOccurrences_node input.val originalParent
           originalNode).1 originalMember
       simp [finalFrameOccurrenceMap, originalRegion] at mapped
   | child originalChild =>
       have originalChildParent :=
-        (ConcreteElaboration.mem_localOccurrences_child input.val originalParent
+        (Concrete.Elaboration.mem_localOccurrences_child input.val originalParent
           originalChild).1 originalMember
       have mappedChild : copyTrace.finalRegionMap elimTrace finalWellFormed
           originalChild = finalChild := by
-        change ConcreteElaboration.LocalOccurrence.child
+        change Concrete.Elaboration.LocalOccurrence.child
             (copyTrace.finalRegionMap elimTrace finalWellFormed originalChild) =
-          ConcreteElaboration.LocalOccurrence.child finalChild at mapped
-        exact ConcreteElaboration.LocalOccurrence.child.inj mapped
+          Concrete.Elaboration.LocalOccurrence.child finalChild at mapped
+        exact Concrete.Elaboration.LocalOccurrence.child.inj mapped
       refine ⟨originalChild, originalChildParent, mappedChild, ?_⟩
       rw [← mappedChild]
       exact reverseRegionMap_child_of_frameRegular_parent
@@ -943,20 +945,20 @@ theorem finalChild_preimage_of_regular_parent
 child wrapper exactly.  Distinguished children remain opaque wrappers while
 their interiors are intentionally outside this theorem. -/
 theorem reverse_region_shape_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -1015,20 +1017,20 @@ theorem reverse_region_shape_of_regular
 its selected original node.  Reversing the owner and atom binder therefore
 recovers the authoritative original constructor. -/
 theorem reverse_node_shape_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :

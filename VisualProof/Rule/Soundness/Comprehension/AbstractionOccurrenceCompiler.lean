@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionFocusedEnvironment
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -25,26 +28,26 @@ def occurrenceFamilyAtomItems
 theorem compileOccurrenceFamilyItems
     (recurse : ∀ {rels : RelCtx},
       (region : Fin d.regionCount) →
-      (context : ConcreteElaboration.WireContext d) →
-      ConcreteElaboration.BinderContext d rels →
+      (context : Concrete.Elaboration.WireContext d) →
+      Concrete.Elaboration.BinderContext d rels →
       Option (Region  context.length rels))
-    (context : ConcreteElaboration.WireContext d)
-    (binders : ConcreteElaboration.BinderContext d rels)
+    (context : Concrete.Elaboration.WireContext d)
+    (binders : Concrete.Elaboration.BinderContext d rels)
     (indices : List ι)
-    (occurrences : ι → List (ConcreteElaboration.LocalOccurrence
+    (occurrences : ι → List (Concrete.Elaboration.LocalOccurrence
       d.regionCount d.nodeCount))
     (items : ι → ItemSeq  context.length rels)
     (compiled : ∀ index, index ∈ indices →
-      ConcreteElaboration.compileOccurrencesWith?  d recurse
+      Concrete.Elaboration.compileOccurrencesWith?  d recurse
         context binders (occurrences index) = some (items index)) :
-    ConcreteElaboration.compileOccurrencesWith?  d recurse
+    Concrete.Elaboration.compileOccurrencesWith?  d recurse
         context binders (indices.flatMap occurrences) =
       some (occurrenceFamilyItems items indices) := by
   induction indices with
   | nil => rfl
   | cons head tail ih =>
       rw [List.flatMap_cons]
-      exact ConcreteElaboration.compileOccurrencesWith?_append recurse context
+      exact Concrete.Elaboration.compileOccurrencesWith?_append recurse context
         binders (occurrences head) (tail.flatMap occurrences) (items head)
         (occurrenceFamilyItems items tail) (compiled head (by simp))
         (ih (by
@@ -54,25 +57,25 @@ theorem compileOccurrenceFamilyItems
 theorem compileOccurrenceFamilyAtomItems
     (recurse : ∀ {rels : RelCtx},
       (region : Fin d.regionCount) →
-      (context : ConcreteElaboration.WireContext d) →
-      ConcreteElaboration.BinderContext d rels →
+      (context : Concrete.Elaboration.WireContext d) →
+      Concrete.Elaboration.BinderContext d rels →
       Option (Region  context.length rels))
-    (context : ConcreteElaboration.WireContext d)
-    (binders : ConcreteElaboration.BinderContext d rels)
+    (context : Concrete.Elaboration.WireContext d)
+    (binders : Concrete.Elaboration.BinderContext d rels)
     (indices : List ι)
-    (occurrences : ι → ConcreteElaboration.LocalOccurrence
+    (occurrences : ι → Concrete.Elaboration.LocalOccurrence
       d.regionCount d.nodeCount)
     (items : ι → Item  context.length rels)
     (compiled : ∀ index, index ∈ indices →
-      ConcreteElaboration.compileOccurrenceWith?  d recurse
+      Concrete.Elaboration.compileOccurrenceWith?  d recurse
         context binders (occurrences index) = some (items index)) :
-    ConcreteElaboration.compileOccurrencesWith?  d recurse
+    Concrete.Elaboration.compileOccurrencesWith?  d recurse
         context binders (indices.map occurrences) =
       some (occurrenceFamilyAtomItems items indices) := by
   induction indices with
   | nil => rfl
   | cons head tail ih =>
-      simp only [List.map_cons, ConcreteElaboration.compileOccurrencesWith?,
+      simp only [List.map_cons, Concrete.Elaboration.compileOccurrencesWith?,
         occurrenceFamilyAtomItems]
       rw [compiled head (by simp), ih (by
         intro index member
@@ -135,4 +138,4 @@ theorem occurrenceFamilyAtomItems_denote_iff
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

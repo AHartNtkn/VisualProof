@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFilteredRegionSimul
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -12,53 +14,53 @@ namespace InstantiationSemantic
 survivor compilers.  Removed nodes are reinserted only from explicit semantic
 certificates; the forward projections merely forget them. -/
 theorem survivor_simulation_of_authoritative
-    {sourceOrigin targetOrigin : CheckedDiagram }
+    {sourceOrigin targetOrigin : Concrete.Checked }
     (sourceState : InstantiationState sourceOrigin sourceParameters sourceProxies)
     (targetState : InstantiationState targetOrigin targetParameters targetProxies)
     (model : Model)
     (sourceRemoved : ∀ {rels : RelCtx}
       (region : Fin sourceState.diagram.val.regionCount)
-      (context : ConcreteElaboration.WireContext sourceState.diagram.val)
-      (binders : ConcreteElaboration.BinderContext sourceState.diagram.val rels)
+      (context : Concrete.Elaboration.WireContext sourceState.diagram.val)
+      (binders : Concrete.Elaboration.BinderContext sourceState.diagram.val rels)
       (node : Fin sourceState.diagram.val.nodeCount)
       (item : Item  context.length rels),
-      ConcreteElaboration.LocalOccurrence.node node ∈
-          ConcreteElaboration.localOccurrences sourceState.diagram.val region →
+      Concrete.Elaboration.LocalOccurrence.node node ∈
+          Concrete.Elaboration.localOccurrences sourceState.diagram.val region →
       dropOccurrenceSurvives sourceState (.node node) = false →
-      ConcreteElaboration.compileNode?  sourceState.diagram.val context
+      Concrete.Elaboration.compileNode?  sourceState.diagram.val context
           binders node = some item →
       ∀ (env : Fin context.length → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
         denoteItem model  env relEnv item)
     (targetRemoved : ∀ {rels : RelCtx}
       (region : Fin targetState.diagram.val.regionCount)
-      (context : ConcreteElaboration.WireContext targetState.diagram.val)
-      (binders : ConcreteElaboration.BinderContext targetState.diagram.val rels)
+      (context : Concrete.Elaboration.WireContext targetState.diagram.val)
+      (binders : Concrete.Elaboration.BinderContext targetState.diagram.val rels)
       (node : Fin targetState.diagram.val.nodeCount)
       (item : Item  context.length rels),
-      ConcreteElaboration.LocalOccurrence.node node ∈
-          ConcreteElaboration.localOccurrences targetState.diagram.val region →
+      Concrete.Elaboration.LocalOccurrence.node node ∈
+          Concrete.Elaboration.localOccurrences targetState.diagram.val region →
       dropOccurrenceSurvives targetState (.node node) = false →
-      ConcreteElaboration.compileNode?  targetState.diagram.val context
+      Concrete.Elaboration.compileNode?  targetState.diagram.val context
           binders node = some item →
       ∀ (env : Fin context.length → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
         denoteItem model  env relEnv item)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
     (sourceRegion : Fin sourceState.diagram.val.regionCount)
     (targetRegion : Fin targetState.diagram.val.regionCount)
-    (sourceContext : ConcreteElaboration.WireContext sourceState.diagram.val)
-    (targetContext : ConcreteElaboration.WireContext targetState.diagram.val)
+    (sourceContext : Concrete.Elaboration.WireContext sourceState.diagram.val)
+    (targetContext : Concrete.Elaboration.WireContext targetState.diagram.val)
     (sourceExact : (sourceContext.extend sourceRegion).Exact sourceRegion)
     (targetExact : (targetContext.extend targetRegion).Exact targetRegion)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       sourceState.diagram.val sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       targetState.diagram.val targetRels)
     (sourceCover : sourceBinders.Covers sourceRegion)
     (targetCover : targetBinders.Covers targetRegion)
-    (outer : ConcreteElaboration.ContextIndexRelation sourceContext.length
+    (outer : Concrete.Elaboration.ContextIndexRelation sourceContext.length
       targetContext.length)
     (relationMap : RelationRenaming sourceRels targetRels)
     (sourceSurvivor : Region  sourceContext.length sourceRels)
@@ -68,13 +70,13 @@ theorem survivor_simulation_of_authoritative
     (targetSurvivorCompiled : compileSurvivorRegion?  targetState
       targetFuel targetRegion targetContext targetBinders = some targetSurvivor)
     (authoritative : ∀ sourceFull targetFull,
-      ConcreteElaboration.compileRegion?  sourceState.diagram.val
+      Concrete.Elaboration.compileRegion?  sourceState.diagram.val
           sourceFuel sourceRegion sourceContext sourceBinders = some sourceFull →
-      ConcreteElaboration.compileRegion?  targetState.diagram.val
+      Concrete.Elaboration.compileRegion?  targetState.diagram.val
           targetFuel targetRegion targetContext targetBinders = some targetFull →
-      ConcreteElaboration.RegionSimulation model  direction outer
+      Concrete.Elaboration.RegionSimulation model  direction outer
         (sourceFull.renameRelations relationMap) targetFull) :
-    ConcreteElaboration.RegionSimulation model  direction outer
+    Concrete.Elaboration.RegionSimulation model  direction outer
       (sourceSurvivor.renameRelations relationMap) targetSurvivor := by
   obtain ⟨sourceFull, sourceFullCompiled⟩ :=
     compileRegion?_exists_of_survivor sourceState sourceFuel sourceRegion
@@ -108,11 +110,11 @@ theorem survivor_simulation_of_authoritative
     relationMap sourceRelEnv targetRelEnv relationAgreement sourceEnv
     sourceSurvivor
   have sourceIdentity :
-      (ConcreteElaboration.ContextIndexRelation.forwardMap id)
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap id)
         |>.EnvironmentsAgree sourceEnv sourceEnv := by
     simp
   have targetIdentity :
-      (ConcreteElaboration.ContextIndexRelation.forwardMap id)
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap id)
         |>.EnvironmentsAgree targetEnv targetEnv := by
     simp
   cases direction with

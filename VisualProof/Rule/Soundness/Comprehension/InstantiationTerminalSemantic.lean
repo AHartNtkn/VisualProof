@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationTerminalEnvironment
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -11,15 +13,15 @@ namespace InstantiationSemantic
 /-- A native terminal relation environment realizes one target-indexed family
 of the host relations certified by the binder spine. -/
 def TerminalRelationsMatch
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -29,16 +31,16 @@ def TerminalRelationsMatch
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (relEnv : RelEnv model.Carrier
-      (Splice.Input.compiledSpliceTerminalView
+      (Concrete.Splice.Input.compiledSpliceTerminalView
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments) hnonempty).witness.toFocus.holeRels) : Prop :=
   ∀ {arity : Nat} (relation : RelVar
-      (Splice.Input.compiledSpliceTerminalView
+      (Concrete.Splice.Input.compiledSpliceTerminalView
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments) hnonempty).witness.toFocus.holeRels arity),
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
-    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
     let proxy : Fin payload.binderSpine.proxyCount := Classical.choose
       (spliceInput.plugLayout.terminalBodyBinder_is_proxy pattern.witness
         pattern.leaf hnonempty relation.index)
@@ -71,15 +73,15 @@ private theorem relEnv_eq_of_lookup
 relation environment.  In particular, a relation witness cannot choose a
 second interpretation for any terminal binder. -/
 theorem terminalRelationsMatch_unique
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -89,7 +91,7 @@ theorem terminalRelationsMatch_unique
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (left right : RelEnv model.Carrier
-      (Splice.Input.compiledSpliceTerminalView
+      (Concrete.Splice.Input.compiledSpliceTerminalView
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments) hnonempty).witness.toFocus.holeRels)
     (leftMatch : TerminalRelationsMatch payload state site arguments hnonempty
@@ -116,15 +118,15 @@ private theorem relationLookup_cast_back
 /-- The relation environment recovered from the actual output compiler leaf
 matches the same proxy values seen through the coalesced host compiler leaf. -/
 theorem terminalOutputRelations_match
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -138,7 +140,7 @@ theorem terminalOutputRelations_match
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -147,7 +149,7 @@ theorem terminalOutputRelations_match
     (fixed :
       let spliceInput := instantiateSpliceInput comprehension attachments binders
         payload state site arguments
-      let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+      let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
       let hostRelations : RelationRenaming host.intrinsicPath.toFocus.holeRels
           outputWitness.toFocus.holeRels := fun relation =>
         spliceInput.plugLayout.hostRelationRenaming host.intrinsicPath
@@ -156,8 +158,8 @@ theorem terminalOutputRelations_match
         (RelEnv.pullback hostRelations outputRelEnv) values) :
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
-    let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
-    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
+    let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
     let terminalRelations : RelationRenaming
         pattern.witness.toFocus.holeRels outputWitness.toFocus.holeRels :=
       fun relation =>
@@ -172,8 +174,8 @@ theorem terminalOutputRelations_match
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
   let layout := spliceInput.plugLayout
-  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
-  let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+  let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
   let hostRelations : RelationRenaming host.intrinsicPath.toFocus.holeRels
       outputWitness.toFocus.holeRels := fun relation =>
     layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
@@ -227,15 +229,15 @@ theorem terminalOutputRelations_match
 /-- The nonempty-spine comprehension witness determined by one fixed family of
 certified host relation values. -/
 noncomputable def terminalRelationOfValues
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -249,7 +251,7 @@ noncomputable def terminalRelationOfValues
   fun relationArguments =>
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
-    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
     ∃ assignment : BoundaryAssignment comprehension.elaborate model.Carrier,
       assignment.args =
           Fin.addCases relationArguments (wireValue ∘ state.parameters) ∘
@@ -261,7 +263,7 @@ noncomputable def terminalRelationOfValues
               (terminalInheritedEnvironment payload state site arguments
                 hnonempty assignment)
               relEnv
-              (ConcreteElaboration.finishRegion comprehension.val.diagram
+              (Concrete.Elaboration.finishRegion comprehension.val.diagram
                 pattern.leaf.inheritedWires payload.binderSpine.bodyContainer
                 pattern.leaf.items)
 
@@ -270,15 +272,15 @@ The state, occurrence site, and ordered argument wires only select where that
 relation is applied; its value depends solely on the transported parameter
 values and the fixed family of enclosing proxy relations. -/
 theorem terminalRelationOfValues_eq
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (left right : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (leftSite : Fin left.diagram.val.regionCount)
@@ -306,15 +308,15 @@ theorem terminalRelationOfValues_eq
 /-- A denoting actual splice output establishes the target-indexed terminal
 relation at the executor-recorded argument wires. -/
 theorem terminalRelationOfValues_of_output
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -328,7 +330,7 @@ theorem terminalRelationOfValues_of_output
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -342,7 +344,7 @@ theorem terminalRelationOfValues_of_output
     (fixed :
       let spliceInput := instantiateSpliceInput comprehension attachments binders
         payload state site arguments
-      let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+      let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
       let hostRelations : RelationRenaming host.intrinsicPath.toFocus.holeRels
           outputWitness.toFocus.holeRels := fun relation =>
         spliceInput.plugLayout.hostRelationRenaming host.intrinsicPath
@@ -353,7 +355,7 @@ theorem terminalRelationOfValues_of_output
       payload state site arguments
     let context := outputLeaf.inheritedWires.extend
       (spliceInput.plugLayout.frameRegion site)
-    let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput context
+    let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment spliceInput context
       outputLeaf.wiresExact env fallback
     let wireValue : Fin state.diagram.val.wireCount → model.Carrier :=
       fun wire => quotientValues (spliceInput.quotientWire wire)
@@ -363,10 +365,10 @@ theorem terminalRelationOfValues_of_output
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
   let layout := spliceInput.plugLayout
-  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
-  let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+  let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
   let context := outputLeaf.inheritedWires.extend (layout.frameRegion site)
-  let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput context
+  let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment spliceInput context
     outputLeaf.wiresExact env fallback
   let wireValue : Fin state.diagram.val.wireCount → model.Carrier :=
     fun wire => quotientValues (spliceInput.quotientWire wire)
@@ -392,7 +394,7 @@ theorem terminalRelationOfValues_of_output
             (terminalInheritedEnvironment payload state site arguments hnonempty
               assignment)
             relEnv
-            (ConcreteElaboration.finishRegion comprehension.val.diagram
+            (Concrete.Elaboration.finishRegion comprehension.val.diagram
               pattern.leaf.inheritedWires payload.binderSpine.bodyContainer
               pattern.leaf.items)
   refine ⟨assignment, ?_, terminalRelEnv, ?_, ?_⟩

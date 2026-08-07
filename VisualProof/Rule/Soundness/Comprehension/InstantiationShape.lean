@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationMaps
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -34,7 +36,7 @@ def mapNodeShape (map : Fin source → Fin target) :
   cases node <;> rfl
 
 private theorem regionShape_transport
-    {source target : CheckedDiagram }
+    {source target : Concrete.Checked }
     (h : source = target)
     (region : Fin target.val.regionCount) :
     source.val.regions
@@ -48,7 +50,7 @@ private theorem regionShape_transport
   cases source.val.regions region <;> rfl
 
 private theorem nodeShape_transport
-    {source target : CheckedDiagram }
+    {source target : Concrete.Checked }
     (h : source = target)
     (node : Fin target.val.nodeCount) :
     source.val.nodes
@@ -62,15 +64,15 @@ private theorem nodeShape_transport
   cases source.val.nodes node <;> rfl
 
 theorem region_shape
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -87,10 +89,10 @@ theorem region_shape
       node_eq candidate_eq arguments_eq rest ih =>
       let spliceInput := plan.spliceInput
       let layout := spliceInput.plugLayout
-      let pluggedDiagram : CheckedDiagram  :=
+      let pluggedDiagram : Concrete.Checked  :=
         ⟨layout.plugRaw,
-          Splice.Input.PlugLayout.plugRaw_wellFormed  spliceInput layout
-            (Splice.Input.checkInput_sound plan.checkedInputChecked).2⟩
+          Concrete.Splice.Input.PlugLayout.plugRaw_wellFormed  spliceInput layout
+            (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2⟩
       have nextDiagramEq : plan.next.diagram = pluggedDiagram := by
         rw [plan.next_eq]
         rfl
@@ -110,21 +112,21 @@ theorem region_shape
       rw [mappedShape]
       rw [layout.plugRegion_frameRegion]
       cases hregion : state.diagram.val.regions region <;>
-        simp [hregion, Splice.Input.PlugLayout.mapFrameRegion, mapRegionShape,
+        simp [hregion, Concrete.Splice.Input.PlugLayout.mapFrameRegion, mapRegionShape,
           regionMap, InstantiationCopyPlan.spliceInput,
           materializedInstantiationSpliceInput, instantiateSpliceInput,
           spliceInput, layout]
 
 theorem node_shape
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -141,10 +143,10 @@ theorem node_shape
       node_eq candidate_eq arguments_eq rest ih =>
       let spliceInput := plan.spliceInput
       let layout := spliceInput.plugLayout
-      let pluggedDiagram : CheckedDiagram  :=
+      let pluggedDiagram : Concrete.Checked  :=
         ⟨layout.plugRaw,
-          Splice.Input.PlugLayout.plugRaw_wellFormed  spliceInput layout
-            (Splice.Input.checkInput_sound plan.checkedInputChecked).2⟩
+          Concrete.Splice.Input.PlugLayout.plugRaw_wellFormed  spliceInput layout
+            (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2⟩
       have nextDiagramEq : plan.next.diagram = pluggedDiagram := by
         rw [plan.next_eq]
         rfl
@@ -165,7 +167,7 @@ theorem node_shape
       rw [mappedShape]
       rw [layout.plugNode_frameNode]
       cases hnode : state.diagram.val.nodes node <;>
-        simp [hnode, Splice.Input.PlugLayout.mapFrameNode, mapNodeShape,
+        simp [hnode, Concrete.Splice.Input.PlugLayout.mapFrameNode, mapNodeShape,
           regionMap, InstantiationCopyPlan.spliceInput,
           materializedInstantiationSpliceInput, instantiateSpliceInput,
           spliceInput, layout]

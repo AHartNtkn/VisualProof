@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvanceCertificate
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -15,15 +17,15 @@ executor bookkeeping as the pre-splice state.  This is the source diagram
 actually consumed by the splice compiler; regions and nodes are unchanged,
 while wire identities are the authoritative attachment classes. -/
 def coalescedInstantiationState
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -39,7 +41,7 @@ def coalescedInstantiationState
   exact {
     diagram := spliceInput.coalesceFrame hadmissible
     provenance := WireProvenance.identity spliceInput.coalesceFrameRaw
-    interface := InterfaceTransport.identity spliceInput.coalesceFrameRaw
+    interface := WireTransport.identity spliceInput.coalesceFrameRaw
     bubble := state.bubble
     parameters := fun index => spliceInput.quotientWire (state.parameters index)
     binderTargets := state.binderTargets
@@ -48,15 +50,15 @@ def coalescedInstantiationState
   }
 
 @[simp] theorem coalescedInstantiationState_diagram
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -70,15 +72,15 @@ def coalescedInstantiationState
   rfl
 
 @[simp] theorem coalescedInstantiationState_processedAtoms
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -90,15 +92,15 @@ def coalescedInstantiationState
   rfl
 
 @[simp] theorem coalescedInstantiationState_pendingAtoms
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -110,15 +112,15 @@ def coalescedInstantiationState
   rfl
 
 @[simp] theorem coalescedInstantiationState_bubble
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -130,22 +132,22 @@ def coalescedInstantiationState
   rfl
 
 @[simp] theorem coalesced_dropOccurrenceSurvives
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       state.diagram.val.regionCount state.diagram.val.nodeCount) :
     dropOccurrenceSurvives
         (coalescedInstantiationState comprehension attachments binders payload
@@ -157,21 +159,21 @@ def coalescedInstantiationState
 well-formed coalesced frame has disjoint endpoint lists, so the quotient image
 is not merely an owner but the unique owner returned by the executor lookup. -/
 theorem coalesced_endpointOwner_eq
-    (spliceInput : Splice.Input )
+    (spliceInput : Concrete.Splice.Input )
     (hadmissible : spliceInput.Admissible)
     (endpoint : CEndpoint spliceInput.frame.val.nodeCount)
     (wire : Fin spliceInput.frame.val.wireCount)
-    (owner : ConcreteElaboration.endpointOwner? spliceInput.frame.val endpoint =
+    (owner : Concrete.Elaboration.endpointOwner? spliceInput.frame.val endpoint =
       some wire) :
-    ConcreteElaboration.endpointOwner? spliceInput.coalesceFrameRaw endpoint =
+    Concrete.Elaboration.endpointOwner? spliceInput.coalesceFrameRaw endpoint =
       some (spliceInput.quotientWire wire) := by
-  have sourceOccurs := ConcreteElaboration.endpointOwner?_sound owner
+  have sourceOccurs := Concrete.Elaboration.endpointOwner?_sound owner
   have quotientOccurs := spliceInput.endpointOccurs_quotient wire endpoint
     sourceOccurs
   obtain ⟨actual, actualOwner⟩ :=
-    ConcreteElaboration.endpointOwner?_complete quotientOccurs
+    Concrete.Elaboration.endpointOwner?_complete quotientOccurs
   have equality : spliceInput.quotientWire wire = actual :=
-    ConcreteElaboration.endpointOwner?_unique
+    Concrete.Elaboration.endpointOwner?_unique
       (spliceInput.coalesceFrameRaw_wellFormed hadmissible
         |>.wire_endpoints_are_disjoint)
       actualOwner quotientOccurs
@@ -181,15 +183,15 @@ theorem coalesced_endpointOwner_eq
 /-- The executor's ordered argument vector is preserved pointwise by host
 wire coalescing.  Repeated argument positions remain repeated positions. -/
 theorem coalesced_instantiateArguments
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -211,7 +213,7 @@ theorem coalesced_instantiateArguments
   let mapped : Fin payload.arity → Fin spliceInput.coalesceFrameRaw.wireCount :=
     fun index => spliceInput.quotientWire (arguments index)
   have pointwise : ∀ index : Fin payload.arity,
-      ConcreteElaboration.endpointOwner? spliceInput.coalesceFrameRaw
+      Concrete.Elaboration.endpointOwner? spliceInput.coalesceFrameRaw
           { node := atom, port := .arg index } = some (mapped index) := by
     intro index
     exact coalesced_endpointOwner_eq spliceInput hadmissible _ _
@@ -228,15 +230,15 @@ theorem coalesced_instantiateArguments
 /-- A compiled current atom in the quotient host denotes the same fixed
 relation at the quotient images of the executor-recorded ordered arguments. -/
 theorem coalesced_compiled_atom_iff_fixedRelation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -253,10 +255,10 @@ theorem coalesced_compiled_atom_iff_fixedRelation
         site arguments).coalesceFrameRaw.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
-    (context : ConcreteElaboration.WireContext
+    (context : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw)
-    (binderContext : ConcreteElaboration.BinderContext
+    (binderContext : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw rels)
     (relEnv : RelEnv model.Carrier rels)
@@ -271,7 +273,7 @@ theorem coalesced_compiled_atom_iff_fixedRelation
     (environment_eq : ∀ index,
       environment index = quotientWireValue (context.get index))
     (item : Item  context.length rels)
-    (compiled : ConcreteElaboration.compileNode?
+    (compiled : Concrete.Elaboration.compileNode?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw context binderContext atom =
       some item) :
@@ -304,15 +306,15 @@ theorem coalesced_compiled_atom_iff_fixedRelation
 /-- The nonzero-spine certificate extracted from the denoting inserted copy
 reconstructs the current atom in the coalesced source survivor. -/
 theorem coalesced_current_atom_denotes_of_terminal
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -331,10 +333,10 @@ theorem coalesced_current_atom_denotes_of_terminal
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     {rels : RelCtx}
-    (context : ConcreteElaboration.WireContext
+    (context : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw)
-    (binderContext : ConcreteElaboration.BinderContext
+    (binderContext : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw rels)
     (relEnv : RelEnv model.Carrier rels)
@@ -355,7 +357,7 @@ theorem coalesced_current_atom_denotes_of_terminal
     (environment_eq : ∀ index,
       environment index = quotientWireValue (context.get index))
     (item : Item  context.length rels)
-    (compiled : ConcreteElaboration.compileNode?
+    (compiled : Concrete.Elaboration.compileNode?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw context binderContext atom =
       some item)
@@ -383,15 +385,15 @@ theorem coalesced_current_atom_denotes_of_terminal
 /-- Zero-spine copy extraction reconstructs the same current atom using the
 payload's authoritative interpreted open comprehension. -/
 theorem coalesced_current_atom_denotes_of_interpreted
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -407,10 +409,10 @@ theorem coalesced_current_atom_denotes_of_interpreted
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw.wireCount → model.Carrier)
     {rels : RelCtx}
-    (context : ConcreteElaboration.WireContext
+    (context : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw)
-    (binderContext : ConcreteElaboration.BinderContext
+    (binderContext : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw rels)
     (relEnv : RelEnv model.Carrier rels)
@@ -429,7 +431,7 @@ theorem coalesced_current_atom_denotes_of_interpreted
     (environment_eq : ∀ index,
       environment index = quotientWireValue (context.get index))
     (item : Item  context.length rels)
-    (compiled : ConcreteElaboration.compileNode?
+    (compiled : Concrete.Elaboration.compileNode?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw context binderContext atom =
       some item)

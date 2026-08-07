@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionFrame
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -155,7 +158,7 @@ theorem regionParent_survives
   have parentEncloses : input.val.Encloses parent child := by
     have hpositive := child.isLt
     refine ⟨⟨1, by omega⟩, ?_⟩
-    simp [ConcreteDiagram.climb, childParent]
+    simp [Concrete.Diagram.climb, childParent]
   have childSelected : child ∈
       (occurrences.get index).selection.selectedRegions :=
     ((occurrences.get index).selection.mem_selectedRegions child).2
@@ -322,7 +325,7 @@ theorem targetRegion_parent_iff_regular
 
 theorem targetAtom_region_ne_regular
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (parent : Fin input.val.regionCount)
     (regular : trace.FrameRegular parent)
     (index : Fin occurrences.length) :
@@ -342,7 +345,7 @@ theorem targetAtom_region_ne_regular
 
 theorem bubble_parent_ne_regular
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (parent : Fin input.val.regionCount)
     (regular : trace.FrameRegular parent) :
     (trace.diagram.regions trace.bubble).parent? ≠
@@ -401,8 +404,8 @@ def occurrenceMap
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (region : Fin input.val.regionCount)
     (regular : trace.FrameRegular region) :
-    ConcreteElaboration.LocalOccurrence input.val.regionCount input.val.nodeCount →
-      ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+    Concrete.Elaboration.LocalOccurrence input.val.regionCount input.val.nodeCount →
+      Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
         trace.diagram.nodeCount
   | .node node =>
       if survives : trace.domains.nodes.survives node = true then
@@ -422,8 +425,8 @@ theorem occurrenceMap_node_of_region
         (trace.node_survives_of_regular region regular node nodeRegion)) := by
   unfold occurrenceMap
   change (if survives : trace.domains.nodes.survives node = true then
-      ConcreteElaboration.LocalOccurrence.node (trace.targetNode node survives)
-    else ConcreteElaboration.LocalOccurrence.child trace.bubble) = _
+      Concrete.Elaboration.LocalOccurrence.node (trace.targetNode node survives)
+    else Concrete.Elaboration.LocalOccurrence.child trace.bubble) = _
   rw [dif_pos (trace.node_survives_of_regular region regular node nodeRegion)]
   congr
 
@@ -437,7 +440,7 @@ theorem occurrenceMap_node_of_region
 
 theorem regular_nodeFilters
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (parent : Fin input.val.regionCount)
     (regular : trace.FrameRegular parent) :
     (filterFin fun node : Fin trace.diagram.nodeCount =>
@@ -488,7 +491,7 @@ theorem regular_nodeFilters
 
 theorem regular_childFilters
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (parent : Fin input.val.regionCount)
     (regular : trace.FrameRegular parent) :
     (filterFin fun child : Fin trace.diagram.regionCount =>
@@ -523,15 +526,15 @@ theorem regular_childFilters
 source node traversal mapped through dense survivor indices. -/
 theorem regular_nodeOccurrences
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (parent : Fin input.val.regionCount)
     (regular : trace.FrameRegular parent) :
     (filterFin fun node : Fin trace.diagram.nodeCount =>
       decide ((trace.diagram.nodes node).region = trace.regionMap parent)).map
-        ConcreteElaboration.LocalOccurrence.node =
+        Concrete.Elaboration.LocalOccurrence.node =
       ((filterFin fun node : Fin input.val.nodeCount =>
         decide ((input.val.nodes node).region = parent)).map
-          ConcreteElaboration.LocalOccurrence.node).map
+          Concrete.Elaboration.LocalOccurrence.node).map
         (trace.occurrenceMap parent regular) := by
   rw [trace.regionMap_of_survives parent regular.1]
   rw [trace.regular_nodeFilters payload parent regular]
@@ -556,9 +559,9 @@ theorem regular_nodeOccurrences
     targetP predicateEq subset
   change ((filterFin targetP).map
       (Fin.castAdd occurrences.length)).map
-        ConcreteElaboration.LocalOccurrence.node =
+        Concrete.Elaboration.LocalOccurrence.node =
     ((filterFin sourceP).map
-      ConcreteElaboration.LocalOccurrence.node).map
+      Concrete.Elaboration.LocalOccurrence.node).map
         (trace.occurrenceMap parent regular)
   rw [← origins]
   simp only [List.map_map]
@@ -582,16 +585,16 @@ theorem regular_nodeOccurrences
 source child traversal mapped through dense survivor indices. -/
 theorem regular_childOccurrences
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (parent : Fin input.val.regionCount)
     (regular : trace.FrameRegular parent) :
     (filterFin fun child : Fin trace.diagram.regionCount =>
       decide ((trace.diagram.regions child).parent? =
         some (trace.regionMap parent))).map
-        ConcreteElaboration.LocalOccurrence.child =
+        Concrete.Elaboration.LocalOccurrence.child =
       ((filterFin fun child : Fin input.val.regionCount =>
         decide ((input.val.regions child).parent? = some parent)).map
-          ConcreteElaboration.LocalOccurrence.child).map
+          Concrete.Elaboration.LocalOccurrence.child).map
         (trace.occurrenceMap parent regular) := by
   rw [trace.regionMap_of_survives parent regular.1]
   rw [trace.regular_childFilters payload parent regular]
@@ -614,9 +617,9 @@ theorem regular_childOccurrences
   have origins := filterFin_survivor_origin trace.domains.regions sourceP
     targetP predicateEq subset
   change ((filterFin targetP).map Fin.castSucc).map
-      ConcreteElaboration.LocalOccurrence.child =
+      Concrete.Elaboration.LocalOccurrence.child =
     ((filterFin sourceP).map
-      ConcreteElaboration.LocalOccurrence.child).map
+      Concrete.Elaboration.LocalOccurrence.child).map
         (trace.occurrenceMap parent regular)
   rw [← origins]
   simp only [List.map_map]
@@ -642,18 +645,18 @@ theorem regular_childOccurrences
 region. -/
 theorem localOccurrences_map_of_regular
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (parent : Fin input.val.regionCount)
     (regular : trace.FrameRegular parent) :
-    ConcreteElaboration.localOccurrences trace.diagram
+    Concrete.Elaboration.localOccurrences trace.diagram
         (trace.regionMap parent) =
-      (ConcreteElaboration.localOccurrences input.val parent).map
+      (Concrete.Elaboration.localOccurrences input.val parent).map
         (trace.occurrenceMap parent regular) := by
-  unfold ConcreteElaboration.localOccurrences
+  unfold Concrete.Elaboration.localOccurrences
   rw [List.map_append]
   rw [trace.regular_nodeOccurrences payload parent regular,
     trace.regular_childOccurrences payload parent regular]
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

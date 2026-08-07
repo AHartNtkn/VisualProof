@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvanceSurvivors
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -10,15 +12,15 @@ namespace InstantiationSemantic
 /-- Occurrence-level form of the frame-node survivor theorem.  Child regions
 always survive, while the current frame atom is the single new rejection. -/
 theorem advance_mapFrameOccurrence_survives_iff
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -27,7 +29,7 @@ theorem advance_mapFrameOccurrence_survives_iff
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       state.diagram.val.regionCount state.diagram.val.nodeCount) :
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
@@ -39,27 +41,27 @@ theorem advance_mapFrameOccurrence_survives_iff
         occurrence ≠ .node atom := by
   cases occurrence with
   | node node =>
-      simpa [Splice.Input.PlugLayout.mapFrameOccurrence] using
+      simpa [Concrete.Splice.Input.PlugLayout.mapFrameOccurrence] using
         (advance_frameNode_survives_iff comprehension attachments binders
           payload state atom tail site arguments hadmissible node)
   | child child =>
       dsimp only
-      simp only [Splice.Input.PlugLayout.mapFrameOccurrence,
+      simp only [Concrete.Splice.Input.PlugLayout.mapFrameOccurrence,
         dropOccurrenceSurvives]
       exact ⟨fun _ => by simp, fun _ => trivial⟩
 
 /-- Every occurrence contributed by the inserted pattern survives the next
 atom compaction. -/
 theorem advance_mapPatternOccurrence_survives
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -68,7 +70,7 @@ theorem advance_mapPatternOccurrence_survives
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       comprehension.val.diagram.regionCount
       comprehension.val.diagram.nodeCount) :
     let spliceInput := instantiateSpliceInput comprehension attachments binders
@@ -88,15 +90,15 @@ theorem advance_mapPatternOccurrence_survives
 site: surviving old frame occurrences except the selected atom, followed (up
 to the compiler's finite permutation) by every terminal pattern occurrence. -/
 theorem advance_site_survivor_occurrences_iff
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -105,7 +107,7 @@ theorem advance_site_survivor_occurrences_iff
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val.regionCount
       (advanceInstantiationState comprehension attachments binders payload
@@ -116,16 +118,16 @@ theorem advance_site_survivor_occurrences_iff
     let next := advanceInstantiationState comprehension attachments binders
       payload state atom tail site arguments hadmissible
     occurrence ∈
-        (ConcreteElaboration.localOccurrences next.diagram.val
+        (Concrete.Elaboration.localOccurrences next.diagram.val
           (layout.frameRegion site)).filter (dropOccurrenceSurvives next) ↔
       (∃ frameOccurrence,
-        frameOccurrence ∈ ConcreteElaboration.localOccurrences
+        frameOccurrence ∈ Concrete.Elaboration.localOccurrences
           state.diagram.val site ∧
         dropOccurrenceSurvives state frameOccurrence = true ∧
         frameOccurrence ≠ .node atom ∧
         occurrence = layout.mapFrameOccurrence frameOccurrence) ∨
       (∃ patternOccurrence,
-        patternOccurrence ∈ ConcreteElaboration.localOccurrences
+        patternOccurrence ∈ Concrete.Elaboration.localOccurrences
           comprehension.val.diagram payload.binderSpine.bodyContainer ∧
         occurrence = layout.mapPatternOccurrence patternOccurrence) := by
   dsimp only
@@ -136,14 +138,14 @@ theorem advance_site_survivor_occurrences_iff
     payload state atom tail site arguments hadmissible
   constructor
   · intro member
-    have fullMember : occurrence ∈ ConcreteElaboration.localOccurrences
+    have fullMember : occurrence ∈ Concrete.Elaboration.localOccurrences
         layout.plugRaw (layout.frameRegion site) := by
       exact (List.mem_filter.mp member).1
     have survives : dropOccurrenceSurvives next occurrence = true :=
       (List.mem_filter.mp member).2
     have semanticMember := layout.semanticSiteOccurrences_complete occurrence
       fullMember
-    rw [Splice.Input.PlugLayout.semanticSiteOccurrences,
+    rw [Concrete.Splice.Input.PlugLayout.semanticSiteOccurrences,
       List.mem_append] at semanticMember
     cases semanticMember with
     | inl frameMember =>

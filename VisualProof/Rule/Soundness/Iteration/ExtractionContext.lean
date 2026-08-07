@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Iteration.AncestorFactor
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -10,7 +12,7 @@ open VisualProof.Diagram
 wire visible at the selection anchor.  Selected-subtree-local wires cannot
 occur in this context: their extracted scopes lie strictly below the body. -/
 theorem fragmentWireOrigin_scope_encloses_anchor
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (wire : Fin layout.wireCount)
@@ -27,7 +29,7 @@ theorem fragmentWireOrigin_scope_encloses_anchor
     let original := selection.internalWires.get internal
     have originEq : input.val.fragmentWireOrigin selection layout
         (layout.internalWire internal) = original := by
-      simp [ConcreteDiagram.fragmentWireOrigin, FragmentLayout.internalWire,
+      simp [Concrete.Diagram.fragmentWireOrigin, FragmentLayout.internalWire,
         original]
     change input.val.Encloses
       (input.val.wires (input.val.fragmentWireOrigin selection layout
@@ -39,7 +41,7 @@ theorem fragmentWireOrigin_scope_encloses_anchor
           (input.val.wires original).scope ∈ selection.selectedRegions :=
         (selection.mem_selectedRegions _).2 selectedScope
       obtain ⟨index, _, fragmentEq⟩ :=
-        ConcreteDiagram.fragmentParent_selectedRegion input selection layout
+        Concrete.Diagram.fragmentParent_selectedRegion input selection layout
           selectedMember
       have scopeEq :
           ((input.val.extractDiagramRaw selection layout).wires
@@ -57,21 +59,21 @@ theorem fragmentWireOrigin_scope_encloses_anchor
           simpa [FragmentLayout.internalWire] using visible
         rwa [scopeEq] at visible'
       have bodyEnclosesMaterial :=
-        ConcreteDiagram.extractDiagramRaw_bodyContainer_encloses_materialRegion
+        Concrete.Diagram.extractDiagramRaw_bodyContainer_encloses_materialRegion
           input selection layout index
-      have equal := ConcreteElaboration.checked_encloses_antisymm
-        (ConcreteDiagram.extractDiagramRaw_wellFormed input selection layout)
+      have equal := Concrete.Elaboration.checked_encloses_antisymm
+        (Concrete.Diagram.extractDiagramRaw_wellFormed input selection layout)
         materialEnclosesBody bodyEnclosesMaterial
       exact False.elim (bodyContainer_ne_materialRegion layout index equal.symm)
     · rw [selection.property.explicitWires_at_anchor original explicit]
-      exact ConcreteDiagram.Encloses.refl input.val selection.val.anchor
+      exact Concrete.Diagram.Encloses.refl input.val selection.val.anchor
   · intro boundary _
-    simpa [ConcreteDiagram.fragmentWireOrigin, FragmentLayout.boundaryWire]
-      using ConcreteDiagram.touchingWire_scope_encloses_anchor input selection
+    simpa [Concrete.Diagram.fragmentWireOrigin, FragmentLayout.boundaryWire]
+      using Concrete.Diagram.touchingWire_scope_encloses_anchor input selection
         boundary
 
 theorem fragmentWireOrigin_scope_encloses_anchor_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (wire : Fin layout.wireCount) :
@@ -90,7 +92,7 @@ theorem fragmentWireOrigin_scope_encloses_anchor_iff
       let original := selection.internalWires.get internal
       have originEq : input.val.fragmentWireOrigin selection layout
           (layout.internalWire internal) = original := by
-        simp [ConcreteDiagram.fragmentWireOrigin, FragmentLayout.internalWire,
+        simp [Concrete.Diagram.fragmentWireOrigin, FragmentLayout.internalWire,
           original]
       have visible' : input.val.Encloses
           (input.val.wires (input.val.fragmentWireOrigin selection layout
@@ -102,16 +104,16 @@ theorem fragmentWireOrigin_scope_encloses_anchor_iff
       · obtain ⟨child, childDirect, childEncloses⟩ := selectedScope
         have anchorEnclosesChild : input.val.Encloses selection.val.anchor child :=
           ⟨⟨1, by have := child.isLt; omega⟩, by
-            simp [ConcreteDiagram.climb,
+            simp [Concrete.Diagram.climb,
               selection.property.childRoots_direct child childDirect]⟩
         have anchorEnclosesScope :=
-          ConcreteElaboration.checked_encloses_trans input.property
+          Concrete.Elaboration.checked_encloses_trans input.property
             anchorEnclosesChild childEncloses
-        have equal := ConcreteElaboration.checked_encloses_antisymm
+        have equal := Concrete.Elaboration.checked_encloses_antisymm
           input.property anchorEnclosesScope visible'
         rw [← equal] at childEncloses
         exact False.elim
-          (ConcreteElaboration.checked_direct_child_not_encloses_parent
+          (Concrete.Elaboration.checked_direct_child_not_encloses_parent
             input.property
             (selection.property.childRoots_direct child childDirect)
             childEncloses)
@@ -125,7 +127,7 @@ theorem fragmentWireOrigin_scope_encloses_anchor_iff
           ((input.val.extractDiagramRaw selection layout).wires
             (layout.internalWire internal)).scope layout.bodyContainer
         rw [scopeEq]
-        exact ConcreteDiagram.Encloses.refl _ _
+        exact Concrete.Diagram.Encloses.refl _ _
     · intro boundary _
       change (input.val.extractDiagramRaw selection layout).Encloses
         ((input.val.extractDiagramRaw selection layout).wires
@@ -136,17 +138,17 @@ theorem fragmentWireOrigin_scope_encloses_anchor_iff
         exact input.val.extractDiagramRaw_boundaryWire_scope selection layout
           boundary
       rw [rootScope]
-      exact ConcreteDiagram.extractDiagramRaw_all_regions_reach_root input
+      exact Concrete.Diagram.extractDiagramRaw_all_regions_reach_root input
         selection layout layout.bodyContainer
   · exact fragmentWireOrigin_scope_encloses_anchor input selection layout wire
 
 theorem fragmentWireOrigin_mem_context_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (fragmentExact : fragmentContext.Exact layout.bodyContainer)
     (hostExact : hostContext.Exact selection.val.anchor)
     (wire : Fin layout.wireCount) :
@@ -159,13 +161,13 @@ theorem fragmentWireOrigin_mem_context_iff
 /-- The semantic relation between an extracted lexical wire context and its
 host context is equality after applying extraction's wire provenance. -/
 def extractionContextRelation
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val) :
-    ConcreteElaboration.ContextIndexRelation
+    (hostContext : Concrete.Elaboration.WireContext input.val) :
+    Concrete.Elaboration.ContextIndexRelation
       fragmentContext.length hostContext.length where
   Rel fragmentIndex hostIndex :=
     input.val.fragmentWireOrigin selection layout
@@ -175,12 +177,12 @@ def extractionContextRelation
 /-- Exact terminal-body and anchor contexts provide a canonical host index
 for every extracted context index. -/
 noncomputable def extractionContextIndexMap
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (fragmentExact : fragmentContext.Exact layout.bodyContainer)
     (hostExact : hostContext.Exact selection.val.anchor) :
     Fin fragmentContext.length → Fin hostContext.length :=
@@ -190,12 +192,12 @@ noncomputable def extractionContextIndexMap
       ((fragmentExact.mem_iff _).1 (List.get_mem _ index)))))
 
 theorem extractionContextIndexMap_spec
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (fragmentExact : fragmentContext.Exact layout.bodyContainer)
     (hostExact : hostContext.Exact selection.val.anchor)
     (index : Fin fragmentContext.length) :
@@ -211,12 +213,12 @@ theorem extractionContextIndexMap_spec
         ((fragmentExact.mem_iff _).1 (List.get_mem _ index)))))) |>.symm
 
 theorem extractionContextEnvironmentsAgree
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (fragmentExact : fragmentContext.Exact layout.bodyContainer)
     (hostExact : hostContext.Exact selection.val.anchor)
     (hostEnv : Fin hostContext.length → D) :

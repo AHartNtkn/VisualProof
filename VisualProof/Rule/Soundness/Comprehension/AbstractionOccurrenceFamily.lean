@@ -1,7 +1,10 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionFocusedPartition
 import VisualProof.Rule.Soundness.Comprehension.AbstractionFocusedKept
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -12,7 +15,7 @@ namespace AbstractionRawTrace
 other certified occurrence.  This is the semantic independence property
 behind simultaneous hidden-wire witnesses. -/
 theorem touchingWire_not_internal
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (left right : Fin occurrences.length)
     (wire : Fin input.val.wireCount)
     (touching : wire ∈ (occurrences.get left).selection.touchingWires) :
@@ -35,7 +38,7 @@ theorem touchingWire_not_internal
           endpoint endpointOccurs
         exact ((occurrences.get right).selection.mem_selectedNodes
           endpoint.node).2 (Or.inr ⟨root, rootMember,
-            ConcreteElaboration.checked_encloses_trans input.property
+            Concrete.Elaboration.checked_encloses_trans input.property
               rootEnclosesScope scopeEnclosesOwner⟩)
       · exact (occurrences.get right).selection.explicitWire_endpoint_selected
           explicit endpointOccurs
@@ -45,8 +48,8 @@ theorem touchingWire_not_internal
 /-- Every extracted fragment wire originates in exactly the internal-or-
 touching closure of its certified host occurrence. -/
 theorem occurrenceFragmentWire_origin_mem_closure
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
     (wire : Fin (occurrenceLayout input occurrence).wireCount) :
     input.val.fragmentWireOrigin occurrence.selection
           (occurrenceLayout input occurrence) wire ∈
@@ -78,7 +81,7 @@ theorem occurrenceFragmentWire_origin_mem_closure
 compilation; it only makes the domain total for `survivorOccurrence`. -/
 theorem survivingSources_filterMap
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (values : List (ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (values : List (Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount)) :
     (trace.survivingSources values).filterMap trace.survivingOccurrence? =
       values.filterMap trace.survivingOccurrence? := by
@@ -94,7 +97,7 @@ theorem survivingSources_filterMap
 authoritative target `filterMap`. -/
 theorem survivingSources_map_survivor
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (values : List (ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (values : List (Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount)) :
     (trace.survivingSources values).map trace.survivorOccurrence =
       values.filterMap trace.survivingOccurrence? := by
@@ -108,10 +111,10 @@ theorem survivingSources_map_survivor
 /-- Assemble independently chosen occurrence valuations.  Disjoint internal
 wire certificates make the selected valuation unique at every host wire. -/
 noncomputable def occurrenceFamilyEnvironment
-    (input : CheckedDiagram )
-    (occurrences : List (AbstractionOccurrence input))
+    (input : Concrete.Checked )
+    (occurrences : List (OperationAbstractionOccurrence input))
     (indices : List (Fin occurrences.length))
-    (context : ConcreteElaboration.WireContext input.val)
+    (context : Concrete.Elaboration.WireContext input.val)
     (values : ∀ index : Fin occurrences.length,
       Fin context.length → D)
     (fallback : Fin context.length → D) :
@@ -125,9 +128,9 @@ noncomputable def occurrenceFamilyEnvironment
     else fallback hostIndex
 
 theorem occurrenceFamilyEnvironment_eq_member
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (indices : List (Fin occurrences.length))
-    (context : ConcreteElaboration.WireContext input.val)
+    (context : Concrete.Elaboration.WireContext input.val)
     (values : ∀ index : Fin occurrences.length,
       Fin context.length → D)
     (fallback : Fin context.length → D)
@@ -160,10 +163,10 @@ theorem occurrenceFamilyEnvironment_eq_member
   rw [chosenEq]
 
 theorem occurrenceFamilyEnvironment_eq_fallback
-    (input : CheckedDiagram )
-    (occurrences : List (AbstractionOccurrence input))
+    (input : Concrete.Checked )
+    (occurrences : List (OperationAbstractionOccurrence input))
     (indices : List (Fin occurrences.length))
-    (context : ConcreteElaboration.WireContext input.val)
+    (context : Concrete.Elaboration.WireContext input.val)
     (values : ∀ index : Fin occurrences.length,
       Fin context.length → D)
     (fallback : Fin context.length → D)
@@ -183,9 +186,9 @@ theorem occurrenceFamilyEnvironment_eq_fallback
 family valuation agrees with that occurrence's independently realized
 valuation. -/
 theorem occurrenceFamilyEnvironment_eq_value_on_closure
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (indices : List (Fin occurrences.length))
-    (context : ConcreteElaboration.WireContext input.val)
+    (context : Concrete.Elaboration.WireContext input.val)
     (values : ∀ index : Fin occurrences.length,
       Fin context.length → D)
     (fallback : Fin context.length → D)
@@ -219,10 +222,10 @@ theorem occurrenceFamilyEnvironment_eq_value_on_closure
 witnesses preserves the exact survivor context relation. -/
 theorem occurrenceFamilyEnvironment_agrees
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (indices : List (Fin occurrences.length))
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
     (values : ∀ index : Fin occurrences.length,
       Fin sourceContext.length → D)
@@ -233,7 +236,7 @@ theorem occurrenceFamilyEnvironment_agrees
       (occurrenceFamilyEnvironment input occurrences indices sourceContext
         values fallback) target := by
   rw [ContextWitness.indexRelation,
-    ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap]
+    Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap]
   funext targetIndex
   change occurrenceFamilyEnvironment input occurrences indices sourceContext
       values fallback (context.sourceIndex targetIndex) = target targetIndex
@@ -256,4 +259,4 @@ theorem occurrenceFamilyEnvironment_agrees
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

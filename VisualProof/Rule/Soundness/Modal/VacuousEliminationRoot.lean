@@ -1,20 +1,23 @@
 import VisualProof.Rule.Soundness.Modal.VacuousEliminationSimulation
 
-namespace VisualProof.Rule.VacuousElimTrace
+namespace VisualProof.Concrete.VacuousElimTrace
+
+open VisualProof.Concrete
+open VisualProof.Rule
 
 open VisualProof
 open VisualProof.Theory
 open VisualProof.Diagram
-open VisualProof.Rule.DoubleCutElimTrace
+open VisualProof.Concrete.DoubleCutElimTrace
 
 def sourceOpen
     (trace : VacuousElimTrace input bubble raw)
-    (boundary : List (Fin input.wireCount)) : OpenConcreteDiagram where
+    (boundary : List (Fin input.wireCount)) : Concrete.OpenDiagram where
   diagram := trace.sourceDiagram
   boundary := boundary
 
-def targetOpen (input : ConcreteDiagram)
-    (boundary : List (Fin input.wireCount)) : OpenConcreteDiagram where
+def targetOpen (input : Concrete.Diagram)
+    (boundary : List (Fin input.wireCount)) : Concrete.OpenDiagram where
   diagram := input
   boundary := boundary
 
@@ -103,31 +106,31 @@ def rootContextWitness
     PromotedContextWitness trace
       (trace.sourceOpen boundary).rootWires
       (targetOpen input boundary).rootWires := by
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed sourceWellFormed targetWellFormed boundary
         boundaryRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨targetOpen input boundary,
       targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
   refine ⟨?_, ?_⟩
   · intro wire member
     have targetScope :=
-      (OpenConcreteDiagram.mem_rootWires_iff target.val target.property wire).1
+      (Concrete.OpenDiagram.mem_rootWires_iff target.val target.property wire).1
         member
     have sourceScope := trace.targetRoot_scope_promoted targetWellFormed wire
       targetScope
-    exact (OpenConcreteDiagram.mem_rootWires_iff source.val source.property
+    exact (Concrete.OpenDiagram.mem_rootWires_iff source.val source.property
       wire).2 sourceScope
   · intro wire member
     have sourceScope :=
-      (OpenConcreteDiagram.mem_rootWires_iff source.val source.property wire).1
+      (Concrete.OpenDiagram.mem_rootWires_iff source.val source.property wire).1
         member
     rcases trace.promotedRoot_scope_parent_or_bubble targetWellFormed wire
       sourceScope with targetScope | bubbleScope
-    · exact Or.inl ((OpenConcreteDiagram.mem_rootWires_iff target.val
+    · exact Or.inl ((Concrete.OpenDiagram.mem_rootWires_iff target.val
         target.property wire).2 targetScope)
-    · exact Or.inr ((ConcreteElaboration.mem_exactScopeWires input bubble
+    · exact Or.inr ((Concrete.Elaboration.mem_exactScopeWires input bubble
         wire).2 bubbleScope)
 
 theorem sourceOpen_hiddenWires_eq_of_regular
@@ -137,7 +140,7 @@ theorem sourceOpen_hiddenWires_eq_of_regular
     (regular : trace.sourceDiagram.root ≠ trace.targetIndex wellFormed) :
     (trace.sourceOpen boundary).hiddenWires =
       (targetOpen input boundary).hiddenWires := by
-  unfold OpenConcreteDiagram.hiddenWires sourceOpen targetOpen
+  unfold Concrete.OpenDiagram.hiddenWires sourceOpen targetOpen
   rw [trace.regular_exactScopeWires wellFormed trace.sourceDiagram.root
     regular]
   have rootOrigin : trace.origin trace.sourceDiagram.root = input.root :=
@@ -148,8 +151,8 @@ theorem sourceOpen_hiddenWires_eq_of_regular
 def PromotedContextWitness.extendRootSelected
     (trace : VacuousElimTrace input bubble raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (sourceExact : sourceContext.Exact (trace.targetIndex wellFormed)) :
     PromotedContextWitness trace sourceContext
@@ -160,11 +163,11 @@ def PromotedContextWitness.extendRootSelected
     · exact context.target_subset_source wire targetMember
     · have focusMember := trace.bubbleWire_mem_focusExact wellFormed wire
           bubbleMember
-      have scope := (ConcreteElaboration.mem_exactScopeWires
+      have scope := (Concrete.Elaboration.mem_exactScopeWires
         trace.sourceDiagram (trace.targetIndex wellFormed) wire).1 focusMember
       exact (sourceExact.mem_iff wire).2 (by
         rw [scope]
-        exact ConcreteDiagram.Encloses.refl _ _)
+        exact Concrete.Diagram.Encloses.refl _ _)
   · intro wire member
     rcases context.source_subset_target_or_bubble wire member with
       targetMember | bubbleMember
@@ -174,8 +177,8 @@ def PromotedContextWitness.extendRootSelected
 theorem PromotedContextWitness.extendRootSelected_source_subset_target
     (trace : VacuousElimTrace input bubble raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (sourceExact : sourceContext.Exact (trace.targetIndex wellFormed)) :
     ∀ wire, wire ∈ sourceContext → wire ∈ targetContext.extend bubble := by
@@ -187,10 +190,10 @@ theorem PromotedContextWitness.extendRootSelected_source_subset_target
 theorem targetRootSelected_exact
     (trace : VacuousElimTrace input bubble raw)
     (wellFormed : input.WellFormed )
-    (targetContext : ConcreteElaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (targetExact : targetContext.Exact trace.parent) :
     (targetContext.extend bubble).Exact bubble := by
   exact targetExact.extend_child wellFormed (by
     simpa [trace.bubble_eq, CRegion.parent?])
 
-end VisualProof.Rule.VacuousElimTrace
+end VisualProof.Concrete.VacuousElimTrace

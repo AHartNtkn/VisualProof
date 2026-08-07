@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvancePatternCompi
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -13,15 +15,15 @@ namespace InstantiationSemantic
 source item is compiled at the checked-open sheet root, while the target item
 is located in the executor's actual survivor occurrence list. -/
 theorem advance_pattern_root_item_denotes_empty
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -30,13 +32,13 @@ theorem advance_pattern_root_item_denotes_empty
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (host : Splice.SiteView
+    (host : Concrete.Splice.SiteView
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrame hadmissible) site)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -52,7 +54,7 @@ theorem advance_pattern_root_item_denotes_empty
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)).length
       outputWitness.toFocus.holeRels)
-    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (survivorCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       (compileSurvivorRegion?
@@ -62,7 +64,7 @@ theorem advance_pattern_root_item_denotes_empty
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site))
       outputLeaf.binders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible).diagram.val
         ((instantiateSpliceInput comprehension attachments binders payload state
@@ -71,34 +73,34 @@ theorem advance_pattern_root_item_denotes_empty
           (advanceInstantiationState comprehension attachments binders payload
             state atom tail site arguments hadmissible))) = some survivorItems)
     (survivorDenotes : denoteItemSeq model  env relEnv survivorItems)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       comprehension.val.diagram.regionCount comprehension.val.diagram.nodeCount)
-    (occurrenceMember : occurrence ∈ ConcreteElaboration.localOccurrences
+    (occurrenceMember : occurrence ∈ Concrete.Elaboration.localOccurrences
       comprehension.val.diagram comprehension.val.diagram.root)
     (sourceItem : Item
       (comprehension.val.exposedWires ++ comprehension.val.hiddenWires).length [])
-    (sourceCompiled : ConcreteElaboration.compileOccurrenceWith?
+    (sourceCompiled : Concrete.Elaboration.compileOccurrenceWith?
       comprehension.val.diagram
-      (ConcreteElaboration.compileRegion?  comprehension.val.diagram
+      (Concrete.Elaboration.compileRegion?  comprehension.val.diagram
         comprehension.val.diagram.regionCount)
       (comprehension.val.exposedWires ++ comprehension.val.hiddenWires)
-      ConcreteElaboration.BinderContext.empty occurrence = some sourceItem) :
+      Concrete.Elaboration.BinderContext.empty occurrence = some sourceItem) :
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
     let layout := spliceInput.plugLayout
-    let targetEq := ConcreteElaboration.WireContext.length_extend
+    let targetEq := Concrete.Elaboration.WireContext.length_extend
       outputLeaf.inheritedWires (layout.frameRegion site)
     let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
       outputWitness outputLeaf hzero
     let targetEnv : Fin
         (outputLeaf.inheritedWires.length +
-          (ConcreteElaboration.exactScopeWires layout.plugRaw
+          (Concrete.Elaboration.exactScopeWires layout.plugRaw
             (layout.frameRegion site)).length) → model.Carrier :=
       env ∘ Fin.cast targetEq.symm
     let sourceEnv := targetEnv ∘ combined
     let relationMap : RelationRenaming []
         outputWitness.toFocus.holeRels :=
-      Splice.Input.PlugLayout.emptyRelationRenaming
+      Concrete.Splice.Input.PlugLayout.emptyRelationRenaming
         outputWitness.toFocus.holeRels
     denoteItem model  sourceEnv relEnv
       ((sourceItem.renameWires
@@ -111,12 +113,12 @@ theorem advance_pattern_root_item_denotes_empty
   let next := advanceInstantiationState comprehension attachments binders
     payload state atom tail site arguments hadmissible
   let occurrences :=
-    (ConcreteElaboration.localOccurrences next.diagram.val
+    (Concrete.Elaboration.localOccurrences next.diagram.val
       (layout.frameRegion site)).filter (dropOccurrenceSurvives next)
   have bodyRoot : payload.binderSpine.bodyContainer =
       comprehension.val.diagram.root :=
     payload.binderSpine.body_eq_root_of_empty hzero
-  have bodyMember : occurrence ∈ ConcreteElaboration.localOccurrences
+  have bodyMember : occurrence ∈ Concrete.Elaboration.localOccurrences
       comprehension.val.diagram payload.binderSpine.bodyContainer := by
     simpa [bodyRoot] using occurrenceMember
   have mappedMember : layout.mapPatternOccurrence occurrence ∈ occurrences := by
@@ -129,25 +131,25 @@ theorem advance_pattern_root_item_denotes_empty
       layout.mapPatternOccurrence occurrence :=
     indexOf?_sound occurrenceIndexEq
   let itemIndex := Fin.cast
-    (ConcreteElaboration.compileOccurrencesWith?_length
+    (Concrete.Elaboration.compileOccurrencesWith?_length
       (compileSurvivorRegion?  next outputLeaf.fuel)
       (outputLeaf.inheritedWires.extend (layout.frameRegion site))
       outputLeaf.binders survivorCompiled).symm occurrenceIndex
   have targetCompiledSurvivor :
-      ConcreteElaboration.compileOccurrenceWith?  next.diagram.val
+      Concrete.Elaboration.compileOccurrenceWith?  next.diagram.val
         (compileSurvivorRegion?  next outputLeaf.fuel)
         (outputLeaf.inheritedWires.extend (layout.frameRegion site))
         outputLeaf.binders (layout.mapPatternOccurrence occurrence) =
           some (survivorItems.get itemIndex) := by
-    have atIndex := ConcreteElaboration.compileOccurrencesWith?_get
+    have atIndex := Concrete.Elaboration.compileOccurrencesWith?_get
       (compileSurvivorRegion?  next outputLeaf.fuel)
       (outputLeaf.inheritedWires.extend (layout.frameRegion site))
       outputLeaf.binders survivorCompiled occurrenceIndex
     rw [occurrenceEq] at atIndex
     exact atIndex
   have targetCompiledAuthoritative :
-      ConcreteElaboration.compileOccurrenceWith?  layout.plugRaw
-        (ConcreteElaboration.compileRegion?  layout.plugRaw
+      Concrete.Elaboration.compileOccurrenceWith?  layout.plugRaw
+        (Concrete.Elaboration.compileRegion?  layout.plugRaw
           outputLeaf.fuel)
         (outputLeaf.inheritedWires.extend (layout.frameRegion site))
         outputLeaf.binders (layout.mapPatternOccurrence occurrence) =
@@ -167,11 +169,11 @@ theorem advance_pattern_root_item_denotes_empty
       (survivorItems.get itemIndex) :=
     (denoteItemSeq_iff_get model  env relEnv survivorItems).mp
       survivorDenotes itemIndex
-  let targetEq := ConcreteElaboration.WireContext.length_extend
+  let targetEq := Concrete.Elaboration.WireContext.length_extend
     outputLeaf.inheritedWires (layout.frameRegion site)
   let targetEnv : Fin
       (outputLeaf.inheritedWires.length +
-        (ConcreteElaboration.exactScopeWires layout.plugRaw
+        (Concrete.Elaboration.exactScopeWires layout.plugRaw
           (layout.frameRegion site)).length) → model.Carrier :=
     env ∘ Fin.cast targetEq.symm
   have targetCastDenotes : denoteItem model  targetEnv relEnv
@@ -187,15 +189,15 @@ theorem advance_pattern_root_item_denotes_empty
 /-- A denoting zero-spine next survivor block contains the entire native open
 pattern root conjunction under the receipt-recorded repeated-alias valuation. -/
 theorem advance_patternRootItems_denotes_empty
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -204,13 +206,13 @@ theorem advance_patternRootItems_denotes_empty
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (host : Splice.SiteView
+    (host : Concrete.Splice.SiteView
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrame hadmissible) site)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -226,7 +228,7 @@ theorem advance_patternRootItems_denotes_empty
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)).length
       outputWitness.toFocus.holeRels)
-    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (survivorCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       (compileSurvivorRegion?
@@ -236,7 +238,7 @@ theorem advance_patternRootItems_denotes_empty
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site))
       outputLeaf.binders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible).diagram.val
         ((instantiateSpliceInput comprehension attachments binders payload state
@@ -248,14 +250,14 @@ theorem advance_patternRootItems_denotes_empty
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
     let layout := spliceInput.plugLayout
-    let pattern := Splice.Input.compiledSpliceOpenRootItems comprehension
-    let targetEq := ConcreteElaboration.WireContext.length_extend
+    let pattern := Concrete.Splice.Input.compiledSpliceOpenRootItems comprehension
+    let targetEq := Concrete.Elaboration.WireContext.length_extend
       outputLeaf.inheritedWires (layout.frameRegion site)
     let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
       outputWitness outputLeaf hzero
     let targetEnv : Fin
         (outputLeaf.inheritedWires.length +
-          (ConcreteElaboration.exactScopeWires layout.plugRaw
+          (Concrete.Elaboration.exactScopeWires layout.plugRaw
             (layout.frameRegion site)).length) → model.Carrier :=
       env ∘ Fin.cast targetEq.symm
     denoteItemSeq (relCtx := []) model
@@ -266,41 +268,41 @@ theorem advance_patternRootItems_denotes_empty
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
   let layout := spliceInput.plugLayout
-  let pattern := Splice.Input.compiledSpliceOpenRootItems comprehension
-  let targetEq := ConcreteElaboration.WireContext.length_extend
+  let pattern := Concrete.Splice.Input.compiledSpliceOpenRootItems comprehension
+  let targetEq := Concrete.Elaboration.WireContext.length_extend
     outputLeaf.inheritedWires (layout.frameRegion site)
   let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
     outputWitness outputLeaf hzero
   let targetEnv : Fin
       (outputLeaf.inheritedWires.length +
-        (ConcreteElaboration.exactScopeWires layout.plugRaw
+        (Concrete.Elaboration.exactScopeWires layout.plugRaw
           (layout.frameRegion site)).length) → model.Carrier :=
     env ∘ Fin.cast targetEq.symm
   let sourceEnv := targetEnv ∘ combined
   let seam := layout.patternRootSeamPreparedWireOfEmpty hadmissible host
   let relationMap : RelationRenaming [] outputWitness.toFocus.holeRels :=
-    Splice.Input.PlugLayout.emptyRelationRenaming
+    Concrete.Splice.Input.PlugLayout.emptyRelationRenaming
       outputWitness.toFocus.holeRels
   apply (denoteItemSeq_iff_get (relCtx := []) model  (sourceEnv ∘ seam)
     (PUnit.unit : RelEnv model.Carrier []) pattern.items).2
   intro sourceIndex
-  have patternLength := ConcreteElaboration.compileOccurrencesWith?_length
-    (ConcreteElaboration.compileRegion?  comprehension.val.diagram
+  have patternLength := Concrete.Elaboration.compileOccurrencesWith?_length
+    (Concrete.Elaboration.compileRegion?  comprehension.val.diagram
       comprehension.val.diagram.regionCount)
     (comprehension.val.exposedWires ++ comprehension.val.hiddenWires)
-    ConcreteElaboration.BinderContext.empty pattern.computation
+    Concrete.Elaboration.BinderContext.empty pattern.computation
   let occurrenceIndex := Fin.cast patternLength sourceIndex
-  let occurrence := (ConcreteElaboration.localOccurrences
+  let occurrence := (Concrete.Elaboration.localOccurrences
     comprehension.val.diagram comprehension.val.diagram.root).get
       occurrenceIndex
-  have occurrenceMember : occurrence ∈ ConcreteElaboration.localOccurrences
+  have occurrenceMember : occurrence ∈ Concrete.Elaboration.localOccurrences
       comprehension.val.diagram comprehension.val.diagram.root :=
     List.get_mem _ occurrenceIndex
-  have sourceCompiled := ConcreteElaboration.compileOccurrencesWith?_get
-    (ConcreteElaboration.compileRegion?  comprehension.val.diagram
+  have sourceCompiled := Concrete.Elaboration.compileOccurrencesWith?_get
+    (Concrete.Elaboration.compileRegion?  comprehension.val.diagram
       comprehension.val.diagram.regionCount)
     (comprehension.val.exposedWires ++ comprehension.val.hiddenWires)
-    ConcreteElaboration.BinderContext.empty pattern.computation occurrenceIndex
+    Concrete.Elaboration.BinderContext.empty pattern.computation occurrenceIndex
   have preparedDenotes := advance_pattern_root_item_denotes_empty comprehension
     attachments binders payload state atom tail site arguments hadmissible host
     outputWitness outputLeaf hzero model  env relEnv survivorItems

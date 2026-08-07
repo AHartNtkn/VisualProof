@@ -1,6 +1,8 @@
 import VisualProof.Rule.Soundness.AttachmentAliasSemanticRootContext
 
-namespace VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+namespace VisualProof.Concrete.Splice.AttachmentAliasMaterialization
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -14,7 +16,7 @@ namespace Semantic
 extra semantic factor between retained nodes and retained children. -/
 theorem focusedRootItemsSimulation
     (mode : Mode)
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (targetWellFormed :
@@ -22,30 +24,30 @@ theorem focusedRootItemsSimulation
         )
     (model : Model)
     (fuelSource fuelTarget : Nat)
-    (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)
-    (targetContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext pattern.val.diagram)
+    (targetContext : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
     (collapse : ContextCollapse pattern attachment spine targetContext
       sourceContext)
     (sourceExact : sourceContext.Exact spine.bodyContainer)
     (targetExact : targetContext.Exact spine.bodyContainer)
-    (sourceBinders : ConcreteElaboration.BinderContext pattern.val.diagram rels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext pattern.val.diagram rels)
+    (targetBinders : Concrete.Elaboration.BinderContext
       (materializedDiagram pattern.val attachment spine.bodyContainer) rels)
     (bindersEqual : HEq sourceBinders targetBinders)
     (sourceBindersCover : sourceBinders.Covers spine.bodyContainer)
     (targetBindersCover : targetBinders.Covers spine.bodyContainer)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       pattern.val.diagram sourceBinders spine.bodyContainer)
-    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (targetEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (materializedDiagram pattern.val attachment spine.bodyContainer)
       targetBinders spine.bodyContainer)
-    (recurse : ∀ {childDirection : ConcreteElaboration.SimulationDirection}
+    (recurse : ∀ {childDirection : Concrete.Elaboration.SimulationDirection}
       {child : Fin pattern.val.diagram.regionCount}
       {childRels : RelCtx}
-      {childSourceBinders : ConcreteElaboration.BinderContext
+      {childSourceBinders : Concrete.Elaboration.BinderContext
         pattern.val.diagram childRels}
-      {childTargetBinders : ConcreteElaboration.BinderContext
+      {childTargetBinders : Concrete.Elaboration.BinderContext
         (materializedDiagram pattern.val attachment spine.bodyContainer) childRels}
       {sourceBody : Region  sourceContext.length childRels}
       {targetBody : Region  targetContext.length childRels},
@@ -54,51 +56,51 @@ theorem focusedRootItemsSimulation
         child).parent? = some spine.bodyContainer →
       True → HEq childSourceBinders childTargetBinders →
       childSourceBinders.Covers child → childTargetBinders.Covers child →
-      ConcreteElaboration.BinderContext.Enumeration pattern.val.diagram
+      Concrete.Elaboration.BinderContext.Enumeration pattern.val.diagram
         childSourceBinders child →
-      ConcreteElaboration.BinderContext.Enumeration
+      Concrete.Elaboration.BinderContext.Enumeration
         (materializedDiagram pattern.val attachment spine.bodyContainer)
         childTargetBinders child →
-      ConcreteElaboration.compileRegion?  pattern.val.diagram fuelSource
+      Concrete.Elaboration.compileRegion?  pattern.val.diagram fuelSource
           child sourceContext childSourceBinders = some sourceBody →
-      ConcreteElaboration.compileRegion?
+      Concrete.Elaboration.compileRegion?
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           fuelTarget child targetContext childTargetBinders = some targetBody →
-      ConcreteElaboration.RegionSimulation model  childDirection
+      Concrete.Elaboration.RegionSimulation model  childDirection
         (indexRelation mode collapse) sourceBody targetBody)
     (sourceItems : ItemSeq  sourceContext.length rels)
     (targetItems : ItemSeq  targetContext.length rels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (sourceCompiled : Concrete.Elaboration.compileOccurrencesWith?
       pattern.val.diagram
-      (ConcreteElaboration.compileRegion?  pattern.val.diagram fuelSource)
+      (Concrete.Elaboration.compileRegion?  pattern.val.diagram fuelSource)
       sourceContext sourceBinders
-      (ConcreteElaboration.localOccurrences pattern.val.diagram
+      (Concrete.Elaboration.localOccurrences pattern.val.diagram
         spine.bodyContainer) = some sourceItems)
-    (targetCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (targetCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (materializedDiagram pattern.val attachment spine.bodyContainer)
-      (ConcreteElaboration.compileRegion?
+      (Concrete.Elaboration.compileRegion?
         (materializedDiagram pattern.val attachment spine.bodyContainer)
         fuelTarget)
       targetContext targetBinders
-      (ConcreteElaboration.localOccurrences
+      (Concrete.Elaboration.localOccurrences
         (materializedDiagram pattern.val attachment spine.bodyContainer)
         spine.bodyContainer) = some targetItems) :
-    ConcreteElaboration.ItemSeqSimulation model  mode.direction
+    Concrete.Elaboration.ItemSeqSimulation model  mode.direction
       (indexRelation mode collapse) sourceItems targetItems := by
   rw [source_localOccurrences] at sourceCompiled
   obtain ⟨sourceNodeItems, sourceChildItems, sourceNodeCompiled,
       sourceChildCompiled, sourceItemsEq⟩ :=
-    ConcreteElaboration.compileOccurrencesWith?_append_split
-      (fun {rels} => ConcreteElaboration.compileRegion?
+    Concrete.Elaboration.compileOccurrencesWith?_append_split
+      (fun {rels} => Concrete.Elaboration.compileRegion?
         pattern.val.diagram fuelSource)
       sourceContext sourceBinders
       (sourceNodeOccurrences pattern.val spine.bodyContainer)
       (sourceChildOccurrences pattern.val spine.bodyContainer)
       sourceItems sourceCompiled
   rw [materialized_focused_localOccurrences] at targetCompiled
-  have targetCompiled' : ConcreteElaboration.compileOccurrencesWith?
+  have targetCompiled' : Concrete.Elaboration.compileOccurrencesWith?
       (materializedDiagram pattern.val attachment spine.bodyContainer)
-      (ConcreteElaboration.compileRegion?
+      (Concrete.Elaboration.compileRegion?
         (materializedDiagram pattern.val attachment spine.bodyContainer)
         fuelTarget)
       targetContext targetBinders
@@ -110,8 +112,8 @@ theorem focusedRootItemsSimulation
     simpa only [List.append_assoc] using targetCompiled
   obtain ⟨targetNodeItems, targetRestItems, targetNodeCompiled,
       targetRestCompiled, targetItemsEq⟩ :=
-    ConcreteElaboration.compileOccurrencesWith?_append_split
-      (fun {rels} => ConcreteElaboration.compileRegion?
+    Concrete.Elaboration.compileOccurrencesWith?_append_split
+      (fun {rels} => Concrete.Elaboration.compileRegion?
         (materializedDiagram pattern.val attachment spine.bodyContainer)
         fuelTarget)
       targetContext targetBinders
@@ -122,8 +124,8 @@ theorem focusedRootItemsSimulation
           (liftOccurrence pattern.val attachment)) targetItems targetCompiled'
   obtain ⟨aliasItems, targetChildItems, aliasCompiled, targetChildCompiled,
       targetRestItemsEq⟩ :=
-    ConcreteElaboration.compileOccurrencesWith?_append_split
-      (fun {rels} => ConcreteElaboration.compileRegion?
+    Concrete.Elaboration.compileOccurrencesWith?_append_split
+      (fun {rels} => Concrete.Elaboration.compileRegion?
         (materializedDiagram pattern.val attachment spine.bodyContainer)
         fuelTarget)
       targetContext targetBinders
@@ -143,9 +145,9 @@ theorem focusedRootItemsSimulation
   | forward =>
       have nodeSimulation := oldNodeOccurrences_simulation_collapse pattern
         attachment spine model
-        (ConcreteElaboration.compileRegion?  pattern.val.diagram
+        (Concrete.Elaboration.compileRegion?  pattern.val.diagram
           fuelSource)
-        (ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           fuelTarget)
         sourceContext targetContext collapse sourceExact.nodup sourceBinders
@@ -158,12 +160,12 @@ theorem focusedRootItemsSimulation
       have targetChildren := childSimulation sourceEnv targetEnv relEnv
         environments sourceDenotes.2
       have envEq :=
-        (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+        (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
           collapse.indexMap sourceEnv targetEnv).mp environments
       have targetAliases := aliasOccurrences_denote_of_collapse pattern attachment
         spine targetWellFormed targetContext sourceContext collapse
         sourceExact.nodup targetExact targetBinders
-        (ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           fuelTarget)
         aliasItems aliasCompiled model  sourceEnv targetEnv envEq.symm relEnv
@@ -171,9 +173,9 @@ theorem focusedRootItemsSimulation
   | backward =>
       have nodeSimulation := oldNodeOccurrences_simulation pattern attachment
         spine model  .backward
-        (ConcreteElaboration.compileRegion?  pattern.val.diagram
+        (Concrete.Elaboration.compileRegion?  pattern.val.diagram
           fuelSource)
-        (ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           fuelTarget)
         sourceContext targetContext collapse targetExact.nodup sourceBinders
@@ -189,4 +191,4 @@ theorem focusedRootItemsSimulation
 
 end Semantic
 
-end VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+end VisualProof.Concrete.Splice.AttachmentAliasMaterialization

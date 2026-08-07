@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationTerminalTrace
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -11,15 +13,15 @@ namespace InstantiationSemantic
 parameter valuation and fixed proxy family, with no arbitrary total wire
 valuation in its interface. -/
 noncomputable def terminalRelationOfParameterValues
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -33,7 +35,7 @@ noncomputable def terminalRelationOfParameterValues
   fun relationArguments =>
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
-    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
     ∃ assignment : BoundaryAssignment comprehension.elaborate model.Carrier,
       assignment.args =
           Fin.addCases relationArguments parameterValues ∘
@@ -45,20 +47,20 @@ noncomputable def terminalRelationOfParameterValues
               (terminalInheritedEnvironment payload state site arguments
                 hnonempty assignment)
               relEnv
-              (ConcreteElaboration.finishRegion comprehension.val.diagram
+              (Concrete.Elaboration.finishRegion comprehension.val.diagram
                 pattern.leaf.inheritedWires payload.binderSpine.bodyContainer
                 pattern.leaf.items)
 
 theorem terminalRelationOfValues_eq_parameterValues
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -83,15 +85,15 @@ theorem terminalRelationOfValues_eq_parameterValues
 comprehension relation is independent of the executor state, occurrence site,
 and ordered argument wires used to install a copy. -/
 theorem terminalRelationOfParameterValues_eq
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (left right : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (leftSite : Fin left.diagram.val.regionCount)
@@ -116,7 +118,7 @@ compiler context.  Repeated parameter wires deliberately read the same
 context entry while retaining their serialized positions. -/
 def ParameterValuesAt
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
     (environment : Fin context.length → D)
     (values : Fin parameterCount → D) : Prop :=
   ∀ position, ∃ index : Fin context.length,
@@ -127,42 +129,42 @@ def ParameterValuesAt
 inherited parameter value. -/
 theorem ParameterValuesAt.extend
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
     (environment : Fin context.length → D)
     (values : Fin parameterCount → D)
     (fixed : ParameterValuesAt state context environment values)
     (region : Fin state.diagram.val.regionCount)
-    (localEnv : Fin (ConcreteElaboration.exactScopeWires state.diagram.val
+    (localEnv : Fin (Concrete.Elaboration.exactScopeWires state.diagram.val
       region).length → D) :
     ParameterValuesAt state (context.extend region)
-      (ConcreteElaboration.extendedEnvironment context region environment localEnv)
+      (Concrete.Elaboration.extendedEnvironment context region environment localEnv)
       values := by
   intro position
   obtain ⟨index, wireEq, valueEq⟩ := fixed position
   let extendedIndex : Fin (context.extend region).length :=
-    Fin.cast (ConcreteElaboration.WireContext.length_extend context region).symm
+    Fin.cast (Concrete.Elaboration.WireContext.length_extend context region).symm
       (Fin.castAdd
-        (ConcreteElaboration.exactScopeWires state.diagram.val region).length
+        (Concrete.Elaboration.exactScopeWires state.diagram.val region).length
         index)
   refine ⟨extendedIndex, ?_, ?_⟩
   · simpa [extendedIndex] using
-      (Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_outer
+      (Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_outer
         context region index).trans wireEq
-  · simpa [ConcreteElaboration.extendedEnvironment, extendedIndex,
+  · simpa [Concrete.Elaboration.extendedEnvironment, extendedIndex,
       extendWireEnv] using valueEq
 
 /-- At an accepted splice site, the quotient-host valuation reads each source
 parameter at the fixed value carried by the next state's exact target context. -/
 theorem siteQuotientEnvironment_parameter
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -171,7 +173,7 @@ theorem siteQuotientEnvironment_parameter
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (context : ConcreteElaboration.WireContext
+    (context : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw)
     (exact : context.Exact
@@ -187,7 +189,7 @@ theorem siteQuotientEnvironment_parameter
     (position : Fin attachments.length) :
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
-    let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+    let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment spliceInput
       context exact environment fallback
     quotientValues (spliceInput.quotientWire (state.parameters position)) =
       parameterValues position := by
@@ -210,7 +212,7 @@ theorem siteQuotientEnvironment_parameter
           (spliceInput.quotientWire (state.parameters position)))).scope
       (spliceInput.plugLayout.frameRegion site) := by
     exact (exact.mem_iff _).1 (indexWire ▸ List.get_mem context index)
-  have quotientEq := Splice.Input.siteQuotientEnvironment_eq spliceInput
+  have quotientEq := Concrete.Splice.Input.siteQuotientEnvironment_eq spliceInput
     context exact environment fallback
     (spliceInput.quotientWire (state.parameters position)) visible index indexWire
   exact quotientEq.trans valueEq

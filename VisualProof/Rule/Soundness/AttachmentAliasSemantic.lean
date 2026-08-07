@@ -1,7 +1,9 @@
 import VisualProof.Rule.Soundness.AttachmentAliasSemanticBoundary
-import VisualProof.Diagram.Concrete.Subgraph.Splice.Input.Discrete
+import VisualProof.Concrete.Subgraph.Splice.Input.Discrete
 
-namespace VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+namespace VisualProof.Concrete.Splice.AttachmentAliasMaterialization
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -13,7 +15,7 @@ namespace Semantic
 
 private theorem rootSelection
     (mode : Mode)
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -33,9 +35,9 @@ private theorem rootSelection
             (indexRelation mode
               (rootCollapse pattern attachment spine contract targetWellFormed)
             ).EnvironmentsAgree
-              (ConcreteElaboration.rootEnvironment pattern.val.exposedWires
+              (Concrete.Elaboration.rootEnvironment pattern.val.exposedWires
                 pattern.val.hiddenWires sourceOuter sourceLocal)
-              (ConcreteElaboration.rootEnvironment
+              (Concrete.Elaboration.rootEnvironment
                 (raw pattern.val attachment spine.bodyContainer).exposedWires
                 (raw pattern.val attachment spine.bodyContainer).hiddenWires
                 targetOuter targetLocal)
@@ -44,9 +46,9 @@ private theorem rootSelection
             (indexRelation mode
               (rootCollapse pattern attachment spine contract targetWellFormed)
             ).EnvironmentsAgree
-              (ConcreteElaboration.rootEnvironment pattern.val.exposedWires
+              (Concrete.Elaboration.rootEnvironment pattern.val.exposedWires
                 pattern.val.hiddenWires sourceOuter sourceLocal)
-              (ConcreteElaboration.rootEnvironment
+              (Concrete.Elaboration.rootEnvironment
                 (raw pattern.val attachment spine.bodyContainer).exposedWires
                 (raw pattern.val attachment spine.bodyContainer).hiddenWires
                 targetOuter targetLocal) := by
@@ -54,32 +56,32 @@ private theorem rootSelection
   cases mode with
   | forward =>
       simp only [indexRelation, Mode.direction] at outerAgrees ⊢
-      rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap]
+      rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap]
         at outerAgrees
       intro sourceLocal
       let targetLocal := forwardTargetLocal pattern attachment spine contract
         targetWellFormed sourceOuter sourceLocal
       refine ⟨targetLocal, ?_⟩
-      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+      apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
         _ _ _).mpr
       exact forwardRootEnvironment_agrees pattern attachment spine contract
         targetWellFormed sourceOuter targetOuter outerAgrees sourceLocal
   | backward =>
       simp only [indexRelation, Mode.direction] at outerAgrees ⊢
-      rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+      rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap]
         at outerAgrees
       intro targetLocal
       let sourceLocal := backwardSourceLocal pattern attachment spine contract
         targetWellFormed targetOuter targetLocal
       refine ⟨sourceLocal, ?_⟩
-      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+      apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap
         _ _ _).mpr
       exact backwardRootEnvironment_agrees pattern attachment spine contract
         targetWellFormed sourceOuter targetOuter outerAgrees targetLocal
 
 noncomputable def rootContext
     (mode : Mode)
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -90,7 +92,7 @@ noncomputable def rootContext
     :
     let simulation := concreteSimulation mode pattern attachment spine contract
       targetWellFormed model
-    ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
+    Concrete.Elaboration.ConcreteSemanticSimulation.RootContextSimulation
       simulation mode.direction pattern.val.exposedWires pattern.val.hiddenWires
       (raw pattern.val attachment spine.bodyContainer).exposedWires
       (raw pattern.val attachment spine.bodyContainer).hiddenWires := by
@@ -107,7 +109,7 @@ noncomputable def rootContext
     transport := ?_
     focusedRootKernel := ?_
   }
-  · simpa only [OpenConcreteDiagram.rootWires] using combined
+  · simpa only [Concrete.OpenDiagram.rootWires] using combined
   · intro regular allowed sourceItems targetItems sourceCompiled targetCompiled
       itemSemantics
     have relationMapEq :
@@ -121,12 +123,12 @@ noncomputable def rootContext
         (source := pattern.val.diagram)
         (target := materializedDiagram pattern.val attachment
           spine.bodyContainer)
-        (sourceBinders := ConcreteElaboration.BinderContext.empty)
-        (targetBinders := ConcreteElaboration.BinderContext.empty)
+        (sourceBinders := Concrete.Elaboration.BinderContext.empty)
+        (targetBinders := Concrete.Elaboration.BinderContext.empty)
         (concreteSimulation mode pattern attachment spine contract
           targetWellFormed model ).binders_empty
     rw [relationMapEq, ItemSeq.renameRelations_id] at itemSemantics ⊢
-    exact ConcreteElaboration.directionalRootTransport_of_agreement
+    exact Concrete.Elaboration.directionalRootTransport_of_agreement
       mode.direction pattern.val.exposedWires pattern.val.hiddenWires
       (raw pattern.val attachment spine.bodyContainer).exposedWires
       (raw pattern.val attachment spine.bodyContainer).hiddenWires
@@ -138,7 +140,7 @@ noncomputable def rootContext
   · intro atRoot distinguished allowed recurse recurseAt sourceItems targetItems
       sourceCompiled targetCompiled
     change pattern.val.diagram.root = spine.bodyContainer at distinguished
-    let targetChecked : CheckedOpenDiagram  :=
+    let targetChecked : Concrete.CheckedOpen  :=
       ⟨raw pattern.val attachment spine.bodyContainer, {
         diagram_well_formed := targetWellFormed
         boundary_is_root_scoped :=
@@ -146,16 +148,16 @@ noncomputable def rootContext
             contract).boundary_is_root_scoped
       }⟩
     have sourceExact :=
-      ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+      Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
         pattern
     have targetExact :=
-      ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+      Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
         targetChecked
-    have sourceExactBody : ConcreteElaboration.WireContext.Exact
+    have sourceExactBody : Concrete.Elaboration.WireContext.Exact
         pattern.val.rootWires spine.bodyContainer := by
       exact distinguished ▸ sourceExact
     have targetExactBody :
-        ConcreteElaboration.WireContext.Exact
+        Concrete.Elaboration.WireContext.Exact
           (raw pattern.val attachment spine.bodyContainer).rootWires
           spine.bodyContainer := by
       have targetRoot :
@@ -163,28 +165,28 @@ noncomputable def rootContext
             spine.bodyContainer := by
         simpa [raw, materializedDiagram] using distinguished
       have targetExact' :
-          ConcreteElaboration.WireContext.Exact
+          Concrete.Elaboration.WireContext.Exact
             (raw pattern.val attachment spine.bodyContainer).rootWires
             (raw pattern.val attachment spine.bodyContainer).diagram.root := by
         simpa only [targetChecked] using targetExact
       exact Eq.mp (congrArg
-        (fun region => ConcreteElaboration.WireContext.Exact
+        (fun region => Concrete.Elaboration.WireContext.Exact
           (raw pattern.val attachment spine.bodyContainer).rootWires region)
         targetRoot) targetExact'
     have sourceCover :=
-      ConcreteElaboration.BinderContext.empty_covers_root
+      Concrete.Elaboration.BinderContext.empty_covers_root
         pattern.property.diagram_well_formed
     have targetCover :=
-      ConcreteElaboration.BinderContext.empty_covers_root targetWellFormed
+      Concrete.Elaboration.BinderContext.empty_covers_root targetWellFormed
     have sourceCoverBody :
-        (ConcreteElaboration.BinderContext.empty :
-          ConcreteElaboration.BinderContext pattern.val.diagram []).Covers
+        (Concrete.Elaboration.BinderContext.empty :
+          Concrete.Elaboration.BinderContext pattern.val.diagram []).Covers
             spine.bodyContainer := by
       rw [← distinguished]
       exact sourceCover
     have targetCoverBody :
-        (ConcreteElaboration.BinderContext.empty :
-          ConcreteElaboration.BinderContext
+        (Concrete.Elaboration.BinderContext.empty :
+          Concrete.Elaboration.BinderContext
             (materializedDiagram pattern.val attachment spine.bodyContainer)
             []).Covers spine.bodyContainer := by
       have targetRoot :
@@ -193,37 +195,37 @@ noncomputable def rootContext
         simpa [materializedDiagram] using distinguished
       exact targetRoot ▸ targetCover
     have sourceEnumeration :=
-      ConcreteElaboration.BinderContext.Enumeration.empty pattern.val.diagram
+      Concrete.Elaboration.BinderContext.Enumeration.empty pattern.val.diagram
     have targetEnumeration :=
-      ConcreteElaboration.BinderContext.Enumeration.empty
+      Concrete.Elaboration.BinderContext.Enumeration.empty
         (materializedDiagram pattern.val attachment spine.bodyContainer)
     have sourceEnumerationBody :
-        ConcreteElaboration.BinderContext.Enumeration pattern.val.diagram
-          ConcreteElaboration.BinderContext.empty spine.bodyContainer := by
+        Concrete.Elaboration.BinderContext.Enumeration pattern.val.diagram
+          Concrete.Elaboration.BinderContext.empty spine.bodyContainer := by
       exact Eq.mp (congrArg
-        (fun region => ConcreteElaboration.BinderContext.Enumeration
-          pattern.val.diagram ConcreteElaboration.BinderContext.empty region)
+        (fun region => Concrete.Elaboration.BinderContext.Enumeration
+          pattern.val.diagram Concrete.Elaboration.BinderContext.empty region)
         distinguished) sourceEnumeration
     have targetEnumerationBody :
-        ConcreteElaboration.BinderContext.Enumeration
+        Concrete.Elaboration.BinderContext.Enumeration
           (materializedDiagram pattern.val attachment spine.bodyContainer)
-          ConcreteElaboration.BinderContext.empty spine.bodyContainer := by
+          Concrete.Elaboration.BinderContext.empty spine.bodyContainer := by
       have targetRoot :
           (materializedDiagram pattern.val attachment spine.bodyContainer).root =
             spine.bodyContainer := by
         simpa [materializedDiagram] using distinguished
       exact Eq.mp (congrArg
-        (fun region => ConcreteElaboration.BinderContext.Enumeration
+        (fun region => Concrete.Elaboration.BinderContext.Enumeration
           (materializedDiagram pattern.val attachment spine.bodyContainer)
-          ConcreteElaboration.BinderContext.empty region)
+          Concrete.Elaboration.BinderContext.empty region)
         targetRoot) targetEnumeration
     have childRecurse : ∀
-        {childDirection : ConcreteElaboration.SimulationDirection}
+        {childDirection : Concrete.Elaboration.SimulationDirection}
         {child : Fin pattern.val.diagram.regionCount}
         {childRels : RelCtx}
-        {childSourceBinders : ConcreteElaboration.BinderContext
+        {childSourceBinders : Concrete.Elaboration.BinderContext
           pattern.val.diagram childRels}
-        {childTargetBinders : ConcreteElaboration.BinderContext
+        {childTargetBinders : Concrete.Elaboration.BinderContext
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           childRels}
         {sourceBody : Region  pattern.val.rootWires.length childRels}
@@ -235,21 +237,21 @@ noncomputable def rootContext
           child).parent? = some spine.bodyContainer →
         True → HEq childSourceBinders childTargetBinders →
         childSourceBinders.Covers child → childTargetBinders.Covers child →
-        ConcreteElaboration.BinderContext.Enumeration pattern.val.diagram
+        Concrete.Elaboration.BinderContext.Enumeration pattern.val.diagram
           childSourceBinders child →
-        ConcreteElaboration.BinderContext.Enumeration
+        Concrete.Elaboration.BinderContext.Enumeration
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           childTargetBinders child →
-        ConcreteElaboration.compileRegion?  pattern.val.diagram
+        Concrete.Elaboration.compileRegion?  pattern.val.diagram
             pattern.val.diagram.regionCount child pattern.val.rootWires
             childSourceBinders = some sourceBody →
-        ConcreteElaboration.compileRegion?
+        Concrete.Elaboration.compileRegion?
             (materializedDiagram pattern.val attachment spine.bodyContainer)
             (materializedDiagram pattern.val attachment
               spine.bodyContainer).regionCount child
             (raw pattern.val attachment spine.bodyContainer).rootWires
             childTargetBinders = some targetBody →
-        ConcreteElaboration.RegionSimulation model  childDirection
+        Concrete.Elaboration.RegionSimulation model  childDirection
           (indexRelation mode combined) sourceBody targetBody := by
       intro childDirection child childRels childSourceBinders childTargetBinders
         sourceBody targetBody sourceParent targetParent _ bindersEqual
@@ -267,7 +269,7 @@ noncomputable def rootContext
         childAllowed binderWitness sourceChildCover targetChildCover
         sourceChildEnumeration targetChildEnumeration sourceChildCompiled
         targetChildCompiled
-      change ConcreteElaboration.RegionSimulation model  childDirection
+      change Concrete.Elaboration.RegionSimulation model  childDirection
         (indexRelation mode combined)
         (Region.renameRelations (fun {arity} relation => relation) sourceBody)
         targetBody at childSimulation
@@ -278,26 +280,26 @@ noncomputable def rootContext
         spine.bodyContainer).regionCount
       pattern.val.rootWires
       (raw pattern.val attachment spine.bodyContainer).rootWires combined
-      sourceExactBody targetExactBody ConcreteElaboration.BinderContext.empty
-      ConcreteElaboration.BinderContext.empty HEq.rfl sourceCoverBody
+      sourceExactBody targetExactBody Concrete.Elaboration.BinderContext.empty
+      Concrete.Elaboration.BinderContext.empty HEq.rfl sourceCoverBody
       targetCoverBody sourceEnumerationBody targetEnumerationBody childRecurse
       sourceItems targetItems
-      (by simpa [distinguished, OpenConcreteDiagram.rootWires] using
+      (by simpa [distinguished, Concrete.OpenDiagram.rootWires] using
         sourceCompiled)
       (by simpa [distinguished, materializedDiagram,
-        OpenConcreteDiagram.rootWires] using targetCompiled)
+        Concrete.OpenDiagram.rootWires] using targetCompiled)
     have relationMapEq :
         (fun {arity} =>
           simulation.relationMap simulation.binders_empty (arity := arity)) =
           (fun {arity} relation => relation) :=
       identityBinder_relationMap_same simulation.binders_empty
     rw [relationMapEq, Region.renameRelations_id]
-    apply ConcreteElaboration.finishRoot_denote mode.direction
+    apply Concrete.Elaboration.finishRoot_denote mode.direction
       pattern.val.exposedWires pattern.val.hiddenWires
       (raw pattern.val attachment spine.bodyContainer).exposedWires
       (raw pattern.val attachment spine.bodyContainer).hiddenWires
       (indexRelation mode exposed) model  sourceItems targetItems
-    exact ConcreteElaboration.directionalRootTransport_of_agreement
+    exact Concrete.Elaboration.directionalRootTransport_of_agreement
       mode.direction pattern.val.exposedWires pattern.val.hiddenWires
       (raw pattern.val attachment spine.bodyContainer).exposedWires
       (raw pattern.val attachment spine.bodyContainer).hiddenWires
@@ -313,7 +315,7 @@ namespace Certificate
 
 /-- The exact positional attachment function for using the materialized
 boundary as a splice-input boundary. -/
-def positionalAttachment {pattern : CheckedOpenDiagram }
+def positionalAttachment {pattern : Concrete.CheckedOpen }
     {attachment : Fin pattern.val.boundary.length → Host}
     {originalSpine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern attachment originalSpine) :
@@ -322,8 +324,8 @@ def positionalAttachment {pattern : CheckedOpenDiagram }
 
 /-- Equal materialized boundary identities carry equal positional host
 attachments.  This is the certificate-level content of
-`Splice.Input.AttachmentsRespectBoundary`. -/
-theorem positionalAttachment_eq_of_boundary_eq {pattern : CheckedOpenDiagram }
+`Concrete.Splice.Input.AttachmentsRespectBoundary`. -/
+theorem positionalAttachment_eq_of_boundary_eq {pattern : Concrete.CheckedOpen }
     {attachment : Fin pattern.val.boundary.length → Host}
     {originalSpine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern attachment originalSpine)
@@ -346,12 +348,12 @@ theorem positionalAttachment_eq_of_boundary_eq {pattern : CheckedOpenDiagram }
     originalSpine.bodyContainer left' right').mp rawEq |>.2
 
 /-- Equality-elimination form of the positional theorem, factored away from
-the dependent fields of `Splice.Input`. -/
-theorem attachmentsRespectExactPattern {pattern : CheckedOpenDiagram }
+the dependent fields of `Concrete.Splice.Input`. -/
+theorem attachmentsRespectExactPattern {pattern : Concrete.CheckedOpen }
     {attachment : Fin pattern.val.boundary.length → Host}
     {originalSpine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern attachment originalSpine)
-    (inputPattern : CheckedOpenDiagram )
+    (inputPattern : Concrete.CheckedOpen )
     (patternEq : inputPattern = certificate.result)
     (inputAttachment : Fin inputPattern.val.boundary.length → Host)
     (attachmentEq : HEq inputAttachment certificate.positionalAttachment) :
@@ -365,9 +367,9 @@ theorem attachmentsRespectExactPattern {pattern : CheckedOpenDiagram }
 
 /-- A splice input whose pattern and positional attachments are exactly those
 of a certificate satisfies the discrete retained-frame boundary contract. -/
-theorem attachmentsRespectBoundary {pattern : CheckedOpenDiagram }
+theorem attachmentsRespectBoundary {pattern : Concrete.CheckedOpen }
     {originalSpine : BinderSpine pattern.val.diagram}
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (attachment : Fin pattern.val.boundary.length →
       Fin input.frame.val.wireCount)
     (certificate : Certificate pattern attachment originalSpine)
@@ -378,9 +380,9 @@ theorem attachmentsRespectBoundary {pattern : CheckedOpenDiagram }
     input.attachment attachmentEq
 
 /-- Certificate-specialized retained-frame quotient cancellation. -/
-noncomputable def discreteQuotientWireEquiv {pattern : CheckedOpenDiagram }
+noncomputable def discreteQuotientWireEquiv {pattern : Concrete.CheckedOpen }
     {originalSpine : BinderSpine pattern.val.diagram}
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (attachment : Fin pattern.val.boundary.length →
       Fin input.frame.val.wireCount)
     (certificate : Certificate pattern attachment originalSpine)
@@ -388,13 +390,13 @@ noncomputable def discreteQuotientWireEquiv {pattern : CheckedOpenDiagram }
     (attachmentEq : HEq input.attachment certificate.positionalAttachment) :
     FiniteEquiv input.wireQuotient.Carrier
       (Fin input.frame.val.wireCount) :=
-  Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary input
+  Concrete.Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary input
     (certificate.attachmentsRespectBoundary input attachment patternEq
       attachmentEq)
 
-@[simp] theorem discreteQuotientWireEquiv_quotientWire {pattern : CheckedOpenDiagram }
+@[simp] theorem discreteQuotientWireEquiv_quotientWire {pattern : Concrete.CheckedOpen }
     {originalSpine : BinderSpine pattern.val.diagram}
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (attachment : Fin pattern.val.boundary.length →
       Fin input.frame.val.wireCount)
     (certificate : Certificate pattern attachment originalSpine)
@@ -403,43 +405,43 @@ noncomputable def discreteQuotientWireEquiv {pattern : CheckedOpenDiagram }
     (wire : Fin input.frame.val.wireCount) :
     certificate.discreteQuotientWireEquiv input attachment patternEq
         attachmentEq (input.quotientWire wire) = wire := by
-  exact Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary_quotientWire input
+  exact Concrete.Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary_quotientWire input
     (certificate.attachmentsRespectBoundary input attachment patternEq
       attachmentEq) wire
 
 /-- Certificate-specialized concrete retained-frame cancellation. -/
-noncomputable def coalescedFrameIso {pattern : CheckedOpenDiagram }
+noncomputable def coalescedFrameIso {pattern : Concrete.CheckedOpen }
     {originalSpine : BinderSpine pattern.val.diagram}
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (attachment : Fin pattern.val.boundary.length →
       Fin input.frame.val.wireCount)
     (certificate : Certificate pattern attachment originalSpine)
     (patternEq : input.pattern = certificate.result)
     (attachmentEq : HEq input.attachment certificate.positionalAttachment) :
-    ConcreteIso input.coalesceFrameRaw input.frame.val :=
-  Splice.Input.coalescedFrameIsoOfAttachmentsRespectBoundary input
+    Concrete.Iso input.coalesceFrameRaw input.frame.val :=
+  Concrete.Splice.Input.coalescedFrameIsoOfAttachmentsRespectBoundary input
     (certificate.attachmentsRespectBoundary input attachment patternEq
       attachmentEq)
 
 /-- Certificate-specialized ordered retained-frame cancellation. -/
-noncomputable def coalescedFrameOpenIso {pattern : CheckedOpenDiagram }
+noncomputable def coalescedFrameOpenIso {pattern : Concrete.CheckedOpen }
     {originalSpine : BinderSpine pattern.val.diagram}
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (attachment : Fin pattern.val.boundary.length →
       Fin input.frame.val.wireCount)
     (certificate : Certificate pattern attachment originalSpine)
     (patternEq : input.pattern = certificate.result)
     (attachmentEq : HEq input.attachment certificate.positionalAttachment)
     (boundary : List (Fin input.frame.val.wireCount)) :
-    OpenConcreteIso (Splice.Input.PlugLayout.coalescedOpenRoot input boundary)
+    Concrete.OpenIso (Concrete.Splice.Input.PlugLayout.coalescedOpenRoot input boundary)
       { diagram := input.frame.val, boundary := boundary } :=
-  Splice.Input.coalescedFrameOpenIsoOfAttachmentsRespectBoundary input
+  Concrete.Splice.Input.coalescedFrameOpenIsoOfAttachmentsRespectBoundary input
     (certificate.attachmentsRespectBoundary input attachment patternEq
       attachmentEq) boundary
 
 /-- Attachment-sensitive alias materialization preserves the checked open
 denotation positionwise, including the certificate's boundary-length cast. -/
-theorem denote_iff {pattern : CheckedOpenDiagram }
+theorem denote_iff {pattern : Concrete.CheckedOpen }
     {attachment : Fin pattern.val.boundary.length → Host}
     {originalSpine : BinderSpine pattern.val.diagram}
     (certificate : Certificate pattern attachment originalSpine)
@@ -466,7 +468,7 @@ theorem denote_iff {pattern : CheckedOpenDiagram }
     intro _
     rfl
   have forwardBoundary :
-      ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness .forward
+      Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness .forward
       pattern.elaborate certificate.result.elaborate
       (Semantic.indexRelation .forward exposed) model  args targetArgs := by
     intro sourceAssignment sourceArgsEq sourceDenotes
@@ -496,18 +498,18 @@ theorem denote_iff {pattern : CheckedOpenDiagram }
                 (Fin.cast certificate.boundary_length position)) =
               sourceAssignment.args
                 (Fin.cast certificate.boundary_length position) := by
-                  simpa only [CheckedOpenDiagram.elaborate_boundary] using
+                  simpa only [Concrete.CheckedOpen.elaborate_boundary] using
                     sourceAssignment.agrees
                       (Fin.cast certificate.boundary_length position)
           _ = args (Fin.cast certificate.boundary_length position) :=
             congrFun sourceArgsEq _
     }
     refine ⟨targetAssignment, rfl, ?_⟩
-    apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+    apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
       exposed.indexMap sourceAssignment.classes targetAssignment.classes).mpr
     rfl
   have backwardBoundary :
-      ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness .backward
+      Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness .backward
       pattern.elaborate certificate.result.elaborate
       (Semantic.indexRelation .backward exposed) model  args targetArgs := by
     intro targetAssignment targetArgsEq targetDenotes
@@ -568,7 +570,7 @@ theorem denote_iff {pattern : CheckedOpenDiagram }
             simp [targetArgs, targetPositionCast]
     }
     refine ⟨sourceAssignment, rfl, ?_⟩
-    apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+    apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap
       exposed.oldIndex sourceAssignment.classes targetAssignment.classes).mpr
     rfl
   constructor
@@ -577,13 +579,13 @@ theorem denote_iff {pattern : CheckedOpenDiagram }
       originalSpine certificate.sourceTerminalBody
       certificate.wellFormed.diagram_well_formed model
     have backwardBoundary' :
-        ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+        Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
           .backward pattern.elaborate certificate.result.elaborate
           backwardRoot.outer model  args targetArgs := by
       rw [show backwardRoot.outer = Semantic.indexRelation .backward exposed by
         rfl]
       exact backwardBoundary
-    have backward := ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+    have backward := Concrete.Elaboration.ConcreteSemanticSimulation.elaborateOpen_denote
       pattern certificate.result model  backwardSimulation .backward
       backwardRoot backwardAllowed args targetArgs backwardBoundary'
     exact backward targetDenotes
@@ -592,17 +594,17 @@ theorem denote_iff {pattern : CheckedOpenDiagram }
       originalSpine certificate.sourceTerminalBody
       certificate.wellFormed.diagram_well_formed model
     have forwardBoundary' :
-        ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+        Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
           .forward pattern.elaborate certificate.result.elaborate
           forwardRoot.outer model  args targetArgs := by
       rw [show forwardRoot.outer = Semantic.indexRelation .forward exposed by
         rfl]
       exact forwardBoundary
-    have forward := ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+    have forward := Concrete.Elaboration.ConcreteSemanticSimulation.elaborateOpen_denote
       pattern certificate.result model  forwardSimulation .forward
       forwardRoot forwardAllowed args targetArgs forwardBoundary'
     exact forward sourceDenotes
 
 end Certificate
 
-end VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+end VisualProof.Concrete.Splice.AttachmentAliasMaterialization

@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalContext
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -12,20 +14,20 @@ namespace InstantiationTrace
 final-to-original simulation: preserved frame regions and the single promoted
 focus. -/
 def FinalAdmissible
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -35,20 +37,20 @@ def FinalAdmissible
     region = elimTrace.targetIndex finalWellFormed
 
 theorem reverseRegionMap_injective_of_admissible
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -88,20 +90,20 @@ theorem reverseRegionMap_injective_of_admissible
     · exact secondFocus.symm
 
 theorem child_admissible_of_regular_parent
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -128,7 +130,7 @@ theorem child_admissible_of_regular_parent
     refine ⟨originalChild, ?_, mappedChild⟩
     constructor
     · intro enclosed
-      rcases ConcreteElaboration.encloses_direct_child originalChildParent
+      rcases Concrete.Elaboration.encloses_direct_child originalChildParent
           enclosed with childBubble | parentEnclosed
       · have childIsBubble : originalChild = bubble := childBubble.symm
         have direct := originalChildParent
@@ -142,18 +144,18 @@ theorem child_admissible_of_regular_parent
 section BinderWitness
 
 variable
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
 
 def FinalBindersMapped
     (copyTrace : InstantiationTrace comprehension attachments binders payload
@@ -162,9 +164,9 @@ def FinalBindersMapped
       result.bubble raw)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       elimTrace.sourceDiagram sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext input.val targetRels)
+    (targetBinders : Concrete.Elaboration.BinderContext input.val targetRels)
     (relationMap : RelationRenaming sourceRels targetRels) : Prop :=
   ∀ region binderArity sourceRelation,
     sourceBinders region = some ⟨binderArity, sourceRelation⟩ →
@@ -179,9 +181,9 @@ structure FinalBinderWitness
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
     {sourceRels targetRels : RelCtx}
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       elimTrace.sourceDiagram sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext input.val targetRels) where
+    (targetBinders : Concrete.Elaboration.BinderContext input.val targetRels) where
   relationMap : RelationRenaming sourceRels targetRels
   bindersMapped : FinalBindersMapped copyTrace elimTrace finalWellFormed
     sourceBinders targetBinders relationMap
@@ -199,9 +201,9 @@ def pushAdmissible
     {finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed }
     {sourceRels targetRels : RelCtx}
-    {sourceBinders : ConcreteElaboration.BinderContext
+    {sourceBinders : Concrete.Elaboration.BinderContext
       elimTrace.sourceDiagram sourceRels}
-    {targetBinders : ConcreteElaboration.BinderContext input.val targetRels}
+    {targetBinders : Concrete.Elaboration.BinderContext input.val targetRels}
     (witness : FinalBinderWitness copyTrace elimTrace finalWellFormed
       sourceBinders targetBinders)
     (child : Fin elimTrace.sourceDiagram.regionCount)
@@ -217,10 +219,10 @@ def pushAdmissible
     intro region binderArity sourceRelation sourceLookup
     by_cases equality : region = child
     · subst region
-      simp only [ConcreteElaboration.BinderContext.push_self] at sourceLookup ⊢
+      simp only [Concrete.Elaboration.BinderContext.push_self] at sourceLookup ⊢
       cases Option.some.inj sourceLookup
       rfl
-    · rw [ConcreteElaboration.BinderContext.push_other _ arity equality]
+    · rw [Concrete.Elaboration.BinderContext.push_other _ arity equality]
         at sourceLookup
       cases sourceEq : sourceBinders region with
       | none => simp [sourceEq] at sourceLookup
@@ -234,7 +236,7 @@ def pushAdmissible
             fun reverseEq => equality
               (copyTrace.reverseRegionMap_injective_of_admissible elimTrace
                 finalWellFormed regionAdmissible childAdmissible reverseEq)
-          rw [ConcreteElaboration.BinderContext.push_other _ arity reverseNe]
+          rw [Concrete.Elaboration.BinderContext.push_other _ arity reverseNe]
           simp [sourceEq] at sourceLookup
           rcases sourceLookup with ⟨arityEq, relationEq⟩
           subst binderArity
@@ -247,7 +249,7 @@ def pushAdmissible
     by_cases equality : region = child
     · subst region
       exact childAdmissible
-    · rw [ConcreteElaboration.BinderContext.push_other _ arity equality]
+    · rw [Concrete.Elaboration.BinderContext.push_other _ arity equality]
         at sourceLookup
       cases sourceEq : sourceBinders region with
       | none => simp [sourceEq] at sourceLookup
@@ -276,12 +278,12 @@ def empty
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed ) :
     FinalBinderWitness copyTrace elimTrace finalWellFormed
-      ConcreteElaboration.BinderContext.empty
-      ConcreteElaboration.BinderContext.empty where
-  relationMap := ConcreteElaboration.identityRelationRenaming []
+      Concrete.Elaboration.BinderContext.empty
+      Concrete.Elaboration.BinderContext.empty where
+  relationMap := Concrete.Elaboration.identityRelationRenaming []
   bindersMapped := by simp [FinalBindersMapped,
-    ConcreteElaboration.BinderContext.empty]
-  admissible := by simp [ConcreteElaboration.BinderContext.empty]
+    Concrete.Elaboration.BinderContext.empty]
+  admissible := by simp [Concrete.Elaboration.BinderContext.empty]
 
 def push
     {copyTrace : InstantiationTrace comprehension attachments binders payload
@@ -291,9 +293,9 @@ def push
     {finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed }
     {sourceRels targetRels : RelCtx}
-    {sourceBinders : ConcreteElaboration.BinderContext
+    {sourceBinders : Concrete.Elaboration.BinderContext
       elimTrace.sourceDiagram sourceRels}
-    {targetBinders : ConcreteElaboration.BinderContext input.val targetRels}
+    {targetBinders : Concrete.Elaboration.BinderContext input.val targetRels}
     (witness : FinalBinderWitness copyTrace elimTrace finalWellFormed
       sourceBinders targetBinders)
     (child parent : Fin elimTrace.sourceDiagram.regionCount)
@@ -315,10 +317,10 @@ def push
       elimTrace finalWellFormed parent child parentRegular childParent
     by_cases equality : region = child
     · subst region
-      simp only [ConcreteElaboration.BinderContext.push_self] at sourceLookup ⊢
+      simp only [Concrete.Elaboration.BinderContext.push_self] at sourceLookup ⊢
       cases Option.some.inj sourceLookup
       rfl
-    · rw [ConcreteElaboration.BinderContext.push_other _ arity equality]
+    · rw [Concrete.Elaboration.BinderContext.push_other _ arity equality]
         at sourceLookup
       cases sourceEq : sourceBinders region with
       | none => simp [sourceEq] at sourceLookup
@@ -332,7 +334,7 @@ def push
             fun reverseEq => equality
               (copyTrace.reverseRegionMap_injective_of_admissible elimTrace
                 finalWellFormed regionAdmissible childAdmissible reverseEq)
-          rw [ConcreteElaboration.BinderContext.push_other _ arity reverseNe]
+          rw [Concrete.Elaboration.BinderContext.push_other _ arity reverseNe]
           simp [sourceEq] at sourceLookup
           rcases sourceLookup with ⟨arityEq, relationEq⟩
           subst binderArity
@@ -348,7 +350,7 @@ def push
     · subst region
       exact copyTrace.child_admissible_of_regular_parent elimTrace
         finalWellFormed parent child parentRegular childParent
-    · rw [ConcreteElaboration.BinderContext.push_other _ arity equality]
+    · rw [Concrete.Elaboration.BinderContext.push_other _ arity equality]
         at sourceLookup
       cases sourceEq : sourceBinders region with
       | none => simp [sourceEq] at sourceLookup

@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionContext
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -10,8 +13,8 @@ namespace AbstractionRawTrace
 
 def BindersMapped
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
+    (sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels)
     (relationMap : RelationRenaming sourceRels targetRels) : Prop :=
   ∀ region (survives : trace.domains.regions.survives region = true)
     binderArity sourceRelation,
@@ -22,8 +25,8 @@ def BindersMapped
 structure BinderWitness
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     {sourceRels targetRels : RelCtx}
-    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels) where
+    (sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels) where
   relationMap : RelationRenaming sourceRels targetRels
   bindersMapped : BindersMapped trace sourceBinders targetBinders relationMap
 
@@ -31,22 +34,22 @@ namespace BinderWitness
 
 def empty
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw) :
-    BinderWitness trace ConcreteElaboration.BinderContext.empty
-      ConcreteElaboration.BinderContext.empty where
-  relationMap := ConcreteElaboration.identityRelationRenaming []
+    BinderWitness trace Concrete.Elaboration.BinderContext.empty
+      Concrete.Elaboration.BinderContext.empty where
+  relationMap := Concrete.Elaboration.identityRelationRenaming []
   bindersMapped := by simp [BindersMapped,
-    ConcreteElaboration.BinderContext.empty]
+    Concrete.Elaboration.BinderContext.empty]
 
 def push
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
     {sourceRels targetRels : RelCtx}
-    {sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels}
-    {targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels}
+    {sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels}
+    {targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels}
     (witness : BinderWitness trace sourceBinders targetBinders)
     (child : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives child = true)
@@ -58,16 +61,16 @@ def push
     intro region regionSurvives binderArity sourceRelation sourceLookup
     by_cases equal : region = child
     · subst region
-      simp only [ConcreteElaboration.BinderContext.push_self] at sourceLookup ⊢
+      simp only [Concrete.Elaboration.BinderContext.push_self] at sourceLookup ⊢
       cases Option.some.inj sourceLookup
       rfl
     · have targetNe : trace.targetRegion region regionSurvives ≠
           trace.targetRegion child survives := by
         intro targetEqual
         exact equal (trace.targetRegion_injective targetEqual)
-      rw [ConcreteElaboration.BinderContext.push_other _ arity equal]
+      rw [Concrete.Elaboration.BinderContext.push_other _ arity equal]
         at sourceLookup
-      rw [ConcreteElaboration.BinderContext.push_other _ arity targetNe]
+      rw [Concrete.Elaboration.BinderContext.push_other _ arity targetNe]
       cases sourceEq : sourceBinders region with
       | none => simp [sourceEq] at sourceLookup
       | some sourceValue =>
@@ -82,15 +85,15 @@ def push
           rfl
 
 theorem relationMap_push
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
     {sourceRels targetRels : RelCtx}
-    {sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels}
-    {targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels}
+    {sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels}
+    {targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels}
     (witness : BinderWitness trace sourceBinders targetBinders)
     (child : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives child = true)
@@ -103,15 +106,15 @@ theorem relationMap_push
 /-- Push a corresponding surviving bubble directly at the simulation's total
 region map, avoiding proof-dependent transport through `targetRegion`. -/
 def pushMapped
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
     {sourceRels targetRels : RelCtx}
-    {sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels}
-    {targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels}
+    {sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels}
+    {targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels}
     (witness : BinderWitness trace sourceBinders targetBinders)
     (child : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives child = true)
@@ -124,7 +127,7 @@ def pushMapped
     by_cases equal : region = child
     · subst region
       rw [trace.regionMap_of_survives child survives]
-      simp only [ConcreteElaboration.BinderContext.push_self] at sourceLookup ⊢
+      simp only [Concrete.Elaboration.BinderContext.push_self] at sourceLookup ⊢
       cases Option.some.inj sourceLookup
       rfl
     · have targetNe : trace.targetRegion region regionSurvives ≠
@@ -132,9 +135,9 @@ def pushMapped
         rw [trace.regionMap_of_survives child survives]
         intro targetEqual
         exact equal (trace.targetRegion_injective targetEqual)
-      rw [ConcreteElaboration.BinderContext.push_other _ arity equal]
+      rw [Concrete.Elaboration.BinderContext.push_other _ arity equal]
         at sourceLookup
-      rw [ConcreteElaboration.BinderContext.push_other _ arity targetNe]
+      rw [Concrete.Elaboration.BinderContext.push_other _ arity targetNe]
       cases sourceEq : sourceBinders region with
       | none => simp [sourceEq] at sourceLookup
       | some sourceValue =>
@@ -149,15 +152,15 @@ def pushMapped
           rfl
 
 theorem relationMap_pushMapped
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
     {sourceRels targetRels : RelCtx}
-    {sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels}
-    {targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels}
+    {sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels}
+    {targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels}
     (witness : BinderWitness trace sourceBinders targetBinders)
     (child : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives child = true)
@@ -168,33 +171,33 @@ theorem relationMap_pushMapped
         RelationRenaming (arity :: sourceRels) (arity :: targetRels)) := rfl
 
 def weakenRelationMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
     {sourceRels targetRels : RelCtx}
-    {sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels}
-    {targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels}
+    {sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels}
+    {targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels}
     (witness : BinderWitness trace sourceBinders targetBinders)
     (arity : Nat) : RelationRenaming sourceRels (arity :: targetRels) :=
   fun {binderArity} (relation : RelVar sourceRels binderArity) =>
-    ConcreteElaboration.BinderContext.liftVar arity
+    Concrete.Elaboration.BinderContext.liftVar arity
     (witness.relationMap relation)
 
 /-- Enter the fresh existential relation bubble on the target side while
 retaining every mapped source binder in the tail relation context. -/
 def intoFreshBubble
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
     {sourceRels targetRels : RelCtx}
-    {sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels}
-    {targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels}
+    {sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels}
+    {targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels}
     (witness : BinderWitness trace sourceBinders targetBinders)
     (arity : Nat) :
     BinderWitness trace sourceBinders
@@ -204,7 +207,7 @@ def intoFreshBubble
     intro region survives binderArity sourceRelation sourceLookup
     have targetNe : trace.targetRegion region survives ≠ trace.bubble :=
       trace.targetRegion_ne_bubble region survives
-    rw [ConcreteElaboration.BinderContext.push_other _ arity targetNe]
+    rw [Concrete.Elaboration.BinderContext.push_other _ arity targetNe]
     rw [witness.bindersMapped region survives binderArity sourceRelation
       sourceLookup]
     simp [weakenRelationMap]
@@ -213,4 +216,4 @@ end BinderWitness
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

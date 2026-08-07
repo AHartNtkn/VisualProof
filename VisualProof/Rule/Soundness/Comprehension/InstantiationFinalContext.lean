@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalReverse
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -12,45 +14,45 @@ Every original wire in the target context has its certified final image in the
 source context.  The source may additionally contain executor-created focus
 wires, which remain locally existential. -/
 structure FinalContextWitness
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input.val) : Prop where
+    (targetContext : Concrete.Elaboration.WireContext input.val) : Prop where
   mapped_mem : ∀ wire, wire ∈ targetContext →
     copyTrace.finalWireMap elimTrace wire ∈ sourceContext
 
 namespace FinalContextWitness
 
 def empty
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw) :
     FinalContextWitness copyTrace elimTrace [] [] where
@@ -60,7 +62,7 @@ noncomputable def sourceIndex
     (witness : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext)
     (targetIndex : Fin targetContext.length) : Fin sourceContext.length :=
-  Classical.choose (ConcreteElaboration.WireContext.lookup?_complete
+  Classical.choose (Concrete.Elaboration.WireContext.lookup?_complete
     (witness.mapped_mem (targetContext.get targetIndex)
       (List.get_mem targetContext targetIndex)))
 
@@ -71,7 +73,7 @@ theorem sourceIndex_lookup
     sourceContext.lookup?
         (copyTrace.finalWireMap elimTrace (targetContext.get targetIndex)) =
       some (witness.sourceIndex targetIndex) :=
-  Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete
+  Classical.choose_spec (Concrete.Elaboration.WireContext.lookup?_complete
     (witness.mapped_mem (targetContext.get targetIndex)
       (List.get_mem targetContext targetIndex)))
 
@@ -81,15 +83,15 @@ theorem sourceIndex_get
     (targetIndex : Fin targetContext.length) :
     sourceContext.get (witness.sourceIndex targetIndex) =
       copyTrace.finalWireMap elimTrace (targetContext.get targetIndex) :=
-  ConcreteElaboration.WireContext.lookup?_sound
+  Concrete.Elaboration.WireContext.lookup?_sound
     (witness.sourceIndex_lookup targetIndex)
 
 noncomputable def indexRelation
     (witness : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext) :
-    ConcreteElaboration.ContextIndexRelation sourceContext.length
+    Concrete.Elaboration.ContextIndexRelation sourceContext.length
       targetContext.length :=
-  ConcreteElaboration.ContextIndexRelation.backwardMap witness.sourceIndex
+  Concrete.Elaboration.ContextIndexRelation.backwardMap witness.sourceIndex
 
 noncomputable def targetEnvironment
     (witness : FinalContextWitness copyTrace elimTrace sourceContext
@@ -104,25 +106,25 @@ theorem targetEnvironment_agrees
     (sourceEnvironment : Fin sourceContext.length → D) :
     witness.indexRelation.EnvironmentsAgree sourceEnvironment
       (witness.targetEnvironment sourceEnvironment) := by
-  apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+  apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
     _ _ _).2
   rfl
 
 noncomputable def localSourceIndex
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
@@ -131,16 +133,16 @@ noncomputable def localSourceIndex
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
       originalRegion = finalRegion)
-    (targetIndex : Fin (ConcreteElaboration.exactScopeWires input.val
+    (targetIndex : Fin (Concrete.Elaboration.exactScopeWires input.val
       originalRegion).length) :
-    Fin (ConcreteElaboration.exactScopeWires elimTrace.sourceDiagram
+    Fin (Concrete.Elaboration.exactScopeWires elimTrace.sourceDiagram
       finalRegion).length :=
-  Classical.choose (ConcreteElaboration.WireContext.lookup?_complete (by
-    apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
+  Classical.choose (Concrete.Elaboration.WireContext.lookup?_complete (by
+    apply (Concrete.Elaboration.mem_exactScopeWires _ _ _).2
     have targetScope : (input.val.wires
-        ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+        ((Concrete.Elaboration.exactScopeWires input.val originalRegion).get
           targetIndex)).scope = originalRegion :=
-      (ConcreteElaboration.mem_exactScopeWires _ _ _).1
+      (Concrete.Elaboration.mem_exactScopeWires _ _ _).1
         (List.get_mem _ targetIndex)
     rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed]
     exact (congrArg
@@ -148,20 +150,20 @@ noncomputable def localSourceIndex
         mappedRegion))
 
 theorem localSourceIndex_lookup
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
@@ -170,41 +172,41 @@ theorem localSourceIndex_lookup
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
       originalRegion = finalRegion)
-    (targetIndex : Fin (ConcreteElaboration.exactScopeWires input.val
+    (targetIndex : Fin (Concrete.Elaboration.exactScopeWires input.val
       originalRegion).length) :
-    ConcreteElaboration.WireContext.lookup?
-        (ConcreteElaboration.exactScopeWires elimTrace.sourceDiagram
+    Concrete.Elaboration.WireContext.lookup?
+        (Concrete.Elaboration.exactScopeWires elimTrace.sourceDiagram
           finalRegion)
         (copyTrace.finalWireMap elimTrace
-          ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+          ((Concrete.Elaboration.exactScopeWires input.val originalRegion).get
             targetIndex)) =
       some (localSourceIndex finalWellFormed finalRegion
         originalRegion mappedRegion targetIndex) :=
-  Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete (by
-    apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
+  Classical.choose_spec (Concrete.Elaboration.WireContext.lookup?_complete (by
+    apply (Concrete.Elaboration.mem_exactScopeWires _ _ _).2
     have targetScope : (input.val.wires
-        ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+        ((Concrete.Elaboration.exactScopeWires input.val originalRegion).get
           targetIndex)).scope = originalRegion :=
-      (ConcreteElaboration.mem_exactScopeWires _ _ _).1
+      (Concrete.Elaboration.mem_exactScopeWires _ _ _).1
         (List.get_mem _ targetIndex)
     rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed,
       targetScope, mappedRegion]))
 
 theorem localSourceIndex_get
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
@@ -213,34 +215,34 @@ theorem localSourceIndex_get
     (originalRegion : Fin input.val.regionCount)
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
       originalRegion = finalRegion)
-    (targetIndex : Fin (ConcreteElaboration.exactScopeWires input.val
+    (targetIndex : Fin (Concrete.Elaboration.exactScopeWires input.val
       originalRegion).length) :
-    (ConcreteElaboration.exactScopeWires elimTrace.sourceDiagram
+    (Concrete.Elaboration.exactScopeWires elimTrace.sourceDiagram
         finalRegion).get
         (localSourceIndex finalWellFormed finalRegion
           originalRegion mappedRegion targetIndex) =
       copyTrace.finalWireMap elimTrace
-        ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+        ((Concrete.Elaboration.exactScopeWires input.val originalRegion).get
           targetIndex) :=
-  ConcreteElaboration.WireContext.lookup?_sound
+  Concrete.Elaboration.WireContext.lookup?_sound
     (localSourceIndex_lookup finalWellFormed finalRegion
       originalRegion mappedRegion targetIndex)
 
 theorem localSourceIndex_injective
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
@@ -253,10 +255,10 @@ theorem localSourceIndex_injective
       finalRegion originalRegion mappedRegion) := by
   intro first second indicesEq
   have mappedWiresEq : copyTrace.finalWireMap elimTrace
-        ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+        ((Concrete.Elaboration.exactScopeWires input.val originalRegion).get
           first) =
       copyTrace.finalWireMap elimTrace
-        ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+        ((Concrete.Elaboration.exactScopeWires input.val originalRegion).get
           second) := by
     rw [← localSourceIndex_get finalWellFormed finalRegion
       originalRegion mappedRegion first,
@@ -264,43 +266,43 @@ theorem localSourceIndex_injective
         originalRegion mappedRegion second, indicesEq]
   have wiresEq := copyTrace.finalWireMap_injective elimTrace
     mappedWiresEq
-  let targetWires := ConcreteElaboration.exactScopeWires input.val
+  let targetWires := Concrete.Elaboration.exactScopeWires input.val
     originalRegion
   obtain ⟨canonical, canonicalLookup⟩ :=
-    ConcreteElaboration.WireContext.lookup?_complete
+    Concrete.Elaboration.WireContext.lookup?_complete
       (List.get_mem targetWires first)
   have firstEq : first = canonical :=
-    ConcreteElaboration.WireContext.lookup?_unique
-      (ConcreteElaboration.exactScopeWires_nodup input.val originalRegion)
+    Concrete.Elaboration.WireContext.lookup?_unique
+      (Concrete.Elaboration.exactScopeWires_nodup input.val originalRegion)
       canonicalLookup rfl
   have secondEq : second = canonical :=
-    ConcreteElaboration.WireContext.lookup?_unique
-      (ConcreteElaboration.exactScopeWires_nodup input.val originalRegion)
+    Concrete.Elaboration.WireContext.lookup?_unique
+      (Concrete.Elaboration.exactScopeWires_nodup input.val originalRegion)
       canonicalLookup wiresEq.symm
   exact firstEq.trans secondEq.symm
 
 def extendMapped
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
-    {sourceContext : ConcreteElaboration.WireContext
+    {sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram}
-    {targetContext : ConcreteElaboration.WireContext input.val}
+    {targetContext : Concrete.Elaboration.WireContext input.val}
     (witness : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
@@ -315,36 +317,36 @@ def extendMapped
   rcases List.mem_append.mp member with outerMember | localMember
   · exact List.mem_append_left _ (witness.mapped_mem wire outerMember)
   · apply List.mem_append_right sourceContext
-    apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
+    apply (Concrete.Elaboration.mem_exactScopeWires _ _ _).2
     have targetScope : (input.val.wires wire).scope = originalRegion :=
-      (ConcreteElaboration.mem_exactScopeWires _ _ _).1 localMember
+      (Concrete.Elaboration.mem_exactScopeWires _ _ _).1 localMember
     rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed]
     exact (congrArg
       (copyTrace.finalRegionMap elimTrace finalWellFormed) targetScope).trans
         mappedRegion
 
 def extendRegular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
-    {sourceContext : ConcreteElaboration.WireContext
+    {sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram}
-    {targetContext : ConcreteElaboration.WireContext input.val}
+    {targetContext : Concrete.Elaboration.WireContext input.val}
     (witness : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
@@ -360,27 +362,27 @@ def extendRegular
       finalRegion regular)
 
 def extendFocused
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
-    {sourceContext : ConcreteElaboration.WireContext
+    {sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram}
-    {targetContext : ConcreteElaboration.WireContext input.val}
+    {targetContext : Concrete.Elaboration.WireContext input.val}
     (witness : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext) :
     FinalContextWitness copyTrace elimTrace
@@ -394,27 +396,27 @@ def extendFocused
 selected bubble-local wires have their certified final images in the single
 source focus context. -/
 def extendSelected
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
-    {sourceContext : ConcreteElaboration.WireContext
+    {sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram}
-    {targetContext : ConcreteElaboration.WireContext input.val}
+    {targetContext : Concrete.Elaboration.WireContext input.val}
     (witness : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext) :
     FinalContextWitness copyTrace elimTrace
@@ -426,16 +428,16 @@ def extendSelected
   · rcases List.mem_append.mp beforeBubble with base | parentLocal
     · exact List.mem_append_left _ (witness.mapped_mem wire base)
     · apply List.mem_append_right sourceContext
-      apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
+      apply (Concrete.Elaboration.mem_exactScopeWires _ _ _).2
       have scope : (input.val.wires wire).scope = payload.parent :=
-        (ConcreteElaboration.mem_exactScopeWires _ _ _).1 parentLocal
+        (Concrete.Elaboration.mem_exactScopeWires _ _ _).1 parentLocal
       rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed,
         scope]
       exact copyTrace.finalRegionMap_parent elimTrace finalWellFormed
   · apply List.mem_append_right sourceContext
-    apply (ConcreteElaboration.mem_exactScopeWires _ _ _).2
+    apply (Concrete.Elaboration.mem_exactScopeWires _ _ _).2
     have scope : (input.val.wires wire).scope = bubble :=
-      (ConcreteElaboration.mem_exactScopeWires _ _ _).1 bubbleLocal
+      (Concrete.Elaboration.mem_exactScopeWires _ _ _).1 bubbleLocal
     rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed,
       scope]
     exact copyTrace.finalRegionMap_bubble elimTrace finalWellFormed

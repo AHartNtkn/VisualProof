@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvanceRegionFixed
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -11,15 +13,15 @@ namespace InstantiationSemantic
 splice.  This is the exact freshness certificate required by forward terminal
 extraction at the next copy site. -/
 theorem ownedAtoms_nodup_advance
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -58,30 +60,30 @@ packaged in the same recursive shape as the executor trace.  Binder targets
 use `BinderTargetsEveryStep`, whose first witness comes from the first checked
 splice rather than from the serialized payload alone. -/
 structure StepInvariantAt
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount) : Prop where
   shape : BubbleHasPayloadArity payload state
   ownedNodup : state.ownedAtoms.Nodup
 
 def StepInvariantsEveryStep
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -93,15 +95,15 @@ def StepInvariantsEveryStep
       StepInvariantAt payload state ∧ StepInvariantsEveryStep rest
 
 theorem stepInvariantsEveryStep_of
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -123,13 +125,13 @@ theorem stepInvariantsEveryStep_of
       exact ⟨invariant, ih nextInvariant⟩
 
 theorem initial_stepInvariantsEveryStep
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length

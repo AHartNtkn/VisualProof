@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFilteredRegionSimul
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -13,15 +15,15 @@ namespace InstantiationSemantic
 replaced occurs in the next survivor traversal at its exact frame image.  The
 statement covers both the splice site and every off-site compiler frame. -/
 theorem advance_mapFrameOccurrence_mem_survivors
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -32,10 +34,10 @@ theorem advance_mapFrameOccurrence_mem_survivors
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (region : Fin state.diagram.val.regionCount)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       state.diagram.val.regionCount state.diagram.val.nodeCount)
     (sourceMember : occurrence ∈
-      (ConcreteElaboration.localOccurrences
+      (Concrete.Elaboration.localOccurrences
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible).diagram.val region).filter
         (dropOccurrenceSurvives
@@ -48,7 +50,7 @@ theorem advance_mapFrameOccurrence_mem_survivors
     let next := advanceInstantiationState comprehension attachments binders
       payload state atom tail site arguments hadmissible
     layout.mapFrameOccurrence occurrence ∈
-      (ConcreteElaboration.localOccurrences next.diagram.val
+      (Concrete.Elaboration.localOccurrences next.diagram.val
         (layout.frameRegion region)).filter (dropOccurrenceSurvives next) := by
   dsimp only
   by_cases hsite : region = site
@@ -74,15 +76,15 @@ theorem advance_mapFrameOccurrence_mem_survivors
 /-- A denoting next-state survivor block therefore supplies the compiled item
 at the exact frame image of any retained non-current source occurrence. -/
 theorem advance_mapped_frame_item_denotes
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -93,10 +95,10 @@ theorem advance_mapped_frame_item_denotes
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (region : Fin state.diagram.val.regionCount)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       state.diagram.val.regionCount state.diagram.val.nodeCount)
     (sourceMember : occurrence ∈
-      (ConcreteElaboration.localOccurrences
+      (Concrete.Elaboration.localOccurrences
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible).diagram.val region).filter
         (dropOccurrenceSurvives
@@ -105,24 +107,24 @@ theorem advance_mapped_frame_item_denotes
     (notCurrent : occurrence ≠ .node atom)
     {rels : RelCtx}
     (fuel : Nat)
-    (context : ConcreteElaboration.WireContext
+    (context : Concrete.Elaboration.WireContext
       (advanceInstantiationState comprehension attachments binders payload state
         atom tail site arguments hadmissible).diagram.val)
-    (relBinders : ConcreteElaboration.BinderContext
+    (relBinders : Concrete.Elaboration.BinderContext
       (advanceInstantiationState comprehension attachments binders payload state
         atom tail site arguments hadmissible).diagram.val rels)
     (model : Model)
     (env : Fin context.length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
     (survivorItems : ItemSeq  context.length rels)
-    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (survivorCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload state
         atom tail site arguments hadmissible).diagram.val
       (compileSurvivorRegion?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible) fuel)
       context relBinders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible).diagram.val
         ((instantiateSpliceInput comprehension attachments binders payload state
@@ -134,7 +136,7 @@ theorem advance_mapped_frame_item_denotes
     let layout := (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).plugLayout
     ∃ targetItem : Item  context.length rels,
-      ConcreteElaboration.compileOccurrenceWith?
+      Concrete.Elaboration.compileOccurrenceWith?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible).diagram.val
         (compileSurvivorRegion?
@@ -149,7 +151,7 @@ theorem advance_mapped_frame_item_denotes
   let next := advanceInstantiationState comprehension attachments binders
     payload state atom tail site arguments hadmissible
   let targetOccurrences :=
-    (ConcreteElaboration.localOccurrences next.diagram.val
+    (Concrete.Elaboration.localOccurrences next.diagram.val
       (layout.frameRegion region)).filter (dropOccurrenceSurvives next)
   have targetMember : layout.mapFrameOccurrence occurrence ∈ targetOccurrences :=
     advance_mapFrameOccurrence_mem_survivors comprehension attachments binders
@@ -161,10 +163,10 @@ theorem advance_mapped_frame_item_denotes
       layout.mapFrameOccurrence occurrence :=
     indexOf?_sound occurrenceIndexEq
   let itemIndex := Fin.cast
-    (ConcreteElaboration.compileOccurrencesWith?_length
+    (Concrete.Elaboration.compileOccurrencesWith?_length
       (compileSurvivorRegion?  next fuel) context relBinders
       survivorCompiled).symm occurrenceIndex
-  have targetCompiled := ConcreteElaboration.compileOccurrencesWith?_get
+  have targetCompiled := Concrete.Elaboration.compileOccurrencesWith?_get
     (compileSurvivorRegion?  next fuel) context relBinders
     survivorCompiled occurrenceIndex
   rw [occurrenceEq] at targetCompiled

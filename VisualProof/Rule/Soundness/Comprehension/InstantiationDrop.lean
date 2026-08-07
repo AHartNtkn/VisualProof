@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationShape
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -10,13 +12,13 @@ namespace InstantiationTrace
 /-- An original node outside the quantified bubble cannot be one of the bound
 atoms deleted after copying, so its composite frame image survives compaction. -/
 theorem nodeMap_survives_drop
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -41,13 +43,13 @@ theorem nodeMap_survives_drop
 
 /-- Dense target node index of an original node outside the rewritten bubble. -/
 def droppedNodeMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -61,13 +63,13 @@ def droppedNodeMap
     (trace.nodeMap_survives_drop node outside)
 
 @[simp] theorem droppedNodeMap_origin
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -81,13 +83,13 @@ def droppedNodeMap
   exact (instantiationAtomDomain result).origin_index _ _
 
 theorem dropped_region_shape
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -101,13 +103,13 @@ theorem dropped_region_shape
     trace.region_shape region
 
 theorem dropped_node_shape
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length

@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFilteredSimulation
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -13,15 +15,15 @@ relation obtained from the current quantified bubble's certified proxy
 binders.  This is the bridge between per-splice compiler extraction and the
 single relation witness eventually chosen for the eliminated bubble. -/
 theorem terminalRelationOfValues_iff_nonempty
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -33,7 +35,7 @@ theorem terminalRelationOfValues_iff_nonempty
     {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
-    (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val
+    (hostLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf state.diagram.val
       state.bubble hostWitness)
     (hostRelEnv : RelEnv model.Carrier hostWitness.toFocus.holeRels)
     (relationArguments : Fin payload.arity → model.Carrier) :
@@ -47,7 +49,7 @@ theorem terminalRelationOfValues_iff_nonempty
         relationArguments := by
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
-  let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+  let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
   let relationMap : RelationRenaming pattern.witness.toFocus.holeRels
       hostWitness.toFocus.holeRels :=
     terminalRelationRenamingAtBubble payload state site arguments hnonempty
@@ -69,7 +71,7 @@ theorem terminalRelationOfValues_iff_nonempty
               (terminalInheritedEnvironment payload state site arguments
                 hnonempty assignment)
               terminalRelEnv
-              (ConcreteElaboration.finishRegion comprehension.val.diagram
+              (Concrete.Elaboration.finishRegion comprehension.val.diagram
                 pattern.leaf.inheritedWires payload.binderSpine.bodyContainer
                 pattern.leaf.items)) ↔
     ∃ assignment : BoundaryAssignment comprehension.elaborate model.Carrier,
@@ -80,7 +82,7 @@ theorem terminalRelationOfValues_iff_nonempty
           (terminalInheritedEnvironment payload state site arguments hnonempty
             assignment)
           hostRelEnv
-          ((ConcreteElaboration.finishRegion comprehension.val.diagram
+          ((Concrete.Elaboration.finishRegion comprehension.val.diagram
             pattern.leaf.inheritedWires payload.binderSpine.bodyContainer
             pattern.leaf.items).renameRelations relationMap)
   constructor
@@ -99,7 +101,7 @@ theorem terminalRelationOfValues_iff_nonempty
       hostRelEnv agrees
       (terminalInheritedEnvironment payload state site arguments hnonempty
         assignment)
-      (ConcreteElaboration.finishRegion comprehension.val.diagram
+      (Concrete.Elaboration.finishRegion comprehension.val.diagram
         pattern.leaf.inheritedWires payload.binderSpine.bodyContainer
         pattern.leaf.items)).mpr terminalDenotes
   · rintro ⟨assignment, assignmentEq, renamedDenotes⟩
@@ -111,7 +113,7 @@ theorem terminalRelationOfValues_iff_nonempty
         hostRelEnv (RelEnv.pullback_agrees relationMap hostRelEnv)
         (terminalInheritedEnvironment payload state site arguments hnonempty
           assignment)
-        (ConcreteElaboration.finishRegion comprehension.val.diagram
+        (Concrete.Elaboration.finishRegion comprehension.val.diagram
           pattern.leaf.inheritedWires payload.binderSpine.bodyContainer
           pattern.leaf.items)).mp renamedDenotes
 

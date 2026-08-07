@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvanceSiteBackward
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -12,9 +14,9 @@ the original source valuation through the splice quotient.  This is the
 pointwise bridge used to identify the relation witness's ordered arguments and
 parameters with the source atom's arguments and parameters. -/
 theorem siteQuotientEnvironment_of_frameMap
-    (input : Splice.Input )
-    (sourceContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetContext : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (input : Concrete.Splice.Input )
+    (sourceContext : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetContext : Concrete.Elaboration.WireContext input.plugLayout.plugRaw)
     (sourceExact : sourceContext.Exact input.site)
     (targetExact : targetContext.Exact
       (input.plugLayout.frameRegion input.site))
@@ -26,7 +28,7 @@ theorem siteQuotientEnvironment_of_frameMap
     (environmentEq : sourceEnv = targetEnv ∘ wireMap)
     (fallback : D)
     (index : Fin sourceContext.length) :
-    Splice.Input.siteQuotientEnvironment input targetContext targetExact
+    Concrete.Splice.Input.siteQuotientEnvironment input targetContext targetExact
         targetEnv fallback (sourceContext.get index) =
       sourceEnv index := by
   have visible : input.plugLayout.plugRaw.Encloses
@@ -37,7 +39,7 @@ theorem siteQuotientEnvironment_of_frameMap
       (sourceContext.get index)).2
       ((sourceExact.mem_iff (sourceContext.get index)).1
         (List.get_mem sourceContext index))
-  have quotientEq := Splice.Input.siteQuotientEnvironment_eq input
+  have quotientEq := Concrete.Splice.Input.siteQuotientEnvironment_eq input
     targetContext targetExact targetEnv fallback (sourceContext.get index)
     visible (wireMap index) (wireSpec index)
   have sourceEq := congrFun environmentEq index
@@ -47,32 +49,32 @@ theorem siteQuotientEnvironment_of_frameMap
 wire equivalence applied to the source host locals followed by the terminal
 comprehension locals supplied by the relation witness. -/
 noncomputable def siteTargetLocalOfNonempty
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → D)
-    (patternLocal : Fin (ConcreteElaboration.exactScopeWires
+    (patternLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.pattern.val.diagram input.binderSpine.bodyContainer).length → D) :
-    Fin (ConcreteElaboration.exactScopeWires layout.plugRaw
+    Fin (Concrete.Elaboration.exactScopeWires layout.plugRaw
       (layout.frameRegion input.site)).length → D :=
   Fin.addCases sourceLocal patternLocal ∘
     (layout.siteLocalWireEquivOfNonempty hnonempty).symm
 
 theorem siteTargetLocalOfNonempty_host
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → D)
-    (patternLocal : Fin (ConcreteElaboration.exactScopeWires
+    (patternLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.pattern.val.diagram input.binderSpine.bodyContainer).length → D)
-    (index : Fin (ConcreteElaboration.exactScopeWires
+    (index : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length) :
     siteTargetLocalOfNonempty layout hnonempty sourceLocal patternLocal
         (layout.siteLocalWireEquivOfNonempty hnonempty
           (Fin.castAdd
-            (ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+            (Concrete.Elaboration.exactScopeWires input.pattern.val.diagram
               input.binderSpine.bodyContainer).length index)) =
       sourceLocal index := by
   unfold siteTargetLocalOfNonempty
@@ -84,19 +86,19 @@ theorem siteTargetLocalOfNonempty_host
   exact Fin.addCases_left index
 
 theorem siteTargetLocalOfNonempty_pattern
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → D)
-    (patternLocal : Fin (ConcreteElaboration.exactScopeWires
+    (patternLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.pattern.val.diagram input.binderSpine.bodyContainer).length → D)
-    (index : Fin (ConcreteElaboration.exactScopeWires
+    (index : Fin (Concrete.Elaboration.exactScopeWires
       input.pattern.val.diagram input.binderSpine.bodyContainer).length) :
     siteTargetLocalOfNonempty layout hnonempty sourceLocal patternLocal
         (layout.siteLocalWireEquivOfNonempty hnonempty
           (Fin.natAdd
-            (ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+            (Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
               input.site).length index)) =
       patternLocal index := by
   unfold siteTargetLocalOfNonempty
@@ -111,52 +113,52 @@ theorem siteTargetLocalOfNonempty_pattern
 `siteTargetLocalOfNonempty` reads the supplied terminal local valuation at the
 authoritative pattern seam index. -/
 theorem siteTargetEnvironment_patternLocalOfNonempty
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hadmissible : input.Admissible)
-    (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
+    (host : Concrete.Splice.SiteView (input.coalesceFrame hadmissible) input.site)
     {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
-    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (patternLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (outerEnv : Fin outputLeaf.inheritedWires.length → D)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → D)
-    (patternLocal : Fin (ConcreteElaboration.exactScopeWires
+    (patternLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.pattern.val.diagram input.binderSpine.bodyContainer).length → D)
-    (index : Fin (ConcreteElaboration.exactScopeWires
+    (index : Fin (Concrete.Elaboration.exactScopeWires
       input.pattern.val.diagram input.binderSpine.bodyContainer).length) :
-    ConcreteElaboration.extendedEnvironment outputLeaf.inheritedWires
+    Concrete.Elaboration.extendedEnvironment outputLeaf.inheritedWires
         (layout.frameRegion input.site) outerEnv
         (siteTargetLocalOfNonempty layout hnonempty sourceLocal patternLocal)
         (layout.patternSeamWireMapOfNonempty hadmissible host patternWitness
           patternLeaf outputWitness outputLeaf hnonempty
           (Fin.cast
-            (ConcreteElaboration.WireContext.length_extend
+            (Concrete.Elaboration.WireContext.length_extend
               patternLeaf.inheritedWires input.binderSpine.bodyContainer).symm
             (Fin.natAdd patternLeaf.inheritedWires.length index))) =
       patternLocal index := by
   let targetIndex := layout.patternSeamWireMapOfNonempty hadmissible host
     patternWitness patternLeaf outputWitness outputLeaf hnonempty
     (Fin.cast
-      (ConcreteElaboration.WireContext.length_extend patternLeaf.inheritedWires
+      (Concrete.Elaboration.WireContext.length_extend patternLeaf.inheritedWires
         input.binderSpine.bodyContainer).symm
       (Fin.natAdd patternLeaf.inheritedWires.length index))
   let localIndex := layout.siteLocalWireEquivOfNonempty hnonempty
     (Fin.natAdd
-      (ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+      (Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
         input.site).length index)
   let expectedIndex : Fin (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).length :=
     Fin.cast
-      (ConcreteElaboration.WireContext.length_extend outputLeaf.inheritedWires
+      (Concrete.Elaboration.WireContext.length_extend outputLeaf.inheritedWires
         (layout.frameRegion input.site)).symm
       (Fin.natAdd outputLeaf.inheritedWires.length localIndex)
   have targetWire : (outputLeaf.inheritedWires.extend
@@ -165,7 +167,7 @@ theorem siteTargetEnvironment_patternLocalOfNonempty
         ((patternLeaf.inheritedWires.extend
           input.binderSpine.bodyContainer).get
           (Fin.cast
-            (ConcreteElaboration.WireContext.length_extend
+            (Concrete.Elaboration.WireContext.length_extend
               patternLeaf.inheritedWires input.binderSpine.bodyContainer).symm
             (Fin.natAdd patternLeaf.inheritedWires.length index))) :=
     layout.patternSeamWireMapOfNonempty_spec hadmissible host patternWitness
@@ -173,32 +175,32 @@ theorem siteTargetEnvironment_patternLocalOfNonempty
   have targetWire' : (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).get targetIndex =
       layout.patternPlugWire
-        ((ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+        ((Concrete.Elaboration.exactScopeWires input.pattern.val.diagram
           input.binderSpine.bodyContainer).get index) := by
     simpa only [
-      Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_local]
+      Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_local]
       using
       targetWire
   have expectedWire : (outputLeaf.inheritedWires.extend
       (layout.frameRegion input.site)).get expectedIndex =
       layout.patternPlugWire
-        ((ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+        ((Concrete.Elaboration.exactScopeWires input.pattern.val.diagram
           input.binderSpine.bodyContainer).get index) := by
-    rw [Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_local]
+    rw [Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_local]
     rw [layout.siteLocalWireEquivOfNonempty_pattern_spec hnonempty]
     exact (layout.patternPlugWire_terminal_local hnonempty index).symm
   have indexEq : targetIndex = expectedIndex := by
     apply Fin.ext
     apply (List.getElem_inj outputLeaf.wiresExact.nodup).mp
     simpa only [List.get_eq_getElem] using targetWire'.trans expectedWire.symm
-  change ConcreteElaboration.extendedEnvironment outputLeaf.inheritedWires
+  change Concrete.Elaboration.extendedEnvironment outputLeaf.inheritedWires
       (layout.frameRegion input.site) outerEnv
       (siteTargetLocalOfNonempty layout hnonempty sourceLocal patternLocal)
       targetIndex = patternLocal index
   rw [indexEq]
-  simp only [ConcreteElaboration.extendedEnvironment, Function.comp_apply]
+  simp only [Concrete.Elaboration.extendedEnvironment, Function.comp_apply]
   have castEq : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend outputLeaf.inheritedWires
+      (Concrete.Elaboration.WireContext.length_extend outputLeaf.inheritedWires
         (layout.frameRegion input.site)) expectedIndex =
       Fin.natAdd outputLeaf.inheritedWires.length localIndex := by
     apply Fin.ext
@@ -212,37 +214,37 @@ theorem siteTargetEnvironment_patternLocalOfNonempty
 context using the caller's inherited-wire map and the splice's certified host
 local block. -/
 noncomputable def siteForwardHostWireMapOfNonempty
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext layout.plugRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetOuter : Concrete.Elaboration.WireContext layout.plugRaw)
     (outerMap : Fin sourceOuter.length → Fin targetOuter.length) :
     Fin (sourceOuter.extend input.site).length →
       Fin (targetOuter.extend (layout.frameRegion input.site)).length :=
   fun index =>
     Fin.cast
-      (ConcreteElaboration.WireContext.length_extend targetOuter
+      (Concrete.Elaboration.WireContext.length_extend targetOuter
         (layout.frameRegion input.site)).symm
       (Fin.addCases
         (fun outer => Fin.castAdd
-          (ConcreteElaboration.exactScopeWires layout.plugRaw
+          (Concrete.Elaboration.exactScopeWires layout.plugRaw
             (layout.frameRegion input.site)).length (outerMap outer))
         (fun localIndex => Fin.natAdd targetOuter.length
           (layout.siteLocalWireEquivOfNonempty hnonempty
             (Fin.castAdd
-              (ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+              (Concrete.Elaboration.exactScopeWires input.pattern.val.diagram
                 input.binderSpine.bodyContainer).length localIndex)))
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend sourceOuter input.site)
+          (Concrete.Elaboration.WireContext.length_extend sourceOuter input.site)
           index))
 
 theorem siteForwardHostWireMapOfNonempty_spec
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext layout.plugRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetOuter : Concrete.Elaboration.WireContext layout.plugRaw)
     (outerMap : Fin sourceOuter.length → Fin targetOuter.length)
     (outerSpec : ∀ index, targetOuter.get (outerMap index) =
       layout.frameWire (sourceOuter.get index))
@@ -252,9 +254,9 @@ theorem siteForwardHostWireMapOfNonempty_spec
           targetOuter outerMap index) =
       layout.frameWire ((sourceOuter.extend input.site).get index) := by
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend sourceOuter input.site) index
+    (Concrete.Elaboration.WireContext.length_extend sourceOuter input.site) index
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend sourceOuter input.site).symm
+      (Concrete.Elaboration.WireContext.length_extend sourceOuter input.site).symm
       split = index := by
     apply Fin.ext
     rfl
@@ -262,22 +264,22 @@ theorem siteForwardHostWireMapOfNonempty_spec
   refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
   · have mapEq : siteForwardHostWireMapOfNonempty layout hnonempty
         sourceOuter targetOuter outerMap
-          (Fin.cast (ConcreteElaboration.WireContext.length_extend sourceOuter
+          (Fin.cast (Concrete.Elaboration.WireContext.length_extend sourceOuter
             input.site).symm (Fin.castAdd _ outer)) =
-        Fin.cast (ConcreteElaboration.WireContext.length_extend targetOuter
+        Fin.cast (Concrete.Elaboration.WireContext.length_extend targetOuter
           (layout.frameRegion input.site)).symm
           (Fin.castAdd _ (outerMap outer)) := by
       apply Fin.ext
       simp [siteForwardHostWireMapOfNonempty]
     rw [mapEq,
-      Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_outer,
-      Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_outer]
+      Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_outer,
+      Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_outer]
     exact outerSpec outer
   · have mapEq : siteForwardHostWireMapOfNonempty layout hnonempty
         sourceOuter targetOuter outerMap
-          (Fin.cast (ConcreteElaboration.WireContext.length_extend sourceOuter
+          (Fin.cast (Concrete.Elaboration.WireContext.length_extend sourceOuter
             input.site).symm (Fin.natAdd sourceOuter.length localIndex)) =
-        Fin.cast (ConcreteElaboration.WireContext.length_extend targetOuter
+        Fin.cast (Concrete.Elaboration.WireContext.length_extend targetOuter
           (layout.frameRegion input.site)).symm
           (Fin.natAdd targetOuter.length
             (layout.siteLocalWireEquivOfNonempty hnonempty
@@ -285,44 +287,44 @@ theorem siteForwardHostWireMapOfNonempty_spec
       apply Fin.ext
       simp [siteForwardHostWireMapOfNonempty]
     rw [mapEq,
-      Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_local,
-      Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_local]
+      Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_local,
+      Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_local]
     exact layout.siteLocalWireEquivOfNonempty_host_spec hnonempty localIndex
 
 theorem siteForwardHostEnvironmentsAgreeOfNonempty
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext layout.plugRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetOuter : Concrete.Elaboration.WireContext layout.plugRaw)
     (outerMap : Fin sourceOuter.length → Fin targetOuter.length)
     (sourceOuterEnv : Fin sourceOuter.length → D)
     (targetOuterEnv : Fin targetOuter.length → D)
     (outerEq : sourceOuterEnv = targetOuterEnv ∘ outerMap)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → D)
-    (patternLocal : Fin (ConcreteElaboration.exactScopeWires
+    (patternLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.pattern.val.diagram input.binderSpine.bodyContainer).length → D) :
-    ConcreteElaboration.extendedEnvironment sourceOuter input.site
+    Concrete.Elaboration.extendedEnvironment sourceOuter input.site
         sourceOuterEnv sourceLocal =
-      ConcreteElaboration.extendedEnvironment targetOuter
+      Concrete.Elaboration.extendedEnvironment targetOuter
           (layout.frameRegion input.site) targetOuterEnv
           (siteTargetLocalOfNonempty layout hnonempty sourceLocal patternLocal) ∘
         siteForwardHostWireMapOfNonempty layout hnonempty sourceOuter
           targetOuter outerMap := by
   funext index
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend sourceOuter input.site) index
+    (Concrete.Elaboration.WireContext.length_extend sourceOuter input.site) index
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend sourceOuter input.site).symm
+      (Concrete.Elaboration.WireContext.length_extend sourceOuter input.site).symm
       split = index := by
     apply Fin.ext
     rfl
   rw [← recover]
   refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
-  · simpa [ConcreteElaboration.extendedEnvironment, extendWireEnv,
+  · simpa [Concrete.Elaboration.extendedEnvironment, extendWireEnv,
       siteForwardHostWireMapOfNonempty, split, outerEq]
-  · simp only [ConcreteElaboration.extendedEnvironment, extendWireEnv,
+  · simp only [Concrete.Elaboration.extendedEnvironment, extendWireEnv,
       siteForwardHostWireMapOfNonempty, Function.comp_apply]
     simp
     exact (siteTargetLocalOfNonempty_host layout hnonempty sourceLocal
@@ -331,25 +333,25 @@ theorem siteForwardHostEnvironmentsAgreeOfNonempty
 /-- Zero-spine analogue: the material-local block consists of the checked
 open comprehension's hidden root wires. -/
 noncomputable def siteTargetLocalOfEmpty
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hzero : input.binderSpine.proxyCount = 0)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → D)
     (patternHidden : Fin input.pattern.val.hiddenWires.length → D) :
-    Fin (ConcreteElaboration.exactScopeWires layout.plugRaw
+    Fin (Concrete.Elaboration.exactScopeWires layout.plugRaw
       (layout.frameRegion input.site)).length → D :=
   Fin.addCases sourceLocal patternHidden ∘
     (layout.siteLocalWireEquivOfEmpty hzero).symm
 
 theorem siteTargetLocalOfEmpty_host
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hzero : input.binderSpine.proxyCount = 0)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → D)
     (patternHidden : Fin input.pattern.val.hiddenWires.length → D)
-    (index : Fin (ConcreteElaboration.exactScopeWires
+    (index : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length) :
     siteTargetLocalOfEmpty layout hzero sourceLocal patternHidden
         (layout.siteLocalWireEquivOfEmpty hzero
@@ -364,17 +366,17 @@ theorem siteTargetLocalOfEmpty_host
   exact Fin.addCases_left index
 
 theorem siteTargetLocalOfEmpty_pattern
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hzero : input.binderSpine.proxyCount = 0)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → D)
     (patternHidden : Fin input.pattern.val.hiddenWires.length → D)
     (index : Fin input.pattern.val.hiddenWires.length) :
     siteTargetLocalOfEmpty layout hzero sourceLocal patternHidden
         (layout.siteLocalWireEquivOfEmpty hzero
           (Fin.natAdd
-            (ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+            (Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
               input.site).length index)) =
       patternHidden index := by
   unfold siteTargetLocalOfEmpty
@@ -389,16 +391,16 @@ theorem siteTargetLocalOfEmpty_pattern
 valuation used here once its quotient valuation agrees with the supplied host
 locals. -/
 theorem focusedLocalEnvironmentOfEmpty_eq_siteTargetLocal
-    {input : Splice.Input }
+    {input : Concrete.Splice.Input }
     (hzero : input.binderSpine.proxyCount = 0)
     (values : input.wireQuotient.Carrier → D)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → D)
     (patternHidden : Fin input.pattern.val.hiddenWires.length → D)
     (hostValues : ∀ index, values
-      ((ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+      ((Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
         input.site).get index) = sourceLocal index) :
-    Splice.Input.focusedLocalEnvironmentOfEmpty input hzero values
+    Concrete.Splice.Input.focusedLocalEnvironmentOfEmpty input hzero values
         patternHidden =
       siteTargetLocalOfEmpty input.plugLayout hzero sourceLocal
         patternHidden := by
@@ -410,42 +412,42 @@ theorem focusedLocalEnvironmentOfEmpty_eq_siteTargetLocal
     (input.plugLayout.siteLocalWireEquivOfEmpty hzero).apply_symm_apply _
   rw [← recover]
   refine Fin.addCases (fun hostIndex => ?_) (fun hiddenIndex => ?_) semantic
-  · rw [Splice.Input.focusedLocalEnvironmentOfEmpty_frame,
+  · rw [Concrete.Splice.Input.focusedLocalEnvironmentOfEmpty_frame,
       siteTargetLocalOfEmpty_host]
     exact hostValues hostIndex
-  · rw [Splice.Input.focusedLocalEnvironmentOfEmpty_hidden,
+  · rw [Concrete.Splice.Input.focusedLocalEnvironmentOfEmpty_hidden,
       siteTargetLocalOfEmpty_pattern]
 
 noncomputable def siteForwardHostWireMapOfEmpty
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hzero : input.binderSpine.proxyCount = 0)
-    (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext layout.plugRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetOuter : Concrete.Elaboration.WireContext layout.plugRaw)
     (outerMap : Fin sourceOuter.length → Fin targetOuter.length) :
     Fin (sourceOuter.extend input.site).length →
       Fin (targetOuter.extend (layout.frameRegion input.site)).length :=
   fun index =>
     Fin.cast
-      (ConcreteElaboration.WireContext.length_extend targetOuter
+      (Concrete.Elaboration.WireContext.length_extend targetOuter
         (layout.frameRegion input.site)).symm
       (Fin.addCases
         (fun outer => Fin.castAdd
-          (ConcreteElaboration.exactScopeWires layout.plugRaw
+          (Concrete.Elaboration.exactScopeWires layout.plugRaw
             (layout.frameRegion input.site)).length (outerMap outer))
         (fun localIndex => Fin.natAdd targetOuter.length
           (layout.siteLocalWireEquivOfEmpty hzero
             (Fin.castAdd input.pattern.val.hiddenWires.length localIndex)))
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend sourceOuter input.site)
+          (Concrete.Elaboration.WireContext.length_extend sourceOuter input.site)
           index))
 
 theorem siteForwardHostWireMapOfEmpty_spec
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hzero : input.binderSpine.proxyCount = 0)
-    (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext layout.plugRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetOuter : Concrete.Elaboration.WireContext layout.plugRaw)
     (outerMap : Fin sourceOuter.length → Fin targetOuter.length)
     (outerSpec : ∀ index, targetOuter.get (outerMap index) =
       layout.frameWire (sourceOuter.get index))
@@ -455,9 +457,9 @@ theorem siteForwardHostWireMapOfEmpty_spec
           outerMap index) =
       layout.frameWire ((sourceOuter.extend input.site).get index) := by
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend sourceOuter input.site) index
+    (Concrete.Elaboration.WireContext.length_extend sourceOuter input.site) index
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend sourceOuter input.site).symm
+      (Concrete.Elaboration.WireContext.length_extend sourceOuter input.site).symm
       split = index := by
     apply Fin.ext
     rfl
@@ -465,22 +467,22 @@ theorem siteForwardHostWireMapOfEmpty_spec
   refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
   · have mapEq : siteForwardHostWireMapOfEmpty layout hzero sourceOuter
         targetOuter outerMap
-          (Fin.cast (ConcreteElaboration.WireContext.length_extend sourceOuter
+          (Fin.cast (Concrete.Elaboration.WireContext.length_extend sourceOuter
             input.site).symm (Fin.castAdd _ outer)) =
-        Fin.cast (ConcreteElaboration.WireContext.length_extend targetOuter
+        Fin.cast (Concrete.Elaboration.WireContext.length_extend targetOuter
           (layout.frameRegion input.site)).symm
           (Fin.castAdd _ (outerMap outer)) := by
       apply Fin.ext
       simp [siteForwardHostWireMapOfEmpty]
     rw [mapEq,
-      Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_outer,
-      Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_outer]
+      Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_outer,
+      Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_outer]
     exact outerSpec outer
   · have mapEq : siteForwardHostWireMapOfEmpty layout hzero sourceOuter
         targetOuter outerMap
-          (Fin.cast (ConcreteElaboration.WireContext.length_extend sourceOuter
+          (Fin.cast (Concrete.Elaboration.WireContext.length_extend sourceOuter
             input.site).symm (Fin.natAdd sourceOuter.length localIndex)) =
-        Fin.cast (ConcreteElaboration.WireContext.length_extend targetOuter
+        Fin.cast (Concrete.Elaboration.WireContext.length_extend targetOuter
           (layout.frameRegion input.site)).symm
           (Fin.natAdd targetOuter.length
             (layout.siteLocalWireEquivOfEmpty hzero
@@ -488,43 +490,43 @@ theorem siteForwardHostWireMapOfEmpty_spec
       apply Fin.ext
       simp [siteForwardHostWireMapOfEmpty]
     rw [mapEq,
-      Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_local,
-      Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_local]
+      Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_local,
+      Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_local]
     exact layout.siteLocalWireEquivOfEmpty_host_spec hzero localIndex
 
 theorem siteForwardHostEnvironmentsAgreeOfEmpty
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hzero : input.binderSpine.proxyCount = 0)
-    (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext layout.plugRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetOuter : Concrete.Elaboration.WireContext layout.plugRaw)
     (outerMap : Fin sourceOuter.length → Fin targetOuter.length)
     (sourceOuterEnv : Fin sourceOuter.length → D)
     (targetOuterEnv : Fin targetOuter.length → D)
     (outerEq : sourceOuterEnv = targetOuterEnv ∘ outerMap)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → D)
     (patternHidden : Fin input.pattern.val.hiddenWires.length → D) :
-    ConcreteElaboration.extendedEnvironment sourceOuter input.site
+    Concrete.Elaboration.extendedEnvironment sourceOuter input.site
         sourceOuterEnv sourceLocal =
-      ConcreteElaboration.extendedEnvironment targetOuter
+      Concrete.Elaboration.extendedEnvironment targetOuter
           (layout.frameRegion input.site) targetOuterEnv
           (siteTargetLocalOfEmpty layout hzero sourceLocal patternHidden) ∘
         siteForwardHostWireMapOfEmpty layout hzero sourceOuter targetOuter
           outerMap := by
   funext index
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend sourceOuter input.site) index
+    (Concrete.Elaboration.WireContext.length_extend sourceOuter input.site) index
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend sourceOuter input.site).symm
+      (Concrete.Elaboration.WireContext.length_extend sourceOuter input.site).symm
       split = index := by
     apply Fin.ext
     rfl
   rw [← recover]
   refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
-  · simpa [ConcreteElaboration.extendedEnvironment, extendWireEnv,
+  · simpa [Concrete.Elaboration.extendedEnvironment, extendWireEnv,
       siteForwardHostWireMapOfEmpty, split, outerEq]
-  · simp only [ConcreteElaboration.extendedEnvironment, extendWireEnv,
+  · simp only [Concrete.Elaboration.extendedEnvironment, extendWireEnv,
       siteForwardHostWireMapOfEmpty, Function.comp_apply]
     simp
     exact (siteTargetLocalOfEmpty_host layout hzero sourceLocal patternHidden
@@ -535,15 +537,15 @@ next-state survivor compiler.  This is the forward half of the authoritative
 seam item isomorphism; it deliberately targets the survivor compiler rather
 than an intrinsic reconstruction of the splice output. -/
 theorem advance_pattern_item_denotes_nonempty_forward
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -552,19 +554,19 @@ theorem advance_pattern_item_denotes_nonempty_forward
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (host : Splice.SiteView
+    (host : Concrete.Splice.SiteView
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrame hadmissible) site)
     {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
-    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (patternLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       comprehension.val.diagram payload.binderSpine.bodyContainer
       patternWitness)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -575,9 +577,9 @@ theorem advance_pattern_item_denotes_nonempty_forward
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       comprehension.val.diagram.regionCount comprehension.val.diagram.nodeCount)
-    (occurrenceMember : occurrence ∈ ConcreteElaboration.localOccurrences
+    (occurrenceMember : occurrence ∈ Concrete.Elaboration.localOccurrences
       comprehension.val.diagram payload.binderSpine.bodyContainer)
     (sourceItem : Item
       (patternLeaf.inheritedWires.extend
@@ -588,13 +590,13 @@ theorem advance_pattern_item_denotes_nonempty_forward
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)).length
       outputWitness.toFocus.holeRels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrenceWith?
+    (sourceCompiled : Concrete.Elaboration.compileOccurrenceWith?
       comprehension.val.diagram
-      (ConcreteElaboration.compileRegion?  comprehension.val.diagram
+      (Concrete.Elaboration.compileRegion?  comprehension.val.diagram
         patternLeaf.fuel)
       (patternLeaf.inheritedWires.extend payload.binderSpine.bodyContainer)
       patternLeaf.binders occurrence = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileOccurrenceWith?
+    (targetCompiled : Concrete.Elaboration.compileOccurrenceWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       (compileSurvivorRegion?
@@ -610,13 +612,13 @@ theorem advance_pattern_item_denotes_nonempty_forward
       let spliceInput := instantiateSpliceInput comprehension attachments binders
         payload state site arguments
       let layout := spliceInput.plugLayout
-      let targetEq := ConcreteElaboration.WireContext.length_extend
+      let targetEq := Concrete.Elaboration.WireContext.length_extend
         outputLeaf.inheritedWires (layout.frameRegion site)
       let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
         outputWitness outputLeaf hnonempty
       let targetEnv : Fin
           (outputLeaf.inheritedWires.length +
-            (ConcreteElaboration.exactScopeWires layout.plugRaw
+            (Concrete.Elaboration.exactScopeWires layout.plugRaw
               (layout.frameRegion site)).length) → model.Carrier :=
         env ∘ Fin.cast targetEq.symm
       let sourceEnv := targetEnv ∘ combined
@@ -644,8 +646,8 @@ theorem advance_pattern_item_denotes_nonempty_forward
     (outputLeaf.inheritedWires.extend (layout.frameRegion site))
     outputLeaf.binders occurrence occurrenceMember
   have targetCompiledAuthoritative :
-      ConcreteElaboration.compileOccurrenceWith?  layout.plugRaw
-        (ConcreteElaboration.compileRegion?  layout.plugRaw
+      Concrete.Elaboration.compileOccurrenceWith?  layout.plugRaw
+        (Concrete.Elaboration.compileRegion?  layout.plugRaw
           outputLeaf.fuel)
         (outputLeaf.inheritedWires.extend (layout.frameRegion site))
         outputLeaf.binders (layout.mapPatternOccurrence occurrence) =
@@ -656,11 +658,11 @@ theorem advance_pattern_item_denotes_nonempty_forward
     spliceInput hadmissible host patternWitness patternLeaf outputWitness
     outputLeaf hnonempty occurrence occurrenceMember sourceItem targetItem
     sourceCompiled targetCompiledAuthoritative
-  let targetEq := ConcreteElaboration.WireContext.length_extend
+  let targetEq := Concrete.Elaboration.WireContext.length_extend
     outputLeaf.inheritedWires (layout.frameRegion site)
   let targetEnv : Fin
       (outputLeaf.inheritedWires.length +
-        (ConcreteElaboration.exactScopeWires layout.plugRaw
+        (Concrete.Elaboration.exactScopeWires layout.plugRaw
           (layout.frameRegion site)).length) → model.Carrier :=
     env ∘ Fin.cast targetEq.symm
   let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
@@ -697,15 +699,15 @@ theorem advance_pattern_item_denotes_nonempty_forward
 `advance_pattern_item_denotes_nonempty_forward`, using the checked-open root
 compiler and its repeated-alias seam map. -/
 theorem advance_pattern_root_item_denotes_empty_forward
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -714,13 +716,13 @@ theorem advance_pattern_root_item_denotes_empty_forward
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (host : Splice.SiteView
+    (host : Concrete.Splice.SiteView
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrame hadmissible) site)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -731,9 +733,9 @@ theorem advance_pattern_root_item_denotes_empty_forward
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion site)).length → model.Carrier)
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       comprehension.val.diagram.regionCount comprehension.val.diagram.nodeCount)
-    (occurrenceMember : occurrence ∈ ConcreteElaboration.localOccurrences
+    (occurrenceMember : occurrence ∈ Concrete.Elaboration.localOccurrences
       comprehension.val.diagram comprehension.val.diagram.root)
     (sourceItem : Item
       (comprehension.val.exposedWires ++ comprehension.val.hiddenWires).length [])
@@ -742,13 +744,13 @@ theorem advance_pattern_root_item_denotes_empty_forward
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)).length
       outputWitness.toFocus.holeRels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrenceWith?
+    (sourceCompiled : Concrete.Elaboration.compileOccurrenceWith?
       comprehension.val.diagram
-      (ConcreteElaboration.compileRegion?  comprehension.val.diagram
+      (Concrete.Elaboration.compileRegion?  comprehension.val.diagram
         comprehension.val.diagram.regionCount)
       (comprehension.val.exposedWires ++ comprehension.val.hiddenWires)
-      ConcreteElaboration.BinderContext.empty occurrence = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileOccurrenceWith?
+      Concrete.Elaboration.BinderContext.empty occurrence = some sourceItem)
+    (targetCompiled : Concrete.Elaboration.compileOccurrenceWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       (compileSurvivorRegion?
@@ -764,13 +766,13 @@ theorem advance_pattern_root_item_denotes_empty_forward
       let spliceInput := instantiateSpliceInput comprehension attachments binders
         payload state site arguments
       let layout := spliceInput.plugLayout
-      let targetEq := ConcreteElaboration.WireContext.length_extend
+      let targetEq := Concrete.Elaboration.WireContext.length_extend
         outputLeaf.inheritedWires (layout.frameRegion site)
       let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
         outputWitness outputLeaf hzero
       let targetEnv : Fin
           (outputLeaf.inheritedWires.length +
-            (ConcreteElaboration.exactScopeWires layout.plugRaw
+            (Concrete.Elaboration.exactScopeWires layout.plugRaw
               (layout.frameRegion site)).length) → model.Carrier :=
         env ∘ Fin.cast targetEq.symm
       let sourceEnv := targetEnv ∘ combined
@@ -787,7 +789,7 @@ theorem advance_pattern_root_item_denotes_empty_forward
   have bodyRoot : payload.binderSpine.bodyContainer =
       comprehension.val.diagram.root :=
     payload.binderSpine.body_eq_root_of_empty hzero
-  have bodyMember : occurrence ∈ ConcreteElaboration.localOccurrences
+  have bodyMember : occurrence ∈ Concrete.Elaboration.localOccurrences
       comprehension.val.diagram payload.binderSpine.bodyContainer := by
     simpa [bodyRoot] using occurrenceMember
   have compilerEq := advance_compilePatternOccurrence_eq comprehension
@@ -796,8 +798,8 @@ theorem advance_pattern_root_item_denotes_empty_forward
     (outputLeaf.inheritedWires.extend (layout.frameRegion site))
     outputLeaf.binders occurrence bodyMember
   have targetCompiledAuthoritative :
-      ConcreteElaboration.compileOccurrenceWith?  layout.plugRaw
-        (ConcreteElaboration.compileRegion?  layout.plugRaw
+      Concrete.Elaboration.compileOccurrenceWith?  layout.plugRaw
+        (Concrete.Elaboration.compileRegion?  layout.plugRaw
           outputLeaf.fuel)
         (outputLeaf.inheritedWires.extend (layout.frameRegion site))
         outputLeaf.binders (layout.mapPatternOccurrence occurrence) =
@@ -808,11 +810,11 @@ theorem advance_pattern_root_item_denotes_empty_forward
     spliceInput hadmissible host outputWitness outputLeaf hzero occurrence
     occurrenceMember sourceItem targetItem sourceCompiled
     targetCompiledAuthoritative
-  let targetEq := ConcreteElaboration.WireContext.length_extend
+  let targetEq := Concrete.Elaboration.WireContext.length_extend
     outputLeaf.inheritedWires (layout.frameRegion site)
   let targetEnv : Fin
       (outputLeaf.inheritedWires.length +
-        (ConcreteElaboration.exactScopeWires layout.plugRaw
+        (Concrete.Elaboration.exactScopeWires layout.plugRaw
           (layout.frameRegion site)).length) → model.Carrier :=
     env ∘ Fin.cast targetEq.symm
   let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
@@ -820,7 +822,7 @@ theorem advance_pattern_root_item_denotes_empty_forward
   let seam := layout.patternRootSeamPreparedWireOfEmpty hadmissible host
   let sourceEnv := targetEnv ∘ combined
   let relationMap : RelationRenaming [] outputWitness.toFocus.holeRels :=
-    Splice.Input.PlugLayout.emptyRelationRenaming
+    Concrete.Splice.Input.PlugLayout.emptyRelationRenaming
       outputWitness.toFocus.holeRels
   have wirePrepared : denoteItem (relCtx := []) model  sourceEnv PUnit.unit
       (sourceItem.renameWires seam) :=

@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationDiscrete
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -14,15 +16,15 @@ The compiler data is the survivor view of the executor state, while the four
 semantic fields retain the single trace relation, every proxy relation, the
 ordered parameter valuation, and truth of the compiled bubble body. -/
 structure BubblePresentation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (model : Model)
@@ -31,11 +33,11 @@ structure BubblePresentation
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier) where
   rels : RelCtx
-  outer : ConcreteElaboration.WireContext state.diagram.val
+  outer : Concrete.Elaboration.WireContext state.diagram.val
   outerExact : (outer.extend state.bubble).Exact state.bubble
-  binderContext : ConcreteElaboration.BinderContext state.diagram.val rels
+  binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels
   binderCover : binderContext.Covers state.bubble
-  binderEnumeration : ConcreteElaboration.BinderContext.Enumeration
+  binderEnumeration : Concrete.Elaboration.BinderContext.Enumeration
     state.diagram.val binderContext state.bubble
   fuel : Nat
   body : Region  outer.length rels
@@ -53,62 +55,62 @@ structure BubblePresentation
 /-- Canonical compiler focus of the quantified bubble after deleting the
 executor's already-processed atom placeholders. -/
 noncomputable def droppedBubbleView
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin parameterCount proxyCount) :
-    Splice.SiteView (InstantiationDrop.checkedDrop state) state.bubble :=
+    Concrete.Splice.SiteView (InstantiationDrop.checkedDrop state) state.bubble :=
   Classical.choice
-    (Splice.siteView_complete (InstantiationDrop.checkedDrop state)
+    (Concrete.Splice.siteView_complete (InstantiationDrop.checkedDrop state)
       state.bubble)
 
 /-- The focused compiler leaf on a dropped state computes exactly the
 survivor region consumed by the fixed-relation simulation. -/
 theorem droppedBubbleView_compileSurvivor
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin parameterCount proxyCount) :
     let view := droppedBubbleView state
     compileSurvivorRegion?  state (view.compilerLeaf.fuel + 1)
         state.bubble view.compilerLeaf.inheritedWires
         view.compilerLeaf.binders =
-      some (ConcreteElaboration.finishRegion state.diagram.val
+      some (Concrete.Elaboration.finishRegion state.diagram.val
         view.compilerLeaf.inheritedWires state.bubble
         view.compilerLeaf.items) := by
   let view := droppedBubbleView state
   let leaf := view.compilerLeaf
   change compileSurvivorRegion?  state (leaf.fuel + 1)
       state.bubble leaf.inheritedWires leaf.binders =
-    some (ConcreteElaboration.finishRegion state.diagram.val
+    some (Concrete.Elaboration.finishRegion state.diagram.val
       leaf.inheritedWires state.bubble leaf.items)
-  have droppedCompiled : ConcreteElaboration.compileRegion?
+  have droppedCompiled : Concrete.Elaboration.compileRegion?
       (dropInstantiationAtomsRaw state) (leaf.fuel + 1) state.bubble
       leaf.inheritedWires leaf.binders =
-        some (ConcreteElaboration.finishRegion
+        some (Concrete.Elaboration.finishRegion
           (dropInstantiationAtomsRaw state) leaf.inheritedWires state.bubble
           leaf.items) := by
     have itemsComputation := leaf.itemsComputation
-    change ConcreteElaboration.compileOccurrencesWith?
+    change Concrete.Elaboration.compileOccurrencesWith?
         (dropInstantiationAtomsRaw state)
-        (ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           (dropInstantiationAtomsRaw state) leaf.fuel)
         (leaf.inheritedWires.extend state.bubble) leaf.binders
-        (ConcreteElaboration.localOccurrences
+        (Concrete.Elaboration.localOccurrences
           (dropInstantiationAtomsRaw state) state.bubble) = some leaf.items
       at itemsComputation
-    unfold ConcreteElaboration.compileRegion?
+    unfold Concrete.Elaboration.compileRegion?
     dsimp only
     exact (congrArg (fun result => result.bind (fun items =>
-      some (ConcreteElaboration.finishRegion state.diagram.val
+      some (Concrete.Elaboration.finishRegion state.diagram.val
         leaf.inheritedWires state.bubble items))) itemsComputation).trans rfl
   exact (drop_compileRegion_eq_survivor state (leaf.fuel + 1) state.bubble
     leaf.inheritedWires leaf.binders).symm.trans droppedCompiled
 
 theorem exact_of_drop
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
     (region : Fin state.diagram.val.regionCount)
-    (exact : @ConcreteElaboration.WireContext.Exact
+    (exact : @Concrete.Elaboration.WireContext.Exact
       (dropInstantiationAtomsRaw state) context region) :
-    @ConcreteElaboration.WireContext.Exact state.diagram.val context region := by
+    @Concrete.Elaboration.WireContext.Exact state.diagram.val context region := by
   constructor
   · exact exact.nodup
   · intro wire
@@ -125,13 +127,13 @@ theorem exact_of_drop
           (state.diagram.val.wires wire).scope region).2 visible
 
 private theorem exact_to_drop
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
     (region : Fin state.diagram.val.regionCount)
-    (exact : @ConcreteElaboration.WireContext.Exact state.diagram.val context
+    (exact : @Concrete.Elaboration.WireContext.Exact state.diagram.val context
       region) :
-    @ConcreteElaboration.WireContext.Exact (dropInstantiationAtomsRaw state)
+    @Concrete.Elaboration.WireContext.Exact (dropInstantiationAtomsRaw state)
       context region := by
   constructor
   · exact exact.nodup
@@ -149,13 +151,13 @@ private theorem exact_to_drop
           simpa only [InstantiationDrop.raw_wire_scope] using droppedVisible)
 
 private theorem binderCover_of_drop
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (context : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (region : Fin state.diagram.val.regionCount)
-    (cover : @ConcreteElaboration.BinderContext.Covers
+    (cover : @Concrete.Elaboration.BinderContext.Covers
       (dropInstantiationAtomsRaw state) rels context region) :
-    @ConcreteElaboration.BinderContext.Covers state.diagram.val rels context
+    @Concrete.Elaboration.BinderContext.Covers state.diagram.val rels context
       region := by
   intro binder parent arity bubbleEq encloses
   apply cover binder parent arity
@@ -163,13 +165,13 @@ private theorem binderCover_of_drop
   · exact (InstantiationDrop.raw_encloses_iff state binder region).2 encloses
 
 private theorem binderCover_to_drop
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (context : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (region : Fin state.diagram.val.regionCount)
-    (cover : @ConcreteElaboration.BinderContext.Covers state.diagram.val rels
+    (cover : @Concrete.Elaboration.BinderContext.Covers state.diagram.val rels
       context region) :
-    @ConcreteElaboration.BinderContext.Covers (dropInstantiationAtomsRaw state)
+    @Concrete.Elaboration.BinderContext.Covers (dropInstantiationAtomsRaw state)
       rels context region := by
   intro binder parent arity bubbleEq encloses
   apply cover binder parent arity
@@ -177,13 +179,13 @@ private theorem binderCover_to_drop
   · exact (InstantiationDrop.raw_encloses_iff state binder region).1 encloses
 
 private def binderEnumeration_of_drop
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (context : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (region : Fin state.diagram.val.regionCount)
-    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+    (enumeration : Concrete.Elaboration.BinderContext.Enumeration
       (dropInstantiationAtomsRaw state) context region) :
-    ConcreteElaboration.BinderContext.Enumeration state.diagram.val context
+    Concrete.Elaboration.BinderContext.Enumeration state.diagram.val context
       region where
   binder := enumeration.binder
   binder_injective := enumeration.binder_injective
@@ -199,10 +201,10 @@ private def binderEnumeration_of_drop
   lookup_owner := enumeration.lookup_owner
 
 private theorem frameInherited_mem
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (region : Fin input.coalesceFrameRaw.regionCount)
-    (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetOuter : Concrete.Elaboration.WireContext input.plugLayout.plugRaw)
     (sourceExact : (sourceOuter.extend region).Exact region)
     (targetExact : (targetOuter.extend
       (input.plugLayout.frameRegion region)).Exact
@@ -219,16 +221,16 @@ private theorem frameInherited_mem
       targetExact (sourceOuter.get index)).2 sourceMember
   have targetParts : layout.frameWire (sourceOuter.get index) ∈ targetOuter ∨
       layout.frameWire (sourceOuter.get index) ∈
-        ConcreteElaboration.exactScopeWires layout.plugRaw
+        Concrete.Elaboration.exactScopeWires layout.plugRaw
           (layout.frameRegion region) := by
     change layout.frameWire (sourceOuter.get index) ∈
-      targetOuter ++ ConcreteElaboration.exactScopeWires layout.plugRaw
+      targetOuter ++ Concrete.Elaboration.exactScopeWires layout.plugRaw
         (layout.frameRegion region) at targetMember
     exact List.mem_append.mp targetMember
   apply targetParts.resolve_right
   intro targetLocal
   have targetScope :=
-    (ConcreteElaboration.mem_exactScopeWires layout.plugRaw
+    (Concrete.Elaboration.mem_exactScopeWires layout.plugRaw
       (layout.frameRegion region) _).1 targetLocal
   have frameScope :
       (layout.plugRaw.wires
@@ -237,7 +239,7 @@ private theorem frameInherited_mem
           (input.coalescedScope (sourceOuter.get index)) := by
     change (layout.plugWire
       (layout.quotientBlockWire (sourceOuter.get index))).scope = _
-    rw [Splice.Input.PlugLayout.plugWire_quotientBlockWire]
+    rw [Concrete.Splice.Input.PlugLayout.plugWire_quotientBlockWire]
   have sourceScope :
       (input.coalesceFrameRaw.wires (sourceOuter.get index)).scope = region := by
     have coalescedScopeEq :
@@ -245,34 +247,34 @@ private theorem frameInherited_mem
       layout.frameRegion_injective (frameScope.symm.trans targetScope)
     simpa [input.coalesceFrameRaw_wire] using coalescedScopeEq
   have sourceLocal : sourceOuter.get index ∈
-      ConcreteElaboration.exactScopeWires input.coalesceFrameRaw region :=
-    (ConcreteElaboration.mem_exactScopeWires _ _ _).2 sourceScope
+      Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw region :=
+    (Concrete.Elaboration.mem_exactScopeWires _ _ _).2 sourceScope
   have nodup := sourceExact.nodup
-  rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at nodup
+  rw [Concrete.Elaboration.WireContext.extend, List.nodup_append] at nodup
   exact nodup.2.2 _ (List.get_mem sourceOuter index) _ sourceLocal rfl
 
 /-- Index transport for the inherited part of any two exact bubble compiler
 contexts across one splice frame. -/
 noncomputable def frameInheritedIndex
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (region : Fin input.coalesceFrameRaw.regionCount)
-    (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetOuter : Concrete.Elaboration.WireContext input.plugLayout.plugRaw)
     (sourceExact : (sourceOuter.extend region).Exact region)
     (targetExact : (targetOuter.extend
       (input.plugLayout.frameRegion region)).Exact
       (input.plugLayout.frameRegion region)) :
     Fin sourceOuter.length → Fin targetOuter.length :=
   fun index => Classical.choose
-    (ConcreteElaboration.WireContext.lookup?_complete
+    (Concrete.Elaboration.WireContext.lookup?_complete
       (frameInherited_mem input region sourceOuter targetOuter sourceExact
         targetExact index))
 
 theorem frameInheritedIndex_lookup
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (region : Fin input.coalesceFrameRaw.regionCount)
-    (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetOuter : Concrete.Elaboration.WireContext input.plugLayout.plugRaw)
     (sourceExact : (sourceOuter.extend region).Exact region)
     (targetExact : (targetOuter.extend
       (input.plugLayout.frameRegion region)).Exact
@@ -283,15 +285,15 @@ theorem frameInheritedIndex_lookup
       some (frameInheritedIndex input region sourceOuter targetOuter
         sourceExact targetExact index) := by
   exact Classical.choose_spec
-    (ConcreteElaboration.WireContext.lookup?_complete
+    (Concrete.Elaboration.WireContext.lookup?_complete
       (frameInherited_mem input region sourceOuter targetOuter sourceExact
         targetExact index))
 
 theorem frameInheritedIndex_spec
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (region : Fin input.coalesceFrameRaw.regionCount)
-    (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetOuter : Concrete.Elaboration.WireContext input.plugLayout.plugRaw)
     (sourceExact : (sourceOuter.extend region).Exact region)
     (targetExact : (targetOuter.extend
       (input.plugLayout.frameRegion region)).Exact
@@ -300,20 +302,20 @@ theorem frameInheritedIndex_spec
     targetOuter.get (frameInheritedIndex input region sourceOuter targetOuter
       sourceExact targetExact index) =
       input.plugLayout.frameWire (sourceOuter.get index) := by
-  apply ConcreteElaboration.WireContext.lookup?_sound
+  apply Concrete.Elaboration.WireContext.lookup?_sound
   exact Classical.choose_spec
-    (ConcreteElaboration.WireContext.lookup?_complete
+    (Concrete.Elaboration.WireContext.lookup?_complete
       (frameInherited_mem input region sourceOuter targetOuter sourceExact
         targetExact index))
 
 private theorem frameRelation_exists
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (region : Fin input.coalesceFrameRaw.regionCount)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       input.coalesceFrameRaw sourceRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.coalesceFrameRaw sourceBinders region)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       input.plugLayout.plugRaw targetRels)
     (targetCover : targetBinders.Covers
       (input.plugLayout.frameRegion region))
@@ -344,13 +346,13 @@ private theorem frameRelation_exists
 /-- Relation-variable transport induced by the exact concrete binder owners
 of the source and target bubble compiler contexts. -/
 noncomputable def frameRelationMap
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (region : Fin input.coalesceFrameRaw.regionCount)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       input.coalesceFrameRaw sourceRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.coalesceFrameRaw sourceBinders region)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       input.plugLayout.plugRaw targetRels)
     (targetCover : targetBinders.Covers
       (input.plugLayout.frameRegion region)) :
@@ -360,13 +362,13 @@ noncomputable def frameRelationMap
       targetBinders targetCover relation)
 
 theorem frameRelationMap_spec
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (region : Fin input.coalesceFrameRaw.regionCount)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       input.coalesceFrameRaw sourceRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.coalesceFrameRaw sourceBinders region)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       input.plugLayout.plugRaw targetRels)
     (targetCover : targetBinders.Covers
       (input.plugLayout.frameRegion region))
@@ -383,15 +385,15 @@ theorem frameRelationMap_spec
 /-- Ordered parameter values pull back from an accepted step's target context
 to the alias-quotient source context. -/
 theorem parameterValuesAt_pullback_frame
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -400,10 +402,10 @@ theorem parameterValuesAt_pullback_frame
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
-    (sourceOuter : ConcreteElaboration.WireContext
+    (sourceOuter : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext
+    (targetOuter : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw)
     (sourceExact : (sourceOuter.extend state.bubble).Exact state.bubble)
@@ -458,41 +460,41 @@ theorem parameterValuesAt_pullback_frame
     (sourceExact.mem_iff sourceWire).2 sourceVisible
   have targetOuterNodup : targetOuter.Nodup := by
     have nodup := targetExact.nodup
-    rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at nodup
+    rw [Concrete.Elaboration.WireContext.extend, List.nodup_append] at nodup
     exact nodup.1
   have sourceOuterNodup : sourceOuter.Nodup := by
     have nodup := sourceExact.nodup
-    rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at nodup
+    rw [Concrete.Elaboration.WireContext.extend, List.nodup_append] at nodup
     exact nodup.1
   have sourceMember : sourceWire ∈ sourceOuter := by
     change sourceWire ∈ sourceOuter ++
-      ConcreteElaboration.exactScopeWires spliceInput.coalesceFrameRaw
+      Concrete.Elaboration.exactScopeWires spliceInput.coalesceFrameRaw
         state.bubble at sourceFullMember
     apply (List.mem_append.mp sourceFullMember).resolve_right
     intro sourceLocal
     have sourceScope :=
-      (ConcreteElaboration.mem_exactScopeWires spliceInput.coalesceFrameRaw
+      (Concrete.Elaboration.mem_exactScopeWires spliceInput.coalesceFrameRaw
         state.bubble sourceWire).1 sourceLocal
     have targetScope :
         (layout.plugRaw.wires (layout.frameWire sourceWire)).scope =
           layout.frameRegion state.bubble := by
       change (layout.plugWire (layout.quotientBlockWire sourceWire)).scope = _
-      rw [Splice.Input.PlugLayout.plugWire_quotientBlockWire]
+      rw [Concrete.Splice.Input.PlugLayout.plugWire_quotientBlockWire]
       exact congrArg layout.frameRegion (by
         simpa [spliceInput.coalesceFrameRaw_wire] using sourceScope)
     have targetLocal : layout.frameWire sourceWire ∈
-        ConcreteElaboration.exactScopeWires layout.plugRaw
+        Concrete.Elaboration.exactScopeWires layout.plugRaw
           (layout.frameRegion state.bubble) :=
-      (ConcreteElaboration.mem_exactScopeWires _ _ _).2 targetScope
+      (Concrete.Elaboration.mem_exactScopeWires _ _ _).2 targetScope
     have nodup := targetExact.nodup
-    rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at nodup
+    rw [Concrete.Elaboration.WireContext.extend, List.nodup_append] at nodup
     exact nodup.2.2 _
       (targetWire' ▸ List.get_mem targetOuter targetIndex)
       _ targetLocal rfl
   obtain ⟨sourceIndex, sourceLookup⟩ :=
-    ConcreteElaboration.WireContext.lookup?_complete sourceMember
+    Concrete.Elaboration.WireContext.lookup?_complete sourceMember
   have sourceGet : sourceOuter.get sourceIndex = sourceWire :=
-    ConcreteElaboration.WireContext.lookup?_sound sourceLookup
+    Concrete.Elaboration.WireContext.lookup?_sound sourceLookup
   refine ⟨sourceIndex, ?_, ?_⟩
   · simpa [coalesced, sourceWire, spliceInput] using sourceGet
   · have mappedGet := frameInheritedIndex_spec spliceInput state.bubble
@@ -503,7 +505,7 @@ theorem parameterValuesAt_pullback_frame
       rw [sourceGet] at mappedLookup
       change targetOuter.lookup? (layout.frameWire sourceWire) =
         some (outerMap sourceIndex) at mappedLookup
-      have targetIsMapped := ConcreteElaboration.WireContext.lookup?_unique
+      have targetIsMapped := Concrete.Elaboration.WireContext.lookup?_unique
         targetOuterNodup mappedLookup targetWire'
       exact targetIsMapped.symm
     change targetEnvironment (outerMap sourceIndex) = parameterValues position
@@ -513,15 +515,15 @@ theorem parameterValuesAt_pullback_frame
 /-- One accepted copy step pulls a target bubble presentation back to the
 alias-quotient source while preserving the single trace witness. -/
 noncomputable def coalescedBubblePresentation_of_target
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -559,11 +561,11 @@ noncomputable def coalescedBubblePresentation_of_target
   let sourceOuter := sourceLeaf.inheritedWires
   let sourceBinders := sourceLeaf.binders
   let sourceEnumeration := sourceLeaf.binderEnumeration
-  let sourceBody := ConcreteElaboration.finishRegion coalesced.diagram.val
+  let sourceBody := Concrete.Elaboration.finishRegion coalesced.diagram.val
     sourceOuter coalesced.bubble sourceLeaf.items
-  have sourceExact : @ConcreteElaboration.WireContext.Exact
+  have sourceExact : @Concrete.Elaboration.WireContext.Exact
       coalesced.diagram.val
-      (@ConcreteElaboration.WireContext.extend coalesced.diagram.val sourceOuter
+      (@Concrete.Elaboration.WireContext.extend coalesced.diagram.val sourceOuter
         state.bubble) state.bubble := by
     apply exact_of_drop coalesced
     simpa only [drop_exactScopeWires] using sourceLeaf.wiresExact
@@ -572,7 +574,7 @@ noncomputable def coalescedBubblePresentation_of_target
       (layout.frameRegion state.bubble) := by
     simpa [next, layout, spliceInput, advanceInstantiationState] using
       target.outerExact
-  have sourceCover : @ConcreteElaboration.BinderContext.Covers
+  have sourceCover : @Concrete.Elaboration.BinderContext.Covers
       coalesced.diagram.val sourceView.intrinsicPath.toFocus.holeRels
       sourceBinders state.bubble := by
     exact binderCover_of_drop coalesced sourceBinders state.bubble (by
@@ -581,7 +583,7 @@ noncomputable def coalescedBubblePresentation_of_target
       (layout.frameRegion state.bubble) := by
     simpa [next, layout, spliceInput, advanceInstantiationState] using
       target.binderCover
-  have sourceEnumeration' : ConcreteElaboration.BinderContext.Enumeration
+  have sourceEnumeration' : Concrete.Elaboration.BinderContext.Enumeration
       spliceInput.coalesceFrameRaw sourceBinders state.bubble := by
     exact binderEnumeration_of_drop coalesced sourceBinders state.bubble (by
       simpa [sourceEnumeration, sourceBinders, sourceLeaf, sourceView,
@@ -620,9 +622,9 @@ noncomputable def coalescedBubblePresentation_of_target
     exact frameRelationMap_spec spliceInput state.bubble sourceBinders
       sourceEnumeration' target.binderContext targetCover relation
   have environmentsAgree :
-      (ConcreteElaboration.ContextIndexRelation.forwardMap outerMap)
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap outerMap)
         |>.EnvironmentsAgree sourceEnvironment target.environment := by
-    rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+    rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap]
     rfl
   have sourceRenamedDenotes : denoteRegion model  sourceEnvironment
       target.relationEnvironment (sourceBody.renameRelations relationMap) := by
@@ -677,11 +679,11 @@ noncomputable def coalescedBubblePresentation_of_target
   }
 
 private theorem inherited_mem_iff_iso
-    {source target : ConcreteDiagram}
-    (iso : ConcreteIso source target)
+    {source target : Concrete.Diagram}
+    (iso : Concrete.Iso source target)
     (region : Fin source.regionCount)
-    (sourceOuter : ConcreteElaboration.WireContext source)
-    (targetOuter : ConcreteElaboration.WireContext target)
+    (sourceOuter : Concrete.Elaboration.WireContext source)
+    (targetOuter : Concrete.Elaboration.WireContext target)
     (sourceExact : (sourceOuter.extend region).Exact region)
     (targetExact : (targetOuter.extend (iso.regions region)).Exact
       (iso.regions region))
@@ -699,7 +701,7 @@ private theorem inherited_mem_iff_iso
           (target.wires (iso.wires wire)).scope =
           (source.wires wire).scope := by
         rw [← iso.wire_scope_eq wire, iso.regions.left_inv]
-      simpa [ConcreteIso.symm, scopeEq] using pulled
+      simpa [Concrete.Iso.symm, scopeEq] using pulled
     have sourceFull := (sourceExact.mem_iff wire).2 sourceVisible
     apply (List.mem_append.mp sourceFull).resolve_right
     intro sourceLocal
@@ -707,13 +709,13 @@ private theorem inherited_mem_iff_iso
         iso.regions region := by
       rw [← iso.wire_scope_eq wire]
       exact congrArg iso.regions
-        ((ConcreteElaboration.mem_exactScopeWires source region wire).1
+        ((Concrete.Elaboration.mem_exactScopeWires source region wire).1
           sourceLocal)
     have targetLocal : iso.wires wire ∈
-        ConcreteElaboration.exactScopeWires target (iso.regions region) :=
-      (ConcreteElaboration.mem_exactScopeWires _ _ _).2 targetScope
+        Concrete.Elaboration.exactScopeWires target (iso.regions region) :=
+      (Concrete.Elaboration.mem_exactScopeWires _ _ _).2 targetScope
     have nodup := targetExact.nodup
-    rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at nodup
+    rw [Concrete.Elaboration.WireContext.extend, List.nodup_append] at nodup
     exact nodup.2.2 _ targetMember _ targetLocal rfl
   · intro sourceMember
     have sourceFull : wire ∈ sourceOuter.extend region :=
@@ -725,25 +727,25 @@ private theorem inherited_mem_iff_iso
     apply (List.mem_append.mp targetFull).resolve_right
     intro targetLocal
     have targetScope :=
-      (ConcreteElaboration.mem_exactScopeWires target (iso.regions region)
+      (Concrete.Elaboration.mem_exactScopeWires target (iso.regions region)
         (iso.wires wire)).1 targetLocal
     have sourceScope : (source.wires wire).scope = region := by
       apply iso.regions.injective
       rw [iso.wire_scope_eq]
       exact targetScope
     have sourceLocal : wire ∈
-        ConcreteElaboration.exactScopeWires source region :=
-      (ConcreteElaboration.mem_exactScopeWires _ _ _).2 sourceScope
+        Concrete.Elaboration.exactScopeWires source region :=
+      (Concrete.Elaboration.mem_exactScopeWires _ _ _).2 sourceScope
     have nodup := sourceExact.nodup
-    rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at nodup
+    rw [Concrete.Elaboration.WireContext.extend, List.nodup_append] at nodup
     exact nodup.2.2 _ sourceMember _ sourceLocal rfl
 
 noncomputable def inheritedWireEquivIso
-    {source target : ConcreteDiagram}
-    (iso : ConcreteIso source target)
+    {source target : Concrete.Diagram}
+    (iso : Concrete.Iso source target)
     (region : Fin source.regionCount)
-    (sourceOuter : ConcreteElaboration.WireContext source)
-    (targetOuter : ConcreteElaboration.WireContext target)
+    (sourceOuter : Concrete.Elaboration.WireContext source)
+    (targetOuter : Concrete.Elaboration.WireContext target)
     (sourceExact : (sourceOuter.extend region).Exact region)
     (targetExact : (targetOuter.extend (iso.regions region)).Exact
       (iso.regions region)) :
@@ -751,21 +753,21 @@ noncomputable def inheritedWireEquivIso
   FiniteEquiv.restrictLists iso.wires sourceOuter targetOuter
     (by
       have nodup := sourceExact.nodup
-      rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at nodup
+      rw [Concrete.Elaboration.WireContext.extend, List.nodup_append] at nodup
       exact nodup.1)
     (by
       have nodup := targetExact.nodup
-      rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at nodup
+      rw [Concrete.Elaboration.WireContext.extend, List.nodup_append] at nodup
       exact nodup.1)
     (fun wire => inherited_mem_iff_iso iso region sourceOuter targetOuter
       sourceExact targetExact wire)
 
 theorem inheritedWireEquivIso_spec
-    {source target : ConcreteDiagram}
-    (iso : ConcreteIso source target)
+    {source target : Concrete.Diagram}
+    (iso : Concrete.Iso source target)
     (region : Fin source.regionCount)
-    (sourceOuter : ConcreteElaboration.WireContext source)
-    (targetOuter : ConcreteElaboration.WireContext target)
+    (sourceOuter : Concrete.Elaboration.WireContext source)
+    (targetOuter : Concrete.Elaboration.WireContext target)
     (sourceExact : (sourceOuter.extend region).Exact region)
     (targetExact : (targetOuter.extend (iso.regions region)).Exact
       (iso.regions region))
@@ -779,15 +781,15 @@ theorem inheritedWireEquivIso_spec
 /-- Deleting processed atoms commutes with cancellation of any retained-host
 quotient certified discrete by the executor's attachment contract. -/
 noncomputable def attachmentRespectingDroppedStateIso
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -796,7 +798,7 @@ noncomputable def attachmentRespectingDroppedStateIso
       payload state site arguments).Admissible)
     (respects : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).AttachmentsRespectBoundary) :
-    ConcreteIso
+    Concrete.Iso
       (dropInstantiationAtomsRaw
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible))
@@ -804,7 +806,7 @@ noncomputable def attachmentRespectingDroppedStateIso
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
   let wireEquiv :=
-    Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
+    Concrete.Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
       spliceInput respects
   exact {
     regionCount_eq := rfl
@@ -832,7 +834,7 @@ noncomputable def attachmentRespectingDroppedStateIso
       intro quotient
       change spliceInput.coalescedScope quotient =
         (state.diagram.val.wires (wireEquiv quotient)).scope
-      exact Splice.Input.coalescedScope_eq_of_attachmentsRespectBoundary
+      exact Concrete.Splice.Input.coalescedScope_eq_of_attachmentsRespectBoundary
         spliceInput respects quotient
     wire_endpoints_perm := by
       intro quotient
@@ -842,23 +844,23 @@ noncomputable def attachmentRespectingDroppedStateIso
           (CEndpoint.rename (.refl _))).Perm
         ((state.diagram.val.wires (wireEquiv quotient)).endpoints.filterMap
           (instantiationAtomDomain state).reindexEndpoint?)
-      rw [Splice.Input.coalescedEndpoints_eq_of_attachmentsRespectBoundary
+      rw [Concrete.Splice.Input.coalescedEndpoints_eq_of_attachmentsRespectBoundary
         spliceInput respects quotient]
       simpa [spliceInput, instantiateSpliceInput, wireEquiv] using
-        (ConcreteIso.refl (dropInstantiationAtomsRaw state)).wire_endpoints_perm
+        (Concrete.Iso.refl (dropInstantiationAtomsRaw state)).wire_endpoints_perm
           (wireEquiv quotient)
   }
 
 theorem attachmentRespectingDroppedRegionIso
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -878,26 +880,26 @@ theorem attachmentRespectingDroppedRegionIso
       (attachmentRespectingDroppedStateIso comprehension attachments binders
         payload state site arguments hadmissible respects).regions sourceRegion =
         targetRegion)
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       (dropInstantiationAtomsRaw
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible)))
-    (targetContext : ConcreteElaboration.WireContext
+    (targetContext : Concrete.Elaboration.WireContext
       (dropInstantiationAtomsRaw state))
     (ambient : FiniteEquiv (Fin sourceContext.length)
       (Fin targetContext.length))
-    (contextsAgree : ConcreteElaboration.WireContextsAgree
+    (contextsAgree : Concrete.Elaboration.WireContextsAgree
       (attachmentRespectingDroppedStateIso comprehension attachments binders
         payload state site arguments hadmissible respects)
       sourceContext targetContext ambient)
     (targetExact : (targetContext.extend targetRegion).Exact targetRegion)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (dropInstantiationAtomsRaw
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible)) sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       (dropInstantiationAtomsRaw state) sourceRels)
-    (bindersAgree : ConcreteElaboration.BinderContextsAgree
+    (bindersAgree : Concrete.Elaboration.BinderContextsAgree
       (attachmentRespectingDroppedStateIso comprehension attachments binders
         payload state site arguments hadmissible respects)
       sourceBinders targetBinders)
@@ -907,7 +909,7 @@ theorem attachmentRespectingDroppedRegionIso
       (coalescedInstantiationState comprehension attachments binders payload
         state site arguments hadmissible)
       sourceFuel sourceRegion sourceContext sourceBinders = some sourceBody)
-    (targetCompiled : ConcreteElaboration.compileRegion?
+    (targetCompiled : Concrete.Elaboration.compileRegion?
       (dropInstantiationAtomsRaw state) targetFuel targetRegion targetContext
       targetBinders = some targetBody) :
     RegionIso  ambient sourceRels sourceBody targetBody := by
@@ -915,29 +917,29 @@ theorem attachmentRespectingDroppedRegionIso
     payload state site arguments hadmissible
   let iso := attachmentRespectingDroppedStateIso comprehension attachments
     binders payload state site arguments hadmissible respects
-  have sourceCompiled' : ConcreteElaboration.compileRegion?
+  have sourceCompiled' : Concrete.Elaboration.compileRegion?
       (dropInstantiationAtomsRaw coalesced) sourceFuel sourceRegion sourceContext
       sourceBinders = some sourceBody := by
     exact (drop_compileRegion_eq_survivor coalesced sourceFuel sourceRegion
       sourceContext sourceBinders).trans (by
         simpa [coalesced] using sourceCompiled)
   subst targetRegion
-  exact ConcreteElaboration.compileRegion?_equivariant iso
+  exact Concrete.Elaboration.compileRegion?_equivariant iso
     (InstantiationDrop.raw_wellFormed state) contextsAgree targetExact
     bindersAgree sourceCompiled' targetCompiled
 
 /-- Cancellation of an executor-certified discrete retained-host quotient
 transports a bubble presentation back to the executor state. -/
 noncomputable def bubblePresentation_of_coalesced
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -962,29 +964,29 @@ noncomputable def bubblePresentation_of_coalesced
   let coalesced := coalescedInstantiationState comprehension attachments binders
     payload state site arguments hadmissible
   let actualIso :=
-    Splice.Input.coalescedFrameIsoOfAttachmentsRespectBoundary spliceInput
+    Concrete.Splice.Input.coalescedFrameIsoOfAttachmentsRespectBoundary spliceInput
       respects
   let droppedIso := attachmentRespectingDroppedStateIso comprehension
     attachments binders payload state site arguments hadmissible respects
   let targetView := droppedBubbleView state
   let targetLeaf := targetView.compilerLeaf
   let targetOuter := targetLeaf.inheritedWires
-  have targetExact : @ConcreteElaboration.WireContext.Exact state.diagram.val
-      (@ConcreteElaboration.WireContext.extend state.diagram.val targetOuter
+  have targetExact : @Concrete.Elaboration.WireContext.Exact state.diagram.val
+      (@Concrete.Elaboration.WireContext.extend state.diagram.val targetOuter
         state.bubble) state.bubble := by
     apply exact_of_drop state
     simpa only [drop_exactScopeWires] using targetLeaf.wiresExact
-  have sourceExact : @ConcreteElaboration.WireContext.Exact
+  have sourceExact : @Concrete.Elaboration.WireContext.Exact
       spliceInput.coalesceFrameRaw
-      (@ConcreteElaboration.WireContext.extend spliceInput.coalesceFrameRaw
+      (@Concrete.Elaboration.WireContext.extend spliceInput.coalesceFrameRaw
         source.outer state.bubble) state.bubble := by
     simpa [coalesced, spliceInput] using source.outerExact
   let ambient := inheritedWireEquivIso actualIso state.bubble source.outer
     targetOuter sourceExact targetExact
-  let targetBinders : ConcreteElaboration.BinderContext state.diagram.val
+  let targetBinders : Concrete.Elaboration.BinderContext state.diagram.val
       source.rels := fun region =>
     source.binderContext (actualIso.regions.invFun region)
-  have bindersAgree : ConcreteElaboration.BinderContextsAgree droppedIso
+  have bindersAgree : Concrete.Elaboration.BinderContextsAgree droppedIso
       source.binderContext targetBinders := by
     intro region
     change source.binderContext
@@ -993,7 +995,7 @@ noncomputable def bubblePresentation_of_coalesced
     apply congrArg source.binderContext
     apply Fin.ext
     rfl
-  have actualBindersAgree : ConcreteElaboration.BinderContextsAgree actualIso
+  have actualBindersAgree : Concrete.Elaboration.BinderContextsAgree actualIso
       source.binderContext targetBinders := by
     intro region
     exact congrArg source.binderContext (actualIso.regions.left_inv region)
@@ -1007,7 +1009,7 @@ noncomputable def bubblePresentation_of_coalesced
   have depthEq := Classical.choose_spec
     (state.diagram.property.all_regions_reach_root state.bubble)
   have depthLe : depth.val ≤ state.diagram.val.regionCount :=
-    ConcreteElaboration.ParentTraversal.checked_climb_to_root_steps_le_regionCount
+    Concrete.Elaboration.ParentTraversal.checked_climb_to_root_steps_le_regionCount
       state.diagram depthEq
   let targetFuel := state.diagram.val.regionCount + 1 - depth.val
   have fuelEq : depth.val + targetFuel = state.diagram.val.regionCount + 1 := by
@@ -1017,18 +1019,18 @@ noncomputable def bubblePresentation_of_coalesced
       state.bubble = some (dropInstantiationAtomsRaw state).root := by
     simpa only [InstantiationDrop.raw_climb, InstantiationDrop.raw_root] using
       depthEq
-  have droppedExact : @ConcreteElaboration.WireContext.Exact
+  have droppedExact : @Concrete.Elaboration.WireContext.Exact
       (dropInstantiationAtomsRaw state)
-      (@ConcreteElaboration.WireContext.extend
+      (@Concrete.Elaboration.WireContext.extend
         (dropInstantiationAtomsRaw state) targetOuter state.bubble)
       state.bubble := by
     apply exact_to_drop state
     simpa only [drop_exactScopeWires] using targetExact
-  have droppedCover : @ConcreteElaboration.BinderContext.Covers
+  have droppedCover : @Concrete.Elaboration.BinderContext.Covers
       (dropInstantiationAtomsRaw state) source.rels targetBinders
       state.bubble := binderCover_to_drop state targetBinders state.bubble
         targetCover
-  let targetCompilation := ConcreteElaboration.compileRegion?_complete
+  let targetCompilation := Concrete.Elaboration.compileRegion?_complete
       (InstantiationDrop.raw_wellFormed state) droppedDepth fuelEq droppedExact
       droppedCover
   let targetBody := Classical.choose targetCompilation
@@ -1037,12 +1039,12 @@ noncomputable def bubblePresentation_of_coalesced
       state.bubble targetOuter targetBinders = some targetBody := by
     exact (drop_compileRegion_eq_survivor state targetFuel state.bubble
       targetOuter targetBinders).symm.trans targetCompiledDropped
-  have contextsAgree : ConcreteElaboration.WireContextsAgree droppedIso
+  have contextsAgree : Concrete.Elaboration.WireContextsAgree droppedIso
       source.outer targetOuter ambient := by
     intro index
     simpa [ambient, actualIso, droppedIso,
       attachmentRespectingDroppedStateIso,
-      Splice.Input.coalescedFrameIsoOfAttachmentsRespectBoundary] using
+      Concrete.Splice.Input.coalescedFrameIsoOfAttachmentsRespectBoundary] using
       inheritedWireEquivIso_spec actualIso state.bubble source.outer targetOuter
         sourceExact targetExact index
   have sourceCompiled : compileSurvivorRegion?  coalesced source.fuel
@@ -1090,11 +1092,11 @@ noncomputable def bubblePresentation_of_coalesced
       rw [wireEq] at mappedWire
       have parameterImage : actualIso.wires (coalesced.parameters position) =
           state.parameters position := by
-        change Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
+        change Concrete.Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
             spliceInput respects
             (spliceInput.quotientWire (state.parameters position)) =
           state.parameters position
-        exact Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary_quotientWire
+        exact Concrete.Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary_quotientWire
           spliceInput respects (state.parameters position)
       exact mappedWire.trans parameterImage
     · change source.environment (ambient.invFun (ambient sourceIndex)) =
@@ -1124,15 +1126,15 @@ noncomputable def bubblePresentation_of_coalesced
 /-- Backward fixed-relation simulations compose over the executor's complete
 accepted trace, normalizing each transient quotient before the next step. -/
 theorem bubblePresentation_nonempty_of_trace
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -1158,7 +1160,7 @@ theorem bubblePresentation_nonempty_of_trace
       obtain ⟨nextPresentation⟩ := ih restSimulations target
       rw [plan.next_eq] at nextPresentation
       let hadmissible :=
-        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+        (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
       have operationalTarget : BubblePresentation plan.operationalPayload
           (advanceInstantiationState plan.materialization.result attachments
             binders plan.operationalPayload state atom tail site arguments
@@ -1178,14 +1180,14 @@ theorem bubblePresentation_nonempty_of_trace
         fixed := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using
             nextPresentation.fixed
         proxies := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using
             nextPresentation.proxies
         parameters := nextPresentation.parameters
         denotes := nextPresentation.denotes
@@ -1195,7 +1197,7 @@ theorem bubblePresentation_nonempty_of_trace
         plan.operationalPayload state atom tail site arguments hadmissible model
          relationValue values parameterValues
         (fun sourceFuel targetFuel => simulation .backward sourceFuel targetFuel
-          state.bubble (ConcreteDiagram.Encloses.refl _ _))
+          state.bubble (Concrete.Diagram.Encloses.refl _ _))
         operationalTarget
       let source := bubblePresentation_of_coalesced
         plan.materialization.result attachments binders
@@ -1217,13 +1219,13 @@ theorem bubblePresentation_nonempty_of_trace
         fixed := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using source.fixed
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using source.fixed
         proxies := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using
             source.proxies
         parameters := source.parameters
         denotes := source.denotes
@@ -1232,15 +1234,15 @@ theorem bubblePresentation_nonempty_of_trace
 /-- Choice-free clients use the propositional composition theorem above;
 semantic soundness extracts its canonical presentation only at the boundary. -/
 noncomputable def bubblePresentation_of_trace
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}

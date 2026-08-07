@@ -1,75 +1,78 @@
 import VisualProof.Rule.Soundness.Modal.EliminationCompiler
 
-namespace VisualProof.Rule.DoubleCutElimTrace
+namespace VisualProof.Concrete.DoubleCutElimTrace
+
+open VisualProof.Concrete
+open VisualProof.Rule
 
 open VisualProof
 open VisualProof.Theory
 open VisualProof.Diagram
 
 theorem finishRegion_denote_iff
-    (diagram : ConcreteDiagram)
-    (context : ConcreteElaboration.WireContext diagram)
+    (diagram : Concrete.Diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (items : ItemSeq  (context.extend region).length rels)
     (model : Model)
     (environment : Fin context.length → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
     denoteRegion model  environment relations
-        (ConcreteElaboration.finishRegion diagram context region items) ↔
+        (Concrete.Elaboration.finishRegion diagram context region items) ↔
       ∃ localEnvironment :
-          Fin (ConcreteElaboration.exactScopeWires diagram region).length →
+          Fin (Concrete.Elaboration.exactScopeWires diagram region).length →
             model.Carrier,
         denoteItemSeq model
-          (ConcreteElaboration.extendedEnvironment context region environment
+          (Concrete.Elaboration.extendedEnvironment context region environment
             localEnvironment)
           relations items := by
-  unfold ConcreteElaboration.finishRegion
+  unfold Concrete.Elaboration.finishRegion
   simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
   constructor
   · rintro ⟨localEnvironment, denotation⟩
     refine ⟨localEnvironment, ?_⟩
     exact (denoteItemSeq_renameWires model
-      (Fin.cast (ConcreteElaboration.WireContext.length_extend context region))
+      (Fin.cast (Concrete.Elaboration.WireContext.length_extend context region))
       (extendWireEnv environment localEnvironment) relations items).mp
         denotation
   · rintro ⟨localEnvironment, denotation⟩
     refine ⟨localEnvironment, ?_⟩
     exact (denoteItemSeq_renameWires model
-      (Fin.cast (ConcreteElaboration.WireContext.length_extend context region))
+      (Fin.cast (Concrete.Elaboration.WireContext.length_extend context region))
       (extendWireEnv environment localEnvironment) relations items).mpr
         denotation
 
 def emptyOuterEnvironment
     (trace : DoubleCutElimTrace input outer raw) (D : Type) :
-    Fin (ConcreteElaboration.exactScopeWires input outer).length → D :=
+    Fin (Concrete.Elaboration.exactScopeWires input outer).length → D :=
   fun index => Fin.elim0
     (Fin.cast (congrArg List.length trace.outer_exactScopeWires) index)
 
 theorem extendOuter_eq
     (trace : DoubleCutElimTrace input outer raw)
-    (context : ConcreteElaboration.WireContext input) :
+    (context : Concrete.Elaboration.WireContext input) :
     context.extend outer = context := by
-  unfold ConcreteElaboration.WireContext.extend
+  unfold Concrete.Elaboration.WireContext.extend
   rw [trace.outer_exactScopeWires]
   exact List.append_nil context
 
 theorem extendedEnvironment_outer_empty
     (trace : DoubleCutElimTrace input outer raw)
-    (context : ConcreteElaboration.WireContext input)
+    (context : Concrete.Elaboration.WireContext input)
     (environment : Fin context.length → D) :
-    ConcreteElaboration.extendedEnvironment context outer environment
+    Concrete.Elaboration.extendedEnvironment context outer environment
         (trace.emptyOuterEnvironment D) =
       fun index => environment
         (Fin.cast (congrArg List.length (trace.extendOuter_eq context))
           index) := by
   funext index
-  unfold ConcreteElaboration.extendedEnvironment emptyOuterEnvironment
+  unfold Concrete.Elaboration.extendedEnvironment emptyOuterEnvironment
   simp only [Function.comp_apply]
   let sourceLocal :
-      Fin (ConcreteElaboration.exactScopeWires input outer).length → D :=
+      Fin (Concrete.Elaboration.exactScopeWires input outer).length → D :=
     trace.emptyOuterEnvironment D
   let countEq :
-      (ConcreteElaboration.exactScopeWires input outer).length = 0 :=
+      (Concrete.Elaboration.exactScopeWires input outer).length = 0 :=
     congrArg List.length trace.outer_exactScopeWires
   have transported := VisualProof.Rule.ModalSoundness.extendWireEnv_transport
     (countEq := countEq.symm)
@@ -79,7 +82,7 @@ theorem extendedEnvironment_outer_empty
       intro impossible
       exact Fin.elim0 impossible)
     (sourceIndex := Fin.cast
-      (ConcreteElaboration.WireContext.length_extend context outer) index)
+      (Concrete.Elaboration.WireContext.length_extend context outer) index)
     (targetIndex := Fin.cast
       ((congrArg List.length (trace.extendOuter_eq context)).trans
         (Nat.add_zero context.length).symm)
@@ -90,46 +93,46 @@ theorem extendedEnvironment_outer_empty
     transported
 
 def extendedOuterIndex
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount) (index : Fin context.length) :
     Fin (context.extend region).length :=
-  Fin.cast (ConcreteElaboration.WireContext.length_extend context region).symm
+  Fin.cast (Concrete.Elaboration.WireContext.length_extend context region).symm
     (Fin.castAdd
-      (ConcreteElaboration.exactScopeWires diagram region).length index)
+      (Concrete.Elaboration.exactScopeWires diagram region).length index)
 
 def extendedLocalIndex
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
-    (index : Fin (ConcreteElaboration.exactScopeWires diagram region).length) :
+    (index : Fin (Concrete.Elaboration.exactScopeWires diagram region).length) :
     Fin (context.extend region).length :=
-  Fin.cast (ConcreteElaboration.WireContext.length_extend context region).symm
+  Fin.cast (Concrete.Elaboration.WireContext.length_extend context region).symm
     (Fin.natAdd context.length index)
 
 def localEnvironmentPart
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (environment : Fin (context.extend region).length → D) :
-    Fin (ConcreteElaboration.exactScopeWires diagram region).length → D :=
+    Fin (Concrete.Elaboration.exactScopeWires diagram region).length → D :=
   fun index => environment (extendedLocalIndex context region index)
 
 theorem extendedEnvironment_of_parts
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (outerEnvironment : Fin context.length → D)
     (environment : Fin (context.extend region).length → D)
     (outerValues : ∀ index,
       environment (extendedOuterIndex context region index) =
         outerEnvironment index) :
-    ConcreteElaboration.extendedEnvironment context region outerEnvironment
+    Concrete.Elaboration.extendedEnvironment context region outerEnvironment
         (localEnvironmentPart context region environment) =
       environment := by
   funext index
   let splitIndex := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend context region) index
+    (Concrete.Elaboration.WireContext.length_extend context region) index
   change extendWireEnv outerEnvironment
       (localEnvironmentPart context region environment) splitIndex =
     environment (Fin.cast
-      (ConcreteElaboration.WireContext.length_extend context region).symm
+      (Concrete.Elaboration.WireContext.length_extend context region).symm
       splitIndex)
   refine Fin.addCases ?_ ?_ splitIndex
   · intro outerIndex
@@ -140,56 +143,56 @@ theorem extendedEnvironment_of_parts
     rfl
 
 @[simp] theorem extendedEnvironment_outer
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (outerEnvironment : Fin context.length → D)
     (localEnvironment :
-      Fin (ConcreteElaboration.exactScopeWires diagram region).length → D)
+      Fin (Concrete.Elaboration.exactScopeWires diagram region).length → D)
     (index : Fin context.length) :
-    ConcreteElaboration.extendedEnvironment context region outerEnvironment
+    Concrete.Elaboration.extendedEnvironment context region outerEnvironment
         localEnvironment (extendedOuterIndex context region index) =
       outerEnvironment index := by
-  simp [ConcreteElaboration.extendedEnvironment, extendedOuterIndex,
+  simp [Concrete.Elaboration.extendedEnvironment, extendedOuterIndex,
     extendWireEnv, Fin.addCases_left]
 
 @[simp] theorem extendedEnvironment_local
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (outerEnvironment : Fin context.length → D)
     (localEnvironment :
-      Fin (ConcreteElaboration.exactScopeWires diagram region).length → D)
+      Fin (Concrete.Elaboration.exactScopeWires diagram region).length → D)
     (index :
-      Fin (ConcreteElaboration.exactScopeWires diagram region).length) :
-    ConcreteElaboration.extendedEnvironment context region outerEnvironment
+      Fin (Concrete.Elaboration.exactScopeWires diagram region).length) :
+    Concrete.Elaboration.extendedEnvironment context region outerEnvironment
         localEnvironment (extendedLocalIndex context region index) =
       localEnvironment index := by
-  simp [ConcreteElaboration.extendedEnvironment, extendedLocalIndex,
+  simp [Concrete.Elaboration.extendedEnvironment, extendedLocalIndex,
     extendWireEnv, Fin.addCases_right]
 
 @[simp] theorem extendedOuterIndex_get
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount) (index : Fin context.length) :
     (context.extend region).get (extendedOuterIndex context region index) =
       context.get index := by
   simpa [extendedOuterIndex,
-    ConcreteElaboration.WireContext.outerIndex] using
-      ConcreteElaboration.WireContext.extend_outer context region index
+    Concrete.Elaboration.WireContext.outerIndex] using
+      Concrete.Elaboration.WireContext.extend_outer context region index
 
 @[simp] theorem extendedLocalIndex_get
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (index :
-      Fin (ConcreteElaboration.exactScopeWires diagram region).length) :
+      Fin (Concrete.Elaboration.exactScopeWires diagram region).length) :
     (context.extend region).get (extendedLocalIndex context region index) =
-      (ConcreteElaboration.exactScopeWires diagram region).get index := by
+      (Concrete.Elaboration.exactScopeWires diagram region).get index := by
   simpa [extendedLocalIndex] using
-    ConcreteElaboration.WireContext.extend_local context region index
+    Concrete.Elaboration.WireContext.extend_local context region index
 
 theorem focusedTargetEnvironment_outer
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (sourceExact :
       (sourceContext.extend (trace.targetIndex wellFormed)).Exact
@@ -199,12 +202,12 @@ theorem focusedTargetEnvironment_outer
     (outerAgreement :
       context.indexRelation.EnvironmentsAgree sourceOuter targetOuter)
     (sourceLocal :
-      Fin (ConcreteElaboration.exactScopeWires trace.sourceDiagram
+      Fin (Concrete.Elaboration.exactScopeWires trace.sourceDiagram
         (trace.targetIndex wellFormed)).length → D)
     (targetIndex : Fin targetContext.length) :
     let focused := context.extendFocused wellFormed
     focused.targetEnvironment
-        (ConcreteElaboration.extendedEnvironment sourceContext
+        (Concrete.Elaboration.extendedEnvironment sourceContext
           (trace.targetIndex wellFormed) sourceOuter sourceLocal)
         (extendedOuterIndex targetContext trace.target targetIndex) =
       targetOuter targetIndex := by
@@ -228,7 +231,7 @@ theorem focusedTargetEnvironment_outer
         (extendedOuterIndex_get targetContext trace.target targetIndex).symm
   have sourceExtendedIndexEq :
       sourceExtendedIndex = focused.sourceIndex targetExtendedIndex :=
-    ConcreteElaboration.WireContext.lookup?_unique sourceExact.nodup
+    Concrete.Elaboration.WireContext.lookup?_unique sourceExact.nodup
       (focused.sourceIndex_lookup targetExtendedIndex) corresponding
   unfold PromotedContextWitness.targetEnvironment
   rw [← sourceExtendedIndexEq]
@@ -249,7 +252,7 @@ theorem PromotedContextWitness.targetEnvironment_eq_of_get
   have secondGet := second.sourceIndex_get secondIndex
   have indicesEqual :
       first.sourceIndex firstIndex = second.sourceIndex secondIndex := by
-    exact (ConcreteElaboration.WireContext.lookup?_unique sourceNodup
+    exact (Concrete.Elaboration.WireContext.lookup?_unique sourceNodup
       (first.sourceIndex_lookup firstIndex)
       (secondGet.trans sameWire.symm)).symm
   unfold PromotedContextWitness.targetEnvironment
@@ -258,8 +261,8 @@ theorem PromotedContextWitness.targetEnvironment_eq_of_get
 theorem selectedTargetEnvironment_outer
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (sourceExact :
       (sourceContext.extend (trace.targetIndex wellFormed)).Exact
@@ -274,7 +277,7 @@ theorem selectedTargetEnvironment_outer
         (extendedOuterIndex
           ((targetContext.extend trace.target).extend outer) trace.inner
           index) =
-      ConcreteElaboration.extendedEnvironment
+      Concrete.Elaboration.extendedEnvironment
         (targetContext.extend trace.target) outer
         (focused.targetEnvironment sourceEnvironment)
         (trace.emptyOuterEnvironment D) index := by
@@ -302,11 +305,11 @@ theorem selectedTargetEnvironment_outer
         (focused.targetEnvironment sourceEnvironment)]
 
 theorem PromotedContextWitness.source_subset_target_at_focus
-    {input : ConcreteDiagram} {outer : Fin input.regionCount}
-    {raw : ConcreteDiagram}
+    {input : Concrete.Diagram} {outer : Fin input.regionCount}
+    {raw : Concrete.Diagram}
     {trace : DoubleCutElimTrace input outer raw}
-    {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
-    {targetContext : ConcreteElaboration.WireContext input}
+    {sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram}
+    {targetContext : Concrete.Elaboration.WireContext input}
     (context : PromotedContextWitness trace sourceContext targetContext)
     (wellFormed : input.WellFormed )
     (sourceExact :
@@ -321,17 +324,17 @@ theorem PromotedContextWitness.source_subset_target_at_focus
       trace.innerWire_mem_focusExact wellFormed wire innerMember
     have extendedNodup :
         (sourceContext ++
-          ConcreteElaboration.exactScopeWires trace.sourceDiagram
+          Concrete.Elaboration.exactScopeWires trace.sourceDiagram
             (trace.targetIndex wellFormed)).Nodup := by
-      simpa [ConcreteElaboration.WireContext.extend] using sourceExact.nodup
+      simpa [Concrete.Elaboration.WireContext.extend] using sourceExact.nodup
     have parts := List.nodup_append.mp extendedNodup
     exact False.elim (parts.2.2 wire sourceMember wire focusMember rfl)
 
 theorem selectedSourceEnvironment_outer
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (sourceExact :
       (sourceContext.extend (trace.targetIndex wellFormed)).Exact
@@ -344,19 +347,19 @@ theorem selectedSourceEnvironment_outer
     (outerAgreement :
       context.indexRelation.EnvironmentsAgree sourceOuter targetOuter)
     (targetLocal :
-      Fin (ConcreteElaboration.exactScopeWires input trace.target).length → D)
+      Fin (Concrete.Elaboration.exactScopeWires input trace.target).length → D)
     (innerLocal :
-      Fin (ConcreteElaboration.exactScopeWires input trace.inner).length → D)
+      Fin (Concrete.Elaboration.exactScopeWires input trace.inner).length → D)
     (sourceIndex : Fin sourceContext.length) :
     let targetFocusEnvironment :=
-      ConcreteElaboration.extendedEnvironment targetContext trace.target
+      Concrete.Elaboration.extendedEnvironment targetContext trace.target
         targetOuter targetLocal
     let targetOuterEnvironment :=
-      ConcreteElaboration.extendedEnvironment
+      Concrete.Elaboration.extendedEnvironment
         (targetContext.extend trace.target) outer targetFocusEnvironment
         (trace.emptyOuterEnvironment D)
     let targetSelectedEnvironment :=
-      ConcreteElaboration.extendedEnvironment
+      Concrete.Elaboration.extendedEnvironment
         ((targetContext.extend trace.target).extend outer) trace.inner
         targetOuterEnvironment innerLocal
     let selected := context.extendSelected wellFormed
@@ -404,7 +407,7 @@ theorem selectedSourceEnvironment_outer
       targetSelectedIndex = selected.targetIndex
         (context.extendSelected_source_subset_target wellFormed)
         sourceExtendedIndex :=
-    ConcreteElaboration.WireContext.lookup?_unique targetSelectedNodup
+    Concrete.Elaboration.WireContext.lookup?_unique targetSelectedNodup
       (selected.targetIndex_lookup
         (context.extendSelected_source_subset_target wellFormed)
         sourceExtendedIndex)
@@ -419,7 +422,7 @@ theorem selectedSourceEnvironment_outer
 theorem targetFocused_doubleCut_denote_iff
     (trace : DoubleCutElimTrace input outer raw)
     (model : Model)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (keptItems : ItemSeq
       (targetContext.extend trace.target).length rels)
     (selectedItems : ItemSeq
@@ -428,36 +431,36 @@ theorem targetFocused_doubleCut_denote_iff
     (targetEnvironment : Fin targetContext.length → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
     denoteRegion model  targetEnvironment relations
-        (ConcreteElaboration.finishRegion input targetContext trace.target
+        (Concrete.Elaboration.finishRegion input targetContext trace.target
           (keptItems.append
             (.cons
               (.cut
-                (ConcreteElaboration.finishRegion input
+                (Concrete.Elaboration.finishRegion input
                   (targetContext.extend trace.target) outer
                   (.cons
                     (.cut
-                      (ConcreteElaboration.finishRegion input
+                      (Concrete.Elaboration.finishRegion input
                         ((targetContext.extend trace.target).extend outer)
                         trace.inner selectedItems))
                     .nil)))
               .nil))) ↔
       ∃ targetLocal :
-          Fin (ConcreteElaboration.exactScopeWires input
+          Fin (Concrete.Elaboration.exactScopeWires input
             trace.target).length → model.Carrier,
         denoteItemSeq model
-            (ConcreteElaboration.extendedEnvironment targetContext
+            (Concrete.Elaboration.extendedEnvironment targetContext
               trace.target targetEnvironment targetLocal)
             relations keptItems ∧
           ∃ innerLocal :
-              Fin (ConcreteElaboration.exactScopeWires input
+              Fin (Concrete.Elaboration.exactScopeWires input
                 trace.inner).length → model.Carrier,
             denoteItemSeq model
-              (ConcreteElaboration.extendedEnvironment
+              (Concrete.Elaboration.extendedEnvironment
                 ((targetContext.extend trace.target).extend outer)
                 trace.inner
-                (ConcreteElaboration.extendedEnvironment
+                (Concrete.Elaboration.extendedEnvironment
                   (targetContext.extend trace.target) outer
-                  (ConcreteElaboration.extendedEnvironment targetContext
+                  (Concrete.Elaboration.extendedEnvironment targetContext
                     trace.target targetEnvironment targetLocal)
                   (trace.emptyOuterEnvironment model.Carrier))
                 innerLocal)
@@ -473,13 +476,13 @@ theorem targetFocused_doubleCut_denote_iff
   · intro doubleNegation
     have innerRegion :
         denoteRegion model
-          (ConcreteElaboration.extendedEnvironment
+          (Concrete.Elaboration.extendedEnvironment
             (targetContext.extend trace.target) outer
-            (ConcreteElaboration.extendedEnvironment targetContext
+            (Concrete.Elaboration.extendedEnvironment targetContext
               trace.target targetEnvironment targetLocal)
             (trace.emptyOuterEnvironment model.Carrier))
           relations
-          (ConcreteElaboration.finishRegion input
+          (Concrete.Elaboration.finishRegion input
             ((targetContext.extend trace.target).extend outer)
             trace.inner selectedItems) := by
       apply Classical.byContradiction
@@ -491,9 +494,9 @@ theorem targetFocused_doubleCut_denote_iff
     exact (finishRegion_denote_iff input
       ((targetContext.extend trace.target).extend outer) trace.inner
       selectedItems model
-      (ConcreteElaboration.extendedEnvironment
+      (Concrete.Elaboration.extendedEnvironment
         (targetContext.extend trace.target) outer
-        (ConcreteElaboration.extendedEnvironment targetContext trace.target
+        (Concrete.Elaboration.extendedEnvironment targetContext trace.target
           targetEnvironment targetLocal)
         (trace.emptyOuterEnvironment model.Carrier))
       relations).mp innerRegion
@@ -501,9 +504,9 @@ theorem targetFocused_doubleCut_denote_iff
     have innerRegion := (finishRegion_denote_iff input
       ((targetContext.extend trace.target).extend outer) trace.inner
       selectedItems model
-      (ConcreteElaboration.extendedEnvironment
+      (Concrete.Elaboration.extendedEnvironment
         (targetContext.extend trace.target) outer
-        (ConcreteElaboration.extendedEnvironment targetContext trace.target
+        (Concrete.Elaboration.extendedEnvironment targetContext trace.target
           targetEnvironment targetLocal)
         (trace.emptyOuterEnvironment model.Carrier))
       relations).mpr innerItems
@@ -516,13 +519,13 @@ theorem targetFocused_doubleCut_denote_iff
     subst outerLocal
     have notInner :
         ¬ denoteRegion model
-          (ConcreteElaboration.extendedEnvironment
+          (Concrete.Elaboration.extendedEnvironment
             (targetContext.extend trace.target) outer
-            (ConcreteElaboration.extendedEnvironment targetContext
+            (Concrete.Elaboration.extendedEnvironment targetContext
               trace.target targetEnvironment targetLocal)
             (trace.emptyOuterEnvironment model.Carrier))
           relations
-          (ConcreteElaboration.finishRegion input
+          (Concrete.Elaboration.finishRegion input
             ((targetContext.extend trace.target).extend outer)
             trace.inner selectedItems) := by
       simpa only [denoteItemSeq_cons, denoteItemSeq_nil, and_true,
@@ -533,23 +536,23 @@ theorem sourceFocused_partition_denote_iff
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
     (model : Model)
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
     (keptItems selectedItems : ItemSeq
       (sourceContext.extend (trace.targetIndex wellFormed)).length rels)
     (sourceEnvironment : Fin sourceContext.length → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
     denoteRegion model  sourceEnvironment relations
-        (ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
+        (Concrete.Elaboration.finishRegion trace.sourceDiagram sourceContext
           (trace.targetIndex wellFormed) (keptItems.append selectedItems)) ↔
       ∃ sourceLocal :
-          Fin (ConcreteElaboration.exactScopeWires trace.sourceDiagram
+          Fin (Concrete.Elaboration.exactScopeWires trace.sourceDiagram
             (trace.targetIndex wellFormed)).length → model.Carrier,
         denoteItemSeq model
-            (ConcreteElaboration.extendedEnvironment sourceContext
+            (Concrete.Elaboration.extendedEnvironment sourceContext
               (trace.targetIndex wellFormed) sourceEnvironment sourceLocal)
             relations keptItems ∧
           denoteItemSeq model
-            (ConcreteElaboration.extendedEnvironment sourceContext
+            (Concrete.Elaboration.extendedEnvironment sourceContext
               (trace.targetIndex wellFormed) sourceEnvironment sourceLocal)
             relations selectedItems := by
   rw [finishRegion_denote_iff]
@@ -560,11 +563,11 @@ theorem sourceFocused_partition_denote_iff
 theorem targetSelected_exact
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
-    (targetContext : ConcreteElaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (targetExact : (targetContext.extend trace.target).Exact trace.target) :
     (((targetContext.extend trace.target).extend outer).extend
       trace.inner).Exact trace.inner := by
   have outerExact := targetExact.extend_child wellFormed trace.outer_parent
   exact outerExact.extend_child wellFormed trace.inner_parent
 
-end VisualProof.Rule.DoubleCutElimTrace
+end VisualProof.Concrete.DoubleCutElimTrace

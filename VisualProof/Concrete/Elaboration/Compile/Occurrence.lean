@@ -1,0 +1,70 @@
+import VisualProof.Concrete.Elaboration.Compile.Certified
+
+namespace VisualProof.Concrete
+
+open VisualProof.Diagram
+
+open Elaboration
+open VisualProof.Data.Finite
+open VisualProof.Theory
+
+namespace OpenOccurrenceEquiv
+
+/-- Certified ordered occurrence equivalence commutes with elaboration. -/
+def elaborate_equivalent {source target : OpenDiagram}
+    (equiv : OpenOccurrenceEquiv source target)
+    (hsource : source.WellFormed )
+    (htarget : target.WellFormed ) :
+    OpenDiagramIso (source.elaborate hsource)
+      ((target.elaborate htarget).castArity
+        equiv.boundary_length_eq.symm) := by
+  have hambient : CertifiedWireContextsAgree equiv.diagram
+      source.exposedWires target.exposedWires equiv.exposedWiresEquiv :=
+    equiv.exposedWiresEquiv_spec
+  have hlocal : CertifiedWireContextsAgree equiv.diagram
+      source.hiddenWires target.hiddenWires equiv.hiddenWiresEquiv :=
+    equiv.hiddenWiresEquiv_spec
+  have hwires := certifiedAppendContextsAgree hambient hlocal
+  have htargetExact : Elaboration.WireContext.Exact
+      (target.exposedWires ++ target.hiddenWires) target.diagram.root := by
+    simpa only [OpenDiagram.rootWires] using
+      Elaboration.openRootWires_exact htarget
+  have hbody : RegionIso  equiv.exposedWiresEquiv []
+      (source.elaborate hsource).body (target.elaborate htarget).body := by
+    obtain ⟨sourceBody, hsourceKernel, hsourceElaborate⟩ :=
+      CheckedOpen.elaborate_body_computation
+        (show CheckedOpen  from ⟨source, hsource⟩)
+    obtain ⟨targetBody, htargetKernel, htargetElaborate⟩ :=
+      CheckedOpen.elaborate_body_computation
+        (show CheckedOpen  from ⟨target, htarget⟩)
+    change (source.elaborate hsource).body = sourceBody at hsourceElaborate
+    change (target.elaborate htarget).body = targetBody at htargetElaborate
+    rw [hsourceElaborate, htargetElaborate]
+    exact compileRoot?_certifiedEquivariant equiv.diagram
+      htarget.diagram_well_formed hwires htargetExact
+      hsourceKernel htargetKernel
+  apply OpenDiagramIso.ofArityEq equiv.boundary_length_eq
+    equiv.exposedWiresEquiv
+  · intro position
+    simpa only [OpenDiagram.elaborate_boundary] using
+      equiv.boundaryClass_commute position
+  · exact hbody
+
+/-- Public ordered-open semantic contract for a certified occurrence. -/
+theorem denote_iff {source target : OpenDiagram}
+    (equiv : OpenOccurrenceEquiv source target)
+    (hsource : source.WellFormed )
+    (htarget : target.WellFormed )
+    (model : Model)
+    (args : Fin source.boundary.length → model.Carrier) :
+    denoteOpen model  (source.elaborate hsource) args ↔
+      denoteOpen model
+        ((target.elaborate htarget).castArity
+          equiv.boundary_length_eq.symm) args :=
+  (equiv.elaborate_equivalent hsource htarget).denoteOpen_iff model  args
+
+end OpenOccurrenceEquiv
+
+
+
+end VisualProof.Concrete

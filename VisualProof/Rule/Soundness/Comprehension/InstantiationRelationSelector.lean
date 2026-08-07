@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Modal.VacuousElimination
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -13,13 +15,13 @@ namespace InstantiationSemantic
 binder spine uses the first certified copy as a reference; the zero-spine case
 uses the authoritative open-comprehension interpretation directly. -/
 noncomputable def relationOfTraceFocus
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -43,13 +45,13 @@ noncomputable def relationOfTraceFocus
 /-- The relation selected from a nonempty executor trace satisfies the one
 trace-wide relation contract consumed by every copy simulation. -/
 theorem relationOfTraceFocus_contract_of_step
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -93,20 +95,20 @@ theorem relationOfTraceFocus_contract_of_step
 reconstruction.  The selector reads ordered parameters and enclosing proxy
 relations before pushing the selected bubble binder. -/
 noncomputable def finalFocusRelationSelector
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (targetWellFormed :
@@ -146,7 +148,7 @@ noncomputable def finalFocusRelationSelector
   | step traceFuel _ _ atom tail site candidate arguments plan pending_eq
       node_eq candidate_eq arguments_eq rest =>
       let hadmissible :=
-        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+        (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
       let initialTargets : BinderTargetsAtBubble payload
           (initialInstantiationState payload) := {
         target_shape := hadmissible.binder_targets_match
@@ -175,13 +177,13 @@ focus is exactly the trace-wide relation selected from the first certified
 copy.  This equality is kept explicit so the focused semantic proof can reuse
 the same witness before existential bubble semantics hides it. -/
 theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {traceFuel : Nat}
     {result : InstantiationState input attachments.length
@@ -203,19 +205,19 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
       (initialInstantiationState payload) atom tail site arguments}
     {rest : InstantiationTrace comprehension attachments binders payload
       traceFuel plan.next result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (targetWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
     (model : Model)
     {sourceRels targetRels : RelCtx}
-    (sourceContext : ConcreteElaboration.WireContext elimTrace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext elimTrace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext
       (dropInstantiationAtomsRaw result))
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       elimTrace.sourceDiagram sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       (dropInstantiationAtomsRaw result) targetRels)
     (sourceExact : sourceContext.Exact
       (elimTrace.targetIndex targetWellFormed))
@@ -223,10 +225,10 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
     (sourceCover : sourceBinders.Covers
       (elimTrace.targetIndex targetWellFormed))
     (targetCover : targetBinders.Covers elimTrace.parent)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       elimTrace.sourceDiagram sourceBinders
         (elimTrace.targetIndex targetWellFormed))
-    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (targetEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (dropInstantiationAtomsRaw result) targetBinders elimTrace.parent)
     (binderWitness : VacuousElimTrace.MappedBinderWitness elimTrace
       sourceBinders targetBinders)
@@ -263,7 +265,7 @@ theorem finalFocusRelationSelector_eq_relationOfTraceFocus_of_step
     let parameterValues := parameterValuesOfExact result finalScopes
       targetContext stateExact targetEnvironment
     let hadmissible :=
-      (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+      (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
     let initialTargets : BinderTargetsAtBubble payload
         (initialInstantiationState payload) := {
       target_shape := hadmissible.binder_targets_match

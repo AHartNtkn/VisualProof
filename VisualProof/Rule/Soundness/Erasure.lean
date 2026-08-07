@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Contextual
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open Theory
 open Diagram
 

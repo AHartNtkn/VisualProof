@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Iteration.KeptRoute
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -29,20 +31,20 @@ theorem denoteRegion_mk_zero_iff
 route block and the selected ancestor resource, with no fresh wire witnesses
 introduced by either factor. -/
 theorem compilerLeaf_selection_factor
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     {outer : Nat} {rels : RelCtx}
     {body : Region  outer rels}
-    (leaf : Splice.Region.ContextPath.CompilerLeaf input.val
+    (leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
       selection.val.anchor (.here body)) :
     ∃ (keptItems selectedItems : ItemSeq
         (leaf.inheritedWires.extend selection.val.anchor).length rels),
-      ConcreteElaboration.compileOccurrencesWith?  input.val
-          (ConcreteElaboration.compileRegion?  input.val leaf.fuel)
+      Concrete.Elaboration.compileOccurrencesWith?  input.val
+          (Concrete.Elaboration.compileRegion?  input.val leaf.fuel)
           (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
           (keptOccurrences input.val selection) = some keptItems ∧
-        ConcreteElaboration.compileOccurrencesWith?  input.val
-          (ConcreteElaboration.compileRegion?  input.val leaf.fuel)
+        Concrete.Elaboration.compileOccurrencesWith?  input.val
+          (Concrete.Elaboration.compileRegion?  input.val leaf.fuel)
           (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
           (selectedOccurrences input.val selection) = some selectedItems ∧
         ∀ (model : Model)

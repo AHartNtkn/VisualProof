@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Iteration.DeiterationSpliceMap
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -13,59 +15,59 @@ private theorem finCount_eq_of_equiv
   · exact fin_card_le_of_injective equiv.symm equiv.symm.injective
 
 private theorem deiterationMapFrameRegion_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (region : CRegion (deiterationRemoved input selection).val.regionCount) :
     (((deiterationReinsertInput input selection witness).plugLayout
       |>.mapFrameRegion region).rename
         (deiterationOutputRegionEquiv input selection witness)) =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.mapFrameRegion region := by
   cases region <;>
-    simp [Splice.Input.PlugLayout.mapFrameRegion,
+    simp [Concrete.Splice.Input.PlugLayout.mapFrameRegion,
       CRegion.rename, deiterationOutputRegionEquiv_frame] <;> rfl
 
 theorem deiterationMapPatternRegion_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (region : CRegion
       (deiterationReinsertInput input selection witness).pattern.val.diagram.regionCount) :
     (((deiterationReinsertInput input selection witness).plugLayout
       |>.mapPatternRegion region).rename
         (deiterationOutputRegionEquiv input selection witness)) =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.mapPatternRegion
           (region.rename
             (deiterationPatternOccurrenceEquiv input selection witness).diagram.regions) := by
   cases region with
   | sheet =>
-      simp only [Splice.Input.PlugLayout.mapPatternRegion, CRegion.rename]
+      simp only [Concrete.Splice.Input.PlugLayout.mapPatternRegion, CRegion.rename]
       rw [deiterationOutputRegionEquiv_frame]
       rfl
   | cut parent =>
-      simp only [Splice.Input.PlugLayout.mapPatternRegion, CRegion.rename]
+      simp only [Concrete.Splice.Input.PlugLayout.mapPatternRegion, CRegion.rename]
       rw [deiterationOutputRegionEquiv_body]
       rfl
   | bubble parent arity =>
-      simp only [Splice.Input.PlugLayout.mapPatternRegion, CRegion.rename]
+      simp only [Concrete.Splice.Input.PlugLayout.mapPatternRegion, CRegion.rename]
       rw [deiterationOutputRegionEquiv_body]
       rfl
 
 theorem deiterationOutputRegion_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (region : Fin
       (deiterationReinsertInput input selection witness).plugLayout.plugRaw.regionCount) :
     ((deiterationReinsertInput input selection witness).plugLayout.plugRaw.regions
         region).rename (deiterationOutputRegionEquiv input selection witness) =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.plugRaw.regions
           (deiterationOutputRegionEquiv input selection witness region) := by
   let source := deiterationReinsertInput input selection witness
-  let target := Splice.Decomposition.originalFragmentInput
+  let target := Concrete.Splice.Decomposition.originalFragmentInput
     (deiterationDecomposition input selection)
   let occurrence := deiterationPatternOccurrenceEquiv input selection witness
   let sourceLayout := source.plugLayout
@@ -111,27 +113,27 @@ theorem deiterationOutputRegion_eq
             (sourceLayout.materialRegions.origin material))
 
 private theorem deiterationMapFrameNode_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (node : CNode (deiterationRemoved input selection).val.regionCount) :
     (((deiterationReinsertInput input selection witness).plugLayout
       |>.mapFrameNode node).rename
         (deiterationOutputRegionEquiv input selection witness)) =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.mapFrameNode node := by
   cases node <;>
-    simp [Splice.Input.PlugLayout.mapFrameNode, CNode.rename,
+    simp [Concrete.Splice.Input.PlugLayout.mapFrameNode, CNode.rename,
       deiterationOutputRegionEquiv_frame] <;> rfl
 
 private noncomputable def deiterationMapPatternNode_corresponds
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     {sourceNode : CNode
       (deiterationReinsertInput input selection witness).pattern.val.diagram.regionCount}
     {targetNode : CNode
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).pattern.val.diagram.regionCount}
     (certified : CNode.CertifiedCorresponds
       (deiterationPatternOccurrenceEquiv input selection witness).diagram.regions
@@ -140,11 +142,11 @@ private noncomputable def deiterationMapPatternNode_corresponds
       (deiterationOutputRegionEquiv input selection witness)
       ((deiterationReinsertInput input selection witness).plugLayout
         |>.mapPatternNode sourceNode)
-      ((Splice.Decomposition.originalFragmentInput
+      ((Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout
           |>.mapPatternNode targetNode) := by
   let sourceLayout := (deiterationReinsertInput input selection witness).plugLayout
-  let targetLayout := (Splice.Decomposition.originalFragmentInput
+  let targetLayout := (Concrete.Splice.Decomposition.originalFragmentInput
     (deiterationDecomposition input selection)).plugLayout
   cases certified with
   | identity sourceRegion targetRegion arity regionEq =>
@@ -162,19 +164,19 @@ private noncomputable def deiterationMapPatternNode_corresponds
         ((deiterationOutputRegionEquiv_binder input selection witness sourceBinder).trans
           (congrArg targetLayout.binderRegion binderEq))
 noncomputable def deiterationOutputNode_correspond
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (node : Fin
       (deiterationReinsertInput input selection witness).plugLayout.plugRaw.nodeCount) :
     CNode.CertifiedCorresponds
       (deiterationOutputRegionEquiv input selection witness)
       ((deiterationReinsertInput input selection witness).plugLayout.plugRaw.nodes node)
-      ((Splice.Decomposition.originalFragmentInput
+      ((Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.plugRaw.nodes
           (deiterationOutputNodeEquiv input selection witness node)) := by
   let source := deiterationReinsertInput input selection witness
-  let target := Splice.Decomposition.originalFragmentInput
+  let target := Concrete.Splice.Decomposition.originalFragmentInput
     (deiterationDecomposition input selection)
   let occurrence := deiterationPatternOccurrenceEquiv input selection witness
   let sourceLayout := source.plugLayout
@@ -207,80 +209,80 @@ noncomputable def deiterationOutputNode_correspond
       (occurrence.diagram.nodes_correspond patternNode)
 
 theorem deiterationCoalescedScope_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (quotient :
       (deiterationReinsertInput input selection witness).wireQuotient.Carrier) :
     (deiterationReinsertInput input selection witness).coalescedScope quotient =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).coalescedScope
           (deiterationQuotientEquiv input selection witness quotient) := by
   change (iterationInput (deiterationRemoved input selection)
       (deiterationRetainedSelection input selection witness)
       (deiterationReinsertTarget input selection)).coalescedScope quotient = _
   rw [iterationCoalescedScope_eq,
-    Splice.Decomposition.originalCoalescedScope_eq,
+    Concrete.Splice.Decomposition.originalCoalescedScope_eq,
     deiterationQuotientEquiv_origin]
   rfl
 
 theorem deiterationCoalescedEndpoints_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (quotient :
       (deiterationReinsertInput input selection witness).wireQuotient.Carrier) :
     (deiterationReinsertInput input selection witness).coalescedEndpoints quotient =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).coalescedEndpoints
           (deiterationQuotientEquiv input selection witness quotient) := by
   change (iterationInput (deiterationRemoved input selection)
       (deiterationRetainedSelection input selection witness)
       (deiterationReinsertTarget input selection)).coalescedEndpoints quotient = _
   rw [iterationCoalescedEndpoints_eq,
-    Splice.Decomposition.originalCoalescedEndpoints_eq,
+    Concrete.Splice.Decomposition.originalCoalescedEndpoints_eq,
     deiterationQuotientEquiv_origin]
   rfl
 
 theorem deiterationMapFrameEndpoint_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (endpoint : CEndpoint (deiterationRemoved input selection).val.nodeCount) :
     (((deiterationReinsertInput input selection witness).plugLayout
       |>.mapFrameEndpoint endpoint).rename
         (deiterationOutputNodeEquiv input selection witness)) =
-      ((Splice.Decomposition.originalFragmentInput
+      ((Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout
           |>.mapFrameEndpoint endpoint) := by
   cases endpoint
-  simp [Splice.Input.PlugLayout.mapFrameEndpoint,
+  simp [Concrete.Splice.Input.PlugLayout.mapFrameEndpoint,
     CEndpoint.rename, deiterationOutputNodeEquiv_frame]
   rfl
 
 theorem deiterationMapPatternEndpoint_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (endpoint : CEndpoint
       (deiterationReinsertInput input selection witness).pattern.val.diagram.nodeCount) :
     (((deiterationReinsertInput input selection witness).plugLayout
       |>.mapPatternEndpoint endpoint).rename
         (deiterationOutputNodeEquiv input selection witness)) =
-      ((Splice.Decomposition.originalFragmentInput
+      ((Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout
           |>.mapPatternEndpoint
             (endpoint.rename
               (deiterationPatternOccurrenceEquiv input selection witness).diagram.nodes)) := by
   cases endpoint
-  simp [Splice.Input.PlugLayout.mapPatternEndpoint,
+  simp [Concrete.Splice.Input.PlugLayout.mapPatternEndpoint,
     CEndpoint.rename, deiterationOutputNodeEquiv_pattern]
   rfl
 
 theorem deiterationMapPatternWire_scope_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (wire : Fin
       (deiterationReinsertInput input selection witness).pattern.val.diagram.wireCount) :
     deiterationOutputRegionEquiv input selection witness
@@ -288,56 +290,56 @@ theorem deiterationMapPatternWire_scope_eq
           |>.mapPatternWire
             ((deiterationReinsertInput input selection witness).pattern.val.diagram.wires
               wire)).scope) =
-      (((Splice.Decomposition.originalFragmentInput
+      (((Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout
           |>.mapPatternWire
-            ((Splice.Decomposition.originalFragmentInput
+            ((Concrete.Splice.Decomposition.originalFragmentInput
               (deiterationDecomposition input selection)).pattern.val.diagram.wires
                 ((deiterationPatternOccurrenceEquiv input selection witness).diagram.wires
                   wire))).scope) := by
-  simp only [Splice.Input.PlugLayout.mapPatternWire]
+  simp only [Concrete.Splice.Input.PlugLayout.mapPatternWire]
   rw [deiterationOutputRegionEquiv_body]
   exact congrArg
-    (Splice.Decomposition.originalFragmentInput
+    (Concrete.Splice.Decomposition.originalFragmentInput
       (deiterationDecomposition input selection)).plugLayout.bodyRegion
     ((deiterationPatternOccurrenceEquiv input selection witness).diagram.wire_scope_eq wire)
 
 theorem deiterationReinsertInput_pattern
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationReinsertInput input selection witness).pattern =
       selectedFragment (deiterationRemoved input selection)
         (deiterationRetainedSelection input selection witness) := by
   rfl
 
 theorem deiterationOriginalFragmentInput_pattern
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val) :
-    (Splice.Decomposition.originalFragmentInput
+    (Concrete.Splice.Decomposition.originalFragmentInput
       (deiterationDecomposition input selection)).pattern =
         selectedFragment input selection := by
   rfl
 
 theorem deiterationMapPatternWire_endpoints_perm
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (wire : Fin
       (deiterationReinsertInput input selection witness).pattern.val.diagram.wireCount) :
     (((deiterationReinsertInput input selection witness).plugLayout.mapPatternWire
         ((deiterationReinsertInput input selection witness).pattern.val.diagram.wires
           wire)).endpoints.map
       (CEndpoint.rename (deiterationOutputNodeEquiv input selection witness))).Perm
-        ((Splice.Decomposition.originalFragmentInput
+        ((Concrete.Splice.Decomposition.originalFragmentInput
           (deiterationDecomposition input selection)).plugLayout.mapPatternWire
-            ((Splice.Decomposition.originalFragmentInput
+            ((Concrete.Splice.Decomposition.originalFragmentInput
               (deiterationDecomposition input selection)).pattern.val.diagram.wires
                 ((deiterationPatternOccurrenceEquiv input selection witness).diagram.wires
                   wire))).endpoints := by
   let occurrence := deiterationPatternOccurrenceEquiv input selection witness
   let sourceLayout := (deiterationReinsertInput input selection witness).plugLayout
-  let targetLayout := (Splice.Decomposition.originalFragmentInput
+  let targetLayout := (Concrete.Splice.Decomposition.originalFragmentInput
     (deiterationDecomposition input selection)).plugLayout
   have mapped := (occurrence.diagram.wire_endpoints_perm wire).map
     targetLayout.mapPatternEndpoint
@@ -375,13 +377,13 @@ theorem deiterationMapPatternWire_endpoints_perm
   exact mapped
 
 theorem deiterationAttachment_alignment
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (position : Fin
       (deiterationReinsertInput input selection witness).pattern.val.boundary.length) :
     (deiterationReinsertInput input selection witness).attachment position =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).attachment
           (Fin.cast
             (deiterationPatternOccurrenceEquiv input selection witness).boundary_length_eq
@@ -397,7 +399,7 @@ theorem deiterationAttachment_alignment
     Fin.cast (deiterationTouchingWireLengthEq input selection witness)
       retainedPosition
   let targetPosition : Fin
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).pattern.val.boundary.length :=
     Fin.cast occurrence.boundary_length_eq position
   let selectionPosition : Fin selection.touchingWires.length :=
@@ -406,13 +408,13 @@ theorem deiterationAttachment_alignment
   change domains.wires.origin
       (retained.touchingWires.get retainedPosition) =
     domains.wires.origin
-      (Splice.Decomposition.originalAttachment
+      (Concrete.Splice.Decomposition.originalAttachment
         (deiterationDecomposition input selection)
           targetPosition)
   rw [deiterationRetained_touchingWire_get_origin]
   have targetOrigin :
       domains.wires.origin
-          (Splice.Decomposition.originalAttachment
+          (Concrete.Splice.Decomposition.originalAttachment
             (deiterationDecomposition input selection) targetPosition) =
         selection.touchingWires.get selectionPosition := by
     change domains.wires.origin
@@ -425,47 +427,47 @@ theorem deiterationAttachment_alignment
   simpa only [List.get_eq_getElem, Fin.val_cast] using transported
 
 @[simp] theorem deiterationQuotientEquiv_quotientWire
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (wire : Fin (deiterationRemoved input selection).val.wireCount) :
     deiterationQuotientEquiv input selection witness
         ((deiterationReinsertInput input selection witness).quotientWire wire) =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).quotientWire wire := by
-  apply (Splice.Decomposition.originalQuotientWireEquiv
+  apply (Concrete.Splice.Decomposition.originalQuotientWireEquiv
     (deiterationDecomposition input selection)).injective
   rw [deiterationQuotientEquiv_origin,
-    Splice.Decomposition.originalQuotientWireEquiv_quotientWire]
+    Concrete.Splice.Decomposition.originalQuotientWireEquiv_quotientWire]
   exact iterationQuotientWireEquiv_quotientWire
     (deiterationRemoved input selection)
     (deiterationRetainedSelection input selection witness)
     (deiterationReinsertTarget input selection) wire
 
 theorem deiterationExposedAttachment_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (sourceExternal : Fin
       (deiterationReinsertInput input selection witness).pattern.val.exposedWires.length)
     (targetExternal : Fin
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).pattern.val.exposedWires.length)
     (wireEq :
       (deiterationPatternOccurrenceEquiv input selection witness).diagram.wires
           ((deiterationReinsertInput input selection witness).pattern.val.exposedWires.get
             sourceExternal) =
-        (Splice.Decomposition.originalFragmentInput
+        (Concrete.Splice.Decomposition.originalFragmentInput
           (deiterationDecomposition input selection)).pattern.val.exposedWires.get
             targetExternal) :
     deiterationQuotientEquiv input selection witness
         ((deiterationReinsertInput input selection witness).plugLayout.exposedAttachment
           sourceExternal) =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.exposedAttachment
           targetExternal := by
   let source := deiterationReinsertInput input selection witness
-  let target := Splice.Decomposition.originalFragmentInput
+  let target := Concrete.Splice.Decomposition.originalFragmentInput
     (deiterationDecomposition input selection)
   let occurrence := deiterationPatternOccurrenceEquiv input selection witness
   let sourcePosition := source.plugLayout.exposedPosition sourceExternal
@@ -494,22 +496,22 @@ theorem deiterationExposedAttachment_eq
       _ = _ := targetWire.symm
   have positionEq : Fin.cast occurrence.boundary_length_eq sourcePosition =
       targetPosition := by
-    exact Splice.Decomposition.originalBoundary_get_injective
+    exact Concrete.Splice.Decomposition.originalBoundary_get_injective
       (deiterationDecomposition input selection) boundaryEq
-  unfold Splice.Input.PlugLayout.exposedAttachment
+  unfold Concrete.Splice.Input.PlugLayout.exposedAttachment
   rw [deiterationQuotientEquiv_quotientWire]
   apply congrArg target.quotientWire
   rw [deiterationAttachment_alignment input selection witness sourcePosition]
   exact congrArg target.attachment positionEq
 
 theorem deiterationMappedBoundaryEndpoints_mem_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (quotient :
       (deiterationReinsertInput input selection witness).wireQuotient.Carrier)
     (endpoint : CEndpoint
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.nodeCount) :
     endpoint ∈
         ((deiterationReinsertInput input selection witness).plugLayout
@@ -517,11 +519,11 @@ theorem deiterationMappedBoundaryEndpoints_mem_iff
             (CEndpoint.rename
               (deiterationOutputNodeEquiv input selection witness))) ↔
       endpoint ∈
-        (Splice.Decomposition.originalFragmentInput
+        (Concrete.Splice.Decomposition.originalFragmentInput
           (deiterationDecomposition input selection)).plugLayout.boundaryEndpoints
             (deiterationQuotientEquiv input selection witness quotient) := by
   let source := deiterationReinsertInput input selection witness
-  let target := Splice.Decomposition.originalFragmentInput
+  let target := Concrete.Splice.Decomposition.originalFragmentInput
     (deiterationDecomposition input selection)
   let occurrence := deiterationPatternOccurrenceEquiv input selection witness
   let sourceLayout := source.plugLayout
@@ -629,20 +631,20 @@ private theorem deiterationPerm_of_nodup_and_mem_iff
     simp [member, otherNotMember]
 
 theorem deiterationBoundaryEndpoints_perm
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (quotient :
       (deiterationReinsertInput input selection witness).wireQuotient.Carrier) :
     ((deiterationReinsertInput input selection witness).plugLayout.boundaryEndpoints
         quotient |>.map
           (CEndpoint.rename
             (deiterationOutputNodeEquiv input selection witness))).Perm
-      ((Splice.Decomposition.originalFragmentInput
+      ((Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.boundaryEndpoints
           (deiterationQuotientEquiv input selection witness quotient)) := by
   let sourceLayout := (deiterationReinsertInput input selection witness).plugLayout
-  let targetLayout := (Splice.Decomposition.originalFragmentInput
+  let targetLayout := (Concrete.Splice.Decomposition.originalFragmentInput
     (deiterationDecomposition input selection)).plugLayout
   apply deiterationPerm_of_nodup_and_mem_iff
   · apply List.Pairwise.map
@@ -658,19 +660,19 @@ theorem deiterationBoundaryEndpoints_perm
   · exact deiterationMappedBoundaryEndpoints_mem_iff input selection witness quotient
 
 theorem deiterationMappedCoalescedEndpoints_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (quotient :
       (deiterationReinsertInput input selection witness).wireQuotient.Carrier) :
     ((((deiterationReinsertInput input selection witness).coalescedEndpoints quotient).map
         (deiterationReinsertInput input selection witness).plugLayout.mapFrameEndpoint).map
           (CEndpoint.rename
             (deiterationOutputNodeEquiv input selection witness))) =
-      ((Splice.Decomposition.originalFragmentInput
+      ((Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).coalescedEndpoints
           (deiterationQuotientEquiv input selection witness quotient)).map
-            (Splice.Decomposition.originalFragmentInput
+            (Concrete.Splice.Decomposition.originalFragmentInput
               (deiterationDecomposition input selection)).plugLayout.mapFrameEndpoint := by
   let endpoints :=
     (deiterationReinsertInput input selection witness).coalescedEndpoints quotient
@@ -680,7 +682,7 @@ theorem deiterationMappedCoalescedEndpoints_eq
         (CEndpoint.rename
           (deiterationOutputNodeEquiv input selection witness)) =
     endpoints.map
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.mapFrameEndpoint
   induction endpoints with
   | nil => rfl
@@ -689,26 +691,26 @@ theorem deiterationMappedCoalescedEndpoints_eq
         ((deiterationReinsertInput input selection witness).plugLayout
             |>.mapFrameEndpoint endpoint).rename
               (deiterationOutputNodeEquiv input selection witness) :: _ =
-          ((Splice.Decomposition.originalFragmentInput
+          ((Concrete.Splice.Decomposition.originalFragmentInput
             (deiterationDecomposition input selection)).plugLayout
               |>.mapFrameEndpoint endpoint) :: _
       rw [deiterationMapFrameEndpoint_eq input selection witness endpoint, induction]
       rfl
 
 theorem deiterationOutputWire_scope_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (wire : Fin
       (deiterationReinsertInput input selection witness).plugLayout.plugRaw.wireCount) :
     deiterationOutputRegionEquiv input selection witness
         ((deiterationReinsertInput input selection witness).plugLayout.plugRaw.wires
           wire).scope =
-      ((Splice.Decomposition.originalFragmentInput
+      ((Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.plugRaw.wires
           (deiterationOutputWireEquiv input selection witness wire)).scope := by
   let source := deiterationReinsertInput input selection witness
-  let target := Splice.Decomposition.originalFragmentInput
+  let target := Concrete.Splice.Decomposition.originalFragmentInput
     (deiterationDecomposition input selection)
   let sourceLayout := source.plugLayout
   let targetLayout := target.plugLayout
@@ -750,20 +752,20 @@ theorem deiterationOutputWire_scope_eq
       (sourceLayout.internalWires.origin internal)
 
 theorem deiterationOutputWire_endpoints_perm
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (wire : Fin
       (deiterationReinsertInput input selection witness).plugLayout.plugRaw.wireCount) :
     (((deiterationReinsertInput input selection witness).plugLayout.plugRaw.wires
         wire).endpoints.map
           (CEndpoint.rename
             (deiterationOutputNodeEquiv input selection witness))).Perm
-      ((Splice.Decomposition.originalFragmentInput
+      ((Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.plugRaw.wires
           (deiterationOutputWireEquiv input selection witness wire)).endpoints := by
   let source := deiterationReinsertInput input selection witness
-  let target := Splice.Decomposition.originalFragmentInput
+  let target := Concrete.Splice.Decomposition.originalFragmentInput
     (deiterationDecomposition input selection)
   let sourceLayout := source.plugLayout
   let targetLayout := target.plugLayout
@@ -842,12 +844,12 @@ theorem deiterationOutputWire_endpoints_perm
       (sourceLayout.internalWires.origin internal)
 
 noncomputable def deiterationOutputOccurrenceEquiv
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
-    ConcreteOccurrenceEquiv
+    (witness : OperationDeiterationWitness input selection) :
+    Concrete.OccurrenceEquiv
       (deiterationReinsertInput input selection witness).plugLayout.plugRaw
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.plugRaw where
   regionCount_eq := finCount_eq_of_equiv
     (deiterationOutputRegionEquiv input selection witness)
@@ -862,9 +864,9 @@ noncomputable def deiterationOutputOccurrenceEquiv
     change deiterationOutputRegionEquiv input selection witness
         ((deiterationReinsertInput input selection witness).plugLayout.frameRegion
           (deiterationRemoved input selection).val.root) =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).plugLayout.frameRegion
-          (Splice.Decomposition.originalFragmentInput
+          (Concrete.Splice.Decomposition.originalFragmentInput
             (deiterationDecomposition input selection)).frame.val.root
     rw [deiterationOutputRegionEquiv_frame]
     rfl
@@ -875,24 +877,24 @@ noncomputable def deiterationOutputOccurrenceEquiv
     deiterationOutputWire_endpoints_perm input selection witness
 
 theorem deiterationOutputBoundary_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (sourceBoundary : List
       (Fin (deiterationRemoved input selection).val.wireCount)) :
-    (Splice.Input.PlugLayout.outputOpenRoot
+    (Concrete.Splice.Input.PlugLayout.outputOpenRoot
       (deiterationReinsertInput input selection witness)
       (deiterationReinsertInput input selection witness).plugLayout
       sourceBoundary).boundary.map
         (deiterationOutputWireEquiv input selection witness) =
-      (Splice.Input.PlugLayout.outputOpenRoot
-        (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Input.PlugLayout.outputOpenRoot
+        (Concrete.Splice.Decomposition.originalFragmentInput
           (deiterationDecomposition input selection))
-        (Splice.Decomposition.originalFragmentInput
+        (Concrete.Splice.Decomposition.originalFragmentInput
           (deiterationDecomposition input selection)).plugLayout
         sourceBoundary).boundary := by
   let source := deiterationReinsertInput input selection witness
-  let target := Splice.Decomposition.originalFragmentInput
+  let target := Concrete.Splice.Decomposition.originalFragmentInput
     (deiterationDecomposition input selection)
   change (sourceBoundary.map
       (source.plugLayout.frameWire ∘ source.quotientWire)).map
@@ -913,20 +915,20 @@ theorem deiterationOutputBoundary_eq
       rfl
 
 noncomputable def deiterationOutputOpenOccurrenceEquiv
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (sourceBoundary : List
       (Fin (deiterationRemoved input selection).val.wireCount)) :
     OpenOccurrenceEquiv
-      (Splice.Input.PlugLayout.outputOpenRoot
+      (Concrete.Splice.Input.PlugLayout.outputOpenRoot
         (deiterationReinsertInput input selection witness)
         (deiterationReinsertInput input selection witness).plugLayout
         sourceBoundary)
-      (Splice.Input.PlugLayout.outputOpenRoot
-        (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Input.PlugLayout.outputOpenRoot
+        (Concrete.Splice.Decomposition.originalFragmentInput
           (deiterationDecomposition input selection))
-        (Splice.Decomposition.originalFragmentInput
+        (Concrete.Splice.Decomposition.originalFragmentInput
           (deiterationDecomposition input selection)).plugLayout
         sourceBoundary) where
   diagram := deiterationOutputOccurrenceEquiv input selection witness

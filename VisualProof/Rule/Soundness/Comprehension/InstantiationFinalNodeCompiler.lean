@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationDropNodeCompiler
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -14,20 +16,20 @@ at its certified original node.  The final wire is the composite image of the
 original wire; atom compaction and vacuous promotion do not change ownership
 for this surviving node. -/
 theorem final_endpointOccurs_reverseNode_iff
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -78,28 +80,28 @@ theorem final_endpointOccurs_reverseNode_iff
 /-- Resolved ports at a regular final node are related by the certified
 final-to-original lexical-context relation. -/
 theorem regularNode_resolvedPorts_related
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed )
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext input.val)
     (context : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext)
     (sourceNodup : sourceContext.Nodup)
@@ -112,23 +114,23 @@ theorem regularNode_resolvedPorts_related
     (port : CPort)
     (sourceIndex : Fin sourceContext.length)
     (targetIndex : Fin targetContext.length)
-    (sourceResolved : ConcreteElaboration.resolvePort?
+    (sourceResolved : Concrete.Elaboration.resolvePort?
       elimTrace.sourceDiagram sourceContext finalNode port = some sourceIndex)
-    (targetResolved : ConcreteElaboration.resolvePort? input.val targetContext
+    (targetResolved : Concrete.Elaboration.resolvePort? input.val targetContext
       (copyTrace.reverseNodeMap elimTrace finalWellFormed finalRegion regular
         finalNode nodeRegion) port = some targetIndex) :
     context.indexRelation.Rel sourceIndex targetIndex := by
   obtain ⟨sourceWire, sourceOccurs, sourceGet⟩ :=
-    ConcreteElaboration.resolvePort?_sound sourceResolved
+    Concrete.Elaboration.resolvePort?_sound sourceResolved
   obtain ⟨targetWire, targetOccurs, targetGet⟩ :=
-    ConcreteElaboration.resolvePort?_sound targetResolved
+    Concrete.Elaboration.resolvePort?_sound targetResolved
   have mappedTargetOccurs : elimTrace.sourceDiagram.EndpointOccurs
       (copyTrace.finalWireMap elimTrace targetWire) ⟨finalNode, port⟩ :=
     (copyTrace.final_endpointOccurs_reverseNode_iff elimTrace finalWellFormed
       finalRegion regular finalNode nodeRegion targetWire port).2
       targetOccurs
   have wireEq : sourceWire = copyTrace.finalWireMap elimTrace targetWire :=
-    ConcreteElaboration.endpoint_wire_unique
+    Concrete.Elaboration.endpoint_wire_unique
       sourceWellFormed.wire_endpoints_are_disjoint sourceOccurs
         mappedTargetOccurs
   have mappedLookup := context.sourceIndex_lookup targetIndex
@@ -138,43 +140,43 @@ theorem regularNode_resolvedPorts_related
         some (context.sourceIndex targetIndex) at mappedLookup
   rw [targetGet] at mappedLookup
   change context.sourceIndex targetIndex = sourceIndex
-  exact (ConcreteElaboration.WireContext.lookup?_unique sourceNodup mappedLookup
+  exact (Concrete.Elaboration.WireContext.lookup?_unique sourceNodup mappedLookup
     (sourceGet.trans wireEq)).symm
 
 /-- Every retained final node compiles to an item semantically equivalent to
 the item compiled from its certified original node under the reverse context
 and binder maps. -/
 theorem regularNode_itemSimulation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed )
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
-    (sourceContext : ConcreteElaboration.WireContext
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext input.val)
     (context : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext)
     (sourceNodup : sourceContext.Nodup)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       elimTrace.sourceDiagram sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext input.val targetRels)
+    (targetBinders : Concrete.Elaboration.BinderContext input.val targetRels)
     (binderWitness : FinalBinderWitness copyTrace elimTrace finalWellFormed
       sourceBinders targetBinders)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
@@ -185,17 +187,17 @@ theorem regularNode_itemSimulation
       finalRegion)
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileNode?
+    (sourceCompiled : Concrete.Elaboration.compileNode?
       elimTrace.sourceDiagram sourceContext sourceBinders finalNode =
         some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode?  input.val
+    (targetCompiled : Concrete.Elaboration.compileNode?  input.val
       targetContext targetBinders
       (copyTrace.reverseNodeMap elimTrace finalWellFormed finalRegion regular
         finalNode nodeRegion) = some targetItem) :
-    ConcreteElaboration.ItemSimulation model  direction
+    Concrete.Elaboration.ItemSimulation model  direction
       context.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
-  apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+  apply Concrete.Elaboration.compileNode?_itemSimulation_of_related_ports
     model  direction sourceContext targetContext context.indexRelation
     sourceBinders targetBinders binderWitness.relationMap finalNode
     (copyTrace.reverseNodeMap elimTrace finalWellFormed finalRegion regular

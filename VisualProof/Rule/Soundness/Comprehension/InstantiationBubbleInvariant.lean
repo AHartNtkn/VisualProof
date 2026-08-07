@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationCoalescedState
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -11,42 +13,42 @@ namespace InstantiationSemantic
 /-- The moving quantified region keeps the payload's declared relation arity
 through every checked splice. -/
 def BubbleHasPayloadArity
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount) : Prop :=
   ∃ parent, state.diagram.val.regions state.bubble =
     .bubble parent payload.arity
 
 theorem initial_bubbleHasPayloadArity
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders) :
     BubbleHasPayloadArity payload (initialInstantiationState payload) := by
   exact ⟨payload.parent, payload.bubble_eq⟩
 
 theorem BubbleHasPayloadArity.coalesced
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -60,18 +62,18 @@ theorem BubbleHasPayloadArity.coalesced
   obtain ⟨parent, bubbleShape⟩ := shape
   exact ⟨parent, by
     simpa [coalescedInstantiationState, instantiateSpliceInput,
-      Splice.Input.coalesceFrameRaw_regions] using bubbleShape⟩
+      Concrete.Splice.Input.coalesceFrameRaw_regions] using bubbleShape⟩
 
 theorem BubbleHasPayloadArity.advance
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -91,20 +93,20 @@ theorem BubbleHasPayloadArity.advance
     spliceInput, layout] using
     layout.plugRaw_frameRegion_bubble state.bubble parent payload.arity
       (by simpa [spliceInput, instantiateSpliceInput,
-        Splice.Input.coalesceFrameRaw_regions] using bubbleShape)
+        Concrete.Splice.Input.coalesceFrameRaw_regions] using bubbleShape)
 
 /-- At an executor-selected atom site, every covering quotient-host compiler
 context contains the moving relation variable at exactly the payload arity. -/
 theorem coalesced_bubbleRelation_exists
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -114,7 +116,7 @@ theorem coalesced_bubbleRelation_exists
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (shape : BubbleHasPayloadArity payload state)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceRels)
     (sourceCover : sourceBinders.Covers site) :
@@ -125,7 +127,7 @@ theorem coalesced_bubbleRelation_exists
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw.regions state.bubble =
         .bubble parent payload.arity := by
-    simpa [instantiateSpliceInput, Splice.Input.coalesceFrameRaw_regions] using
+    simpa [instantiateSpliceInput, Concrete.Splice.Input.coalesceFrameRaw_regions] using
       bubbleShape
   have sourceEncloses : state.diagram.val.Encloses state.bubble site := by
     simpa [node_eq] using state.diagram.property.atom_binders_enclose atom
@@ -141,15 +143,15 @@ theorem coalesced_bubbleRelation_exists
 /-- Every state visited by a successful executor trace carries the moving
 binder's payload arity. -/
 def BubbleShapeEveryStep
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -161,15 +163,15 @@ def BubbleShapeEveryStep
       BubbleHasPayloadArity payload state ∧ BubbleShapeEveryStep rest
 
 theorem bubbleShapeEveryStep_of
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -187,15 +189,15 @@ theorem bubbleShapeEveryStep_of
 /-- The moving quantified bubble has the payload arity at the terminal state of
 an accepted executor trace. -/
 theorem BubbleHasPayloadArity.afterTrace
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -211,13 +213,13 @@ theorem BubbleHasPayloadArity.afterTrace
         atom tail site arguments plan)
 
 theorem initial_bubbleShapeEveryStep
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length

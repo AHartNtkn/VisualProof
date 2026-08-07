@@ -1,6 +1,8 @@
 import VisualProof.Rule.Soundness.AttachmentAliasSemanticGraph
 
-namespace VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+namespace VisualProof.Concrete.Splice.AttachmentAliasMaterialization
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -57,60 +59,60 @@ theorem allFin_add (n m : Nat) :
       rw [hleft, hmiddle, hlast]
       rfl
 
-def liftOccurrence (pattern : OpenConcreteDiagram)
+def liftOccurrence (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host) :
-    ConcreteElaboration.LocalOccurrence pattern.diagram.regionCount
+    Concrete.Elaboration.LocalOccurrence pattern.diagram.regionCount
         pattern.diagram.nodeCount →
-      ConcreteElaboration.LocalOccurrence pattern.diagram.regionCount
+      Concrete.Elaboration.LocalOccurrence pattern.diagram.regionCount
         (pattern.diagram.nodeCount + aliasCount pattern attachment)
   | .node node => .node (liftOldNode pattern attachment node)
   | .child child => .child child
 
-def sourceNodeOccurrences (pattern : OpenConcreteDiagram)
+def sourceNodeOccurrences (pattern : Concrete.OpenDiagram)
     (region : Fin pattern.diagram.regionCount) :
-    List (ConcreteElaboration.LocalOccurrence pattern.diagram.regionCount
+    List (Concrete.Elaboration.LocalOccurrence pattern.diagram.regionCount
       pattern.diagram.nodeCount) :=
   (filterFin fun node => decide ((pattern.diagram.nodes node).region = region)).map
-    ConcreteElaboration.LocalOccurrence.node
+    Concrete.Elaboration.LocalOccurrence.node
 
-def sourceChildOccurrences (pattern : OpenConcreteDiagram)
+def sourceChildOccurrences (pattern : Concrete.OpenDiagram)
     (region : Fin pattern.diagram.regionCount) :
-    List (ConcreteElaboration.LocalOccurrence pattern.diagram.regionCount
+    List (Concrete.Elaboration.LocalOccurrence pattern.diagram.regionCount
       pattern.diagram.nodeCount) :=
   (filterFin fun child =>
     decide ((pattern.diagram.regions child).parent? = some region)).map
-      ConcreteElaboration.LocalOccurrence.child
+      Concrete.Elaboration.LocalOccurrence.child
 
-def aliasOccurrences (pattern : OpenConcreteDiagram)
+def aliasOccurrences (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host) :
-    List (ConcreteElaboration.LocalOccurrence pattern.diagram.regionCount
+    List (Concrete.Elaboration.LocalOccurrence pattern.diagram.regionCount
       (pattern.diagram.nodeCount + aliasCount pattern attachment)) :=
   (allFin (aliasCount pattern attachment)).map fun aliasIndex =>
     .node (aliasNode pattern attachment aliasIndex)
 
-theorem source_localOccurrences (pattern : OpenConcreteDiagram)
+theorem source_localOccurrences (pattern : Concrete.OpenDiagram)
     (region : Fin pattern.diagram.regionCount) :
-    ConcreteElaboration.localOccurrences pattern.diagram region =
+    Concrete.Elaboration.localOccurrences pattern.diagram region =
       sourceNodeOccurrences pattern region ++
         sourceChildOccurrences pattern region := rfl
 
 theorem materialized_regular_localOccurrences
-    (pattern : OpenConcreteDiagram)
+    (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (bodyContainer region : Fin pattern.diagram.regionCount)
     (regular : region ≠ bodyContainer) :
-    ConcreteElaboration.localOccurrences
+    Concrete.Elaboration.localOccurrences
         (materializedDiagram pattern attachment bodyContainer) region =
-      (ConcreteElaboration.localOccurrences pattern.diagram region).map
+      (Concrete.Elaboration.localOccurrences pattern.diagram region).map
         (liftOccurrence pattern attachment) := by
-  unfold ConcreteElaboration.localOccurrences filterFin
+  unfold Concrete.Elaboration.localOccurrences filterFin
   change
     (List.filter _ (allFin (pattern.diagram.nodeCount +
       aliasCount pattern attachment))).map
-        (@ConcreteElaboration.LocalOccurrence.node pattern.diagram.regionCount
+        (@Concrete.Elaboration.LocalOccurrence.node pattern.diagram.regionCount
           (pattern.diagram.nodeCount + aliasCount pattern attachment)) ++
       (List.filter _ (allFin pattern.diagram.regionCount)).map
-        (@ConcreteElaboration.LocalOccurrence.child pattern.diagram.regionCount
+        (@Concrete.Elaboration.LocalOccurrence.child pattern.diagram.regionCount
           (pattern.diagram.nodeCount + aliasCount pattern attachment)) = _
   rw [allFin_add pattern.diagram.nodeCount (aliasCount pattern attachment),
     List.filter_append]
@@ -145,25 +147,25 @@ theorem materialized_regular_localOccurrences
   congr 1
 
 theorem materialized_focused_localOccurrences
-    (pattern : OpenConcreteDiagram)
+    (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (bodyContainer : Fin pattern.diagram.regionCount) :
-    ConcreteElaboration.localOccurrences
+    Concrete.Elaboration.localOccurrences
         (materializedDiagram pattern attachment bodyContainer) bodyContainer =
       (sourceNodeOccurrences pattern bodyContainer).map
           (liftOccurrence pattern attachment) ++
         aliasOccurrences pattern attachment ++
         (sourceChildOccurrences pattern bodyContainer).map
           (liftOccurrence pattern attachment) := by
-  unfold ConcreteElaboration.localOccurrences filterFin sourceNodeOccurrences
+  unfold Concrete.Elaboration.localOccurrences filterFin sourceNodeOccurrences
     sourceChildOccurrences aliasOccurrences
   change
     (List.filter _ (allFin (pattern.diagram.nodeCount +
       aliasCount pattern attachment))).map
-        (@ConcreteElaboration.LocalOccurrence.node pattern.diagram.regionCount
+        (@Concrete.Elaboration.LocalOccurrence.node pattern.diagram.regionCount
           (pattern.diagram.nodeCount + aliasCount pattern attachment)) ++
       (List.filter _ (allFin pattern.diagram.regionCount)).map
-        (@ConcreteElaboration.LocalOccurrence.child pattern.diagram.regionCount
+        (@Concrete.Elaboration.LocalOccurrence.child pattern.diagram.regionCount
           (pattern.diagram.nodeCount + aliasCount pattern attachment)) = _
   rw [allFin_add pattern.diagram.nodeCount (aliasCount pattern attachment),
     List.filter_append]
@@ -204,43 +206,43 @@ theorem materialized_focused_localOccurrences
 /-- Retained nodes compile with exactly the materialized-wire collapse
 relation on their resolved ports. -/
 theorem oldNode_itemSimulation
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
-    (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)
-    (targetContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext pattern.val.diagram)
+    (targetContext : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
     (collapse : ContextCollapse pattern attachment spine targetContext
       sourceContext)
     (sourceNodup : sourceContext.Nodup)
-    (sourceBinders : ConcreteElaboration.BinderContext pattern.val.diagram rels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext pattern.val.diagram rels)
+    (targetBinders : Concrete.Elaboration.BinderContext
       (materializedDiagram pattern.val attachment spine.bodyContainer) rels)
     (bindersEqual : HEq sourceBinders targetBinders)
     (sourceNode : Fin pattern.val.diagram.nodeCount)
     (sourceItem : Item  sourceContext.length rels)
     (targetItem : Item  targetContext.length rels)
-    (sourceCompiled : ConcreteElaboration.compileNode?
+    (sourceCompiled : Concrete.Elaboration.compileNode?
       pattern.val.diagram sourceContext sourceBinders sourceNode =
         some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode?
+    (targetCompiled : Concrete.Elaboration.compileNode?
       (materializedDiagram pattern.val attachment spine.bodyContainer)
       targetContext targetBinders
       (liftOldNode pattern.val attachment sourceNode) = some targetItem)
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection) :
-    ConcreteElaboration.ItemSimulation model  direction
-      (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
+    (direction : Concrete.Elaboration.SimulationDirection) :
+    Concrete.Elaboration.ItemSimulation model  direction
+      (Concrete.Elaboration.ContextIndexRelation.backwardMap collapse.indexMap)
       sourceItem targetItem := by
   cases bindersEqual
   have simulation :=
-    ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+    Concrete.Elaboration.compileNode?_itemSimulation_of_related_ports
       (source := pattern.val.diagram)
       (target := materializedDiagram pattern.val attachment spine.bodyContainer)
       model  direction sourceContext targetContext
-      (ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap)
+      (Concrete.Elaboration.ContextIndexRelation.backwardMap collapse.indexMap)
       sourceBinders sourceBinders
-      (ConcreteElaboration.identityRelationRenaming rels)
+      (Concrete.Elaboration.identityRelationRenaming rels)
       (sourceNode := sourceNode)
       (targetNode := liftOldNode pattern.val attachment sourceNode)
       (regionMap := id) (binderMap := id)
@@ -250,15 +252,15 @@ theorem oldNode_itemSimulation
       (portsRelated := by
         intro port sourceIndex targetIndex sourceResolved targetResolved
         obtain ⟨sourceOwner, sourceOccurs, sourceGet⟩ :=
-          ConcreteElaboration.resolvePort?_sound sourceResolved
+          Concrete.Elaboration.resolvePort?_sound sourceResolved
         obtain ⟨targetOwner, targetOccurs, targetGet⟩ :=
-          ConcreteElaboration.resolvePort?_sound targetResolved
+          Concrete.Elaboration.resolvePort?_sound targetResolved
         obtain ⟨origin, originEq, originOccurs⟩ :=
           oldEndpointOccurs_backward pattern.val attachment spine.bodyContainer
             targetOwner { node := sourceNode, port := port } (by
               simpa [liftOldEndpoint, liftOldNode] using targetOccurs)
         have ownerEq : origin = sourceOwner :=
-          ConcreteElaboration.endpoint_wire_unique
+          Concrete.Elaboration.endpoint_wire_unique
             pattern.property.diagram_well_formed.wire_endpoints_are_disjoint
             originOccurs sourceOccurs
         have sourceGetList : sourceContext.get sourceIndex = sourceOwner := by
@@ -275,11 +277,11 @@ theorem oldNode_itemSimulation
           simpa only [List.get_eq_getElem] using valuesEq))
       (bindersRelated := by
         intro region binder arity sourceRelation nodeShape binderLookup
-        simpa [ConcreteElaboration.identityRelationRenaming] using binderLookup)
+        simpa [Concrete.Elaboration.identityRelationRenaming] using binderLookup)
       (sourceItem := sourceItem) (targetItem := targetItem)
       sourceCompiled targetCompiled
   have relationMapEq :
-      (ConcreteElaboration.identityRelationRenaming rels :
+      (Concrete.Elaboration.identityRelationRenaming rels :
         RelationRenaming rels rels) =
       (fun {arity} (relation : RelVar rels arity) => relation) := rfl
   rw [relationMapEq, Item.renameRelations_id] at simulation
@@ -289,43 +291,43 @@ theorem oldNode_itemSimulation
 the canonical lifted-old target position.  This orientation deliberately
 ignores fresh alias positions until the distinguished identity block. -/
 theorem oldNode_itemSimulation_oldIndex
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
-    (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)
-    (targetContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext pattern.val.diagram)
+    (targetContext : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
     (collapse : ContextCollapse pattern attachment spine targetContext
       sourceContext)
     (targetNodup : targetContext.Nodup)
-    (sourceBinders : ConcreteElaboration.BinderContext pattern.val.diagram rels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext pattern.val.diagram rels)
+    (targetBinders : Concrete.Elaboration.BinderContext
       (materializedDiagram pattern.val attachment spine.bodyContainer) rels)
     (bindersEqual : HEq sourceBinders targetBinders)
     (sourceNode : Fin pattern.val.diagram.nodeCount)
     (sourceItem : Item  sourceContext.length rels)
     (targetItem : Item  targetContext.length rels)
-    (sourceCompiled : ConcreteElaboration.compileNode?
+    (sourceCompiled : Concrete.Elaboration.compileNode?
       pattern.val.diagram sourceContext sourceBinders sourceNode =
         some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode?
+    (targetCompiled : Concrete.Elaboration.compileNode?
       (materializedDiagram pattern.val attachment spine.bodyContainer)
       targetContext targetBinders
       (liftOldNode pattern.val attachment sourceNode) = some targetItem)
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection) :
-    ConcreteElaboration.ItemSimulation model  direction
-      (ConcreteElaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
+    (direction : Concrete.Elaboration.SimulationDirection) :
+    Concrete.Elaboration.ItemSimulation model  direction
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
       sourceItem targetItem := by
   cases bindersEqual
   have simulation :=
-    ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+    Concrete.Elaboration.compileNode?_itemSimulation_of_related_ports
       (source := pattern.val.diagram)
       (target := materializedDiagram pattern.val attachment spine.bodyContainer)
       model  direction sourceContext targetContext
-      (ConcreteElaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap collapse.oldIndex)
       sourceBinders sourceBinders
-      (ConcreteElaboration.identityRelationRenaming rels)
+      (Concrete.Elaboration.identityRelationRenaming rels)
       (sourceNode := sourceNode)
       (targetNode := liftOldNode pattern.val attachment sourceNode)
       (regionMap := id) (binderMap := id)
@@ -335,15 +337,15 @@ theorem oldNode_itemSimulation_oldIndex
       (portsRelated := by
         intro port sourceIndex targetIndex sourceResolved targetResolved
         obtain ⟨sourceOwner, sourceOccurs, sourceGet⟩ :=
-          ConcreteElaboration.resolvePort?_sound sourceResolved
+          Concrete.Elaboration.resolvePort?_sound sourceResolved
         obtain ⟨targetOwner, targetOccurs, targetGet⟩ :=
-          ConcreteElaboration.resolvePort?_sound targetResolved
+          Concrete.Elaboration.resolvePort?_sound targetResolved
         obtain ⟨origin, originEq, originOccurs⟩ :=
           oldEndpointOccurs_backward pattern.val attachment spine.bodyContainer
             targetOwner { node := sourceNode, port := port } (by
               simpa [liftOldEndpoint, liftOldNode] using targetOccurs)
         have ownerEq : origin = sourceOwner :=
-          ConcreteElaboration.endpoint_wire_unique
+          Concrete.Elaboration.endpoint_wire_unique
             pattern.property.diagram_well_formed.wire_endpoints_are_disjoint
             originOccurs sourceOccurs
         change collapse.oldIndex sourceIndex = targetIndex
@@ -358,11 +360,11 @@ theorem oldNode_itemSimulation_oldIndex
           simpa only [List.get_eq_getElem] using oldGet.trans targetGetList.symm))
       (bindersRelated := by
         intro region binder arity sourceRelation nodeShape binderLookup
-        simpa [ConcreteElaboration.identityRelationRenaming] using binderLookup)
+        simpa [Concrete.Elaboration.identityRelationRenaming] using binderLookup)
       (sourceItem := sourceItem) (targetItem := targetItem)
       sourceCompiled targetCompiled
   have relationMapEq :
-      (ConcreteElaboration.identityRelationRenaming rels :
+      (Concrete.Elaboration.identityRelationRenaming rels :
         RelationRenaming rels rels) =
       (fun {arity} (relation : RelVar rels arity) => relation) := rfl
   rw [relationMapEq, Item.renameRelations_id] at simulation
@@ -370,4 +372,4 @@ theorem oldNode_itemSimulation_oldIndex
 
 end Semantic
 
-end VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+end VisualProof.Concrete.Splice.AttachmentAliasMaterialization

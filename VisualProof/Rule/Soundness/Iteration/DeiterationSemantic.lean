@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -14,10 +16,10 @@ reassembly by ordered occurrence equivalence, and then identified with the
 original host. -/
 theorem deiteration_sound_of_reinsert
     (orientation : Orientation)
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
-    (receipt : StepReceipt input)
+    (witness : OperationDeiterationWitness input selection)
+    (receipt : OperationReceipt input)
     (happly : applyDeiteration input selection witness = .ok receipt)
     (reinsertSound :
       SuccessfulReceiptSound orientation
@@ -34,17 +36,17 @@ theorem deiteration_sound_of_reinsert
       ⟨realizes.rawResultOpen mapped,
         realizes.rawResultOpen_wellFormed sourceRoot htransport⟩)
     (operationalIso := fun _boundary _sourceRoot mapped _htransport =>
-      OpenConcreteIso.refl (realizes.rawResultOpen mapped))
+      Concrete.OpenIso.refl (realizes.rawResultOpen mapped))
   intro model boundary sourceRoot mapped htransport args
   let rawMapped := realizes.targetBoundary mapped
   have hexpected :
-      (removeWireInterfaceTransport input selection).transportBoundary boundary =
+      (removeWireWireTransport input selection).transportBoundary boundary =
         some rawMapped :=
     realizes.transportBoundary_expected htransport
   have rawRoot : ∀ wire, wire ∈ rawMapped →
       ((deiterationRemoved input selection).val.wires wire).scope =
         (deiterationRemoved input selection).val.root := by
-    exact (removeWireInterfaceTransport input selection)
+    exact (removeWireWireTransport input selection)
       |>.transportBoundary_root_scoped sourceRoot hexpected
   let reinsertInput := deiterationReinsertInput input selection witness
   let reinsertReceipt := deiterationReinsertReceipt input selection witness
@@ -52,17 +54,17 @@ theorem deiteration_sound_of_reinsert
   have reinsertRealizes := applyIteration_realizes reinsertSpec
   let reinsertAdmissible := deiterationReinsertInput_admissible input selection
     witness
-  let reinsertOpen := Splice.Input.PlugLayout.checkedOutputOpenRoot
+  let reinsertOpen := Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot
     reinsertInput reinsertInput.plugLayout reinsertAdmissible rawMapped rawRoot
   have hExpectedReinsert :
-      (iterationInterfaceTransport (deiterationRemoved input selection)
+      (iterationWireTransport (deiterationRemoved input selection)
         (deiterationRetainedSelection input selection witness)
         (deiterationReinsertTarget input selection)).transportBoundary rawMapped =
       some reinsertOpen.val.boundary := by
-    apply InterfaceTransport.transportBoundary_eq_map
+    apply WireTransport.transportBoundary_eq_map
     intro wire hwire
-    unfold iterationInterfaceTransport spliceFrameInterfaceTransport
-      InterfaceTransport.rootFiltered
+    unfold iterationWireTransport spliceFrameWireTransport
+      WireTransport.rootFiltered
     dsimp only
     change (if (reinsertInput.plugLayout.plugRaw.wires
           (reinsertInput.plugLayout.frameWire
@@ -78,22 +80,22 @@ theorem deiteration_sound_of_reinsert
         (List.mem_map_of_mem hwire)
   obtain ⟨reinsertMapped, hReinsertTransport⟩ :=
     reinsertRealizes.transportBoundary_receipt_complete hExpectedReinsert
-  let reinsertIso : OpenConcreteIso reinsertOpen.val
+  let reinsertIso : Concrete.OpenIso reinsertOpen.val
       (reinsertRealizes.rawResultOpen reinsertMapped) :=
     reinsertRealizes.operationalIso_to_rawResultOpen hReinsertTransport
       reinsertOpen.val.boundary hExpectedReinsert
   let removedArgs : Fin rawMapped.length → model.Carrier :=
     args ∘ Fin.cast
-      ((removeWireInterfaceTransport input selection)
+      ((removeWireWireTransport input selection)
         |>.transportBoundary_length hexpected)
   have hReinsert := reinsertSound model rawMapped rawRoot reinsertMapped
     hReinsertTransport removedArgs
-  let removed : OpenProofState  := {
+  let removed : OperationState  := {
     diagram := deiterationRemoved input selection
     boundary := rawMapped
     boundary_root_scoped := rawRoot
   }
-  let reinsertTarget : OpenProofState  := {
+  let reinsertTarget : OperationState  := {
     diagram := reinsertReceipt.result
     boundary := reinsertMapped
     boundary_root_scoped :=
@@ -106,7 +108,7 @@ theorem deiteration_sound_of_reinsert
           (removedArgs ∘ Fin.cast
             (reinsertReceipt.interface.transportBoundary_length
               hReinsertTransport)) := by
-    simpa only [DirectedEntailment, StepTag.semanticMode] using hReinsert
+    simpa only [OperationEntailment, StepTag.operationMode] using hReinsert
   have hNormalize := reinsertRealizes.operationalOpen_denote_iff_result
     rawRoot hReinsertTransport reinsertOpen reinsertIso
     model
@@ -126,10 +128,10 @@ theorem deiteration_sound_of_reinsert
               hReinsertTransport)) := by
     simpa only [reinsertArgs, reinsertTarget] using hNormalize
   let decomposition := deiterationDecomposition input selection
-  let canonicalInput := Splice.Decomposition.originalFragmentInput decomposition
-  let canonicalOpen := Splice.Input.PlugLayout.checkedOutputOpenRoot
+  let canonicalInput := Concrete.Splice.Decomposition.originalFragmentInput decomposition
+  let canonicalOpen := Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot
     canonicalInput canonicalInput.plugLayout
-      (Splice.Decomposition.originalFragmentInput_admissible decomposition)
+      (Concrete.Splice.Decomposition.originalFragmentInput_admissible decomposition)
       rawMapped rawRoot
   let occurrence := deiterationOutputOpenOccurrenceEquiv input selection witness
     rawMapped
@@ -142,22 +144,22 @@ theorem deiteration_sound_of_reinsert
       reinsertOpen.denote model reinsertArgs ↔
         canonicalOpen.denote model canonicalArgs := by
     simpa only [canonicalArgs, reinsertOpen, canonicalOpen,
-      CheckedOpenDiagram.denote] using hOccurrence
+      Concrete.CheckedOpen.denote] using hOccurrence
   have hReassembly :=
-    Splice.Decomposition.reassemble_original_output_open_denotation_iff
+    Concrete.Splice.Decomposition.reassemble_original_output_open_denotation_iff
       decomposition rawMapped rawRoot model canonicalArgs
-  let hostOpen := Splice.Decomposition.reassembleCanonicalHostOpen
+  let hostOpen := Concrete.Splice.Decomposition.reassembleCanonicalHostOpen
     decomposition rawMapped rawRoot
   let hostArgs : Fin hostOpen.val.boundary.length → model.Carrier :=
     canonicalArgs ∘ Fin.cast
-      (Splice.Decomposition.reassemble_original_output_open_iso decomposition
+      (Concrete.Splice.Decomposition.reassemble_original_output_open_iso decomposition
         rawMapped).boundary_length_eq.symm
   have hReassembly' :
       canonicalOpen.denote model canonicalArgs ↔
         hostOpen.denote model hostArgs := by
     simpa only [canonicalOpen, hostOpen, hostArgs,
-      CheckedOpenDiagram.denote] using hReassembly
-  let source : OpenProofState  := {
+      Concrete.CheckedOpen.denote] using hReassembly
+  let source : OperationState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
@@ -166,14 +168,14 @@ theorem deiteration_sound_of_reinsert
       rawMapped.map decomposition.frameDomains.wires.origin = boundary := by
     simpa [decomposition, deiterationDecomposition, deiterationDomains,
       rawMapped] using
-        removeWireInterfaceTransport_boundary_origins input selection {}
+        removeWireWireTransport_boundary_origins input selection {}
           boundary rawMapped hexpected
-  let sourceHostIso : OpenConcreteIso source.asCheckedOpen.val hostOpen.val := {
-    diagram := ConcreteIso.refl input.val
+  let sourceHostIso : Concrete.OpenIso source.asCheckedOpen.val hostOpen.val := {
+    diagram := Concrete.Iso.refl input.val
     boundary := by
-      change boundary.map (ConcreteIso.refl input.val).wires =
+      change boundary.map (Concrete.Iso.refl input.val).wires =
         rawMapped.map decomposition.frameDomains.wires.origin
-      simpa [ConcreteIso.refl, FiniteEquiv.refl] using horigins.symm
+      simpa [Concrete.Iso.refl, FiniteEquiv.refl] using horigins.symm
   }
   have hSourceHost := sourceHostIso.denote_iff source.asCheckedOpen.property
     hostOpen.property model args
@@ -195,20 +197,20 @@ theorem deiteration_sound_of_reinsert
       removed.denote model removedArgs ↔
         source.denote model args :=
     hReinsertEquiv.trans hInsertedHost
-  let operational : CheckedOpenDiagram  :=
+  let operational : Concrete.CheckedOpen  :=
     ⟨realizes.rawResultOpen mapped,
       realizes.rawResultOpen_wellFormed sourceRoot htransport⟩
   let operationalArgs : Fin rawMapped.length → model.Carrier :=
     args ∘ Fin.cast
-      ((OpenConcreteIso.refl (realizes.rawResultOpen mapped)).boundary_length_eq.trans
+      ((Concrete.OpenIso.refl (realizes.rawResultOpen mapped)).boundary_length_eq.trans
         ((realizes.rawResultOpen_boundary_length mapped).trans
           (receipt.interface.transportBoundary_length htransport)))
-  change DirectedEntailment .deiteration orientation
+  change OperationEntailment .deiteration orientation
     (source.denote model args)
     (operational.denote model
       operationalArgs)
-  unfold DirectedEntailment
-  simp only [StepTag.semanticMode]
+  unfold OperationEntailment
+  simp only [StepTag.operationMode]
   change source.denote model args ↔
     removed.denote model
       operationalArgs

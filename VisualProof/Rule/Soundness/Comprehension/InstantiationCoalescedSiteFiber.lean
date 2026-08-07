@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationCoalescedSiteTransp
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -12,7 +14,7 @@ namespace InstantiationSemantic
 /-- Extend an exact compiler-context valuation to all wires, using the
 supplied fallback only outside the compiled region's visible scope. -/
 noncomputable def exactContextWireValue
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (exact : context.Exact region)
     (environment : Fin context.length → D)
@@ -24,7 +26,7 @@ noncomputable def exactContextWireValue
     else fallback
 
 theorem exactContextWireValue_get
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (exact : context.Exact region)
     (environment : Fin context.length → D)
@@ -41,7 +43,7 @@ theorem exactContextWireValue_get
   let chosen := Classical.choose
     (context.lookup?_complete ((exact.mem_iff (context.get index)).2 visible))
   have chosenGet : context.get chosen = context.get index :=
-    ConcreteElaboration.WireContext.lookup?_sound
+    Concrete.Elaboration.WireContext.lookup?_sound
       (Classical.choose_spec
         (context.lookup?_complete
           ((exact.mem_iff (context.get index)).2 visible)))
@@ -54,7 +56,7 @@ theorem exactContextWireValue_get
 
 theorem exactContextWireValue_parameters
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
     (region : Fin state.diagram.val.regionCount)
     (exact : context.Exact region)
     (environment : Fin context.length → D)
@@ -74,15 +76,15 @@ theorem exactContextWireValue_parameters
 /-- The current executor-owned atom remains in the survivor compiler and
 therefore exposes the fixed relation from any denoting survivor conjunction. -/
 theorem survivor_items_entail_fixedRelation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -98,8 +100,8 @@ theorem survivor_items_entail_fixedRelation
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
     (fuel : Nat)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
     (fixed : FixedRelationAt payload state relationValue binderContext relEnv)
     (relation : RelVar rels payload.arity)
@@ -109,43 +111,43 @@ theorem survivor_items_entail_fixedRelation
     (environment_eq : ∀ index,
       environment index = wireValue (context.get index))
     (items : ItemSeq  context.length rels)
-    (compiled : ConcreteElaboration.compileOccurrencesWith?
+    (compiled : Concrete.Elaboration.compileOccurrencesWith?
       state.diagram.val (compileSurvivorRegion?  state fuel)
       context binderContext
-      ((ConcreteElaboration.localOccurrences state.diagram.val site).filter
+      ((Concrete.Elaboration.localOccurrences state.diagram.val site).filter
         (dropOccurrenceSurvives state)) = some items)
     (denotes : denoteItemSeq model  environment relEnv items) :
     relationValue (wireValue ∘ arguments) := by
   let occurrences :=
-    (ConcreteElaboration.localOccurrences state.diagram.val site).filter
+    (Concrete.Elaboration.localOccurrences state.diagram.val site).filter
       (dropOccurrenceSurvives state)
-  have localMember : ConcreteElaboration.LocalOccurrence.node atom ∈
-      ConcreteElaboration.localOccurrences state.diagram.val site := by
-    apply (ConcreteElaboration.mem_localOccurrences_node _ _ _).2
+  have localMember : Concrete.Elaboration.LocalOccurrence.node atom ∈
+      Concrete.Elaboration.localOccurrences state.diagram.val site := by
+    apply (Concrete.Elaboration.mem_localOccurrences_node _ _ _).2
     simpa using congrArg CNode.region node_eq
   have survives : dropOccurrenceSurvives state (.node atom) = true :=
     step_atom_survives state atom tail pending_eq ownedNodup
-  have member : ConcreteElaboration.LocalOccurrence.node atom ∈ occurrences :=
+  have member : Concrete.Elaboration.LocalOccurrence.node atom ∈ occurrences :=
     List.mem_filter.mpr ⟨localMember, survives⟩
   obtain ⟨occurrenceIndex, occurrenceIndexEq⟩ := indexOf?_complete member
   have occurrenceEq : occurrences.get occurrenceIndex = .node atom :=
     indexOf?_sound occurrenceIndexEq
   let itemIndex := Fin.cast
-    (ConcreteElaboration.compileOccurrencesWith?_length
+    (Concrete.Elaboration.compileOccurrencesWith?_length
       (compileSurvivorRegion?  state fuel) context binderContext
       compiled).symm occurrenceIndex
-  have atIndex := ConcreteElaboration.compileOccurrencesWith?_get
+  have atIndex := Concrete.Elaboration.compileOccurrencesWith?_get
     (compileSurvivorRegion?  state fuel) context binderContext
     compiled occurrenceIndex
-  have atAtom : ConcreteElaboration.compileOccurrenceWith?
+  have atAtom : Concrete.Elaboration.compileOccurrenceWith?
       state.diagram.val (compileSurvivorRegion?  state fuel)
       context binderContext (.node atom) = some (items.get itemIndex) := by
     rw [← occurrenceEq]
     simpa [occurrences, itemIndex] using atIndex
-  have atomCompiled : ConcreteElaboration.compileNode?
+  have atomCompiled : Concrete.Elaboration.compileNode?
       state.diagram.val context binderContext atom =
         some (items.get itemIndex) := by
-    simpa [ConcreteElaboration.compileOccurrenceWith?] using atAtom
+    simpa [Concrete.Elaboration.compileOccurrenceWith?] using atAtom
   have atomDenotes : denoteItem model  environment relEnv
       (items.get itemIndex) :=
     (denoteItemSeq_iff_get model  environment relEnv items).mp denotes
@@ -158,15 +160,15 @@ theorem survivor_items_entail_fixedRelation
 /-- Denotation of the active fixed-relation atom makes the complete source
 site valuation constant on every fiber of the canonical attachment quotient. -/
 theorem site_sourceEnvironment_fiberConstant
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -192,13 +194,13 @@ theorem site_sourceEnvironment_fiberConstant
     (emptyRelationEq : ∀ _hzero : payload.binderSpine.proxyCount = 0,
       relationValue = payload.interpretedRelation model  parameterValues)
     (fuel : Nat)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
-    (targetContext : ConcreteElaboration.WireContext
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
+    (targetContext : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw)
     (sourceExact : context.Exact site)
     (targetExact : targetContext.Exact site)
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
     (fixed : FixedRelationAt payload state relationValue binderContext relEnv)
     (relation : RelVar rels payload.arity)
@@ -207,10 +209,10 @@ theorem site_sourceEnvironment_fiberConstant
     (environment : Fin context.length → model.Carrier)
     (parameters : ParameterValuesAt state context environment parameterValues)
     (items : ItemSeq  context.length rels)
-    (compiled : ConcreteElaboration.compileOccurrencesWith?
+    (compiled : Concrete.Elaboration.compileOccurrencesWith?
       state.diagram.val (compileSurvivorRegion?  state fuel)
       context binderContext
-      ((ConcreteElaboration.localOccurrences state.diagram.val site).filter
+      ((Concrete.Elaboration.localOccurrences state.diagram.val site).filter
         (dropOccurrenceSurvives state)) = some items)
     (denotes : denoteItemSeq model  environment relEnv items)
     (fallback : model.Carrier) :

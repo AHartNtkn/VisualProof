@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationDropNodeCompiler
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -13,18 +15,18 @@ the executor's final compaction removes. -/
 def compileSurvivorRegion?
     (state : InstantiationState origin parameterCount proxyCount) :
     Nat → (region : Fin state.diagram.val.regionCount) →
-      (context : ConcreteElaboration.WireContext state.diagram.val) →
-      ConcreteElaboration.BinderContext state.diagram.val rels →
+      (context : Concrete.Elaboration.WireContext state.diagram.val) →
+      Concrete.Elaboration.BinderContext state.diagram.val rels →
       Option (Region  context.length rels)
   | 0, _, _, _ => none
   | fuel + 1, region, context, binders => do
       let extended := context.extend region
-      let items ← ConcreteElaboration.compileOccurrencesWith?
+      let items ← Concrete.Elaboration.compileOccurrencesWith?
         state.diagram.val (compileSurvivorRegion?  state fuel)
         extended binders
-        ((ConcreteElaboration.localOccurrences state.diagram.val region).filter
+        ((Concrete.Elaboration.localOccurrences state.diagram.val region).filter
           (dropOccurrenceSurvives state))
-      pure (ConcreteElaboration.finishRegion state.diagram.val context region
+      pure (Concrete.Elaboration.finishRegion state.diagram.val context region
         items)
 
 /-- A single surviving occurrence compiles identically before and after dense
@@ -33,29 +35,29 @@ theorem drop_compileOccurrence_origin
     (state : InstantiationState origin parameterCount proxyCount)
     (dropRecurse : ∀ {rels : RelCtx},
       (region : Fin state.diagram.val.regionCount) →
-      (context : ConcreteElaboration.WireContext state.diagram.val) →
-      ConcreteElaboration.BinderContext state.diagram.val rels →
+      (context : Concrete.Elaboration.WireContext state.diagram.val) →
+      Concrete.Elaboration.BinderContext state.diagram.val rels →
       Option (Region  context.length rels))
     (sourceRecurse : ∀ {rels : RelCtx},
       (region : Fin state.diagram.val.regionCount) →
-      (context : ConcreteElaboration.WireContext state.diagram.val) →
-      ConcreteElaboration.BinderContext state.diagram.val rels →
+      (context : Concrete.Elaboration.WireContext state.diagram.val) →
+      Concrete.Elaboration.BinderContext state.diagram.val rels →
       Option (Region  context.length rels))
     (recurse_eq : ∀ {rels : RelCtx}
       (region : Fin state.diagram.val.regionCount)
-      (context : ConcreteElaboration.WireContext state.diagram.val)
-      (binders : ConcreteElaboration.BinderContext state.diagram.val rels),
+      (context : Concrete.Elaboration.WireContext state.diagram.val)
+      (binders : Concrete.Elaboration.BinderContext state.diagram.val rels),
       dropRecurse region context binders =
         sourceRecurse region context binders)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
-    (binders : ConcreteElaboration.BinderContext state.diagram.val rels)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
+    (binders : Concrete.Elaboration.BinderContext state.diagram.val rels)
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       (dropInstantiationAtomsRaw state).regionCount
       (dropInstantiationAtomsRaw state).nodeCount) :
-    ConcreteElaboration.compileOccurrenceWith?
+    Concrete.Elaboration.compileOccurrenceWith?
         (dropInstantiationAtomsRaw state) dropRecurse context binders
         occurrence =
-      ConcreteElaboration.compileOccurrenceWith?  state.diagram.val
+      Concrete.Elaboration.compileOccurrenceWith?  state.diagram.val
         sourceRecurse context binders (dropOccurrenceOrigin state occurrence) := by
   cases occurrence with
   | node node =>
@@ -63,17 +65,17 @@ theorem drop_compileOccurrence_origin
   | child child =>
       cases hregion : state.diagram.val.regions child with
       | sheet =>
-          simp [ConcreteElaboration.compileOccurrenceWith?,
+          simp [Concrete.Elaboration.compileOccurrenceWith?,
             InstantiationDrop.raw_regions, hregion, dropOccurrenceOrigin]
           rfl
       | cut parent =>
-          simp only [ConcreteElaboration.compileOccurrenceWith?,
+          simp only [Concrete.Elaboration.compileOccurrenceWith?,
             InstantiationDrop.raw_regions, hregion, dropOccurrenceOrigin]
           exact congrArg (fun result => result.bind fun body =>
             some (Item.cut body))
             (recurse_eq child context binders)
       | bubble parent arity =>
-          simp only [ConcreteElaboration.compileOccurrenceWith?,
+          simp only [Concrete.Elaboration.compileOccurrenceWith?,
             InstantiationDrop.raw_regions, hregion, dropOccurrenceOrigin]
           exact congrArg (fun result => result.bind fun body =>
             some (Item.bubble arity body))
@@ -85,35 +87,35 @@ theorem drop_compileOccurrences_origin
     (state : InstantiationState origin parameterCount proxyCount)
     (dropRecurse : ∀ {rels : RelCtx},
       (region : Fin state.diagram.val.regionCount) →
-      (context : ConcreteElaboration.WireContext state.diagram.val) →
-      ConcreteElaboration.BinderContext state.diagram.val rels →
+      (context : Concrete.Elaboration.WireContext state.diagram.val) →
+      Concrete.Elaboration.BinderContext state.diagram.val rels →
       Option (Region  context.length rels))
     (sourceRecurse : ∀ {rels : RelCtx},
       (region : Fin state.diagram.val.regionCount) →
-      (context : ConcreteElaboration.WireContext state.diagram.val) →
-      ConcreteElaboration.BinderContext state.diagram.val rels →
+      (context : Concrete.Elaboration.WireContext state.diagram.val) →
+      Concrete.Elaboration.BinderContext state.diagram.val rels →
       Option (Region  context.length rels))
     (recurse_eq : ∀ {rels : RelCtx}
       (region : Fin state.diagram.val.regionCount)
-      (context : ConcreteElaboration.WireContext state.diagram.val)
-      (binders : ConcreteElaboration.BinderContext state.diagram.val rels),
+      (context : Concrete.Elaboration.WireContext state.diagram.val)
+      (binders : Concrete.Elaboration.BinderContext state.diagram.val rels),
       dropRecurse region context binders =
         sourceRecurse region context binders)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
-    (binders : ConcreteElaboration.BinderContext state.diagram.val rels)
-    (occurrences : List (ConcreteElaboration.LocalOccurrence
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
+    (binders : Concrete.Elaboration.BinderContext state.diagram.val rels)
+    (occurrences : List (Concrete.Elaboration.LocalOccurrence
       (dropInstantiationAtomsRaw state).regionCount
       (dropInstantiationAtomsRaw state).nodeCount)) :
-    ConcreteElaboration.compileOccurrencesWith?
+    Concrete.Elaboration.compileOccurrencesWith?
         (dropInstantiationAtomsRaw state) dropRecurse context binders
         occurrences =
-      ConcreteElaboration.compileOccurrencesWith?  state.diagram.val
+      Concrete.Elaboration.compileOccurrencesWith?  state.diagram.val
         sourceRecurse context binders
           (occurrences.map (dropOccurrenceOrigin state)) := by
   induction occurrences with
   | nil => rfl
   | cons occurrence tail ih =>
-      simp only [ConcreteElaboration.compileOccurrencesWith?, List.map_cons]
+      simp only [Concrete.Elaboration.compileOccurrencesWith?, List.map_cons]
       rw [drop_compileOccurrence_origin state dropRecurse sourceRecurse
         recurse_eq context binders occurrence, ih]
       rfl
@@ -121,19 +123,19 @@ theorem drop_compileOccurrences_origin
 @[simp] theorem drop_exactScopeWires
     (state : InstantiationState origin parameterCount proxyCount)
     (region : Fin state.diagram.val.regionCount) :
-    ConcreteElaboration.exactScopeWires (dropInstantiationAtomsRaw state)
+    Concrete.Elaboration.exactScopeWires (dropInstantiationAtomsRaw state)
         region =
-      ConcreteElaboration.exactScopeWires state.diagram.val region := by
+      Concrete.Elaboration.exactScopeWires state.diagram.val region := by
   rfl
 
 @[simp] theorem drop_finishRegion
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
     (region : Fin state.diagram.val.regionCount)
     (items : ItemSeq  (context.extend region).length rels) :
-    ConcreteElaboration.finishRegion (dropInstantiationAtomsRaw state)
+    Concrete.Elaboration.finishRegion (dropInstantiationAtomsRaw state)
         context region items =
-      ConcreteElaboration.finishRegion state.diagram.val context region
+      Concrete.Elaboration.finishRegion state.diagram.val context region
         items := by
   rfl
 
@@ -143,9 +145,9 @@ theorem drop_compileRegion_eq_survivor
     (state : InstantiationState origin parameterCount proxyCount) :
     ∀ {rels : RelCtx} (fuel : Nat)
       (region : Fin state.diagram.val.regionCount)
-      (context : ConcreteElaboration.WireContext state.diagram.val)
-      (binders : ConcreteElaboration.BinderContext state.diagram.val rels),
-      ConcreteElaboration.compileRegion?
+      (context : Concrete.Elaboration.WireContext state.diagram.val)
+      (binders : Concrete.Elaboration.BinderContext state.diagram.val rels),
+      Concrete.Elaboration.compileRegion?
           (dropInstantiationAtomsRaw state) fuel region context binders =
         compileSurvivorRegion?  state fuel region context binders := by
   intro rels fuel
@@ -155,41 +157,41 @@ theorem drop_compileRegion_eq_survivor
       rfl
   | succ fuel ih =>
       intro region context binders
-      unfold ConcreteElaboration.compileRegion? compileSurvivorRegion?
+      unfold Concrete.Elaboration.compileRegion? compileSurvivorRegion?
       dsimp only
-      change (ConcreteElaboration.compileOccurrencesWith?
+      change (Concrete.Elaboration.compileOccurrencesWith?
           (dropInstantiationAtomsRaw state)
-          (ConcreteElaboration.compileRegion?
+          (Concrete.Elaboration.compileRegion?
             (dropInstantiationAtomsRaw state) fuel)
           (context.extend region) binders
-          (ConcreteElaboration.localOccurrences
+          (Concrete.Elaboration.localOccurrences
             (dropInstantiationAtomsRaw state) region)).bind
-            (fun items => some (ConcreteElaboration.finishRegion
+            (fun items => some (Concrete.Elaboration.finishRegion
               (dropInstantiationAtomsRaw state) context region items)) =
-        (ConcreteElaboration.compileOccurrencesWith?
+        (Concrete.Elaboration.compileOccurrencesWith?
           state.diagram.val (compileSurvivorRegion?  state fuel)
           (context.extend region) binders
-          ((ConcreteElaboration.localOccurrences state.diagram.val
+          ((Concrete.Elaboration.localOccurrences state.diagram.val
             region).filter (dropOccurrenceSurvives state))).bind
-            (fun items => some (ConcreteElaboration.finishRegion
+            (fun items => some (Concrete.Elaboration.finishRegion
               state.diagram.val context region items))
       have compiled := drop_compileOccurrences_origin state
-        (ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           (dropInstantiationAtomsRaw state) fuel)
         (compileSurvivorRegion?  state fuel)
         (fun child childContext childBinders =>
           ih child childContext childBinders)
         (context.extend region) binders
-        (ConcreteElaboration.localOccurrences
+        (Concrete.Elaboration.localOccurrences
           (dropInstantiationAtomsRaw state) region)
       rw [dropInstantiationAtomsRaw_localOccurrences_origin state region]
         at compiled
-      cases hdrop : ConcreteElaboration.compileOccurrencesWith?
+      cases hdrop : Concrete.Elaboration.compileOccurrencesWith?
           (dropInstantiationAtomsRaw state)
-          (ConcreteElaboration.compileRegion?
+          (Concrete.Elaboration.compileRegion?
             (dropInstantiationAtomsRaw state) fuel)
           (context.extend region) binders
-          (ConcreteElaboration.localOccurrences
+          (Concrete.Elaboration.localOccurrences
             (dropInstantiationAtomsRaw state) region) with
       | none =>
           rw [hdrop] at compiled
@@ -200,9 +202,9 @@ theorem drop_compileRegion_eq_survivor
           rw [hdrop] at compiled
           have hsource := compiled.symm
           rw [hsource]
-          change some (ConcreteElaboration.finishRegion
+          change some (Concrete.Elaboration.finishRegion
             (dropInstantiationAtomsRaw state) context region items) =
-              some (ConcreteElaboration.finishRegion state.diagram.val
+              some (Concrete.Elaboration.finishRegion state.diagram.val
                 context region items)
           exact congrArg some (drop_finishRegion state context region items)
 
@@ -213,27 +215,27 @@ theorem drop_compileOccurrences_eq_survivor
     (state : InstantiationState origin parameterCount proxyCount)
     (fuel : Nat)
     (region : Fin state.diagram.val.regionCount)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
-    (binders : ConcreteElaboration.BinderContext state.diagram.val rels) :
-    ConcreteElaboration.compileOccurrencesWith?
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
+    (binders : Concrete.Elaboration.BinderContext state.diagram.val rels) :
+    Concrete.Elaboration.compileOccurrencesWith?
         (dropInstantiationAtomsRaw state)
-        (ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           (dropInstantiationAtomsRaw state) fuel)
         context binders
-        (ConcreteElaboration.localOccurrences
+        (Concrete.Elaboration.localOccurrences
           (dropInstantiationAtomsRaw state) region) =
-      ConcreteElaboration.compileOccurrencesWith?  state.diagram.val
+      Concrete.Elaboration.compileOccurrencesWith?  state.diagram.val
         (compileSurvivorRegion?  state fuel) context binders
-        ((ConcreteElaboration.localOccurrences state.diagram.val region).filter
+        ((Concrete.Elaboration.localOccurrences state.diagram.val region).filter
           (dropOccurrenceSurvives state)) := by
   have compiled := drop_compileOccurrences_origin state
-    (ConcreteElaboration.compileRegion?
+    (Concrete.Elaboration.compileRegion?
       (dropInstantiationAtomsRaw state) fuel)
     (compileSurvivorRegion?  state fuel)
     (fun child childContext childBinders =>
       drop_compileRegion_eq_survivor state fuel child childContext childBinders)
     context binders
-    (ConcreteElaboration.localOccurrences
+    (Concrete.Elaboration.localOccurrences
       (dropInstantiationAtomsRaw state) region)
   rw [dropInstantiationAtomsRaw_localOccurrences_origin state region]
     at compiled

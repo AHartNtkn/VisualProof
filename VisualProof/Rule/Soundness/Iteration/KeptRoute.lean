@@ -1,7 +1,9 @@
 import VisualProof.Rule.Soundness.Iteration.DiscreteQuotient
-import VisualProof.Diagram.Concrete.Subgraph.Splice.Input.Alignment.HostProjection
+import VisualProof.Concrete.Subgraph.Splice.Input.Alignment.HostProjection
 
 namespace VisualProof.Rule.IterationSoundness
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -11,22 +13,22 @@ open VisualProof.Rule.ModalSoundness
 /-- A route from the selection anchor to an unselected target begins through
 an occurrence retained by the selection partition. -/
 theorem routeHead_mem_keptOccurrences
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     {child target : Fin input.val.regionCount}
     {rest : List Nat}
     (parent : (input.val.regions child).parent? = some selection.val.anchor)
-    (position : Fin (ConcreteElaboration.localOccurrences input.val
+    (position : Fin (Concrete.Elaboration.localOccurrences input.val
       selection.val.anchor).length)
-    (positionEq : indexOf? (ConcreteElaboration.localOccurrences input.val
+    (positionEq : indexOf? (Concrete.Elaboration.localOccurrences input.val
       selection.val.anchor) (.child child) = some position)
-    (tail : Splice.RegionRoute input.val child target rest)
+    (tail : Concrete.Splice.RegionRoute input.val child target rest)
     (targetNotSelected : ¬ selection.val.SelectsRegion target) :
-    ConcreteElaboration.LocalOccurrence.child child ∈
+    Concrete.Elaboration.LocalOccurrence.child child ∈
       keptOccurrences input.val selection := by
-  have hlocal : ConcreteElaboration.LocalOccurrence.child child ∈
-      ConcreteElaboration.localOccurrences input.val selection.val.anchor :=
-    (ConcreteElaboration.mem_localOccurrences_child input.val
+  have hlocal : Concrete.Elaboration.LocalOccurrence.child child ∈
+      Concrete.Elaboration.localOccurrences input.val selection.val.anchor :=
+    (Concrete.Elaboration.mem_localOccurrences_child input.val
       selection.val.anchor child).2 parent
   rw [keptOccurrences, List.mem_filter]
   refine ⟨hlocal, ?_⟩
@@ -36,24 +38,24 @@ theorem routeHead_mem_keptOccurrences
   intro childSelected
   apply targetNotSelected
   exact ⟨child, childSelected,
-    Splice.Input.RegionRoute.encloses tail input.property⟩
+    Concrete.Splice.Input.RegionRoute.encloses tail input.property⟩
 
 /-- A proper descendant reached through a compiled occurrence block, together
 with the exact wire and relation transports retained by the compiler trace. -/
 structure CompiledRouteTerminal
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     {start : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
     {startBody : Region  outer rels}
-    (startLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (startLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here startBody))
     (compiledItems : ItemSeq
       (startLeaf.inheritedWires.extend start).length rels)
     {target : Fin input.val.regionCount} {path : List Nat}
-    (_route : Splice.RegionRoute input.val start target path)
+    (_route : Concrete.Splice.RegionRoute input.val start target path)
     (compiledPath : List Nat)
     (witness : Region.ContextPath (Region.mk 0 compiledItems) compiledPath) where
-  leaf : Splice.Region.ContextPath.CompilerLeaf input.val target witness
+  leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val target witness
   inheritedIndex :
     Fin (startLeaf.inheritedWires.extend start).length →
       Fin leaf.inheritedWires.length
@@ -69,11 +71,11 @@ structure CompiledRouteTerminal
       some ⟨arity, witness.toFocus.context.outerRelation relation⟩
   terminalLexical : ∀ {targetPath : List Nat} {targetOuter : Nat}
       {targetBody : Region  targetOuter rels}
-      {targetRoute : Splice.RegionRoute input.val start target targetPath}
+      {targetRoute : Concrete.Splice.RegionRoute input.val start target targetPath}
       {targetWitness : Region.ContextPath targetBody targetPath}
-      {targetState : Splice.Region.ContextPath.CompilerLeaf input.val start
+      {targetState : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
         (.here targetBody)}
-      (targetTrace : Splice.CompilerTrace  input.val targetRoute
+      (targetTrace : Concrete.Splice.CompilerTrace  input.val targetRoute
         targetWitness targetState),
     targetState.binders = startLeaf.binders →
       ∃ hrels : witness.toFocus.holeRels =
@@ -81,11 +83,11 @@ structure CompiledRouteTerminal
         HEq leaf.binders targetTrace.leaf.binders
   terminalInherited : ∀ {targetPath : List Nat} {targetOuter : Nat}
       {targetBody : Region  targetOuter rels}
-      {targetRoute : Splice.RegionRoute input.val start target targetPath}
+      {targetRoute : Concrete.Splice.RegionRoute input.val start target targetPath}
       {targetWitness : Region.ContextPath targetBody targetPath}
-      {targetState : Splice.Region.ContextPath.CompilerLeaf input.val start
+      {targetState : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
         (.here targetBody)}
-      (targetTrace : Splice.CompilerTrace  input.val targetRoute
+      (targetTrace : Concrete.Splice.CompilerTrace  input.val targetRoute
         targetWitness targetState),
     targetState.inheritedWires = startLeaf.inheritedWires →
       leaf.inheritedWires = targetTrace.leaf.inheritedWires
@@ -94,16 +96,16 @@ structure CompiledRouteTerminal
 path witness.  Keeping the path and witness in one dependent transport avoids
 manufacturing a second certificate after route-position normalization. -/
 def CompiledRouteTerminal.castPath
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {start : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
     {startBody : Region  outer rels}
-    {startLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    {startLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here startBody)}
     {compiledItems : ItemSeq
       (startLeaf.inheritedWires.extend start).length rels}
     {target : Fin input.val.regionCount} {path : List Nat}
-    {route : Splice.RegionRoute input.val start target path}
+    {route : Concrete.Splice.RegionRoute input.val start target path}
     {sourcePath targetPath : List Nat}
     {witness : Region.ContextPath (Region.mk 0 compiledItems) sourcePath}
     (terminal : CompiledRouteTerminal input startLeaf compiledItems route
@@ -117,18 +119,18 @@ def CompiledRouteTerminal.castPath
 /-- Intrinsic path obtained by compiling an arbitrary retained occurrence
 block at the route's start. -/
 structure CompiledRouteResult
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     {start : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
     {startBody : Region  outer rels}
-    (startLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (startLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here startBody))
-    (occurrences : List (ConcreteElaboration.LocalOccurrence
+    (occurrences : List (Concrete.Elaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount))
     (compiledItems : ItemSeq
       (startLeaf.inheritedWires.extend start).length rels)
     {target : Fin input.val.regionCount} {path : List Nat}
-    (route : Splice.RegionRoute input.val start target path) where
+    (route : Concrete.Splice.RegionRoute input.val start target path) where
   compiledPath : List Nat
   witness : Region.ContextPath
     (Region.mk 0 compiledItems) compiledPath
@@ -139,12 +141,12 @@ structure CompiledRouteResult
     ∃ (child : Fin input.val.regionCount)
       (compiledPosition : Fin occurrences.length)
       (fullPosition : Fin
-        (ConcreteElaboration.localOccurrences input.val start).length)
+        (Concrete.Elaboration.localOccurrences input.val start).length)
       (rest : List Nat),
       compiledPath = compiledPosition.val :: rest ∧
         path = fullPosition.val :: rest ∧
         indexOf? occurrences (.child child) = some compiledPosition ∧
-      indexOf? (ConcreteElaboration.localOccurrences input.val start)
+      indexOf? (Concrete.Elaboration.localOccurrences input.val start)
           (.child child) = some fullPosition
 
 /-- Route completeness retaining the entire authoritative compiler trace,
@@ -153,23 +155,23 @@ This proof-relevant result is what path-preserving cross-presentation
 alignment consumes; callers that need only a terminal leaf use the projection
 below. -/
 theorem compilerLeaf_routeTrace_complete
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     {start target : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
     {body : Region  outer rels}
-    (leaf : Splice.Region.ContextPath.CompilerLeaf input.val start (.here body))
+    (leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start (.here body))
     {path : List Nat}
-    (route : Splice.RegionRoute input.val start target path) :
-    Nonempty (Splice.CompilerTraceResult input route leaf.inheritedWires
+    (route : Concrete.Splice.RegionRoute input.val start target path) :
+    Nonempty (Concrete.Splice.CompilerTraceResult input route leaf.inheritedWires
       leaf.binders (leaf.fuel + 1)
-      (ConcreteElaboration.finishRegion input.val leaf.inheritedWires start
+      (Concrete.Elaboration.finishRegion input.val leaf.inheritedWires start
         leaf.items)) := by
-  have compiled : ConcreteElaboration.compileRegion?  input.val
+  have compiled : Concrete.Elaboration.compileRegion?  input.val
       (leaf.fuel + 1) start leaf.inheritedWires leaf.binders =
-        some (ConcreteElaboration.finishRegion input.val leaf.inheritedWires
+        some (Concrete.Elaboration.finishRegion input.val leaf.inheritedWires
           start leaf.items) := by
-    simp [ConcreteElaboration.compileRegion?, leaf.itemsComputation]
-  exact Splice.compileRegion_route_context_complete input route
+    simp [Concrete.Elaboration.compileRegion?, leaf.itemsComputation]
+  exact Concrete.Splice.compileRegion_route_context_complete input route
     compiled leaf.wiresExact leaf.bindersCover leaf.binderEnumeration
 
 /-- Compiling the complete authoritative leaf along a concrete route retains
@@ -177,21 +179,21 @@ that route's exact position list.  This is the canonical full-leaf path used
 to identify an anchor-relative route with the executor's root-relative site
 view. -/
 theorem compilerLeaf_routePath_complete
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     {start target : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
     {body : Region  outer rels}
-    (leaf : Splice.Region.ContextPath.CompilerLeaf input.val start (.here body))
+    (leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start (.here body))
     {path : List Nat}
-    (route : Splice.RegionRoute input.val start target path) :
+    (route : Concrete.Splice.RegionRoute input.val start target path) :
     ∃ witness : Region.ContextPath body path,
-      Nonempty (Splice.Region.ContextPath.CompilerLeaf input.val target
+      Nonempty (Concrete.Splice.Region.ContextPath.CompilerLeaf input.val target
         witness) := by
   obtain ⟨result⟩ := compilerLeaf_routeTrace_complete input leaf route
   let transported := result.trace.castWiresEq route result.witness result.state
     leaf.inheritedLength
   have hbody : body = Region.castWiresEq leaf.inheritedLength
-      (ConcreteElaboration.finishRegion input.val leaf.inheritedWires start
+      (Concrete.Elaboration.finishRegion input.val leaf.inheritedWires start
         leaf.items) := leaf.bodyComputation
   rw [hbody]
   exact ⟨result.witness.castWiresEq leaf.inheritedLength,
@@ -200,27 +202,27 @@ theorem compilerLeaf_routePath_complete
 /-- Compiler-route completeness for an arbitrary occurrence sublist.  This is
 the proof-critical core behind iteration's retained selection route. -/
 theorem compiledOccurrences_route_complete
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     {start : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
     {startBody : Region  outer rels}
-    (startLeaf : Splice.Region.ContextPath.CompilerLeaf input.val start
+    (startLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start
       (.here startBody))
-    (occurrences : List (ConcreteElaboration.LocalOccurrence
+    (occurrences : List (Concrete.Elaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount))
     (compiledItems : ItemSeq
       (startLeaf.inheritedWires.extend start).length rels)
     (itemsCompiled :
-      ConcreteElaboration.compileOccurrencesWith?  input.val
-        (ConcreteElaboration.compileRegion?  input.val startLeaf.fuel)
+      Concrete.Elaboration.compileOccurrencesWith?  input.val
+        (Concrete.Elaboration.compileRegion?  input.val startLeaf.fuel)
         (startLeaf.inheritedWires.extend start) startLeaf.binders occurrences =
           some compiledItems)
     {target : Fin input.val.regionCount} {path : List Nat}
-    (route : Splice.RegionRoute input.val start target path)
+    (route : Concrete.Splice.RegionRoute input.val start target path)
     (firstChildOccurs : ∀ child,
       (input.val.regions child).parent? = some start →
       input.val.Encloses child target →
-      ConcreteElaboration.LocalOccurrence.child child ∈ occurrences) :
+      Concrete.Elaboration.LocalOccurrence.child child ∈ occurrences) :
     Nonempty (CompiledRouteResult input startLeaf occurrences compiledItems
       route) := by
   cases route with
@@ -234,15 +236,15 @@ theorem compiledOccurrences_route_complete
         headPositions := Or.inl rfl
       }⟩
   | @step start child target rest parent position positionEq tail =>
-      have headMember : ConcreteElaboration.LocalOccurrence.child child ∈
+      have headMember : Concrete.Elaboration.LocalOccurrence.child child ∈
           occurrences :=
         firstChildOccurs child parent
-          (Splice.Input.RegionRoute.encloses tail input.property)
+          (Concrete.Splice.Input.RegionRoute.encloses tail input.property)
       obtain ⟨compiledPosition, compiledPositionEq⟩ :=
         indexOf?_complete headMember
       obtain ⟨focus, focusEq, childCompiled⟩ :=
-        Splice.compiledOccurrence_focus input.val
-          (ConcreteElaboration.compileRegion?  input.val startLeaf.fuel)
+        Concrete.Splice.compiledOccurrence_focus input.val
+          (Concrete.Elaboration.compileRegion?  input.val startLeaf.fuel)
           (startLeaf.inheritedWires.extend start) rels startLeaf.binders
           occurrences compiledItems (.child child) compiledPosition
           itemsCompiled compiledPositionEq
@@ -252,23 +254,23 @@ theorem compiledOccurrences_route_complete
           have childParentEq : childParent = start := by
             simpa [childKind, CRegion.parent?] using parent
           subst childParent
-          simp only [ConcreteElaboration.compileOccurrenceWith?, childKind]
+          simp only [Concrete.Elaboration.compileOccurrenceWith?, childKind]
             at childCompiled
           obtain ⟨childBody, childBodyEq, childItemEq⟩ :=
             Option.bind_eq_some_iff.mp childCompiled
           have childItem : Item.cut childBody = focus.item :=
             Option.some.inj childItemEq
-          obtain ⟨childResult⟩ := Splice.compileRegion_route_context_complete
+          obtain ⟨childResult⟩ := Concrete.Splice.compileRegion_route_context_complete
             input tail childBodyEq
             (startLeaf.wiresExact.extend_child input.property parent)
-            (ConcreteElaboration.BinderContext.covers_cut_child
+            (Concrete.Elaboration.BinderContext.covers_cut_child
               startLeaf.bindersCover childKind)
             (startLeaf.binderEnumeration.cutChild input.property childKind)
           let witness : Region.ContextPath (Region.mk 0 compiledItems)
               (compiledPosition.val :: rest) :=
             Region.ContextPath.cut (localWires := 0) focus focusEq
               childItem.symm childResult.witness
-          let terminalLeaf : Splice.Region.ContextPath.CompilerLeaf input.val
+          let terminalLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
               target witness := childResult.trace.leaf.underCut
           let inheritedIndex :
               Fin (startLeaf.inheritedWires.extend start).length →
@@ -291,7 +293,7 @@ theorem compiledOccurrences_route_complete
                         (congrArg List.length childResult.inherited_eq).symm
                         index)) = _
                 rw [childResult.trace.inheritedIndex_get]
-                exact Splice.compilerTrace_get_cast childResult.inherited_eq
+                exact Concrete.Splice.compilerTrace_get_cast childResult.inherited_eq
                   index
               inheritedIndex_intrinsic := by
                 intro index
@@ -312,7 +314,7 @@ theorem compiledOccurrences_route_complete
                 let binder := startLeaf.binderEnumeration.binder relation.index
                 have startLookup : startLeaf.binders binder =
                     some ⟨relationArity, relation⟩ :=
-                  Splice.binderEnumeration_lookup_exact
+                  Concrete.Splice.binderEnumeration_lookup_exact
                     startLeaf.binderEnumeration relation
                 have childLookup : childResult.state.binders binder =
                     some ⟨relationArity, relation⟩ := by
@@ -331,15 +333,15 @@ theorem compiledOccurrences_route_complete
                   targetWitness targetState targetTrace htargetBinders
                 cases targetTrace with
                 | here targetState =>
-                    have hcycle := Splice.Input.RegionRoute.encloses tail
+                    have hcycle := Concrete.Splice.Input.RegionRoute.encloses tail
                       input.property
                     exact False.elim
-                      (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                      (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                         input.property parent hcycle)
                 | @bubble _ targetChild _ _ targetParent _ _ targetTail _ _
                     targetArity _ _ _ _ _ _ _ targetState _ _
                     targetChildState targetChildKind _ _ _ targetTailTrace =>
-                    have hchild := Splice.Input.RegionRoute.firstChild_eq
+                    have hchild := Concrete.Splice.Input.RegionRoute.firstChild_eq
                       input.property parent targetParent tail targetTail
                     subst targetChild
                     have hkind : CRegion.cut start =
@@ -349,7 +351,7 @@ theorem compiledOccurrences_route_complete
                 | @cut _ targetChild _ _ targetParent _ _ targetTail _ _ _ _
                     _ _ _ _ _ targetState _ _ targetChildState
                     targetChildKind _ targetBinders _ targetTailTrace =>
-                    have hchild := Splice.Input.RegionRoute.firstChild_eq
+                    have hchild := Concrete.Splice.Input.RegionRoute.firstChild_eq
                       input.property parent targetParent tail targetTail
                     subst targetChild
                     have childBinders : childResult.state.binders =
@@ -357,7 +359,7 @@ theorem compiledOccurrences_route_complete
                       childResult.binders_eq.trans
                         (htargetBinders.symm.trans targetBinders.symm)
                     obtain ⟨hrels, hleaf⟩ :=
-                      Splice.Input.CompilerTrace.sameDiagramTerminalLexical
+                      Concrete.Splice.Input.CompilerTrace.sameDiagramTerminalLexical
                         input.property childResult.trace targetTailTrace
                         childBinders
                     exact ⟨hrels, by
@@ -367,16 +369,16 @@ theorem compiledOccurrences_route_complete
                   targetWitness targetState targetTrace htargetInherited
                 cases targetTrace with
                 | here targetState =>
-                    have hcycle := Splice.Input.RegionRoute.encloses tail
+                    have hcycle := Concrete.Splice.Input.RegionRoute.encloses tail
                       input.property
                     exact False.elim
-                      (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                      (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                         input.property parent hcycle)
                 | @bubble _ targetChild _ _ targetParent _ _ targetTail _ _
                     targetArity _ _ _ _ _ _ _ targetState _ _
                     targetChildState targetChildKind targetInherited _ _
                     targetTailTrace =>
-                    have hchild := Splice.Input.RegionRoute.firstChild_eq
+                    have hchild := Concrete.Splice.Input.RegionRoute.firstChild_eq
                       input.property parent targetParent tail targetTail
                     subst targetChild
                     have hkind : CRegion.cut start =
@@ -386,7 +388,7 @@ theorem compiledOccurrences_route_complete
                 | @cut _ targetChild _ _ targetParent _ _ targetTail _ _ _ _
                     _ _ _ _ _ targetState _ _ targetChildState
                     targetChildKind targetInherited _ _ targetTailTrace =>
-                    have hchild := Splice.Input.RegionRoute.firstChild_eq
+                    have hchild := Concrete.Splice.Input.RegionRoute.firstChild_eq
                       input.property parent targetParent tail targetTail
                     subst targetChild
                     have childInherited : childResult.state.inheritedWires =
@@ -395,7 +397,7 @@ theorem compiledOccurrences_route_complete
                         (((congrArg (fun wires => wires.extend start)
                           htargetInherited).symm).trans targetInherited.symm)
                     have terminalEq :=
-                      Splice.Input.CompilerTrace.sameDiagramTerminalInherited
+                      Concrete.Splice.Input.CompilerTrace.sameDiagramTerminalInherited
                         input.property childResult.trace targetTailTrace
                         childInherited
                     simpa only [terminalLeaf, witness] using terminalEq
@@ -407,23 +409,23 @@ theorem compiledOccurrences_route_complete
           have childParentEq : childParent = start := by
             simpa [childKind, CRegion.parent?] using parent
           subst childParent
-          simp only [ConcreteElaboration.compileOccurrenceWith?, childKind]
+          simp only [Concrete.Elaboration.compileOccurrenceWith?, childKind]
             at childCompiled
           obtain ⟨childBody, childBodyEq, childItemEq⟩ :=
             Option.bind_eq_some_iff.mp childCompiled
           have childItem : Item.bubble arity childBody = focus.item :=
             Option.some.inj childItemEq
-          obtain ⟨childResult⟩ := Splice.compileRegion_route_context_complete
+          obtain ⟨childResult⟩ := Concrete.Splice.compileRegion_route_context_complete
             input tail childBodyEq
             (startLeaf.wiresExact.extend_child input.property parent)
-            (ConcreteElaboration.BinderContext.push_covers_bubble_child
+            (Concrete.Elaboration.BinderContext.push_covers_bubble_child
               startLeaf.bindersCover childKind)
             (startLeaf.binderEnumeration.bubbleChild input.property childKind)
           let witness : Region.ContextPath (Region.mk 0 compiledItems)
               (compiledPosition.val :: rest) :=
             Region.ContextPath.bubble (localWires := 0) focus focusEq
               childItem.symm childResult.witness
-          let terminalLeaf : Splice.Region.ContextPath.CompilerLeaf input.val
+          let terminalLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
               target witness := childResult.trace.leaf.underBubble
           let inheritedIndex :
               Fin (startLeaf.inheritedWires.extend start).length →
@@ -446,7 +448,7 @@ theorem compiledOccurrences_route_complete
                         (congrArg List.length childResult.inherited_eq).symm
                         index)) = _
                 rw [childResult.trace.inheritedIndex_get]
-                exact Splice.compilerTrace_get_cast childResult.inherited_eq
+                exact Concrete.Splice.compilerTrace_get_cast childResult.inherited_eq
                   index
               inheritedIndex_intrinsic := by
                 intro index
@@ -467,17 +469,17 @@ theorem compiledOccurrences_route_complete
                 let binder := startLeaf.binderEnumeration.binder relation.index
                 have startLookup : startLeaf.binders binder =
                     some ⟨relationArity, relation⟩ :=
-                  Splice.binderEnumeration_lookup_exact
+                  Concrete.Splice.binderEnumeration_lookup_exact
                     startLeaf.binderEnumeration relation
                 have binderNe : binder ≠ child := by
                   intro equal
                   have binderEncloses :=
                     startLeaf.binderEnumeration.encloses relation.index
-                  exact ConcreteElaboration.checked_direct_child_not_encloses_parent
+                  exact Concrete.Elaboration.checked_direct_child_not_encloses_parent
                     input.property parent
                     (by simpa [binder, equal] using binderEncloses)
                 let lifted : Theory.RelVar (arity :: rels) relationArity :=
-                  ConcreteElaboration.BinderContext.liftVar arity relation
+                  Concrete.Elaboration.BinderContext.liftVar arity relation
                 have childLookup : childResult.state.binders binder =
                     some ⟨relationArity, lifted⟩ := by
                   rw [childResult.binders_eq]
@@ -485,9 +487,9 @@ theorem compiledOccurrences_route_complete
                     startLeaf.binders.push child arity binder =
                         (startLeaf.binders binder).map (fun previous =>
                           ⟨previous.1,
-                            ConcreteElaboration.BinderContext.liftVar arity
+                            Concrete.Elaboration.BinderContext.liftVar arity
                               previous.2⟩) :=
-                      ConcreteElaboration.BinderContext.push_other
+                      Concrete.Elaboration.BinderContext.push_other
                         startLeaf.binders arity binderNe
                     _ = some ⟨relationArity, lifted⟩ := by
                       rw [startLookup]
@@ -505,15 +507,15 @@ theorem compiledOccurrences_route_complete
                   targetWitness targetState targetTrace htargetBinders
                 cases targetTrace with
                 | here targetState =>
-                    have hcycle := Splice.Input.RegionRoute.encloses tail
+                    have hcycle := Concrete.Splice.Input.RegionRoute.encloses tail
                       input.property
                     exact False.elim
-                      (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                      (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                         input.property parent hcycle)
                 | @cut _ targetChild _ _ targetParent _ _ targetTail _ _ _ _
                     _ _ _ _ _ targetState _ _ targetChildState
                     targetChildKind _ _ _ targetTailTrace =>
-                    have hchild := Splice.Input.RegionRoute.firstChild_eq
+                    have hchild := Concrete.Splice.Input.RegionRoute.firstChild_eq
                       input.property parent targetParent tail targetTail
                     subst targetChild
                     have hkind : CRegion.bubble start arity =
@@ -523,7 +525,7 @@ theorem compiledOccurrences_route_complete
                     targetArity _ _ _ _ _ _ _ targetState _ _
                     targetChildState targetChildKind _ targetBinders _
                     targetTailTrace =>
-                    have hchild := Splice.Input.RegionRoute.firstChild_eq
+                    have hchild := Concrete.Splice.Input.RegionRoute.firstChild_eq
                       input.property parent targetParent tail targetTail
                     subst targetChild
                     have harity : targetArity = arity := by
@@ -536,7 +538,7 @@ theorem compiledOccurrences_route_complete
                         ((congrArg (fun binders => binders.push child arity)
                           htargetBinders.symm).trans targetBinders.symm)
                     obtain ⟨hrels, hleaf⟩ :=
-                      Splice.Input.CompilerTrace.sameDiagramTerminalLexical
+                      Concrete.Splice.Input.CompilerTrace.sameDiagramTerminalLexical
                         input.property childResult.trace targetTailTrace
                         childBinders
                     exact ⟨hrels, by
@@ -546,15 +548,15 @@ theorem compiledOccurrences_route_complete
                   targetWitness targetState targetTrace htargetInherited
                 cases targetTrace with
                 | here targetState =>
-                    have hcycle := Splice.Input.RegionRoute.encloses tail
+                    have hcycle := Concrete.Splice.Input.RegionRoute.encloses tail
                       input.property
                     exact False.elim
-                      (ConcreteElaboration.checked_direct_child_not_encloses_parent
+                      (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                         input.property parent hcycle)
                 | @cut _ targetChild _ _ targetParent _ _ targetTail _ _ _ _
                     _ _ _ _ _ targetState _ _ targetChildState
                     targetChildKind targetInherited _ _ targetTailTrace =>
-                    have hchild := Splice.Input.RegionRoute.firstChild_eq
+                    have hchild := Concrete.Splice.Input.RegionRoute.firstChild_eq
                       input.property parent targetParent tail targetTail
                     subst targetChild
                     have hkind : CRegion.bubble start arity =
@@ -564,7 +566,7 @@ theorem compiledOccurrences_route_complete
                     targetArity _ _ _ _ _ _ _ targetState _ _
                     targetChildState targetChildKind targetInherited _ _
                     targetTailTrace =>
-                    have hchild := Splice.Input.RegionRoute.firstChild_eq
+                    have hchild := Concrete.Splice.Input.RegionRoute.firstChild_eq
                       input.property parent targetParent tail targetTail
                     subst targetChild
                     have harity : targetArity = arity := by
@@ -577,7 +579,7 @@ theorem compiledOccurrences_route_complete
                         (((congrArg (fun wires => wires.extend start)
                           htargetInherited).symm).trans targetInherited.symm)
                     have terminalEq :=
-                      Splice.Input.CompilerTrace.sameDiagramTerminalInherited
+                      Concrete.Splice.Input.CompilerTrace.sameDiagramTerminalInherited
                         input.property childResult.trace targetTailTrace
                         childInherited
                     simpa only [terminalLeaf, witness] using terminalEq
@@ -590,53 +592,53 @@ theorem compiledOccurrences_route_complete
 the selection anchor.  The selected block is therefore available as a
 separate ancestor conjunct while this path reaches the insertion site. -/
 structure KeptRouteResult
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     {outer : Nat} {rels : Theory.RelCtx}
     {anchorBody : Region  outer rels}
-    (anchorLeaf : Splice.Region.ContextPath.CompilerLeaf input.val
+    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
       selection.val.anchor (.here anchorBody))
     (keptItems : ItemSeq
       (anchorLeaf.inheritedWires.extend selection.val.anchor).length rels)
     {target : Fin input.val.regionCount} {path : List Nat}
-    (_route : Splice.RegionRoute input.val selection.val.anchor target path) where
+    (_route : Concrete.Splice.RegionRoute input.val selection.val.anchor target path) where
   keptPath : List Nat
   witness : Region.ContextPath
     (Region.mk 0 keptItems) keptPath
   terminal : target = selection.val.anchor ∨
-    Nonempty (Splice.Region.ContextPath.CompilerLeaf input.val target witness)
+    Nonempty (Concrete.Splice.Region.ContextPath.CompilerLeaf input.val target witness)
 
 /-- Completeness of the retained-block path.  No second compilation authority
 is introduced: the top item block is the partition compiler result and every
 recursive child is the result already returned by `compileRegion?`. -/
 theorem keptRoute_complete
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     {outer : Nat} {rels : Theory.RelCtx}
     {anchorBody : Region  outer rels}
-    (anchorLeaf : Splice.Region.ContextPath.CompilerLeaf input.val
+    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
       selection.val.anchor (.here anchorBody))
     (keptItems : ItemSeq
       (anchorLeaf.inheritedWires.extend selection.val.anchor).length rels)
     (keptCompiled :
-      ConcreteElaboration.compileOccurrencesWith?  input.val
-        (ConcreteElaboration.compileRegion?  input.val anchorLeaf.fuel)
+      Concrete.Elaboration.compileOccurrencesWith?  input.val
+        (Concrete.Elaboration.compileRegion?  input.val anchorLeaf.fuel)
         (anchorLeaf.inheritedWires.extend selection.val.anchor)
         anchorLeaf.binders (keptOccurrences input.val selection) =
           some keptItems)
     {target : Fin input.val.regionCount} {path : List Nat}
-    (route : Splice.RegionRoute input.val selection.val.anchor target path)
+    (route : Concrete.Splice.RegionRoute input.val selection.val.anchor target path)
     (targetNotSelected : ¬ selection.val.SelectsRegion target) :
     Nonempty (KeptRouteResult input selection anchorLeaf keptItems route) := by
   have firstChildOccurs : ∀ child,
       (input.val.regions child).parent? = some selection.val.anchor →
       input.val.Encloses child target →
-      ConcreteElaboration.LocalOccurrence.child child ∈
+      Concrete.Elaboration.LocalOccurrence.child child ∈
         keptOccurrences input.val selection := by
     intro child parent childEncloses
-    have hlocal : ConcreteElaboration.LocalOccurrence.child child ∈
-        ConcreteElaboration.localOccurrences input.val selection.val.anchor :=
-      (ConcreteElaboration.mem_localOccurrences_child input.val
+    have hlocal : Concrete.Elaboration.LocalOccurrence.child child ∈
+        Concrete.Elaboration.localOccurrences input.val selection.val.anchor :=
+      (Concrete.Elaboration.mem_localOccurrences_child input.val
         selection.val.anchor child).2 parent
     rw [keptOccurrences, List.mem_filter]
     refine ⟨hlocal, ?_⟩

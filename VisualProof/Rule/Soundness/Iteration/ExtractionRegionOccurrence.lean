@@ -2,21 +2,23 @@ import VisualProof.Rule.Soundness.Iteration.ExtractionRegion
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
 
 private theorem directParent_encloses
-    {d : ConcreteDiagram} {parent child : Fin d.regionCount}
+    {d : Concrete.Diagram} {parent child : Fin d.regionCount}
     (hparent : (d.regions child).parent? = some parent) :
     d.Encloses parent child := by
   refine ⟨⟨1, by have := child.isLt; omega⟩, ?_⟩
-  simp [ConcreteDiagram.climb, hparent]
+  simp [Concrete.Diagram.climb, hparent]
 
 /-- A direct child of copied material is itself copied material.  Administrative
 root and proxy regions cannot occur below material. -/
 theorem materialDirectChild_is_material
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (parent : Fin layout.materialRegionCount)
@@ -36,17 +38,17 @@ theorem materialDirectChild_is_material
           (layout.materialRegion parent) (layout.proxy proxy) :=
       directParent_encloses hparent
     have proxyEnclosesMaterial :=
-      ConcreteDiagram.extractDiagramRaw_proxy_encloses_materialRegion input
+      Concrete.Diagram.extractDiagramRaw_proxy_encloses_materialRegion input
         selection layout proxy parent
-    have equal := ConcreteElaboration.checked_encloses_antisymm
-      (ConcreteDiagram.extractDiagramRaw_wellFormed input selection layout)
+    have equal := Concrete.Elaboration.checked_encloses_antisymm
+      (Concrete.Diagram.extractDiagramRaw_wellFormed input selection layout)
       materialEnclosesProxy proxyEnclosesMaterial
     exact False.elim (layout.proxy_ne_materialRegion proxy parent equal.symm)
   · exact hmaterial
 
 /-- Parenthood of copied material reflects exact host parenthood. -/
 theorem materialDirectChild_origin_parent
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (parent child : Fin layout.materialRegionCount)
@@ -62,7 +64,7 @@ theorem materialDirectChild_origin_parent
         (selection.mem_selectedRegions
           (selection.selectedRegions.get child)).1 (List.get_mem _ child)
       rw [rootEq] at childEncloses
-      have childRoot := ConcreteElaboration.encloses_sheet_eq
+      have childRoot := Concrete.Elaboration.encloses_sheet_eq
         input.property.root_is_sheet childEncloses
       have childParent := selection.property.childRoots_direct selectedChild
         childMember
@@ -88,7 +90,7 @@ theorem materialDirectChild_origin_parent
       simp [CRegion.parent?, origin]
 
 private theorem materialClimb_reflects
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (ancestor : Fin layout.materialRegionCount) :
@@ -107,17 +109,17 @@ private theorem materialClimb_reflects
           layout.materialRegion ancestor := Option.some.inj hclimb
       have indexEq := layout.materialRegion_injective mappedEq
       subst descendant
-      exact ConcreteDiagram.Encloses.refl _ _
+      exact Concrete.Diagram.Encloses.refl _ _
   | succ steps induction =>
       intro descendant hbound hclimb
       cases hparent : ((input.val.extractDiagramRaw selection layout).regions
           (layout.materialRegion descendant)).parent? with
       | none =>
-          simp [ConcreteDiagram.climb, hparent] at hclimb
+          simp [Concrete.Diagram.climb, hparent] at hclimb
       | some fragmentParent =>
           have tail : (input.val.extractDiagramRaw selection layout).climb steps
               fragmentParent = some (layout.materialRegion ancestor) := by
-            simpa [ConcreteDiagram.climb, hparent] using hclimb
+            simpa [Concrete.Diagram.climb, hparent] using hclimb
           rcases input.val.extractDiagramRaw_materialRegion_parent selection
               layout descendant with bodyParent | ⟨middle, materialParent⟩
           · rw [bodyParent] at hparent
@@ -130,10 +132,10 @@ private theorem materialClimb_reflects
                 change steps < layout.regionCount + 1
                 omega⟩, tail⟩
             have bodyEnclosesMaterial :=
-              ConcreteDiagram.extractDiagramRaw_bodyContainer_encloses_materialRegion
+              Concrete.Diagram.extractDiagramRaw_bodyContainer_encloses_materialRegion
                 input selection layout ancestor
-            have equal := ConcreteElaboration.checked_encloses_antisymm
-              (ConcreteDiagram.extractDiagramRaw_wellFormed input selection
+            have equal := Concrete.Elaboration.checked_encloses_antisymm
+              (Concrete.Diagram.extractDiagramRaw_wellFormed input selection
                 layout)
               materialEnclosesBody bodyEnclosesMaterial
             exact False.elim
@@ -148,13 +150,13 @@ private theorem materialClimb_reflects
                 (selection.selectedRegions.get middle)
                 (selection.selectedRegions.get descendant) :=
               directParent_encloses middleParent
-            exact ConcreteElaboration.checked_encloses_trans input.property
+            exact Concrete.Elaboration.checked_encloses_trans input.property
               ancestorEnclosesMiddle middleEnclosesDescendant
 
 /-- An ancestry relation between copied material regions reflects the exact
 host ancestry relation between their provenances. -/
 theorem materialEncloses_reflects
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (ancestor descendant : Fin layout.materialRegionCount)
@@ -169,31 +171,31 @@ theorem materialEncloses_reflects
 /-- Mapping any occurrence local to copied material back through provenance
 produces an occurrence local to the corresponding host region. -/
 theorem extractionHostOccurrenceMap_mem_local_material
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (parent : Fin layout.materialRegionCount)
-    (occurrence : ConcreteElaboration.LocalOccurrence layout.regionCount
+    (occurrence : Concrete.Elaboration.LocalOccurrence layout.regionCount
       layout.nodeCount)
-    (member : occurrence ∈ ConcreteElaboration.localOccurrences
+    (member : occurrence ∈ Concrete.Elaboration.localOccurrences
       (input.val.extractDiagramRaw selection layout)
       (layout.materialRegion parent)) :
     extractionHostOccurrenceMap input selection layout occurrence ∈
-      ConcreteElaboration.localOccurrences input.val
+      Concrete.Elaboration.localOccurrences input.val
         (selection.selectedRegions.get parent) := by
   cases occurrence with
   | node node =>
-      have hlocal := (ConcreteElaboration.mem_localOccurrences_node _ _ _).1
+      have hlocal := (Concrete.Elaboration.mem_localOccurrences_node _ _ _).1
         member
       have ownerEq := input.val.extractDiagramRaw_node_region selection layout node
       rw [ownerEq] at hlocal
       have hostOwner := (fragmentParent_eq_materialRegion_iff input selection
         layout (input.val.nodes (selection.selectedNodes.get node)).region
         parent).1 hlocal
-      apply (ConcreteElaboration.mem_localOccurrences_node _ _ _).2
+      apply (Concrete.Elaboration.mem_localOccurrences_node _ _ _).2
       simpa [extractionHostOccurrenceMap] using hostOwner
   | child child =>
-      have hlocal := (ConcreteElaboration.mem_localOccurrences_child _ _ _).1
+      have hlocal := (Concrete.Elaboration.mem_localOccurrences_child _ _ _).1
         member
       obtain ⟨childIndex, childEq⟩ := materialDirectChild_is_material input
         selection layout parent child hlocal
@@ -210,30 +212,30 @@ theorem extractionHostOccurrenceMap_mem_local_material
       have originEq : selection.selectedRegions.get (Classical.choose material) =
           selection.selectedRegions.get childIndex := congrArg
         selection.selectedRegions.get chosenEq
-      apply (ConcreteElaboration.mem_localOccurrences_child _ _ _).2
+      apply (Concrete.Elaboration.mem_localOccurrences_child _ _ _).2
       rw [originEq]
       exact hostParent
 
 /-- Every host occurrence local to selected material has an extracted local
 preimage with that exact provenance. -/
 theorem hostLocalOccurrence_has_extractionPreimage
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (parent : Fin layout.materialRegionCount)
-    (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (occurrence : Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount)
-    (member : occurrence ∈ ConcreteElaboration.localOccurrences input.val
+    (member : occurrence ∈ Concrete.Elaboration.localOccurrences input.val
       (selection.selectedRegions.get parent)) :
     ∃ fragmentOccurrence,
-      fragmentOccurrence ∈ ConcreteElaboration.localOccurrences
+      fragmentOccurrence ∈ Concrete.Elaboration.localOccurrences
         (input.val.extractDiagramRaw selection layout)
         (layout.materialRegion parent) ∧
       extractionHostOccurrenceMap input selection layout fragmentOccurrence =
         occurrence := by
   cases occurrence with
   | node node =>
-      have owner := (ConcreteElaboration.mem_localOccurrences_node _ _ _).1
+      have owner := (Concrete.Elaboration.mem_localOccurrences_node _ _ _).1
         member
       have selectedOwner : selection.val.SelectsRegion
           (input.val.nodes node).region := by
@@ -246,7 +248,7 @@ theorem hostLocalOccurrence_has_extractionPreimage
       have hget' : selection.selectedNodes.get fragmentNode = node := by
         simpa only [List.get_eq_getElem] using hget
       refine ⟨.node fragmentNode, ?_, ?_⟩
-      · apply (ConcreteElaboration.mem_localOccurrences_node _ _ _).2
+      · apply (Concrete.Elaboration.mem_localOccurrences_node _ _ _).2
         rw [input.val.extractDiagramRaw_node_region selection layout]
         apply (fragmentParent_eq_materialRegion_iff input selection layout
           (input.val.nodes (selection.selectedNodes.get fragmentNode)).region
@@ -254,10 +256,10 @@ theorem hostLocalOccurrence_has_extractionPreimage
         rw [hget']
         exact owner
       · simp only [extractionHostOccurrenceMap]
-        exact congrArg ConcreteElaboration.LocalOccurrence.node hget'
+        exact congrArg Concrete.Elaboration.LocalOccurrence.node hget'
   | child child =>
       have hostParent :=
-        (ConcreteElaboration.mem_localOccurrences_child _ _ _).1 member
+        (Concrete.Elaboration.mem_localOccurrences_child _ _ _).1 member
       have selectedParent : selection.val.SelectsRegion
           (selection.selectedRegions.get parent) :=
         (selection.mem_selectedRegions _).1 (List.get_mem _ parent)
@@ -265,7 +267,7 @@ theorem hostLocalOccurrence_has_extractionPreimage
         by
           obtain ⟨root, rootMember, rootEnclosesParent⟩ := selectedParent
           exact ⟨root, rootMember,
-            ConcreteElaboration.checked_encloses_trans input.property
+            Concrete.Elaboration.checked_encloses_trans input.property
               rootEnclosesParent (directParent_encloses hostParent)⟩
       have childMember : child ∈ selection.selectedRegions :=
         (selection.mem_selectedRegions child).2 selectedChild
@@ -275,11 +277,11 @@ theorem hostLocalOccurrence_has_extractionPreimage
         simpa only [List.get_eq_getElem] using hget
       let fragmentChild := layout.materialRegion childIndex
       refine ⟨.child fragmentChild, ?_, ?_⟩
-      · apply (ConcreteElaboration.mem_localOccurrences_child _ _ _).2
+      · apply (Concrete.Elaboration.mem_localOccurrences_child _ _ _).2
         unfold fragmentChild
         rw [← (fragmentParent_eq_materialRegion_iff input selection layout
           (selection.selectedRegions.get parent) parent).2 rfl]
-        apply ConcreteDiagram.extractDiagramRaw_materialRegion_parent_exact
+        apply Concrete.Diagram.extractDiagramRaw_materialRegion_parent_exact
           input selection layout childIndex
         rwa [hget']
       · have material : ∃ index : Fin layout.materialRegionCount,
@@ -294,7 +296,7 @@ theorem hostLocalOccurrence_has_extractionPreimage
         rw [originEq]
 
 @[simp] theorem extractionHostOccurrenceMap_materialChild
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (index : Fin layout.materialRegionCount) :
@@ -309,20 +311,20 @@ theorem hostLocalOccurrence_has_extractionPreimage
   have chosenEq : Classical.choose material = index :=
     layout.materialRegion_injective (Classical.choose_spec material)
   exact congrArg (fun candidate =>
-    ConcreteElaboration.LocalOccurrence.child
+    Concrete.Elaboration.LocalOccurrence.child
       (selection.selectedRegions.get candidate)) chosenEq
 
 private theorem extractionHostOccurrenceMap_injective_on_materialLocals
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (parent : Fin layout.materialRegionCount)
-    {first second : ConcreteElaboration.LocalOccurrence layout.regionCount
+    {first second : Concrete.Elaboration.LocalOccurrence layout.regionCount
       layout.nodeCount}
-    (firstMember : first ∈ ConcreteElaboration.localOccurrences
+    (firstMember : first ∈ Concrete.Elaboration.localOccurrences
       (input.val.extractDiagramRaw selection layout)
       (layout.materialRegion parent))
-    (secondMember : second ∈ ConcreteElaboration.localOccurrences
+    (secondMember : second ∈ Concrete.Elaboration.localOccurrences
       (input.val.extractDiagramRaw selection layout)
       (layout.materialRegion parent))
     (mapped : extractionHostOccurrenceMap input selection layout first =
@@ -333,7 +335,7 @@ private theorem extractionHostOccurrenceMap_injective_on_materialLocals
       cases second with
       | node secondNode =>
           simp only [extractionHostOccurrenceMap] at mapped
-          have origins := ConcreteElaboration.LocalOccurrence.node.inj mapped
+          have origins := Concrete.Elaboration.LocalOccurrence.node.inj mapped
           have indices : firstNode = secondNode := by
             apply Fin.ext
             exact (List.getElem_inj selection.selectedNodes_nodup).mp (by
@@ -342,7 +344,7 @@ private theorem extractionHostOccurrenceMap_injective_on_materialLocals
           rfl
       | child secondChild =>
           have secondLocal :=
-            (ConcreteElaboration.mem_localOccurrences_child _ _ _).1
+            (Concrete.Elaboration.mem_localOccurrences_child _ _ _).1
               secondMember
           obtain ⟨index, rfl⟩ := materialDirectChild_is_material input
             selection layout parent secondChild secondLocal
@@ -351,7 +353,7 @@ private theorem extractionHostOccurrenceMap_injective_on_materialLocals
           cases mapped
   | child firstChild =>
       have firstLocal :=
-        (ConcreteElaboration.mem_localOccurrences_child _ _ _).1 firstMember
+        (Concrete.Elaboration.mem_localOccurrences_child _ _ _).1 firstMember
       obtain ⟨firstIndex, rfl⟩ := materialDirectChild_is_material input
         selection layout parent firstChild firstLocal
       cases second with
@@ -361,12 +363,12 @@ private theorem extractionHostOccurrenceMap_injective_on_materialLocals
           cases mapped
       | child secondChild =>
           have secondLocal :=
-            (ConcreteElaboration.mem_localOccurrences_child _ _ _).1
+            (Concrete.Elaboration.mem_localOccurrences_child _ _ _).1
               secondMember
           obtain ⟨secondIndex, rfl⟩ := materialDirectChild_is_material input
             selection layout parent secondChild secondLocal
           simp only [extractionHostOccurrenceMap_materialChild] at mapped
-          have origins := ConcreteElaboration.LocalOccurrence.child.inj mapped
+          have origins := Concrete.Elaboration.LocalOccurrence.child.inj mapped
           have indices : firstIndex = secondIndex := by
             apply Fin.ext
             exact (List.getElem_inj selection.selectedRegions_nodup).mp (by
@@ -392,25 +394,25 @@ private theorem perm_of_nodup_and_mem_iff
 /-- Recursive material occurrences are exactly the host region's direct
 occurrences, up to extraction provenance and compiler-irrelevant ordering. -/
 theorem extractionHostOccurrenceMap_material_perm_host
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (parent : Fin layout.materialRegionCount) :
-    (ConcreteElaboration.localOccurrences
+    (Concrete.Elaboration.localOccurrences
         (input.val.extractDiagramRaw selection layout)
         (layout.materialRegion parent)
       |>.map (extractionHostOccurrenceMap input selection layout)).Perm
-      (ConcreteElaboration.localOccurrences input.val
+      (Concrete.Elaboration.localOccurrences input.val
         (selection.selectedRegions.get parent)) := by
-  let fragmentOccurrences := ConcreteElaboration.localOccurrences
+  let fragmentOccurrences := Concrete.Elaboration.localOccurrences
     (input.val.extractDiagramRaw selection layout)
     (layout.materialRegion parent)
   apply perm_of_nodup_and_mem_iff
-  · have sourceNodup := ConcreteElaboration.localOccurrences_nodup
+  · have sourceNodup := Concrete.Elaboration.localOccurrences_nodup
       (input.val.extractDiagramRaw selection layout)
       (layout.materialRegion parent)
     have mappedNodup : ∀ items : List
-        (ConcreteElaboration.LocalOccurrence layout.regionCount
+        (Concrete.Elaboration.LocalOccurrence layout.regionCount
           layout.nodeCount),
         items.Nodup →
         (∀ occurrence, occurrence ∈ items → occurrence ∈ fragmentOccurrences) →
@@ -436,7 +438,7 @@ theorem extractionHostOccurrenceMap_material_perm_host
               intro occurrence occurrenceMember
               exact subset occurrence (by simp [occurrenceMember]))
     exact mappedNodup fragmentOccurrences sourceNodup (fun _ member => member)
-  · exact ConcreteElaboration.localOccurrences_nodup input.val
+  · exact Concrete.Elaboration.localOccurrences_nodup input.val
       (selection.selectedRegions.get parent)
   · intro occurrence
     constructor

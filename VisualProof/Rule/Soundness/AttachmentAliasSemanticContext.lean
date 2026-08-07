@@ -1,6 +1,8 @@
 import VisualProof.Rule.Soundness.AttachmentAliasSemanticCompiler
 
-namespace VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+namespace VisualProof.Concrete.Splice.AttachmentAliasMaterialization
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -27,15 +29,15 @@ private theorem listGet_map_cast_soundness (values : List α) (f : α → β)
 /-- Away from the root, materialization changes only the representation of
 wire identities: the exact local list is the ordered lift of the source list. -/
 theorem materialized_exactScopeWires_of_ne_root
-    (pattern : OpenConcreteDiagram)
+    (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (bodyContainer region : Fin pattern.diagram.regionCount)
     (hne : region ≠ pattern.diagram.root) :
-    ConcreteElaboration.exactScopeWires
+    Concrete.Elaboration.exactScopeWires
         (materializedDiagram pattern attachment bodyContainer) region =
-      (ConcreteElaboration.exactScopeWires pattern.diagram region).map
+      (Concrete.Elaboration.exactScopeWires pattern.diagram region).map
         (liftOldWire pattern attachment) := by
-  unfold ConcreteElaboration.exactScopeWires filterFin
+  unfold Concrete.Elaboration.exactScopeWires filterFin
   change List.filter _
       (allFin (pattern.diagram.wireCount + aliasCount pattern attachment)) = _
   rw [allFin_add pattern.diagram.wireCount (aliasCount pattern attachment)]
@@ -96,25 +98,25 @@ theorem materialized_exactScopeWires_of_ne_root
         (List.map (Fin.castAdd (aliasCount pattern attachment))) oldFilter
 
 theorem materialized_exactScopeWires_length_of_ne_root
-    (pattern : OpenConcreteDiagram)
+    (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (bodyContainer region : Fin pattern.diagram.regionCount)
     (hne : region ≠ pattern.diagram.root) :
-    (ConcreteElaboration.exactScopeWires
+    (Concrete.Elaboration.exactScopeWires
       (materializedDiagram pattern attachment bodyContainer) region).length =
-    (ConcreteElaboration.exactScopeWires pattern.diagram region).length := by
+    (Concrete.Elaboration.exactScopeWires pattern.diagram region).length := by
   rw [materialized_exactScopeWires_of_ne_root pattern attachment bodyContainer
     region hne]
   exact List.length_map _
 
 noncomputable def extendCollapse
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (region : Fin pattern.val.diagram.regionCount)
     (expandedExact : (expanded.extend region).Exact region)
@@ -125,13 +127,13 @@ noncomputable def extendCollapse
     (expanded.extend region) (original.extend region) expandedExact originalExact
 
 theorem extendCollapse_index_inherited
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (region : Fin pattern.val.diagram.regionCount)
     (expandedExact : (expanded.extend region).Exact region)
@@ -158,28 +160,28 @@ theorem extendCollapse_index_inherited
     exact (mapped.trans (collapse.get index).symm).trans originalGet.symm)
 
 theorem extendCollapse_index_local
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (region : Fin pattern.val.diagram.regionCount)
     (hne : region ≠ pattern.val.diagram.root)
     (expandedExact : (expanded.extend region).Exact region)
     (originalExact : (original.extend region).Exact region)
-    (index : Fin (ConcreteElaboration.exactScopeWires
+    (index : Fin (Concrete.Elaboration.exactScopeWires
       (materializedDiagram pattern.val attachment spine.bodyContainer)
         region).length) :
     (extendCollapse pattern attachment spine contract expanded original collapse
         region expandedExact originalExact).indexMap
           (Fin.cast
-            (ConcreteElaboration.WireContext.length_extend expanded region).symm
+            (Concrete.Elaboration.WireContext.length_extend expanded region).symm
             (Fin.natAdd expanded.length index)) =
       Fin.cast
-        (ConcreteElaboration.WireContext.length_extend original region).symm
+        (Concrete.Elaboration.WireContext.length_extend original region).symm
         (Fin.natAdd original.length
           (Fin.cast
             (materialized_exactScopeWires_length_of_ne_root pattern.val attachment
@@ -192,13 +194,13 @@ theorem extendCollapse_index_local
     have mapped := (extendCollapse pattern attachment spine contract expanded
       original collapse region expandedExact originalExact).get
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend expanded region).symm
+          (Concrete.Elaboration.WireContext.length_extend expanded region).symm
           (Fin.natAdd expanded.length index))
     have expandedGet : (expanded.extend region).get
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend expanded region).symm
+          (Concrete.Elaboration.WireContext.length_extend expanded region).symm
           (Fin.natAdd expanded.length index)) =
-        (ConcreteElaboration.exactScopeWires
+        (Concrete.Elaboration.exactScopeWires
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           region).get index := by
       simpa only [List.get_eq_getElem] using expanded.extend_local region index
@@ -207,35 +209,35 @@ theorem extendCollapse_index_local
       (materialized_exactScopeWires_of_ne_root pattern.val attachment
         spine.bodyContainer region hne) index
     have targetGet' :
-        (ConcreteElaboration.exactScopeWires
+        (Concrete.Elaboration.exactScopeWires
           (materializedDiagram pattern.val attachment spine.bodyContainer)
             region).get index =
           liftOldWire pattern.val attachment
-            ((ConcreteElaboration.exactScopeWires pattern.val.diagram region).get
+            ((Concrete.Elaboration.exactScopeWires pattern.val.diagram region).get
               sourceIndex) := by
       simpa [sourceIndex] using targetGet.trans
         (listGet_map_cast_soundness
-          (ConcreteElaboration.exactScopeWires pattern.val.diagram region)
+          (Concrete.Elaboration.exactScopeWires pattern.val.diagram region)
           (liftOldWire pattern.val attachment) sourceIndex)
     rw [targetGet', collapseWire_old] at mapped
     have originalGet : (original.extend region).get
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend original region).symm
+          (Concrete.Elaboration.WireContext.length_extend original region).symm
           (Fin.natAdd original.length sourceIndex)) =
-        (ConcreteElaboration.exactScopeWires pattern.val.diagram region).get
+        (Concrete.Elaboration.exactScopeWires pattern.val.diagram region).get
           sourceIndex := by
       simpa only [List.get_eq_getElem] using
         original.extend_local region sourceIndex
     exact mapped.trans originalGet.symm)
 
 theorem extendCollapse_oldIndex_inherited
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (region : Fin pattern.val.diagram.regionCount)
     (expandedExact : (expanded.extend region).Exact region)
@@ -262,27 +264,27 @@ theorem extendCollapse_oldIndex_inherited
     exact oldGet.trans ((collapse.old_get index).symm.trans expandedGet.symm))
 
 theorem extendCollapse_oldIndex_local
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (region : Fin pattern.val.diagram.regionCount)
     (hne : region ≠ pattern.val.diagram.root)
     (expandedExact : (expanded.extend region).Exact region)
     (originalExact : (original.extend region).Exact region)
-    (index : Fin (ConcreteElaboration.exactScopeWires
+    (index : Fin (Concrete.Elaboration.exactScopeWires
       pattern.val.diagram region).length) :
     (extendCollapse pattern attachment spine contract expanded original collapse
         region expandedExact originalExact).oldIndex
           (Fin.cast
-            (ConcreteElaboration.WireContext.length_extend original region).symm
+            (Concrete.Elaboration.WireContext.length_extend original region).symm
             (Fin.natAdd original.length index)) =
       Fin.cast
-        (ConcreteElaboration.WireContext.length_extend expanded region).symm
+        (Concrete.Elaboration.WireContext.length_extend expanded region).symm
         (Fin.natAdd expanded.length
           (Fin.cast
             (materialized_exactScopeWires_length_of_ne_root pattern.val attachment
@@ -292,13 +294,13 @@ theorem extendCollapse_oldIndex_local
     have oldGet := (extendCollapse pattern attachment spine contract expanded
       original collapse region expandedExact originalExact).old_get
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend original region).symm
+          (Concrete.Elaboration.WireContext.length_extend original region).symm
           (Fin.natAdd original.length index))
     have originalGet : (original.extend region).get
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend original region).symm
+          (Concrete.Elaboration.WireContext.length_extend original region).symm
           (Fin.natAdd original.length index)) =
-        (ConcreteElaboration.exactScopeWires pattern.val.diagram region).get
+        (Concrete.Elaboration.exactScopeWires pattern.val.diagram region).get
           index := by
       simpa only [List.get_eq_getElem] using original.extend_local region index
     rw [originalGet] at oldGet
@@ -309,29 +311,29 @@ theorem extendCollapse_oldIndex_local
         spine.bodyContainer region hne).symm index
     have targetGet := listGet_cast_of_eq scopeEq targetIndex
     have targetGet' :
-        (ConcreteElaboration.exactScopeWires
+        (Concrete.Elaboration.exactScopeWires
           (materializedDiagram pattern.val attachment spine.bodyContainer)
             region).get targetIndex =
           liftOldWire pattern.val attachment
-            ((ConcreteElaboration.exactScopeWires pattern.val.diagram region).get
+            ((Concrete.Elaboration.exactScopeWires pattern.val.diagram region).get
               index) := by
       simpa [targetIndex] using targetGet.trans
         (listGet_map_cast_soundness
-          (ConcreteElaboration.exactScopeWires pattern.val.diagram region)
+          (Concrete.Elaboration.exactScopeWires pattern.val.diagram region)
           (liftOldWire pattern.val attachment) index)
     have expandedGet : (expanded.extend region).get
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend expanded region).symm
+          (Concrete.Elaboration.WireContext.length_extend expanded region).symm
           (Fin.natAdd expanded.length
             targetIndex)) =
         liftOldWire pattern.val attachment
-          ((ConcreteElaboration.exactScopeWires pattern.val.diagram region).get
+          ((Concrete.Elaboration.exactScopeWires pattern.val.diagram region).get
             index) := by
       have localGet : (expanded.extend region).get
           (Fin.cast
-            (ConcreteElaboration.WireContext.length_extend expanded region).symm
+            (Concrete.Elaboration.WireContext.length_extend expanded region).symm
             (Fin.natAdd expanded.length targetIndex)) =
-          (ConcreteElaboration.exactScopeWires
+          (Concrete.Elaboration.exactScopeWires
             (materializedDiagram pattern.val attachment spine.bodyContainer)
               region).get targetIndex := by
         simpa only [List.get_eq_getElem] using
@@ -340,70 +342,70 @@ theorem extendCollapse_oldIndex_local
     exact oldGet.trans expandedGet.symm)
 
 def extendedEnv
-    (context : ConcreteElaboration.WireContext input)
+    (context : Concrete.Elaboration.WireContext input)
     (region : Fin input.regionCount)
     (outer : Fin context.length → D)
-    (localEnv : Fin (ConcreteElaboration.exactScopeWires input region).length → D) :
+    (localEnv : Fin (Concrete.Elaboration.exactScopeWires input region).length → D) :
     Fin (context.extend region).length → D :=
-  ConcreteElaboration.extendedEnvironment context region outer localEnv
+  Concrete.Elaboration.extendedEnvironment context region outer localEnv
 
 theorem extendedEnv_outer
-    (context : ConcreteElaboration.WireContext input)
+    (context : Concrete.Elaboration.WireContext input)
     (region : Fin input.regionCount)
     (outer : Fin context.length → D)
-    (localEnv : Fin (ConcreteElaboration.exactScopeWires input region).length → D)
+    (localEnv : Fin (Concrete.Elaboration.exactScopeWires input region).length → D)
     (index : Fin context.length) :
     extendedEnv context region outer localEnv (context.outerIndex region index) =
       outer index := by
-  unfold extendedEnv ConcreteElaboration.extendedEnvironment
+  unfold extendedEnv Concrete.Elaboration.extendedEnvironment
   change extendWireEnv outer localEnv
-      (Fin.cast (ConcreteElaboration.WireContext.length_extend context region)
+      (Fin.cast (Concrete.Elaboration.WireContext.length_extend context region)
         (context.outerIndex region index)) = outer index
   rw [show Fin.cast _ (context.outerIndex region index) =
-      Fin.castAdd (ConcreteElaboration.exactScopeWires input region).length index by
+      Fin.castAdd (Concrete.Elaboration.exactScopeWires input region).length index by
     apply Fin.ext
     rfl]
   exact Fin.addCases_left index
 
 noncomputable def targetLocal
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (region : Fin pattern.val.diagram.regionCount)
     (expandedExact : (expanded.extend region).Exact region)
     (originalExact : (original.extend region).Exact region)
     (sourceOuter : Fin original.length → D)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       pattern.val.diagram region).length → D) :
-    Fin (ConcreteElaboration.exactScopeWires
+    Fin (Concrete.Elaboration.exactScopeWires
       (materializedDiagram pattern.val attachment spine.bodyContainer)
         region).length → D :=
   fun index => extendedEnv original region sourceOuter sourceLocal
     ((extendCollapse pattern attachment spine contract expanded original collapse
       region expandedExact originalExact).indexMap
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend expanded region).symm
+          (Concrete.Elaboration.WireContext.length_extend expanded region).symm
           (Fin.natAdd expanded.length index)))
 
 theorem extendedEnv_collapse
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (region : Fin pattern.val.diagram.regionCount)
     (expandedExact : (expanded.extend region).Exact region)
     (originalExact : (original.extend region).Exact region)
     (sourceOuter : Fin original.length → D)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       pattern.val.diagram region).length → D) :
     extendedEnv original region sourceOuter sourceLocal ∘
         (extendCollapse pattern attachment spine contract expanded original
@@ -413,9 +415,9 @@ theorem extendedEnv_collapse
           region expandedExact originalExact sourceOuter sourceLocal) := by
   funext targetIndex
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend expanded region) targetIndex
+    (Concrete.Elaboration.WireContext.length_extend expanded region) targetIndex
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend expanded region).symm
+      (Concrete.Elaboration.WireContext.length_extend expanded region).symm
       split = targetIndex := by apply Fin.ext; rfl
   rw [← recover]
   refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) split
@@ -429,31 +431,31 @@ theorem extendedEnv_collapse
       expanded original collapse region expandedExact originalExact inherited]
     rw [extendedEnv_outer, extendedEnv_outer]
     rfl
-  · simp [targetLocal, extendedEnv, ConcreteElaboration.extendedEnvironment,
+  · simp [targetLocal, extendedEnv, Concrete.Elaboration.extendedEnvironment,
       extendWireEnv, Function.comp_def]
 
 def sourceLocal
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (region : Fin pattern.val.diagram.regionCount)
     (hne : region ≠ pattern.val.diagram.root)
-    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+    (targetLocal : Fin (Concrete.Elaboration.exactScopeWires
       (materializedDiagram pattern.val attachment spine.bodyContainer)
         region).length → D) :
-    Fin (ConcreteElaboration.exactScopeWires pattern.val.diagram region).length → D :=
+    Fin (Concrete.Elaboration.exactScopeWires pattern.val.diagram region).length → D :=
   targetLocal ∘ Fin.cast
     (materialized_exactScopeWires_length_of_ne_root pattern.val attachment
       spine.bodyContainer region hne).symm
 
 theorem extendedEnv_uncollapse
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (region : Fin pattern.val.diagram.regionCount)
     (hne : region ≠ pattern.val.diagram.root)
@@ -462,7 +464,7 @@ theorem extendedEnv_uncollapse
     (sourceOuter : Fin original.length → D)
     (targetOuter : Fin expanded.length → D)
     (outerAgrees : sourceOuter ∘ collapse.indexMap = targetOuter)
-    (targetLocalEnv : Fin (ConcreteElaboration.exactScopeWires
+    (targetLocalEnv : Fin (Concrete.Elaboration.exactScopeWires
       (materializedDiagram pattern.val attachment spine.bodyContainer)
         region).length → D) :
     extendedEnv original region sourceOuter
@@ -472,9 +474,9 @@ theorem extendedEnv_uncollapse
       extendedEnv expanded region targetOuter targetLocalEnv := by
   funext targetIndex
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend expanded region) targetIndex
+    (Concrete.Elaboration.WireContext.length_extend expanded region) targetIndex
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend expanded region).symm
+      (Concrete.Elaboration.WireContext.length_extend expanded region).symm
       split = targetIndex := by apply Fin.ext; rfl
   rw [← recover]
   refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) split
@@ -494,23 +496,23 @@ theorem extendedEnv_uncollapse
         ((extendCollapse pattern attachment spine contract expanded original
           collapse region expandedExact originalExact).indexMap
             (Fin.cast
-              (ConcreteElaboration.WireContext.length_extend expanded region).symm
+              (Concrete.Elaboration.WireContext.length_extend expanded region).symm
               (Fin.natAdd expanded.length localIndex))) = _
     rw [extendCollapse_index_local pattern attachment spine contract expanded
       original collapse region hne expandedExact originalExact localIndex]
-    simp [sourceLocal, extendedEnv, ConcreteElaboration.extendedEnvironment,
+    simp [sourceLocal, extendedEnv, Concrete.Elaboration.extendedEnvironment,
       extendWireEnv, Function.comp_def]
 
 /-- The canonical lifted-old indices transport an arbitrary target local
 valuation back to the source without imposing any equality on fresh aliases. -/
 theorem extendedEnv_oldIndex
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (region : Fin pattern.val.diagram.regionCount)
     (hne : region ≠ pattern.val.diagram.root)
@@ -519,7 +521,7 @@ theorem extendedEnv_oldIndex
     (sourceOuter : Fin original.length → D)
     (targetOuter : Fin expanded.length → D)
     (outerEq : sourceOuter = targetOuter ∘ collapse.oldIndex)
-    (targetLocalEnv : Fin (ConcreteElaboration.exactScopeWires
+    (targetLocalEnv : Fin (Concrete.Elaboration.exactScopeWires
       (materializedDiagram pattern.val attachment spine.bodyContainer)
         region).length → D) :
     extendedEnv original region sourceOuter
@@ -529,9 +531,9 @@ theorem extendedEnv_oldIndex
           collapse region expandedExact originalExact).oldIndex := by
   funext sourceIndex
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend original region) sourceIndex
+    (Concrete.Elaboration.WireContext.length_extend original region) sourceIndex
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend original region).symm
+      (Concrete.Elaboration.WireContext.length_extend original region).symm
       split = sourceIndex := by apply Fin.ext; rfl
   rw [← recover]
   refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) split
@@ -551,56 +553,56 @@ theorem extendedEnv_oldIndex
   · change extendedEnv original region sourceOuter
         (sourceLocal pattern attachment spine region hne targetLocalEnv)
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend original region).symm
+          (Concrete.Elaboration.WireContext.length_extend original region).symm
           (Fin.natAdd original.length localIndex)) =
       extendedEnv expanded region targetOuter targetLocalEnv
         ((extendCollapse pattern attachment spine contract expanded original
           collapse region expandedExact originalExact).oldIndex
             (Fin.cast
-              (ConcreteElaboration.WireContext.length_extend original region).symm
+              (Concrete.Elaboration.WireContext.length_extend original region).symm
               (Fin.natAdd original.length localIndex)))
     rw [extendCollapse_oldIndex_local pattern attachment spine contract expanded
       original collapse region hne expandedExact originalExact localIndex]
-    simp [sourceLocal, extendedEnv, ConcreteElaboration.extendedEnvironment,
+    simp [sourceLocal, extendedEnv, Concrete.Elaboration.extendedEnvironment,
       extendWireEnv, Function.comp_def]
 
 /-- Select the source local valuation directly through the canonical old-wire
 indices of the extended collapse. Unlike `sourceLocal`, this formulation also
 works at the root, where materialization adds root-scoped alias wires. -/
 noncomputable def oldIndexLocal
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (region : Fin pattern.val.diagram.regionCount)
     (expandedExact : (expanded.extend region).Exact region)
     (originalExact : (original.extend region).Exact region)
     (targetOuter : Fin expanded.length → D)
-    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+    (targetLocal : Fin (Concrete.Elaboration.exactScopeWires
       (materializedDiagram pattern.val attachment spine.bodyContainer)
         region).length → D) :
-    Fin (ConcreteElaboration.exactScopeWires pattern.val.diagram region).length →
+    Fin (Concrete.Elaboration.exactScopeWires pattern.val.diagram region).length →
       D :=
   fun index =>
     extendedEnv expanded region targetOuter targetLocal
       ((extendCollapse pattern attachment spine contract expanded original
         collapse region expandedExact originalExact).oldIndex
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend original region).symm
+          (Concrete.Elaboration.WireContext.length_extend original region).symm
           (Fin.natAdd original.length index)))
 
 theorem extendedEnv_oldIndex_general
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (region : Fin pattern.val.diagram.regionCount)
     (expandedExact : (expanded.extend region).Exact region)
@@ -608,7 +610,7 @@ theorem extendedEnv_oldIndex_general
     (sourceOuter : Fin original.length → D)
     (targetOuter : Fin expanded.length → D)
     (outerEq : sourceOuter = targetOuter ∘ collapse.oldIndex)
-    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+    (targetLocal : Fin (Concrete.Elaboration.exactScopeWires
       (materializedDiagram pattern.val attachment spine.bodyContainer)
         region).length → D) :
     extendedEnv original region sourceOuter
@@ -619,9 +621,9 @@ theorem extendedEnv_oldIndex_general
           collapse region expandedExact originalExact).oldIndex := by
   funext sourceIndex
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend original region) sourceIndex
+    (Concrete.Elaboration.WireContext.length_extend original region) sourceIndex
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend original region).symm
+      (Concrete.Elaboration.WireContext.length_extend original region).symm
       split = sourceIndex := by apply Fin.ext; rfl
   rw [← recover]
   refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) split
@@ -633,18 +635,18 @@ theorem extendedEnv_oldIndex_general
     rw [extendedEnv_outer, extendedEnv_outer, outerEq]
     rfl
   · simp [oldIndexLocal, extendedEnv,
-      ConcreteElaboration.extendedEnvironment, extendWireEnv,
+      Concrete.Elaboration.extendedEnvironment, extendWireEnv,
       Function.comp_def]
 
 def targetLocalOldIndex
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (region : Fin pattern.val.diagram.regionCount)
     (hne : region ≠ pattern.val.diagram.root)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       pattern.val.diagram region).length → D) :
-    Fin (ConcreteElaboration.exactScopeWires
+    Fin (Concrete.Elaboration.exactScopeWires
       (materializedDiagram pattern.val attachment spine.bodyContainer)
         region).length → D :=
   sourceLocal ∘ Fin.cast
@@ -652,13 +654,13 @@ def targetLocalOldIndex
       spine.bodyContainer region hne)
 
 theorem extendedEnv_oldIndex_lift
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
-    (expanded : ConcreteElaboration.WireContext
+    (expanded : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (original : ConcreteElaboration.WireContext pattern.val.diagram)
+    (original : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine expanded original)
     (region : Fin pattern.val.diagram.regionCount)
     (hne : region ≠ pattern.val.diagram.root)
@@ -667,7 +669,7 @@ theorem extendedEnv_oldIndex_lift
     (sourceOuter : Fin original.length → D)
     (targetOuter : Fin expanded.length → D)
     (outerEq : sourceOuter = targetOuter ∘ collapse.oldIndex)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       pattern.val.diagram region).length → D) :
     extendedEnv original region sourceOuter sourceLocal =
       extendedEnv expanded region targetOuter
@@ -676,9 +678,9 @@ theorem extendedEnv_oldIndex_lift
           collapse region expandedExact originalExact).oldIndex := by
   funext sourceIndex
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend original region) sourceIndex
+    (Concrete.Elaboration.WireContext.length_extend original region) sourceIndex
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend original region).symm
+      (Concrete.Elaboration.WireContext.length_extend original region).symm
       split = sourceIndex := by apply Fin.ext; rfl
   rw [← recover]
   refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) split
@@ -694,9 +696,9 @@ theorem extendedEnv_oldIndex_lift
       expanded original collapse region hne expandedExact originalExact
       localIndex]
     simp [targetLocalOldIndex, extendedEnv,
-      ConcreteElaboration.extendedEnvironment, extendWireEnv,
+      Concrete.Elaboration.extendedEnvironment, extendWireEnv,
       Function.comp_def]
 
 end Semantic
 
-end VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+end VisualProof.Concrete.Splice.AttachmentAliasMaterialization

@@ -4,6 +4,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAttachmentSemantic
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -13,15 +15,15 @@ namespace InstantiationSemantic
 /-- Every accepted executor step carries the complete fixed-relation region
 simulation for every region enclosed by the moving quantified bubble. -/
 def RegionSimulationsEveryStep
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -36,7 +38,7 @@ def RegionSimulationsEveryStep
   | .done _ _ _ => True
   | .step _ state _ atom tail site _ arguments plan _ _ _ _ rest =>
       let hadmissible :=
-        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+        (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
       (∀ direction sourceFuel targetFuel
         (region : Fin state.diagram.val.regionCount),
         state.diagram.val.Encloses state.bubble region →
@@ -50,15 +52,15 @@ def RegionSimulationsEveryStep
 /-- The executor trace, shape ledger, target ledger, and fixed trace relation
 jointly discharge every hypothesis of the one-step recursive simulation. -/
 theorem regionSimulationsEveryStep_of
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -84,15 +86,15 @@ theorem regionSimulationsEveryStep_of
       rcases relations with ⟨nonemptyRelationEq, emptyRelationEq,
         restRelations⟩
       let hadmissible :=
-        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+        (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
       have operationalTargets : BinderTargetsAtBubble plan.operationalPayload
           state := by
         constructor
         · intro index
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using
             targets.target_shape index
         · intro index
           exact targets.target_encloses index
@@ -106,8 +108,8 @@ theorem regionSimulationsEveryStep_of
         have sourceEq := emptyRelationEq (by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using hzero)
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using hzero)
         apply sourceEq.trans
         funext relationArguments
         apply propext
@@ -129,8 +131,8 @@ theorem regionSimulationsEveryStep_of
         have sourceNonempty : payload.binderSpine.proxyCount ≠ 0 := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using hnonempty
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using hnonempty
         apply (nonemptyRelationEq sourceNonempty).trans
         exact terminalRelationOfParameterValues_materialized payload state site
           arguments plan.materialization sourceNonempty model  parameterValues
@@ -139,13 +141,13 @@ theorem regionSimulationsEveryStep_of
       · exact enclosed
 
 theorem initial_regionSimulationsEveryStep
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length

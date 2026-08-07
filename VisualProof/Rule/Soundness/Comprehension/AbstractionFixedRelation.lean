@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionAtom
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -13,14 +16,14 @@ fresh abstraction bubble by the one comprehension relation chosen at the outer
 existential.  The relation variable is proof-relevant because intervening
 bubbles shift its de Bruijn index. -/
 structure FixedRelationWitness
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (model : Model)
-    (binders : ConcreteElaboration.BinderContext trace.diagram rels)
+    (binders : Concrete.Elaboration.BinderContext trace.diagram rels)
     (relations : RelEnv model.Carrier rels) where
   relation : RelVar rels comprehension.val.boundary.length
   lookup : binders trace.bubble =
@@ -33,22 +36,22 @@ namespace FixedRelationWitness
 /-- Enter the executor-created abstraction bubble with the comprehension
 itself as its existential relation witness. -/
 def fresh
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (model : Model)
-    (binders : ConcreteElaboration.BinderContext trace.diagram rels)
+    (binders : Concrete.Elaboration.BinderContext trace.diagram rels)
     (relations : RelEnv model.Carrier rels) :
     FixedRelationWitness trace model
       (binders.push trace.bubble comprehension.val.boundary.length)
       (abstractionRelation  comprehension model ,
         relations) where
-  relation := ConcreteElaboration.BinderContext.head
+  relation := Concrete.Elaboration.BinderContext.head
     comprehension.val.boundary.length
-  lookup := ConcreteElaboration.BinderContext.push_self _ _ _
+  lookup := Concrete.Elaboration.BinderContext.push_self _ _ _
   value := rfl
 
 /-- Passing through any other target bubble preserves the fixed abstraction
@@ -61,13 +64,13 @@ def pushOther
     (childRelation : Relation model.Carrier arity) :
     FixedRelationWitness trace model  (binders.push child arity)
       (childRelation, relations) where
-  relation := ConcreteElaboration.BinderContext.liftVar arity witness.relation
+  relation := Concrete.Elaboration.BinderContext.liftVar arity witness.relation
   lookup := by
-    rw [ConcreteElaboration.BinderContext.push_other binders arity other.symm]
+    rw [Concrete.Elaboration.BinderContext.push_other binders arity other.symm]
     rw [witness.lookup]
     rfl
   value := by
-    simpa [RelEnv.lookup, ConcreteElaboration.BinderContext.liftVar] using
+    simpa [RelEnv.lookup, Concrete.Elaboration.BinderContext.liftVar] using
       witness.value
 
 end FixedRelationWitness
@@ -77,18 +80,18 @@ comprehension relation at the occurrence's ordered source-wire valuation.
 Unlike `compiledTargetAtom_denote_iff_relation`, this form remains valid below
 arbitrary intervening target binders. -/
 theorem compiledTargetAtom_denote_iff_fixed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension
       occurrences)
     (occurrenceIndex : Fin occurrences.length)
     (model : Model)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (contextWitness : ContextWitness trace sourceContext targetContext)
     (sourceExact : sourceContext.Exact
       (occurrences.get occurrenceIndex).selection.val.anchor)
@@ -96,12 +99,12 @@ theorem compiledTargetAtom_denote_iff_fixed
     (targetEnvironment : Fin targetContext.length → model.Carrier)
     (environments : contextWitness.indexRelation.EnvironmentsAgree
       sourceEnvironment targetEnvironment)
-    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
+    (targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels)
     (targetRelationEnvironment : RelEnv model.Carrier targetRels)
     (fixed : FixedRelationWitness trace model  targetBinders
       targetRelationEnvironment)
     (item : Item  targetContext.length targetRels)
-    (compiled : ConcreteElaboration.compileNode?  trace.diagram
+    (compiled : Concrete.Elaboration.compileNode?  trace.diagram
       targetContext targetBinders (trace.targetAtom occurrenceIndex) =
         some item) :
     denoteItem model  targetEnvironment targetRelationEnvironment item ↔
@@ -115,7 +118,7 @@ theorem compiledTargetAtom_denote_iff_fixed
       (Fin.natAdd trace.domains.nodes.count occurrenceIndex) =
         .atom (trace.atomOwners occurrenceIndex) trace.bubble := by
     simpa only [targetAtom] using trace.diagram_atom occurrenceIndex
-  simp only [ConcreteElaboration.compileNode?, targetAtom, atomShape]
+  simp only [Concrete.Elaboration.compileNode?, targetAtom, atomShape]
     at compiled
   obtain ⟨actual, actualLookup, compiled⟩ :=
     Option.bind_eq_some_iff.mp compiled
@@ -166,4 +169,4 @@ theorem compiledTargetAtom_denote_iff_fixed
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

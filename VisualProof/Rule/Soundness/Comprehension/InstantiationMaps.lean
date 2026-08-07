@@ -1,7 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvance
-import VisualProof.Diagram.Concrete.Subgraph.Splice.Input.Discrete
+import VisualProof.Concrete.Subgraph.Splice.Input.Discrete
 
 namespace VisualProof.Rule
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -17,15 +19,15 @@ private theorem map_owned_step
 
 /-- Composite frame-region map carried by a successful copy trace. -/
 def regionMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -40,15 +42,15 @@ def regionMap
 
 /-- Composite frame-node map carried by a successful copy trace. -/
 def nodeMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -63,15 +65,15 @@ def nodeMap
 
 /-- Composite quotient/frame-wire map carried by a successful copy trace. -/
 def wireMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -86,15 +88,15 @@ def wireMap
           (plan.spliceInput.quotientWire wire)))
 
 theorem regionMap_injective
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -112,15 +114,15 @@ theorem regionMap_injective
       simpa using congrArg Fin.val equal
 
 theorem nodeMap_injective
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -140,15 +142,15 @@ theorem nodeMap_injective
 /-- Alias materialization makes the composite host-wire map injective.  No
 two pre-existing wire identities are coalesced by any accepted copy step. -/
 theorem wireMap_injective
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -169,7 +171,7 @@ theorem wireMap_injective
         simpa using congrArg Fin.val equal
       have quotientEqual := layout.frameWire_injective frameEqual
       have hostEqual := congrArg
-        (Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
+        (Concrete.Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
           spliceInput plan.attachmentsRespectBoundary)
         quotientEqual
       simpa [spliceInput] using hostEqual
@@ -179,15 +181,15 @@ for every original wire/node pair.  Alias materialization makes each
 intermediate host quotient discrete, so no distinct original wire can acquire
 the mapped endpoint. -/
 theorem endpointOccurs_wireMap_nodeMap_iff
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -214,7 +216,7 @@ theorem endpointOccurs_wireMap_nodeMap_iff
       let advanced := advanceMaterializedInstantiationState comprehension
         attachments binders payload state atom tail site arguments
         plan.materialization
-          (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+          (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
       have rawIff : advanced.diagram.val.EndpointOccurs
           (layout.frameWire quotient) ⟨layout.frameNode node, port⟩ ↔
           state.diagram.val.EndpointOccurs wire ⟨node, port⟩ := by
@@ -225,13 +227,13 @@ theorem endpointOccurs_wireMap_nodeMap_iff
           obtain ⟨sourceWire, mappedWire, coalescedOccurs⟩ :=
             layout.plugRaw_frameEndpoint_backward
               (layout.frameWire quotient) ⟨node, port⟩ (by
-                simpa [Splice.Input.PlugLayout.mapFrameEndpoint] using occurs)
+                simpa [Concrete.Splice.Input.PlugLayout.mapFrameEndpoint] using occurs)
           have sourceWireEq : sourceWire = quotient :=
             layout.frameWire_injective mappedWire
           subst sourceWire
           change ⟨node, port⟩ ∈ spliceInput.coalescedEndpoints quotient
             at coalescedOccurs
-          rw [Splice.Input.coalescedEndpoints_eq_of_attachmentsRespectBoundary
+          rw [Concrete.Splice.Input.coalescedEndpoints_eq_of_attachmentsRespectBoundary
             spliceInput plan.attachmentsRespectBoundary] at coalescedOccurs
           simpa [quotient, spliceInput] using coalescedOccurs
         · intro occurs
@@ -239,7 +241,7 @@ theorem endpointOccurs_wireMap_nodeMap_iff
             ⟨node, port⟩ occurs
           have plugged := layout.plugRaw_frameEndpoint_forward quotient
             ⟨node, port⟩ coalesced
-          simpa [Splice.Input.PlugLayout.mapFrameEndpoint] using plugged
+          simpa [Concrete.Splice.Input.PlugLayout.mapFrameEndpoint] using plugged
       have transported : ∀ (next : InstantiationState origin attachments.length
           payload.binderSpine.proxyCount) (next_eq : next = advanced),
           next.diagram.val.EndpointOccurs
@@ -254,15 +256,15 @@ theorem endpointOccurs_wireMap_nodeMap_iff
 /-- The composite host-wire map carries each retained wire scope through the
 same composite region map. -/
 theorem wireMap_scope
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -285,14 +287,14 @@ theorem wireMap_scope
       let advanced := advanceMaterializedInstantiationState comprehension
         attachments binders payload state atom tail site arguments
         plan.materialization
-          (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+          (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
       have rawScope :
           (advanced.diagram.val.wires (layout.frameWire quotient)).scope =
             layout.frameRegion (state.diagram.val.wires wire).scope := by
         change (layout.plugWire (layout.quotientBlockWire quotient)).scope = _
         rw [layout.plugWire_quotientBlockWire]
         have scopeEq :=
-          Splice.Input.coalescedScope_eq_of_attachmentsRespectBoundary
+          Concrete.Splice.Input.coalescedScope_eq_of_attachmentsRespectBoundary
             spliceInput plan.attachmentsRespectBoundary quotient
         rw [scopeEq]
         simp [quotient, spliceInput] <;> rfl
@@ -313,15 +315,15 @@ theorem wireMap_scope
 /-- The composite frame map preserves every retained region constructor and
 maps its parent through the same composite region map. -/
 theorem regionMap_shape
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -347,7 +349,7 @@ theorem regionMap_shape
       let advanced := advanceMaterializedInstantiationState comprehension
         attachments binders payload state atom tail site arguments
         plan.materialization
-          (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+          (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
       have rawShape : advanced.diagram.val.regions (layout.frameRegion region) =
           match state.diagram.val.regions region with
           | .sheet => .sheet
@@ -357,7 +359,7 @@ theorem regionMap_shape
         change layout.plugRegion (layout.frameRegion region) = _
         rw [layout.plugRegion_frameRegion]
         cases shape : state.diagram.val.regions region <;>
-          simp [Splice.Input.PlugLayout.mapFrameRegion, spliceInput,
+          simp [Concrete.Splice.Input.PlugLayout.mapFrameRegion, spliceInput,
             InstantiationCopyPlan.spliceInput, materializedInstantiationSpliceInput,
             instantiateSpliceInput, shape] <;> rfl
       have transported : ∀ (next : InstantiationState origin attachments.length
@@ -385,15 +387,15 @@ theorem regionMap_shape
 /-- The composite frame map preserves every retained node constructor and
 maps all region-valued fields through the composite region map. -/
 theorem nodeMap_shape
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -420,7 +422,7 @@ theorem nodeMap_shape
       let advanced := advanceMaterializedInstantiationState comprehension
         attachments binders payload state atom tail site arguments
         plan.materialization
-          (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+          (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
       have rawShape : advanced.diagram.val.nodes (layout.frameNode node) =
           match state.diagram.val.nodes node with
           | .identity owner arity =>
@@ -430,7 +432,7 @@ theorem nodeMap_shape
         change layout.plugNode (layout.frameNode node) = _
         rw [layout.plugNode_frameNode]
         cases shape : state.diagram.val.nodes node <;>
-          simp [Splice.Input.PlugLayout.mapFrameNode, spliceInput,
+          simp [Concrete.Splice.Input.PlugLayout.mapFrameNode, spliceInput,
             InstantiationCopyPlan.spliceInput, materializedInstantiationSpliceInput,
             instantiateSpliceInput, shape] <;> rfl
       have transported : ∀ (next : InstantiationState origin attachments.length
@@ -457,15 +459,15 @@ theorem nodeMap_shape
       | atom owner binder =>
           simpa [nodeMap, regionMap, shape] using mapped
 theorem regionMap_bubble
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -488,15 +490,15 @@ theorem regionMap_bubble
       exact ih
 
 theorem regionMap_root
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -515,7 +517,7 @@ theorem regionMap_root
         simpa [layout, InstantiationCopyPlan.spliceInput,
           materializedInstantiationSpliceInput, instantiateSpliceInput,
           advanceMaterializedInstantiationState, advanceInstantiationState,
-          Splice.Input.PlugLayout.plugRaw]
+          Concrete.Splice.Input.PlugLayout.plugRaw]
           using congrArg (fun next => next.diagram.val.root.val)
             plan.next_eq.symm
       simp only [regionMap]
@@ -523,15 +525,15 @@ theorem regionMap_root
       exact ih
 
 theorem regionMap_binderTargets
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -558,15 +560,15 @@ theorem regionMap_binderTargets
       exact ih
 
 theorem wireMap_parameters
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -595,15 +597,15 @@ theorem wireMap_parameters
 /-- The trace's composite node map transports exactly the executor-owned atom
 list; no processed occurrence is lost between copy steps. -/
 theorem ownedAtoms_eq_map
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -619,7 +621,7 @@ theorem ownedAtoms_eq_map
       let advanced := advanceMaterializedInstantiationState comprehension
         attachments binders payload state atom tail site arguments
         plan.materialization
-          (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+          (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
       have rawOwned : advanced.ownedAtoms =
           state.ownedAtoms.map layout.frameNode := by
         dsimp [advanced, layout, spliceInput, InstantiationState.ownedAtoms,
@@ -643,15 +645,15 @@ theorem ownedAtoms_eq_map
       rfl
 
 theorem result_pendingAtoms_empty
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -665,13 +667,13 @@ theorem result_pendingAtoms_empty
       exact ih
 
 theorem initial_processedAtoms_eq_map
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length

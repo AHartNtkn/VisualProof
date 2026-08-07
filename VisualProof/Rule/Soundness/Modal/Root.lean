@@ -2,54 +2,56 @@ import VisualProof.Rule.Soundness.Modal.FocusedItems
 
 namespace VisualProof.Rule.ModalSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Theory
 open VisualProof.Diagram
 
 def doubleCutIntroRawOpen
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (selection : CheckedSelection source.diagram) :
-    OpenConcreteDiagram where
+    Concrete.OpenDiagram where
   diagram := doubleCutIntroRaw source.diagram selection
   boundary := source.boundary
 
 @[simp] theorem doubleCutIntroRawOpen_exposedWires
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (selection : CheckedSelection source.diagram) :
     (doubleCutIntroRawOpen source selection).exposedWires =
       source.exposedWires := by
   rfl
 
 @[simp] theorem doubleCutIntroRawOpen_hiddenWires
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (selection : CheckedSelection source.diagram) :
     (doubleCutIntroRawOpen source selection).hiddenWires =
       source.hiddenWires := by
-  unfold OpenConcreteDiagram.hiddenWires
+  unfold Concrete.OpenDiagram.hiddenWires
   change
-    (ConcreteElaboration.exactScopeWires
+    (Concrete.Elaboration.exactScopeWires
       (doubleCutIntroRaw source.diagram selection)
       (doubleCutIntroRaw source.diagram selection).root).filter
         (fun wire => decide (wire ∉ source.exposedWires)) =
-      (ConcreteElaboration.exactScopeWires source.diagram
+      (Concrete.Elaboration.exactScopeWires source.diagram
         source.diagram.root).filter
           (fun wire => decide (wire ∉ source.exposedWires))
   rw [doubleCutIntroRaw_root,
     doubleCutIntroRaw_exactScopeWires]
 
 @[simp] theorem doubleCutIntroRawOpen_rootWires
-    (source : OpenConcreteDiagram)
+    (source : Concrete.OpenDiagram)
     (selection : CheckedSelection source.diagram) :
     (doubleCutIntroRawOpen source selection).rootWires =
       source.rootWires := by
-  unfold OpenConcreteDiagram.rootWires
+  unfold Concrete.OpenDiagram.rootWires
   rw [doubleCutIntroRawOpen_exposedWires,
     doubleCutIntroRawOpen_hiddenWires]
   rfl
 
 theorem doubleCutIntroRawOpen_wellFormed
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (selection : CheckedSelection source.val.diagram)
     (targetWellFormed :
       (doubleCutIntroRaw source.val.diagram selection).WellFormed ) :
@@ -64,28 +66,28 @@ theorem doubleCutIntroRawOpen_wellFormed
     doubleCutIntroRaw_root, liftCWireRegions, sourceScoped]
 
 noncomputable def doubleCutIntroRootContext
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (selection : CheckedSelection source.val.diagram)
     (targetWellFormed :
       (doubleCutIntroRaw source.val.diagram selection).WellFormed )
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection) :
+    (direction : Concrete.Elaboration.SimulationDirection) :
     let simulation := doubleCutIntroSimulation
       ⟨source.val.diagram, source.property.diagram_well_formed⟩ selection
       targetWellFormed model
-    ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
+    Concrete.Elaboration.ConcreteSemanticSimulation.RootContextSimulation
       simulation direction
       source.val.exposedWires source.val.hiddenWires
       (doubleCutIntroRawOpen source.val selection).exposedWires
       (doubleCutIntroRawOpen source.val selection).hiddenWires := by
-  let input : CheckedDiagram  :=
+  let input : Concrete.Checked  :=
     ⟨source.val.diagram, source.property.diagram_well_formed⟩
   let simulation := doubleCutIntroSimulation input selection targetWellFormed
     model
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨doubleCutIntroRawOpen source.val selection,
       doubleCutIntroRawOpen_wellFormed source selection targetWellFormed⟩
-  change ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
+  change Concrete.Elaboration.ConcreteSemanticSimulation.RootContextSimulation
     simulation direction source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires
   have exposedEq : target.val.exposedWires = source.val.exposedWires :=
@@ -100,7 +102,7 @@ noncomputable def doubleCutIntroRootContext
   let outerMap :=
     Fin.cast (congrArg List.length exposedEq.symm)
   let outerRelation :=
-    ConcreteElaboration.ContextIndexRelation.forwardMap outerMap
+    Concrete.Elaboration.ContextIndexRelation.forwardMap outerMap
   refine {
     outer := outerRelation
     context := combinedContext
@@ -116,7 +118,7 @@ noncomputable def doubleCutIntroRootContext
   }
   · intro regular allowed sourceItems targetItems sourceCompiled targetCompiled
       itemSemantics
-    apply ConcreteElaboration.directionalRootTransport_of_agreement
+    apply Concrete.Elaboration.directionalRootTransport_of_agreement
       direction source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires outerRelation
       combinedContext.indexRelation model
@@ -134,7 +136,7 @@ noncomputable def doubleCutIntroRootContext
           apply Fin.ext
           rfl
         have outerFunctional :=
-          (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+          (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap
             outerMap sourceOuter targetOuter).mp (by
               simpa only [outerRelation] using outerAgrees)
         rw [outerMapIdentity] at outerFunctional
@@ -148,11 +150,11 @@ noncomputable def doubleCutIntroRootContext
               sourceLocal (Fin.cast (congrArg List.length hiddenEq) index)
           refine ⟨targetLocal, ?_⟩
           unfold LiftedContextWitness.indexRelation
-            ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
-            ConcreteElaboration.ContextIndexRelation.forwardMap
+            Concrete.Elaboration.ContextIndexRelation.EnvironmentsAgree
+            Concrete.Elaboration.ContextIndexRelation.forwardMap
           intro sourceIndex targetIndex related
           subst targetIndex
-          unfold ConcreteElaboration.rootEnvironment
+          unfold Concrete.Elaboration.rootEnvironment
           simp only [Function.comp_apply]
           apply extendWireEnv_transport
             (countEq := congrArg List.length hiddenEq)
@@ -167,11 +169,11 @@ noncomputable def doubleCutIntroRootContext
               targetLocal (Fin.cast (congrArg List.length hiddenEq).symm index)
           refine ⟨sourceLocal, ?_⟩
           unfold LiftedContextWitness.indexRelation
-            ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
-            ConcreteElaboration.ContextIndexRelation.forwardMap
+            Concrete.Elaboration.ContextIndexRelation.EnvironmentsAgree
+            Concrete.Elaboration.ContextIndexRelation.forwardMap
           intro sourceIndex targetIndex related
           subst targetIndex
-          unfold ConcreteElaboration.rootEnvironment
+          unfold Concrete.Elaboration.rootEnvironment
           simp only [Function.comp_apply]
           apply extendWireEnv_transport
             (countEq := congrArg List.length hiddenEq)
@@ -185,19 +187,19 @@ noncomputable def doubleCutIntroRootContext
   · intro atRoot focused allowed recurse recurseAt sourceItems targetItems
       sourceCompiled targetCompiled
     have sourceExact :
-        ConcreteElaboration.WireContext.Exact
+        Concrete.Elaboration.WireContext.Exact
           (source.val.exposedWires ++ source.val.hiddenWires)
           source.val.diagram.root := by
-      simpa only [OpenConcreteDiagram.rootWires] using
-        ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+      simpa only [Concrete.OpenDiagram.rootWires] using
+        Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
           source
     have targetExact :
-        @ConcreteElaboration.WireContext.Exact target.val.diagram
+        @Concrete.Elaboration.WireContext.Exact target.val.diagram
           (target.val.exposedWires ++ target.val.hiddenWires :
-            ConcreteElaboration.WireContext target.val.diagram)
+            Concrete.Elaboration.WireContext target.val.diagram)
           target.val.diagram.root := by
-      simpa only [OpenConcreteDiagram.rootWires] using
-        ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+      simpa only [Concrete.OpenDiagram.rootWires] using
+        Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
           target
     change input.val.root = selection.val.anchor at focused
     have itemSimulation :=
@@ -207,39 +209,39 @@ noncomputable def doubleCutIntroRootContext
         (source.val.exposedWires ++ source.val.hiddenWires)
         (target.val.exposedWires ++ target.val.hiddenWires)
         combinedContext
-        ConcreteElaboration.BinderContext.empty
-        ConcreteElaboration.BinderContext.empty
+        Concrete.Elaboration.BinderContext.empty
+        Concrete.Elaboration.BinderContext.empty
         simulation.binders_empty (by simpa only [← focused] using sourceExact)
         (by
           simpa only [simulation.root_eq, ← focused] using targetExact)
         (by
           simpa only [← focused] using
-            ConcreteElaboration.BinderContext.empty_covers_root
+            Concrete.Elaboration.BinderContext.empty_covers_root
               source.property.diagram_well_formed)
         (by
           simpa only [simulation.root_eq, ← focused] using
-            ConcreteElaboration.BinderContext.empty_covers_root
+            Concrete.Elaboration.BinderContext.empty_covers_root
               target.property.diagram_well_formed)
         (by
           simpa only [← focused] using
-            ConcreteElaboration.BinderContext.Enumeration.empty
+            Concrete.Elaboration.BinderContext.Enumeration.empty
               source.val.diagram)
         (by
           simpa only [simulation.root_eq, ← focused] using
-            ConcreteElaboration.BinderContext.Enumeration.empty
+            Concrete.Elaboration.BinderContext.Enumeration.empty
               target.val.diagram)
         recurseAt sourceItems targetItems
         (by simpa only [← focused] using sourceCompiled)
         (by
           change
-            ConcreteElaboration.compileOccurrencesWith?
+            Concrete.Elaboration.compileOccurrencesWith?
               (doubleCutIntroRaw input.val selection)
-              (ConcreteElaboration.compileRegion?
+              (Concrete.Elaboration.compileRegion?
                 (doubleCutIntroRaw input.val selection)
                 (doubleCutIntroRaw input.val selection).regionCount)
               (target.val.exposedWires ++ target.val.hiddenWires)
-              ConcreteElaboration.BinderContext.empty
-              (ConcreteElaboration.localOccurrences
+              Concrete.Elaboration.BinderContext.empty
+              (Concrete.Elaboration.localOccurrences
                 (doubleCutIntroRaw input.val selection)
                 (Fin.castAdd 2 selection.val.anchor)) =
               some targetItems
@@ -253,10 +255,10 @@ noncomputable def doubleCutIntroRootContext
       funext relation
       exact Fin.elim0 relation.index
     rw [relationMapEq, Region.renameRelations_id]
-    apply ConcreteElaboration.finishRoot_denote direction
+    apply Concrete.Elaboration.finishRoot_denote direction
       source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires outerRelation model
-    apply ConcreteElaboration.directionalRootTransport_of_agreement
+    apply Concrete.Elaboration.directionalRootTransport_of_agreement
       direction source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires outerRelation
       combinedContext.indexRelation model  sourceItems targetItems
@@ -271,7 +273,7 @@ noncomputable def doubleCutIntroRootContext
           apply Fin.ext
           rfl
         have outerFunctional :=
-          (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+          (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap
             outerMap sourceOuter targetOuter).mp (by
               simpa only [outerRelation] using outerAgrees)
         rw [outerMapIdentity] at outerFunctional
@@ -285,11 +287,11 @@ noncomputable def doubleCutIntroRootContext
               sourceLocal (Fin.cast (congrArg List.length hiddenEq) index)
           refine ⟨targetLocal, ?_⟩
           unfold LiftedContextWitness.indexRelation
-            ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
-            ConcreteElaboration.ContextIndexRelation.forwardMap
+            Concrete.Elaboration.ContextIndexRelation.EnvironmentsAgree
+            Concrete.Elaboration.ContextIndexRelation.forwardMap
           intro sourceIndex targetIndex related
           subst targetIndex
-          unfold ConcreteElaboration.rootEnvironment
+          unfold Concrete.Elaboration.rootEnvironment
           simp only [Function.comp_apply]
           apply extendWireEnv_transport
             (countEq := congrArg List.length hiddenEq)
@@ -304,11 +306,11 @@ noncomputable def doubleCutIntroRootContext
               targetLocal (Fin.cast (congrArg List.length hiddenEq).symm index)
           refine ⟨sourceLocal, ?_⟩
           unfold LiftedContextWitness.indexRelation
-            ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
-            ConcreteElaboration.ContextIndexRelation.forwardMap
+            Concrete.Elaboration.ContextIndexRelation.EnvironmentsAgree
+            Concrete.Elaboration.ContextIndexRelation.forwardMap
           intro sourceIndex targetIndex related
           subst targetIndex
-          unfold ConcreteElaboration.rootEnvironment
+          unfold Concrete.Elaboration.rootEnvironment
           simp only [Function.comp_apply]
           apply extendWireEnv_transport
             (countEq := congrArg List.length hiddenEq)
@@ -327,27 +329,27 @@ noncomputable def doubleCutIntroRootContext
       exact itemSimulation
 
 theorem doubleCutIntroBoundaryWitness
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (selection : CheckedSelection source.val.diagram)
     (targetWellFormed :
       (doubleCutIntroRaw source.val.diagram selection).WellFormed )
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (model : Model)
     (args : Fin source.val.boundary.length → model.Carrier) :
-    let target : CheckedOpenDiagram  :=
+    let target : Concrete.CheckedOpen  :=
       ⟨doubleCutIntroRawOpen source.val selection,
         doubleCutIntroRawOpen_wellFormed source selection targetWellFormed⟩
-    ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+    Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       direction source.elaborate target.elaborate
       (doubleCutIntroRootContext source selection targetWellFormed model
         direction).outer
       model  args args := by
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨doubleCutIntroRawOpen source.val selection,
       doubleCutIntroRawOpen_wellFormed source selection targetWellFormed⟩
   dsimp only
   unfold
-    ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+    Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
   cases direction with
   | forward =>
       intro sourceAssignment sourceArgsEq sourceDenotes
@@ -367,10 +369,10 @@ theorem doubleCutIntroBoundaryWitness
           exact sourceAssignment.agrees position
       }
       refine ⟨targetAssignment, rfl, ?_⟩
-      unfold ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+      unfold Concrete.Elaboration.ContextIndexRelation.EnvironmentsAgree
       intro sourceIndex targetIndex related
       simp [doubleCutIntroRootContext,
-        ConcreteElaboration.ContextIndexRelation.forwardMap] at related
+        Concrete.Elaboration.ContextIndexRelation.forwardMap] at related
       subst targetIndex
       rfl
   | backward =>
@@ -391,25 +393,25 @@ theorem doubleCutIntroBoundaryWitness
           exact targetAssignment.agrees position
       }
       refine ⟨sourceAssignment, rfl, ?_⟩
-      unfold ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
+      unfold Concrete.Elaboration.ContextIndexRelation.EnvironmentsAgree
       intro sourceIndex targetIndex related
       simp [doubleCutIntroRootContext,
-        ConcreteElaboration.ContextIndexRelation.forwardMap] at related
+        Concrete.Elaboration.ContextIndexRelation.forwardMap] at related
       subst targetIndex
       rfl
 
-theorem doubleCutIntroInterfaceTransport_transportBoundary
-    (source : ConcreteDiagram)
+theorem doubleCutIntroWireTransport_transportBoundary
+    (source : Concrete.Diagram)
     (selection : CheckedSelection source)
     (boundary : List (Fin source.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (source.wires wire).scope = source.root) :
-    (doubleCutIntroInterfaceTransport source selection).transportBoundary
+    (doubleCutIntroWireTransport source selection).transportBoundary
         boundary =
       some boundary := by
   calc
     _ = some (boundary.map id) := by
-      apply InterfaceTransport.transportBoundary_eq_map
+      apply WireTransport.transportBoundary_eq_map
       intro wire member
       have targetRoot :
           ((doubleCutIntroRaw source selection).wires wire).scope =

@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvanceAtomSemantic
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -14,26 +16,26 @@ Every node marked for final compaction denotes in every lexical compiler
 presentation that interprets the moving bubble by the trace's one fixed
 comprehension relation. -/
 def ProcessedAtomsDenote
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (model : Model)
     (relationValue : Relation model.Carrier payload.arity) : Prop :=
   ∀ {rels : RelCtx}
-    (context : ConcreteElaboration.WireContext state.diagram.val)
-    (binders : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
+    (binders : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (node : Fin state.diagram.val.nodeCount)
     (item : Item  context.length rels),
     node ∈ state.processedAtoms →
-    ConcreteElaboration.compileNode?  state.diagram.val context
+    Concrete.Elaboration.compileNode?  state.diagram.val context
         binders node = some item →
     ∀ (env : Fin context.length → model.Carrier)
       (relEnv : RelEnv model.Carrier rels),
@@ -42,13 +44,13 @@ def ProcessedAtomsDenote
 
 /-- The initial executor state has no processed atoms. -/
 theorem initial_processedAtomsDenote
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
     (model : Model)
     (relationValue : Relation model.Carrier payload.arity) :
@@ -61,14 +63,14 @@ theorem initial_processedAtomsDenote
 /-- The processed-node invariant is exactly the certificate expected by the
 generic authoritative/survivor semantic bridge. -/
 theorem ProcessedAtomsDenote.removed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {origin : CheckedDiagram }
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    {origin : Concrete.Checked }
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
@@ -77,14 +79,14 @@ theorem ProcessedAtomsDenote.removed
     (processed : ProcessedAtomsDenote payload state model  relationValue) :
     ∀ {rels : RelCtx}
       (region : Fin state.diagram.val.regionCount)
-      (context : ConcreteElaboration.WireContext state.diagram.val)
-      (binders : ConcreteElaboration.BinderContext state.diagram.val rels)
+      (context : Concrete.Elaboration.WireContext state.diagram.val)
+      (binders : Concrete.Elaboration.BinderContext state.diagram.val rels)
       (node : Fin state.diagram.val.nodeCount)
       (item : Item  context.length rels),
-      ConcreteElaboration.LocalOccurrence.node node ∈
-          ConcreteElaboration.localOccurrences state.diagram.val region →
+      Concrete.Elaboration.LocalOccurrence.node node ∈
+          Concrete.Elaboration.localOccurrences state.diagram.val region →
       dropOccurrenceSurvives state (.node node) = false →
-      ConcreteElaboration.compileNode?  state.diagram.val context
+      Concrete.Elaboration.compileNode?  state.diagram.val context
           binders node = some item →
       ∀ (env : Fin context.length → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),

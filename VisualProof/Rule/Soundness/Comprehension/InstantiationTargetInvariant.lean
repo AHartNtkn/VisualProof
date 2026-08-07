@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationTerminalRelation
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -10,15 +12,15 @@ namespace InstantiationSemantic
 /-- One accepted splice preserves the retained target binders' shape and their
 enclosure of the moving quantified bubble. -/
 theorem BinderTargetsAtBubble.advance
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -54,15 +56,15 @@ theorem BinderTargetsAtBubble.advance
 /-- Every nonterminal executor trace state carries the binder-target invariant
 needed to interpret the terminal comprehension body at that copy. -/
 def BinderTargetsEveryStep
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -74,15 +76,15 @@ def BinderTargetsEveryStep
       BinderTargetsAtBubble payload state ∧ BinderTargetsEveryStep rest
 
 theorem binderTargetsEveryStep_of
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -100,15 +102,15 @@ theorem binderTargetsEveryStep_of
 /-- The retained binder targets remain well-shaped and enclosing at the final
 state of an accepted executor trace. -/
 theorem BinderTargetsAtBubble.afterTrace
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -125,13 +127,13 @@ theorem BinderTargetsAtBubble.afterTrace
 /-- The first accepted copy supplies target shape; the serialized payload
 supplies the stronger target-to-bubble enclosure, and both persist thereafter. -/
 theorem initial_binderTargetsEveryStep
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -144,7 +146,7 @@ theorem initial_binderTargetsEveryStep
   | step fuel state result atom tail site candidate arguments plan
       pending_eq node_eq candidate_eq arguments_eq rest =>
       let hadmissible :=
-        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+        (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
       have targets : BinderTargetsAtBubble payload
           (initialInstantiationState payload) := {
         target_shape := hadmissible.binder_targets_match

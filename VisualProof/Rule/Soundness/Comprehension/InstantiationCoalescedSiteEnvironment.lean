@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationRelationAssignment
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -10,10 +12,10 @@ namespace InstantiationSemantic
 /-- Canonical compiler-index map from an exact host context at the splice site
 to the exact context of its attachment quotient. -/
 noncomputable def siteQuotientIndexMap
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (hadmissible : input.Admissible)
-    (sourceContext : ConcreteElaboration.WireContext input.frame.val)
-    (targetContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (sourceContext : Concrete.Elaboration.WireContext input.frame.val)
+    (targetContext : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
     (sourceExact : sourceContext.Exact input.site)
     (targetExact : targetContext.Exact input.site) :
     Fin sourceContext.length → Fin targetContext.length :=
@@ -25,10 +27,10 @@ noncomputable def siteQuotientIndexMap
             (List.get_mem sourceContext index)))))
 
 theorem siteQuotientIndexMap_spec
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (hadmissible : input.Admissible)
-    (sourceContext : ConcreteElaboration.WireContext input.frame.val)
-    (targetContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (sourceContext : Concrete.Elaboration.WireContext input.frame.val)
+    (targetContext : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
     (sourceExact : sourceContext.Exact input.site)
     (targetExact : targetContext.Exact input.site)
     (index : Fin sourceContext.length) :
@@ -36,7 +38,7 @@ theorem siteQuotientIndexMap_spec
         (siteQuotientIndexMap input hadmissible sourceContext targetContext
           sourceExact targetExact index) =
       input.quotientWire (sourceContext.get index) := by
-  exact ConcreteElaboration.WireContext.lookup?_sound
+  exact Concrete.Elaboration.WireContext.lookup?_sound
     (Classical.choose_spec (targetContext.lookup?_complete
       ((targetExact.mem_iff (input.quotientWire (sourceContext.get index))).2
         ((input.quotientWire_visible_at_site_iff hadmissible
@@ -47,10 +49,10 @@ theorem siteQuotientIndexMap_spec
 /-- Every quotient wire visible at the site has a visible original
 representative, so the canonical exact-context map is onto. -/
 theorem siteQuotientIndexMap_surjective
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (hadmissible : input.Admissible)
-    (sourceContext : ConcreteElaboration.WireContext input.frame.val)
-    (targetContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (sourceContext : Concrete.Elaboration.WireContext input.frame.val)
+    (targetContext : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
     (sourceExact : sourceContext.Exact input.site)
     (targetExact : targetContext.Exact input.site) :
     Function.Surjective
@@ -81,16 +83,16 @@ theorem siteQuotientIndexMap_surjective
   rw [siteQuotientIndexMap_spec]
   have sourceGet : sourceContext.get sourceIndex = wire := by
     simpa only [List.get_eq_getElem] using
-      ConcreteElaboration.WireContext.lookup?_sound sourceLookup
+      Concrete.Elaboration.WireContext.lookup?_sound sourceLookup
   rw [sourceGet, quotientEq]
 
 /-- The complete site map restricts to any certified quotient map on the
 inherited compiler context. -/
 theorem siteQuotientIndexMap_outer
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (hadmissible : input.Admissible)
-    (sourceOuter : ConcreteElaboration.WireContext input.frame.val)
-    (targetOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (sourceOuter : Concrete.Elaboration.WireContext input.frame.val)
+    (targetOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
     (sourceExact : (sourceOuter.extend input.site).Exact input.site)
     (targetExact : (targetOuter.extend input.site).Exact input.site)
     (outerMap : Fin sourceOuter.length → Fin targetOuter.length)
@@ -114,12 +116,12 @@ theorem siteQuotientIndexMap_outer
   have sourceGet : (sourceOuter.extend input.site).get
       (sourceOuter.outerIndex input.site index) = sourceOuter.get index := by
     simpa only [List.get_eq_getElem] using
-      ConcreteElaboration.WireContext.extend_outer sourceOuter input.site index
+      Concrete.Elaboration.WireContext.extend_outer sourceOuter input.site index
   have targetGet : (targetOuter.extend input.site).get
       (targetOuter.outerIndex input.site (outerMap index)) =
         targetOuter.get (outerMap index) := by
     simpa only [List.get_eq_getElem] using
-      ConcreteElaboration.WireContext.extend_outer targetOuter input.site
+      Concrete.Elaboration.WireContext.extend_outer targetOuter input.site
         (outerMap index)
   rw [sourceGet, targetGet]
   exact outerSpec index |>.symm

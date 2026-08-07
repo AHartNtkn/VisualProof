@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvanceOffsiteFixed
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -10,66 +12,66 @@ open VisualProof.Theory
 namespace InstantiationSemantic
 
 private theorem finishRegion_denote_iff
-    (diagram : ConcreteDiagram)
-    (context : ConcreteElaboration.WireContext diagram)
+    (diagram : Concrete.Diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (items : ItemSeq  (context.extend region).length rels)
     (model : Model)
     (environment : Fin context.length → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
     denoteRegion model  environment relations
-        (ConcreteElaboration.finishRegion diagram context region items) ↔
+        (Concrete.Elaboration.finishRegion diagram context region items) ↔
       ∃ localEnvironment :
-          Fin (ConcreteElaboration.exactScopeWires diagram region).length →
+          Fin (Concrete.Elaboration.exactScopeWires diagram region).length →
             model.Carrier,
         denoteItemSeq model
-          (ConcreteElaboration.extendedEnvironment context region environment
+          (Concrete.Elaboration.extendedEnvironment context region environment
             localEnvironment)
           relations items := by
-  unfold ConcreteElaboration.finishRegion
+  unfold Concrete.Elaboration.finishRegion
   simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
   constructor
   · rintro ⟨localEnvironment, denotation⟩
     exact ⟨localEnvironment,
       (denoteItemSeq_renameWires model
-        (Fin.cast (ConcreteElaboration.WireContext.length_extend context region))
+        (Fin.cast (Concrete.Elaboration.WireContext.length_extend context region))
         (extendWireEnv environment localEnvironment) relations items).mp
           denotation⟩
   · rintro ⟨localEnvironment, denotation⟩
     exact ⟨localEnvironment,
       (denoteItemSeq_renameWires model
-        (Fin.cast (ConcreteElaboration.WireContext.length_extend context region))
+        (Fin.cast (Concrete.Elaboration.WireContext.length_extend context region))
         (extendWireEnv environment localEnvironment) relations items).mpr
           denotation⟩
 
 private theorem full_items_exists_of_survivor
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin parameterCount proxyCount)
     (fuel : Nat)
     (region : Fin state.diagram.val.regionCount)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
-    (binders : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
+    (binders : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (exact : (context.extend region).Exact region)
     (cover : binders.Covers region)
     (survivorBody : Region  context.length rels)
     (survivorCompiled : compileSurvivorRegion?  state (fuel + 1)
       region context binders = some survivorBody) :
     ∃ fullItems : ItemSeq  (context.extend region).length rels,
-      ConcreteElaboration.compileOccurrencesWith?  state.diagram.val
-        (ConcreteElaboration.compileRegion?  state.diagram.val fuel)
+      Concrete.Elaboration.compileOccurrencesWith?  state.diagram.val
+        (Concrete.Elaboration.compileRegion?  state.diagram.val fuel)
         (context.extend region) binders
-        (ConcreteElaboration.localOccurrences state.diagram.val region) =
+        (Concrete.Elaboration.localOccurrences state.diagram.val region) =
           some fullItems := by
   obtain ⟨fullBody, fullCompiled⟩ := compileRegion?_exists_of_survivor state
     (fuel + 1) region context binders exact cover
       ⟨survivorBody, survivorCompiled⟩
-  unfold ConcreteElaboration.compileRegion? at fullCompiled
+  unfold Concrete.Elaboration.compileRegion? at fullCompiled
   dsimp only at fullCompiled
-  cases fullItemsCompiled : ConcreteElaboration.compileOccurrencesWith?
+  cases fullItemsCompiled : Concrete.Elaboration.compileOccurrencesWith?
        state.diagram.val
-      (ConcreteElaboration.compileRegion?  state.diagram.val fuel)
+      (Concrete.Elaboration.compileRegion?  state.diagram.val fuel)
       (context.extend region) binders
-      (ConcreteElaboration.localOccurrences state.diagram.val region) with
+      (Concrete.Elaboration.localOccurrences state.diagram.val region) with
   | none => simp [fullItemsCompiled] at fullCompiled
   | some fullItems => exact ⟨fullItems, rfl⟩
 
@@ -77,15 +79,15 @@ private theorem full_items_exists_of_survivor
 both semantic directions under the trace's fixed relation, proxy family, and
 ordered parameter valuation. -/
 theorem advance_site_region_simulation_fixed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -113,7 +115,7 @@ theorem advance_site_region_simulation_fixed
     (emptyRelationEq : ∀ _hzero :
       payload.binderSpine.proxyCount = 0,
       relationValue = payload.interpretedRelation model  parameterValues)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
     (childSimulation : ∀ direction
       (child : Fin state.diagram.val.regionCount),
@@ -138,30 +140,30 @@ theorem advance_site_region_simulation_fixed
             binders payload state site arguments hadmissible
           let next := advanceInstantiationState comprehension attachments binders
             payload state atom tail site arguments hadmissible
-          change (ConcreteElaboration.compileOccurrencesWith?
+          change (Concrete.Elaboration.compileOccurrencesWith?
               coalesced.diagram.val
               (compileSurvivorRegion?  coalesced sourceFuel)
               (sourceOuter.extend site) sourceBinders
-              ((ConcreteElaboration.localOccurrences coalesced.diagram.val
+              ((Concrete.Elaboration.localOccurrences coalesced.diagram.val
                 site).filter (dropOccurrenceSurvives coalesced))).bind
-                (fun items => some (ConcreteElaboration.finishRegion
+                (fun items => some (Concrete.Elaboration.finishRegion
                   coalesced.diagram.val sourceOuter site items)) =
             some sourceBody at sourceCompiled
-          change (ConcreteElaboration.compileOccurrencesWith?
+          change (Concrete.Elaboration.compileOccurrencesWith?
               next.diagram.val
               (compileSurvivorRegion?  next targetFuel)
               (targetOuter.extend (layout.frameRegion site)) targetBinders
-              ((ConcreteElaboration.localOccurrences next.diagram.val
+              ((Concrete.Elaboration.localOccurrences next.diagram.val
                 (layout.frameRegion site)).filter
                   (dropOccurrenceSurvives next))).bind
-                (fun items => some (ConcreteElaboration.finishRegion
+                (fun items => some (Concrete.Elaboration.finishRegion
                   next.diagram.val targetOuter (layout.frameRegion site)
                     items)) = some targetBody at targetCompiled
-          cases sourceItemsResult : ConcreteElaboration.compileOccurrencesWith?
+          cases sourceItemsResult : Concrete.Elaboration.compileOccurrencesWith?
                coalesced.diagram.val
               (compileSurvivorRegion?  coalesced sourceFuel)
               (sourceOuter.extend site) sourceBinders
-              ((ConcreteElaboration.localOccurrences coalesced.diagram.val
+              ((Concrete.Elaboration.localOccurrences coalesced.diagram.val
                 site).filter (dropOccurrenceSurvives coalesced)) with
           | none => simp [sourceItemsResult] at sourceCompiled
           | some sourceItems =>
@@ -170,11 +172,11 @@ theorem advance_site_region_simulation_fixed
               have sourceBodyEq := Option.some.inj sourceCompiled
               subst sourceBody
               cases targetItemsResult :
-                  ConcreteElaboration.compileOccurrencesWith?
+                  Concrete.Elaboration.compileOccurrencesWith?
                     next.diagram.val
                     (compileSurvivorRegion?  next targetFuel)
                     (targetOuter.extend (layout.frameRegion site)) targetBinders
-                    ((ConcreteElaboration.localOccurrences next.diagram.val
+                    ((Concrete.Elaboration.localOccurrences next.diagram.val
                       (layout.frameRegion site)).filter
                         (dropOccurrenceSurvives next)) with
               | none =>
@@ -189,42 +191,42 @@ theorem advance_site_region_simulation_fixed
                     full_items_exists_of_survivor next targetFuel
                       (layout.frameRegion site) targetOuter targetBinders
                       targetExact targetCover
-                      (ConcreteElaboration.finishRegion next.diagram.val
+                      (Concrete.Elaboration.finishRegion next.diagram.val
                         targetOuter (layout.frameRegion site) targetItems)
                       (by
-                        change (ConcreteElaboration.compileOccurrencesWith?
+                        change (Concrete.Elaboration.compileOccurrencesWith?
                              next.diagram.val
                             (compileSurvivorRegion?  next targetFuel)
                             (targetOuter.extend (layout.frameRegion site))
                             targetBinders
-                            ((ConcreteElaboration.localOccurrences
+                            ((Concrete.Elaboration.localOccurrences
                               next.diagram.val (layout.frameRegion site)).filter
                                 (dropOccurrenceSurvives next))).bind
                                   (fun items => some
-                                    (ConcreteElaboration.finishRegion
+                                    (Concrete.Elaboration.finishRegion
                                       next.diagram.val targetOuter
                                       (layout.frameRegion site) items)) =
-                          some (ConcreteElaboration.finishRegion next.diagram.val
+                          some (Concrete.Elaboration.finishRegion next.diagram.val
                             targetOuter (layout.frameRegion site) targetItems)
                         rw [targetItemsResult]
                         rfl
                         )
                   have sourceFinishRename :
-                          (ConcreteElaboration.finishRegion coalesced.diagram.val
+                          (Concrete.Elaboration.finishRegion coalesced.diagram.val
                             sourceOuter site sourceItems).renameRelations
                               relationMap =
-                            ConcreteElaboration.finishRegion coalesced.diagram.val
+                            Concrete.Elaboration.finishRegion coalesced.diagram.val
                               sourceOuter site
                                 (sourceItems.renameRelations relationMap) := by
                         simpa [coalesced] using
-                          ConcreteElaboration.finishRegion_renameRelations
+                          Concrete.Elaboration.finishRegion_renameRelations
                             sourceOuter site relationMap sourceItems
                   cases direction with
                   | forward =>
                       intro sourceDenotes
                       have sourceDenotes' : denoteRegion model
                           sourceOuterEnv targetRelEnv
-                          (ConcreteElaboration.finishRegion coalesced.diagram.val
+                          (Concrete.Elaboration.finishRegion coalesced.diagram.val
                             sourceOuter site
                               (sourceItems.renameRelations relationMap)) :=
                         sourceFinishRename ▸ sourceDenotes
@@ -237,7 +239,7 @@ theorem advance_site_region_simulation_fixed
                         (denoteItemSeq_renameRelations model  relationMap
                           (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
                           (RelEnv.pullback_agrees relationMap targetRelEnv)
-                          (ConcreteElaboration.extendedEnvironment sourceOuter
+                          (Concrete.Elaboration.extendedEnvironment sourceOuter
                             site sourceOuterEnv sourceLocal) sourceItems).mp
                               sourceItemsDenote
                       by_cases hzero : payload.binderSpine.proxyCount = 0
@@ -314,7 +316,7 @@ theorem advance_site_region_simulation_fixed
                         (denoteItemSeq_renameRelations model  relationMap
                           (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
                           (RelEnv.pullback_agrees relationMap targetRelEnv)
-                          (ConcreteElaboration.extendedEnvironment sourceOuter
+                          (Concrete.Elaboration.extendedEnvironment sourceOuter
                             site sourceOuterEnv sourceLocal) sourceItems).mpr
                               sourceItemsDenote
                       have preparedRegion :=
@@ -328,15 +330,15 @@ theorem advance_site_region_simulation_fixed
 inside the moving quantified bubble.  Direct children remain in that bubble,
 so each recursive call carries an explicit enclosure witness. -/
 theorem advance_enclosed_region_simulation_fixed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -417,31 +419,31 @@ theorem advance_enclosed_region_simulation_fixed
             let targetContext := targetOuter.extend (layout.frameRegion region)
             let extendedMap := layout.frameExtendedWireMap region atSite
               sourceOuter targetOuter outerMap
-            change (ConcreteElaboration.compileOccurrencesWith?
+            change (Concrete.Elaboration.compileOccurrencesWith?
                 coalesced.diagram.val
                 (compileSurvivorRegion?  coalesced sourceFuel)
                 sourceContext sourceBinders
-                ((ConcreteElaboration.localOccurrences coalesced.diagram.val
+                ((Concrete.Elaboration.localOccurrences coalesced.diagram.val
                   region).filter (dropOccurrenceSurvives coalesced))).bind
-                    (fun items => some (ConcreteElaboration.finishRegion
+                    (fun items => some (Concrete.Elaboration.finishRegion
                       coalesced.diagram.val sourceOuter region items)) =
               some sourceBody at sourceCompiled
-            change (ConcreteElaboration.compileOccurrencesWith?
+            change (Concrete.Elaboration.compileOccurrencesWith?
                 next.diagram.val
                 (compileSurvivorRegion?  next targetFuel)
                 targetContext targetBinders
-                ((ConcreteElaboration.localOccurrences next.diagram.val
+                ((Concrete.Elaboration.localOccurrences next.diagram.val
                   (layout.frameRegion region)).filter
                     (dropOccurrenceSurvives next))).bind
-                      (fun items => some (ConcreteElaboration.finishRegion
+                      (fun items => some (Concrete.Elaboration.finishRegion
                         next.diagram.val targetOuter (layout.frameRegion region)
                           items)) = some targetBody at targetCompiled
             cases sourceItemsResult :
-                ConcreteElaboration.compileOccurrencesWith?
+                Concrete.Elaboration.compileOccurrencesWith?
                   coalesced.diagram.val
                   (compileSurvivorRegion?  coalesced sourceFuel)
                   sourceContext sourceBinders
-                  ((ConcreteElaboration.localOccurrences coalesced.diagram.val
+                  ((Concrete.Elaboration.localOccurrences coalesced.diagram.val
                     region).filter (dropOccurrenceSurvives coalesced)) with
             | none => rw [sourceItemsResult] at sourceCompiled; contradiction
             | some sourceItems =>
@@ -449,11 +451,11 @@ theorem advance_enclosed_region_simulation_fixed
                 have sourceBodyEq := Option.some.inj sourceCompiled
                 subst sourceBody
                 cases targetItemsResult :
-                    ConcreteElaboration.compileOccurrencesWith?
+                    Concrete.Elaboration.compileOccurrencesWith?
                       next.diagram.val
                       (compileSurvivorRegion?  next targetFuel)
                       targetContext targetBinders
-                      ((ConcreteElaboration.localOccurrences next.diagram.val
+                      ((Concrete.Elaboration.localOccurrences next.diagram.val
                         (layout.frameRegion region)).filter
                           (dropOccurrenceSurvives next)) with
                 | none => rw [targetItemsResult] at targetCompiled; contradiction
@@ -464,21 +466,21 @@ theorem advance_enclosed_region_simulation_fixed
                     have extendedSpec := layout.frameExtendedWireMap_spec region
                       atSite sourceOuter targetOuter outerMap outerSpec
                     have sourceFinishRename :
-                        (ConcreteElaboration.finishRegion coalesced.diagram.val
+                        (Concrete.Elaboration.finishRegion coalesced.diagram.val
                           sourceOuter region sourceItems).renameRelations
                             relationMap =
-                          ConcreteElaboration.finishRegion coalesced.diagram.val
+                          Concrete.Elaboration.finishRegion coalesced.diagram.val
                             sourceOuter region
                               (sourceItems.renameRelations relationMap) := by
                       simpa [coalesced] using
-                        ConcreteElaboration.finishRegion_renameRelations
+                        Concrete.Elaboration.finishRegion_renameRelations
                           sourceOuter region relationMap sourceItems
                     cases direction with
                     | forward =>
                         intro sourceDenotes
                         have sourceDenotes' : denoteRegion model
                             sourceOuterEnv targetRelEnv
-                            (ConcreteElaboration.finishRegion
+                            (Concrete.Elaboration.finishRegion
                               coalesced.diagram.val sourceOuter region
                                 (sourceItems.renameRelations relationMap)) :=
                           sourceFinishRename ▸ sourceDenotes
@@ -491,26 +493,26 @@ theorem advance_enclosed_region_simulation_fixed
                           (denoteItemSeq_renameRelations model  relationMap
                             (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
                             (RelEnv.pullback_agrees relationMap targetRelEnv)
-                            (ConcreteElaboration.extendedEnvironment sourceOuter
+                            (Concrete.Elaboration.extendedEnvironment sourceOuter
                               region sourceOuterEnv sourceLocal) sourceItems).mp
                                 sourceItemsPrepared
                         let targetLocal := sourceLocal ∘
                           (layout.frameLocalWireEquiv region atSite).symm
-                        let sourceEnv := ConcreteElaboration.extendedEnvironment
+                        let sourceEnv := Concrete.Elaboration.extendedEnvironment
                           sourceOuter region sourceOuterEnv sourceLocal
-                        let targetEnv := ConcreteElaboration.extendedEnvironment
+                        let targetEnv := Concrete.Elaboration.extendedEnvironment
                           targetOuter (layout.frameRegion region) targetOuterEnv
                             targetLocal
                         have environmentEq : sourceEnv =
                             targetEnv ∘ extendedMap := by
-                          rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+                          rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap]
                             at outerAgrees
                           funext index
                           let split := Fin.cast
-                            (ConcreteElaboration.WireContext.length_extend
+                            (Concrete.Elaboration.WireContext.length_extend
                               sourceOuter region) index
                           have recover : Fin.cast
-                              (ConcreteElaboration.WireContext.length_extend
+                              (Concrete.Elaboration.WireContext.length_extend
                                 sourceOuter region).symm split = index := by
                             apply Fin.ext
                             rfl
@@ -518,9 +520,9 @@ theorem advance_enclosed_region_simulation_fixed
                           refine Fin.addCases (fun outer => ?_)
                             (fun localIndex => ?_) split <;>
                             simp [sourceEnv, targetEnv,
-                              ConcreteElaboration.extendedEnvironment,
+                              Concrete.Elaboration.extendedEnvironment,
                               extendWireEnv, extendedMap,
-                              Splice.Input.PlugLayout.frameExtendedWireMap,
+                              Concrete.Splice.Input.PlugLayout.frameExtendedWireMap,
                               targetLocal, outerAgrees]
                           exact (congrArg sourceLocal
                             ((layout.frameLocalWireEquiv region atSite).left_inv
@@ -558,21 +560,21 @@ theorem advance_enclosed_region_simulation_fixed
                             targetOuterEnv targetRelEnv).mp targetDenotes
                         let sourceLocal := targetLocal ∘
                           layout.frameLocalWireEquiv region atSite
-                        let sourceEnv := ConcreteElaboration.extendedEnvironment
+                        let sourceEnv := Concrete.Elaboration.extendedEnvironment
                           sourceOuter region sourceOuterEnv sourceLocal
-                        let targetEnv := ConcreteElaboration.extendedEnvironment
+                        let targetEnv := Concrete.Elaboration.extendedEnvironment
                           targetOuter (layout.frameRegion region) targetOuterEnv
                             targetLocal
                         have environmentEq : sourceEnv =
                             targetEnv ∘ extendedMap := by
-                          rw [ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap]
+                          rw [Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap]
                             at outerAgrees
                           funext index
                           let split := Fin.cast
-                            (ConcreteElaboration.WireContext.length_extend
+                            (Concrete.Elaboration.WireContext.length_extend
                               sourceOuter region) index
                           have recover : Fin.cast
-                              (ConcreteElaboration.WireContext.length_extend
+                              (Concrete.Elaboration.WireContext.length_extend
                                 sourceOuter region).symm split = index := by
                             apply Fin.ext
                             rfl
@@ -580,9 +582,9 @@ theorem advance_enclosed_region_simulation_fixed
                           refine Fin.addCases (fun outer => ?_)
                             (fun localIndex => ?_) split <;>
                             simp [sourceEnv, targetEnv,
-                              ConcreteElaboration.extendedEnvironment,
+                              Concrete.Elaboration.extendedEnvironment,
                               extendWireEnv, extendedMap,
-                              Splice.Input.PlugLayout.frameExtendedWireMap,
+                              Concrete.Splice.Input.PlugLayout.frameExtendedWireMap,
                               sourceLocal, outerAgrees]
                         have targetExtendedParameters : ParameterValuesAt next
                             targetContext targetEnv parameterValues :=

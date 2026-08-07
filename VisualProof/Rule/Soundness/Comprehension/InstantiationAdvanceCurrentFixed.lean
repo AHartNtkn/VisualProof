@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFixedSimulation
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -14,15 +16,15 @@ All lexical fixedness premises are derived from the target compiler receipt;
 the caller supplies only the trace-stable equality identifying the selected
 relation with the terminal comprehension relation. -/
 theorem advance_current_atom_denotes_nonempty_fixed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -43,7 +45,7 @@ theorem advance_current_atom_denotes_nonempty_fixed
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -58,7 +60,7 @@ theorem advance_current_atom_denotes_nonempty_fixed
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)).length
       outputWitness.toFocus.holeRels)
-    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (survivorCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       (compileSurvivorRegion?
@@ -68,7 +70,7 @@ theorem advance_current_atom_denotes_nonempty_fixed
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site))
       outputLeaf.binders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible).diagram.val
         ((instantiateSpliceInput comprehension attachments binders payload state
@@ -87,14 +89,14 @@ theorem advance_current_atom_denotes_nonempty_fixed
         state atom tail site arguments hadmissible)
       outputLeaf.binders outputRelEnv values)
     {sourceRels : RelCtx}
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceRels)
     (sourceCover : sourceBinders.Covers site)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceBinders site)
     (relationMap : RelationRenaming sourceRels
@@ -111,11 +113,11 @@ theorem advance_current_atom_denotes_nonempty_fixed
         payload state site arguments
       let outputContext := outputLeaf.inheritedWires.extend
         (spliceInput.plugLayout.frameRegion site)
-      let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+      let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment spliceInput
         outputContext outputLeaf.wiresExact outputEnv fallback
       ∀ index, sourceEnv index = quotientValues (sourceContext.get index))
     (sourceItem : Item  sourceContext.length sourceRels)
-    (sourceCompiled : ConcreteElaboration.compileNode?
+    (sourceCompiled : Concrete.Elaboration.compileNode?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceContext sourceBinders atom =
       some sourceItem)
@@ -124,7 +126,7 @@ theorem advance_current_atom_denotes_nonempty_fixed
         payload state site arguments
       let outputContext := outputLeaf.inheritedWires.extend
         (spliceInput.plugLayout.frameRegion site)
-      let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+      let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment spliceInput
         outputContext outputLeaf.wiresExact outputEnv fallback
       relationValue = terminalRelationOfValues payload state site arguments
         hnonempty model
@@ -133,7 +135,7 @@ theorem advance_current_atom_denotes_nonempty_fixed
       (RelEnv.pullback relationMap outputRelEnv) sourceItem := by
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
-  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
   obtain ⟨sourceRelation, sourceLookup⟩ :=
     coalesced_bubbleRelation_exists comprehension attachments binders payload
       state atom site arguments node_eq hadmissible shape sourceBinders
@@ -160,15 +162,15 @@ theorem advance_current_atom_denotes_nonempty_fixed
 authoritative interpreted open comprehension, so the target receipt again
 supplies all remaining lexical evidence. -/
 theorem advance_current_atom_denotes_empty_fixed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -187,7 +189,7 @@ theorem advance_current_atom_denotes_empty_fixed
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -202,7 +204,7 @@ theorem advance_current_atom_denotes_empty_fixed
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)).length
       outputWitness.toFocus.holeRels)
-    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (survivorCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       (compileSurvivorRegion?
@@ -212,7 +214,7 @@ theorem advance_current_atom_denotes_empty_fixed
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site))
       outputLeaf.binders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible).diagram.val
         ((instantiateSpliceInput comprehension attachments binders payload state
@@ -227,14 +229,14 @@ theorem advance_current_atom_denotes_empty_fixed
         state atom tail site arguments hadmissible)
       relationValue outputLeaf.binders outputRelEnv)
     {sourceRels : RelCtx}
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceRels)
     (sourceCover : sourceBinders.Covers site)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceBinders site)
     (relationMap : RelationRenaming sourceRels
@@ -251,11 +253,11 @@ theorem advance_current_atom_denotes_empty_fixed
         payload state site arguments
       let outputContext := outputLeaf.inheritedWires.extend
         (spliceInput.plugLayout.frameRegion site)
-      let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+      let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment spliceInput
         outputContext outputLeaf.wiresExact outputEnv fallback
       ∀ index, sourceEnv index = quotientValues (sourceContext.get index))
     (sourceItem : Item  sourceContext.length sourceRels)
-    (sourceCompiled : ConcreteElaboration.compileNode?
+    (sourceCompiled : Concrete.Elaboration.compileNode?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceContext sourceBinders atom =
       some sourceItem)
@@ -264,7 +266,7 @@ theorem advance_current_atom_denotes_empty_fixed
         payload state site arguments
       let outputContext := outputLeaf.inheritedWires.extend
         (spliceInput.plugLayout.frameRegion site)
-      let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+      let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment spliceInput
         outputContext outputLeaf.wiresExact outputEnv fallback
       relationValue = payload.interpretedRelation model
         (fun index => quotientValues

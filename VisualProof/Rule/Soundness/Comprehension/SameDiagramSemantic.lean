@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationTraceBackwardAligne
 
 namespace VisualProof.Rule.InstantiationSemantic
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -10,8 +12,8 @@ open VisualProof.Theory
 concrete diagram.  The compiler may enumerate the same visible wires in
 different orders. -/
 structure SameDiagramContext
-    (diagram : ConcreteDiagram)
-    (source target : ConcreteElaboration.WireContext diagram) where
+    (diagram : Concrete.Diagram)
+    (source target : Concrete.Elaboration.WireContext diagram) where
   index : FiniteEquiv (Fin source.length) (Fin target.length)
   get : ∀ sourceIndex,
     target.get (index sourceIndex) = source.get sourceIndex
@@ -20,44 +22,44 @@ namespace SameDiagramContext
 
 def indexRelation
     (context : SameDiagramContext diagram source target) :
-    ConcreteElaboration.ContextIndexRelation source.length target.length :=
-  ConcreteElaboration.ContextIndexRelation.forwardMap context.index
+    Concrete.Elaboration.ContextIndexRelation source.length target.length :=
+  Concrete.Elaboration.ContextIndexRelation.forwardMap context.index
 
 def extend
     (context : SameDiagramContext diagram source target)
     (region : Fin diagram.regionCount) :
     SameDiagramContext diagram (source.extend region) (target.extend region) :=
   {
-    index := ConcreteElaboration.extendedContextEquiv
-      (ConcreteIso.refl diagram) source target context.index region
+    index := Concrete.Elaboration.extendedContextEquiv
+      (Concrete.Iso.refl diagram) source target context.index region
     get := by
-      simpa [ConcreteIso.refl, FiniteEquiv.refl] using
-        (ConcreteElaboration.WireContextsAgree.extend
-          (iso := ConcreteIso.refl diagram) context.get region)
+      simpa [Concrete.Iso.refl, FiniteEquiv.refl] using
+        (Concrete.Elaboration.WireContextsAgree.extend
+          (iso := Concrete.Iso.refl diagram) context.get region)
   }
 
 /-- Equivalent exact inherited contexts determine the canonical same-diagram
 context correspondence used at a compiled region. -/
 noncomputable def ofExact
     (region : Fin diagram.regionCount)
-    (source target : ConcreteElaboration.WireContext diagram)
+    (source target : Concrete.Elaboration.WireContext diagram)
     (sourceExact : (source.extend region).Exact region)
     (targetExact : (target.extend region).Exact region) :
     SameDiagramContext diagram source target := by
-  let index := inheritedWireEquivIso (ConcreteIso.refl diagram) region
+  let index := inheritedWireEquivIso (Concrete.Iso.refl diagram) region
     source target sourceExact targetExact
   exact {
     index := index
     get := by
       intro sourceIndex
-      simpa [ConcreteIso.refl, FiniteEquiv.refl] using
-        (inheritedWireEquivIso_spec (ConcreteIso.refl diagram) region source
+      simpa [Concrete.Iso.refl, FiniteEquiv.refl] using
+        (inheritedWireEquivIso_spec (Concrete.Iso.refl diagram) region source
           target sourceExact targetExact sourceIndex)
   }
 
 theorem localSelection
     (context : SameDiagramContext diagram source target)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (region : Fin diagram.regionCount)
     (model : Model) :
     ∀ (sourceOuter : Fin source.length → model.Carrier)
@@ -67,56 +69,56 @@ theorem localSelection
         | .forward => ∀ sourceLocal,
             ∃ targetLocal,
               (context.extend region).indexRelation.EnvironmentsAgree
-                (ConcreteElaboration.extendedEnvironment source region
+                (Concrete.Elaboration.extendedEnvironment source region
                   sourceOuter sourceLocal)
-                (ConcreteElaboration.extendedEnvironment target region
+                (Concrete.Elaboration.extendedEnvironment target region
                   targetOuter targetLocal)
         | .backward => ∀ targetLocal,
             ∃ sourceLocal,
               (context.extend region).indexRelation.EnvironmentsAgree
-                (ConcreteElaboration.extendedEnvironment source region
+                (Concrete.Elaboration.extendedEnvironment source region
                   sourceOuter sourceLocal)
-                (ConcreteElaboration.extendedEnvironment target region
+                (Concrete.Elaboration.extendedEnvironment target region
                   targetOuter targetLocal) := by
   intro sourceOuter targetOuter outerAgreement
   have outerEq : sourceOuter = targetOuter ∘ context.index :=
-    (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+    (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap
       context.index sourceOuter targetOuter).mp outerAgreement
-  let localEquiv := ConcreteElaboration.localWireEquiv
-    (ConcreteIso.refl diagram) region
+  let localEquiv := Concrete.Elaboration.localWireEquiv
+    (Concrete.Iso.refl diagram) region
   cases direction with
   | forward =>
       intro sourceLocal
       let targetLocal := sourceLocal ∘ localEquiv.invFun
       refine ⟨targetLocal, ?_⟩
-      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+      apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap
         (context.extend region).index _ _).mpr
       funext index
       let split : Fin (source.length +
-          (ConcreteElaboration.exactScopeWires diagram region).length) :=
-        Fin.cast (ConcreteElaboration.WireContext.length_extend source region)
+          (Concrete.Elaboration.exactScopeWires diagram region).length) :=
+        Fin.cast (Concrete.Elaboration.WireContext.length_extend source region)
           index
       have recover : Fin.cast
-          (ConcreteElaboration.WireContext.length_extend source region).symm
+          (Concrete.Elaboration.WireContext.length_extend source region).symm
           split = index := by
         apply Fin.ext
         rfl
       rw [← recover]
       refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
       · simp [SameDiagramContext.extend, indexRelation,
-          ConcreteElaboration.extendedContextEquiv,
-          ConcreteElaboration.castFinEquiv,
-          ConcreteElaboration.localWireEquiv, ConcreteIso.refl,
+          Concrete.Elaboration.extendedContextEquiv,
+          Concrete.Elaboration.castFinEquiv,
+          Concrete.Elaboration.localWireEquiv, Concrete.Iso.refl,
           FiniteEquiv.refl,
-          ConcreteElaboration.extendedEnvironment, outerEq,
+          Concrete.Elaboration.extendedEnvironment, outerEq,
           Function.comp_def]
         simp [extendWireEnv, outerEq, Function.comp_def]
       · simp [SameDiagramContext.extend, indexRelation,
-          ConcreteElaboration.extendedContextEquiv,
-          ConcreteElaboration.castFinEquiv,
-          ConcreteElaboration.localWireEquiv, ConcreteIso.refl,
+          Concrete.Elaboration.extendedContextEquiv,
+          Concrete.Elaboration.castFinEquiv,
+          Concrete.Elaboration.localWireEquiv, Concrete.Iso.refl,
           FiniteEquiv.refl,
-          ConcreteElaboration.extendedEnvironment, targetLocal,
+          Concrete.Elaboration.extendedEnvironment, targetLocal,
           Function.comp_def]
         simp only [extendWireEnv, Fin.addCases_right, Function.comp_apply]
         change sourceLocal localIndex =
@@ -126,34 +128,34 @@ theorem localSelection
       intro targetLocal
       let sourceLocal := targetLocal ∘ localEquiv
       refine ⟨sourceLocal, ?_⟩
-      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+      apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap
         (context.extend region).index _ _).mpr
       funext index
       let split : Fin (source.length +
-          (ConcreteElaboration.exactScopeWires diagram region).length) :=
-        Fin.cast (ConcreteElaboration.WireContext.length_extend source region)
+          (Concrete.Elaboration.exactScopeWires diagram region).length) :=
+        Fin.cast (Concrete.Elaboration.WireContext.length_extend source region)
           index
       have recover : Fin.cast
-          (ConcreteElaboration.WireContext.length_extend source region).symm
+          (Concrete.Elaboration.WireContext.length_extend source region).symm
           split = index := by
         apply Fin.ext
         rfl
       rw [← recover]
       refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) split
       · simp [SameDiagramContext.extend, indexRelation,
-          ConcreteElaboration.extendedContextEquiv,
-          ConcreteElaboration.castFinEquiv,
-          ConcreteElaboration.localWireEquiv, ConcreteIso.refl,
+          Concrete.Elaboration.extendedContextEquiv,
+          Concrete.Elaboration.castFinEquiv,
+          Concrete.Elaboration.localWireEquiv, Concrete.Iso.refl,
           FiniteEquiv.refl,
-          ConcreteElaboration.extendedEnvironment, outerEq,
+          Concrete.Elaboration.extendedEnvironment, outerEq,
           Function.comp_def]
         simp [extendWireEnv, outerEq, Function.comp_def]
       · simp [SameDiagramContext.extend, indexRelation,
-          ConcreteElaboration.extendedContextEquiv,
-          ConcreteElaboration.castFinEquiv,
-          ConcreteElaboration.localWireEquiv, ConcreteIso.refl,
+          Concrete.Elaboration.extendedContextEquiv,
+          Concrete.Elaboration.castFinEquiv,
+          Concrete.Elaboration.localWireEquiv, Concrete.Iso.refl,
           FiniteEquiv.refl,
-          ConcreteElaboration.extendedEnvironment, sourceLocal,
+          Concrete.Elaboration.extendedEnvironment, sourceLocal,
           Function.comp_def]
         simp only [extendWireEnv, Fin.addCases_right, Function.comp_apply]
         change targetLocal (localEquiv localIndex) =
@@ -165,10 +167,10 @@ end SameDiagramContext
 /-- Relation variables in two compiler binder contexts are paired by their
 common concrete binder owner. -/
 structure SameDiagramBinderWitness
-    (diagram : ConcreteDiagram)
+    (diagram : Concrete.Diagram)
     {sourceRels targetRels : RelCtx}
-    (source : ConcreteElaboration.BinderContext diagram sourceRels)
-    (target : ConcreteElaboration.BinderContext diagram targetRels) where
+    (source : Concrete.Elaboration.BinderContext diagram sourceRels)
+    (target : Concrete.Elaboration.BinderContext diagram targetRels) where
   relationMap : RelationRenaming sourceRels targetRels
   mapped : ∀ region arity (relation : RelVar sourceRels arity),
     source region = some ⟨arity, relation⟩ →
@@ -176,11 +178,11 @@ structure SameDiagramBinderWitness
 
 namespace SameDiagramBinderWitness
 
-def empty (diagram : ConcreteDiagram) :
+def empty (diagram : Concrete.Diagram) :
     SameDiagramBinderWitness diagram
-      ConcreteElaboration.BinderContext.empty
-      ConcreteElaboration.BinderContext.empty where
-  relationMap := ConcreteElaboration.identityRelationRenaming []
+      Concrete.Elaboration.BinderContext.empty
+      Concrete.Elaboration.BinderContext.empty where
+  relationMap := Concrete.Elaboration.identityRelationRenaming []
   mapped := by
     intro region arity relation
     exact Fin.elim0 relation.index
@@ -196,11 +198,11 @@ def push
     intro region binderArity relation sourceLookup
     by_cases equality : region = child
     · subst region
-      simp only [ConcreteElaboration.BinderContext.push_self]
+      simp only [Concrete.Elaboration.BinderContext.push_self]
         at sourceLookup ⊢
       cases Option.some.inj sourceLookup
       rfl
-    · rw [ConcreteElaboration.BinderContext.push_other _ arity equality]
+    · rw [Concrete.Elaboration.BinderContext.push_other _ arity equality]
         at sourceLookup ⊢
       cases sourceEq : source region with
       | none => simp [sourceEq] at sourceLookup
@@ -225,12 +227,12 @@ def push
         RelationRenaming (arity :: sourceRels) (arity :: targetRels)) := rfl
 
 private theorem relation_exists
-    (diagram : ConcreteDiagram)
+    (diagram : Concrete.Diagram)
     (region : Fin diagram.regionCount)
-    (source : ConcreteElaboration.BinderContext diagram sourceRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (source : Concrete.Elaboration.BinderContext diagram sourceRels)
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       diagram source region)
-    (target : ConcreteElaboration.BinderContext diagram targetRels)
+    (target : Concrete.Elaboration.BinderContext diagram targetRels)
     (targetCover : target.Covers region)
     {arity : Nat} (relation : RelVar sourceRels arity) :
     ∃ targetRelation : RelVar targetRels arity,
@@ -246,12 +248,12 @@ private theorem relation_exists
 
 /-- Canonical owner-preserving relation-variable correspondence. -/
 noncomputable def ofEnumeration
-    (diagram : ConcreteDiagram)
+    (diagram : Concrete.Diagram)
     (region : Fin diagram.regionCount)
-    (source : ConcreteElaboration.BinderContext diagram sourceRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (source : Concrete.Elaboration.BinderContext diagram sourceRels)
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       diagram source region)
-    (target : ConcreteElaboration.BinderContext diagram targetRels)
+    (target : Concrete.Elaboration.BinderContext diagram targetRels)
     (targetCover : target.Covers region) :
     SameDiagramBinderWitness diagram source target := by
   let relationMap : RelationRenaming sourceRels targetRels :=
@@ -275,11 +277,11 @@ end SameDiagramBinderWitness
 /-- Semantic invariance of recompiling one well-formed diagram under exact
 wire contexts and owner-aligned binder contexts. -/
 noncomputable def sameDiagramSemanticSimulation
-    (diagram : ConcreteDiagram)
+    (diagram : Concrete.Diagram)
     (wellFormed : diagram.WellFormed )
     (model : Model)
     :
-    ConcreteElaboration.ConcreteSemanticSimulation  diagram diagram
+    Concrete.Elaboration.ConcreteSemanticSimulation  diagram diagram
       model  where
   source_wellFormed := wellFormed
   target_wellFormed := wellFormed
@@ -329,7 +331,7 @@ noncomputable def sameDiagramSemanticSimulation
       allowed sourceExact targetExact sourceCover targetCover sourceEnumeration
       targetEnumeration sourceItems targetItems sourceCompiled targetCompiled
       itemSimulation
-    exact ConcreteElaboration.directionalLocalTransport_of_agreement direction
+    exact Concrete.Elaboration.directionalLocalTransport_of_agreement direction
       source target region region context.indexRelation
       (context.extend region).indexRelation model
       (sourceItems.renameRelations binderWitness.relationMap) targetItems
@@ -340,19 +342,19 @@ noncomputable def sameDiagramSemanticSimulation
       sourceNode targetNode regular mapped nodeRegion sourceItem targetItem
       sourceCompiled targetCompiled
     have nodeEq : targetNode = sourceNode :=
-      ConcreteElaboration.LocalOccurrence.node.inj mapped.symm
+      Concrete.Elaboration.LocalOccurrence.node.inj mapped.symm
     subst targetNode
-    apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+    apply Concrete.Elaboration.compileNode?_itemSimulation_of_related_ports
       model  direction source target context.indexRelation sourceBinders
       targetBinders binderWitness.relationMap sourceNode sourceNode id id
     · cases diagram.nodes sourceNode <;> rfl
     · intro port sourceIndex targetIndex sourceResolved targetResolved
       obtain ⟨sourceOwner, sourceOccurs, sourceGet⟩ :=
-        ConcreteElaboration.resolvePort?_sound sourceResolved
+        Concrete.Elaboration.resolvePort?_sound sourceResolved
       obtain ⟨targetOwner, targetOccurs, targetGet⟩ :=
-        ConcreteElaboration.resolvePort?_sound targetResolved
+        Concrete.Elaboration.resolvePort?_sound targetResolved
       have ownerEq : sourceOwner = targetOwner :=
-        ConcreteElaboration.endpoint_wire_unique
+        Concrete.Elaboration.endpoint_wire_unique
           wellFormed.wire_endpoints_are_disjoint sourceOccurs targetOccurs
       have mappedGet : target.get (context.index sourceIndex) = sourceOwner := by
         rw [context.get]

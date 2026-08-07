@@ -1,6 +1,8 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionTrace
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -9,42 +11,42 @@ open Diagram
 namespace AbstractionRawTrace
 
 @[simp] theorem region_survives_iff
-    (input : CheckedDiagram )
-    (occurrences : List (AbstractionOccurrence input))
+    (input : Concrete.Checked )
+    (occurrences : List (OperationAbstractionOccurrence input))
     (region : Fin input.val.regionCount) :
     (Domains input occurrences).regions.survives region = true ↔
       region ∉ abstractionRegions occurrences := by
   simp [Domains, abstractionDomains, AbstractionDomains.regions_exact]
 
 @[simp] theorem node_survives_iff
-    (input : CheckedDiagram )
-    (occurrences : List (AbstractionOccurrence input))
+    (input : Concrete.Checked )
+    (occurrences : List (OperationAbstractionOccurrence input))
     (node : Fin input.val.nodeCount) :
     (Domains input occurrences).nodes.survives node = true ↔
       node ∉ abstractionNodes occurrences := by
   simp [Domains, abstractionDomains, AbstractionDomains.nodes_exact]
 
 @[simp] theorem wire_survives_iff
-    (input : CheckedDiagram )
-    (occurrences : List (AbstractionOccurrence input))
+    (input : Concrete.Checked )
+    (occurrences : List (OperationAbstractionOccurrence input))
     (wire : Fin input.val.wireCount) :
     (Domains input occurrences).wires.survives wire = true ↔
       wire ∉ abstractionWires occurrences := by
   simp [Domains, abstractionDomains, AbstractionDomains.wires_exact]
 
 theorem selection_anchor_not_selected
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val) :
     selection.val.anchor ∉ selection.selectedRegions := by
   intro selected
   obtain ⟨child, childRoot, enclosed⟩ :=
     (selection.mem_selectedRegions selection.val.anchor).1 selected
-  exact ConcreteElaboration.checked_direct_child_not_encloses_parent
+  exact Concrete.Elaboration.checked_direct_child_not_encloses_parent
     input.property (selection.property.childRoots_direct child childRoot)
       enclosed
 
 theorem occurrence_anchor_not_abstractionRegions
-    (payload : ComprehensionAbstractPayload input wrap comprehension
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension
       occurrences)
     (index : Fin occurrences.length) :
     (occurrences.get index).selection.val.anchor ∉
@@ -61,7 +63,7 @@ theorem occurrence_anchor_not_abstractionRegions
   · exact payload.anchors_not_nested index other same regionMember
 
 theorem occurrence_anchor_survives
-    (payload : ComprehensionAbstractPayload input wrap comprehension
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension
       occurrences)
     (index : Fin occurrences.length) :
     (Domains input occurrences).regions.survives
@@ -70,7 +72,7 @@ theorem occurrence_anchor_survives
     (occurrence_anchor_not_abstractionRegions payload index)
 
 theorem wrap_anchor_not_abstractionRegions
-    (payload : ComprehensionAbstractPayload input wrap comprehension
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension
       occurrences) :
     wrap.val.anchor ∉ abstractionRegions occurrences := by
   intro selected
@@ -82,7 +84,7 @@ theorem wrap_anchor_not_abstractionRegions
     (payload.regions_inside index wrap.val.anchor regionMember)
 
 theorem wrap_anchor_survives
-    (payload : ComprehensionAbstractPayload input wrap comprehension
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension
       occurrences) :
     (Domains input occurrences).regions.survives wrap.val.anchor = true :=
   (region_survives_iff input occurrences _).2
@@ -170,7 +172,7 @@ theorem atomOwner_eq_bubble_of_anchor_eq
 
 theorem atomOwner_eq_targetRegion_of_anchor_ne
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension
       occurrences)
     (index : Fin occurrences.length)
     (anchor : (occurrences.get index).selection.val.anchor ≠ wrap.val.anchor) :
@@ -226,4 +228,4 @@ theorem abstractWire?_targetWire
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

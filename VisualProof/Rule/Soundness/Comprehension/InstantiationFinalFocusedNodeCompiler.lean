@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalFocusedOccurre
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -9,20 +11,20 @@ open VisualProof.Theory
 namespace InstantiationTrace
 
 theorem reverseRegionMap_finalRegionMap_of_enclosing_parent
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -39,33 +41,33 @@ theorem reverseRegionMap_finalRegionMap_of_enclosing_parent
       constructor
       · intro bubbleEncloses
         exact payload_bubble_not_encloses_parent payload
-          (ConcreteElaboration.checked_encloses_trans input.property
+          (Concrete.Elaboration.checked_encloses_trans input.property
             bubbleEncloses encloses)
       · exact atFocus
     exact copyTrace.reverseRegionMap_finalRegionMap elimTrace finalWellFormed
       region regular
 
 theorem focusedKeptNode_shape
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
     (finalNode : Fin elimTrace.sourceDiagram.nodeCount)
-    (member : ConcreteElaboration.LocalOccurrence.node finalNode ∈
+    (member : Concrete.Elaboration.LocalOccurrence.node finalNode ∈
       elimTrace.keptOccurrences finalWellFormed)
     (originalNode : Fin input.val.nodeCount)
     (originalRegion : (input.val.nodes originalNode).region = payload.parent)
@@ -85,7 +87,7 @@ theorem focusedKeptNode_shape
   have finalOwner :
       (elimTrace.sourceDiagram.nodes finalNode).region =
         elimTrace.targetIndex finalWellFormed :=
-    (ConcreteElaboration.mem_localOccurrences_node elimTrace.sourceDiagram
+    (Concrete.Elaboration.mem_localOccurrences_node elimTrace.sourceDiagram
       (elimTrace.targetIndex finalWellFormed) finalNode).1
       (List.mem_filter.mp member).1
   have droppedShape := copyTrace.dropped_node_shape originalNode outside
@@ -184,26 +186,26 @@ theorem focusedKeptNode_shape
             copyTrace.reverseRegionMap_finalRegionMap_of_enclosing_parent
               elimTrace finalWellFormed binder binderEncloses]
 theorem focusedKeptChild_shape
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
     (child : Fin elimTrace.sourceDiagram.regionCount)
-    (member : ConcreteElaboration.LocalOccurrence.child child ∈
+    (member : Concrete.Elaboration.LocalOccurrence.child child ∈
       elimTrace.keptOccurrences finalWellFormed) :
     input.val.regions
         (copyTrace.reverseRegionMap elimTrace finalWellFormed child) =
@@ -217,17 +219,17 @@ theorem focusedKeptChild_shape
   cases original with
   | node originalNode =>
       have originalRegion :=
-        (ConcreteElaboration.mem_localOccurrences_node input.val
+        (Concrete.Elaboration.mem_localOccurrences_node input.val
           payload.parent originalNode).1 originalMember
       simp [droppedParentForwardMap, droppedOutsideOccurrenceMap,
         originalRegion, VacuousElimTrace.occurrenceMap] at forwardEq
   | child originalChild =>
       have originalParent :=
-        (ConcreteElaboration.mem_localOccurrences_child input.val
+        (Concrete.Elaboration.mem_localOccurrences_child input.val
           payload.parent originalChild).1 originalMember
       have mappedOrigin : copyTrace.regionMap originalChild =
           elimTrace.origin child :=
-        ConcreteElaboration.LocalOccurrence.child.inj
+        Concrete.Elaboration.LocalOccurrence.child.inj
           (nodes := result.diagram.val.nodeCount) (by
             simpa [droppedParentForwardMap, droppedOutsideOccurrenceMap,
               VacuousElimTrace.occurrenceMap] using forwardEq)
@@ -235,7 +237,7 @@ theorem focusedKeptChild_shape
         finalWellFormed child member
       have originalEq : originalChild =
           copyTrace.reverseRegionMap elimTrace finalWellFormed child :=
-        ConcreteElaboration.LocalOccurrence.child.inj
+        Concrete.Elaboration.LocalOccurrence.child.inj
           (nodes := input.val.nodeCount) (reverseEq.symm.trans focusReverse)
       rw [← originalEq]
       have droppedShape := copyTrace.dropped_region_shape originalChild
@@ -301,20 +303,20 @@ theorem focusedKeptChild_shape
               rfl
 
 theorem focusedKeptNode_endpointOccurs_iff
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalNode : Fin elimTrace.sourceDiagram.nodeCount)
@@ -343,26 +345,26 @@ theorem focusedKeptNode_endpointOccurs_iff
   exact copyTrace.endpointOccurs_wireMap_nodeMap_iff wire originalNode port
 
 theorem focusedKeptNode_resolvedPorts_related
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext input.val)
     (context : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext)
     (sourceNodup : sourceContext.Nodup)
@@ -375,22 +377,22 @@ theorem focusedKeptNode_resolvedPorts_related
     (port : CPort)
     (sourceIndex : Fin sourceContext.length)
     (targetIndex : Fin targetContext.length)
-    (sourceResolved : ConcreteElaboration.resolvePort?
+    (sourceResolved : Concrete.Elaboration.resolvePort?
       elimTrace.sourceDiagram sourceContext finalNode port = some sourceIndex)
-    (targetResolved : ConcreteElaboration.resolvePort? input.val targetContext
+    (targetResolved : Concrete.Elaboration.resolvePort? input.val targetContext
       originalNode port = some targetIndex) :
     context.indexRelation.Rel sourceIndex targetIndex := by
   obtain ⟨sourceWire, sourceOccurs, sourceGet⟩ :=
-    ConcreteElaboration.resolvePort?_sound sourceResolved
+    Concrete.Elaboration.resolvePort?_sound sourceResolved
   obtain ⟨targetWire, targetOccurs, targetGet⟩ :=
-    ConcreteElaboration.resolvePort?_sound targetResolved
+    Concrete.Elaboration.resolvePort?_sound targetResolved
   have mappedTargetOccurs : elimTrace.sourceDiagram.EndpointOccurs
       (copyTrace.finalWireMap elimTrace targetWire) ⟨finalNode, port⟩ :=
     (copyTrace.focusedKeptNode_endpointOccurs_iff elimTrace finalNode
       originalNode originalRegion droppedEq targetWire port).2
       targetOccurs
   have wireEq : sourceWire = copyTrace.finalWireMap elimTrace targetWire :=
-    ConcreteElaboration.endpoint_wire_unique
+    Concrete.Elaboration.endpoint_wire_unique
       sourceWellFormed.wire_endpoints_are_disjoint sourceOccurs
         mappedTargetOccurs
   have mappedLookup := context.sourceIndex_lookup targetIndex
@@ -400,67 +402,67 @@ theorem focusedKeptNode_resolvedPorts_related
         some (context.sourceIndex targetIndex) at mappedLookup
   rw [targetGet] at mappedLookup
   change context.sourceIndex targetIndex = sourceIndex
-  exact (ConcreteElaboration.WireContext.lookup?_unique sourceNodup mappedLookup
+  exact (Concrete.Elaboration.WireContext.lookup?_unique sourceNodup mappedLookup
     (sourceGet.trans wireEq)).symm
 
 /-- Every retained node at the promoted focus compiles to the corresponding
 original-parent item under the composite final context and binder maps. -/
 theorem focusedKeptNode_itemSimulation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed )
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
-    (sourceContext : ConcreteElaboration.WireContext
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext input.val)
     (context : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext)
     (sourceNodup : sourceContext.Nodup)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       elimTrace.sourceDiagram sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext input.val targetRels)
+    (targetBinders : Concrete.Elaboration.BinderContext input.val targetRels)
     (binderWitness : FinalBinderWitness copyTrace elimTrace finalWellFormed
       sourceBinders targetBinders)
     (finalNode : Fin elimTrace.sourceDiagram.nodeCount)
-    (member : ConcreteElaboration.LocalOccurrence.node finalNode ∈
+    (member : Concrete.Elaboration.LocalOccurrence.node finalNode ∈
       elimTrace.keptOccurrences finalWellFormed)
     (targetNode : Fin input.val.nodeCount)
     (mapped : copyTrace.finalFocusOccurrenceMap elimTrace (.node finalNode) =
       .node targetNode)
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileNode?
+    (sourceCompiled : Concrete.Elaboration.compileNode?
       elimTrace.sourceDiagram sourceContext sourceBinders finalNode =
         some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode?  input.val
+    (targetCompiled : Concrete.Elaboration.compileNode?  input.val
       targetContext targetBinders targetNode = some targetItem) :
-    ConcreteElaboration.ItemSimulation model  direction
+    Concrete.Elaboration.ItemSimulation model  direction
       context.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   obtain ⟨originalNode, originalRegion, reverseEq, droppedEq⟩ :=
     copyTrace.keptNode_original elimTrace finalWellFormed finalNode member
   have targetNodeEq : targetNode = originalNode :=
-    ConcreteElaboration.LocalOccurrence.node.inj
+    Concrete.Elaboration.LocalOccurrence.node.inj
       (regions := input.val.regionCount) (mapped.symm.trans reverseEq)
   subst targetNode
-  apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+  apply Concrete.Elaboration.compileNode?_itemSimulation_of_related_ports
     model  direction sourceContext targetContext context.indexRelation
     sourceBinders targetBinders binderWitness.relationMap finalNode originalNode
     (copyTrace.reverseRegionMap elimTrace finalWellFormed)

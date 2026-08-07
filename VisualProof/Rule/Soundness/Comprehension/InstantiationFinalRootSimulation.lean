@@ -2,24 +2,26 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalRootCompiler
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
 
 namespace InstantiationTrace
 
-variable {input : CheckedDiagram }
+variable {input : Concrete.Checked }
   {bubble : Fin input.val.regionCount}
-  {comprehension : CheckedOpenDiagram }
+  {comprehension : Concrete.CheckedOpen }
   {attachments : List (Fin input.val.wireCount)}
   {binders : List
     (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-  {payload : ComprehensionInstantiatePayload input bubble comprehension
+  {payload : OperationComprehensionInstantiatePayload input bubble comprehension
     attachments binders}
   {fuel : Nat}
   {result : InstantiationState input attachments.length
     payload.binderSpine.proxyCount}
-  {raw : ConcreteDiagram}
+  {raw : Concrete.Diagram}
 
 theorem terminalBoundary_root
     (copyTrace : InstantiationTrace comprehension attachments binders payload
@@ -53,24 +55,24 @@ noncomputable def finalRootContextSimulation
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection) :
-    let source : CheckedOpenDiagram  :=
+    (direction : Concrete.Elaboration.SimulationDirection) :
+    let source : Concrete.CheckedOpen  :=
       ⟨copyTrace.finalSourceOpen elimTrace boundary,
         copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
           finalWellFormed boundary boundaryRoot⟩
-    let target : CheckedOpenDiagram  :=
+    let target : Concrete.CheckedOpen  :=
       ⟨finalTargetOpen input boundary,
         finalTargetOpen_wellFormed input boundary boundaryRoot⟩
     let simulation := copyTrace.finalSemanticSimulation elimTrace
       sourceWellFormed finalWellFormed model
-    ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
+    Concrete.Elaboration.ConcreteSemanticSimulation.RootContextSimulation
       simulation direction source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires := by
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
         finalWellFormed boundary boundaryRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨finalTargetOpen input boundary,
       finalTargetOpen_wellFormed input boundary boundaryRoot⟩
   let simulation := copyTrace.finalSemanticSimulation elimTrace
@@ -78,16 +80,16 @@ noncomputable def finalRootContextSimulation
   let outer := copyTrace.finalOuterContextWitness elimTrace boundary
   let combined := copyTrace.finalRootContextWitness elimTrace finalWellFormed
     boundary boundaryRoot sourceWellFormed
-  have sourceRootExact : ConcreteElaboration.WireContext.Exact
+  have sourceRootExact : Concrete.Elaboration.WireContext.Exact
       source.val.rootWires
       elimTrace.sourceDiagram.root := by
     simpa [source] using
-      ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+      Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
         source
-  have targetRootExact : ConcreteElaboration.WireContext.Exact
+  have targetRootExact : Concrete.Elaboration.WireContext.Exact
       target.val.rootWires input.val.root := by
     simpa [target] using
-      ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+      Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
         target
   refine {
     outer := outer.indexRelation
@@ -142,13 +144,13 @@ noncomputable def finalRootContextSimulation
         rw [← parentRoot] at targetParent'
         exact targetParent'
       exact False.elim
-        ((ConcreteElaboration.checked_direct_child_not_encloses_parent
+        ((Concrete.Elaboration.checked_direct_child_not_encloses_parent
           input.property selfParent)
-          (ConcreteDiagram.Encloses.refl input.val payload.parent))
+          (Concrete.Diagram.Encloses.refl input.val payload.parent))
   · intro regular allowed sourceItems targetItems sourceCompiled
       targetCompiled itemSemantics
     letI : Nonempty model.Carrier := model.nonempty
-    apply ConcreteElaboration.directionalRootTransport_of_agreement direction
+    apply Concrete.Elaboration.directionalRootTransport_of_agreement direction
       source.val.exposedWires source.val.hiddenWires target.val.exposedWires
       target.val.hiddenWires outer.indexRelation combined.indexRelation model
        (sourceItems.renameRelations
@@ -184,7 +186,7 @@ noncomputable def finalRootContextSimulation
     let terminalBoundary := boundary.map copyTrace.wireMap
     have terminalBoundaryRoot := copyTrace.terminalBoundary_root
       boundary boundaryRoot
-    let terminal : CheckedOpenDiagram  :=
+    let terminal : Concrete.CheckedOpen  :=
       ⟨VacuousElimTrace.targetOpen (dropInstantiationAtomsRaw result)
           terminalBoundary,
         VacuousElimTrace.targetOpen_wellFormed finalWellFormed
@@ -201,44 +203,44 @@ noncomputable def finalRootContextSimulation
           elimTrace.promotion.root_origin
     let terminalContext := elimTrace.rootContextWitness sourceWellFormed
       finalWellFormed terminalBoundary terminalBoundaryRoot
-    have terminalExact : ConcreteElaboration.WireContext.Exact
+    have terminalExact : Concrete.Elaboration.WireContext.Exact
         terminal.val.rootWires elimTrace.parent := by
       have exact :=
-        ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+        Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
           terminal
       simpa [terminal, terminalParentRoot] using exact
     have sourceRootEq : source.val.rootWires =
         (elimTrace.sourceOpen terminalBoundary).rootWires := rfl
-    have sourceExactFocus : ConcreteElaboration.WireContext.Exact
+    have sourceExactFocus : Concrete.Elaboration.WireContext.Exact
         source.val.rootWires
         (elimTrace.targetIndex finalWellFormed) := by
       simpa [sourceRootFocus] using sourceRootExact
-    have targetExactParent : ConcreteElaboration.WireContext.Exact
+    have targetExactParent : Concrete.Elaboration.WireContext.Exact
         target.val.rootWires payload.parent := by
       simpa [targetParentRoot] using targetRootExact
-    let sourceEmpty : ConcreteElaboration.BinderContext
-        elimTrace.sourceDiagram [] := ConcreteElaboration.BinderContext.empty
-    let targetEmpty : ConcreteElaboration.BinderContext input.val [] :=
-      ConcreteElaboration.BinderContext.empty
+    let sourceEmpty : Concrete.Elaboration.BinderContext
+        elimTrace.sourceDiagram [] := Concrete.Elaboration.BinderContext.empty
+    let targetEmpty : Concrete.Elaboration.BinderContext input.val [] :=
+      Concrete.Elaboration.BinderContext.empty
     have targetCover : targetEmpty.Covers
         payload.parent := by
       simpa [targetParentRoot] using
-        ConcreteElaboration.BinderContext.empty_covers_root input.property
+        Concrete.Elaboration.BinderContext.empty_covers_root input.property
     have targetEnumeration :
-        ConcreteElaboration.BinderContext.Enumeration input.val
+        Concrete.Elaboration.BinderContext.Enumeration input.val
           targetEmpty payload.parent := by
       simpa [targetParentRoot] using
-        ConcreteElaboration.BinderContext.Enumeration.empty input.val
+        Concrete.Elaboration.BinderContext.Enumeration.empty input.val
     have sourceCover : sourceEmpty.Covers
         (elimTrace.targetIndex finalWellFormed) := by
       simpa [sourceRootFocus] using
-        ConcreteElaboration.BinderContext.empty_covers_root sourceWellFormed
+        Concrete.Elaboration.BinderContext.empty_covers_root sourceWellFormed
     have sourceEnumeration :
-        ConcreteElaboration.BinderContext.Enumeration elimTrace.sourceDiagram
+        Concrete.Elaboration.BinderContext.Enumeration elimTrace.sourceDiagram
           sourceEmpty
           (elimTrace.targetIndex finalWellFormed) := by
       simpa [sourceRootFocus] using
-        ConcreteElaboration.BinderContext.Enumeration.empty
+        Concrete.Elaboration.BinderContext.Enumeration.empty
           elimTrace.sourceDiagram
     have itemTransport := copyTrace.focusedRootItems_transport elimTrace
       sourceWellFormed finalWellFormed model
@@ -255,10 +257,10 @@ noncomputable def finalRootContextSimulation
       (by simpa [sourceRootEq, sourceRootFocus] using sourceCompiled)
       (by
         have targetCompiled' := targetCompiled
-        change ConcreteElaboration.compileOccurrencesWith?  input.val
-            (ConcreteElaboration.compileRegion?  input.val
+        change Concrete.Elaboration.compileOccurrencesWith?  input.val
+            (Concrete.Elaboration.compileRegion?  input.val
               input.val.regionCount) target.val.rootWires targetEmpty
-            (ConcreteElaboration.localOccurrences input.val
+            (Concrete.Elaboration.localOccurrences input.val
               (copyTrace.reverseRegionMap elimTrace finalWellFormed
                 elimTrace.sourceDiagram.root)) = some targetItems
           at targetCompiled'
@@ -270,9 +272,9 @@ noncomputable def finalRootContextSimulation
           RelationRenaming [] []) =
         (fun {arity} (relation : RelVar [] arity) => relation) := rfl
     have itemTransport' :
-        ConcreteElaboration.ItemSeqSimulation model  .forward
+        Concrete.Elaboration.ItemSeqSimulation model  .forward
           combined.indexRelation sourceItems targetItems := by
-      change ConcreteElaboration.ItemSeqSimulation model  .forward
+      change Concrete.Elaboration.ItemSeqSimulation model  .forward
         combined.indexRelation
         (sourceItems.renameRelations
           (simulation.relationMap simulation.binders_empty)) targetItems
@@ -281,11 +283,11 @@ noncomputable def finalRootContextSimulation
       exact itemTransport
     rw [relationMapEq, Region.renameRelations_id]
     letI : Nonempty model.Carrier := model.nonempty
-    exact ConcreteElaboration.finishRoot_denote .forward
+    exact Concrete.Elaboration.finishRoot_denote .forward
       source.val.exposedWires source.val.hiddenWires target.val.exposedWires
       target.val.hiddenWires outer.indexRelation model  sourceItems
       targetItems
-      (ConcreteElaboration.directionalRootTransport_of_agreement .forward
+      (Concrete.Elaboration.directionalRootTransport_of_agreement .forward
         source.val.exposedWires source.val.hiddenWires target.val.exposedWires
         target.val.hiddenWires outer.indexRelation combined.indexRelation model
          sourceItems targetItems
@@ -304,29 +306,29 @@ theorem finalBoundaryWitness
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (model : Model)
     (args : Fin boundary.length → model.Carrier) :
-    let source : CheckedOpenDiagram  :=
+    let source : Concrete.CheckedOpen  :=
       ⟨copyTrace.finalSourceOpen elimTrace boundary,
         copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
           finalWellFormed boundary boundaryRoot⟩
-    let target : CheckedOpenDiagram  :=
+    let target : Concrete.CheckedOpen  :=
       ⟨finalTargetOpen input boundary,
         finalTargetOpen_wellFormed input boundary boundaryRoot⟩
     let root := copyTrace.finalRootContextSimulation elimTrace
       sourceWellFormed finalWellFormed boundary boundaryRoot
       model  direction
-    ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+    Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       direction source.elaborate target.elaborate root.outer model
       (args ∘ Fin.cast
         (copyTrace.finalBoundaryLengthEq elimTrace boundary)) args := by
   dsimp only
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
         finalWellFormed boundary boundaryRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨finalTargetOpen input boundary,
       finalTargetOpen_wellFormed input boundary boundaryRoot⟩
   let outer := copyTrace.finalOuterContextWitness elimTrace boundary
@@ -337,7 +339,7 @@ theorem finalBoundaryWitness
   have targetExposedNodup := target.val.exposedWires_nodup
   have wireInjective := copyTrace.finalWireMap_injective elimTrace
   unfold
-    ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+    Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
   cases direction with
   | forward =>
       intro sourceAssignment sourceArgsEq sourceDenotes
@@ -423,17 +425,17 @@ theorem finalOpen_denote
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (allowed : FinalAllowed elimTrace.sourceDiagram
       (elimTrace.targetIndex finalWellFormed) direction
       elimTrace.sourceDiagram.root)
     (model : Model)
     (args : Fin boundary.length → model.Carrier) :
-    let source : CheckedOpenDiagram  :=
+    let source : Concrete.CheckedOpen  :=
       ⟨copyTrace.finalSourceOpen elimTrace boundary,
         copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
           finalWellFormed boundary boundaryRoot⟩
-    let target : CheckedOpenDiagram  :=
+    let target : Concrete.CheckedOpen  :=
       ⟨finalTargetOpen input boundary,
         finalTargetOpen_wellFormed input boundary boundaryRoot⟩
     direction.Entails
@@ -441,18 +443,18 @@ theorem finalOpen_denote
           (args ∘ Fin.cast
             (copyTrace.finalBoundaryLengthEq elimTrace boundary)))
       (target.denote model  args) := by
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
         finalWellFormed boundary boundaryRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨finalTargetOpen input boundary,
       finalTargetOpen_wellFormed input boundary boundaryRoot⟩
   let simulation := copyTrace.finalSemanticSimulation elimTrace
     sourceWellFormed finalWellFormed model
   let root := copyTrace.finalRootContextSimulation elimTrace sourceWellFormed
     finalWellFormed boundary boundaryRoot model  direction
-  exact ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+  exact Concrete.Elaboration.ConcreteSemanticSimulation.elaborateOpen_denote
     source target model  simulation direction root allowed
     (args ∘ Fin.cast (copyTrace.finalBoundaryLengthEq elimTrace boundary)) args
     (copyTrace.finalBoundaryWitness elimTrace sourceWellFormed finalWellFormed

@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Iteration.DeiterationReinsert
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -10,18 +12,18 @@ open VisualProof.Diagram
 extraction.  Keeping this equality separate lets the independently checked
 justifier-to-selected certificates remain the only beta-eta authority. -/
 theorem deiterationRetainedOccurrence_nodes_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (node : Fin
       (selectedFragment
         ⟨input.val.removeRaw selection (deiterationDomains input selection),
-          ConcreteDiagram.removeRaw_wellFormed input selection
+          Concrete.Diagram.removeRaw_wellFormed input selection
             (deiterationDomains input selection)⟩
         (deiterationRetainedSelection input selection witness)).diagram.nodeCount) :
     ((selectedFragment
         ⟨input.val.removeRaw selection (deiterationDomains input selection),
-          ConcreteDiagram.removeRaw_wellFormed input selection
+          Concrete.Diagram.removeRaw_wellFormed input selection
             (deiterationDomains input selection)⟩
         (deiterationRetainedSelection input selection witness)).diagram.nodes
           node).rename
@@ -39,13 +41,13 @@ theorem deiterationRetainedOccurrence_nodes_eq
 selection.  The exact extraction transport is composed without manufacturing
 a certificate; the witness certificates are reused verbatim. -/
 def deiterationPatternOccurrenceEquiv
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     OpenOccurrenceEquiv
       (selectedFragment
         ⟨input.val.removeRaw selection (deiterationDomains input selection),
-          ConcreteDiagram.removeRaw_wellFormed input selection
+          Concrete.Diagram.removeRaw_wellFormed input selection
             (deiterationDomains input selection)⟩
         (deiterationRetainedSelection input selection witness))
       (selectedFragment input selection) :=
@@ -54,11 +56,11 @@ def deiterationPatternOccurrenceEquiv
     (deiterationRetainedOccurrence_nodes_eq input selection witness)
 
 theorem deiterationPattern_proxyCount_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationReinsertInput input selection witness).binderSpine.proxyCount =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).binderSpine.proxyCount := by
   change (deiterationRetainedLayout input selection witness).proxyCount =
     (deiterationExtraction input selection).raw.layout.proxyCount
@@ -68,15 +70,15 @@ theorem deiterationPattern_proxyCount_eq
 /-- The composed occurrence sends every survivor proxy to the corresponding
 selected proxy in the same ordered external-binder position. -/
 theorem deiterationPattern_proxy_alignment
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (index : Fin
       (deiterationReinsertInput input selection witness).binderSpine.proxyCount) :
     (deiterationPatternOccurrenceEquiv input selection witness).diagram.regions
         ((deiterationReinsertInput input selection witness).binderSpine.proxy
           index) =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).binderSpine.proxy
           (Fin.cast
             (deiterationPattern_proxyCount_eq input selection witness) index) := by
@@ -96,15 +98,15 @@ theorem deiterationPattern_proxy_alignment
   exact second
 
 theorem deiterationPattern_bodyContainer_alignment
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationPatternOccurrenceEquiv input selection witness).diagram.regions
         (deiterationReinsertInput input selection witness).binderSpine.bodyContainer =
-      (Splice.Decomposition.originalFragmentInput
+      (Concrete.Splice.Decomposition.originalFragmentInput
         (deiterationDecomposition input selection)).binderSpine.bodyContainer := by
   let source := (deiterationReinsertInput input selection witness).binderSpine
-  let target := (Splice.Decomposition.originalFragmentInput
+  let target := (Concrete.Splice.Decomposition.originalFragmentInput
     (deiterationDecomposition input selection)).binderSpine
   have countEq := deiterationPattern_proxyCount_eq input selection witness
   have countEq' : source.proxyCount = target.proxyCount := by

@@ -2,26 +2,28 @@ import VisualProof.Rule.Soundness.Iteration.SelectionPartition
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
 open VisualProof.Rule.ModalSoundness
 
 private theorem selectedOccurrence_node_direct
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (node : Fin input.val.nodeCount)
-    (member : ConcreteElaboration.LocalOccurrence.node node ∈
+    (member : Concrete.Elaboration.LocalOccurrence.node node ∈
       selectedOccurrences input.val selection) :
     node ∈ selection.val.directNodes := by
   rw [selectedOccurrences, List.mem_filter] at member
   simpa [occurrenceSelected] using member.2
 
 private theorem selectedOccurrence_child_direct
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (child : Fin input.val.regionCount)
-    (member : ConcreteElaboration.LocalOccurrence.child child ∈
+    (member : Concrete.Elaboration.LocalOccurrence.child child ∈
       selectedOccurrences input.val selection) :
     child ∈ selection.val.childRoots := by
   rw [selectedOccurrences, List.mem_filter] at member
@@ -38,7 +40,7 @@ private theorem directChild_selected
     (direct : child ∈ selection.val.childRoots) :
     child ∈ selection.selectedRegions := by
   exact (selection.mem_selectedRegions child).2
-    ⟨child, direct, ConcreteDiagram.Encloses.refl d child⟩
+    ⟨child, direct, Concrete.Diagram.Encloses.refl d child⟩
 
 /-- The fragment node carrying a selected host node. -/
 noncomputable def extractedNode
@@ -79,16 +81,16 @@ theorem bodyContainer_ne_materialRegion
     exact layout.proxy_ne_materialRegion _ index
 
 /-- Map one selected anchor occurrence to the corresponding occurrence in the
-terminal body of the extracted open pattern.  Membership is retained in the
-type, so this construction contains no search-failure fallback. -/
+terminal body of the extracted open pattern. Membership is retained in the
+type as supplied evidence. -/
 noncomputable def extractedSelectedOccurrence
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (occurrence : Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount)
     (member : occurrence ∈ selectedOccurrences input.val selection) :
-    ConcreteElaboration.LocalOccurrence layout.regionCount layout.nodeCount :=
+    Concrete.Elaboration.LocalOccurrence layout.regionCount layout.nodeCount :=
   match occurrence with
   | .node node =>
       let direct := selectedOccurrence_node_direct input selection node member
@@ -101,24 +103,24 @@ noncomputable def extractedSelectedOccurrence
 /-- Every mapped selected occurrence is emitted directly by the extracted
 pattern compiler at its terminal body container. -/
 theorem extractedSelectedOccurrence_mem_terminal
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (occurrence : Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount)
     (member : occurrence ∈ selectedOccurrences input.val selection) :
     extractedSelectedOccurrence input selection layout occurrence member ∈
-      ConcreteElaboration.localOccurrences
+      Concrete.Elaboration.localOccurrences
         (input.val.extractDiagramRaw selection layout) layout.bodyContainer := by
   cases occurrence with
   | node node =>
       let direct := selectedOccurrence_node_direct input selection node member
       let selected := directNode_selected selection direct
-      change ConcreteElaboration.LocalOccurrence.node
+      change Concrete.Elaboration.LocalOccurrence.node
           (extractedNode selection node selected) ∈
-        ConcreteElaboration.localOccurrences
+        Concrete.Elaboration.localOccurrences
           (input.val.extractDiagramRaw selection layout) layout.bodyContainer
-      apply (ConcreteElaboration.mem_localOccurrences_node
+      apply (Concrete.Elaboration.mem_localOccurrences_node
         (input.val.extractDiagramRaw selection layout) layout.bodyContainer
         (extractedNode selection node selected)).2
       rw [input.val.extractDiagramRaw_node_region selection layout,
@@ -129,15 +131,15 @@ theorem extractedSelectedOccurrence_mem_terminal
       let direct := selectedOccurrence_child_direct input selection child member
       let selected := directChild_selected selection direct
       let index := extractedRegion selection child selected
-      change ConcreteElaboration.LocalOccurrence.child
+      change Concrete.Elaboration.LocalOccurrence.child
           (layout.materialRegion index) ∈
-        ConcreteElaboration.localOccurrences
+        Concrete.Elaboration.localOccurrences
           (input.val.extractDiagramRaw selection layout) layout.bodyContainer
-      apply (ConcreteElaboration.mem_localOccurrences_child
+      apply (Concrete.Elaboration.mem_localOccurrences_child
         (input.val.extractDiagramRaw selection layout) layout.bodyContainer
         (layout.materialRegion index)).2
       have parent :=
-        ConcreteDiagram.extractDiagramRaw_materialRegion_parent_exact input
+        Concrete.Diagram.extractDiagramRaw_materialRegion_parent_exact input
           selection layout index (parent := selection.val.anchor) (by
             rw [extractedRegion_origin selection child selected]
             exact selection.property.childRoots_direct child direct)
@@ -146,7 +148,7 @@ theorem extractedSelectedOccurrence_mem_terminal
 /-- A fragment node emitted at the terminal body comes from a directly
 selected anchor node, not from inside one of the selected child subtrees. -/
 theorem terminalNode_origin_direct
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (node : Fin layout.nodeCount)
@@ -163,7 +165,7 @@ theorem terminalNode_origin_direct
         selection.selectedRegions :=
       (selection.mem_selectedRegions _).2 subtree
     obtain ⟨index, _, mapped⟩ :=
-      ConcreteDiagram.fragmentParent_selectedRegion input selection layout
+      Concrete.Diagram.fragmentParent_selectedRegion input selection layout
         selectedRegion
     have owner := input.val.extractDiagramRaw_node_region selection layout node
     rw [mapped] at owner
@@ -172,35 +174,35 @@ theorem terminalNode_origin_direct
 
 /-- Node part of reverse occurrence coverage for extraction. -/
 theorem terminalNode_has_selected_preimage
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (node : Fin layout.nodeCount)
     (terminal :
-      ConcreteElaboration.LocalOccurrence.node node ∈
-        ConcreteElaboration.localOccurrences
+      Concrete.Elaboration.LocalOccurrence.node node ∈
+        Concrete.Elaboration.localOccurrences
           (input.val.extractDiagramRaw selection layout) layout.bodyContainer) :
-    ∃ (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    ∃ (occurrence : Concrete.Elaboration.LocalOccurrence input.val.regionCount
         input.val.nodeCount)
       (member : occurrence ∈ selectedOccurrences input.val selection),
       extractedSelectedOccurrence input selection layout occurrence member =
         .node node := by
-  have owner := (ConcreteElaboration.mem_localOccurrences_node
+  have owner := (Concrete.Elaboration.mem_localOccurrences_node
     (input.val.extractDiagramRaw selection layout) layout.bodyContainer node).1
     terminal
   let original := selection.selectedNodes.get node
   have direct := terminalNode_origin_direct input selection layout node owner
-  have hlocal : ConcreteElaboration.LocalOccurrence.node original ∈
-      ConcreteElaboration.localOccurrences input.val selection.val.anchor := by
-    apply (ConcreteElaboration.mem_localOccurrences_node input.val
+  have hlocal : Concrete.Elaboration.LocalOccurrence.node original ∈
+      Concrete.Elaboration.localOccurrences input.val selection.val.anchor := by
+    apply (Concrete.Elaboration.mem_localOccurrences_node input.val
       selection.val.anchor original).2
     exact selection.property.directNodes_at_anchor original direct
-  have member : ConcreteElaboration.LocalOccurrence.node original ∈
+  have member : Concrete.Elaboration.LocalOccurrence.node original ∈
       selectedOccurrences input.val selection := by
     rw [selectedOccurrences, List.mem_filter]
     exact ⟨hlocal, by simpa [occurrenceSelected, original] using direct⟩
   refine ⟨.node original, member, ?_⟩
-  change ConcreteElaboration.LocalOccurrence.node
+  change Concrete.Elaboration.LocalOccurrence.node
       (extractedNode selection original
         (directNode_selected selection direct)) = .node node
   congr 1
@@ -215,7 +217,7 @@ theorem terminalNode_has_selected_preimage
     simpa only [List.get_eq_getElem] using helements)
 
 theorem selectedRegion_ne_root
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     {region : Fin input.val.regionCount}
     (selected : region ∈ selection.selectedRegions) :
@@ -224,7 +226,7 @@ theorem selectedRegion_ne_root
   obtain ⟨child, direct, encloses⟩ :=
     (selection.mem_selectedRegions region).1 selected
   rw [equality] at encloses
-  have childEq := ConcreteElaboration.encloses_sheet_eq
+  have childEq := Concrete.Elaboration.encloses_sheet_eq
     input.property.root_is_sheet encloses
   subst child
   have parent := selection.property.childRoots_direct input.val.root direct
@@ -232,7 +234,7 @@ theorem selectedRegion_ne_root
   contradiction
 
 theorem fragmentParent_body_of_selected_child_parent
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {region parent : Fin input.val.regionCount}
@@ -242,7 +244,7 @@ theorem fragmentParent_body_of_selected_child_parent
     parent = selection.val.anchor := by
   obtain ⟨root, direct, encloses⟩ :=
     (selection.mem_selectedRegions region).1 selected
-  rcases ConcreteElaboration.encloses_direct_child parentEq encloses with
+  rcases Concrete.Elaboration.encloses_direct_child parentEq encloses with
     rootEq | parentSelected
   · subst root
     exact Option.some.inj
@@ -252,14 +254,14 @@ theorem fragmentParent_body_of_selected_child_parent
       (selection.mem_selectedRegions parent).2
         ⟨root, direct, parentSelected⟩
     obtain ⟨index, _, parentMapped⟩ :=
-      ConcreteDiagram.fragmentParent_selectedRegion input selection layout
+      Concrete.Diagram.fragmentParent_selectedRegion input selection layout
         selectedParent
     exact False.elim
       (bodyContainer_ne_materialRegion layout index
         (mapped.symm.trans parentMapped))
 
 private theorem proxy_not_direct_child_of_bodyContainer
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (index : Fin layout.proxyCount) :
@@ -274,7 +276,7 @@ private theorem proxy_not_direct_child_of_bodyContainer
           (if _hzero : index.val = 0 then layout.root
             else layout.proxy ⟨index.val - 1, by omega⟩)
           ((input.val.extractedBinderSpine selection layout).arity index) := by
-    simpa [ConcreteDiagram.extractedBinderSpine] using proxyKind
+    simpa [Concrete.Diagram.extractedBinderSpine] using proxyKind
   rw [proxyKind']
   simp only [CRegion.parent?]
   intro parentEq
@@ -293,7 +295,7 @@ private theorem proxy_not_direct_child_of_bodyContainer
       omega
 
 theorem terminalChild_is_material
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (child : Fin layout.regionCount)
@@ -313,7 +315,7 @@ theorem terminalChild_is_material
   · exact material
 
 private theorem terminalMaterial_origin_direct
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (index : Fin layout.materialRegionCount)
@@ -331,7 +333,7 @@ private theorem terminalMaterial_origin_direct
         rw [kind]
         rfl
       have extracted :=
-        ConcreteDiagram.extractDiagramRaw_materialRegion_parent_exact input
+        Concrete.Diagram.extractDiagramRaw_materialRegion_parent_exact input
           selection layout index (parent := parent) (by
             simpa [region] using hostParent)
       have mapped : input.val.fragmentParent layout parent =
@@ -340,11 +342,11 @@ private theorem terminalMaterial_origin_direct
         selection layout selected hostParent mapped
       obtain ⟨root, direct, encloses⟩ :=
         (selection.mem_selectedRegions region).1 selected
-      rcases ConcreteElaboration.encloses_direct_child hostParent
+      rcases Concrete.Elaboration.encloses_direct_child hostParent
           encloses with rootEq | impossible
       · simpa [region, rootEq] using direct
       · exact False.elim
-          (ConcreteElaboration.checked_direct_child_not_encloses_parent
+          (Concrete.Elaboration.checked_direct_child_not_encloses_parent
             input.property (by
               have rootParent := selection.property.childRoots_direct root direct
               simpa [parentAnchor] using rootParent) impossible)
@@ -353,7 +355,7 @@ private theorem terminalMaterial_origin_direct
         rw [kind]
         rfl
       have extracted :=
-        ConcreteDiagram.extractDiagramRaw_materialRegion_parent_exact input
+        Concrete.Diagram.extractDiagramRaw_materialRegion_parent_exact input
           selection layout index (parent := parent) (by
             simpa [region] using hostParent)
       have mapped : input.val.fragmentParent layout parent =
@@ -362,30 +364,30 @@ private theorem terminalMaterial_origin_direct
         selection layout selected hostParent mapped
       obtain ⟨root, direct, encloses⟩ :=
         (selection.mem_selectedRegions region).1 selected
-      rcases ConcreteElaboration.encloses_direct_child hostParent
+      rcases Concrete.Elaboration.encloses_direct_child hostParent
           encloses with rootEq | impossible
       · simpa [region, rootEq] using direct
       · exact False.elim
-          (ConcreteElaboration.checked_direct_child_not_encloses_parent
+          (Concrete.Elaboration.checked_direct_child_not_encloses_parent
             input.property (by
               have rootParent := selection.property.childRoots_direct root direct
               simpa [parentAnchor] using rootParent) impossible)
 
 /-- Child-region part of reverse occurrence coverage for extraction. -/
 theorem terminalChild_has_selected_preimage
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (child : Fin layout.regionCount)
-    (terminal : ConcreteElaboration.LocalOccurrence.child child ∈
-      ConcreteElaboration.localOccurrences
+    (terminal : Concrete.Elaboration.LocalOccurrence.child child ∈
+      Concrete.Elaboration.localOccurrences
         (input.val.extractDiagramRaw selection layout) layout.bodyContainer) :
-    ∃ (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    ∃ (occurrence : Concrete.Elaboration.LocalOccurrence input.val.regionCount
         input.val.nodeCount)
       (member : occurrence ∈ selectedOccurrences input.val selection),
       extractedSelectedOccurrence input selection layout occurrence member =
         .child child := by
-  have parentEq := (ConcreteElaboration.mem_localOccurrences_child
+  have parentEq := (Concrete.Elaboration.mem_localOccurrences_child
     (input.val.extractDiagramRaw selection layout) layout.bodyContainer child).1
     terminal
   obtain ⟨index, rfl⟩ := terminalChild_is_material input selection layout child
@@ -393,17 +395,17 @@ theorem terminalChild_has_selected_preimage
   let original := selection.selectedRegions.get index
   have direct := terminalMaterial_origin_direct input selection layout index
     parentEq
-  have hlocal : ConcreteElaboration.LocalOccurrence.child original ∈
-      ConcreteElaboration.localOccurrences input.val selection.val.anchor := by
-    apply (ConcreteElaboration.mem_localOccurrences_child input.val
+  have hlocal : Concrete.Elaboration.LocalOccurrence.child original ∈
+      Concrete.Elaboration.localOccurrences input.val selection.val.anchor := by
+    apply (Concrete.Elaboration.mem_localOccurrences_child input.val
       selection.val.anchor original).2
     exact selection.property.childRoots_direct original direct
-  have member : ConcreteElaboration.LocalOccurrence.child original ∈
+  have member : Concrete.Elaboration.LocalOccurrence.child original ∈
       selectedOccurrences input.val selection := by
     rw [selectedOccurrences, List.mem_filter]
     exact ⟨hlocal, by simpa [occurrenceSelected, original] using direct⟩
   refine ⟨.child original, member, ?_⟩
-  change ConcreteElaboration.LocalOccurrence.child
+  change Concrete.Elaboration.LocalOccurrence.child
       (layout.materialRegion
         (extractedRegion selection original
           (directChild_selected selection direct))) =
@@ -424,12 +426,12 @@ theorem terminalChild_has_selected_preimage
 unreachable on `selectedOccurrences`; making the map total lets the compiler
 simulation consume it with the ordinary `List.map` interface. -/
 noncomputable def extractionOccurrenceMap
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
-    ConcreteElaboration.LocalOccurrence input.val.regionCount
+    Concrete.Elaboration.LocalOccurrence input.val.regionCount
         input.val.nodeCount →
-      ConcreteElaboration.LocalOccurrence layout.regionCount layout.nodeCount
+      Concrete.Elaboration.LocalOccurrence layout.regionCount layout.nodeCount
   | .node node =>
       if selected : node ∈ selection.selectedNodes then
         .node (extractedNode selection node selected)
@@ -443,10 +445,10 @@ noncomputable def extractionOccurrenceMap
         .child layout.root
 
 theorem extractionOccurrenceMap_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (occurrence : Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount)
     (member : occurrence ∈ selectedOccurrences input.val selection) :
     extractionOccurrenceMap input selection layout occurrence =
@@ -464,10 +466,10 @@ theorem extractionOccurrenceMap_eq
       rfl
 
 private theorem extractionOccurrenceMap_injective_on_selected
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    {left right : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    {left right : Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount}
     (leftMember : left ∈ selectedOccurrences input.val selection)
     (rightMember : right ∈ selectedOccurrences input.val selection)
@@ -488,7 +490,7 @@ private theorem extractionOccurrenceMap_injective_on_selected
             dite_true] at mapped
           have indices : extractedNode selection left leftSelected =
               extractedNode selection right rightSelected :=
-            ConcreteElaboration.LocalOccurrence.node.inj mapped
+            Concrete.Elaboration.LocalOccurrence.node.inj mapped
           have origins := congrArg selection.selectedNodes.get indices
           rw [extractedNode_origin selection left leftSelected,
             extractedNode_origin selection right rightSelected] at origins
@@ -520,7 +522,7 @@ private theorem extractionOccurrenceMap_injective_on_selected
                   (extractedRegion selection left leftSelected) =
                 layout.materialRegion
                   (extractedRegion selection right rightSelected) :=
-            ConcreteElaboration.LocalOccurrence.child.inj mapped
+            Concrete.Elaboration.LocalOccurrence.child.inj mapped
           have indices := layout.materialRegion_injective materialIndices
           have origins := congrArg selection.selectedRegions.get indices
           rw [extractedRegion_origin selection left leftSelected,
@@ -546,17 +548,17 @@ private theorem perm_of_nodup_and_mem_iff
 /-- The selected anchor occurrences and the extracted pattern's terminal-body
 occurrences are the same finite family, up to the extraction renaming. -/
 theorem extractionOccurrenceMap_selected_perm_terminal
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
     ((selectedOccurrences input.val selection).map
         (extractionOccurrenceMap input selection layout)).Perm
-      (ConcreteElaboration.localOccurrences
+      (Concrete.Elaboration.localOccurrences
         (input.val.extractDiagramRaw selection layout) layout.bodyContainer) := by
   apply perm_of_nodup_and_mem_iff
   · let selected := selectedOccurrences input.val selection
     have mappedNodup : ∀ items : List
-        (ConcreteElaboration.LocalOccurrence input.val.regionCount
+        (Concrete.Elaboration.LocalOccurrence input.val.regionCount
           input.val.nodeCount),
         items.Nodup →
         (∀ occurrence, occurrence ∈ items → occurrence ∈ selected) →
@@ -581,9 +583,9 @@ theorem extractionOccurrenceMap_selected_perm_terminal
               intro occurrence occurrenceMember
               exact subset occurrence (by simp [occurrenceMember]))
     exact mappedNodup selected
-      ((ConcreteElaboration.localOccurrences_nodup input.val
+      ((Concrete.Elaboration.localOccurrences_nodup input.val
         selection.val.anchor).filter _) (fun _ member => member)
-  · exact ConcreteElaboration.localOccurrences_nodup
+  · exact Concrete.Elaboration.localOccurrences_nodup
       (input.val.extractDiagramRaw selection layout) layout.bodyContainer
   · intro occurrence
     constructor
@@ -614,11 +616,11 @@ theorem extractionOccurrenceMap_selected_perm_terminal
 occurrence from which extraction built it.  Administrative proxy/root children
 use the anchor fallback, but those branches never occur in the terminal body. -/
 noncomputable def extractionHostOccurrenceMap
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
-    ConcreteElaboration.LocalOccurrence layout.regionCount layout.nodeCount →
-      ConcreteElaboration.LocalOccurrence input.val.regionCount
+    Concrete.Elaboration.LocalOccurrence layout.regionCount layout.nodeCount →
+      Concrete.Elaboration.LocalOccurrence input.val.regionCount
         input.val.nodeCount
   | .node node => .node (selection.selectedNodes.get node)
   | .child child =>
@@ -629,10 +631,10 @@ noncomputable def extractionHostOccurrenceMap
         .child selection.val.anchor
 
 theorem extractionHostOccurrenceMap_leftInverse
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (occurrence : Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount)
     (member : occurrence ∈ selectedOccurrences input.val selection) :
     extractionHostOccurrenceMap input selection layout
@@ -673,10 +675,10 @@ theorem extractionHostOccurrenceMap_leftInverse
 used by compiler simulation from the extracted pattern into the retained
 ancestor block. -/
 theorem extractionHostOccurrenceMap_terminal_perm_selected
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
-    (ConcreteElaboration.localOccurrences
+    (Concrete.Elaboration.localOccurrences
         (input.val.extractDiagramRaw selection layout) layout.bodyContainer
       |>.map (extractionHostOccurrenceMap input selection layout)).Perm
       (selectedOccurrences input.val selection) := by
@@ -690,7 +692,7 @@ theorem extractionHostOccurrenceMap_terminal_perm_selected
         selectedOccurrences input.val selection := by
     let selected := selectedOccurrences input.val selection
     have mapEq : ∀ occurrences : List
-        (ConcreteElaboration.LocalOccurrence input.val.regionCount
+        (Concrete.Elaboration.LocalOccurrence input.val.regionCount
           input.val.nodeCount),
         (∀ occurrence, occurrence ∈ occurrences → occurrence ∈ selected) →
         occurrences.map

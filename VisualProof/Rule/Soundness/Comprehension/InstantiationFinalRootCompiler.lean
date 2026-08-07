@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Modal.VacuousEliminationRootCompiler
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -10,18 +12,18 @@ open DoubleCutElimTrace
 
 namespace InstantiationTrace
 
-variable {input : CheckedDiagram }
+variable {input : Concrete.Checked }
   {bubble : Fin input.val.regionCount}
-  {comprehension : CheckedOpenDiagram }
+  {comprehension : Concrete.CheckedOpen }
   {attachments : List (Fin input.val.wireCount)}
   {binders : List
     (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-  {payload : ComprehensionInstantiatePayload input bubble comprehension
+  {payload : OperationComprehensionInstantiatePayload input bubble comprehension
     attachments binders}
   {fuel : Nat}
   {result : InstantiationState input attachments.length
     payload.binderSpine.proxyCount}
-  {raw : ConcreteDiagram}
+  {raw : Concrete.Diagram}
 
 /-- The promoted root owns the comprehension-instantiation implication on
 the complete exposed/hidden compiler contexts. -/
@@ -35,19 +37,19 @@ theorem focusedRootItems_transport
       (dropInstantiationAtomsRaw result).WellFormed )
     (model : Model)
     (fuelSource fuelTarget : Nat)
-    (sourceRoot : ConcreteElaboration.WireContext elimTrace.sourceDiagram)
-    (targetRoot : ConcreteElaboration.WireContext input.val)
+    (sourceRoot : Concrete.Elaboration.WireContext elimTrace.sourceDiagram)
+    (targetRoot : Concrete.Elaboration.WireContext input.val)
     (rootContext : FinalContextWitness copyTrace elimTrace sourceRoot
       targetRoot)
-    (terminalRoot : ConcreteElaboration.WireContext
+    (terminalRoot : Concrete.Elaboration.WireContext
       (dropInstantiationAtomsRaw result))
     (terminalContext : VacuousElimTrace.PromotedContextWitness elimTrace
       sourceRoot terminalRoot)
     (terminalExact : terminalRoot.Exact elimTrace.parent)
     {sourceRels targetRels : RelCtx}
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       elimTrace.sourceDiagram sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext input.val targetRels)
+    (targetBinders : Concrete.Elaboration.BinderContext input.val targetRels)
     (binderWitness : FinalBinderWitness copyTrace elimTrace finalWellFormed
       sourceBinders targetBinders)
     (sourceExact : sourceRoot.Exact
@@ -56,26 +58,26 @@ theorem focusedRootItems_transport
     (sourceBindersCover : sourceBinders.Covers
       (elimTrace.targetIndex finalWellFormed))
     (targetBindersCover : targetBinders.Covers payload.parent)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       elimTrace.sourceDiagram sourceBinders
       (elimTrace.targetIndex finalWellFormed))
-    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (targetEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val targetBinders payload.parent)
     (allowed : FinalAllowed elimTrace.sourceDiagram
       (elimTrace.targetIndex finalWellFormed) .forward
       (elimTrace.targetIndex finalWellFormed))
     (recurseAt : ∀
-      {childDirection : ConcreteElaboration.SimulationDirection}
+      {childDirection : Concrete.Elaboration.SimulationDirection}
       {child : Fin elimTrace.sourceDiagram.regionCount}
       {childSourceRels childTargetRels : RelCtx}
-      {childSourceBinders : ConcreteElaboration.BinderContext
+      {childSourceBinders : Concrete.Elaboration.BinderContext
         elimTrace.sourceDiagram childSourceRels}
-      {childTargetBinders : ConcreteElaboration.BinderContext
+      {childTargetBinders : Concrete.Elaboration.BinderContext
         input.val childTargetRels}
       (childFuelTarget : Nat)
-      (childSourceContext : ConcreteElaboration.WireContext
+      (childSourceContext : Concrete.Elaboration.WireContext
         elimTrace.sourceDiagram)
-      (childTargetContext : ConcreteElaboration.WireContext input.val)
+      (childTargetContext : Concrete.Elaboration.WireContext input.val)
       (childContext : FinalContextWitness copyTrace elimTrace
         childSourceContext childTargetContext),
       copyTrace.FinalAdmissible elimTrace finalWellFormed child →
@@ -86,9 +88,9 @@ theorem focusedRootItems_transport
       childSourceBinders.Covers child →
       childTargetBinders.Covers
         (copyTrace.reverseRegionMap elimTrace finalWellFormed child) →
-      ConcreteElaboration.BinderContext.Enumeration elimTrace.sourceDiagram
+      Concrete.Elaboration.BinderContext.Enumeration elimTrace.sourceDiagram
         childSourceBinders child →
-      ConcreteElaboration.BinderContext.Enumeration input.val
+      Concrete.Elaboration.BinderContext.Enumeration input.val
         childTargetBinders
           (copyTrace.reverseRegionMap elimTrace finalWellFormed child) →
       (childSourceContext.extend child).Exact child →
@@ -99,57 +101,57 @@ theorem focusedRootItems_transport
           childSourceRels)
         (targetBody : Region  childTargetContext.length
           childTargetRels),
-      ConcreteElaboration.compileRegion?  elimTrace.sourceDiagram
+      Concrete.Elaboration.compileRegion?  elimTrace.sourceDiagram
           fuelSource child childSourceContext childSourceBinders =
         some sourceBody →
-      ConcreteElaboration.compileRegion?  input.val childFuelTarget
+      Concrete.Elaboration.compileRegion?  input.val childFuelTarget
           (copyTrace.reverseRegionMap elimTrace finalWellFormed child)
           childTargetContext childTargetBinders = some targetBody →
-      ConcreteElaboration.RegionSimulation model  childDirection
+      Concrete.Elaboration.RegionSimulation model  childDirection
         childContext.indexRelation
         (sourceBody.renameRelations childBinderWitness.relationMap)
         targetBody)
     (sourceItems : ItemSeq  sourceRoot.length sourceRels)
     (targetItems : ItemSeq  targetRoot.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrencesWith?
+      Concrete.Elaboration.compileOccurrencesWith?
         elimTrace.sourceDiagram
-        (ConcreteElaboration.compileRegion?  elimTrace.sourceDiagram
+        (Concrete.Elaboration.compileRegion?  elimTrace.sourceDiagram
           fuelSource)
         sourceRoot sourceBinders
-        (ConcreteElaboration.localOccurrences elimTrace.sourceDiagram
+        (Concrete.Elaboration.localOccurrences elimTrace.sourceDiagram
           (elimTrace.targetIndex finalWellFormed)) = some sourceItems)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrencesWith?  input.val
-        (ConcreteElaboration.compileRegion?  input.val fuelTarget)
+      Concrete.Elaboration.compileOccurrencesWith?  input.val
+        (Concrete.Elaboration.compileRegion?  input.val fuelTarget)
         targetRoot targetBinders
-        (ConcreteElaboration.localOccurrences input.val payload.parent) =
+        (Concrete.Elaboration.localOccurrences input.val payload.parent) =
           some targetItems) :
-    ConcreteElaboration.ItemSeqSimulation model  .forward
+    Concrete.Elaboration.ItemSeqSimulation model  .forward
       rootContext.indexRelation
       (sourceItems.renameRelations binderWitness.relationMap) targetItems := by
     let sourceRecurse : ∀ {rels : RelCtx},
         (region : Fin elimTrace.sourceDiagram.regionCount) →
-        (context : ConcreteElaboration.WireContext elimTrace.sourceDiagram) →
-        ConcreteElaboration.BinderContext elimTrace.sourceDiagram rels →
+        (context : Concrete.Elaboration.WireContext elimTrace.sourceDiagram) →
+        Concrete.Elaboration.BinderContext elimTrace.sourceDiagram rels →
         Option (Region  context.length rels) :=
-      fun {rels} => ConcreteElaboration.compileRegion?
+      fun {rels} => Concrete.Elaboration.compileRegion?
         elimTrace.sourceDiagram fuelSource
     let targetRecurse : ∀ {rels : RelCtx},
         (region : Fin input.val.regionCount) →
-        (context : ConcreteElaboration.WireContext input.val) →
-        ConcreteElaboration.BinderContext input.val rels →
+        (context : Concrete.Elaboration.WireContext input.val) →
+        Concrete.Elaboration.BinderContext input.val rels →
         Option (Region  context.length rels) :=
-      fun {rels} => ConcreteElaboration.compileRegion?  input.val
+      fun {rels} => Concrete.Elaboration.compileRegion?  input.val
         fuelTarget
     have targetCompiledAtParent :
-        ConcreteElaboration.compileOccurrencesWith?  input.val
+        Concrete.Elaboration.compileOccurrencesWith?  input.val
           targetRecurse targetRoot targetBinders
-          (ConcreteElaboration.localOccurrences input.val payload.parent) =
+          (Concrete.Elaboration.localOccurrences input.val payload.parent) =
             some targetItems := by
       simpa [targetRecurse] using targetCompiled
     obtain ⟨sourcePartitionItems, sourcePartitionCompiled⟩ :=
-      ConcreteElaboration.compileOccurrencesWith?_complete sourceRecurse
+      Concrete.Elaboration.compileOccurrencesWith?_complete sourceRecurse
         sourceRoot
         sourceBinders
         (elimTrace.keptOccurrences finalWellFormed ++
@@ -164,17 +166,17 @@ theorem focusedRootItems_transport
               finalWellFormed).mem_iff.mp member))
     obtain ⟨sourceKeptItems, sourceSelectedItems, sourceKeptCompiled,
         sourceSelectedCompiled, sourcePartitionEq⟩ :=
-      ConcreteElaboration.compileOccurrencesWith?_append_split sourceRecurse
+      Concrete.Elaboration.compileOccurrencesWith?_append_split sourceRecurse
         sourceRoot
         sourceBinders (elimTrace.keptOccurrences finalWellFormed)
         (elimTrace.selectedOccurrences finalWellFormed) sourcePartitionItems
         sourcePartitionCompiled
     obtain ⟨targetPartitionItems, targetPartitionCompiled⟩ :=
-      ConcreteElaboration.compileOccurrencesWith?_complete targetRecurse
+      Concrete.Elaboration.compileOccurrencesWith?_complete targetRecurse
         targetRoot targetBinders
         ((elimTrace.keptOccurrences finalWellFormed).map
             (copyTrace.finalFocusOccurrenceMap elimTrace) ++
-          [ConcreteElaboration.LocalOccurrence.child bubble])
+          [Concrete.Elaboration.LocalOccurrence.child bubble])
         (by
           intro occurrence member
           exact VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem
@@ -184,18 +186,18 @@ theorem focusedRootItems_transport
               finalWellFormed).mem_iff.mp member))
     obtain ⟨targetKeptItems, targetBubbleItems, targetKeptCompiled,
         targetBubbleCompiled, targetPartitionEq⟩ :=
-      ConcreteElaboration.compileOccurrencesWith?_append_split targetRecurse
+      Concrete.Elaboration.compileOccurrencesWith?_append_split targetRecurse
         targetRoot targetBinders
         ((elimTrace.keptOccurrences finalWellFormed).map
           (copyTrace.finalFocusOccurrenceMap elimTrace))
-        [ConcreteElaboration.LocalOccurrence.child bubble]
+        [Concrete.Elaboration.LocalOccurrence.child bubble]
         targetPartitionItems targetPartitionCompiled
-    simp only [ConcreteElaboration.compileOccurrencesWith?]
+    simp only [Concrete.Elaboration.compileOccurrencesWith?]
       at targetBubbleCompiled
     dsimp only [targetRecurse] at targetBubbleCompiled
-    simp only [ConcreteElaboration.compileOccurrenceWith?, payload.bubble_eq]
+    simp only [Concrete.Elaboration.compileOccurrenceWith?, payload.bubble_eq]
       at targetBubbleCompiled
-    cases bubbleResult : ConcreteElaboration.compileRegion?  input.val
+    cases bubbleResult : Concrete.Elaboration.compileRegion?  input.val
         fuelTarget bubble targetRoot
         (targetBinders.push bubble payload.arity) with
     | none => simp [bubbleResult] at targetBubbleCompiled
@@ -203,13 +205,13 @@ theorem focusedRootItems_transport
         simp [bubbleResult] at targetBubbleCompiled
         subst targetBubbleItems
         cases fuelTarget with
-        | zero => simp [ConcreteElaboration.compileRegion?] at bubbleResult
+        | zero => simp [Concrete.Elaboration.compileRegion?] at bubbleResult
         | succ bubbleFuel =>
-            simp only [ConcreteElaboration.compileRegion?] at bubbleResult
+            simp only [Concrete.Elaboration.compileRegion?] at bubbleResult
             obtain ⟨targetSelectedItems, targetSelectedCompiled,
                 bubbleBodyEq⟩ := Option.bind_eq_some_iff.mp bubbleResult
             have bubbleBodyEq' :
-                ConcreteElaboration.finishRegion input.val
+                Concrete.Elaboration.finishRegion input.val
                     targetRoot bubble
                     targetSelectedItems = bubbleBody :=
               Option.some.inj bubbleBodyEq
@@ -218,16 +220,16 @@ theorem focusedRootItems_transport
             have keptPointwise : ∀ occurrence,
                 occurrence ∈ elimTrace.keptOccurrences finalWellFormed →
                 ∀ sourceItem targetItem,
-                ConcreteElaboration.compileOccurrenceWith?
+                Concrete.Elaboration.compileOccurrenceWith?
                     elimTrace.sourceDiagram sourceRecurse
                     sourceRoot
                     sourceBinders occurrence = some sourceItem →
-                ConcreteElaboration.compileOccurrenceWith?  input.val
+                Concrete.Elaboration.compileOccurrenceWith?  input.val
                     targetRecurse targetRoot
                     targetBinders
                     (copyTrace.finalFocusOccurrenceMap elimTrace occurrence) =
                       some targetItem →
-                ConcreteElaboration.ItemSimulation model  .forward
+                Concrete.Elaboration.ItemSimulation model  .forward
                   focusedContext.indexRelation
                   (sourceItem.renameRelations binderWitness.relationMap)
                   targetItem := by
@@ -248,7 +250,7 @@ theorem focusedRootItems_transport
                   simpa [sourceRecurse] using sourceOccurrence)
                 (by simpa [targetRecurse] using targetOccurrence)
             have keptSimulation :=
-              ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+              Concrete.Elaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
                 model  .forward sourceRecurse targetRecurse
                 sourceRoot
                 targetRoot sourceBinders
@@ -277,7 +279,7 @@ theorem focusedRootItems_transport
                 .bubble elimTrace.parent payload.arity := by
               rw [payloadArityEq]
               exact elimBubbleShape
-            let terminalOuter : ConcreteElaboration.WireContext
+            let terminalOuter : Concrete.Elaboration.WireContext
                 (dropInstantiationAtomsRaw result) := terminalRoot
             let terminalFocusedContext := terminalContext
             let terminalSelectedContext :=
@@ -286,13 +288,13 @@ theorem focusedRootItems_transport
             let terminalBinders := InstantiationSemantic.traceBinderContext
               copyTrace targetBinders
             have terminalParentCoverState :
-                @ConcreteElaboration.BinderContext.Covers result.diagram.val
+                @Concrete.Elaboration.BinderContext.Covers result.diagram.val
                   targetRels terminalBinders elimTrace.parent := by
               rw [← copyTrace.regionMap_parent_eq_elimParent elimTrace]
               exact InstantiationSemantic.traceBinderContext_covers_parent
                 copyTrace targetBinders targetBindersCover
             have terminalParentCover :
-                @ConcreteElaboration.BinderContext.Covers
+                @Concrete.Elaboration.BinderContext.Covers
                   (dropInstantiationAtomsRaw result) targetRels terminalBinders
                   elimTrace.parent :=
               InstantiationSemantic.binderCover_to_drop result terminalBinders
@@ -301,7 +303,7 @@ theorem focusedRootItems_transport
               InstantiationSemantic.traceBinderEnumeration copyTrace
                 targetBinders payload.parent targetEnumeration
             have terminalEnumerationStateAtParent :
-                ConcreteElaboration.BinderContext.Enumeration result.diagram.val
+                Concrete.Elaboration.BinderContext.Enumeration result.diagram.val
                   terminalBinders elimTrace.parent := by
               rw [← copyTrace.regionMap_parent_eq_elimParent elimTrace]
               exact terminalEnumerationState
@@ -313,7 +315,7 @@ theorem focusedRootItems_transport
               elimTrace.targetRootSelected_exact finalWellFormed terminalRoot
                 terminalParentExact
             have terminalBubbleCover :=
-              ConcreteElaboration.BinderContext.push_covers_bubble_child
+              Concrete.Elaboration.BinderContext.push_covers_bubble_child
                 terminalParentCover (by
                   simpa only [InstantiationDrop.raw_regions] using
                     terminalBubbleShape)
@@ -332,7 +334,7 @@ theorem focusedRootItems_transport
               (finalWellFormed.all_regions_reach_root result.bubble)
             have terminalDepthLe : terminalDepth.val ≤
                 (dropInstantiationAtomsRaw result).regionCount :=
-              ConcreteElaboration.ParentTraversal.checked_climb_to_root_steps_le_regionCount
+              Concrete.Elaboration.ParentTraversal.checked_climb_to_root_steps_le_regionCount
                 (InstantiationDrop.checkedDrop result) terminalDepthEq
             let terminalFuel :=
               (dropInstantiationAtomsRaw result).regionCount + 1 -
@@ -342,7 +344,7 @@ theorem focusedRootItems_transport
               dsimp [terminalFuel]
               omega
             obtain ⟨terminalBody, terminalCompiled⟩ :=
-              ConcreteElaboration.compileRegion?_complete finalWellFormed
+              Concrete.Elaboration.compileRegion?_complete finalWellFormed
                 terminalDepthEq terminalFuelEq terminalSelectedExact
                 terminalBubbleCover
             cases terminalFuelCase : terminalFuel with
@@ -352,13 +354,13 @@ theorem focusedRootItems_transport
                 omega
             | succ terminalBodyFuel =>
                 rw [terminalFuelCase] at terminalCompiled
-                simp only [ConcreteElaboration.compileRegion?]
+                simp only [Concrete.Elaboration.compileRegion?]
                   at terminalCompiled
                 obtain ⟨terminalSelectedItems, terminalSelectedCompiled,
                     terminalBodyEq⟩ :=
                   Option.bind_eq_some_iff.mp terminalCompiled
                 have terminalBodyEq' :
-                    ConcreteElaboration.finishRegion result.diagram.val
+                    Concrete.Elaboration.finishRegion result.diagram.val
                         terminalRoot
                         result.bubble
                         terminalSelectedItems = terminalBody := by
@@ -378,19 +380,19 @@ theorem focusedRootItems_transport
                 have terminalSelectedPointwise : ∀ occurrence,
                     occurrence ∈ elimTrace.selectedOccurrences finalWellFormed →
                     ∀ sourceItem terminalItem,
-                    ConcreteElaboration.compileOccurrenceWith?
+                    Concrete.Elaboration.compileOccurrenceWith?
                         elimTrace.sourceDiagram sourceRecurse
                         sourceRoot
                         sourceBinders occurrence = some sourceItem →
-                    ConcreteElaboration.compileOccurrenceWith?
+                    Concrete.Elaboration.compileOccurrenceWith?
                         (dropInstantiationAtomsRaw result)
-                        (ConcreteElaboration.compileRegion?
+                        (Concrete.Elaboration.compileRegion?
                           (dropInstantiationAtomsRaw result) terminalBodyFuel)
                         (terminalRoot.extend result.bubble)
                         (terminalBinders.push result.bubble payload.arity)
                         (elimTrace.occurrenceMap occurrence) =
                           some terminalItem →
-                    ConcreteElaboration.ItemSimulation model  .forward
+                    Concrete.Elaboration.ItemSimulation model  .forward
                       terminalSelectedContext.indexRelation
                       (sourceItem.renameRelations
                         terminalBubbleBinderWitness.relationMap)
@@ -437,9 +439,9 @@ theorem focusedRootItems_transport
                   · simpa [sourceRecurse] using sourceOccurrence
                   · exact terminalOccurrence
                 have terminalSelectedSimulation :=
-                  ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+                  Concrete.Elaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
                     model  .forward sourceRecurse
-                    (ConcreteElaboration.compileRegion?
+                    (Concrete.Elaboration.compileRegion?
                       (dropInstantiationAtomsRaw result) terminalBodyFuel)
                     sourceRoot
                     (terminalRoot.extend result.bubble)
@@ -507,7 +509,7 @@ theorem focusedRootItems_transport
                   payloadArityEq.symm ▸ freshTrace
                 let terminalBubbleMap : RelationRenaming sourceRels
                     (payload.arity :: targetRels) :=
-                  fun relation => ConcreteElaboration.BinderContext.liftVar
+                  fun relation => Concrete.Elaboration.BinderContext.liftVar
                     payload.arity (binderWitness.relationMap relation)
                 have terminalBubbleAgreement : RelEnv.Agrees terminalBubbleMap
                     sourceRelations (fresh, targetRelations) := by
@@ -533,7 +535,7 @@ theorem focusedRootItems_transport
                     terminalRoot result.bubble
                     terminalSelectedEnvironment
                 have terminalSelectedEnvironmentEq :
-                    ConcreteElaboration.extendedEnvironment
+                    Concrete.Elaboration.extendedEnvironment
                         terminalRoot result.bubble
                         terminalFocusEnvironment terminalBubbleLocal =
                       terminalSelectedEnvironment := by
@@ -546,7 +548,7 @@ theorem focusedRootItems_transport
                     denoteRegion (relCtx := payload.arity :: targetRels)
                       model  terminalFocusEnvironment
                       (fresh, targetRelations)
-                      (ConcreteElaboration.finishRegion result.diagram.val
+                      (Concrete.Elaboration.finishRegion result.diagram.val
                         terminalRoot
                         result.bubble terminalSelectedItems) := by
                   apply (DoubleCutElimTrace.finishRegion_denote_iff
@@ -557,7 +559,7 @@ theorem focusedRootItems_transport
                     (fresh, targetRelations)).mpr
                   refine ⟨terminalBubbleLocal, ?_⟩
                   have stateEnvironmentEq :
-                      ConcreteElaboration.extendedEnvironment
+                      Concrete.Elaboration.extendedEnvironment
                           terminalRoot
                           result.bubble terminalFocusEnvironment
                           terminalBubbleLocal = terminalSelectedEnvironment := by
@@ -590,24 +592,24 @@ theorem focusedRootItems_transport
                     simp [payload.bubble_eq, CRegion.parent?])
                 have targetBubbleCover :
                     (targetBinders.push bubble payload.arity).Covers bubble :=
-                  ConcreteElaboration.BinderContext.push_covers_bubble_child
+                  Concrete.Elaboration.BinderContext.push_covers_bubble_child
                     targetBindersCover payload.bubble_eq
                 have targetBubbleEnumeration :
-                    ConcreteElaboration.BinderContext.Enumeration input.val
+                    Concrete.Elaboration.BinderContext.Enumeration input.val
                       (targetBinders.push bubble payload.arity) bubble :=
                   targetEnumeration.bubbleChild input.property payload.bubble_eq
                 have targetBubbleDenote :
                     denoteRegion (relCtx := payload.arity :: targetRels)
                       model  targetFocusEnvironment
                       (fresh, targetRelations)
-                      (ConcreteElaboration.finishRegion input.val
+                      (Concrete.Elaboration.finishRegion input.val
                         targetRoot bubble
                         targetSelectedItems) := by
                   cases copyTrace with
                   | done traceFuel current pendingEmpty =>
                       let iso := initialDropIso payload
                       let sourceOuter :
-                          ConcreteElaboration.WireContext
+                          Concrete.Elaboration.WireContext
                             (dropInstantiationAtomsRaw
                               (initialInstantiationState payload)) :=
                         terminalRoot
@@ -622,7 +624,7 @@ theorem focusedRootItems_transport
                           sourceOuter targetOuter sourceBubbleExact
                           targetBubbleExact
                       have contextsAgree :
-                          ConcreteElaboration.WireContextsAgree iso sourceOuter
+                          Concrete.Elaboration.WireContextsAgree iso sourceOuter
                             targetOuter ambient := by
                         intro index
                         exact
@@ -630,7 +632,7 @@ theorem focusedRootItems_transport
                             bubble sourceOuter targetOuter sourceBubbleExact
                             targetBubbleExact index
                       let sourceBinderContext :
-                          ConcreteElaboration.BinderContext
+                          Concrete.Elaboration.BinderContext
                             (dropInstantiationAtomsRaw
                               (initialInstantiationState payload))
                             (payload.arity :: targetRels) :=
@@ -638,7 +640,7 @@ theorem focusedRootItems_transport
                       let targetBinderContext :=
                         targetBinders.push bubble payload.arity
                       have baseBindersAgree :
-                          ConcreteElaboration.BinderContextsAgree iso
+                          Concrete.Elaboration.BinderContextsAgree iso
                             terminalBinders targetBinders := by
                         intro owner
                         change targetBinders owner = terminalBinders owner
@@ -651,32 +653,32 @@ theorem focusedRootItems_transport
                           at mapped
                         exact mapped.symm
                       have bindersAgree :
-                          ConcreteElaboration.BinderContextsAgree iso
+                          Concrete.Elaboration.BinderContextsAgree iso
                             sourceBinderContext targetBinderContext := by
                         simpa [sourceBinderContext, targetBinderContext] using
                           baseBindersAgree.push bubble payload.arity
                       have sourceCompiledDrop :
-                          ConcreteElaboration.compileRegion?
+                          Concrete.Elaboration.compileRegion?
                               (dropInstantiationAtomsRaw
                                 (initialInstantiationState payload))
                               (terminalBodyFuel + 1) bubble sourceOuter
                               sourceBinderContext =
-                            some (ConcreteElaboration.finishRegion input.val
+                            some (Concrete.Elaboration.finishRegion input.val
                               sourceOuter bubble terminalSelectedItems) := by
-                        unfold ConcreteElaboration.compileRegion?
+                        unfold Concrete.Elaboration.compileRegion?
                         dsimp only
                         simpa [sourceOuter, sourceBinderContext,
                           initialInstantiationState] using terminalCompiled
                       have targetBubbleCompiledRegion :
-                          ConcreteElaboration.compileRegion?  input.val
+                          Concrete.Elaboration.compileRegion?  input.val
                             (bubbleFuel + 1) bubble targetOuter
                             targetBinderContext =
-                              some (ConcreteElaboration.finishRegion input.val
+                              some (Concrete.Elaboration.finishRegion input.val
                                 targetOuter bubble targetSelectedItems) := by
                         simpa [targetOuter, targetBinderContext,
-                          ConcreteElaboration.compileRegion?] using bubbleResult
+                          Concrete.Elaboration.compileRegion?] using bubbleResult
                       have compiledIso :=
-                        ConcreteElaboration.compileRegion?_equivariant iso
+                        Concrete.Elaboration.compileRegion?_equivariant iso
                           input.property contextsAgree targetBubbleExact
                           bindersAgree sourceCompiledDrop
                           targetBubbleCompiledRegion
@@ -748,7 +750,7 @@ theorem focusedRootItems_transport
                   | step traceFuel _ _ atom tail site candidate arguments
                       plan pending_eq node_eq candidate_eq arguments_eq rest =>
                       let hadmissible :=
-                        (Splice.Input.checkInput_sound
+                        (Concrete.Splice.Input.checkInput_sound
                           plan.checkedInputChecked).2
                       let initialTargets :
                           InstantiationSemantic.BinderTargetsAtBubble payload
@@ -900,7 +902,7 @@ theorem focusedRootItems_transport
                         presentation := terminalPresentation
                         wireAligned := terminalWireAligned
                         relationMap :=
-                          ConcreteElaboration.identityRelationRenaming
+                          Concrete.Elaboration.identityRelationRenaming
                             (payload.arity :: targetRels)
                         binderAligned := by
                           intro region binderArity relation lookup
@@ -930,7 +932,7 @@ theorem focusedRootItems_transport
                                 terminalStateEnumeration
                                 (targetBinders.push bubble payload.arity)
                                 targetBubbleCover payload.parent relation =
-                              ConcreteElaboration.identityRelationRenaming
+                              Concrete.Elaboration.identityRelationRenaming
                                 (payload.arity :: targetRels) relation
                             at mappedRelationEq
                           rw [mappedRelationEq] at mapped
@@ -974,21 +976,21 @@ theorem focusedRootItems_transport
                           sourceFocusEnvironment fallback
                           (focusedContext.sourceIndex index)).symm
                       have targetBubbleCompiledRegion :
-                          ConcreteElaboration.compileRegion?  input.val
+                          Concrete.Elaboration.compileRegion?  input.val
                             (bubbleFuel + 1) bubble
                             targetRoot
                             (targetBinders.push bubble payload.arity) =
-                              some (ConcreteElaboration.finishRegion input.val
+                              some (Concrete.Elaboration.finishRegion input.val
                                 targetRoot bubble
                                 targetSelectedItems) := by
-                        simpa only [ConcreteElaboration.compileRegion?] using
+                        simpa only [Concrete.Elaboration.compileRegion?] using
                           bubbleResult
                       exact initialExternal.denoteRecompiled_initial
                         initialOwnerIdentity
                         targetRoot targetBubbleExact
                         targetBubbleCover targetBubbleEnumeration
                         (bubbleFuel + 1)
-                        (ConcreteElaboration.finishRegion input.val
+                        (Concrete.Elaboration.finishRegion input.val
                           targetRoot bubble
                           targetSelectedItems)
                         targetBubbleCompiledRegion targetFocusEnvironment
@@ -997,7 +999,7 @@ theorem focusedRootItems_transport
                     denoteItem model  targetFocusEnvironment
                       targetRelations
                       (Item.bubble payload.arity
-                        (ConcreteElaboration.finishRegion input.val
+                        (Concrete.Elaboration.finishRegion input.val
                           targetRoot bubble
                           targetSelectedItems)) := by
                   simp only [bubble_denotes_exists]

@@ -1,6 +1,8 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionInterface
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -80,7 +82,7 @@ theorem targetRegion_ne_bubble
   omega
 
 theorem selectedRegion_parent_cases
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     {region parent : Fin input.val.regionCount}
     (selected : region ∈ selection.selectedRegions)
@@ -88,7 +90,7 @@ theorem selectedRegion_parent_cases
     parent = selection.val.anchor ∨ parent ∈ selection.selectedRegions := by
   obtain ⟨root, direct, encloses⟩ :=
     (selection.mem_selectedRegions region).1 selected
-  rcases ConcreteElaboration.encloses_direct_child parentEq encloses with
+  rcases Concrete.Elaboration.encloses_direct_child parentEq encloses with
     rootEq | parentSelected
   · subst root
     left
@@ -100,13 +102,13 @@ theorem selectedRegion_parent_cases
       ⟨root, direct, parentSelected⟩
 
 theorem selection_root_not_selected
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val) :
     input.val.root ∉ selection.selectedRegions := by
   intro selected
   obtain ⟨child, childRoot, encloses⟩ :=
     (selection.mem_selectedRegions input.val.root).1 selected
-  have childEq := ConcreteElaboration.encloses_sheet_eq
+  have childEq := Concrete.Elaboration.encloses_sheet_eq
     input.property.root_is_sheet encloses
   have parent := selection.property.childRoots_direct child childRoot
   rw [childEq, input.property.root_is_sheet] at parent
@@ -291,4 +293,4 @@ theorem region_shape_of_regular
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

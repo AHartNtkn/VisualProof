@@ -1,28 +1,31 @@
 import VisualProof.Rule.Soundness.Modal.VacuousEliminationRootCompiler
 
-namespace VisualProof.Rule.VacuousElimTrace
+namespace VisualProof.Concrete.VacuousElimTrace
+
+open VisualProof.Concrete
+open VisualProof.Rule
 
 open VisualProof
 open VisualProof.Theory
 open VisualProof.Diagram
 
 theorem WireContext.index_eq_of_get_eq
-    (context : ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (nodup : context.Nodup)
     (first second : Fin context.length)
     (equal : context.get first = context.get second) :
     first = second := by
   obtain ⟨index, lookup⟩ :=
-    ConcreteElaboration.WireContext.lookup?_complete
+    Concrete.Elaboration.WireContext.lookup?_complete
       (List.get_mem context second)
   have firstEq : first = index :=
-    ConcreteElaboration.WireContext.lookup?_unique nodup lookup equal
+    Concrete.Elaboration.WireContext.lookup?_unique nodup lookup equal
   have secondEq : second = index :=
-    ConcreteElaboration.WireContext.lookup?_unique nodup lookup rfl
+    Concrete.Elaboration.WireContext.lookup?_unique nodup lookup rfl
   exact firstEq.trans secondEq.symm
 
 theorem WireContext.index_val_eq_of_context_eq
-    {first second : ConcreteElaboration.WireContext diagram}
+    {first second : Concrete.Elaboration.WireContext diagram}
     (contextEq : first = second)
     (nodup : first.Nodup)
     (firstIndex : Fin first.length)
@@ -34,23 +37,23 @@ theorem WireContext.index_val_eq_of_context_eq
     (WireContext.index_eq_of_get_eq first nodup firstIndex secondIndex equal)
 
 theorem rootScope_transport
-    {first second : ConcreteDiagram}
+    {first second : Concrete.Diagram}
     (diagramEq : first = second)
     (wire : Fin first.wireCount)
     (rootScope : (first.wires wire).scope = first.root) :
     (second.wires
-      (Fin.cast (congrArg ConcreteDiagram.wireCount diagramEq) wire)).scope =
+      (Fin.cast (congrArg Concrete.Diagram.wireCount diagramEq) wire)).scope =
         second.root := by
   subst second
   exact rootScope
 
-def concreteIsoOfEq {first second : ConcreteDiagram}
-    (diagramEq : first = second) : ConcreteIso first second := by
+def concreteIsoOfEq {first second : Concrete.Diagram}
+    (diagramEq : first = second) : Concrete.Iso first second := by
   subst second
-  exact ConcreteIso.refl first
+  exact Concrete.Iso.refl first
 
 theorem concreteIsoOfEq_wires_val
-    {first second : ConcreteDiagram}
+    {first second : Concrete.Diagram}
     (diagramEq : first = second)
     (wire : Fin first.wireCount) :
     ((concreteIsoOfEq diagramEq).wires wire).val = wire.val := by
@@ -66,24 +69,24 @@ noncomputable def rootContextSimulation
       (input.wires wire).scope = input.root)
     (model : Model)
     (freshForward : FreshRelationSelector trace targetWellFormed model)
-    (direction : ConcreteElaboration.SimulationDirection) :
-    let source : CheckedOpenDiagram  :=
+    (direction : Concrete.Elaboration.SimulationDirection) :
+    let source : Concrete.CheckedOpen  :=
       ⟨trace.sourceOpen boundary,
         trace.sourceOpen_wellFormed sourceWellFormed targetWellFormed boundary
           boundaryRoot⟩
-    let target : CheckedOpenDiagram  :=
+    let target : Concrete.CheckedOpen  :=
       ⟨targetOpen input boundary,
         targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
     let simulation := trace.semanticSimulation sourceWellFormed
       targetWellFormed model  freshForward
-    ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
+    Concrete.Elaboration.ConcreteSemanticSimulation.RootContextSimulation
       simulation direction source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires := by
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed sourceWellFormed targetWellFormed boundary
         boundaryRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨targetOpen input boundary,
       targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
   let simulation := trace.semanticSimulation sourceWellFormed
@@ -94,17 +97,17 @@ noncomputable def rootContextSimulation
     target.val.exposedWires
   have exposedEq : source.val.exposedWires = target.val.exposedWires := rfl
   have sourceRootExact :
-      ConcreteElaboration.WireContext.Exact
+      Concrete.Elaboration.WireContext.Exact
         (source.val.exposedWires ++ source.val.hiddenWires)
         trace.sourceDiagram.root := by
-    simpa only [OpenConcreteDiagram.rootWires] using
-      ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+    simpa only [Concrete.OpenDiagram.rootWires] using
+      Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
         source
   have targetRootExact :
-      ConcreteElaboration.WireContext.Exact
+      Concrete.Elaboration.WireContext.Exact
         (target.val.exposedWires ++ target.val.hiddenWires) input.root := by
-    simpa only [OpenConcreteDiagram.rootWires] using
-      ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+    simpa only [Concrete.OpenDiagram.rootWires] using
+      Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
         target
   refine {
     outer := outerRelation
@@ -125,7 +128,7 @@ noncomputable def rootContextSimulation
           RelationRenaming [] []) =
           (fun {arity} (relation : RelVar [] arity) => relation) := rfl
     rw [relationMapEq, ItemSeq.renameRelations_id] at itemSemantics ⊢
-    apply ConcreteElaboration.directionalRootTransport_of_agreement direction
+    apply Concrete.Elaboration.directionalRootTransport_of_agreement direction
       source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires outerRelation
       promoted.indexRelation model  sourceItems targetItems
@@ -150,7 +153,7 @@ noncomputable def rootContextSimulation
           intro sourceIndex targetIndex related
           have indexValue := WireContext.index_val_eq_of_context_eq
             rootContextEq sourceRootExact.nodup sourceIndex targetIndex related
-          unfold ConcreteElaboration.rootEnvironment
+          unfold Concrete.Elaboration.rootEnvironment
           simp only [Function.comp_apply]
           apply VisualProof.Rule.ModalSoundness.extendWireEnv_transport
             countEq sourceLocal targetLocal
@@ -165,7 +168,7 @@ noncomputable def rootContextSimulation
           intro sourceIndex targetIndex related
           have indexValue := WireContext.index_val_eq_of_context_eq
             rootContextEq sourceRootExact.nodup sourceIndex targetIndex related
-          unfold ConcreteElaboration.rootEnvironment
+          unfold Concrete.Elaboration.rootEnvironment
           simp only [Function.comp_apply]
           apply VisualProof.Rule.ModalSoundness.extendWireEnv_transport
             countEq sourceLocal targetLocal
@@ -189,31 +192,31 @@ noncomputable def rootContextSimulation
     have rootOrigin : trace.origin trace.sourceDiagram.root = input.root :=
       trace.promotion.root_origin
     have sourceExact :
-        ConcreteElaboration.WireContext.Exact
+        Concrete.Elaboration.WireContext.Exact
           (source.val.exposedWires ++ source.val.hiddenWires)
           (trace.targetIndex targetWellFormed) := by
       simpa only [focused] using sourceRootExact
     have targetExact :
-        ConcreteElaboration.WireContext.Exact
+        Concrete.Elaboration.WireContext.Exact
           (target.val.exposedWires ++ target.val.hiddenWires)
           trace.parent := by
       simpa only [targetAtRoot] using targetRootExact
     have sourceCover :=
-      ConcreteElaboration.BinderContext.empty_covers_root sourceWellFormed
+      Concrete.Elaboration.BinderContext.empty_covers_root sourceWellFormed
     have targetCover :=
-      ConcreteElaboration.BinderContext.empty_covers_root targetWellFormed
+      Concrete.Elaboration.BinderContext.empty_covers_root targetWellFormed
     have sourceEnumeration :=
-      ConcreteElaboration.BinderContext.Enumeration.empty trace.sourceDiagram
+      Concrete.Elaboration.BinderContext.Enumeration.empty trace.sourceDiagram
     have targetEnumeration :=
-      ConcreteElaboration.BinderContext.Enumeration.empty input
+      Concrete.Elaboration.BinderContext.Enumeration.empty input
     have transport := trace.focusedRootItems_transport sourceWellFormed
       targetWellFormed model  direction trace.sourceDiagram.regionCount
       input.regionCount source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires
       freshForward
       promoted
-      ConcreteElaboration.BinderContext.empty
-      ConcreteElaboration.BinderContext.empty simulation.binders_empty
+      Concrete.Elaboration.BinderContext.empty
+      Concrete.Elaboration.BinderContext.empty simulation.binders_empty
       sourceExact targetExact
       (by simpa only [focused] using sourceCover)
       (by simpa only [targetAtRoot] using targetCover)
@@ -238,7 +241,7 @@ noncomputable def rootContextSimulation
           RelationRenaming [] []) =
           (fun {arity} (relation : RelVar [] arity) => relation) := rfl
     rw [relationMapEq, Region.renameRelations_id]
-    exact ConcreteElaboration.finishRoot_denote direction
+    exact Concrete.Elaboration.finishRoot_denote direction
       source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires outerRelation model
       sourceItems targetItems transport
@@ -250,44 +253,44 @@ theorem boundaryWitness
     (boundary : List (Fin input.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.wires wire).scope = input.root)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (model : Model)
     (freshForward : FreshRelationSelector trace targetWellFormed model)
     (args : Fin boundary.length → model.Carrier) :
-    let source : CheckedOpenDiagram  :=
+    let source : Concrete.CheckedOpen  :=
       ⟨trace.sourceOpen boundary,
         trace.sourceOpen_wellFormed sourceWellFormed targetWellFormed boundary
           boundaryRoot⟩
-    let target : CheckedOpenDiagram  :=
+    let target : Concrete.CheckedOpen  :=
       ⟨targetOpen input boundary,
         targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
     let root := trace.rootContextSimulation sourceWellFormed targetWellFormed
       boundary boundaryRoot model  freshForward direction
-    ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+    Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       direction source.elaborate target.elaborate root.outer model
       args args := by
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed sourceWellFormed targetWellFormed boundary
         boundaryRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨targetOpen input boundary,
       targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
   let root := trace.rootContextSimulation sourceWellFormed targetWellFormed
     boundary boundaryRoot model  freshForward direction
   have exposedEq : source.val.exposedWires = target.val.exposedWires := rfl
   have sourceRootExact :
-      ConcreteElaboration.WireContext.Exact
+      Concrete.Elaboration.WireContext.Exact
         (source.val.exposedWires ++ source.val.hiddenWires)
         trace.sourceDiagram.root := by
-    simpa only [OpenConcreteDiagram.rootWires] using
-      ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+    simpa only [Concrete.OpenDiagram.rootWires] using
+      Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
         source
   have sourceExposedNodup : source.val.exposedWires.Nodup :=
     (List.nodup_append.mp sourceRootExact.nodup).1
   dsimp only
   unfold
-    ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+    Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
   cases direction with
   | forward =>
       intro sourceAssignment sourceArgsEq sourceDenotes
@@ -342,17 +345,17 @@ theorem interfaceTransport_transportBoundary
     (boundary : List (Fin input.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.wires wire).scope = input.root) :
-    (vacuousElimInterfaceTransport hraw).transportBoundary boundary =
+    (vacuousElimWireTransport hraw).transportBoundary boundary =
       some (boundary.map
         (Fin.cast (vacuousElimRaw?_wireCount hraw).symm)) := by
   let trace := vacuousElimTrace hraw
   have rawEq : raw = trace.sourceDiagram := trace.promotion.raw_eq_diagram
   let wireCountEq : input.wireCount = raw.wireCount :=
     (vacuousElimRaw?_wireCount hraw).symm
-  apply InterfaceTransport.transportBoundary_eq_map
+  apply WireTransport.transportBoundary_eq_map
   intro wire member
-  unfold vacuousElimInterfaceTransport InterfaceTransport.byWireCount
-    InterfaceTransport.rootFiltered
+  unfold vacuousElimWireTransport WireTransport.byWireCount
+    WireTransport.rootFiltered
   dsimp only
   have promotedRoot :
       (raw.wires (Fin.cast wireCountEq wire)).scope = raw.root := by
@@ -360,7 +363,7 @@ theorem interfaceTransport_transportBoundary
        wellFormed wire (sourceRoot wire member)
     have transported := rootScope_transport rawEq.symm wire promoted
     have castEq :
-        Fin.cast (congrArg ConcreteDiagram.wireCount rawEq.symm) wire =
+        Fin.cast (congrArg Concrete.Diagram.wireCount rawEq.symm) wire =
           Fin.cast wireCountEq wire := by
       apply Fin.ext
       rfl
@@ -371,4 +374,4 @@ theorem interfaceTransport_transportBoundary
       else none) = some (Fin.cast wireCountEq wire)
   rw [if_pos promotedRoot]
 
-end VisualProof.Rule.VacuousElimTrace
+end VisualProof.Concrete.VacuousElimTrace

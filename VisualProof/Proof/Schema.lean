@@ -1,6 +1,8 @@
-import VisualProof.Diagram.Concrete.Semantics
+import VisualProof.Concrete.Semantics
 
 namespace VisualProof.Proof
+
+open VisualProof.Concrete
 
 open VisualProof
 open Diagram
@@ -9,8 +11,8 @@ open Diagram
 boundary interface. The schema is certification data, not primitive rule
 content. -/
 structure TheoremSchema where
-  left : CheckedOpenDiagram
-  right : CheckedOpenDiagram
+  left : Concrete.CheckedOpen
+  right : Concrete.CheckedOpen
   sameBoundaryArity : left.val.boundary.length = right.val.boundary.length
 
 /-- Semantic validity of a meta-level theorem schema. -/

@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationTargetInvariant
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -11,19 +13,19 @@ namespace InstantiationSemantic
 /-- A denoting focused compiler block after a nonempty-spine splice contains
 the terminal pattern block prepared by the authoritative splice compiler. -/
 theorem terminalPrepared_denotes_of_output
-    (input : Splice.Input )
-    (layout : Splice.Input.PlugLayout input)
+    (input : Concrete.Splice.Input )
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hadmissible : input.Admissible)
-    (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
+    (host : Concrete.Splice.SiteView (input.coalesceFrame hadmissible) input.site)
     {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
-    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (patternLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
@@ -33,11 +35,11 @@ theorem terminalPrepared_denotes_of_output
     (denotes : denoteItemSeq model  env relEnv outputLeaf.items) :
     let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
       outputWitness outputLeaf hnonempty
-    let targetEq := ConcreteElaboration.WireContext.length_extend
+    let targetEq := Concrete.Elaboration.WireContext.length_extend
       outputLeaf.inheritedWires (layout.frameRegion input.site)
     let targetEnv : Fin
         (outputLeaf.inheritedWires.length +
-          (ConcreteElaboration.exactScopeWires layout.plugRaw
+          (Concrete.Elaboration.exactScopeWires layout.plugRaw
             (layout.frameRegion input.site)).length) → model.Carrier :=
       env ∘ Fin.cast targetEq.symm
     let sourceEnv := targetEnv ∘ combined
@@ -58,11 +60,11 @@ theorem terminalPrepared_denotes_of_output
   dsimp only
   let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
     outputWitness outputLeaf hnonempty
-  let targetEq := ConcreteElaboration.WireContext.length_extend
+  let targetEq := Concrete.Elaboration.WireContext.length_extend
     outputLeaf.inheritedWires (layout.frameRegion input.site)
   let targetEnv : Fin
       (outputLeaf.inheritedWires.length +
-        (ConcreteElaboration.exactScopeWires layout.plugRaw
+        (Concrete.Elaboration.exactScopeWires layout.plugRaw
           (layout.frameRegion input.site)).length) → model.Carrier :=
     env ∘ Fin.cast targetEq.symm
   let sourceEnv := targetEnv ∘ combined
@@ -106,19 +108,19 @@ single prepared seam environment, the authoritative post-splice compiler
 block denotes.  This is the constructive half needed when replaying an
 instantiation trace forward beneath an intervening cut. -/
 theorem output_denotes_of_host_and_terminalPrepared
-    (input : Splice.Input )
-    (layout : Splice.Input.PlugLayout input)
+    (input : Concrete.Splice.Input )
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hadmissible : input.Admissible)
-    (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
+    (host : Concrete.Splice.SiteView (input.coalesceFrame hadmissible) input.site)
     {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
-    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (patternLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
@@ -128,11 +130,11 @@ theorem output_denotes_of_host_and_terminalPrepared
     (hostDenotes :
       let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
         outputWitness outputLeaf hnonempty
-      let targetEq := ConcreteElaboration.WireContext.length_extend
+      let targetEq := Concrete.Elaboration.WireContext.length_extend
         outputLeaf.inheritedWires (layout.frameRegion input.site)
       let targetEnv : Fin
           (outputLeaf.inheritedWires.length +
-            (ConcreteElaboration.exactScopeWires layout.plugRaw
+            (Concrete.Elaboration.exactScopeWires layout.plugRaw
               (layout.frameRegion input.site)).length) → model.Carrier :=
         env ∘ Fin.cast targetEq.symm
       let sourceEnv := targetEnv ∘ combined
@@ -146,11 +148,11 @@ theorem output_denotes_of_host_and_terminalPrepared
     (terminalDenotes :
       let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
         outputWitness outputLeaf hnonempty
-      let targetEq := ConcreteElaboration.WireContext.length_extend
+      let targetEq := Concrete.Elaboration.WireContext.length_extend
         outputLeaf.inheritedWires (layout.frameRegion input.site)
       let targetEnv : Fin
           (outputLeaf.inheritedWires.length +
-            (ConcreteElaboration.exactScopeWires layout.plugRaw
+            (Concrete.Elaboration.exactScopeWires layout.plugRaw
               (layout.frameRegion input.site)).length) → model.Carrier :=
         env ∘ Fin.cast targetEq.symm
       let sourceEnv := targetEnv ∘ combined
@@ -172,11 +174,11 @@ theorem output_denotes_of_host_and_terminalPrepared
   dsimp only at hostDenotes terminalDenotes
   let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
     outputWitness outputLeaf hnonempty
-  let targetEq := ConcreteElaboration.WireContext.length_extend
+  let targetEq := Concrete.Elaboration.WireContext.length_extend
     outputLeaf.inheritedWires (layout.frameRegion input.site)
   let targetEnv : Fin
       (outputLeaf.inheritedWires.length +
-        (ConcreteElaboration.exactScopeWires layout.plugRaw
+        (Concrete.Elaboration.exactScopeWires layout.plugRaw
           (layout.frameRegion input.site)).length) → model.Carrier :=
     env ∘ Fin.cast targetEq.symm
   let sourceEnv := targetEnv ∘ combined
@@ -215,19 +217,19 @@ theorem output_denotes_of_host_and_terminalPrepared
 /-- Native-context form of `terminalPrepared_denotes_of_output`: both seam
 renamings are interpreted by environment pullback. -/
 theorem terminalItems_denotes_of_output
-    (input : Splice.Input )
-    (layout : Splice.Input.PlugLayout input)
+    (input : Concrete.Splice.Input )
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (hadmissible : input.Admissible)
-    (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
+    (host : Concrete.Splice.SiteView (input.coalesceFrame hadmissible) input.site)
     {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
-    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (patternLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf layout.plugRaw
       (layout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
@@ -237,11 +239,11 @@ theorem terminalItems_denotes_of_output
     (denotes : denoteItemSeq model  env relEnv outputLeaf.items) :
     let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
       outputWitness outputLeaf hnonempty
-    let targetEq := ConcreteElaboration.WireContext.length_extend
+    let targetEq := Concrete.Elaboration.WireContext.length_extend
       outputLeaf.inheritedWires (layout.frameRegion input.site)
     let targetEnv : Fin
         (outputLeaf.inheritedWires.length +
-          (ConcreteElaboration.exactScopeWires layout.plugRaw
+          (Concrete.Elaboration.exactScopeWires layout.plugRaw
             (layout.frameRegion input.site)).length) → model.Carrier :=
       env ∘ Fin.cast targetEq.symm
     let sourceEnv := targetEnv ∘ combined
@@ -260,11 +262,11 @@ theorem terminalItems_denotes_of_output
   dsimp only
   let combined := layout.siteCombinedWireEquivOfNonempty hadmissible host
     outputWitness outputLeaf hnonempty
-  let targetEq := ConcreteElaboration.WireContext.length_extend
+  let targetEq := Concrete.Elaboration.WireContext.length_extend
     outputLeaf.inheritedWires (layout.frameRegion input.site)
   let targetEnv : Fin
       (outputLeaf.inheritedWires.length +
-        (ConcreteElaboration.exactScopeWires layout.plugRaw
+        (Concrete.Elaboration.exactScopeWires layout.plugRaw
           (layout.frameRegion input.site)).length) → model.Carrier :=
     env ∘ Fin.cast targetEq.symm
   let sourceEnv := targetEnv ∘ combined

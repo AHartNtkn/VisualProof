@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionOccurrenceCompiler
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -12,27 +15,27 @@ namespace AbstractionRawTrace
 block entails its corresponding fresh atom, simultaneously and in executor
 order. -/
 theorem occurrenceFamily_forward
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     {sourceRels targetRels : RelCtx}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (model : Model)
     (hostFuel : Nat)
     (region : Fin input.val.regionCount)
     (indices : List (Fin occurrences.length))
     (anchored : ∀ index, index ∈ indices →
       (occurrences.get index).selection.val.anchor = region)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
-    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
+    (sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels)
     (sourceCover : sourceBinders.Covers region)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val sourceBinders region)
     (sourceExact : sourceContext.Exact region)
     (sourceItems : Fin occurrences.length →
@@ -40,13 +43,13 @@ theorem occurrenceFamily_forward
     (targetItems : Fin occurrences.length →
       Item  targetContext.length targetRels)
     (sourceCompiled : ∀ index, index ∈ indices →
-      ConcreteElaboration.compileOccurrencesWith?  input.val
-        (ConcreteElaboration.compileRegion?  input.val hostFuel)
+      Concrete.Elaboration.compileOccurrencesWith?  input.val
+        (Concrete.Elaboration.compileRegion?  input.val hostFuel)
         sourceContext sourceBinders
-        (ModalSoundness.selectedOccurrences input.val
+        (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val
           (occurrences.get index).selection) = some (sourceItems index))
     (targetCompiled : ∀ index, index ∈ indices →
-      ConcreteElaboration.compileNode?  trace.diagram targetContext
+      Concrete.Elaboration.compileNode?  trace.diagram targetContext
         targetBinders (trace.targetAtom index) = some (targetItems index))
     (sourceEnvironment : Fin sourceContext.length → model.Carrier)
     (targetEnvironment : Fin targetContext.length → model.Carrier)
@@ -75,7 +78,7 @@ theorem occurrenceFamily_forward
       (occurrences.get index).selection.val.anchor := by
     rw [anchor]
     exact sourceCover
-  have enumerationAt : ConcreteElaboration.BinderContext.Enumeration input.val
+  have enumerationAt : Concrete.Elaboration.BinderContext.Enumeration input.val
       sourceBinders (occurrences.get index).selection.val.anchor := by
     rw [anchor]
     exact sourceEnumeration
@@ -84,7 +87,7 @@ theorem occurrenceFamily_forward
     sourceContext sourceBinders enumerationAt coverAt exactAt
     (sourceItems index) (sourceCompiled index member) sourceEnvironment
     sourceRelations (by
-      exact (IterationSoundness.denoteRegion_mk_zero_iff model  sourceEnvironment
+      exact (VisualProof.Rule.IterationSoundness.denoteRegion_mk_zero_iff model  sourceEnvironment
         sourceRelations (sourceItems index)).2 (sourceBlocks index member))
   exact (trace.compiledTargetAtom_denote_iff_fixed payload index model
     sourceContext targetContext context exactAt sourceEnvironment
@@ -95,27 +98,27 @@ theorem occurrenceFamily_forward
 valuations simultaneously.  The resulting source valuation still agrees with
 the target on every surviving wire and makes every selected block true. -/
 theorem occurrenceFamily_backward
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     {sourceRels targetRels : RelCtx}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (model : Model)
     (hostFuel : Nat)
     (region : Fin input.val.regionCount)
     (indices : List (Fin occurrences.length))
     (anchored : ∀ index, index ∈ indices →
       (occurrences.get index).selection.val.anchor = region)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
-    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
+    (sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels)
     (sourceCover : sourceBinders.Covers region)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val sourceBinders region)
     (sourceExact : sourceContext.Exact region)
     (sourceItems : Fin occurrences.length →
@@ -123,13 +126,13 @@ theorem occurrenceFamily_backward
     (targetItems : Fin occurrences.length →
       Item  targetContext.length targetRels)
     (sourceCompiled : ∀ index, index ∈ indices →
-      ConcreteElaboration.compileOccurrencesWith?  input.val
-        (ConcreteElaboration.compileRegion?  input.val hostFuel)
+      Concrete.Elaboration.compileOccurrencesWith?  input.val
+        (Concrete.Elaboration.compileRegion?  input.val hostFuel)
         sourceContext sourceBinders
-        (ModalSoundness.selectedOccurrences input.val
+        (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val
           (occurrences.get index).selection) = some (sourceItems index))
     (targetCompiled : ∀ index, index ∈ indices →
-      ConcreteElaboration.compileNode?  trace.diagram targetContext
+      Concrete.Elaboration.compileNode?  trace.diagram targetContext
         targetBinders (trace.targetAtom index) = some (targetItems index))
     (fallback : Fin sourceContext.length → model.Carrier)
     (targetEnvironment : Fin targetContext.length → model.Carrier)
@@ -171,7 +174,7 @@ theorem occurrenceFamily_backward
         (occurrences.get index).selection.val.anchor := by
       rw [anchor]
       exact sourceCover
-    have enumerationAt : ConcreteElaboration.BinderContext.Enumeration
+    have enumerationAt : Concrete.Elaboration.BinderContext.Enumeration
         input.val sourceBinders
           (occurrences.get index).selection.val.anchor := by
       rw [anchor]
@@ -238,4 +241,4 @@ theorem occurrenceFamily_backward
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Iteration.ActualTransport
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -48,18 +50,18 @@ theorem reachable_pullback_outerRelation
 /-- Every wire inherited by the extracted terminal body occurs in the full
 selection-anchor context. -/
 theorem iterationTerminalAnchorMember
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    (index : Fin (Splice.Input.compiledSpliceTerminalView
+    (index : Fin (Concrete.Splice.Input.compiledSpliceTerminalView
       (iterationInput input selection target) hnonempty
     ).leaf.inheritedWires.length) :
     input.val.fragmentWireOrigin selection
         ({} : FragmentLayout input.val selection)
-        ((Splice.Input.compiledSpliceTerminalView
+        ((Concrete.Splice.Input.compiledSpliceTerminalView
           (iterationInput input selection target) hnonempty
         ).leaf.inheritedWires.get index) ∈
       (((iterationCoalescedAnchorView input selection target hadmissible)
@@ -73,8 +75,8 @@ theorem iterationTerminalAnchorMember
     anchorView.compilerLeaf.inheritedWires.extend selection.val.anchor
   let targetContext := sourceContext.map
     (iterationCoalescedFrameIso input selection target).wires
-  let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
-  have targetExact : ConcreteElaboration.WireContext.Exact targetContext
+  let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+  have targetExact : Concrete.Elaboration.WireContext.Exact targetContext
       selection.val.anchor :=
     anchorView.compilerLeaf.wiresExact.mapIso
       (iterationCoalescedFrameIso input selection target)
@@ -92,13 +94,13 @@ theorem iterationTerminalAnchorMember
 /-- Canonical anchor-context index of a wire inherited by the extracted
 terminal body. -/
 noncomputable def iterationTerminalAnchorIndex
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    (index : Fin (Splice.Input.compiledSpliceTerminalView
+    (index : Fin (Concrete.Splice.Input.compiledSpliceTerminalView
       (iterationInput input selection target) hnonempty
     ).leaf.inheritedWires.length) :
     Fin (((iterationCoalescedAnchorView input selection target hadmissible)
@@ -109,13 +111,13 @@ noncomputable def iterationTerminalAnchorIndex
       hnonempty index))
 
 theorem iterationTerminalAnchorIndex_get
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    (index : Fin (Splice.Input.compiledSpliceTerminalView
+    (index : Fin (Concrete.Splice.Input.compiledSpliceTerminalView
       (iterationInput input selection target) hnonempty
     ).leaf.inheritedWires.length) :
     (((iterationCoalescedAnchorView input selection target hadmissible)
@@ -125,7 +127,7 @@ theorem iterationTerminalAnchorIndex_get
             hnonempty index) =
       input.val.fragmentWireOrigin selection
         ({} : FragmentLayout input.val selection)
-        ((Splice.Input.compiledSpliceTerminalView
+        ((Concrete.Splice.Input.compiledSpliceTerminalView
           (iterationInput input selection target) hnonempty
         ).leaf.inheritedWires.get index) := by
   classical
@@ -135,18 +137,18 @@ theorem iterationTerminalAnchorIndex_get
       hnonempty index)))
 
 theorem iterationTerminalAnchorIndex_related
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0)
-    (index : Fin (Splice.Input.compiledSpliceTerminalView
+    (index : Fin (Concrete.Splice.Input.compiledSpliceTerminalView
       (iterationInput input selection target) hnonempty
     ).leaf.inheritedWires.length) :
     (extractionContextRelation input selection
       ({} : FragmentLayout input.val selection)
-      (Splice.Input.compiledSpliceTerminalView
+      (Concrete.Splice.Input.compiledSpliceTerminalView
         (iterationInput input selection target) hnonempty).leaf.inheritedWires
       (((iterationCoalescedAnchorView input selection target hadmissible)
         |>.compilerLeaf.inheritedWires.extend selection.val.anchor).map
@@ -160,7 +162,7 @@ theorem iterationTerminalAnchorIndex_related
 /-- Every exposed wire of an empty-spine extracted root occurs in the full
 selection-anchor context. -/
 theorem iterationRootAnchorMember
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -185,11 +187,11 @@ theorem iterationRootAnchorMember
     (iterationCoalescedFrameIso input selection target).wires
   have bodyEq : layout.bodyContainer = spliceInput.pattern.val.diagram.root :=
     layout.bodyContainer_eq_root_of_proxyCount_eq_zero hzero
-  have fragmentExact : ConcreteElaboration.WireContext.Exact
+  have fragmentExact : Concrete.Elaboration.WireContext.Exact
       spliceInput.pattern.val.rootWires layout.bodyContainer := by
     rw [bodyEq]
-    exact ConcreteElaboration.openRootWires_exact spliceInput.pattern.property
-  have targetExact : ConcreteElaboration.WireContext.Exact targetContext
+    exact Concrete.Elaboration.openRootWires_exact spliceInput.pattern.property
+  have targetExact : Concrete.Elaboration.WireContext.Exact targetContext
       selection.val.anchor :=
     anchorView.compilerLeaf.wiresExact.mapIso
       (iterationCoalescedFrameIso input selection target)
@@ -202,7 +204,7 @@ theorem iterationRootAnchorMember
 /-- Canonical anchor-context index of an exposed wire of the empty-spine
 extracted root. -/
 noncomputable def iterationRootAnchorIndex
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -217,7 +219,7 @@ noncomputable def iterationRootAnchorIndex
     (iterationRootAnchorMember input selection target hadmissible hzero index))
 
 theorem iterationRootAnchorIndex_get
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -240,7 +242,7 @@ theorem iterationRootAnchorIndex_get
     (iterationRootAnchorMember input selection target hadmissible hzero index)))
 
 theorem iterationRootAnchorIndex_related
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -263,7 +265,7 @@ theorem iterationRootAnchorIndex_related
 /-- Empty-spine counterpart of `partitionedRoute_copyTransport`: the selected
 anchor supplies the extracted open root at every route-reachable valuation. -/
 theorem partitionedRoute_rootCopyTransport
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -275,9 +277,9 @@ theorem partitionedRoute_rootCopyTransport
       (iterationCoalescedAnchorView input selection target hadmissible
         ).focus.holeRels}
     (selectedCompiled :
-      ConcreteElaboration.compileOccurrencesWith?
+      Concrete.Elaboration.compileOccurrencesWith?
           (iterationInput input selection target).coalesceFrameRaw
-          (ConcreteElaboration.compileRegion?
+          (Concrete.Elaboration.compileRegion?
             (iterationInput input selection target).coalesceFrameRaw
             (iterationCoalescedAnchorView input selection target hadmissible
               ).compilerLeaf.fuel)
@@ -292,14 +294,14 @@ theorem partitionedRoute_rootCopyTransport
       (iterationCoalescedAnchorView input selection target hadmissible
         ).focus.holeRels}
     {path : List Nat}
-    (route : Splice.RegionRoute
+    (route : Concrete.Splice.RegionRoute
       (iterationInput input selection target).coalesceFrameRaw
       selection.val.anchor target path)
     {compiledPath : List Nat}
     {witness : Region.ContextPath (Region.mk 0 keptItems) compiledPath}
     (terminal : CompiledRouteTerminal
       ((iterationInput input selection target).coalesceFrame hadmissible)
-      (Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+      (Concrete.Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
         (iterationInput input selection target).coalesceFrameRaw
         selection.val.anchor
         (iterationCoalescedAnchorView input selection target hadmissible
@@ -329,7 +331,7 @@ theorem partitionedRoute_rootCopyTransport
       selection.val.anchor
     let iso := iterationCoalescedFrameIso input selection target
     let targetContext := sourceContext.map iso.wires
-    let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+    let pattern := Concrete.Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
     let hostIndex := iterationRootAnchorIndex input selection target
       hadmissible hzero
     let wireEquiv : FiniteEquiv (Fin sourceContext.length)
@@ -340,7 +342,7 @@ theorem partitionedRoute_rootCopyTransport
       Fin.cast terminal.leaf.inheritedLength
         (terminal.inheritedIndex (wireEquiv.symm (hostIndex index)))
     let routeRelation : RelationRenaming [] witness.toFocus.holeRels :=
-      Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
+      Concrete.Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
     ∀ (sourceEnv : Fin sourceContext.length → model.Carrier)
       (sourceRelEnv : RelEnv model.Carrier anchorView.focus.holeRels),
       denoteRegion model  sourceEnv sourceRelEnv
@@ -351,7 +353,7 @@ theorem partitionedRoute_rootCopyTransport
               holeEnv holeRelEnv →
             denoteRegion model  (holeEnv ∘ routeWire)
               (RelEnv.pullback routeRelation holeRelEnv)
-              (ConcreteElaboration.finishRoot
+              (Concrete.Elaboration.finishRoot
                 spliceInput.pattern.val.exposedWires
                 spliceInput.pattern.val.hiddenWires pattern.items) := by
   dsimp only
@@ -363,7 +365,7 @@ theorem partitionedRoute_rootCopyTransport
     selection.val.anchor
   let iso := iterationCoalescedFrameIso input selection target
   let targetContext := sourceContext.map iso.wires
-  let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+  let pattern := Concrete.Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
   let hostIndex := iterationRootAnchorIndex input selection target
     hadmissible hzero
   let wireEquiv : FiniteEquiv (Fin sourceContext.length)
@@ -374,7 +376,7 @@ theorem partitionedRoute_rootCopyTransport
     Fin.cast terminal.leaf.inheritedLength
       (terminal.inheritedIndex (wireEquiv.symm (hostIndex index)))
   let routeRelation : RelationRenaming [] witness.toFocus.holeRels :=
-    Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
+    Concrete.Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
   obtain ⟨semanticItems, semanticCompiled, selectedSemantic⟩ :=
     coalescedAnchorSelected_entails_root input selection target hadmissible
       hzero
@@ -389,7 +391,7 @@ theorem partitionedRoute_rootCopyTransport
         (holeEnv ∘ routeWire)
         (fun index => sourceEnv (wireEquiv.symm index)) := by
     intro patternIndex targetIndex related
-    have targetExact : ConcreteElaboration.WireContext.Exact targetContext
+    have targetExact : Concrete.Elaboration.WireContext.Exact targetContext
         selection.val.anchor := anchorView.compilerLeaf.wiresExact.mapIso iso
     have targetIndexEq : hostIndex patternIndex = targetIndex := by
       apply Fin.ext
@@ -412,13 +414,13 @@ theorem partitionedRoute_rootCopyTransport
     ((denoteRegion_mk_zero_iff model  sourceEnv sourceRelEnv
       selectedItems).1 selectedDenotes)
   let anchorRelation : RelationRenaming [] anchorView.focus.holeRels :=
-    Splice.Input.PlugLayout.emptyRelationRenaming anchorView.focus.holeRels
+    Concrete.Splice.Input.PlugLayout.emptyRelationRenaming anchorView.focus.holeRels
   have rawMaterial :=
     (denoteRegion_renameRelations model  anchorRelation
       (RelEnv.pullback anchorRelation sourceRelEnv) sourceRelEnv
       (RelEnv.pullback_agrees anchorRelation sourceRelEnv)
       (holeEnv ∘ routeWire)
-      (ConcreteElaboration.finishRoot spliceInput.pattern.val.exposedWires
+      (Concrete.Elaboration.finishRoot spliceInput.pattern.val.exposedWires
         spliceInput.pattern.val.hiddenWires pattern.items)).mp renamedMaterial
   have emptyPulled : RelEnv.pullback anchorRelation sourceRelEnv =
       RelEnv.pullback routeRelation holeRelEnv := by
@@ -431,7 +433,7 @@ theorem partitionedRoute_rootCopyTransport
 material is the compiled open root, with exposed wires mapped into the route
 hole and hidden root wires left existential. -/
 theorem partitionedRoute_rootSplice_equiv
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -443,9 +445,9 @@ theorem partitionedRoute_rootSplice_equiv
       (iterationCoalescedAnchorView input selection target hadmissible
         ).focus.holeRels}
     (selectedCompiled :
-      ConcreteElaboration.compileOccurrencesWith?
+      Concrete.Elaboration.compileOccurrencesWith?
           (iterationInput input selection target).coalesceFrameRaw
-          (ConcreteElaboration.compileRegion?
+          (Concrete.Elaboration.compileRegion?
             (iterationInput input selection target).coalesceFrameRaw
             (iterationCoalescedAnchorView input selection target hadmissible
               ).compilerLeaf.fuel)
@@ -455,14 +457,14 @@ theorem partitionedRoute_rootSplice_equiv
             ).compilerLeaf.binders
           (selectedOccurrences input.val selection) = some selectedItems)
     {path : List Nat}
-    (route : Splice.RegionRoute
+    (route : Concrete.Splice.RegionRoute
       (iterationInput input selection target).coalesceFrameRaw
       selection.val.anchor target path)
     {compiledPath : List Nat}
     {witness : Region.ContextPath (Region.mk 0 keptItems) compiledPath}
     (terminal : CompiledRouteTerminal
       ((iterationInput input selection target).coalesceFrame hadmissible)
-      (Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+      (Concrete.Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
         (iterationInput input selection target).coalesceFrameRaw
         selection.val.anchor
         (iterationCoalescedAnchorView input selection target hadmissible
@@ -499,7 +501,7 @@ theorem partitionedRoute_rootSplice_equiv
       selection.val.anchor
     let iso := iterationCoalescedFrameIso input selection target
     let targetContext := sourceContext.map iso.wires
-    let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+    let pattern := Concrete.Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
     let hostIndex := iterationRootAnchorIndex input selection target
       hadmissible hzero
     let wireEquiv : FiniteEquiv (Fin sourceContext.length)
@@ -513,8 +515,8 @@ theorem partitionedRoute_rootSplice_equiv
         Fin (witness.toFocus.holeWires + hostLocal) := fun index =>
       Fin.castAdd hostLocal (routeWire index)
     let relationMap : RelationRenaming [] witness.toFocus.holeRels :=
-      Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
-    let material := ConcreteElaboration.finishRoot
+      Concrete.Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
+    let material := Concrete.Elaboration.finishRoot
       spliceInput.pattern.val.exposedWires spliceInput.pattern.val.hiddenWires
       pattern.items
     denoteRegion model  sourceEnv sourceRelEnv
@@ -533,7 +535,7 @@ theorem partitionedRoute_rootSplice_equiv
     selection.val.anchor
   let iso := iterationCoalescedFrameIso input selection target
   let targetContext := sourceContext.map iso.wires
-  let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+  let pattern := Concrete.Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
   let hostIndex := iterationRootAnchorIndex input selection target
     hadmissible hzero
   let wireEquiv : FiniteEquiv (Fin sourceContext.length)
@@ -547,8 +549,8 @@ theorem partitionedRoute_rootSplice_equiv
       Fin (witness.toFocus.holeWires + hostLocal) := fun index =>
     Fin.castAdd hostLocal (routeWire index)
   let relationMap : RelationRenaming [] witness.toFocus.holeRels :=
-    Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
-  let material := ConcreteElaboration.finishRoot
+    Concrete.Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
+  let material := Concrete.Elaboration.finishRoot
     spliceInput.pattern.val.exposedWires spliceInput.pattern.val.hiddenWires
     pattern.items
   have copyTransport := partitionedRoute_rootCopyTransport input selection
@@ -578,7 +580,7 @@ every valuation reachable through the retained route.  The wire and relation
 maps in the conclusion are the route-native factors later identified with the
 maps used by the executable splice compiler. -/
 theorem partitionedRoute_copyTransport
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -590,9 +592,9 @@ theorem partitionedRoute_copyTransport
       (iterationCoalescedAnchorView input selection target hadmissible
         ).focus.holeRels}
     (selectedCompiled :
-      ConcreteElaboration.compileOccurrencesWith?
+      Concrete.Elaboration.compileOccurrencesWith?
           (iterationInput input selection target).coalesceFrameRaw
-          (ConcreteElaboration.compileRegion?
+          (Concrete.Elaboration.compileRegion?
             (iterationInput input selection target).coalesceFrameRaw
             (iterationCoalescedAnchorView input selection target hadmissible
               ).compilerLeaf.fuel)
@@ -607,14 +609,14 @@ theorem partitionedRoute_copyTransport
       (iterationCoalescedAnchorView input selection target hadmissible
         ).focus.holeRels}
     {path : List Nat}
-    (route : Splice.RegionRoute
+    (route : Concrete.Splice.RegionRoute
       (iterationInput input selection target).coalesceFrameRaw
       selection.val.anchor target path)
     {compiledPath : List Nat}
     {witness : Region.ContextPath (Region.mk 0 keptItems) compiledPath}
     (terminal : CompiledRouteTerminal
       ((iterationInput input selection target).coalesceFrame hadmissible)
-      (Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+      (Concrete.Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
         (iterationInput input selection target).coalesceFrameRaw
         selection.val.anchor
         (iterationCoalescedAnchorView input selection target hadmissible
@@ -644,11 +646,11 @@ theorem partitionedRoute_copyTransport
     let sourceContext := sourceLeaf.inheritedWires.extend selection.val.anchor
     let iso := iterationCoalescedFrameIso input selection target
     let targetContext := sourceContext.map iso.wires
-    let targetBinders : ConcreteElaboration.BinderContext input.val
+    let targetBinders : Concrete.Elaboration.BinderContext input.val
         anchorView.focus.holeRels := fun binder => sourceLeaf.binders binder
     let targetCover : targetBinders.Covers selection.val.anchor :=
       sourceLeaf.bindersCover.mapIso iso (by intro binder; rfl)
-    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
     let binderWitness := ExtractionBinderWitness.terminal input selection layout
       pattern.leaf.binders pattern.leaf.binderEnumeration targetBinders
       targetCover
@@ -675,7 +677,7 @@ theorem partitionedRoute_copyTransport
               holeEnv holeRelEnv →
             denoteRegion model  (holeEnv ∘ routeWire)
               (RelEnv.pullback routeRelation holeRelEnv)
-              (ConcreteElaboration.finishRegion spliceInput.pattern.val.diagram
+              (Concrete.Elaboration.finishRegion spliceInput.pattern.val.diagram
                 pattern.leaf.inheritedWires spliceInput.binderSpine.bodyContainer
                 pattern.leaf.items) := by
   dsimp only
@@ -687,15 +689,15 @@ theorem partitionedRoute_copyTransport
   let sourceContext := sourceLeaf.inheritedWires.extend selection.val.anchor
   let iso := iterationCoalescedFrameIso input selection target
   let targetContext := sourceContext.map iso.wires
-  let targetBinders : ConcreteElaboration.BinderContext input.val
+  let targetBinders : Concrete.Elaboration.BinderContext input.val
       anchorView.focus.holeRels := fun binder => sourceLeaf.binders binder
-  have binderAgreement : ConcreteElaboration.BinderContextsAgree iso
+  have binderAgreement : Concrete.Elaboration.BinderContextsAgree iso
       sourceLeaf.binders targetBinders := by
     intro binder
     rfl
   let targetCover : targetBinders.Covers selection.val.anchor :=
     sourceLeaf.bindersCover.mapIso iso binderAgreement
-  let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+  let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
   let binderWitness := ExtractionBinderWitness.terminal input selection layout
     pattern.leaf.binders pattern.leaf.binderEnumeration targetBinders
     targetCover
@@ -726,7 +728,7 @@ theorem partitionedRoute_copyTransport
         (holeEnv ∘ routeWire)
         (fun index => sourceEnv (wireEquiv.symm index)) := by
     intro patternIndex targetIndex related
-    have targetExact : ConcreteElaboration.WireContext.Exact targetContext
+    have targetExact : Concrete.Elaboration.WireContext.Exact targetContext
         selection.val.anchor := sourceLeaf.wiresExact.mapIso iso
     have targetIndexEq : hostIndex patternIndex = targetIndex := by
       apply Fin.ext
@@ -764,7 +766,7 @@ theorem partitionedRoute_copyTransport
       (RelEnv.pullback binderWitness.relationMap sourceRelEnv) sourceRelEnv
       (RelEnv.pullback_agrees binderWitness.relationMap sourceRelEnv)
       (holeEnv ∘ routeWire)
-      (ConcreteElaboration.finishRegion spliceInput.pattern.val.diagram
+      (Concrete.Elaboration.finishRegion spliceInput.pattern.val.diagram
         pattern.leaf.inheritedWires spliceInput.binderSpine.bodyContainer
         pattern.leaf.items)).mp renamedMaterial
   exact anchorPulled ▸ rawMaterial
@@ -774,7 +776,7 @@ semantic iteration law before the final compiler-presentation isomorphism:
 the selected ancestor remains present while an identical extracted copy is
 inserted at the descendant. -/
 theorem partitionedRoute_splice_equiv
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -786,9 +788,9 @@ theorem partitionedRoute_splice_equiv
       (iterationCoalescedAnchorView input selection target hadmissible
         ).focus.holeRels}
     (selectedCompiled :
-      ConcreteElaboration.compileOccurrencesWith?
+      Concrete.Elaboration.compileOccurrencesWith?
           (iterationInput input selection target).coalesceFrameRaw
-          (ConcreteElaboration.compileRegion?
+          (Concrete.Elaboration.compileRegion?
             (iterationInput input selection target).coalesceFrameRaw
             (iterationCoalescedAnchorView input selection target hadmissible
               ).compilerLeaf.fuel)
@@ -798,14 +800,14 @@ theorem partitionedRoute_splice_equiv
             ).compilerLeaf.binders
           (selectedOccurrences input.val selection) = some selectedItems)
     {path : List Nat}
-    (route : Splice.RegionRoute
+    (route : Concrete.Splice.RegionRoute
       (iterationInput input selection target).coalesceFrameRaw
       selection.val.anchor target path)
     {compiledPath : List Nat}
     {witness : Region.ContextPath (Region.mk 0 keptItems) compiledPath}
     (terminal : CompiledRouteTerminal
       ((iterationInput input selection target).coalesceFrame hadmissible)
-      (Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+      (Concrete.Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
         (iterationInput input selection target).coalesceFrameRaw
         selection.val.anchor
         (iterationCoalescedAnchorView input selection target hadmissible
@@ -843,8 +845,8 @@ theorem partitionedRoute_splice_equiv
       anchorView.compilerLeaf.inheritedWires.extend selection.val.anchor
     let iso := iterationCoalescedFrameIso input selection target
     let targetContext := sourceContext.map iso.wires
-    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
-    let targetBinders : ConcreteElaboration.BinderContext input.val
+    let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    let targetBinders : Concrete.Elaboration.BinderContext input.val
         anchorView.focus.holeRels := fun binder =>
       anchorView.compilerLeaf.binders binder
     let targetCover : targetBinders.Covers selection.val.anchor :=
@@ -868,7 +870,7 @@ theorem partitionedRoute_splice_equiv
         witness.toFocus.holeRels := fun {arity} relation =>
       witness.toFocus.context.outerRelation
         (binderWitness.relationMap relation)
-    let material := ConcreteElaboration.finishRegion
+    let material := Concrete.Elaboration.finishRegion
       spliceInput.pattern.val.diagram pattern.leaf.inheritedWires
       spliceInput.binderSpine.bodyContainer pattern.leaf.items
     denoteRegion model  sourceEnv sourceRelEnv
@@ -888,11 +890,11 @@ theorem partitionedRoute_splice_equiv
     anchorView.compilerLeaf.inheritedWires.extend selection.val.anchor
   let iso := iterationCoalescedFrameIso input selection target
   let targetContext := sourceContext.map iso.wires
-  let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
-  let targetBinders : ConcreteElaboration.BinderContext input.val
+  let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+  let targetBinders : Concrete.Elaboration.BinderContext input.val
       anchorView.focus.holeRels := fun binder =>
     anchorView.compilerLeaf.binders binder
-  have binderAgreement : ConcreteElaboration.BinderContextsAgree iso
+  have binderAgreement : Concrete.Elaboration.BinderContextsAgree iso
       anchorView.compilerLeaf.binders targetBinders := by
     intro binder
     rfl
@@ -917,7 +919,7 @@ theorem partitionedRoute_splice_equiv
       witness.toFocus.holeRels := fun {arity} relation =>
     witness.toFocus.context.outerRelation
       (binderWitness.relationMap relation)
-  let material := ConcreteElaboration.finishRegion
+  let material := Concrete.Elaboration.finishRegion
     spliceInput.pattern.val.diagram pattern.leaf.inheritedWires
     spliceInput.binderSpine.bodyContainer pattern.leaf.items
   have copyTransport := partitionedRoute_copyTransport input selection target

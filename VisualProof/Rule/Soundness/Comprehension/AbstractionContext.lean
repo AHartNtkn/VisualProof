@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionOccurrences
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -56,8 +59,8 @@ certified surviving source origin in the source context.  Source contexts may
 contain additional wires deleted inside focused occurrence bodies. -/
 structure ContextWitness
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram) : Prop where
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram) : Prop where
   origin_mem : ∀ wire, wire ∈ targetContext →
     trace.domains.wires.origin wire ∈ sourceContext
 
@@ -71,7 +74,7 @@ def empty
 noncomputable def sourceIndex
     (witness : ContextWitness trace sourceContext targetContext)
     (targetIndex : Fin targetContext.length) : Fin sourceContext.length :=
-  Classical.choose (ConcreteElaboration.WireContext.lookup?_complete
+  Classical.choose (Concrete.Elaboration.WireContext.lookup?_complete
     (witness.origin_mem (targetContext.get targetIndex)
       (List.get_mem targetContext targetIndex)))
 
@@ -81,7 +84,7 @@ theorem sourceIndex_lookup
     sourceContext.lookup?
         (trace.domains.wires.origin (targetContext.get targetIndex)) =
       some (witness.sourceIndex targetIndex) :=
-  Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete
+  Classical.choose_spec (Concrete.Elaboration.WireContext.lookup?_complete
     (witness.origin_mem (targetContext.get targetIndex)
       (List.get_mem targetContext targetIndex)))
 
@@ -90,14 +93,14 @@ theorem sourceIndex_get
     (targetIndex : Fin targetContext.length) :
     sourceContext.get (witness.sourceIndex targetIndex) =
       trace.domains.wires.origin (targetContext.get targetIndex) :=
-  ConcreteElaboration.WireContext.lookup?_sound
+  Concrete.Elaboration.WireContext.lookup?_sound
     (witness.sourceIndex_lookup targetIndex)
 
 noncomputable def indexRelation
     (witness : ContextWitness trace sourceContext targetContext) :
-    ConcreteElaboration.ContextIndexRelation sourceContext.length
+    Concrete.Elaboration.ContextIndexRelation sourceContext.length
       targetContext.length :=
-  ConcreteElaboration.ContextIndexRelation.backwardMap witness.sourceIndex
+  Concrete.Elaboration.ContextIndexRelation.backwardMap witness.sourceIndex
 
 noncomputable def targetEnvironment
     (witness : ContextWitness trace sourceContext targetContext)
@@ -110,7 +113,7 @@ theorem targetEnvironment_agrees
     (sourceEnvironment : Fin sourceContext.length → D) :
     witness.indexRelation.EnvironmentsAgree sourceEnvironment
       (witness.targetEnvironment sourceEnvironment) := by
-  apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+  apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
     _ _ _).2
   rfl
 
@@ -118,7 +121,7 @@ theorem targetEnvironment_agrees
 the represented target wires. -/
 def castTarget
     (witness : ContextWitness trace sourceContext targetContext)
-    {otherTarget : ConcreteElaboration.WireContext trace.diagram}
+    {otherTarget : Concrete.Elaboration.WireContext trace.diagram}
     (equal : otherTarget = targetContext) :
     ContextWitness trace sourceContext otherTarget := by
   subst otherTarget
@@ -126,7 +129,7 @@ def castTarget
 
 theorem castTarget_agrees
     (witness : ContextWitness trace sourceContext targetContext)
-    {otherTarget : ConcreteElaboration.WireContext trace.diagram}
+    {otherTarget : Concrete.Elaboration.WireContext trace.diagram}
     (equal : otherTarget = targetContext)
     (sourceEnvironment : Fin sourceContext.length → D)
     (targetEnvironment : Fin targetContext.length → D)
@@ -142,14 +145,14 @@ theorem castTarget_agrees
 /-- Extend the origin relation through a surviving source region. Exact local
 wires correspond by compact scope injectivity. -/
 def extend
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     {trace : AbstractionRawTrace input wrap comprehension occurrences raw}
-    {sourceContext : ConcreteElaboration.WireContext input.val}
-    {targetContext : ConcreteElaboration.WireContext trace.diagram}
+    {sourceContext : Concrete.Elaboration.WireContext input.val}
+    {targetContext : Concrete.Elaboration.WireContext trace.diagram}
     (witness : ContextWitness trace sourceContext targetContext)
     (region : Fin input.val.regionCount)
     (regionSurvives : trace.domains.regions.survives region = true) :
@@ -157,13 +160,13 @@ def extend
       (targetContext.extend (trace.regionMap region)) where
   origin_mem := by
     intro targetWire targetMember
-    rw [ConcreteElaboration.WireContext.extend] at targetMember ⊢
+    rw [Concrete.Elaboration.WireContext.extend] at targetMember ⊢
     rcases List.mem_append.mp targetMember with outer | hlocal
     · exact List.mem_append_left _ (witness.origin_mem targetWire outer)
     · apply List.mem_append_right sourceContext
-      apply (ConcreteElaboration.mem_exactScopeWires input.val region _).2
+      apply (Concrete.Elaboration.mem_exactScopeWires input.val region _).2
       have targetScope :=
-        (ConcreteElaboration.mem_exactScopeWires trace.diagram
+        (Concrete.Elaboration.mem_exactScopeWires trace.diagram
           (trace.regionMap region) targetWire).1 hlocal
       let original := trace.domains.wires.origin targetWire
       have originalSurvives :
@@ -180,4 +183,4 @@ end ContextWitness
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

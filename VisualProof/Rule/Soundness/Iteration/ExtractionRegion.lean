@@ -2,13 +2,15 @@ import VisualProof.Rule.Soundness.Iteration.ExtractionNode
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
 
 /-- A material fragment region has exactly one host provenance. -/
 theorem fragmentParent_eq_materialRegion_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (region : Fin input.val.regionCount)
@@ -19,7 +21,7 @@ theorem fragmentParent_eq_materialRegion_iff
   · intro mapped
     by_cases hselected : region ∈ selection.selectedRegions
     · obtain ⟨found, hget, hfound⟩ :=
-        ConcreteDiagram.fragmentParent_selectedRegion input selection layout
+        Concrete.Diagram.fragmentParent_selectedRegion input selection layout
           hselected
       rw [hfound] at mapped
       have indexEq := layout.materialRegion_injective mapped
@@ -33,7 +35,7 @@ theorem fragmentParent_eq_materialRegion_iff
       | none =>
           have bodyNe : layout.bodyContainer ≠ layout.materialRegion index :=
             bodyContainer_ne_materialRegion layout index
-          unfold ConcreteDiagram.fragmentParent at mapped
+          unfold Concrete.Diagram.fragmentParent at mapped
           by_cases hanchor : region = selection.val.anchor
           · simp [hanchor] at mapped
             exact False.elim (bodyNe mapped)
@@ -42,7 +44,7 @@ theorem fragmentParent_eq_materialRegion_iff
   · intro origin
     subst region
     obtain ⟨found, hget, hmapped⟩ :=
-      ConcreteDiagram.fragmentParent_selectedRegion input selection layout
+      Concrete.Diagram.fragmentParent_selectedRegion input selection layout
         (List.get_mem _ index)
     have foundEq : found = index := by
       apply Fin.ext
@@ -55,7 +57,7 @@ theorem fragmentParent_eq_materialRegion_iff
 region.  Boundary wires never become local; internal wires retain the exact
 host scope selected by their material provenance. -/
 theorem fragmentWireOrigin_scope_eq_materialRegion_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (wire : Fin layout.wireCount)
@@ -68,7 +70,7 @@ theorem fragmentWireOrigin_scope_eq_materialRegion_iff
   revert wire
   apply Fin.addCases
   · intro internal
-    simp only [ConcreteDiagram.fragmentWireOrigin, Fin.addCases_left]
+    simp only [Concrete.Diagram.fragmentWireOrigin, Fin.addCases_left]
     have scopeEq :
         ((input.val.extractDiagramRaw selection layout).wires
           (Fin.castAdd layout.boundaryWireCount internal)).scope =
@@ -85,7 +87,7 @@ theorem fragmentWireOrigin_scope_eq_materialRegion_iff
       fragmentParent_eq_materialRegion_iff input selection layout
         (input.val.wires (selection.internalWires.get internal)).scope index
   · intro boundary
-    simp only [ConcreteDiagram.fragmentWireOrigin, Fin.addCases_right]
+    simp only [Concrete.Diagram.fragmentWireOrigin, Fin.addCases_right]
     have hrootNe : layout.root ≠ layout.materialRegion index :=
       (layout.materialRegion_ne_root index).symm
     have hnotSelected : ¬ selection.val.SelectsRegion
@@ -110,41 +112,41 @@ theorem fragmentWireOrigin_scope_eq_materialRegion_iff
       exact False.elim (horiginNe scopeEq)
 
 theorem fragmentWireOrigin_mem_exactScopeWires_material_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (wire : Fin layout.wireCount)
     (index : Fin layout.materialRegionCount) :
-    wire ∈ ConcreteElaboration.exactScopeWires
+    wire ∈ Concrete.Elaboration.exactScopeWires
         (input.val.extractDiagramRaw selection layout)
         (layout.materialRegion index) ↔
       input.val.fragmentWireOrigin selection layout wire ∈
-        ConcreteElaboration.exactScopeWires input.val
+        Concrete.Elaboration.exactScopeWires input.val
           (selection.selectedRegions.get index) := by
-  exact (ConcreteElaboration.mem_exactScopeWires
+  exact (Concrete.Elaboration.mem_exactScopeWires
     (input.val.extractDiagramRaw selection layout)
       (layout.materialRegion index) wire).trans
     ((fragmentWireOrigin_scope_eq_materialRegion_iff input selection layout
       wire index).trans
-      (ConcreteElaboration.mem_exactScopeWires input.val
+      (Concrete.Elaboration.mem_exactScopeWires input.val
         (selection.selectedRegions.get index)
         (input.val.fragmentWireOrigin selection layout wire)).symm)
 
 /-- Every host wire local to copied material has one extracted local preimage. -/
 theorem hostExactScopeWire_has_fragmentPreimage
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (index : Fin layout.materialRegionCount)
     (hostWire : Fin input.val.wireCount)
-    (hostLocal : hostWire ∈ ConcreteElaboration.exactScopeWires input.val
+    (hostLocal : hostWire ∈ Concrete.Elaboration.exactScopeWires input.val
       (selection.selectedRegions.get index)) :
     ∃ fragmentWire,
       input.val.fragmentWireOrigin selection layout fragmentWire = hostWire ∧
-      fragmentWire ∈ ConcreteElaboration.exactScopeWires
+      fragmentWire ∈ Concrete.Elaboration.exactScopeWires
         (input.val.extractDiagramRaw selection layout)
         (layout.materialRegion index) := by
-  have hostScope := (ConcreteElaboration.mem_exactScopeWires _ _ _).1 hostLocal
+  have hostScope := (Concrete.Elaboration.mem_exactScopeWires _ _ _).1 hostLocal
   have selectedScope : selection.val.SelectsRegion
       (input.val.wires hostWire).scope := by
     rw [hostScope]
@@ -158,7 +160,7 @@ theorem hostExactScopeWire_has_fragmentPreimage
   have originEq : input.val.fragmentWireOrigin selection layout fragmentWire =
       hostWire := by
     unfold fragmentWire
-    simp only [ConcreteDiagram.fragmentWireOrigin,
+    simp only [Concrete.Diagram.fragmentWireOrigin,
       FragmentLayout.internalWire, Fin.addCases_left]
     simpa only [List.get_eq_getElem] using hget'
   refine ⟨fragmentWire, originEq, ?_⟩

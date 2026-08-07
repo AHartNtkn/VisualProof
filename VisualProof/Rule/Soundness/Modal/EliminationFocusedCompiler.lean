@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Modal.EliminationFocusedTransport
 
-namespace VisualProof.Rule.DoubleCutElimTrace
+namespace VisualProof.Concrete.DoubleCutElimTrace
+
+open VisualProof.Concrete
+open VisualProof.Rule
 
 open VisualProof
 open VisualProof.Theory
@@ -11,15 +14,15 @@ theorem focusedOccurrence_itemSimulation
     (sourceWellFormed : trace.sourceDiagram.WellFormed )
     (targetWellFormed : input.WellFormed )
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
     (targetParent : Fin input.regionCount)
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (contextWitness : PromotedContextWitness trace sourceContext targetContext)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       trace.sourceDiagram sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext input targetRels)
+    (targetBinders : Concrete.Elaboration.BinderContext input targetRels)
     (binderWitness : PromotedBinderWitness trace sourceBinders targetBinders)
     (sourceExact : sourceContext.Exact (trace.targetIndex targetWellFormed))
     (targetExact : targetContext.Exact targetParent)
@@ -27,28 +30,28 @@ theorem focusedOccurrence_itemSimulation
       sourceBinders.Covers (trace.targetIndex targetWellFormed))
     (targetBindersCover : targetBinders.Covers targetParent)
     (sourceEnumeration :
-      ConcreteElaboration.BinderContext.Enumeration trace.sourceDiagram
+      Concrete.Elaboration.BinderContext.Enumeration trace.sourceDiagram
         sourceBinders (trace.targetIndex targetWellFormed))
     (targetEnumeration :
-      ConcreteElaboration.BinderContext.Enumeration input targetBinders
+      Concrete.Elaboration.BinderContext.Enumeration input targetBinders
         targetParent)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       trace.sourceDiagram.regionCount trace.sourceDiagram.nodeCount)
     (nodeAtParent : ∀ node, occurrence = .node node →
       (input.nodes node).region = targetParent)
     (childAtParent : ∀ child, occurrence = .child child →
       (input.regions (trace.origin child)).parent? = some targetParent)
     (recurseAt : ∀
-      {childDirection : ConcreteElaboration.SimulationDirection}
+      {childDirection : Concrete.Elaboration.SimulationDirection}
       {child : Fin trace.sourceDiagram.regionCount}
       {childSourceRels childTargetRels : RelCtx}
-      {childSourceBinders : ConcreteElaboration.BinderContext
+      {childSourceBinders : Concrete.Elaboration.BinderContext
         trace.sourceDiagram childSourceRels}
-      {childTargetBinders : ConcreteElaboration.BinderContext
+      {childTargetBinders : Concrete.Elaboration.BinderContext
         input childTargetRels}
       (childFuelTarget : Nat)
-      (childSourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-      (childTargetContext : ConcreteElaboration.WireContext input)
+      (childSourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+      (childTargetContext : Concrete.Elaboration.WireContext input)
       (childContext : PromotedContextWitness trace childSourceContext
         childTargetContext),
       True → True →
@@ -56,9 +59,9 @@ theorem focusedOccurrence_itemSimulation
         childTargetBinders) →
       childSourceBinders.Covers child →
       childTargetBinders.Covers (trace.origin child) →
-      ConcreteElaboration.BinderContext.Enumeration trace.sourceDiagram
+      Concrete.Elaboration.BinderContext.Enumeration trace.sourceDiagram
         childSourceBinders child →
-      ConcreteElaboration.BinderContext.Enumeration input childTargetBinders
+      Concrete.Elaboration.BinderContext.Enumeration input childTargetBinders
         (trace.origin child) →
       (childSourceContext.extend child).Exact child →
       (childTargetContext.extend (trace.origin child)).Exact
@@ -67,31 +70,31 @@ theorem focusedOccurrence_itemSimulation
           childSourceRels)
         (targetBody : Region  childTargetContext.length
           childTargetRels),
-      ConcreteElaboration.compileRegion?  trace.sourceDiagram
+      Concrete.Elaboration.compileRegion?  trace.sourceDiagram
           fuelSource child childSourceContext childSourceBinders =
         some sourceBody →
-      ConcreteElaboration.compileRegion?  input childFuelTarget
+      Concrete.Elaboration.compileRegion?  input childFuelTarget
           (trace.origin child) childTargetContext childTargetBinders =
         some targetBody →
-      ConcreteElaboration.RegionSimulation model  childDirection
+      Concrete.Elaboration.RegionSimulation model  childDirection
         childContext.indexRelation
         (sourceBody.renameRelations childBinderWitness.relationMap)
         targetBody)
-    (member : occurrence ∈ ConcreteElaboration.localOccurrences
+    (member : occurrence ∈ Concrete.Elaboration.localOccurrences
       trace.sourceDiagram (trace.targetIndex targetWellFormed))
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrenceWith?  trace.sourceDiagram
-        (ConcreteElaboration.compileRegion?  trace.sourceDiagram
+      Concrete.Elaboration.compileOccurrenceWith?  trace.sourceDiagram
+        (Concrete.Elaboration.compileRegion?  trace.sourceDiagram
           fuelSource)
         sourceContext sourceBinders occurrence = some sourceItem)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrenceWith?  input
-        (ConcreteElaboration.compileRegion?  input fuelTarget)
+      Concrete.Elaboration.compileOccurrenceWith?  input
+        (Concrete.Elaboration.compileRegion?  input fuelTarget)
         targetContext targetBinders (trace.occurrenceMap occurrence) =
           some targetItem) :
-    ConcreteElaboration.ItemSimulation model  direction
+    Concrete.Elaboration.ItemSimulation model  direction
       contextWitness.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   apply trace.compileOccurrence_itemSimulation sourceWellFormed
@@ -117,14 +120,14 @@ theorem focusedItems_regionSimulation
     (targetWellFormed : input.WellFormed )
     (model : Model)
     {sourceRels targetRels : RelCtx}
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       trace.sourceDiagram sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext input targetRels)
+    (targetBinders : Concrete.Elaboration.BinderContext input targetRels)
     (binderWitness : PromotedBinderWitness trace sourceBinders targetBinders)
     (sourceExact :
       (sourceContext.extend (trace.targetIndex targetWellFormed)).Exact
@@ -135,22 +138,22 @@ theorem focusedItems_regionSimulation
       sourceBinders.Covers (trace.targetIndex targetWellFormed))
     (targetBindersCover : targetBinders.Covers trace.target)
     (sourceEnumeration :
-      ConcreteElaboration.BinderContext.Enumeration trace.sourceDiagram
+      Concrete.Elaboration.BinderContext.Enumeration trace.sourceDiagram
         sourceBinders (trace.targetIndex targetWellFormed))
     (targetEnumeration :
-      ConcreteElaboration.BinderContext.Enumeration input targetBinders
+      Concrete.Elaboration.BinderContext.Enumeration input targetBinders
         trace.target)
     (recurseAt : ∀
-      {childDirection : ConcreteElaboration.SimulationDirection}
+      {childDirection : Concrete.Elaboration.SimulationDirection}
       {child : Fin trace.sourceDiagram.regionCount}
       {childSourceRels childTargetRels : RelCtx}
-      {childSourceBinders : ConcreteElaboration.BinderContext
+      {childSourceBinders : Concrete.Elaboration.BinderContext
         trace.sourceDiagram childSourceRels}
-      {childTargetBinders : ConcreteElaboration.BinderContext
+      {childTargetBinders : Concrete.Elaboration.BinderContext
         input childTargetRels}
       (childFuelTarget : Nat)
-      (childSourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-      (childTargetContext : ConcreteElaboration.WireContext input)
+      (childSourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+      (childTargetContext : Concrete.Elaboration.WireContext input)
       (childContext : PromotedContextWitness trace childSourceContext
         childTargetContext),
       True → True →
@@ -158,9 +161,9 @@ theorem focusedItems_regionSimulation
         childTargetBinders) →
       childSourceBinders.Covers child →
       childTargetBinders.Covers (trace.origin child) →
-      ConcreteElaboration.BinderContext.Enumeration trace.sourceDiagram
+      Concrete.Elaboration.BinderContext.Enumeration trace.sourceDiagram
         childSourceBinders child →
-      ConcreteElaboration.BinderContext.Enumeration input childTargetBinders
+      Concrete.Elaboration.BinderContext.Enumeration input childTargetBinders
         (trace.origin child) →
       (childSourceContext.extend child).Exact child →
       (childTargetContext.extend (trace.origin child)).Exact
@@ -169,13 +172,13 @@ theorem focusedItems_regionSimulation
           childSourceRels)
         (targetBody : Region  childTargetContext.length
           childTargetRels),
-      ConcreteElaboration.compileRegion?  trace.sourceDiagram
+      Concrete.Elaboration.compileRegion?  trace.sourceDiagram
           fuelSource child childSourceContext childSourceBinders =
         some sourceBody →
-      ConcreteElaboration.compileRegion?  input childFuelTarget
+      Concrete.Elaboration.compileRegion?  input childFuelTarget
           (trace.origin child) childTargetContext childTargetBinders =
         some targetBody →
-      ConcreteElaboration.RegionSimulation model  childDirection
+      Concrete.Elaboration.RegionSimulation model  childDirection
         childContext.indexRelation
         (sourceBody.renameRelations childBinderWitness.relationMap)
         targetBody)
@@ -185,43 +188,43 @@ theorem focusedItems_regionSimulation
     (targetItems : ItemSeq
       (targetContext.extend trace.target).length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrencesWith?
+      Concrete.Elaboration.compileOccurrencesWith?
         trace.sourceDiagram
-        (ConcreteElaboration.compileRegion?  trace.sourceDiagram
+        (Concrete.Elaboration.compileRegion?  trace.sourceDiagram
           fuelSource)
         (sourceContext.extend (trace.targetIndex targetWellFormed))
         sourceBinders
-        (ConcreteElaboration.localOccurrences trace.sourceDiagram
+        (Concrete.Elaboration.localOccurrences trace.sourceDiagram
           (trace.targetIndex targetWellFormed)) = some sourceItems)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrencesWith?  input
-        (ConcreteElaboration.compileRegion?  input fuelTarget)
+      Concrete.Elaboration.compileOccurrencesWith?  input
+        (Concrete.Elaboration.compileRegion?  input fuelTarget)
         (targetContext.extend trace.target) targetBinders
-        (ConcreteElaboration.localOccurrences input trace.target) =
+        (Concrete.Elaboration.localOccurrences input trace.target) =
           some targetItems) :
-    ConcreteElaboration.RegionSimulation model  direction
+    Concrete.Elaboration.RegionSimulation model  direction
       context.indexRelation
-      ((ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
+      ((Concrete.Elaboration.finishRegion trace.sourceDiagram sourceContext
         (trace.targetIndex targetWellFormed) sourceItems).renameRelations
           binderWitness.relationMap)
-      (ConcreteElaboration.finishRegion input targetContext trace.target
+      (Concrete.Elaboration.finishRegion input targetContext trace.target
         targetItems) := by
   cases binderWitness.relationContexts_eq
   let sourceRecurse : ∀ {rels : RelCtx},
       (region : Fin trace.sourceDiagram.regionCount) →
-      (context : ConcreteElaboration.WireContext trace.sourceDiagram) →
-      ConcreteElaboration.BinderContext trace.sourceDiagram rels →
+      (context : Concrete.Elaboration.WireContext trace.sourceDiagram) →
+      Concrete.Elaboration.BinderContext trace.sourceDiagram rels →
       Option (Region  context.length rels) :=
-    fun {rels} => ConcreteElaboration.compileRegion?
+    fun {rels} => Concrete.Elaboration.compileRegion?
       trace.sourceDiagram fuelSource
   let targetRecurse : ∀ {rels : RelCtx},
       (region : Fin input.regionCount) →
-      (context : ConcreteElaboration.WireContext input) →
-      ConcreteElaboration.BinderContext input rels →
+      (context : Concrete.Elaboration.WireContext input) →
+      Concrete.Elaboration.BinderContext input rels →
       Option (Region  context.length rels) :=
-    fun {rels} => ConcreteElaboration.compileRegion?  input fuelTarget
+    fun {rels} => Concrete.Elaboration.compileRegion?  input fuelTarget
   obtain ⟨sourcePartitionItems, sourcePartitionCompiled⟩ :=
-    ConcreteElaboration.compileOccurrencesWith?_complete sourceRecurse
+    Concrete.Elaboration.compileOccurrencesWith?_complete sourceRecurse
       (sourceContext.extend (trace.targetIndex targetWellFormed))
       sourceBinders
       (trace.keptOccurrences targetWellFormed ++
@@ -236,16 +239,16 @@ theorem focusedItems_regionSimulation
             targetWellFormed).mem_iff.mp member))
   obtain ⟨sourceKeptItems, sourceSelectedItems, sourceKeptCompiled,
       sourceSelectedCompiled, sourcePartitionEq⟩ :=
-    ConcreteElaboration.compileOccurrencesWith?_append_split sourceRecurse
+    Concrete.Elaboration.compileOccurrencesWith?_append_split sourceRecurse
       (sourceContext.extend (trace.targetIndex targetWellFormed))
       sourceBinders (trace.keptOccurrences targetWellFormed)
       (trace.selectedOccurrences targetWellFormed) sourcePartitionItems
       sourcePartitionCompiled
   obtain ⟨targetPartitionItems, targetPartitionCompiled⟩ :=
-    ConcreteElaboration.compileOccurrencesWith?_complete targetRecurse
+    Concrete.Elaboration.compileOccurrencesWith?_complete targetRecurse
       (targetContext.extend trace.target) targetBinders
       ((trace.keptOccurrences targetWellFormed).map trace.occurrenceMap ++
-        [ConcreteElaboration.LocalOccurrence.child outer])
+        [Concrete.Elaboration.LocalOccurrence.child outer])
       (by
         intro occurrence member
         exact VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem
@@ -255,16 +258,16 @@ theorem focusedItems_regionSimulation
             targetWellFormed).mem_iff.mp member))
   obtain ⟨targetKeptItems, targetOuterItems, targetKeptCompiled,
       targetOuterCompiled, targetPartitionEq⟩ :=
-    ConcreteElaboration.compileOccurrencesWith?_append_split targetRecurse
+    Concrete.Elaboration.compileOccurrencesWith?_append_split targetRecurse
       (targetContext.extend trace.target) targetBinders
       ((trace.keptOccurrences targetWellFormed).map trace.occurrenceMap)
-      [ConcreteElaboration.LocalOccurrence.child outer]
+      [Concrete.Elaboration.LocalOccurrence.child outer]
       targetPartitionItems targetPartitionCompiled
-  simp only [ConcreteElaboration.compileOccurrencesWith?] at targetOuterCompiled
+  simp only [Concrete.Elaboration.compileOccurrencesWith?] at targetOuterCompiled
   dsimp only [targetRecurse] at targetOuterCompiled
-  simp only [ConcreteElaboration.compileOccurrenceWith?, trace.outer_eq]
+  simp only [Concrete.Elaboration.compileOccurrenceWith?, trace.outer_eq]
     at targetOuterCompiled
-  cases outerResult : ConcreteElaboration.compileRegion?  input
+  cases outerResult : Concrete.Elaboration.compileRegion?  input
       fuelTarget outer (targetContext.extend trace.target) targetBinders with
   | none => simp [outerResult] at targetOuterCompiled
   | some outerBody =>
@@ -272,21 +275,21 @@ theorem focusedItems_regionSimulation
       subst targetOuterItems
       cases fuelTarget with
       | zero =>
-          simp [ConcreteElaboration.compileRegion?] at outerResult
+          simp [Concrete.Elaboration.compileRegion?] at outerResult
       | succ outerFuel =>
-          simp only [ConcreteElaboration.compileRegion?] at outerResult
+          simp only [Concrete.Elaboration.compileRegion?] at outerResult
           rw [trace.outer_localOccurrences] at outerResult
           obtain ⟨outerItems, outerItemsCompiled, outerBodyEq⟩ :=
             Option.bind_eq_some_iff.mp outerResult
           have outerBodyEq' :
-              ConcreteElaboration.finishRegion input
+              Concrete.Elaboration.finishRegion input
                   (targetContext.extend trace.target) outer outerItems =
                 outerBody := Option.some.inj outerBodyEq
           subst outerBody
-          simp only [ConcreteElaboration.compileOccurrencesWith?] at outerItemsCompiled
-          simp only [ConcreteElaboration.compileOccurrenceWith?, trace.inner_eq]
+          simp only [Concrete.Elaboration.compileOccurrencesWith?] at outerItemsCompiled
+          simp only [Concrete.Elaboration.compileOccurrenceWith?, trace.inner_eq]
             at outerItemsCompiled
-          cases innerResult : ConcreteElaboration.compileRegion?  input
+          cases innerResult : Concrete.Elaboration.compileRegion?  input
               outerFuel trace.inner
               ((targetContext.extend trace.target).extend outer)
               targetBinders with
@@ -296,15 +299,15 @@ theorem focusedItems_regionSimulation
               subst outerItems
               cases outerFuel with
               | zero =>
-                  simp [ConcreteElaboration.compileRegion?] at innerResult
+                  simp [Concrete.Elaboration.compileRegion?] at innerResult
               | succ innerFuel =>
-                  simp only [ConcreteElaboration.compileRegion?] at innerResult
+                  simp only [Concrete.Elaboration.compileRegion?] at innerResult
                   rw [trace.inner_localOccurrences targetWellFormed]
                     at innerResult
                   obtain ⟨targetSelectedItems, targetSelectedCompiled,
                       innerBodyEq⟩ := Option.bind_eq_some_iff.mp innerResult
                   have innerBodyEq' :
-                      ConcreteElaboration.finishRegion input
+                      Concrete.Elaboration.finishRegion input
                           ((targetContext.extend trace.target).extend outer)
                           trace.inner targetSelectedItems = innerBody :=
                     Option.some.inj innerBodyEq
@@ -312,10 +315,10 @@ theorem focusedItems_regionSimulation
                   let focusedContext := context.extendFocused targetWellFormed
                   let selectedContext := context.extendSelected targetWellFormed
                   have targetOuterCover :=
-                    ConcreteElaboration.BinderContext.covers_cut_child
+                    Concrete.Elaboration.BinderContext.covers_cut_child
                       targetBindersCover trace.outer_eq
                   have targetInnerCover :=
-                    ConcreteElaboration.BinderContext.covers_cut_child
+                    Concrete.Elaboration.BinderContext.covers_cut_child
                       targetOuterCover trace.inner_eq
                   have targetOuterEnumeration :=
                     targetEnumeration.cutChild targetWellFormed trace.outer_eq
@@ -328,16 +331,16 @@ theorem focusedItems_regionSimulation
                   have keptPointwise : ∀ occurrence,
                       occurrence ∈ trace.keptOccurrences targetWellFormed →
                       ∀ sourceItem targetItem,
-                      ConcreteElaboration.compileOccurrenceWith?
+                      Concrete.Elaboration.compileOccurrenceWith?
                           trace.sourceDiagram sourceRecurse
                           (sourceContext.extend
                             (trace.targetIndex targetWellFormed))
                           sourceBinders occurrence = some sourceItem →
-                      ConcreteElaboration.compileOccurrenceWith?  input
+                      Concrete.Elaboration.compileOccurrenceWith?  input
                           targetRecurse (targetContext.extend trace.target)
                           targetBinders (trace.occurrenceMap occurrence) =
                             some targetItem →
-                      ConcreteElaboration.ItemSimulation model  direction
+                      Concrete.Elaboration.ItemSimulation model  direction
                         focusedContext.indexRelation
                         (sourceItem.renameRelations binderWitness.relationMap)
                         targetItem := by
@@ -366,19 +369,19 @@ theorem focusedItems_regionSimulation
                       occurrence ∈ trace.selectedOccurrences
                         targetWellFormed →
                       ∀ sourceItem targetItem,
-                      ConcreteElaboration.compileOccurrenceWith?
+                      Concrete.Elaboration.compileOccurrenceWith?
                           trace.sourceDiagram sourceRecurse
                           (sourceContext.extend
                             (trace.targetIndex targetWellFormed))
                           sourceBinders occurrence = some sourceItem →
-                      ConcreteElaboration.compileOccurrenceWith?  input
-                          (ConcreteElaboration.compileRegion?  input
+                      Concrete.Elaboration.compileOccurrenceWith?  input
+                          (Concrete.Elaboration.compileRegion?  input
                             innerFuel)
                           (((targetContext.extend trace.target).extend outer).extend
                             trace.inner)
                           targetBinders (trace.occurrenceMap occurrence) =
                             some targetItem →
-                      ConcreteElaboration.ItemSimulation model  direction
+                      Concrete.Elaboration.ItemSimulation model  direction
                         selectedContext.indexRelation
                         (sourceItem.renameRelations binderWitness.relationMap)
                         targetItem := by
@@ -407,7 +410,7 @@ theorem focusedItems_regionSimulation
                     · simpa [sourceRecurse] using sourceOccurrence
                     · exact targetOccurrence
                   have keptSimulation :=
-                    ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+                    Concrete.Elaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
                       model  direction sourceRecurse targetRecurse
                       (sourceContext.extend
                         (trace.targetIndex targetWellFormed))
@@ -418,9 +421,9 @@ theorem focusedItems_regionSimulation
                       sourceKeptItems targetKeptItems sourceKeptCompiled
                       targetKeptCompiled
                   have selectedSimulation :=
-                    ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+                    Concrete.Elaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
                       model  direction sourceRecurse
-                      (ConcreteElaboration.compileRegion?  input
+                      (Concrete.Elaboration.compileRegion?  input
                         innerFuel)
                       (sourceContext.extend
                         (trace.targetIndex targetWellFormed))
@@ -487,14 +490,14 @@ theorem focusedItems_regionSimulation
                               sourcePartitionItems model  sourceEnvironment
                               relations).mpr
                               ⟨sourceLocal, sourcePermutation
-                                (ConcreteElaboration.extendedEnvironment
+                                (Concrete.Elaboration.extendedEnvironment
                                   sourceContext
                                   (trace.targetIndex targetWellFormed)
                                   sourceEnvironment sourceLocal)
                                 relations |>.mp sourceItemsDenote⟩))
                       exact ⟨targetLocal,
                         (targetPermutation
-                          (ConcreteElaboration.extendedEnvironment targetContext
+                          (Concrete.Elaboration.extendedEnvironment targetContext
                             trace.target targetEnvironment targetLocal)
                           relations).mpr targetPartitionDenote⟩
                   | backward =>
@@ -505,7 +508,7 @@ theorem focusedItems_regionSimulation
                           relations).mp targetDenotation
                       have targetPartitionDenote :=
                         (targetPermutation
-                          (ConcreteElaboration.extendedEnvironment targetContext
+                          (Concrete.Elaboration.extendedEnvironment targetContext
                             trace.target targetEnvironment targetLocal)
                           relations).mp targetItemsDenote
                       obtain ⟨sourceLocal, sourcePartitionDenote⟩ :=
@@ -524,9 +527,9 @@ theorem focusedItems_regionSimulation
                         sourceItems model  sourceEnvironment relations).mpr
                       exact ⟨sourceLocal,
                         (sourcePermutation
-                          (ConcreteElaboration.extendedEnvironment sourceContext
+                          (Concrete.Elaboration.extendedEnvironment sourceContext
                             (trace.targetIndex targetWellFormed)
                             sourceEnvironment sourceLocal)
                           relations).mpr sourcePartitionDenote⟩
 
-end VisualProof.Rule.DoubleCutElimTrace
+end VisualProof.Concrete.DoubleCutElimTrace

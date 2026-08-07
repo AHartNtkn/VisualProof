@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionReachability
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -8,45 +11,45 @@ open VisualProof.Diagram
 namespace AbstractionRawTrace
 
 def extendedOuterIndex
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount) (index : Fin context.length) :
     Fin (context.extend region).length :=
-  Fin.cast (ConcreteElaboration.WireContext.length_extend context region).symm
+  Fin.cast (Concrete.Elaboration.WireContext.length_extend context region).symm
     (Fin.castAdd
-      (ConcreteElaboration.exactScopeWires d region).length index)
+      (Concrete.Elaboration.exactScopeWires d region).length index)
 
 def extendedLocalIndex
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount)
-    (index : Fin (ConcreteElaboration.exactScopeWires d region).length) :
+    (index : Fin (Concrete.Elaboration.exactScopeWires d region).length) :
     Fin (context.extend region).length :=
-  Fin.cast (ConcreteElaboration.WireContext.length_extend context region).symm
+  Fin.cast (Concrete.Elaboration.WireContext.length_extend context region).symm
     (Fin.natAdd context.length index)
 
 def localEnvironmentPart
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount)
     (environment : Fin (context.extend region).length → D) :
-    Fin (ConcreteElaboration.exactScopeWires d region).length → D :=
+    Fin (Concrete.Elaboration.exactScopeWires d region).length → D :=
   fun index => environment (extendedLocalIndex context region index)
 
 theorem extendedEnvironment_of_parts
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount)
     (outerEnvironment : Fin context.length → D)
     (environment : Fin (context.extend region).length → D)
     (outerValues : ∀ index,
       environment (extendedOuterIndex context region index) =
         outerEnvironment index) :
-    ConcreteElaboration.extendedEnvironment context region outerEnvironment
+    Concrete.Elaboration.extendedEnvironment context region outerEnvironment
         (localEnvironmentPart context region environment) = environment := by
   funext index
   let splitIndex := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend context region) index
+    (Concrete.Elaboration.WireContext.length_extend context region) index
   change extendWireEnv outerEnvironment
       (localEnvironmentPart context region environment) splitIndex =
     environment (Fin.cast
-      (ConcreteElaboration.WireContext.length_extend context region).symm
+      (Concrete.Elaboration.WireContext.length_extend context region).symm
       splitIndex)
   refine Fin.addCases ?_ ?_ splitIndex
   · intro outerIndex
@@ -57,71 +60,71 @@ theorem extendedEnvironment_of_parts
     rfl
 
 @[simp] theorem extendedEnvironment_outer
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount)
     (outerEnvironment : Fin context.length → D)
     (localEnvironment :
-      Fin (ConcreteElaboration.exactScopeWires d region).length → D)
+      Fin (Concrete.Elaboration.exactScopeWires d region).length → D)
     (index : Fin context.length) :
-    ConcreteElaboration.extendedEnvironment context region outerEnvironment
+    Concrete.Elaboration.extendedEnvironment context region outerEnvironment
         localEnvironment (extendedOuterIndex context region index) =
       outerEnvironment index := by
-  simp [ConcreteElaboration.extendedEnvironment, extendedOuterIndex,
+  simp [Concrete.Elaboration.extendedEnvironment, extendedOuterIndex,
     extendWireEnv, Fin.addCases_left]
 
 @[simp] theorem extendedEnvironment_local
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount)
     (outerEnvironment : Fin context.length → D)
     (localEnvironment :
-      Fin (ConcreteElaboration.exactScopeWires d region).length → D)
+      Fin (Concrete.Elaboration.exactScopeWires d region).length → D)
     (index :
-      Fin (ConcreteElaboration.exactScopeWires d region).length) :
-    ConcreteElaboration.extendedEnvironment context region outerEnvironment
+      Fin (Concrete.Elaboration.exactScopeWires d region).length) :
+    Concrete.Elaboration.extendedEnvironment context region outerEnvironment
         localEnvironment (extendedLocalIndex context region index) =
       localEnvironment index := by
-  simp [ConcreteElaboration.extendedEnvironment, extendedLocalIndex,
+  simp [Concrete.Elaboration.extendedEnvironment, extendedLocalIndex,
     extendWireEnv, Fin.addCases_right]
 
 @[simp] theorem extendedOuterIndex_get
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount) (index : Fin context.length) :
     (context.extend region).get (extendedOuterIndex context region index) =
       context.get index := by
-  simpa [extendedOuterIndex, ConcreteElaboration.WireContext.outerIndex] using
-    ConcreteElaboration.WireContext.extend_outer context region index
+  simpa [extendedOuterIndex, Concrete.Elaboration.WireContext.outerIndex] using
+    Concrete.Elaboration.WireContext.extend_outer context region index
 
 @[simp] theorem extendedLocalIndex_get
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount)
     (index :
-      Fin (ConcreteElaboration.exactScopeWires d region).length) :
+      Fin (Concrete.Elaboration.exactScopeWires d region).length) :
     (context.extend region).get (extendedLocalIndex context region index) =
-    (ConcreteElaboration.exactScopeWires d region).get index := by
+    (Concrete.Elaboration.exactScopeWires d region).get index := by
   simpa [extendedLocalIndex] using
-    ConcreteElaboration.WireContext.extend_local context region index
+    Concrete.Elaboration.WireContext.extend_local context region index
 
 noncomputable def localSourceIndex
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (region : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives region = true)
     (targetIndex : Fin
-      (ConcreteElaboration.exactScopeWires trace.diagram
+      (Concrete.Elaboration.exactScopeWires trace.diagram
         (trace.regionMap region)).length) :
-    Fin (ConcreteElaboration.exactScopeWires input.val region).length :=
-  Classical.choose (ConcreteElaboration.WireContext.lookup?_complete (by
+    Fin (Concrete.Elaboration.exactScopeWires input.val region).length :=
+  Classical.choose (Concrete.Elaboration.WireContext.lookup?_complete (by
     let targetWire :=
-      (ConcreteElaboration.exactScopeWires trace.diagram
+      (Concrete.Elaboration.exactScopeWires trace.diagram
         (trace.regionMap region)).get targetIndex
     have targetScope :=
-      (ConcreteElaboration.mem_exactScopeWires trace.diagram
+      (Concrete.Elaboration.mem_exactScopeWires trace.diagram
         (trace.regionMap region) targetWire).1 (List.get_mem _ _)
     let original := trace.domains.wires.origin targetWire
     have originalSurvives := trace.domains.wires.origin_survives targetWire
     have scopeTransport := trace.targetWire_scope original originalSurvives
     rw [trace.targetWire_origin_index targetWire, targetScope,
       trace.regionMap_of_survives region survives] at scopeTransport
-    exact (ConcreteElaboration.mem_exactScopeWires input.val region original).2
+    exact (Concrete.Elaboration.mem_exactScopeWires input.val region original).2
       (trace.targetRegion_injective scopeTransport.symm)))
 
 theorem localSourceIndex_get
@@ -129,27 +132,27 @@ theorem localSourceIndex_get
     (region : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives region = true)
     (targetIndex : Fin
-      (ConcreteElaboration.exactScopeWires trace.diagram
+      (Concrete.Elaboration.exactScopeWires trace.diagram
         (trace.regionMap region)).length) :
-    (ConcreteElaboration.exactScopeWires input.val region).get
+    (Concrete.Elaboration.exactScopeWires input.val region).get
         (trace.localSourceIndex region survives targetIndex) =
       trace.domains.wires.origin
-        ((ConcreteElaboration.exactScopeWires trace.diagram
+        ((Concrete.Elaboration.exactScopeWires trace.diagram
           (trace.regionMap region)).get targetIndex) :=
-  ConcreteElaboration.WireContext.lookup?_sound
-    (Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete (by
+  Concrete.Elaboration.WireContext.lookup?_sound
+    (Classical.choose_spec (Concrete.Elaboration.WireContext.lookup?_complete (by
       let targetWire :=
-        (ConcreteElaboration.exactScopeWires trace.diagram
+        (Concrete.Elaboration.exactScopeWires trace.diagram
           (trace.regionMap region)).get targetIndex
       have targetScope :=
-        (ConcreteElaboration.mem_exactScopeWires trace.diagram
+        (Concrete.Elaboration.mem_exactScopeWires trace.diagram
           (trace.regionMap region) targetWire).1 (List.get_mem _ _)
       let original := trace.domains.wires.origin targetWire
       have originalSurvives := trace.domains.wires.origin_survives targetWire
       have scopeTransport := trace.targetWire_scope original originalSurvives
       rw [trace.targetWire_origin_index targetWire, targetScope,
         trace.regionMap_of_survives region survives] at scopeTransport
-      exact (ConcreteElaboration.mem_exactScopeWires input.val region original).2
+      exact (Concrete.Elaboration.mem_exactScopeWires input.val region original).2
         (trace.targetRegion_injective scopeTransport.symm))))
 
 theorem localSourceIndex_injective
@@ -160,17 +163,17 @@ theorem localSourceIndex_injective
     Function.Injective (trace.localSourceIndex region survives) := by
   intro first second equal
   have originEq : trace.domains.wires.origin
-      ((ConcreteElaboration.exactScopeWires trace.diagram
+      ((Concrete.Elaboration.exactScopeWires trace.diagram
         (trace.regionMap region)).get first) =
       trace.domains.wires.origin
-      ((ConcreteElaboration.exactScopeWires trace.diagram
+      ((Concrete.Elaboration.exactScopeWires trace.diagram
         (trace.regionMap region)).get second) := by
     rw [← trace.localSourceIndex_get region survives first,
       ← trace.localSourceIndex_get region survives second, equal]
   have wireEq := trace.domains.wires.origin_injective originEq
   apply Fin.ext
   exact (List.getElem_inj
-    (ConcreteElaboration.exactScopeWires_nodup trace.diagram
+    (Concrete.Elaboration.exactScopeWires_nodup trace.diagram
       (trace.regionMap region))).mp wireEq
 
 noncomputable def sourceLocalOfTarget [Nonempty D]
@@ -179,9 +182,9 @@ noncomputable def sourceLocalOfTarget [Nonempty D]
     (region : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives region = true)
     (targetLocal : Fin
-      (ConcreteElaboration.exactScopeWires trace.diagram
+      (Concrete.Elaboration.exactScopeWires trace.diagram
         (trace.regionMap region)).length → D) :
-    Fin (ConcreteElaboration.exactScopeWires input.val region).length → D :=
+    Fin (Concrete.Elaboration.exactScopeWires input.val region).length → D :=
   fun sourceIndex =>
     if member : ∃ targetIndex,
         trace.localSourceIndex region survives targetIndex = sourceIndex
@@ -194,10 +197,10 @@ noncomputable def sourceLocalOfTarget [Nonempty D]
     (region : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives region = true)
     (targetLocal : Fin
-      (ConcreteElaboration.exactScopeWires trace.diagram
+      (Concrete.Elaboration.exactScopeWires trace.diagram
         (trace.regionMap region)).length → D)
     (targetIndex : Fin
-      (ConcreteElaboration.exactScopeWires trace.diagram
+      (Concrete.Elaboration.exactScopeWires trace.diagram
         (trace.regionMap region)).length) :
     trace.sourceLocalOfTarget targetWellFormed region survives targetLocal
         (trace.localSourceIndex region survives targetIndex) =
@@ -214,8 +217,8 @@ noncomputable def sourceLocalOfTarget [Nonempty D]
 
 theorem targetEnvironment_outer
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
     (region : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives region = true)
@@ -225,11 +228,11 @@ theorem targetEnvironment_outer
     (outerAgreement : context.indexRelation.EnvironmentsAgree sourceOuter
       targetOuter)
     (sourceLocal :
-      Fin (ConcreteElaboration.exactScopeWires input.val region).length → D)
+      Fin (Concrete.Elaboration.exactScopeWires input.val region).length → D)
     (targetIndex : Fin targetContext.length) :
     let extended := context.extend region survives
     extended.targetEnvironment
-        (ConcreteElaboration.extendedEnvironment sourceContext region
+        (Concrete.Elaboration.extendedEnvironment sourceContext region
           sourceOuter sourceLocal)
         (extendedOuterIndex targetContext (trace.regionMap region)
           targetIndex) = targetOuter targetIndex := by
@@ -253,7 +256,7 @@ theorem targetEnvironment_outer
       simpa only [List.get_eq_getElem] using
         corresponding.trans (extended.sourceIndex_get _).symm)
   unfold ContextWitness.targetEnvironment
-  change ConcreteElaboration.extendedEnvironment sourceContext region
+  change Concrete.Elaboration.extendedEnvironment sourceContext region
       sourceOuter sourceLocal (extended.sourceIndex targetExtendedIndex) = _
   rw [← sourceExtendedEq]
   rw [extendedEnvironment_outer]
@@ -261,21 +264,21 @@ theorem targetEnvironment_outer
 
 theorem targetEnvironment_local
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
     (region : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives region = true)
     (sourceExact : (sourceContext.extend region).Exact region)
     (sourceOuter : Fin sourceContext.length → D)
     (sourceLocal :
-      Fin (ConcreteElaboration.exactScopeWires input.val region).length → D)
+      Fin (Concrete.Elaboration.exactScopeWires input.val region).length → D)
     (targetIndex : Fin
-      (ConcreteElaboration.exactScopeWires trace.diagram
+      (Concrete.Elaboration.exactScopeWires trace.diagram
         (trace.regionMap region)).length) :
     let extended := context.extend region survives
     extended.targetEnvironment
-        (ConcreteElaboration.extendedEnvironment sourceContext region
+        (Concrete.Elaboration.extendedEnvironment sourceContext region
           sourceOuter sourceLocal)
         (extendedLocalIndex targetContext (trace.regionMap region)
           targetIndex) =
@@ -300,7 +303,7 @@ theorem targetEnvironment_local
       simpa only [List.get_eq_getElem] using
         corresponding.trans (extended.sourceIndex_get _).symm)
   unfold ContextWitness.targetEnvironment
-  change ConcreteElaboration.extendedEnvironment sourceContext region
+  change Concrete.Elaboration.extendedEnvironment sourceContext region
       sourceOuter sourceLocal (extended.sourceIndex targetExtendedIndex) = _
   rw [← sourceExtendedEq]
   exact extendedEnvironment_local sourceContext region sourceOuter sourceLocal
@@ -312,9 +315,9 @@ relation and receive an arbitrary carrier value. -/
 theorem regularEnvironmentSelection
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (targetWellFormed : trace.diagram.WellFormed )
-    (direction : ConcreteElaboration.SimulationDirection)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
     (region : Fin input.val.regionCount)
     (regular : trace.FrameRegular region)
@@ -328,16 +331,16 @@ theorem regularEnvironmentSelection
         | .forward => ∀ sourceLocal,
             ∃ targetLocal,
               extended.indexRelation.EnvironmentsAgree
-                (ConcreteElaboration.extendedEnvironment sourceContext region
+                (Concrete.Elaboration.extendedEnvironment sourceContext region
                   sourceOuter sourceLocal)
-                (ConcreteElaboration.extendedEnvironment targetContext
+                (Concrete.Elaboration.extendedEnvironment targetContext
                   (trace.regionMap region) targetOuter targetLocal)
         | .backward => ∀ targetLocal,
             ∃ sourceLocal,
               extended.indexRelation.EnvironmentsAgree
-                (ConcreteElaboration.extendedEnvironment sourceContext region
+                (Concrete.Elaboration.extendedEnvironment sourceContext region
                   sourceOuter sourceLocal)
-                (ConcreteElaboration.extendedEnvironment targetContext
+                (Concrete.Elaboration.extendedEnvironment targetContext
                   (trace.regionMap region) targetOuter targetLocal) := by
   dsimp only
   let extended := context.extend region regular.1
@@ -345,7 +348,7 @@ theorem regularEnvironmentSelection
   cases direction with
   | forward =>
       intro sourceLocal
-      let sourceEnvironment := ConcreteElaboration.extendedEnvironment
+      let sourceEnvironment := Concrete.Elaboration.extendedEnvironment
         sourceContext region sourceOuter sourceLocal
       let targetEnvironment := extended.targetEnvironment sourceEnvironment
       let targetLocal := localEnvironmentPart targetContext
@@ -367,7 +370,7 @@ theorem regularEnvironmentSelection
       intro targetLocal
       let sourceLocal := trace.sourceLocalOfTarget targetWellFormed region
         regular.1 targetLocal
-      let sourceEnvironment := ConcreteElaboration.extendedEnvironment
+      let sourceEnvironment := Concrete.Elaboration.extendedEnvironment
         sourceContext region sourceOuter sourceLocal
       let targetEnvironment := extended.targetEnvironment sourceEnvironment
       refine ⟨sourceLocal, ?_⟩
@@ -394,4 +397,4 @@ theorem regularEnvironmentSelection
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

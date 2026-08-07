@@ -4,6 +4,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationParameterValues
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -13,14 +15,14 @@ namespace InstantiationSemantic
 /-- Canonical target compiler index of a quotient-host wire visible at the
 distinguished splice site. -/
 noncomputable def siteSourceWireMap
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       input.plugLayout.plugRaw (input.plugLayout.frameRegion input.site)
       outputWitness)
-    (sourceContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (sourceContext : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
     (sourceExact : sourceContext.Exact input.site) :
     Fin sourceContext.length →
       Fin (outputLeaf.inheritedWires.extend
@@ -34,14 +36,14 @@ noncomputable def siteSourceWireMap
           (List.get_mem sourceContext index)))
 
 theorem siteSourceWireMap_spec
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       input.plugLayout.plugRaw (input.plugLayout.frameRegion input.site)
       outputWitness)
-    (sourceContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (sourceContext : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
     (sourceExact : sourceContext.Exact input.site)
     (index : Fin sourceContext.length) :
     (outputLeaf.inheritedWires.extend
@@ -54,14 +56,14 @@ theorem siteSourceWireMap_spec
 /-- The induced quotient valuation agrees pointwise with the target compiler
 environment along `siteSourceWireMap`. -/
 theorem siteSourceWireMap_environment
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       input.plugLayout.plugRaw (input.plugLayout.frameRegion input.site)
       outputWitness)
-    (sourceContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
+    (sourceContext : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
     (sourceExact : sourceContext.Exact input.site)
     (outputEnv : Fin (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)).length → D)
@@ -69,13 +71,13 @@ theorem siteSourceWireMap_environment
     (index : Fin sourceContext.length) :
     let outputContext := outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)
-    let quotientValues := Splice.Input.siteQuotientEnvironment input
+    let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment input
       outputContext outputLeaf.wiresExact outputEnv fallback
     outputEnv (siteSourceWireMap input outputWitness outputLeaf sourceContext
       sourceExact index) = quotientValues (sourceContext.get index) := by
   dsimp only
   symm
-  apply Splice.Input.siteQuotientEnvironment_eq input
+  apply Concrete.Splice.Input.siteQuotientEnvironment_eq input
     (outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site))
     outputLeaf.wiresExact outputEnv fallback (sourceContext.get index)
@@ -89,9 +91,9 @@ theorem siteSourceWireMap_environment
 /-- A target local witness at the splice site induces the unique quotient-host
 local witness with the same concrete wire values. -/
 theorem site_sourceLocalEnvironment_exists
-    (input : Splice.Input )
-    (sourceOuter : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (input : Concrete.Splice.Input )
+    (sourceOuter : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetOuter : Concrete.Elaboration.WireContext input.plugLayout.plugRaw)
     (sourceExact : (sourceOuter.extend input.site).Exact input.site)
     (targetExact : (targetOuter.extend
       (input.plugLayout.frameRegion input.site)).Exact
@@ -102,43 +104,43 @@ theorem site_sourceLocalEnvironment_exists
     (sourceOuterEnv : Fin sourceOuter.length → D)
     (targetOuterEnv : Fin targetOuter.length → D)
     (outerAgrees :
-      (ConcreteElaboration.ContextIndexRelation.forwardMap outerMap)
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap outerMap)
         |>.EnvironmentsAgree sourceOuterEnv targetOuterEnv)
-    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+    (targetLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site)).length → D)
     (fallback : D) :
     let sourceContext := sourceOuter.extend input.site
     let targetContext := targetOuter.extend
       (input.plugLayout.frameRegion input.site)
-    let targetEnv := ConcreteElaboration.extendedEnvironment targetOuter
+    let targetEnv := Concrete.Elaboration.extendedEnvironment targetOuter
       (input.plugLayout.frameRegion input.site) targetOuterEnv targetLocal
-    let quotientValues := Splice.Input.siteQuotientEnvironment input
+    let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment input
       targetContext targetExact targetEnv fallback
-    ∃ sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    ∃ sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
         input.coalesceFrameRaw input.site).length → D,
-      ConcreteElaboration.extendedEnvironment sourceOuter input.site
+      Concrete.Elaboration.extendedEnvironment sourceOuter input.site
           sourceOuterEnv sourceLocal =
         fun index => quotientValues (sourceContext.get index) := by
   dsimp only
   let sourceContext := sourceOuter.extend input.site
   let targetContext := targetOuter.extend
     (input.plugLayout.frameRegion input.site)
-  let targetEnv := ConcreteElaboration.extendedEnvironment targetOuter
+  let targetEnv := Concrete.Elaboration.extendedEnvironment targetOuter
     (input.plugLayout.frameRegion input.site) targetOuterEnv targetLocal
-  let quotientValues := Splice.Input.siteQuotientEnvironment input
+  let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment input
     targetContext targetExact targetEnv fallback
-  let sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+  let sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       input.coalesceFrameRaw input.site).length → D := fun index =>
     quotientValues
-      ((ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+      ((Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
         input.site).get index)
   refine ⟨sourceLocal, ?_⟩
   funext index
   let split := Fin.cast
-    (ConcreteElaboration.WireContext.length_extend sourceOuter input.site) index
+    (Concrete.Elaboration.WireContext.length_extend sourceOuter input.site) index
   have recover : Fin.cast
-      (ConcreteElaboration.WireContext.length_extend sourceOuter
+      (Concrete.Elaboration.WireContext.length_extend sourceOuter
         input.site).symm split = index := by
     apply Fin.ext
     rfl
@@ -147,17 +149,17 @@ theorem site_sourceLocalEnvironment_exists
   · have outerEq : sourceOuterEnv = targetOuterEnv ∘ outerMap := by
       simpa using outerAgrees
     let targetIndex : Fin targetContext.length := Fin.cast
-      (ConcreteElaboration.WireContext.length_extend targetOuter
+      (Concrete.Elaboration.WireContext.length_extend targetOuter
         (input.plugLayout.frameRegion input.site)).symm
       (Fin.castAdd
-        (ConcreteElaboration.exactScopeWires input.plugLayout.plugRaw
+        (Concrete.Elaboration.exactScopeWires input.plugLayout.plugRaw
           (input.plugLayout.frameRegion input.site)).length (outerMap outer))
     have targetWire : targetContext.get targetIndex =
         input.plugLayout.frameWire (sourceOuter.get outer) := by
       calc
         targetContext.get targetIndex = targetOuter.get (outerMap outer) := by
           simpa [targetContext, targetIndex] using
-            (Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_outer
+            (Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_outer
               targetOuter (input.plugLayout.frameRegion input.site)
               (outerMap outer))
         _ = input.plugLayout.frameWire (sourceOuter.get outer) := outerSpec outer
@@ -169,55 +171,55 @@ theorem site_sourceLocalEnvironment_exists
         (sourceOuter.get outer)).2
         ((sourceExact.mem_iff (sourceOuter.get outer)).1 (by
           exact List.mem_append_left _ (List.get_mem sourceOuter outer)))
-    have quotientEq := Splice.Input.siteQuotientEnvironment_eq input
+    have quotientEq := Concrete.Splice.Input.siteQuotientEnvironment_eq input
       targetContext targetExact targetEnv fallback (sourceOuter.get outer)
       visible targetIndex targetWire
     have targetValue : targetEnv targetIndex =
         targetOuterEnv (outerMap outer) := by
       simp [targetEnv, targetIndex, targetContext,
-        ConcreteElaboration.extendedEnvironment, extendWireEnv]
+        Concrete.Elaboration.extendedEnvironment, extendWireEnv]
     have main : sourceOuterEnv outer =
         quotientValues (sourceOuter.get outer) := by
       rw [outerEq]
       exact targetValue.symm.trans quotientEq.symm
-    simp only [ConcreteElaboration.extendedEnvironment,
+    simp only [Concrete.Elaboration.extendedEnvironment,
       Function.comp_apply, extendWireEnv]
     have splitCancel :
         Fin.cast
-            (ConcreteElaboration.WireContext.length_extend sourceOuter
+            (Concrete.Elaboration.WireContext.length_extend sourceOuter
               input.site)
             (Fin.cast
-              (ConcreteElaboration.WireContext.length_extend sourceOuter
+              (Concrete.Elaboration.WireContext.length_extend sourceOuter
                 input.site).symm
               (Fin.castAdd
-                (ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+                (Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
                   input.site).length outer)) =
           Fin.castAdd
-            (ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+            (Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
               input.site).length outer := by
       apply Fin.ext
       rfl
     rw [splitCancel, Fin.addCases_left]
-    rw [Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_outer]
+    rw [Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_outer]
     exact main
   · have main : sourceLocal localIndex = quotientValues
-        ((ConcreteElaboration.exactScopeWires input.coalesceFrameRaw
+        ((Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
           input.site).get localIndex) := rfl
-    simp only [ConcreteElaboration.extendedEnvironment,
+    simp only [Concrete.Elaboration.extendedEnvironment,
       Function.comp_apply, extendWireEnv]
     have splitCancel :
         Fin.cast
-            (ConcreteElaboration.WireContext.length_extend sourceOuter
+            (Concrete.Elaboration.WireContext.length_extend sourceOuter
               input.site)
             (Fin.cast
-              (ConcreteElaboration.WireContext.length_extend sourceOuter
+              (Concrete.Elaboration.WireContext.length_extend sourceOuter
                 input.site).symm
               (Fin.natAdd sourceOuter.length localIndex)) =
           Fin.natAdd sourceOuter.length localIndex := by
       apply Fin.ext
       rfl
     rw [splitCancel, Fin.addCases_right]
-    rw [Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_local]
+    rw [Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_local]
     exact main
 
 /-- Semantic simulation for one executor splice under the single
@@ -225,15 +227,15 @@ comprehension relation selected for the complete trace.  Unlike the ordinary
 region simulation interface, this predicate records that the target lexical
 environment interprets the moving bubble by that fixed relation. -/
 def FixedAdvanceRegionSimulation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -247,14 +249,14 @@ def FixedAdvanceRegionSimulation
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
     (parameterValues : Fin attachments.length → model.Carrier)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (sourceFuel targetFuel : Nat)
     (region : Fin state.diagram.val.regionCount) : Prop :=
   ∀ {sourceRels targetRels : RelCtx}
-    (sourceOuter : ConcreteElaboration.WireContext
+    (sourceOuter : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext
+    (targetOuter : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw)
     (sourceExact : (sourceOuter.extend region).Exact region)
@@ -263,20 +265,20 @@ def FixedAdvanceRegionSimulation
         site arguments).plugLayout.frameRegion region)).Exact
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion region))
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw targetRels)
     (sourceCover : sourceBinders.Covers region)
     (targetCover : targetBinders.Covers
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion region))
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceBinders region)
-    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (targetEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw targetBinders
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -308,7 +310,7 @@ def FixedAdvanceRegionSimulation
     ∀ (sourceEnv : Fin sourceOuter.length → model.Carrier)
       (targetEnv : Fin targetOuter.length → model.Carrier)
       (targetRelEnv : RelEnv model.Carrier targetRels),
-      (ConcreteElaboration.ContextIndexRelation.forwardMap outerMap)
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap outerMap)
           |>.EnvironmentsAgree sourceEnv targetEnv →
       FixedRelationAt payload
         (advanceInstantiationState comprehension attachments binders payload
@@ -330,15 +332,15 @@ def FixedAdvanceRegionSimulation
 /-- Frame binder transport reflects the target's fixed moving-bubble
 interpretation to the quotient source context. -/
 theorem fixedRelationAt_pullback_frame
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -348,13 +350,13 @@ theorem fixedRelationAt_pullback_frame
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (region : Fin state.diagram.val.regionCount)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw targetRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceBinders region)
     (relationMap : RelationRenaming sourceRels targetRels)
@@ -387,15 +389,15 @@ theorem fixedRelationAt_pullback_frame
 /-- The same frame transport reflects the complete indexed proxy-relation
 family to the quotient source context. -/
 theorem proxyRelationsAt_pullback_frame
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -405,13 +407,13 @@ theorem proxyRelationsAt_pullback_frame
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (region : Fin state.diagram.val.regionCount)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw targetRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceBinders region)
     (relationMap : RelationRenaming sourceRels targetRels)
@@ -444,15 +446,15 @@ theorem proxyRelationsAt_pullback_frame
 /-- Any focused output compiler presentation reflects the target proxy family
 to the canonical quotient-host seam presentation used by terminal extraction. -/
 theorem proxyRelationsAt_host_pullback
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -464,13 +466,13 @@ theorem proxyRelationsAt_host_pullback
     {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
-    (hostLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (hostLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw site hostWitness)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw
       ((instantiateSpliceInput comprehension attachments binders payload state

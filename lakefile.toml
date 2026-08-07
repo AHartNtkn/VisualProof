@@ -7,4 +7,4 @@ name = "VisualProof"
 
 [[lean_exe]]
 name = "visualproof_step_tags"
-root = "VisualProof.Correspondence.StepTagsMain"
+root = "VisualProof.Concrete.StepTagsMain"

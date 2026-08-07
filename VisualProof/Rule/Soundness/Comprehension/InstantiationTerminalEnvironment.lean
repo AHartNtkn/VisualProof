@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationProxyRelations
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -11,18 +13,18 @@ namespace InstantiationSemantic
 /-- The terminal body's canonical boundary-class valuation is exactly the
 valuation read by the authoritative splice seam at each inherited wire. -/
 theorem patternTerminalInheritedEnvironment_seam
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (hadmissible : input.Admissible)
-    (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
+    (host : Concrete.Splice.SiteView (input.coalesceFrame hadmissible) input.site)
     {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
-    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (patternLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (env : Fin (outputLeaf.inheritedWires.extend
@@ -31,10 +33,10 @@ theorem patternTerminalInheritedEnvironment_seam
     (index : Fin patternLeaf.inheritedWires.length) :
     let context := outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)
-    let values := Splice.Input.siteQuotientEnvironment input context
+    let values := Concrete.Splice.Input.siteQuotientEnvironment input context
       outputLeaf.wiresExact env fallback
     let assignment := input.patternAttachmentAssignment.map values
-    let external := Splice.Input.PlugLayout.exposedWireIndex input
+    let external := Concrete.Splice.Input.PlugLayout.exposedWireIndex input
       (patternLeaf.inheritedWires.get index)
       ((input.plugLayout.terminalBody_inherited_mem_iff_exposed patternWitness patternLeaf
         hnonempty (patternLeaf.inheritedWires.get index)).1
@@ -43,15 +45,15 @@ theorem patternTerminalInheritedEnvironment_seam
       env (input.plugLayout.patternSeamWireMapOfNonempty hadmissible host patternWitness
         patternLeaf outputWitness outputLeaf hnonempty
         (Fin.cast
-          (ConcreteElaboration.WireContext.length_extend
+          (Concrete.Elaboration.WireContext.length_extend
             patternLeaf.inheritedWires input.binderSpine.bodyContainer).symm
           (Fin.castAdd
-            (ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+            (Concrete.Elaboration.exactScopeWires input.pattern.val.diagram
               input.binderSpine.bodyContainer).length index))) := by
   dsimp only
   let context := outputLeaf.inheritedWires.extend
     (input.plugLayout.frameRegion input.site)
-  let external := Splice.Input.PlugLayout.exposedWireIndex input
+  let external := Concrete.Splice.Input.PlugLayout.exposedWireIndex input
     (patternLeaf.inheritedWires.get index)
     ((input.plugLayout.terminalBody_inherited_mem_iff_exposed patternWitness patternLeaf
       hnonempty (patternLeaf.inheritedWires.get index)).1
@@ -59,10 +61,10 @@ theorem patternTerminalInheritedEnvironment_seam
   let sourceIndex : Fin (patternLeaf.inheritedWires.extend
       input.binderSpine.bodyContainer).length :=
     Fin.cast
-      (ConcreteElaboration.WireContext.length_extend
+      (Concrete.Elaboration.WireContext.length_extend
         patternLeaf.inheritedWires input.binderSpine.bodyContainer).symm
       (Fin.castAdd
-        (ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+        (Concrete.Elaboration.exactScopeWires input.pattern.val.diagram
           input.binderSpine.bodyContainer).length index)
   let targetIndex := input.plugLayout.patternSeamWireMapOfNonempty hadmissible host
     patternWitness patternLeaf outputWitness outputLeaf hnonempty sourceIndex
@@ -70,7 +72,7 @@ theorem patternTerminalInheritedEnvironment_seam
       (patternLeaf.inheritedWires.extend
         input.binderSpine.bodyContainer).get sourceIndex =
       patternLeaf.inheritedWires.get index := by
-    exact Splice.Input.PlugLayout.ConcreteElaboration.WireContext.extend_get_outer
+    exact Concrete.Splice.Input.PlugLayout.Elaboration.WireContext.extend_get_outer
       patternLeaf.inheritedWires input.binderSpine.bodyContainer index
   have targetWire : context.get targetIndex =
       input.plugLayout.frameWire (input.plugLayout.exposedAttachment external) := by
@@ -79,7 +81,7 @@ theorem patternTerminalInheritedEnvironment_seam
     rw [sourceWire]
     exact input.plugLayout.patternPlugWire_terminal_inherited patternWitness patternLeaf
       hnonempty index
-  have valueEq := Splice.Input.siteQuotientEnvironment_eq input context
+  have valueEq := Concrete.Splice.Input.siteQuotientEnvironment_eq input context
     outputLeaf.wiresExact env fallback (input.plugLayout.exposedAttachment external)
     ((input.plugLayout.frameWire_visible_at_region_iff input.site
       (input.plugLayout.exposedAttachment external)).2
@@ -87,24 +89,24 @@ theorem patternTerminalInheritedEnvironment_seam
           (input.plugLayout.exposedPosition external)))
     targetIndex targetWire
   simpa [context, external, sourceIndex, targetIndex,
-    Splice.Input.patternAttachmentAssignment, BoundaryAssignment.map,
-    Splice.Input.PlugLayout.exposedAttachment, Function.comp_def] using valueEq
+    Concrete.Splice.Input.patternAttachmentAssignment, BoundaryAssignment.map,
+    Concrete.Splice.Input.PlugLayout.exposedAttachment, Function.comp_def] using valueEq
 
 /-- Splitting the terminal compiler context into its inherited and local parts
 recovers exactly the complete environment transported through the splice seam. -/
 theorem patternTerminalExtendedEnvironment_seam
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (hadmissible : input.Admissible)
-    (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
+    (host : Concrete.Splice.SiteView (input.coalesceFrame hadmissible) input.site)
     {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
-    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (patternLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (env : Fin (outputLeaf.inheritedWires.extend
@@ -112,34 +114,34 @@ theorem patternTerminalExtendedEnvironment_seam
     (fallback : D) :
     let context := outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)
-    let values := Splice.Input.siteQuotientEnvironment input context
+    let values := Concrete.Splice.Input.siteQuotientEnvironment input context
       outputLeaf.wiresExact env fallback
     let assignment := input.patternAttachmentAssignment.map values
     let inheritedEnv : Fin patternLeaf.inheritedWires.length → D := fun index =>
-      assignment.classes (Splice.Input.PlugLayout.exposedWireIndex input
+      assignment.classes (Concrete.Splice.Input.PlugLayout.exposedWireIndex input
         (patternLeaf.inheritedWires.get index)
         ((input.plugLayout.terminalBody_inherited_mem_iff_exposed patternWitness
           patternLeaf hnonempty (patternLeaf.inheritedWires.get index)).1
             (List.get_mem _ index)))
-    let localEnv : Fin (ConcreteElaboration.exactScopeWires
+    let localEnv : Fin (Concrete.Elaboration.exactScopeWires
         input.pattern.val.diagram input.binderSpine.bodyContainer).length → D :=
       fun index =>
         env (input.plugLayout.patternSeamWireMapOfNonempty hadmissible host
           patternWitness patternLeaf outputWitness outputLeaf hnonempty
           (Fin.cast
-            (ConcreteElaboration.WireContext.length_extend
+            (Concrete.Elaboration.WireContext.length_extend
               patternLeaf.inheritedWires input.binderSpine.bodyContainer).symm
             (Fin.natAdd patternLeaf.inheritedWires.length index)))
-    ConcreteElaboration.extendedEnvironment patternLeaf.inheritedWires
+    Concrete.Elaboration.extendedEnvironment patternLeaf.inheritedWires
         input.binderSpine.bodyContainer inheritedEnv localEnv =
       env ∘ input.plugLayout.patternSeamWireMapOfNonempty hadmissible host
         patternWitness patternLeaf outputWitness outputLeaf hnonempty := by
   dsimp only
   funext sourceIndex
-  let lengthEq := ConcreteElaboration.WireContext.length_extend
+  let lengthEq := Concrete.Elaboration.WireContext.length_extend
     patternLeaf.inheritedWires input.binderSpine.bodyContainer
   let split : Fin (patternLeaf.inheritedWires.length +
-      (ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+      (Concrete.Elaboration.exactScopeWires input.pattern.val.diagram
         input.binderSpine.bodyContainer).length) := Fin.cast lengthEq sourceIndex
   have recover : Fin.cast lengthEq.symm split = sourceIndex := by
     apply Fin.ext
@@ -149,14 +151,14 @@ theorem patternTerminalExtendedEnvironment_seam
   · have castRecover : Fin.cast lengthEq
         (Fin.cast lengthEq.symm
           (Fin.castAdd
-            (ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+            (Concrete.Elaboration.exactScopeWires input.pattern.val.diagram
               input.binderSpine.bodyContainer).length inherited)) =
         Fin.castAdd
-          (ConcreteElaboration.exactScopeWires input.pattern.val.diagram
+          (Concrete.Elaboration.exactScopeWires input.pattern.val.diagram
             input.binderSpine.bodyContainer).length inherited := by
       apply Fin.ext
       rfl
-    simp only [ConcreteElaboration.extendedEnvironment, Function.comp_apply]
+    simp only [Concrete.Elaboration.extendedEnvironment, Function.comp_apply]
     rw [castRecover]
     simp only [extendWireEnv, Fin.addCases_left]
     exact patternTerminalInheritedEnvironment_seam input hadmissible host
@@ -168,25 +170,25 @@ theorem patternTerminalExtendedEnvironment_seam
         Fin.natAdd patternLeaf.inheritedWires.length localIndex := by
       apply Fin.ext
       rfl
-    simp only [ConcreteElaboration.extendedEnvironment, Function.comp_apply]
+    simp only [Concrete.Elaboration.extendedEnvironment, Function.comp_apply]
     rw [castRecover]
     simp [extendWireEnv]
 
 /-- A denoting post-splice compiler leaf therefore supplies the native terminal
 body under the canonical ordered boundary assignment. -/
 theorem patternTerminalRegion_denotes_of_output
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (hadmissible : input.Admissible)
-    (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
+    (host : Concrete.Splice.SiteView (input.coalesceFrame hadmissible) input.site)
     {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
-    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (patternLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
@@ -197,12 +199,12 @@ theorem patternTerminalRegion_denotes_of_output
     (denotes : denoteItemSeq model  env relEnv outputLeaf.items) :
     let context := outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)
-    let values := Splice.Input.siteQuotientEnvironment input context
+    let values := Concrete.Splice.Input.siteQuotientEnvironment input context
       outputLeaf.wiresExact env fallback
     let assignment := input.patternAttachmentAssignment.map values
     let inheritedEnv : Fin patternLeaf.inheritedWires.length → model.Carrier :=
       fun index =>
-        assignment.classes (Splice.Input.PlugLayout.exposedWireIndex input
+        assignment.classes (Concrete.Splice.Input.PlugLayout.exposedWireIndex input
           (patternLeaf.inheritedWires.get index)
           ((input.plugLayout.terminalBody_inherited_mem_iff_exposed patternWitness
             patternLeaf hnonempty (patternLeaf.inheritedWires.get index)).1
@@ -217,29 +219,29 @@ theorem patternTerminalRegion_denotes_of_output
             hnonempty relation)
     denoteRegion model  inheritedEnv
       (RelEnv.pullback terminalRelations relEnv)
-      (ConcreteElaboration.finishRegion input.pattern.val.diagram
+      (Concrete.Elaboration.finishRegion input.pattern.val.diagram
         patternLeaf.inheritedWires input.binderSpine.bodyContainer
         patternLeaf.items) := by
   dsimp only
   let context := outputLeaf.inheritedWires.extend
     (input.plugLayout.frameRegion input.site)
-  let values := Splice.Input.siteQuotientEnvironment input context
+  let values := Concrete.Splice.Input.siteQuotientEnvironment input context
     outputLeaf.wiresExact env fallback
   let assignment := input.patternAttachmentAssignment.map values
   let inheritedEnv : Fin patternLeaf.inheritedWires.length → model.Carrier :=
     fun index =>
-      assignment.classes (Splice.Input.PlugLayout.exposedWireIndex input
+      assignment.classes (Concrete.Splice.Input.PlugLayout.exposedWireIndex input
         (patternLeaf.inheritedWires.get index)
         ((input.plugLayout.terminalBody_inherited_mem_iff_exposed patternWitness
           patternLeaf hnonempty (patternLeaf.inheritedWires.get index)).1
             (List.get_mem _ index)))
-  let localEnv : Fin (ConcreteElaboration.exactScopeWires
+  let localEnv : Fin (Concrete.Elaboration.exactScopeWires
       input.pattern.val.diagram input.binderSpine.bodyContainer).length →
       model.Carrier := fun index =>
     env (input.plugLayout.patternSeamWireMapOfNonempty hadmissible host
       patternWitness patternLeaf outputWitness outputLeaf hnonempty
       (Fin.cast
-        (ConcreteElaboration.WireContext.length_extend
+        (Concrete.Elaboration.WireContext.length_extend
           patternLeaf.inheritedWires input.binderSpine.bodyContainer).symm
         (Fin.natAdd patternLeaf.inheritedWires.length index)))
   let terminalRelations : RelationRenaming
@@ -258,18 +260,18 @@ theorem patternTerminalRegion_denotes_of_output
         patternWitness patternLeaf outputWitness outputLeaf hnonempty)
       (RelEnv.pullback terminalRelations relEnv) patternLeaf.items := by
     simpa [terminalRelations,
-      Splice.Input.PlugLayout.patternSeamWireMapOfNonempty,
+      Concrete.Splice.Input.PlugLayout.patternSeamWireMapOfNonempty,
       Function.comp_def] using nativeItems
   have environmentEq := patternTerminalExtendedEnvironment_seam input
     hadmissible host patternWitness patternLeaf outputWitness outputLeaf hnonempty
     env fallback
-  change ConcreteElaboration.extendedEnvironment patternLeaf.inheritedWires
+  change Concrete.Elaboration.extendedEnvironment patternLeaf.inheritedWires
       input.binderSpine.bodyContainer inheritedEnv localEnv =
     env ∘ input.plugLayout.patternSeamWireMapOfNonempty hadmissible host
       patternWitness patternLeaf outputWitness outputLeaf hnonempty
     at environmentEq
   rw [← environmentEq] at seamItems
-  unfold ConcreteElaboration.finishRegion
+  unfold Concrete.Elaboration.finishRegion
   simp only [denoteRegion_mk]
   refine ⟨localEnv, ?_⟩
   rw [ItemSeq.castWiresEq_eq_renameWires, denoteItemSeq_renameWires]

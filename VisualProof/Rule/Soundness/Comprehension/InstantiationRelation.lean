@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationDropWellFormed
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -13,21 +15,21 @@ The witness is intentionally abstract here: the receipt-driven terminal-body
 simulation constructs the authoritative witness, including every external proxy
 binder, while this invariant records how the compiler sees it. -/
 def FixedRelationAt
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     {model : Model}
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels) : Prop :=
   ∀ relation : RelVar rels payload.arity,
     binderContext state.bubble = some ⟨payload.arity, relation⟩ →
@@ -36,21 +38,21 @@ def FixedRelationAt
 /-- Pushing the selected existential witness establishes the fixed-relation
 invariant immediately inside the quantified bubble. -/
 theorem fixedRelationAt_push
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     {model : Model}
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels) :
     FixedRelationAt payload state relationValue
       (binderContext.push state.bubble payload.arity)
@@ -59,12 +61,12 @@ theorem fixedRelationAt_push
   have hhead :
       (binderContext.push state.bubble payload.arity) state.bubble =
         some ⟨payload.arity,
-          ConcreteElaboration.BinderContext.head payload.arity⟩ :=
-    ConcreteElaboration.BinderContext.push_self binderContext state.bubble
+          Concrete.Elaboration.BinderContext.head payload.arity⟩ :=
+    Concrete.Elaboration.BinderContext.push_self binderContext state.bubble
       payload.arity
   rw [hhead] at hlookup
   have relationEq : relation =
-      ConcreteElaboration.BinderContext.head payload.arity := by
+      Concrete.Elaboration.BinderContext.head payload.arity := by
     cases Option.some.inj hlookup
     rfl
   subst relation
@@ -73,21 +75,21 @@ theorem fixedRelationAt_push
 /-- Descending through any other relation bubble preserves the selected
 quantified relation; the new head relation is lexically independent. -/
 theorem fixedRelationAt_push_other
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     {model : Model}
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
     (fixed : FixedRelationAt payload state relationValue binderContext relEnv)
     (child : Fin state.diagram.val.regionCount)
@@ -97,7 +99,7 @@ theorem fixedRelationAt_push_other
     FixedRelationAt payload state relationValue
       (binderContext.push child childArity) (childRelation, relEnv) := by
   intro relation hlookup
-  rw [ConcreteElaboration.BinderContext.push_other binderContext childArity hne]
+  rw [Concrete.Elaboration.BinderContext.push_other binderContext childArity hne]
     at hlookup
   cases hold : binderContext state.bubble with
   | none => simp [hold] at hlookup
@@ -108,27 +110,27 @@ theorem fixedRelationAt_push_other
         exact congrArg Sigma.fst (Option.some.inj hlookup)
       subst ownedArity
       have relationEq : relation =
-          ConcreteElaboration.BinderContext.liftVar childArity ownedRelation := by
+          Concrete.Elaboration.BinderContext.liftVar childArity ownedRelation := by
         have hsigma := Option.some.inj hlookup
         cases hsigma
         rfl
       subst relation
       simpa [RelEnv.lookup,
-        ConcreteElaboration.BinderContext.liftVar] using
+        Concrete.Elaboration.BinderContext.liftVar] using
           fixed ownedRelation hold
 
 /-- Under the fixed interpretation, the executor-owned atom denotes exactly
 the chosen relation witness at its receipt-recorded argument wires. -/
 theorem atom_iff_fixedRelation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
@@ -136,7 +138,7 @@ theorem atom_iff_fixedRelation
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
     (fixed : FixedRelationAt payload state relationValue binderContext relEnv)
     (relation : RelVar rels payload.arity)
@@ -148,15 +150,15 @@ theorem atom_iff_fixedRelation
 
 /-- Pointwise compiler form of `atom_iff_fixedRelation`. -/
 theorem atom_item_iff_fixedRelation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (arguments : Fin payload.arity → Fin state.diagram.val.wireCount)
@@ -164,7 +166,7 @@ theorem atom_item_iff_fixedRelation
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
     (fixed : FixedRelationAt payload state relationValue binderContext relEnv)
     (relation : RelVar rels payload.arity)

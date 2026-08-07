@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Iteration.SameSite
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -33,23 +35,23 @@ private theorem filterMap_nodup_of_some_injective
           · exact ih htail
 
 private theorem selection_anchor_not_selected
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val) :
     ¬ selection.val.SelectsRegion selection.val.anchor := by
   rintro ⟨root, hroot, hencloses⟩
-  exact (ConcreteElaboration.checked_direct_child_not_encloses_parent
+  exact (Concrete.Elaboration.checked_direct_child_not_encloses_parent
     input.property (selection.property.childRoots_direct root hroot))
     hencloses
 
 def deiterationDomains
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val) :
     FrameDomains input.val selection := {}
 
 theorem deiterationJustifierAnchor_not_selected
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     witness.justifier.val.anchor ∉ selection.selectedRegions := by
   intro selected
   have selects : selection.val.SelectsRegion witness.justifier.val.anchor :=
@@ -59,18 +61,18 @@ theorem deiterationJustifierAnchor_not_selected
   exact selection_anchor_not_selected input selection selectsAnchor
 
 theorem deiterationJustifierAnchor_survives
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationDomains input selection).regions.survives
         witness.justifier.val.anchor = true := by
   apply ((deiterationDomains input selection).region_survives_iff _).2
   exact Or.inr (deiterationJustifierAnchor_not_selected input selection witness)
 
 theorem deiterationJustifierRegion_survives
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     {region : Fin input.val.regionCount}
     (selected : region ∈ witness.justifier.selectedRegions) :
     (deiterationDomains input selection).regions.survives region = true := by
@@ -78,9 +80,9 @@ theorem deiterationJustifierRegion_survives
   exact Or.inr (witness.regions_disjoint region selected)
 
 theorem deiterationJustifierNode_survives
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     {node : Fin input.val.nodeCount}
     (selected : node ∈ witness.justifier.selectedNodes) :
     (deiterationDomains input selection).nodes.survives node = true := by
@@ -88,9 +90,9 @@ theorem deiterationJustifierNode_survives
   exact witness.nodes_disjoint node selected
 
 theorem deiterationJustifierWire_survives
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     {wire : Fin input.val.wireCount}
     (selected : wire ∈ witness.justifier.internalWires) :
     (deiterationDomains input selection).wires.survives wire = true := by
@@ -98,9 +100,9 @@ theorem deiterationJustifierWire_survives
   exact witness.internalWires_disjoint wire selected
 
 def deiterationRetainedRequest
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     SelectionRequest
       (input.val.removeRaw selection (deiterationDomains input selection)) where
   anchor := (deiterationDomains input selection).regions.index
@@ -114,9 +116,9 @@ def deiterationRetainedRequest
     (deiterationDomains input selection).wires.index?
 
 private theorem deiterationRetainedRequest_childRoot_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     {mapped : Fin (deiterationDomains input selection).regions.count}
     (member : mapped ∈
       (deiterationRetainedRequest input selection witness).childRoots) :
@@ -130,9 +132,9 @@ private theorem deiterationRetainedRequest_childRoot_origin
   exact originalMember
 
 private theorem deiterationRetainedRequest_directNode_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     {mapped : Fin (deiterationDomains input selection).nodes.count}
     (member : mapped ∈
       (deiterationRetainedRequest input selection witness).directNodes) :
@@ -146,9 +148,9 @@ private theorem deiterationRetainedRequest_directNode_origin
   exact originalMember
 
 private theorem deiterationRetainedRequest_explicitWire_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     {mapped : Fin (deiterationDomains input selection).wires.count}
     (member : mapped ∈
       (deiterationRetainedRequest input selection witness).explicitWires) :
@@ -171,7 +173,7 @@ private theorem survivorIndex_eq_of_eq
   rfl
 
 private theorem removeRaw_parent_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (domains : FrameDomains input.val selection)
     {child parent : domains.regions.Carrier}
@@ -217,7 +219,7 @@ private theorem removeRaw_parent_origin
       simpa [CRegion.parent?] using congrArg some parentEq
 
 private theorem removeRaw_climb_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (domains : FrameDomains input.val selection)
     {steps : Nat} {start finish : domains.regions.Carrier}
@@ -231,7 +233,7 @@ private theorem removeRaw_climb_origin
       subst finish
       rfl
   | succ steps ih =>
-      rw [ConcreteDiagram.climb] at hclimb
+      rw [Concrete.Diagram.climb] at hclimb
       cases hparent :
           ((input.val.removeRaw selection domains).regions start).parent? with
       | none =>
@@ -241,11 +243,11 @@ private theorem removeRaw_climb_origin
           rw [hparent] at hclimb
           have originalParent := removeRaw_parent_origin input selection domains
             hparent
-          rw [ConcreteDiagram.climb, originalParent]
+          rw [Concrete.Diagram.climb, originalParent]
           exact ih hclimb
 
 theorem removeRaw_encloses_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (domains : FrameDomains input.val selection)
     {ancestor descendant : domains.regions.Carrier}
@@ -286,7 +288,7 @@ private theorem reindexNode_region
           cases hreindex
           rfl
 private theorem deiteration_removeRaw_node_region
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (domains : FrameDomains input.val selection)
     (node : Fin input.val.nodeCount)
@@ -295,7 +297,7 @@ private theorem deiteration_removeRaw_node_region
         (domains.nodes.index node survives)).region =
       domains.regions.index (input.val.nodes node).region
         (domains.nodeRegion_survives survives) := by
-  have reindexed := ConcreteDiagram.removeRaw_node_reindexed input selection
+  have reindexed := Concrete.Diagram.removeRaw_node_reindexed input selection
     domains (domains.nodes.index node survives)
   rw [domains.nodes.origin_index node survives] at reindexed
   exact reindexNode_region domains.regions (input.val.nodes node)
@@ -304,9 +306,9 @@ private theorem deiteration_removeRaw_node_region
     (domains.nodeRegion_survives survives) reindexed
 
 private theorem deiterationRetainedRequest_selectsNode_of_original
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     {node : Fin input.val.nodeCount}
     (selected : witness.justifier.val.SelectsNode node) :
     (deiterationRetainedRequest input selection witness).SelectsNode
@@ -325,7 +327,7 @@ private theorem deiterationRetainedRequest_selectsNode_of_original
     let domains := deiterationDomains input selection
     have rootSelected : root ∈ witness.justifier.selectedRegions :=
       (witness.justifier.mem_selectedRegions root).2
-        ⟨root, rootMember, ConcreteDiagram.Encloses.refl input.val root⟩
+        ⟨root, rootMember, Concrete.Diagram.Encloses.refl input.val root⟩
     have ownerSelected : (input.val.nodes node).region ∈
         witness.justifier.selectedRegions :=
       (witness.justifier.mem_selectedRegions _).2
@@ -338,16 +340,16 @@ private theorem deiterationRetainedRequest_selectsNode_of_original
         (deiterationJustifierRegion_survives input selection witness
           rootSelected)⟩
     · rw [deiteration_removeRaw_node_region]
-      exact ConcreteDiagram.removeRaw_encloses input selection domains
+      exact Concrete.Diagram.removeRaw_encloses input selection domains
         (deiterationJustifierRegion_survives input selection witness
           rootSelected)
         (deiterationJustifierRegion_survives input selection witness
           ownerSelected) rootEncloses
 
 theorem deiterationRetainedRequest_valid
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationRetainedRequest input selection witness).Valid := by
   let domains := deiterationDomains input selection
   let request := deiterationRetainedRequest input selection witness
@@ -374,10 +376,10 @@ theorem deiterationRetainedRequest_valid
         witness.justifier.selectedRegions :=
       (witness.justifier.mem_selectedRegions original).2
         ⟨original, originalMember,
-          ConcreteDiagram.Encloses.refl input.val original⟩
+          Concrete.Diagram.Encloses.refl input.val original⟩
     have parent := witness.justifier.property.childRoots_direct original
       originalMember
-    have removedParent := ConcreteDiagram.removeRaw_parent input selection
+    have removedParent := Concrete.Diagram.removeRaw_parent input selection
       domains (deiterationJustifierRegion_survives input selection witness
         originalSelected) parent
     have originalIndex : domains.regions.index original
@@ -415,12 +417,12 @@ theorem deiterationRetainedRequest_valid
     rw [← mappedEq]
     cases hnode : input.val.nodes original with
     | identity region arity =>
-        rw [ConcreteDiagram.removeRaw_identity input selection domains
+        rw [Concrete.Diagram.removeRaw_identity input selection domains
           nodeSurvives hnode]
         simpa [hnode, request, deiterationRetainedRequest, domains] using
           ownerIndexEq
     | atom region binder =>
-        rw [ConcreteDiagram.removeRaw_atom input selection domains
+        rw [Concrete.Diagram.removeRaw_atom input selection domains
           nodeSurvives hnode]
         simpa [hnode, request, deiterationRetainedRequest, domains] using
           ownerIndexEq
@@ -438,7 +440,7 @@ theorem deiterationRetainedRequest_valid
       witness.justifier.explicitWire_mem_internalWires originalMember
     have scope := witness.justifier.property.explicitWires_at_anchor original
       originalMember
-    rw [ConcreteDiagram.removeRaw_wire_scope]
+    rw [Concrete.Diagram.removeRaw_wire_scope]
     exact survivorIndex_eq_of_eq domains.regions scope
       (domains.wireScope_survives (by
         simpa [original] using domains.wires.origin_survives mapped))
@@ -448,12 +450,12 @@ theorem deiterationRetainedRequest_valid
       selection witness member
     let originalWire := domains.wires.origin mapped
     obtain ⟨originalEndpoint, originalEndpointMember, endpointMap⟩ :=
-      (ConcreteDiagram.mem_removeRaw_wire_endpoints_iff input selection domains
+      (Concrete.Diagram.mem_removeRaw_wire_endpoints_iff input selection domains
         mapped endpoint).1 endpointMember
     have originalSelected :=
       witness.justifier.property.explicitWireEndpoints_selected originalWire
         originalMember originalEndpoint originalEndpointMember
-    have endpointOrigin := ConcreteDiagram.reindexEndpoint?_origin domains
+    have endpointOrigin := Concrete.Diagram.reindexEndpoint?_origin domains
       endpointMap
     have nodeEq : originalEndpoint.node = domains.nodes.origin endpoint.node := by
       simpa using congrArg CEndpoint.node endpointOrigin
@@ -468,18 +470,18 @@ theorem deiterationRetainedRequest_valid
       witness originalSelected
 
 def deiterationRetainedSelection
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     CheckedSelection
       (input.val.removeRaw selection (deiterationDomains input selection)) :=
   ⟨deiterationRetainedRequest input selection witness,
     deiterationRetainedRequest_valid input selection witness⟩
 
 theorem deiterationRetained_selectsRegion_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (region : (deiterationDomains input selection).regions.Carrier) :
     (deiterationRetainedRequest input selection witness).SelectsRegion region ↔
       witness.justifier.val.SelectsRegion
@@ -494,21 +496,21 @@ theorem deiterationRetained_selectsRegion_iff
   · rintro ⟨root, rootMember, encloses⟩
     have rootSelected : root ∈ witness.justifier.selectedRegions :=
       (witness.justifier.mem_selectedRegions root).2
-        ⟨root, rootMember, ConcreteDiagram.Encloses.refl input.val root⟩
+        ⟨root, rootMember, Concrete.Diagram.Encloses.refl input.val root⟩
     have rootSurvives := deiterationJustifierRegion_survives input selection
       witness rootSelected
     refine ⟨domains.regions.index root rootSurvives, ?_, ?_⟩
     · apply List.mem_filterMap.mpr
       exact ⟨root, rootMember,
         domains.regions.index?_index root rootSurvives⟩
-    · have transported := ConcreteDiagram.removeRaw_encloses input selection
+    · have transported := Concrete.Diagram.removeRaw_encloses input selection
         domains rootSurvives (domains.regions.origin_survives region) encloses
       have indexEq := domains.regions.index_origin region
       rw [indexEq] at transported
       exact transported
 
 private theorem deiteration_removeRaw_node_region_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (domains : FrameDomains input.val selection)
     (node : domains.nodes.Carrier) :
@@ -521,9 +523,9 @@ private theorem deiteration_removeRaw_node_region_origin
   rw [mapped, domains.regions.origin_index]
 
 theorem deiterationRetained_selectsNode_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (node : (deiterationDomains input selection).nodes.Carrier) :
     (deiterationRetainedRequest input selection witness).SelectsNode node ↔
       witness.justifier.val.SelectsNode
@@ -553,20 +555,20 @@ theorem deiterationRetained_selectsNode_iff
       exact selectedOwner
 
 private theorem deiteration_removeRaw_wire_scope_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (domains : FrameDomains input.val selection)
     (wire : domains.wires.Carrier) :
     domains.regions.origin
         ((input.val.removeRaw selection domains).wires wire).scope =
       (input.val.wires (domains.wires.origin wire)).scope := by
-  rw [ConcreteDiagram.removeRaw_wire_scope,
+  rw [Concrete.Diagram.removeRaw_wire_scope,
     domains.regions.origin_index]
 
 theorem deiterationRetained_selectsWire_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (wire : (deiterationDomains input selection).wires.Carrier) :
     (deiterationRetainedRequest input selection witness).SelectsWire wire ↔
       witness.justifier.val.SelectsWire
@@ -629,9 +631,9 @@ private theorem filterFin_survivor_origin
   | true => simp [selected, subset original selected]
 
 theorem deiterationRetained_selectedRegions_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationRetainedSelection input selection witness).selectedRegions.map
         (deiterationDomains input selection).regions.origin =
       witness.justifier.selectedRegions := by
@@ -646,9 +648,9 @@ theorem deiterationRetained_selectedRegions_origin
     exact of_decide_eq_true selected
 
 theorem deiterationRetained_selectedNodes_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationRetainedSelection input selection witness).selectedNodes.map
         (deiterationDomains input selection).nodes.origin =
       witness.justifier.selectedNodes := by
@@ -663,9 +665,9 @@ theorem deiterationRetained_selectedNodes_origin
     exact of_decide_eq_true selected
 
 theorem deiterationRetained_internalWires_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationRetainedSelection input selection witness).internalWires.map
         (deiterationDomains input selection).wires.origin =
       witness.justifier.internalWires := by
@@ -680,9 +682,9 @@ theorem deiterationRetained_internalWires_origin
     exact of_decide_eq_true selected
 
 theorem deiterationRetained_touchesWire_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (wire : (deiterationDomains input selection).wires.Carrier) :
     (¬ (deiterationRetainedRequest input selection witness).SelectsWire wire ∧
         ∃ endpoint,
@@ -703,13 +705,13 @@ theorem deiterationRetained_touchesWire_iff
       ((deiterationRetained_selectsWire_iff input selection witness wire).2
         selectedOriginal), ?_⟩
     obtain ⟨original, originalMember, endpointMap⟩ :=
-      (ConcreteDiagram.mem_removeRaw_wire_endpoints_iff input selection domains
+      (Concrete.Diagram.mem_removeRaw_wire_endpoints_iff input selection domains
         wire endpoint).1 endpointMember
     refine ⟨original, originalMember, ?_⟩
     have selectedOriginal :=
       (deiterationRetained_selectsNode_iff input selection witness
         endpoint.node).1 selectedNode
-    have endpointOrigin := ConcreteDiagram.reindexEndpoint?_origin domains
+    have endpointOrigin := Concrete.Diagram.reindexEndpoint?_origin domains
       endpointMap
     have nodeEq : original.node = domains.nodes.origin endpoint.node := by
       simpa using congrArg CEndpoint.node endpointOrigin
@@ -733,7 +735,7 @@ theorem deiterationRetained_touchesWire_iff
       port := original.port
     }
     refine ⟨mappedEndpoint, ?_, ?_⟩
-    · apply (ConcreteDiagram.mem_removeRaw_wire_endpoints_iff input selection
+    · apply (Concrete.Diagram.mem_removeRaw_wire_endpoints_iff input selection
         domains wire mappedEndpoint).2
       refine ⟨original, originalMember, ?_⟩
       unfold SurvivorDomain.reindexEndpoint?
@@ -750,9 +752,9 @@ theorem deiterationRetained_touchesWire_iff
       exact selectedNode
 
 theorem deiterationRetained_touchingWires_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationRetainedSelection input selection witness).touchingWires.map
         (deiterationDomains input selection).wires.origin =
       witness.justifier.touchingWires := by
@@ -772,9 +774,9 @@ theorem deiterationRetained_touchingWires_origin
     exact (selection.mem_touchingWires_consequences selectedMember).1
 
 theorem deiterationRetained_usesExternalBinder_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection)
+    (witness : OperationDeiterationWitness input selection)
     (binder : (deiterationDomains input selection).regions.Carrier) :
     (deiterationRetainedSelection input selection witness).UsesExternalBinder
         binder ↔
@@ -801,11 +803,11 @@ theorem deiterationRetained_usesExternalBinder_iff
       have nodeIndex := domains.nodes.index_origin node
       cases hnode : input.val.nodes (domains.nodes.origin node) with
       | identity region arity =>
-          rw [← nodeIndex, ConcreteDiagram.removeRaw_identity input selection
+          rw [← nodeIndex, Concrete.Diagram.removeRaw_identity input selection
             domains originalSurvives hnode] at atom
           simpa [hnode] using atom
       | atom region originalBinder =>
-          rw [← nodeIndex, ConcreteDiagram.removeRaw_atom input selection
+          rw [← nodeIndex, Concrete.Diagram.removeRaw_atom input selection
             domains originalSurvives hnode] at atom
           simp only [hnode]
           have binderEq : domains.regions.index originalBinder
@@ -835,26 +837,26 @@ theorem deiterationRetained_usesExternalBinder_iff
       | atom region originalBinder =>
           simp only [hnode] at atom
           subst originalBinder
-          rw [ConcreteDiagram.removeRaw_atom input selection domains
+          rw [Concrete.Diagram.removeRaw_atom input selection domains
             nodeSurvives hnode]
           simp only
           have binderIndex := domains.regions.index_origin binder
           exact binderIndex
 
 private theorem checked_climb_steps_le_regionCount
-    (checked : CheckedDiagram )
+    (checked : Concrete.Checked )
     {steps : Nat} {start finish : Fin checked.val.regionCount}
     (climb : checked.val.climb steps start = some finish) :
     steps ≤ checked.val.regionCount := by
   obtain ⟨tail, tailClimb⟩ := checked.property.all_regions_reach_root finish
-  have rootClimb := ConcreteElaboration.climb_add climb tailClimb
+  have rootClimb := Concrete.Elaboration.climb_add climb tailClimb
   have totalBound :=
-    ConcreteElaboration.ParentTraversal.checked_climb_to_root_steps_le_regionCount
+    Concrete.Elaboration.ParentTraversal.checked_climb_to_root_steps_le_regionCount
       checked rootClimb
   omega
 
 private theorem removeRaw_climb_option_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (domains : FrameDomains input.val selection)
     (start : Fin input.val.regionCount)
@@ -867,7 +869,7 @@ private theorem removeRaw_climb_option_origin
   cases sourceClimb : input.val.climb steps start with
   | some finish =>
       obtain ⟨finishSurvives, removedClimb⟩ :=
-        ConcreteDiagram.removeRaw_climb input selection domains startSurvives
+        Concrete.Diagram.removeRaw_climb input selection domains startSurvives
           sourceClimb
       rw [removedClimb]
       exact congrArg some
@@ -902,9 +904,9 @@ private theorem filterMap_allFin_add_of_none
       exact ih
 
 theorem deiterationRetained_anchorChain_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationRetainedSelection input selection witness
       |>.anchorChainInnerFirst).map
         (deiterationDomains input selection).regions.origin =
@@ -950,11 +952,11 @@ theorem deiterationRetained_anchorChain_origin
     | none => rfl
     | some finish =>
         obtain ⟨finishSurvives, removedClimb⟩ :=
-          ConcreteDiagram.removeRaw_climb input selection domains
+          Concrete.Diagram.removeRaw_climb input selection domains
             anchorSurvives sourceClimb
-        let removed : CheckedDiagram  :=
+        let removed : Concrete.Checked  :=
           ⟨input.val.removeRaw selection domains,
-            ConcreteDiagram.removeRaw_wellFormed input selection domains⟩
+            Concrete.Diagram.removeRaw_wellFormed input selection domains⟩
         have stepsBound := checked_climb_steps_le_regionCount removed
           removedClimb
         change steps ≤ domains.regions.count at stepsBound
@@ -995,9 +997,9 @@ decreasing_by
   simpa using Nat.lt_succ_of_le (List.length_filter_le _ tail)
 
 theorem deiterationRetained_externalBinders_origin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationRetainedSelection input selection witness).externalBinders.map
         (deiterationDomains input selection).regions.origin =
       witness.justifier.externalBinders := by

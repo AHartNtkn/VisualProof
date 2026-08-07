@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationTraceRegion
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -11,7 +13,7 @@ namespace InstantiationSemantic
 /-- The canonical valuation of an attachment-quotient class, obtained from
 its certified representative in the retained frame. -/
 noncomputable def quotientFrameValue
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (frameValue : Fin input.frame.val.wireCount → D) :
     input.wireQuotient.Carrier → D :=
   frameValue ∘ input.wireQuotient.origin
@@ -19,7 +21,7 @@ noncomputable def quotientFrameValue
 /-- A frame valuation that is constant on attachment classes factors through
 the executor's exact wire quotient. -/
 theorem quotientFrameValue_quotientWire
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (frameValue : Fin input.frame.val.wireCount → D)
     (constant : ∀ {left right},
       input.quotientWire left = input.quotientWire right →
@@ -35,7 +37,7 @@ theorem quotientFrameValue_quotientWire
 certificate making the retained-frame valuation factor through every wire
 coalescence performed by the splice input. -/
 theorem quotientFrameValue_quotientWire_of_pattern_denotes
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (model : Model)
     (frameValue : Fin input.frame.val.wireCount → model.Carrier)
     (args : Fin input.pattern.val.boundary.length → model.Carrier)
@@ -53,7 +55,7 @@ theorem quotientFrameValue_quotientWire_of_pattern_denotes
 /-- Function-level form of `quotientFrameValue_quotientWire_of_pattern_denotes`.
 It preserves all original wire positions, including repeated ordered aliases. -/
 theorem quotientFrameValue_comp_quotientWire_of_pattern_denotes
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (model : Model)
     (frameValue : Fin input.frame.val.wireCount → model.Carrier)
     (args : Fin input.pattern.val.boundary.length → model.Carrier)
@@ -69,7 +71,7 @@ theorem quotientFrameValue_comp_quotientWire_of_pattern_denotes
 needed by the attachment quotient; denotation of the pattern body is not
 needed for this narrower conclusion. -/
 theorem quotientWire_value_eq_of_boundaryAssignment
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (frameValue : Fin input.frame.val.wireCount → D)
     (assignment : BoundaryAssignment input.pattern.elaborate D)
     (realizes : ∀ position,

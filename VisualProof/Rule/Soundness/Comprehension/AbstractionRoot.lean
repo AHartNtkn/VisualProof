@@ -1,7 +1,10 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionSimulation
 import VisualProof.Rule.Soundness.Modal.EliminationRoot
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -11,13 +14,13 @@ open DoubleCutElimTrace
 
 namespace AbstractionRawTrace
 
-def concreteIsoOfEq {first second : ConcreteDiagram}
-    (diagramEq : first = second) : ConcreteIso first second := by
+def concreteIsoOfEq {first second : Concrete.Diagram}
+    (diagramEq : first = second) : Concrete.Iso first second := by
   subst second
-  exact ConcreteIso.refl first
+  exact Concrete.Iso.refl first
 
 theorem concreteIsoOfEq_wires_val
-    {first second : ConcreteDiagram}
+    {first second : Concrete.Diagram}
     (diagramEq : first = second)
     (wire : Fin first.wireCount) :
     ((concreteIsoOfEq diagramEq).wires wire).val = wire.val := by
@@ -81,7 +84,7 @@ theorem sourceEnvironment_agrees
       (witness.sourceEnvironment sourceNodup targetNodup fallback
         targetEnvironment)
       targetEnvironment := by
-  apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+  apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
     _ _ _).2
   funext targetIndex
   exact witness.sourceEnvironment_sourceIndex sourceNodup targetNodup fallback
@@ -98,7 +101,7 @@ def targetBoundary
     (boundary : List (Fin input.val.wireCount))
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped) :
     List (Fin trace.diagram.wireCount) :=
   List.ofFn fun position =>
@@ -112,7 +115,7 @@ def targetBoundary
     (boundary : List (Fin input.val.wireCount))
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped) :
     (trace.targetBoundary hraw boundary mapped transport).length =
       boundary.length := by
@@ -125,7 +128,7 @@ theorem targetBoundary_get
     (boundary : List (Fin input.val.wireCount))
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped)
     (position : Fin (trace.targetBoundary hraw boundary mapped transport).length) :
     (trace.targetBoundary hraw boundary mapped transport).get position =
@@ -139,7 +142,7 @@ theorem targetBoundary_get
 
 def sourceOpen
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (boundary : List (Fin input.val.wireCount)) : OpenConcreteDiagram := {
+    (boundary : List (Fin input.val.wireCount)) : Concrete.OpenDiagram := {
   diagram := input.val
   boundary := boundary
 }
@@ -151,16 +154,16 @@ def targetOpen
     (boundary : List (Fin input.val.wireCount))
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped) :
-    OpenConcreteDiagram := {
+    Concrete.OpenDiagram := {
   diagram := trace.diagram
   boundary := trace.targetBoundary hraw boundary mapped transport
 }
 
 theorem targetBoundary_root_scoped
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (hraw : (comprehensionAbstractRaw? input wrap comprehension occurrences).map
       Subtype.val = some raw)
     (boundary : List (Fin input.val.wireCount))
@@ -168,7 +171,7 @@ theorem targetBoundary_root_scoped
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped) :
     ∀ wire, wire ∈ trace.targetBoundary hraw boundary mapped transport →
       (trace.diagram.wires wire).scope = trace.diagram.root := by
@@ -188,11 +191,11 @@ theorem targetBoundary_root_scoped
     _ = trace.diagram.root := trace.targetRegion_root
 
 theorem sourceOpen_wellFormed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -208,13 +211,13 @@ theorem sourceOpen_wellFormed
       exact sourceRoot
 
 theorem targetOpen_wellFormed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed )
     (hraw : (comprehensionAbstractRaw? input wrap comprehension occurrences).map
       Subtype.val = some raw)
@@ -223,7 +226,7 @@ theorem targetOpen_wellFormed
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped) :
     (trace.targetOpen hraw boundary mapped transport).WellFormed  :=
   ⟨targetWellFormed,
@@ -239,7 +242,7 @@ def rootOuterContextWitness
     (boundary : List (Fin input.val.wireCount))
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped) :
     ContextWitness trace
       (trace.sourceOpen boundary).exposedWires
@@ -250,7 +253,7 @@ def rootOuterContextWitness
         trace.targetBoundary hraw boundary mapped transport :=
       by
         simpa only [targetOpen] using
-          (OpenConcreteDiagram.mem_exposedWires
+          (Concrete.OpenDiagram.mem_exposedWires
             (trace.targetOpen hraw boundary mapped transport) targetWire).1
               targetMember
     obtain ⟨position, positionEq⟩ := List.mem_iff_get.mp boundaryMember
@@ -263,7 +266,7 @@ def rootOuterContextWitness
         boundary.get sourcePosition := by
       rw [targetEq]
       exact trace.targetWire_origin _ _
-    apply (OpenConcreteDiagram.mem_exposedWires _ _).2
+    apply (Concrete.OpenDiagram.mem_exposedWires _ _).2
     rw [originEq]
     exact List.get_mem boundary sourcePosition
 
@@ -274,7 +277,7 @@ theorem rootOuterContextWitness_sourceIndex_surjective
     (boundary : List (Fin input.val.wireCount))
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped) :
     Function.Surjective
       (trace.rootOuterContextWitness hraw boundary mapped transport).sourceIndex := by
@@ -283,7 +286,7 @@ theorem rootOuterContextWitness_sourceIndex_surjective
   let outer := trace.rootOuterContextWitness hraw boundary mapped transport
   intro sourceIndex
   have sourceBoundaryMember : source.exposedWires.get sourceIndex ∈ boundary :=
-    (OpenConcreteDiagram.mem_exposedWires source _).1
+    (Concrete.OpenDiagram.mem_exposedWires source _).1
       (List.get_mem source.exposedWires sourceIndex)
   obtain ⟨sourcePosition, sourcePositionEq⟩ :=
     List.mem_iff_get.mp sourceBoundaryMember
@@ -294,16 +297,16 @@ theorem rootOuterContextWitness_sourceIndex_surjective
   let targetWire :=
     (trace.targetBoundary hraw boundary mapped transport).get targetPosition
   have targetExposed : targetWire ∈ target.exposedWires := by
-    apply (OpenConcreteDiagram.mem_exposedWires target targetWire).2
+    apply (Concrete.OpenDiagram.mem_exposedWires target targetWire).2
     exact List.get_mem _ targetPosition
   obtain ⟨targetIndex, targetLookup⟩ :=
-    ConcreteElaboration.WireContext.lookup?_complete targetExposed
+    Concrete.Elaboration.WireContext.lookup?_complete targetExposed
   refine ⟨targetIndex, ?_⟩
   symm
-  apply ConcreteElaboration.WireContext.lookup?_unique source.exposedWires_nodup
+  apply Concrete.Elaboration.WireContext.lookup?_unique source.exposedWires_nodup
     (outer.sourceIndex_lookup targetIndex)
   have targetGet : target.exposedWires.get targetIndex = targetWire :=
-    ConcreteElaboration.WireContext.lookup?_sound targetLookup
+    Concrete.Elaboration.WireContext.lookup?_sound targetLookup
   change source.exposedWires.get sourceIndex =
     trace.domains.wires.origin (target.exposedWires.get targetIndex)
   rw [targetGet]
@@ -332,13 +335,13 @@ theorem rootOuterContextWitness_sourceIndex_surjective
 root wires may remain hidden on the source side, while every target root wire
 has one unique source origin. -/
 def rootContextWitness
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed )
     (hraw : (comprehensionAbstractRaw? input wrap comprehension occurrences).map
       Subtype.val = some raw)
@@ -347,7 +350,7 @@ def rootContextWitness
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped) :
     ContextWitness trace
       (trace.sourceOpen boundary).rootWires
@@ -360,7 +363,7 @@ def rootContextWitness
       targetWellFormed hraw boundary sourceRoot mapped transport
     have targetScope : (trace.diagram.wires targetWire).scope =
         trace.diagram.root :=
-      (OpenConcreteDiagram.mem_rootWires_iff target targetOpenWellFormed
+      (Concrete.OpenDiagram.mem_rootWires_iff target targetOpenWellFormed
         targetWire).1 targetMember
     let original := trace.domains.wires.origin targetWire
     have originalSurvives := trace.domains.wires.origin_survives targetWire
@@ -370,7 +373,7 @@ def rootContextWitness
       apply trace.targetRegion_injective
         (rightSurvives := trace.root_survives)
       simpa only [trace.targetRegion_root] using scopeTransport.symm
-    apply (OpenConcreteDiagram.mem_rootWires_iff source
+    apply (Concrete.OpenDiagram.mem_rootWires_iff source
       (trace.sourceOpen_wellFormed boundary sourceRoot) original).2
     exact originalRoot
 
@@ -378,13 +381,13 @@ def rootContextWitness
 classes. Source-only hidden wires receive an arbitrary value only in the
 backward direction. -/
 theorem rootEnvironmentSelection
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed )
     (hraw : (comprehensionAbstractRaw? input wrap comprehension occurrences).map
       Subtype.val = some raw)
@@ -393,14 +396,14 @@ theorem rootEnvironmentSelection
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     [Nonempty D] :
-    let source : CheckedOpenDiagram  :=
+    let source : Concrete.CheckedOpen  :=
       ⟨trace.sourceOpen boundary,
         trace.sourceOpen_wellFormed boundary sourceRoot⟩
-    let target : CheckedOpenDiagram  :=
+    let target : Concrete.CheckedOpen  :=
       ⟨trace.targetOpen hraw boundary mapped transport,
         trace.targetOpen_wellFormed payload targetWellFormed hraw boundary
           sourceRoot mapped transport⟩
@@ -414,35 +417,35 @@ theorem rootEnvironmentSelection
         | .forward => ∀ sourceLocal,
             ∃ targetLocal,
               combined.indexRelation.EnvironmentsAgree
-                (ConcreteElaboration.rootEnvironment source.val.exposedWires
+                (Concrete.Elaboration.rootEnvironment source.val.exposedWires
                   source.val.hiddenWires sourceOuter sourceLocal)
-                (ConcreteElaboration.rootEnvironment target.val.exposedWires
+                (Concrete.Elaboration.rootEnvironment target.val.exposedWires
                   target.val.hiddenWires targetOuter targetLocal)
         | .backward => ∀ targetLocal,
             ∃ sourceLocal,
               combined.indexRelation.EnvironmentsAgree
-                (ConcreteElaboration.rootEnvironment source.val.exposedWires
+                (Concrete.Elaboration.rootEnvironment source.val.exposedWires
                   source.val.hiddenWires sourceOuter sourceLocal)
-                (ConcreteElaboration.rootEnvironment target.val.exposedWires
+                (Concrete.Elaboration.rootEnvironment target.val.exposedWires
                   target.val.hiddenWires targetOuter targetLocal) := by
   dsimp only
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed boundary sourceRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨trace.targetOpen hraw boundary mapped transport,
       trace.targetOpen_wellFormed payload targetWellFormed hraw boundary
         sourceRoot mapped transport⟩
   let outer := trace.rootOuterContextWitness hraw boundary mapped transport
   let combined := trace.rootContextWitness payload targetWellFormed hraw
     boundary sourceRoot mapped transport
-  have sourceRootExact : ConcreteElaboration.WireContext.Exact
+  have sourceRootExact : Concrete.Elaboration.WireContext.Exact
       source.val.rootWires source.val.diagram.root :=
-    ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+    Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
       source
-  have targetRootExact : ConcreteElaboration.WireContext.Exact
+  have targetRootExact : Concrete.Elaboration.WireContext.Exact
       target.val.rootWires target.val.diagram.root :=
-    ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+    Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
       target
   have outerGet (targetIndex : Fin target.val.exposedWires.length) :
       combined.sourceIndex
@@ -451,7 +454,7 @@ theorem rootEnvironmentSelection
         rootOuterIndex source.val.exposedWires source.val.hiddenWires
           (outer.sourceIndex targetIndex) := by
     symm
-    apply ConcreteElaboration.WireContext.lookup?_unique sourceRootExact.nodup
+    apply Concrete.Elaboration.WireContext.lookup?_unique sourceRootExact.nodup
       (combined.sourceIndex_lookup
         (rootOuterIndex target.val.exposedWires target.val.hiddenWires
           targetIndex))
@@ -473,14 +476,14 @@ theorem rootEnvironmentSelection
   cases direction with
   | forward =>
       intro sourceLocal
-      let sourceEnvironment := ConcreteElaboration.rootEnvironment
+      let sourceEnvironment := Concrete.Elaboration.rootEnvironment
         source.val.exposedWires source.val.hiddenWires sourceOuter sourceLocal
       let targetEnvironment := combined.targetEnvironment sourceEnvironment
       let targetLocal := rootLocalPart target.val.exposedWires
         target.val.hiddenWires targetEnvironment
       refine ⟨targetLocal, ?_⟩
       have targetEnvironmentEq :
-          ConcreteElaboration.rootEnvironment target.val.exposedWires
+          Concrete.Elaboration.rootEnvironment target.val.exposedWires
               target.val.hiddenWires targetOuter targetLocal =
             targetEnvironment := by
         apply rootEnvironment_of_parts
@@ -497,7 +500,7 @@ theorem rootEnvironmentSelection
       exact combined.targetEnvironment_agrees sourceEnvironment
   | backward =>
       intro targetLocal
-      let targetEnvironment := ConcreteElaboration.rootEnvironment
+      let targetEnvironment := Concrete.Elaboration.rootEnvironment
         target.val.exposedWires target.val.hiddenWires targetOuter targetLocal
       let fallback : D := Classical.choice inferInstance
       let sourceEnvironment := combined.sourceEnvironment sourceRootExact.nodup
@@ -506,7 +509,7 @@ theorem rootEnvironmentSelection
         source.val.hiddenWires sourceEnvironment
       refine ⟨sourceLocal, ?_⟩
       have sourceEnvironmentEq :
-          ConcreteElaboration.rootEnvironment source.val.exposedWires
+          Concrete.Elaboration.rootEnvironment source.val.exposedWires
               source.val.hiddenWires sourceOuter sourceLocal =
             sourceEnvironment := by
         apply rootEnvironment_of_parts
@@ -543,13 +546,13 @@ theorem rootEnvironmentSelection
         targetRootExact.nodup fallback targetEnvironment
 
 noncomputable def rootContextSimulation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed )
     (hraw : (comprehensionAbstractRaw? input wrap comprehension occurrences).map
       Subtype.val = some raw)
@@ -558,25 +561,25 @@ noncomputable def rootContextSimulation
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped)
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection) :
-    let source : CheckedOpenDiagram  :=
+    (direction : Concrete.Elaboration.SimulationDirection) :
+    let source : Concrete.CheckedOpen  :=
       ⟨trace.sourceOpen boundary,
         trace.sourceOpen_wellFormed boundary sourceRoot⟩
-    let target : CheckedOpenDiagram  :=
+    let target : Concrete.CheckedOpen  :=
       ⟨trace.targetOpen hraw boundary mapped transport,
         trace.targetOpen_wellFormed payload targetWellFormed hraw boundary
           sourceRoot mapped transport⟩
     let simulation := trace.semanticSimulation payload targetWellFormed model
-    ConcreteElaboration.ConcreteSemanticSimulation.RootContextSimulation
+    Concrete.Elaboration.ConcreteSemanticSimulation.RootContextSimulation
       simulation direction source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires := by
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed boundary sourceRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨trace.targetOpen hraw boundary mapped transport,
       trace.targetOpen_wellFormed payload targetWellFormed hraw boundary
         sourceRoot mapped transport⟩
@@ -584,13 +587,13 @@ noncomputable def rootContextSimulation
   let outer := trace.rootOuterContextWitness hraw boundary mapped transport
   let combined := trace.rootContextWitness payload targetWellFormed hraw
     boundary sourceRoot mapped transport
-  have sourceRootExact : ConcreteElaboration.WireContext.Exact
+  have sourceRootExact : Concrete.Elaboration.WireContext.Exact
       source.val.rootWires source.val.diagram.root :=
-    ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+    Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
       source
-  have targetRootExact : ConcreteElaboration.WireContext.Exact
+  have targetRootExact : Concrete.Elaboration.WireContext.Exact
       target.val.rootWires target.val.diagram.root :=
-    ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+    Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
       target
   refine {
     outer := outer.indexRelation
@@ -634,17 +637,17 @@ noncomputable def rootContextSimulation
         (wrap.mem_selectedRegions child).1 selected
       have rootEq : root = child := by
         have rootParent := wrap.property.childRoots_direct root rootMember
-        rcases ConcreteElaboration.encloses_direct_child childParent' encloses with
+        rcases Concrete.Elaboration.encloses_direct_child childParent' encloses with
           equal | enclosesParent
         · exact equal
         · exact False.elim
-            (ConcreteElaboration.checked_direct_child_not_encloses_parent
+            (Concrete.Elaboration.checked_direct_child_not_encloses_parent
               input.property rootParent enclosesParent)
       exact targetDirect (rootEq ▸ rootMember)
   · intro regular allowed sourceItems targetItems sourceCompiled targetCompiled
       itemSemantics
     letI : Nonempty model.Carrier := model.nonempty
-    apply ConcreteElaboration.directionalRootTransport_of_agreement direction
+    apply Concrete.Elaboration.directionalRootTransport_of_agreement direction
       source.val.exposedWires source.val.hiddenWires
       target.val.exposedWires target.val.hiddenWires outer.indexRelation
       combined.indexRelation model
@@ -669,134 +672,134 @@ noncomputable def rootContextSimulation
     let fuelTarget := trace.diagram.regionCount
     let sourceRels : RelCtx := []
     let targetRels : RelCtx := []
-    let sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels :=
-      ConcreteElaboration.BinderContext.empty
+    let sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels :=
+      Concrete.Elaboration.BinderContext.empty
     let targetBinders :
-        ConcreteElaboration.BinderContext trace.diagram targetRels :=
-      ConcreteElaboration.BinderContext.empty
+        Concrete.Elaboration.BinderContext trace.diagram targetRels :=
+      Concrete.Elaboration.BinderContext.empty
     let binderWitness : BinderWitness trace sourceBinders targetBinders :=
       BinderWitness.empty trace
-    let sourceExtended : ConcreteElaboration.WireContext input.val :=
+    let sourceExtended : Concrete.Elaboration.WireContext input.val :=
       source.val.rootWires
-    let targetExtended : ConcreteElaboration.WireContext trace.diagram :=
+    let targetExtended : Concrete.Elaboration.WireContext trace.diagram :=
       target.val.rootWires
     have targetAtFocus :
         trace.regionMap wrap.val.anchor = trace.diagram.root := by
       rw [← rootFocus, trace.regionMap_root]
-    have sourceExact : ConcreteElaboration.WireContext.Exact sourceExtended
+    have sourceExact : Concrete.Elaboration.WireContext.Exact sourceExtended
         wrap.val.anchor := by
       simpa only [sourceExtended, source, sourceOpen, rootFocus] using
         sourceRootExact
-    have targetExact : ConcreteElaboration.WireContext.Exact targetExtended
+    have targetExact : Concrete.Elaboration.WireContext.Exact targetExtended
         (trace.regionMap wrap.val.anchor) := by
       simpa only [targetExtended, target, targetAtFocus] using targetRootExact
     have sourceBindersCover : sourceBinders.Covers wrap.val.anchor := by
       simpa only [sourceBinders, sourceRels, rootFocus] using
-        ConcreteElaboration.BinderContext.empty_covers_root input.property
+        Concrete.Elaboration.BinderContext.empty_covers_root input.property
     have targetBindersCover :
         targetBinders.Covers (trace.regionMap wrap.val.anchor) := by
       simpa only [targetBinders, targetRels, targetAtFocus] using
-        ConcreteElaboration.BinderContext.empty_covers_root targetWellFormed
+        Concrete.Elaboration.BinderContext.empty_covers_root targetWellFormed
     have sourceEnumeration :
-        ConcreteElaboration.BinderContext.Enumeration input.val sourceBinders
+        Concrete.Elaboration.BinderContext.Enumeration input.val sourceBinders
           wrap.val.anchor := by
       simpa only [sourceBinders, sourceRels, rootFocus] using
-        ConcreteElaboration.BinderContext.Enumeration.empty input.val
+        Concrete.Elaboration.BinderContext.Enumeration.empty input.val
     have targetEnumerationRoot :=
-      ConcreteElaboration.BinderContext.Enumeration.empty trace.diagram
+      Concrete.Elaboration.BinderContext.Enumeration.empty trace.diagram
     have targetEnumeration :
-        ConcreteElaboration.BinderContext.Enumeration trace.diagram
+        Concrete.Elaboration.BinderContext.Enumeration trace.diagram
           targetBinders (trace.regionMap wrap.val.anchor) := by
       simpa only [targetBinders, targetRels, targetAtFocus] using
         targetEnumerationRoot
     have sourceCompiledFocused :
-        ConcreteElaboration.compileOccurrencesWith?  input.val
-          (ConcreteElaboration.compileRegion?  input.val fuelSource)
+        Concrete.Elaboration.compileOccurrencesWith?  input.val
+          (Concrete.Elaboration.compileRegion?  input.val fuelSource)
           sourceExtended sourceBinders
-          (ConcreteElaboration.localOccurrences input.val wrap.val.anchor) =
+          (Concrete.Elaboration.localOccurrences input.val wrap.val.anchor) =
             some sourceItems := by
       simpa only [fuelSource, sourceExtended, sourceBinders, sourceRels,
         source, rootFocus] using sourceCompiled
     have targetCompiledFocused :
-        ConcreteElaboration.compileOccurrencesWith?  trace.diagram
-          (ConcreteElaboration.compileRegion?  trace.diagram fuelTarget)
+        Concrete.Elaboration.compileOccurrencesWith?  trace.diagram
+          (Concrete.Elaboration.compileRegion?  trace.diagram fuelTarget)
           targetExtended targetBinders
-          (ConcreteElaboration.localOccurrences trace.diagram
+          (Concrete.Elaboration.localOccurrences trace.diagram
             (trace.regionMap wrap.val.anchor)) = some targetItems := by
       simpa only [fuelTarget, targetExtended, targetBinders, targetRels,
-        target, OpenConcreteDiagram.rootWires, ← rootFocus] using targetCompiled
+        target, Concrete.OpenDiagram.rootWires, ← rootFocus] using targetCompiled
     let sourceRecurse : ∀ {rels : RelCtx},
         (region : Fin input.val.regionCount) →
-        (context : ConcreteElaboration.WireContext input.val) →
-        ConcreteElaboration.BinderContext input.val rels →
+        (context : Concrete.Elaboration.WireContext input.val) →
+        Concrete.Elaboration.BinderContext input.val rels →
         Option (Region  context.length rels) :=
-      fun {rels} => ConcreteElaboration.compileRegion?  input.val
+      fun {rels} => Concrete.Elaboration.compileRegion?  input.val
         fuelSource
     let targetRecurse : ∀ {rels : RelCtx},
         (region : Fin trace.diagram.regionCount) →
-        (context : ConcreteElaboration.WireContext trace.diagram) →
-        ConcreteElaboration.BinderContext trace.diagram rels →
+        (context : Concrete.Elaboration.WireContext trace.diagram) →
+        Concrete.Elaboration.BinderContext trace.diagram rels →
         Option (Region  context.length rels) :=
-      fun {rels} => ConcreteElaboration.compileRegion?  trace.diagram
+      fun {rels} => Concrete.Elaboration.compileRegion?  trace.diagram
         fuelTarget
-    have sourcePartition := ModalSoundness.anchorOccurrences_perm_partition
+    have sourcePartition := VisualProof.Rule.ModalSoundness.anchorOccurrences_perm_partition
       input.val wrap
     obtain ⟨sourcePartitionItems, sourcePartitionCompiled⟩ :=
-      ConcreteElaboration.compileOccurrencesWith?_complete sourceRecurse
+      Concrete.Elaboration.compileOccurrencesWith?_complete sourceRecurse
         sourceExtended sourceBinders
-        (ModalSoundness.keptOccurrences input.val wrap ++
-          ModalSoundness.selectedOccurrences input.val wrap) (by
+        (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap ++
+          VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap) (by
             intro occurrence member
-            exact ModalSoundness.compileOccurrence_success_of_mem input.val
+            exact VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem input.val
               sourceRecurse sourceExtended sourceBinders sourceCompiledFocused
               ((sourcePartition.mem_iff).1 member))
     obtain ⟨sourceKeptItems, sourceSelectedItems, sourceKeptCompiled,
         sourceSelectedCompiled, sourcePartitionEq⟩ :=
-      ConcreteElaboration.compileOccurrencesWith?_append_split sourceRecurse
+      Concrete.Elaboration.compileOccurrencesWith?_append_split sourceRecurse
         sourceExtended sourceBinders
-        (ModalSoundness.keptOccurrences input.val wrap)
-        (ModalSoundness.selectedOccurrences input.val wrap)
+        (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap)
+        (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap)
         sourcePartitionItems sourcePartitionCompiled
     have targetPartition :
-        (ConcreteElaboration.localOccurrences trace.diagram
+        (Concrete.Elaboration.localOccurrences trace.diagram
             (trace.regionMap wrap.val.anchor)).Perm
-          ((ModalSoundness.keptOccurrences input.val wrap).map
+          ((VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap).map
               trace.survivorOccurrence ++
-            [(ConcreteElaboration.LocalOccurrence.child trace.bubble :
-              ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+            [(Concrete.Elaboration.LocalOccurrence.child trace.bubble :
+              Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
                 trace.diagram.nodeCount)]) := by
       rw [trace.regionMap_of_survives wrap.val.anchor
         (wrap_anchor_survives payload)]
       simpa [trace.kept_filterMap_eq_map payload] using
         trace.wrapAnchorLocalOccurrences payload
     obtain ⟨targetPartitionItems, targetPartitionCompiled⟩ :=
-      ConcreteElaboration.compileOccurrencesWith?_complete targetRecurse
+      Concrete.Elaboration.compileOccurrencesWith?_complete targetRecurse
         targetExtended targetBinders
-        ((ModalSoundness.keptOccurrences input.val wrap).map
+        ((VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap).map
             trace.survivorOccurrence ++
-          [(ConcreteElaboration.LocalOccurrence.child trace.bubble :
-            ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+          [(Concrete.Elaboration.LocalOccurrence.child trace.bubble :
+            Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
               trace.diagram.nodeCount)]) (by
             intro occurrence member
-            exact ModalSoundness.compileOccurrence_success_of_mem trace.diagram
+            exact VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem trace.diagram
               targetRecurse targetExtended targetBinders targetCompiledFocused
               ((targetPartition.mem_iff).2 member))
     obtain ⟨targetKeptItems, targetBubbleItems, targetKeptCompiled,
         targetBubbleCompiled, targetPartitionEq⟩ :=
-      ConcreteElaboration.compileOccurrencesWith?_append_split targetRecurse
+      Concrete.Elaboration.compileOccurrencesWith?_append_split targetRecurse
         targetExtended targetBinders
-        ((ModalSoundness.keptOccurrences input.val wrap).map
+        ((VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap).map
           trace.survivorOccurrence)
-        [ConcreteElaboration.LocalOccurrence.child trace.bubble]
+        [Concrete.Elaboration.LocalOccurrence.child trace.bubble]
         targetPartitionItems targetPartitionCompiled
-    simp only [ConcreteElaboration.compileOccurrencesWith?]
+    simp only [Concrete.Elaboration.compileOccurrencesWith?]
       at targetBubbleCompiled
     dsimp only [targetRecurse] at targetBubbleCompiled
-    simp only [ConcreteElaboration.compileOccurrenceWith?, trace.diagram_bubble]
+    simp only [Concrete.Elaboration.compileOccurrenceWith?, trace.diagram_bubble]
       at targetBubbleCompiled
     let targetPushed := targetBinders.push trace.bubble
       comprehension.val.boundary.length
-    cases bubbleResult : ConcreteElaboration.compileRegion?
+    cases bubbleResult : Concrete.Elaboration.compileRegion?
         trace.diagram fuelTarget trace.bubble targetExtended targetPushed with
     | none => simp [targetPushed, bubbleResult] at targetBubbleCompiled
     | some bubbleBody =>
@@ -804,29 +807,29 @@ noncomputable def rootContextSimulation
         subst targetBubbleItems
         cases fuelTargetEq : fuelTarget with
         | zero =>
-            simp [fuelTargetEq, ConcreteElaboration.compileRegion?]
+            simp [fuelTargetEq, Concrete.Elaboration.compileRegion?]
               at bubbleResult
         | succ bubbleFuel =>
-            simp only [fuelTargetEq, ConcreteElaboration.compileRegion?]
+            simp only [fuelTargetEq, Concrete.Elaboration.compileRegion?]
               at bubbleResult
             obtain ⟨bubbleItems, bubbleItemsCompiled, bubbleBodyEq⟩ :=
               Option.bind_eq_some_iff.mp bubbleResult
             have bubbleBodyEq' :
-                ConcreteElaboration.finishRegion trace.diagram targetExtended
+                Concrete.Elaboration.finishRegion trace.diagram targetExtended
                   trace.bubble bubbleItems = bubbleBody :=
               Option.some.inj bubbleBodyEq
             subst bubbleBody
             let focusedContext := combined
             have keptPointwise : ∀ occurrence,
-                occurrence ∈ ModalSoundness.keptOccurrences input.val wrap →
+                occurrence ∈ VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap →
                 ∀ sourceItem targetItem,
-                ConcreteElaboration.compileOccurrenceWith?  input.val
+                Concrete.Elaboration.compileOccurrenceWith?  input.val
                     sourceRecurse sourceExtended sourceBinders occurrence =
                       some sourceItem →
-                ConcreteElaboration.compileOccurrenceWith?
+                Concrete.Elaboration.compileOccurrenceWith?
                     trace.diagram targetRecurse targetExtended targetBinders
                     (trace.survivorOccurrence occurrence) = some targetItem →
-                ConcreteElaboration.ItemSimulation model  .forward
+                Concrete.Elaboration.ItemSimulation model  .forward
                   focusedContext.indexRelation
                   (sourceItem.renameRelations binderWitness.relationMap)
                   targetItem := by
@@ -845,31 +848,31 @@ noncomputable def rootContextSimulation
                   simpa [sourceRecurse] using sourceOccurrence)
                 (by simpa [targetRecurse, fuelTargetEq] using targetOccurrence)
             have keptSimulation :=
-              ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+              Concrete.Elaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
                 model  .forward sourceRecurse targetRecurse sourceExtended
                 targetExtended sourceBinders targetBinders
                 focusedContext.indexRelation binderWitness.relationMap
                 trace.survivorOccurrence
-                (ModalSoundness.keptOccurrences input.val wrap) keptPointwise
+                (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap) keptPointwise
                 sourceKeptItems targetKeptItems sourceKeptCompiled
                 targetKeptCompiled
             let selectedSurvivors := trace.survivingSources
-              (ModalSoundness.selectedOccurrences input.val wrap)
+              (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap)
             let selectedAtWrap := selectedAt input occurrences wrap.val.anchor
             let targetSelectedSurvivors :=
               selectedSurvivors.map trace.survivorOccurrence
             let indices := anchorIndices occurrences wrap.val.anchor
-            let targetAtoms : List (ConcreteElaboration.LocalOccurrence
+            let targetAtoms : List (Concrete.Elaboration.LocalOccurrence
                 trace.diagram.regionCount trace.diagram.nodeCount) :=
               indices.map fun index =>
-                ConcreteElaboration.LocalOccurrence.node (trace.targetAtom index)
+                Concrete.Elaboration.LocalOccurrence.node (trace.targetAtom index)
             have sourceSelectedPartition :
                 (selectedSurvivors ++ selectedAtWrap).Perm
-                  (ModalSoundness.selectedOccurrences input.val wrap) := by
+                  (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap) := by
               simpa [selectedSurvivors, selectedAtWrap] using
                 trace.selectedOccurrences_perm_focusedPartition payload
             have targetBubblePartition :
-                (ConcreteElaboration.localOccurrences trace.diagram
+                (Concrete.Elaboration.localOccurrences trace.diagram
                     trace.bubble).Perm
                   (targetSelectedSurvivors ++ targetAtoms) := by
               simpa [targetSelectedSurvivors, selectedSurvivors, targetAtoms,
@@ -879,55 +882,55 @@ noncomputable def rootContextSimulation
             let bubbleContext := targetExtended.extend trace.bubble
             obtain ⟨sourceSelectedPartitionItems,
                 sourceSelectedPartitionCompiled⟩ :=
-              ConcreteElaboration.compileOccurrencesWith?_complete sourceRecurse
+              Concrete.Elaboration.compileOccurrencesWith?_complete sourceRecurse
                 sourceExtended sourceBinders
                 (selectedSurvivors ++ selectedAtWrap) (by
                   intro occurrence member
-                  exact ModalSoundness.compileOccurrence_success_of_mem input.val
+                  exact VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem input.val
                     sourceRecurse sourceExtended sourceBinders
                     sourceSelectedCompiled
                     ((sourceSelectedPartition.mem_iff).1 member))
             obtain ⟨sourceSurvivorItems, sourceFamilyAggregateItems,
                 sourceSurvivorCompiled, sourceFamilyAggregateCompiled,
                 sourceSelectedPartitionEq⟩ :=
-              ConcreteElaboration.compileOccurrencesWith?_append_split
+              Concrete.Elaboration.compileOccurrencesWith?_append_split
                 sourceRecurse sourceExtended sourceBinders selectedSurvivors
                 selectedAtWrap sourceSelectedPartitionItems
                 sourceSelectedPartitionCompiled
             let bubbleRecurse : ∀ {rels : RelCtx},
                 (region : Fin trace.diagram.regionCount) →
-                (context : ConcreteElaboration.WireContext trace.diagram) →
-                ConcreteElaboration.BinderContext trace.diagram rels →
+                (context : Concrete.Elaboration.WireContext trace.diagram) →
+                Concrete.Elaboration.BinderContext trace.diagram rels →
                 Option (Region  context.length rels) :=
-              fun {rels} => ConcreteElaboration.compileRegion?
+              fun {rels} => Concrete.Elaboration.compileRegion?
                 trace.diagram bubbleFuel
             obtain ⟨targetBubblePartitionItems,
                 targetBubblePartitionCompiled⟩ :=
-              ConcreteElaboration.compileOccurrencesWith?_complete bubbleRecurse
+              Concrete.Elaboration.compileOccurrencesWith?_complete bubbleRecurse
                 bubbleContext targetPushed
                 (targetSelectedSurvivors ++ targetAtoms) (by
                   intro occurrence member
-                  exact ModalSoundness.compileOccurrence_success_of_mem
+                  exact VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem
                     trace.diagram bubbleRecurse bubbleContext targetPushed
                     bubbleItemsCompiled
                     ((targetBubblePartition.mem_iff).2 member))
             obtain ⟨targetSurvivorItems, targetAtomItems,
                 targetSurvivorCompiled, targetAtomCompiled,
                 targetBubblePartitionEq⟩ :=
-              ConcreteElaboration.compileOccurrencesWith?_append_split
+              Concrete.Elaboration.compileOccurrencesWith?_append_split
                 bubbleRecurse bubbleContext targetPushed
                 targetSelectedSurvivors targetAtoms
                 targetBubblePartitionItems targetBubblePartitionCompiled
             have sourceBlockExists : ∀ index, index ∈ indices →
                 ∃ items : ItemSeq  sourceExtended.length sourceRels,
-                  ConcreteElaboration.compileOccurrencesWith?
+                  Concrete.Elaboration.compileOccurrencesWith?
                     input.val sourceRecurse sourceExtended sourceBinders
-                    (ModalSoundness.selectedOccurrences input.val
+                    (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val
                       (occurrences.get index).selection) = some items := by
               intro index indexMember
-              apply ConcreteElaboration.compileOccurrencesWith?_complete
+              apply Concrete.Elaboration.compileOccurrencesWith?_complete
               intro occurrence occurrenceMember
-              apply ModalSoundness.compileOccurrence_success_of_mem input.val
+              apply VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem input.val
                 sourceRecurse sourceExtended sourceBinders
                 sourceFamilyAggregateCompiled
               exact (mem_selectedAt input occurrences wrap.val.anchor
@@ -941,9 +944,9 @@ noncomputable def rootContextSimulation
                 Classical.choose (sourceBlockExists index member)
               else .nil
             have sourceFamilyCompiled : ∀ index, index ∈ indices →
-                ConcreteElaboration.compileOccurrencesWith?
+                Concrete.Elaboration.compileOccurrencesWith?
                   input.val sourceRecurse sourceExtended sourceBinders
-                  (ModalSoundness.selectedOccurrences input.val
+                  (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val
                     (occurrences.get index).selection) =
                       some (sourceFamilyItems index) := by
               intro index member
@@ -952,7 +955,7 @@ noncomputable def rootContextSimulation
               exact Classical.choose_spec (sourceBlockExists index member)
             have sourceFamilyCompiler := compileOccurrenceFamilyItems
               sourceRecurse sourceExtended sourceBinders indices
-              (fun index => ModalSoundness.selectedOccurrences input.val
+              (fun index => VisualProof.Rule.ModalSoundness.selectedOccurrences input.val
                 (occurrences.get index).selection)
               sourceFamilyItems sourceFamilyCompiled
             have sourceFamilyEq :
@@ -965,16 +968,16 @@ noncomputable def rootContextSimulation
             have targetAtomExists : ∀ index, index ∈ indices →
                 ∃ item : Item  bubbleContext.length
                     (comprehension.val.boundary.length :: targetRels),
-                  ConcreteElaboration.compileNode?  trace.diagram
+                  Concrete.Elaboration.compileNode?  trace.diagram
                     bubbleContext targetPushed (trace.targetAtom index) =
                       some item := by
               intro index indexMember
               obtain ⟨item, compiled⟩ :=
-                ModalSoundness.compileOccurrence_success_of_mem trace.diagram
+                VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem trace.diagram
                   bubbleRecurse bubbleContext targetPushed targetAtomCompiled
                   (List.mem_map.mpr ⟨index, indexMember, rfl⟩)
               exact ⟨item, by
-                simpa [ConcreteElaboration.compileOccurrenceWith?] using
+                simpa [Concrete.Elaboration.compileOccurrenceWith?] using
                   compiled⟩
             let targetFamilyItems : Fin occurrences.length →
                 Item  bubbleContext.length
@@ -983,7 +986,7 @@ noncomputable def rootContextSimulation
                 Classical.choose (targetAtomExists index member)
               else .cut (.mk 0 .nil)
             have targetFamilyCompiled : ∀ index, index ∈ indices →
-                ConcreteElaboration.compileNode?  trace.diagram
+                Concrete.Elaboration.compileNode?  trace.diagram
                   bubbleContext targetPushed (trace.targetAtom index) =
                     some (targetFamilyItems index) := by
               intro index member
@@ -992,10 +995,10 @@ noncomputable def rootContextSimulation
               exact Classical.choose_spec (targetAtomExists index member)
             have targetFamilyCompiler := compileOccurrenceFamilyAtomItems
               bubbleRecurse bubbleContext targetPushed indices
-              (fun index => ConcreteElaboration.LocalOccurrence.node
+              (fun index => Concrete.Elaboration.LocalOccurrence.node
                 (trace.targetAtom index)) targetFamilyItems (by
                   intro index member
-                  simpa [ConcreteElaboration.compileOccurrenceWith?] using
+                  simpa [Concrete.Elaboration.compileOccurrenceWith?] using
                     targetFamilyCompiled index member)
             have targetFamilyEq :
                 occurrenceFamilyAtomItems targetFamilyItems indices =
@@ -1004,7 +1007,7 @@ noncomputable def rootContextSimulation
               exact targetFamilyCompiler.symm.trans (by
                 simpa [targetAtoms] using targetAtomCompiled)
             have sourceSelectedCanonicalCompiled :
-                ConcreteElaboration.compileOccurrencesWith?  input.val
+                Concrete.Elaboration.compileOccurrencesWith?  input.val
                   sourceRecurse sourceExtended sourceBinders
                   (selectedSurvivors ++ selectedAtWrap) =
                     some (sourceSurvivorItems.append
@@ -1012,7 +1015,7 @@ noncomputable def rootContextSimulation
               rw [← sourceSelectedPartitionEq]
               exact sourceSelectedPartitionCompiled
             have targetBubbleCanonicalCompiled :
-                ConcreteElaboration.compileOccurrencesWith?
+                Concrete.Elaboration.compileOccurrencesWith?
                   trace.diagram bubbleRecurse bubbleContext targetPushed
                   (targetSelectedSurvivors ++ targetAtoms) =
                     some (targetSurvivorItems.append targetAtomItems) := by
@@ -1025,14 +1028,14 @@ noncomputable def rootContextSimulation
             have targetBubbleCanonicalNodup :
                 (targetSelectedSurvivors ++ targetAtoms).Nodup :=
               (targetBubblePartition.nodup_iff).1
-                (ConcreteElaboration.localOccurrences_nodup trace.diagram
+                (Concrete.Elaboration.localOccurrences_nodup trace.diagram
                   trace.bubble)
             have selectedSurvivorMembers : ∀ occurrence,
                 occurrence ∈ selectedSurvivors → occurrence ∈
-                  ModalSoundness.selectedOccurrences input.val wrap := by
+                  VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap := by
               intro occurrence member
               exact (mem_survivingSources trace
-                (ModalSoundness.selectedOccurrences input.val wrap)
+                (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap)
                 occurrence).1 member |>.1
             have selectedSurvivorMaps : ∀ occurrence,
                 occurrence ∈ selectedSurvivors →
@@ -1041,10 +1044,10 @@ noncomputable def rootContextSimulation
               intro occurrence member
               exact Option.isSome_iff_exists.mp
                 ((mem_survivingSources trace
-                  (ModalSoundness.selectedOccurrences input.val wrap)
+                  (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap)
                   occurrence).1 member |>.2)
             have fixedRecurseAt : ∀
-                (childDirection : ConcreteElaboration.SimulationDirection)
+                (childDirection : Concrete.Elaboration.SimulationDirection)
                 (child : Fin input.val.regionCount),
                 child ∈ wrap.selectedRegions →
                 trace.domains.regions.survives child = true →
@@ -1083,23 +1086,23 @@ noncomputable def rootContextSimulation
                   simpa [targetPushed, targetSelectedSurvivors] using
                     targetSurvivorCompiled)
             have sourceCanonicalNodup :
-                (ModalSoundness.keptOccurrences input.val wrap ++
-                  ModalSoundness.selectedOccurrences input.val wrap).Nodup :=
+                (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap ++
+                  VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap).Nodup :=
               (sourcePartition.nodup_iff).2
-                (ConcreteElaboration.localOccurrences_nodup input.val
+                (Concrete.Elaboration.localOccurrences_nodup input.val
                   wrap.val.anchor)
             have targetCanonicalNodup :
-                ((ModalSoundness.keptOccurrences input.val wrap).map
+                ((VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap).map
                     trace.survivorOccurrence ++
-                  [(ConcreteElaboration.LocalOccurrence.child trace.bubble :
-                    ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+                  [(Concrete.Elaboration.LocalOccurrence.child trace.bubble :
+                    Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
                       trace.diagram.nodeCount)]).Nodup :=
               (targetPartition.nodup_iff).1
-                (ConcreteElaboration.localOccurrences_nodup trace.diagram
+                (Concrete.Elaboration.localOccurrences_nodup trace.diagram
                   (trace.regionMap wrap.val.anchor))
             letI : Nonempty model.Carrier := model.nonempty
             have focusedItems :
-                ConcreteElaboration.ItemSeqSimulation model  .forward
+                Concrete.Elaboration.ItemSeqSimulation model  .forward
                   combined.indexRelation
                   (sourceItems.renameRelations binderWitness.relationMap)
                   targetItems := by
@@ -1118,7 +1121,7 @@ noncomputable def rootContextSimulation
               have sourcePermutation := compileOccurrences_perm_denote_iff
                 input.val sourceRecurse sourceExtended sourceBinders
                 sourcePartition sourceCanonicalNodup
-                (ConcreteElaboration.localOccurrences_nodup input.val
+                (Concrete.Elaboration.localOccurrences_nodup input.val
                   wrap.val.anchor)
                 sourcePartitionCompiled sourceCompiledFocused model
                 sourceLocalEnvironment sourceRelations
@@ -1163,7 +1166,7 @@ noncomputable def rootContextSimulation
                 intro arity relation
                 simpa [freshWitness, BinderWitness.intoFreshBubble,
                   BinderWitness.weakenRelationMap, freshRelations,
-                  RelEnv.lookup, ConcreteElaboration.BinderContext.liftVar]
+                  RelEnv.lookup, Concrete.Elaboration.BinderContext.liftVar]
                   using baseRelationAgreement arity relation
               have sourceSurvivorRenamed : denoteItemSeq model
                   sourceLocalEnvironment freshRelations
@@ -1221,21 +1224,21 @@ noncomputable def rootContextSimulation
                 compileOccurrences_perm_denote_iff trace.diagram bubbleRecurse
                   (targetExtended.extend trace.bubble) targetPushed
                   targetBubblePartition
-                  (ConcreteElaboration.localOccurrences_nodup trace.diagram
+                  (Concrete.Elaboration.localOccurrences_nodup trace.diagram
                     trace.bubble) targetBubbleCanonicalNodup bubbleItemsCompiled
                   targetBubbleCanonicalCompiled model
                   targetBubbleEnvironment freshRelations
               have bubbleItemsDenote :=
                 targetBubblePermutation.mpr targetBubbleCanonicalDenote
               have bubbleItemsDenoteActual : denoteItemSeq model
-                  (ConcreteElaboration.extendedEnvironment targetExtended
+                  (Concrete.Elaboration.extendedEnvironment targetExtended
                     trace.bubble targetLocalEnvironment bubbleLocal)
                   freshRelations bubbleItems := by
                 rw [trace.extendedEnvironment_bubble_empty]
                 exact bubbleItemsDenote
               have bubbleBodyDenote : denoteRegion model
                   targetLocalEnvironment freshRelations
-                  (ConcreteElaboration.finishRegion trace.diagram targetExtended
+                  (Concrete.Elaboration.finishRegion trace.diagram targetExtended
                     trace.bubble bubbleItems) :=
                 (DoubleCutElimTrace.finishRegion_denote_iff trace.diagram
                   targetExtended trace.bubble bubbleItems model
@@ -1244,7 +1247,7 @@ noncomputable def rootContextSimulation
               have targetBubbleDenote : denoteItem model
                   targetLocalEnvironment targetRelations
                   (.bubble comprehension.val.boundary.length
-                    (ConcreteElaboration.finishRegion trace.diagram targetExtended
+                    (Concrete.Elaboration.finishRegion trace.diagram targetExtended
                       trace.bubble bubbleItems)) := by
                 simp only [bubble_denotes_exists]
                 exact ⟨freshRelation, bubbleBodyDenote⟩
@@ -1252,29 +1255,29 @@ noncomputable def rootContextSimulation
                   targetLocalEnvironment targetRelations
                   (targetKeptItems.append (.cons
                     (.bubble comprehension.val.boundary.length
-                      (ConcreteElaboration.finishRegion trace.diagram
+                      (Concrete.Elaboration.finishRegion trace.diagram
                         targetExtended trace.bubble bubbleItems)) .nil)) := by
                 apply (denoteItemSeq_append model  targetLocalEnvironment
                   targetRelations targetKeptItems _).2
                 exact ⟨targetKeptDenote, by simpa using targetBubbleDenote⟩
               have targetCanonicalCompiled :
-                  ConcreteElaboration.compileOccurrencesWith?
+                  Concrete.Elaboration.compileOccurrencesWith?
                     trace.diagram targetRecurse targetExtended targetBinders
-                    ((ModalSoundness.keptOccurrences input.val wrap).map
+                    ((VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap).map
                         trace.survivorOccurrence ++
-                      [(ConcreteElaboration.LocalOccurrence.child trace.bubble :
-                        ConcreteElaboration.LocalOccurrence
+                      [(Concrete.Elaboration.LocalOccurrence.child trace.bubble :
+                        Concrete.Elaboration.LocalOccurrence
                           trace.diagram.regionCount trace.diagram.nodeCount)]) =
                       some (targetKeptItems.append (.cons
                         (.bubble comprehension.val.boundary.length
-                          (ConcreteElaboration.finishRegion trace.diagram
+                          (Concrete.Elaboration.finishRegion trace.diagram
                             targetExtended trace.bubble bubbleItems)) .nil)) := by
                 rw [← targetPartitionEq]
                 exact targetPartitionCompiled
               have targetPermutation := compileOccurrences_perm_denote_iff
                 trace.diagram targetRecurse targetExtended targetBinders
                 targetPartition
-                (ConcreteElaboration.localOccurrences_nodup trace.diagram
+                (Concrete.Elaboration.localOccurrences_nodup trace.diagram
                   (trace.regionMap wrap.val.anchor)) targetCanonicalNodup
                 targetCompiledFocused targetCanonicalCompiled
                 model  targetLocalEnvironment targetRelations
@@ -1286,9 +1289,9 @@ noncomputable def rootContextSimulation
                   RelationRenaming [] []) =
                   (fun {arity} (relation : RelVar [] arity) => relation) := rfl
             have focusedItems' :
-                ConcreteElaboration.ItemSeqSimulation model  .forward
+                Concrete.Elaboration.ItemSeqSimulation model  .forward
                   combined.indexRelation sourceItems targetItems := by
-              change ConcreteElaboration.ItemSeqSimulation model  .forward
+              change Concrete.Elaboration.ItemSeqSimulation model  .forward
                 combined.indexRelation
                 (sourceItems.renameRelations
                   (simulation.relationMap simulation.binders_empty)) targetItems
@@ -1297,7 +1300,7 @@ noncomputable def rootContextSimulation
               exact focusedItems
             rw [relationMapEq, Region.renameRelations_id]
             have rootTransport :=
-              ConcreteElaboration.directionalRootTransport_of_agreement .forward
+              Concrete.Elaboration.directionalRootTransport_of_agreement .forward
                 source.val.exposedWires source.val.hiddenWires
                 target.val.exposedWires target.val.hiddenWires
                 outer.indexRelation combined.indexRelation model
@@ -1305,7 +1308,7 @@ noncomputable def rootContextSimulation
                 (trace.rootEnvironmentSelection payload targetWellFormed hraw
                   boundary sourceRoot mapped transport .forward)
                 focusedItems'
-            exact ConcreteElaboration.finishRoot_denote .forward
+            exact Concrete.Elaboration.finishRoot_denote .forward
               source.val.exposedWires source.val.hiddenWires
               target.val.exposedWires target.val.hiddenWires
               outer.indexRelation model
@@ -1318,7 +1321,7 @@ theorem boundaryClass_transport
     (boundary : List (Fin input.val.wireCount))
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped)
     (sourcePosition : Fin boundary.length) :
     let source := trace.sourceOpen boundary
@@ -1337,13 +1340,13 @@ theorem boundaryClass_transport
     Fin.cast (trace.targetBoundary_length hraw boundary mapped transport).symm
       sourcePosition
   symm
-  apply ConcreteElaboration.WireContext.lookup?_unique source.exposedWires_nodup
+  apply Concrete.Elaboration.WireContext.lookup?_unique source.exposedWires_nodup
     (outer.sourceIndex_lookup (target.boundaryClass targetPosition))
   change source.exposedWires.get (source.boundaryClass sourcePosition) =
     trace.domains.wires.origin
       (target.exposedWires.get (target.boundaryClass targetPosition))
-  rw [OpenConcreteDiagram.boundaryClass_sound source sourcePosition,
-    OpenConcreteDiagram.boundaryClass_sound target targetPosition]
+  rw [Concrete.OpenDiagram.boundaryClass_sound source sourcePosition,
+    Concrete.OpenDiagram.boundaryClass_sound target targetPosition]
   change boundary.get sourcePosition = trace.domains.wires.origin
     ((trace.targetBoundary hraw boundary mapped transport).get targetPosition)
   rw [trace.targetBoundary_get hraw boundary mapped transport targetPosition]
@@ -1356,13 +1359,13 @@ theorem boundaryClass_transport
   exact (trace.targetWire_origin _ _).symm
 
 theorem boundaryWitness
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed )
     (hraw : (comprehensionAbstractRaw? input wrap comprehension occurrences).map
       Subtype.val = some raw)
@@ -1371,28 +1374,28 @@ theorem boundaryWitness
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (model : Model)
     (args : Fin boundary.length → model.Carrier) :
-    let source : CheckedOpenDiagram  :=
+    let source : Concrete.CheckedOpen  :=
       ⟨trace.sourceOpen boundary,
         trace.sourceOpen_wellFormed boundary sourceRoot⟩
-    let target : CheckedOpenDiagram  :=
+    let target : Concrete.CheckedOpen  :=
       ⟨trace.targetOpen hraw boundary mapped transport,
         trace.targetOpen_wellFormed payload targetWellFormed hraw boundary
           sourceRoot mapped transport⟩
     let root := trace.rootContextSimulation payload targetWellFormed hraw
       boundary sourceRoot mapped transport model  direction
-    ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+    Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
       direction source.elaborate target.elaborate root.outer model  args
       (args ∘ Fin.cast
         (trace.targetBoundary_length hraw boundary mapped transport)) := by
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed boundary sourceRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨trace.targetOpen hraw boundary mapped transport,
       trace.targetOpen_wellFormed payload targetWellFormed hraw boundary
         sourceRoot mapped transport⟩
@@ -1411,7 +1414,7 @@ theorem boundaryWitness
     rfl
   dsimp only
   unfold
-    ConcreteElaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
+    Concrete.Elaboration.ConcreteSemanticSimulation.DirectionalBoundaryWitness
   cases direction with
   | forward =>
       intro sourceAssignment sourceArgsEq sourceDenotes
@@ -1439,11 +1442,11 @@ theorem boundaryWitness
             targetArgs targetPosition
           rw [classEq]
           have sourceAgrees := sourceAssignment.agrees sourcePosition
-          simpa only [CheckedOpenDiagram.elaborate_boundary, sourceArgsEq,
+          simpa only [Concrete.CheckedOpen.elaborate_boundary, sourceArgsEq,
             targetArgs, Function.comp_apply] using sourceAgrees
       }
       refine ⟨targetAssignment, rfl, ?_⟩
-      exact (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+      exact (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
         outer.sourceIndex sourceAssignment.classes targetAssignment.classes).2 rfl
   | backward =>
       intro targetAssignment targetArgsEq targetDenotes
@@ -1480,11 +1483,11 @@ theorem boundaryWitness
           rw [chosenEq]
           have targetAgrees := targetAssignment.agrees targetPosition
           rw [targetArgsEq] at targetAgrees
-          simpa only [CheckedOpenDiagram.elaborate_boundary, Function.comp_apply,
+          simpa only [Concrete.CheckedOpen.elaborate_boundary, Function.comp_apply,
             targetPosition_cast] using targetAgrees
       }
       refine ⟨sourceAssignment, rfl, ?_⟩
-      apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+      apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
         outer.sourceIndex sourceAssignment.classes targetAssignment.classes).2
       funext targetIndex
       change targetAssignment.classes
@@ -1496,16 +1499,16 @@ theorem boundaryWitness
       rw [sourceClassTarget_spec]
 
 theorem allowed_root
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (focus : Fin input.val.regionCount)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (allowedDepth : AbstractionDepthAllowed direction
       (concreteCutDepth input.val focus)) :
     AbstractionAllowed input.val focus direction input.val.root := by
   intro path depth route routeDepth
-  let view := Classical.choice (Diagram.Splice.siteView_complete input focus)
+  let view := Classical.choice (Concrete.Splice.siteView_complete input focus)
   have pathEq : path = view.path :=
-    Diagram.Splice.Input.RegionRoute.path_unique input.property route view.route
+    Concrete.Splice.Input.RegionRoute.path_unique input.property route view.route
   subst path
   have routeEq : route = view.route := Subsingleton.elim _ _
   subst route
@@ -1516,13 +1519,13 @@ theorem allowed_root
   exact allowedDepth
 
 theorem open_denote
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed )
     (hraw : (comprehensionAbstractRaw? input wrap comprehension occurrences).map
       Subtype.val = some raw)
@@ -1531,17 +1534,17 @@ theorem open_denote
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (allowed : AbstractionAllowed input.val wrap.val.anchor direction
       input.val.root)
     (model : Model)
     (args : Fin boundary.length → model.Carrier) :
-    let source : CheckedOpenDiagram  :=
+    let source : Concrete.CheckedOpen  :=
       ⟨trace.sourceOpen boundary,
         trace.sourceOpen_wellFormed boundary sourceRoot⟩
-    let target : CheckedOpenDiagram  :=
+    let target : Concrete.CheckedOpen  :=
       ⟨trace.targetOpen hraw boundary mapped transport,
         trace.targetOpen_wellFormed payload targetWellFormed hraw boundary
           sourceRoot mapped transport⟩
@@ -1549,15 +1552,15 @@ theorem open_denote
       (target.denote model
         (args ∘ Fin.cast
           (trace.targetBoundary_length hraw boundary mapped transport))) := by
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed boundary sourceRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨trace.targetOpen hraw boundary mapped transport,
       trace.targetOpen_wellFormed payload targetWellFormed hraw boundary
         sourceRoot mapped transport⟩
   let simulation := trace.semanticSimulation payload targetWellFormed model
-  exact ConcreteElaboration.ConcreteSemanticSimulation.elaborateOpen_denote
+  exact Concrete.Elaboration.ConcreteSemanticSimulation.elaborateOpen_denote
     source target model  simulation direction
     (trace.rootContextSimulation payload targetWellFormed hraw boundary
       sourceRoot mapped transport model  direction)
@@ -1574,10 +1577,10 @@ def targetOpenIsoRaw
     (boundary : List (Fin input.val.wireCount))
     (mapped : List (Fin raw.wireCount))
     (transport :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some mapped) :
-    OpenConcreteIso (trace.targetOpen hraw boundary mapped transport)
-      ({ diagram := raw, boundary := mapped } : OpenConcreteDiagram) where
+    Concrete.OpenIso (trace.targetOpen hraw boundary mapped transport)
+      ({ diagram := raw, boundary := mapped } : Concrete.OpenDiagram) where
   diagram := concreteIsoOfEq trace.raw_eq_diagram.symm
   boundary := by
     apply List.ext_get
@@ -1586,7 +1589,7 @@ def targetOpenIsoRaw
         mapped.length
       rw [List.length_map,
         trace.targetBoundary_length hraw boundary mapped transport]
-      exact (comprehensionAbstractInterfaceTransport input wrap comprehension
+      exact (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary_length transport |>.symm
     · intro index targetBound mappedBound
       have targetBound' : index <
@@ -1611,7 +1614,7 @@ def targetOpenIsoRaw
         position).val = (mapped.get ⟨index, mappedBound⟩).val
       rw [targetGet]
       have mappedPositionEq : Fin.cast
-          ((comprehensionAbstractInterfaceTransport input wrap comprehension
+          ((comprehensionAbstractWireTransport input wrap comprehension
             occurrences raw hraw).transportBoundary_length transport).symm
             sourcePosition = ⟨index, mappedBound⟩ := by
         apply Fin.ext
@@ -1622,4 +1625,4 @@ def targetOpenIsoRaw
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

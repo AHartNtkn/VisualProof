@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvancePatternEmpty
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -12,18 +14,18 @@ namespace InstantiationSemantic
 items.  This separates semantic seam recovery from the stronger (and here
 unavailable) premise that every retained host item also denotes. -/
 theorem patternTerminalRegion_denotes_of_native_items
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (hadmissible : input.Admissible)
-    (host : Splice.SiteView (input.coalesceFrame hadmissible) input.site)
+    (host : Concrete.Splice.SiteView (input.coalesceFrame hadmissible) input.site)
     {patternBody : Region  patternOuter patternRels}
     {patternPath : List Nat}
     (patternWitness : Region.ContextPath patternBody patternPath)
-    (patternLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (patternLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       input.pattern.val.diagram input.binderSpine.bodyContainer patternWitness)
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.plugLayout.plugRaw
       (input.plugLayout.frameRegion input.site) outputWitness)
     (hnonempty : input.binderSpine.proxyCount ≠ 0)
     (model : Model)
@@ -32,13 +34,13 @@ theorem patternTerminalRegion_denotes_of_native_items
     (relEnv : RelEnv model.Carrier outputWitness.toFocus.holeRels)
     (fallback : model.Carrier)
     (nativeItems :
-      let targetEq := ConcreteElaboration.WireContext.length_extend
+      let targetEq := Concrete.Elaboration.WireContext.length_extend
         outputLeaf.inheritedWires (input.plugLayout.frameRegion input.site)
       let combined := input.plugLayout.siteCombinedWireEquivOfNonempty
         hadmissible host outputWitness outputLeaf hnonempty
       let targetEnv : Fin
           (outputLeaf.inheritedWires.length +
-            (ConcreteElaboration.exactScopeWires input.plugLayout.plugRaw
+            (Concrete.Elaboration.exactScopeWires input.plugLayout.plugRaw
               (input.plugLayout.frameRegion input.site)).length) →
           model.Carrier := env ∘ Fin.cast targetEq.symm
       let sourceEnv := targetEnv ∘ combined
@@ -56,12 +58,12 @@ theorem patternTerminalRegion_denotes_of_native_items
         (RelEnv.pullback terminalRelations relEnv) patternLeaf.items) :
     let context := outputLeaf.inheritedWires.extend
       (input.plugLayout.frameRegion input.site)
-    let values := Splice.Input.siteQuotientEnvironment input context
+    let values := Concrete.Splice.Input.siteQuotientEnvironment input context
       outputLeaf.wiresExact env fallback
     let assignment := input.patternAttachmentAssignment.map values
     let inheritedEnv : Fin patternLeaf.inheritedWires.length → model.Carrier :=
       fun index =>
-        assignment.classes (Splice.Input.PlugLayout.exposedWireIndex input
+        assignment.classes (Concrete.Splice.Input.PlugLayout.exposedWireIndex input
           (patternLeaf.inheritedWires.get index)
           ((input.plugLayout.terminalBody_inherited_mem_iff_exposed patternWitness
             patternLeaf hnonempty (patternLeaf.inheritedWires.get index)).1
@@ -76,29 +78,29 @@ theorem patternTerminalRegion_denotes_of_native_items
             hnonempty relation)
     denoteRegion model  inheritedEnv
       (RelEnv.pullback terminalRelations relEnv)
-      (ConcreteElaboration.finishRegion input.pattern.val.diagram
+      (Concrete.Elaboration.finishRegion input.pattern.val.diagram
         patternLeaf.inheritedWires input.binderSpine.bodyContainer
         patternLeaf.items) := by
   dsimp only
   let context := outputLeaf.inheritedWires.extend
     (input.plugLayout.frameRegion input.site)
-  let values := Splice.Input.siteQuotientEnvironment input context
+  let values := Concrete.Splice.Input.siteQuotientEnvironment input context
     outputLeaf.wiresExact env fallback
   let assignment := input.patternAttachmentAssignment.map values
   let inheritedEnv : Fin patternLeaf.inheritedWires.length → model.Carrier :=
     fun index =>
-      assignment.classes (Splice.Input.PlugLayout.exposedWireIndex input
+      assignment.classes (Concrete.Splice.Input.PlugLayout.exposedWireIndex input
         (patternLeaf.inheritedWires.get index)
         ((input.plugLayout.terminalBody_inherited_mem_iff_exposed patternWitness
           patternLeaf hnonempty (patternLeaf.inheritedWires.get index)).1
             (List.get_mem _ index)))
-  let localEnv : Fin (ConcreteElaboration.exactScopeWires
+  let localEnv : Fin (Concrete.Elaboration.exactScopeWires
       input.pattern.val.diagram input.binderSpine.bodyContainer).length →
       model.Carrier := fun index =>
     env (input.plugLayout.patternSeamWireMapOfNonempty hadmissible host
       patternWitness patternLeaf outputWitness outputLeaf hnonempty
       (Fin.cast
-        (ConcreteElaboration.WireContext.length_extend
+        (Concrete.Elaboration.WireContext.length_extend
           patternLeaf.inheritedWires input.binderSpine.bodyContainer).symm
         (Fin.natAdd patternLeaf.inheritedWires.length index)))
   let terminalRelations : RelationRenaming
@@ -114,18 +116,18 @@ theorem patternTerminalRegion_denotes_of_native_items
         patternWitness patternLeaf outputWitness outputLeaf hnonempty)
       (RelEnv.pullback terminalRelations relEnv) patternLeaf.items := by
     simpa [terminalRelations,
-      Splice.Input.PlugLayout.patternSeamWireMapOfNonempty,
+      Concrete.Splice.Input.PlugLayout.patternSeamWireMapOfNonempty,
       Function.comp_def] using nativeItems
   have environmentEq := patternTerminalExtendedEnvironment_seam input
     hadmissible host patternWitness patternLeaf outputWitness outputLeaf hnonempty
     env fallback
-  change ConcreteElaboration.extendedEnvironment patternLeaf.inheritedWires
+  change Concrete.Elaboration.extendedEnvironment patternLeaf.inheritedWires
       input.binderSpine.bodyContainer inheritedEnv localEnv =
     env ∘ input.plugLayout.patternSeamWireMapOfNonempty hadmissible host
       patternWitness patternLeaf outputWitness outputLeaf hnonempty
     at environmentEq
   rw [← environmentEq] at seamItems
-  unfold ConcreteElaboration.finishRegion
+  unfold Concrete.Elaboration.finishRegion
   simp only [denoteRegion_mk]
   refine ⟨localEnv, ?_⟩
   rw [ItemSeq.castWiresEq_eq_renameWires, denoteItemSeq_renameWires]
@@ -135,15 +137,15 @@ theorem patternTerminalRegion_denotes_of_native_items
 relation as a full splice output, without requiring previously processed host
 atoms to be reintroduced. -/
 theorem terminalRelationOfValues_of_survivor
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -159,7 +161,7 @@ theorem terminalRelationOfValues_of_survivor
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -174,7 +176,7 @@ theorem terminalRelationOfValues_of_survivor
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)).length
       outputWitness.toFocus.holeRels)
-    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (survivorCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       (compileSurvivorRegion?
@@ -184,7 +186,7 @@ theorem terminalRelationOfValues_of_survivor
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site))
       outputLeaf.binders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible).diagram.val
         ((instantiateSpliceInput comprehension attachments binders payload state
@@ -196,7 +198,7 @@ theorem terminalRelationOfValues_of_survivor
     (fixed :
       let spliceInput := instantiateSpliceInput comprehension attachments binders
         payload state site arguments
-      let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+      let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
       let hostRelations : RelationRenaming host.intrinsicPath.toFocus.holeRels
           outputWitness.toFocus.holeRels := fun relation =>
         spliceInput.plugLayout.hostRelationRenaming host.intrinsicPath
@@ -207,7 +209,7 @@ theorem terminalRelationOfValues_of_survivor
       payload state site arguments
     let context := outputLeaf.inheritedWires.extend
       (spliceInput.plugLayout.frameRegion site)
-    let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput context
+    let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment spliceInput context
       outputLeaf.wiresExact env fallback
     let wireValue : Fin state.diagram.val.wireCount → model.Carrier :=
       fun wire => quotientValues (spliceInput.quotientWire wire)
@@ -217,10 +219,10 @@ theorem terminalRelationOfValues_of_survivor
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
   let layout := spliceInput.plugLayout
-  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
-  let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+  let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
   let context := outputLeaf.inheritedWires.extend (layout.frameRegion site)
-  let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput context
+  let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment spliceInput context
     outputLeaf.wiresExact env fallback
   let wireValue : Fin state.diagram.val.wireCount → model.Carrier :=
     fun wire => quotientValues (spliceInput.quotientWire wire)
@@ -246,7 +248,7 @@ theorem terminalRelationOfValues_of_survivor
             (terminalInheritedEnvironment payload state site arguments hnonempty
               assignment)
             relEnv
-            (ConcreteElaboration.finishRegion comprehension.val.diagram
+            (Concrete.Elaboration.finishRegion comprehension.val.diagram
               pattern.leaf.inheritedWires payload.binderSpine.bodyContainer
               pattern.leaf.items)
   refine ⟨assignment, ?_, terminalRelEnv, ?_, ?_⟩
@@ -280,15 +282,15 @@ theorem terminalRelationOfValues_of_survivor
 /-- Zero-spine survivor extraction directly certifies the payload's
 authoritative interpreted relation at the executor-recorded argument vector. -/
 theorem interpretedRelation_of_survivor_empty
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -302,7 +304,7 @@ theorem interpretedRelation_of_survivor_empty
     {outputBody : Region  outputOuter outputRels}
     {outputPath : List Nat}
     (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Splice.Region.ContextPath.CompilerLeaf
+    (outputLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -317,7 +319,7 @@ theorem interpretedRelation_of_survivor_empty
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)).length
       outputWitness.toFocus.holeRels)
-    (survivorCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (survivorCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       (compileSurvivorRegion?
@@ -327,7 +329,7 @@ theorem interpretedRelation_of_survivor_empty
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site))
       outputLeaf.binders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible).diagram.val
         ((instantiateSpliceInput comprehension attachments binders payload state
@@ -340,7 +342,7 @@ theorem interpretedRelation_of_survivor_empty
       payload state site arguments
     let context := outputLeaf.inheritedWires.extend
       (spliceInput.plugLayout.frameRegion site)
-    let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+    let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment spliceInput
       context outputLeaf.wiresExact env fallback
     let wireValue : Fin state.diagram.val.wireCount → model.Carrier :=
       fun wire => quotientValues (spliceInput.quotientWire wire)
@@ -350,9 +352,9 @@ theorem interpretedRelation_of_survivor_empty
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
   let layout := spliceInput.plugLayout
-  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
   let context := outputLeaf.inheritedWires.extend (layout.frameRegion site)
-  let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+  let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment spliceInput
     context outputLeaf.wiresExact env fallback
   let wireValue : Fin state.diagram.val.wireCount → model.Carrier :=
     fun wire => quotientValues (spliceInput.quotientWire wire)
@@ -361,11 +363,11 @@ theorem interpretedRelation_of_survivor_empty
     outputWitness outputLeaf hzero model  env outputRelEnv survivorItems
     survivorCompiled survivorDenotes
   dsimp only at nativeItems
-  let targetEq := ConcreteElaboration.WireContext.length_extend
+  let targetEq := Concrete.Elaboration.WireContext.length_extend
     outputLeaf.inheritedWires (layout.frameRegion site)
   let targetEnv : Fin
       (outputLeaf.inheritedWires.length +
-        (ConcreteElaboration.exactScopeWires layout.plugRaw
+        (Concrete.Elaboration.exactScopeWires layout.plugRaw
           (layout.frameRegion site)).length) → model.Carrier :=
     env ∘ Fin.cast targetEq.symm
   let combined := layout.siteCombinedWireEquivOfEmpty hadmissible host
@@ -382,11 +384,11 @@ theorem interpretedRelation_of_survivor_empty
   have nativeItems' : denoteItemSeq (relCtx := []) model
       (sourceEnv ∘ layout.patternRootSeamPreparedWireOfEmpty hadmissible host)
       PUnit.unit
-      (Splice.Input.compiledSpliceOpenRootItems comprehension).items := by
+      (Concrete.Splice.Input.compiledSpliceOpenRootItems comprehension).items := by
     simpa [sourceEnv, targetEnv, combined, layout, spliceInput]
       using nativeItems
   rw [environmentEq] at nativeItems'
-  have patternDenotes := Splice.Input.pattern_denote_of_patternRootItems
+  have patternDenotes := Concrete.Splice.Input.pattern_denote_of_patternRootItems
     spliceInput hadmissible outputWitness outputLeaf hzero model  env
     fallback nativeItems'
   have argumentValues :

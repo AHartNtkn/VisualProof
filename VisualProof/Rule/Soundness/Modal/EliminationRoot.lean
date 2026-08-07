@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Modal.EliminationSimulation
 
-namespace VisualProof.Rule.DoubleCutElimTrace
+namespace VisualProof.Concrete.DoubleCutElimTrace
+
+open VisualProof.Concrete
+open VisualProof.Rule
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -9,12 +12,12 @@ open VisualProof.Diagram
 
 def sourceOpen
     (trace : DoubleCutElimTrace input outer raw)
-    (boundary : List (Fin input.wireCount)) : OpenConcreteDiagram where
+    (boundary : List (Fin input.wireCount)) : Concrete.OpenDiagram where
   diagram := trace.sourceDiagram
   boundary := boundary
 
-def targetOpen (input : ConcreteDiagram)
-    (boundary : List (Fin input.wireCount)) : OpenConcreteDiagram where
+def targetOpen (input : Concrete.Diagram)
+    (boundary : List (Fin input.wireCount)) : Concrete.OpenDiagram where
   diagram := input
   boundary := boundary
 
@@ -106,31 +109,31 @@ def rootContextWitness
     PromotedContextWitness trace
       (trace.sourceOpen boundary).rootWires
       (targetOpen input boundary).rootWires := by
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨trace.sourceOpen boundary,
       trace.sourceOpen_wellFormed sourceWellFormed targetWellFormed boundary
         boundaryRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨targetOpen input boundary,
       targetOpen_wellFormed targetWellFormed boundary boundaryRoot⟩
   refine ⟨?_, ?_⟩
   · intro wire member
     have targetScope :=
-      (OpenConcreteDiagram.mem_rootWires_iff target.val target.property wire).1
+      (Concrete.OpenDiagram.mem_rootWires_iff target.val target.property wire).1
         member
     have sourceScope := trace.targetRoot_scope_promoted targetWellFormed wire
       targetScope
-    exact (OpenConcreteDiagram.mem_rootWires_iff source.val source.property
+    exact (Concrete.OpenDiagram.mem_rootWires_iff source.val source.property
       wire).2 sourceScope
   · intro wire member
     have sourceScope :=
-      (OpenConcreteDiagram.mem_rootWires_iff source.val source.property wire).1
+      (Concrete.OpenDiagram.mem_rootWires_iff source.val source.property wire).1
         member
     rcases trace.promotedRoot_scope_target_or_inner targetWellFormed wire
       sourceScope with targetScope | innerScope
-    · exact Or.inl ((OpenConcreteDiagram.mem_rootWires_iff target.val
+    · exact Or.inl ((Concrete.OpenDiagram.mem_rootWires_iff target.val
         target.property wire).2 targetScope)
-    · exact Or.inr ((ConcreteElaboration.mem_exactScopeWires input trace.inner
+    · exact Or.inr ((Concrete.Elaboration.mem_exactScopeWires input trace.inner
         wire).2 innerScope)
 
 theorem sourceOpen_hiddenWires_eq_of_regular
@@ -140,7 +143,7 @@ theorem sourceOpen_hiddenWires_eq_of_regular
     (regular : trace.sourceDiagram.root ≠ trace.targetIndex wellFormed) :
     (trace.sourceOpen boundary).hiddenWires =
       (targetOpen input boundary).hiddenWires := by
-  unfold OpenConcreteDiagram.hiddenWires sourceOpen targetOpen
+  unfold Concrete.OpenDiagram.hiddenWires sourceOpen targetOpen
   rw [trace.regular_exactScopeWires wellFormed trace.sourceDiagram.root
     regular]
   have rootOrigin : trace.origin trace.sourceDiagram.root = input.root :=
@@ -168,13 +171,13 @@ def rootLocalPart (ambient locals : List α)
   fun index => environment (rootLocalIndex ambient locals index)
 
 theorem rootEnvironment_of_parts
-    (ambient locals : ConcreteElaboration.WireContext diagram)
+    (ambient locals : Concrete.Elaboration.WireContext diagram)
     (outerEnvironment : Fin ambient.length → D)
     (environment : Fin (ambient ++ locals).length → D)
     (outerValues : ∀ index,
       environment (rootOuterIndex ambient locals index) =
         outerEnvironment index) :
-    ConcreteElaboration.rootEnvironment ambient locals outerEnvironment
+    Concrete.Elaboration.rootEnvironment ambient locals outerEnvironment
         (rootLocalPart ambient locals environment) = environment := by
   funext index
   let splitIndex : Fin (ambient.length + locals.length) :=
@@ -193,25 +196,25 @@ theorem rootEnvironment_of_parts
     rfl
 
 @[simp] theorem rootEnvironment_outer
-    (ambient locals : ConcreteElaboration.WireContext diagram)
+    (ambient locals : Concrete.Elaboration.WireContext diagram)
     (outerEnvironment : Fin ambient.length → D)
     (localEnvironment : Fin locals.length → D)
     (index : Fin ambient.length) :
-    ConcreteElaboration.rootEnvironment ambient locals outerEnvironment
+    Concrete.Elaboration.rootEnvironment ambient locals outerEnvironment
         localEnvironment (rootOuterIndex ambient locals index) =
       outerEnvironment index := by
-  simp [ConcreteElaboration.rootEnvironment, rootOuterIndex, extendWireEnv,
+  simp [Concrete.Elaboration.rootEnvironment, rootOuterIndex, extendWireEnv,
     Fin.addCases_left]
 
 @[simp] theorem rootEnvironment_local
-    (ambient locals : ConcreteElaboration.WireContext diagram)
+    (ambient locals : Concrete.Elaboration.WireContext diagram)
     (outerEnvironment : Fin ambient.length → D)
     (localEnvironment : Fin locals.length → D)
     (index : Fin locals.length) :
-    ConcreteElaboration.rootEnvironment ambient locals outerEnvironment
+    Concrete.Elaboration.rootEnvironment ambient locals outerEnvironment
         localEnvironment (rootLocalIndex ambient locals index) =
       localEnvironment index := by
-  simp [ConcreteElaboration.rootEnvironment, rootLocalIndex, extendWireEnv,
+  simp [Concrete.Elaboration.rootEnvironment, rootLocalIndex, extendWireEnv,
     Fin.addCases_right]
 
 @[simp] theorem rootOuterIndex_get
@@ -229,8 +232,8 @@ theorem rootEnvironment_of_parts
 def PromotedContextWitness.extendRootSelected
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (sourceExact : sourceContext.Exact (trace.targetIndex wellFormed)) :
     PromotedContextWitness trace sourceContext
@@ -244,11 +247,11 @@ def PromotedContextWitness.extendRootSelected
         exact False.elim (List.not_mem_nil outerMember)
     · have focusMember := trace.innerWire_mem_focusExact wellFormed wire
         innerMember
-      have scope := (ConcreteElaboration.mem_exactScopeWires
+      have scope := (Concrete.Elaboration.mem_exactScopeWires
         trace.sourceDiagram (trace.targetIndex wellFormed) wire).1 focusMember
       exact (sourceExact.mem_iff wire).2 (by
         rw [scope]
-        exact ConcreteDiagram.Encloses.refl _ _)
+        exact Concrete.Diagram.Encloses.refl _ _)
   · intro wire member
     rcases context.source_subset_target_or_inner wire member with
       targetMember | innerMember
@@ -259,8 +262,8 @@ def PromotedContextWitness.extendRootSelected
 theorem PromotedContextWitness.extendRootSelected_source_subset_target
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (sourceExact : sourceContext.Exact (trace.targetIndex wellFormed)) :
     ∀ wire, wire ∈ sourceContext →
@@ -273,10 +276,10 @@ theorem PromotedContextWitness.extendRootSelected_source_subset_target
 theorem targetRootSelected_exact
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
-    (targetContext : ConcreteElaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (targetExact : targetContext.Exact trace.target) :
     ((targetContext.extend outer).extend trace.inner).Exact trace.inner := by
   have outerExact := targetExact.extend_child wellFormed trace.outer_parent
   exact outerExact.extend_child wellFormed trace.inner_parent
 
-end VisualProof.Rule.DoubleCutElimTrace
+end VisualProof.Concrete.DoubleCutElimTrace

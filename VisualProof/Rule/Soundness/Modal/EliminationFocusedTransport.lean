@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Modal.EliminationFocusedItems
 
-namespace VisualProof.Rule.DoubleCutElimTrace
+namespace VisualProof.Concrete.DoubleCutElimTrace
+
+open VisualProof.Concrete
+open VisualProof.Rule
 
 open VisualProof
 open VisualProof.Theory
@@ -10,9 +13,9 @@ theorem focusedPartition_regionSimulation
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (sourceExact :
       (sourceContext.extend (trace.targetIndex wellFormed)).Exact
@@ -27,26 +30,26 @@ theorem focusedPartition_regionSimulation
     (targetSelected : ItemSeq
       (((targetContext.extend trace.target).extend outer).extend
         trace.inner).length rels)
-    (keptSimulation : ConcreteElaboration.ItemSeqSimulation model
+    (keptSimulation : Concrete.Elaboration.ItemSeqSimulation model
       direction (context.extendFocused wellFormed).indexRelation
       sourceKept targetKept)
-    (selectedSimulation : ConcreteElaboration.ItemSeqSimulation model
+    (selectedSimulation : Concrete.Elaboration.ItemSeqSimulation model
       direction (context.extendSelected wellFormed).indexRelation
       sourceSelected targetSelected) :
-    ConcreteElaboration.RegionSimulation model  direction
+    Concrete.Elaboration.RegionSimulation model  direction
       context.indexRelation
-      (ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
+      (Concrete.Elaboration.finishRegion trace.sourceDiagram sourceContext
         (trace.targetIndex wellFormed)
         (sourceKept.append sourceSelected))
-      (ConcreteElaboration.finishRegion input targetContext trace.target
+      (Concrete.Elaboration.finishRegion input targetContext trace.target
         (targetKept.append
           (.cons
             (.cut
-              (ConcreteElaboration.finishRegion input
+              (Concrete.Elaboration.finishRegion input
                 (targetContext.extend trace.target) outer
                 (.cons
                   (.cut
-                    (ConcreteElaboration.finishRegion input
+                    (Concrete.Elaboration.finishRegion input
                       ((targetContext.extend trace.target).extend outer)
                       trace.inner targetSelected))
                   .nil)))
@@ -63,14 +66,14 @@ theorem focusedPartition_regionSimulation
           sourceContext sourceKept sourceSelected sourceOuter relations).mp
           sourceDenotation
       let sourceEnvironment :=
-        ConcreteElaboration.extendedEnvironment sourceContext
+        Concrete.Elaboration.extendedEnvironment sourceContext
           (trace.targetIndex wellFormed) sourceOuter sourceLocal
       let targetFocusPulled :=
         focused.targetEnvironment sourceEnvironment
       let targetLocal := localEnvironmentPart targetContext trace.target
         targetFocusPulled
       have targetFocusEq :
-          ConcreteElaboration.extendedEnvironment targetContext trace.target
+          Concrete.Elaboration.extendedEnvironment targetContext trace.target
               targetOuter targetLocal =
             targetFocusPulled := by
         apply extendedEnvironment_of_parts
@@ -90,9 +93,9 @@ theorem focusedPartition_regionSimulation
         ((targetContext.extend trace.target).extend outer) trace.inner
         targetSelectedPulled
       have targetSelectedEq :
-          ConcreteElaboration.extendedEnvironment
+          Concrete.Elaboration.extendedEnvironment
               ((targetContext.extend trace.target).extend outer) trace.inner
-              (ConcreteElaboration.extendedEnvironment
+              (Concrete.Elaboration.extendedEnvironment
                 (targetContext.extend trace.target) outer targetFocusPulled
                 (trace.emptyOuterEnvironment model.Carrier))
               innerLocal =
@@ -122,14 +125,14 @@ theorem focusedPartition_regionSimulation
         (trace.targetFocused_doubleCut_denote_iff model  targetContext
           targetKept targetSelected targetOuter relations).mp targetDenotation
       let targetFocusEnvironment :=
-        ConcreteElaboration.extendedEnvironment targetContext trace.target
+        Concrete.Elaboration.extendedEnvironment targetContext trace.target
           targetOuter targetLocal
       let targetOuterEnvironment :=
-        ConcreteElaboration.extendedEnvironment
+        Concrete.Elaboration.extendedEnvironment
           (targetContext.extend trace.target) outer targetFocusEnvironment
           (trace.emptyOuterEnvironment model.Carrier)
       let targetSelectedEnvironment :=
-        ConcreteElaboration.extendedEnvironment
+        Concrete.Elaboration.extendedEnvironment
           ((targetContext.extend trace.target).extend outer) trace.inner
           targetOuterEnvironment innerLocal
       let sourceSubset :=
@@ -139,7 +142,7 @@ theorem focusedPartition_regionSimulation
       let sourceLocal := localEnvironmentPart sourceContext
         (trace.targetIndex wellFormed) sourceEnvironment
       have sourceEnvironmentEq :
-          ConcreteElaboration.extendedEnvironment sourceContext
+          Concrete.Elaboration.extendedEnvironment sourceContext
               (trace.targetIndex wellFormed) sourceOuter sourceLocal =
             sourceEnvironment := by
         apply extendedEnvironment_of_parts
@@ -190,4 +193,4 @@ theorem focusedPartition_regionSimulation
       · rw [sourceEnvironmentEq]
         exact sourceSelectedDenotation
 
-end VisualProof.Rule.DoubleCutElimTrace
+end VisualProof.Concrete.DoubleCutElimTrace

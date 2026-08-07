@@ -3,17 +3,19 @@ import VisualProof.Rule.Soundness.HighLevel
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open Diagram
 
-/-- Every successful branch of the sole checked dispatcher preserves
-denotation at every transported ordered boundary.  The proof is exhaustive:
+/-- Every successful raw-operation branch preserves denotation at every
+transported ordered boundary. The proof is exhaustive:
 each constructor is discharged by its  rule-family obligation. -/
-theorem applyStep_sound
+theorem applyOperation_sound
     {orientation : Orientation}
-    {input : Diagram.CheckedDiagram } {step : Step input}
-    {receipt : StepReceipt input}
-    (happly : applyStep orientation input step = .ok receipt) :
+    {input : Concrete.Checked } {step : OperationStep input}
+    {receipt : OperationReceipt input}
+    (happly : applyRawOperation orientation input step = .ok receipt) :
     SuccessfulReceiptSound orientation input step receipt := by
   cases step with
   | boundRelationSpawn region binder arity =>

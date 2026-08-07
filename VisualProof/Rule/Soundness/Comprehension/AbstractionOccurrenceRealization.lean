@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionFixedRelation
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -13,12 +16,12 @@ open-root compiler witnesses for one certified occurrence.  Its exposed
 classes are forced to be the ordered touching-wire valuation; only hidden
 root wires remain freely chosen. -/
 theorem relation_occurrence_openRoot_realization
-    (input : CheckedDiagram )
-    (comprehension : CheckedOpenDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence)
+    (input : Concrete.Checked )
+    (comprehension : Concrete.CheckedOpen )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence)
     (model : Model)
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (hostExact : hostContext.Exact occurrence.selection.val.anchor)
     (hostEnvironment : Fin hostContext.length → model.Carrier)
     (relationDenotes : abstractionRelation
@@ -27,27 +30,27 @@ theorem relation_occurrence_openRoot_realization
           hostEnvironment ∘ witness.assignment.args)) :
     let fragment := input.val.extractOpenRaw occurrence.selection
       (occurrenceLayout input occurrence)
-    let checkedFragment : CheckedOpenDiagram  :=
+    let checkedFragment : Concrete.CheckedOpen  :=
       ⟨fragment, occurrenceFragment_wellFormed input occurrence⟩
-    let compiled := Splice.Input.compiledSpliceOpenRootItems checkedFragment
+    let compiled := Concrete.Splice.Input.compiledSpliceOpenRootItems checkedFragment
     ∃ assignment : BoundaryAssignment checkedFragment.elaborate model.Carrier,
       assignment.classes = fragmentOuterEnvironment input occurrence witness
         hostContext hostExact hostEnvironment ∧
       ∃ hiddenEnvironment : Fin fragment.hiddenWires.length → model.Carrier,
         denoteItemSeq (relCtx := []) model
-          (ConcreteElaboration.rootEnvironment fragment.exposedWires
+          (Concrete.Elaboration.rootEnvironment fragment.exposedWires
             fragment.hiddenWires assignment.classes hiddenEnvironment)
           (PUnit.unit : RelEnv model.Carrier []) compiled.items := by
   dsimp only
   let fragment := input.val.extractOpenRaw occurrence.selection
     (occurrenceLayout input occurrence)
-  let checkedFragment : CheckedOpenDiagram  :=
+  let checkedFragment : Concrete.CheckedOpen  :=
     ⟨fragment, occurrenceFragment_wellFormed input occurrence⟩
-  let compiled := Splice.Input.compiledSpliceOpenRootItems checkedFragment
+  let compiled := Concrete.Splice.Input.compiledSpliceOpenRootItems checkedFragment
   let touching := touchingEnvironment input occurrence hostContext hostExact
     hostEnvironment
   let fragmentArguments : Fin fragment.boundary.length → model.Carrier :=
-    touching ∘ Fin.cast (ConcreteDiagram.extractBoundaryRaw_length input.val
+    touching ∘ Fin.cast (Concrete.Diagram.extractBoundaryRaw_length input.val
       occurrence.selection (occurrenceLayout input occurrence))
   have fragmentDenotes : checkedFragment.denote model  fragmentArguments := by
     exact (occurrenceFragment_denote_iff_relation input occurrence witness model
@@ -68,7 +71,7 @@ theorem relation_occurrence_openRoot_realization
     assignment.classes external = assignment.args position := assignmentAt
     _ = fragmentArguments position := congrFun assignmentArgs position
     _ = touching
-        (Fin.cast (ConcreteDiagram.extractBoundaryRaw_length input.val
+        (Fin.cast (Concrete.Diagram.extractBoundaryRaw_length input.val
           occurrence.selection (occurrenceLayout input occurrence))
           position) := rfl
     _ = fragmentOuterEnvironment input occurrence witness hostContext
@@ -77,17 +80,17 @@ theorem relation_occurrence_openRoot_realization
       symm
       exact fragmentOuterEnvironment_boundary input occurrence witness
         hostContext hostExact hostEnvironment
-          (Fin.cast (ConcreteDiagram.extractBoundaryRaw_length input.val
+          (Fin.cast (Concrete.Diagram.extractBoundaryRaw_length input.val
             occurrence.selection (occurrenceLayout input occurrence)) position)
 
 /-- Extend one fragment-root valuation to the host anchor context, using the
 fragment value exactly on wires represented by the occurrence and retaining a
 caller-supplied fallback everywhere else. -/
 noncomputable def occurrenceHostEnvironment
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence)
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (hostExact : hostContext.Exact occurrence.selection.val.anchor)
     (fragmentEnvironment : Fin (input.val.extractOpenRaw occurrence.selection
       (occurrenceLayout input occurrence)).rootWires.length → D)
@@ -96,7 +99,7 @@ noncomputable def occurrenceHostEnvironment
   classical
   exact fun hostIndex =>
     if represented : ∃ fragmentIndex,
-        (IterationSoundness.extractionContextRelation input occurrence.selection
+        (VisualProof.Rule.IterationSoundness.extractionContextRelation input occurrence.selection
           (occurrenceLayout input occurrence)
           (input.val.extractOpenRaw occurrence.selection
             (occurrenceLayout input occurrence)).rootWires hostContext).Rel
@@ -105,15 +108,15 @@ noncomputable def occurrenceHostEnvironment
     else fallback hostIndex
 
 theorem occurrenceHostEnvironment_agrees
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence)
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (hostExact : hostContext.Exact occurrence.selection.val.anchor)
     (fragmentEnvironment : Fin (input.val.extractOpenRaw occurrence.selection
       (occurrenceLayout input occurrence)).rootWires.length → D)
     (fallback : Fin hostContext.length → D) :
-    (IterationSoundness.extractionContextRelation input occurrence.selection
+    (VisualProof.Rule.IterationSoundness.extractionContextRelation input occurrence.selection
       (occurrenceLayout input occurrence)
       (input.val.extractOpenRaw occurrence.selection
         (occurrenceLayout input occurrence)).rootWires hostContext
@@ -125,14 +128,14 @@ theorem occurrenceHostEnvironment_agrees
   rw [dif_pos ⟨fragmentIndex, related⟩]
   let chosen := Classical.choose
     (show ∃ candidate,
-      (IterationSoundness.extractionContextRelation input occurrence.selection
+      (VisualProof.Rule.IterationSoundness.extractionContextRelation input occurrence.selection
         (occurrenceLayout input occurrence)
         (input.val.extractOpenRaw occurrence.selection
           (occurrenceLayout input occurrence)).rootWires hostContext).Rel
             candidate hostIndex from ⟨fragmentIndex, related⟩)
   have chosenRelated := Classical.choose_spec
     (show ∃ candidate,
-      (IterationSoundness.extractionContextRelation input occurrence.selection
+      (VisualProof.Rule.IterationSoundness.extractionContextRelation input occurrence.selection
         (occurrenceLayout input occurrence)
         (input.val.extractOpenRaw occurrence.selection
           (occurrenceLayout input occurrence)).rootWires hostContext).Rel
@@ -155,39 +158,39 @@ theorem occurrenceHostEnvironment_agrees
 /-- Root environments produced by the open compiler take the assignment's
 class value on every exposed root wire. -/
 theorem rootEnvironment_exposed
-    (fragment : OpenConcreteDiagram)
+    (fragment : Concrete.OpenDiagram)
     (classes : Fin fragment.exposedWires.length → D)
     (hidden : Fin fragment.hiddenWires.length → D)
     (rootIndex : Fin fragment.rootWires.length)
     (exposedIndex : Fin fragment.exposedWires.length)
     (wireEq : fragment.rootWires.get rootIndex =
       fragment.exposedWires.get exposedIndex) :
-    ConcreteElaboration.rootEnvironment fragment.exposedWires
+    Concrete.Elaboration.rootEnvironment fragment.exposedWires
         fragment.hiddenWires classes hidden rootIndex = classes exposedIndex := by
   let lengthEq : fragment.exposedWires.length + fragment.hiddenWires.length =
       fragment.rootWires.length := by
-    simp [OpenConcreteDiagram.rootWires]
+    simp [Concrete.OpenDiagram.rootWires]
   let canonical : Fin fragment.rootWires.length :=
     Fin.cast lengthEq (Fin.castAdd fragment.hiddenWires.length exposedIndex)
   have canonicalWire : fragment.rootWires.get canonical =
       fragment.exposedWires.get exposedIndex := by
-    simp [canonical, lengthEq, OpenConcreteDiagram.rootWires]
+    simp [canonical, lengthEq, Concrete.OpenDiagram.rootWires]
   have indexEq : rootIndex = canonical := by
     apply Fin.ext
     exact (List.getElem_inj fragment.rootWires_nodup).mp
       (wireEq.trans canonicalWire.symm)
   subst rootIndex
-  simp [canonical, lengthEq, ConcreteElaboration.rootEnvironment,
-    OpenConcreteDiagram.rootWires, extendWireEnv]
+  simp [canonical, lengthEq, Concrete.Elaboration.rootEnvironment,
+    Concrete.OpenDiagram.rootWires, extendWireEnv]
 
 /-- The host extension changes only wires internal to this occurrence.  On a
 boundary/exposed fragment wire, the open assignment is already forced to the
 fallback touching-wire value. -/
 theorem occurrenceHostEnvironment_eq_fallback_of_not_internal
-    (input : CheckedDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence)
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (input : Concrete.Checked )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (hostExact : hostContext.Exact occurrence.selection.val.anchor)
     (fragmentEnvironment : Fin (input.val.extractOpenRaw occurrence.selection
       (occurrenceLayout input occurrence)).rootWires.length → D)
@@ -219,7 +222,7 @@ theorem occurrenceHostEnvironment_eq_fallback_of_not_internal
           occurrence.selection.internalWires := by
       intro internal
       apply notInternal
-      unfold IterationSoundness.extractionContextRelation at related
+      unfold VisualProof.Rule.IterationSoundness.extractionContextRelation at related
       exact related ▸ internal
     have boundaryMember : fragment.rootWires.get fragmentIndex ∈
         fragment.boundary := by
@@ -237,7 +240,7 @@ theorem occurrenceHostEnvironment_eq_fallback_of_not_internal
         (fun boundary _ => ?_) fragmentWire
       · apply False.elim
         apply notInternal
-        simpa only [ConcreteDiagram.fragmentWireOrigin,
+        simpa only [Concrete.Diagram.fragmentWireOrigin,
           Fin.addCases_left] using
             (List.get_mem occurrence.selection.internalWires internal)
       · change Fin.natAdd (occurrenceLayout input occurrence).internalWireCount
@@ -246,7 +249,7 @@ theorem occurrenceHostEnvironment_eq_fallback_of_not_internal
         exact List.mem_ofFn.mpr ⟨boundary, rfl⟩
     have exposedMember : fragment.rootWires.get fragmentIndex ∈
         fragment.exposedWires :=
-      (OpenConcreteDiagram.mem_exposedWires fragment _).2 boundaryMember
+      (Concrete.OpenDiagram.mem_exposedWires fragment _).2 boundaryMember
     obtain ⟨exposedIndex, exposedGet⟩ := List.mem_iff_get.mp exposedMember
     have fragmentValue := exposedValues fragmentIndex exposedIndex exposedGet.symm
     have hostIndexEq : exposedHostIndex input occurrence witness hostContext
@@ -255,7 +258,7 @@ theorem occurrenceHostEnvironment_eq_fallback_of_not_internal
       apply (List.getElem_inj hostExact.nodup).mp
       have exposedOrigin := exposedHostIndex_get input occurrence witness
         hostContext hostExact exposedIndex
-      unfold IterationSoundness.extractionContextRelation at related
+      unfold VisualProof.Rule.IterationSoundness.extractionContextRelation at related
       simpa only [List.get_eq_getElem] using exposedOrigin.trans
         ((congrArg (input.val.fragmentWireOrigin occurrence.selection
           (occurrenceLayout input occurrence)) exposedGet).trans related)
@@ -273,24 +276,24 @@ root-wire witnesses and makes the authoritative selected compiler block true.
 The chosen host valuation is unchanged outside the occurrence's internal-wire
 set, which is the composition law needed for several disjoint occurrences. -/
 theorem relation_selectedOccurrence_environment
-    (input : CheckedDiagram )
-    (comprehension : CheckedOpenDiagram )
-    (occurrence : AbstractionOccurrence input)
-    (witness : AbstractionWitness input comprehension occurrence)
+    (input : Concrete.Checked )
+    (comprehension : Concrete.CheckedOpen )
+    (occurrence : OperationAbstractionOccurrence input)
+    (witness : OperationAbstractionWitness input comprehension occurrence)
     (model : Model)
     (hostFuel : Nat)
-    (hostContext : ConcreteElaboration.WireContext input.val)
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
-    (hostEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (hostContext : Concrete.Elaboration.WireContext input.val)
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
+    (hostEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val hostBinders occurrence.selection.val.anchor)
     (hostCover : hostBinders.Covers occurrence.selection.val.anchor)
     (hostExact : hostContext.Exact occurrence.selection.val.anchor)
     (hostItems : ItemSeq  hostContext.length hostRels)
     (hostCompiled :
-      ConcreteElaboration.compileOccurrencesWith?  input.val
-        (ConcreteElaboration.compileRegion?  input.val hostFuel)
+      Concrete.Elaboration.compileOccurrencesWith?  input.val
+        (Concrete.Elaboration.compileRegion?  input.val hostFuel)
         hostContext hostBinders
-        (ModalSoundness.selectedOccurrences input.val occurrence.selection) =
+        (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val occurrence.selection) =
           some hostItems)
     (fallback : Fin hostContext.length → model.Carrier)
     (relationEnvironment : RelEnv model.Carrier hostRels)
@@ -304,13 +307,13 @@ theorem relation_selectedOccurrence_environment
       denoteItemSeq model  hostEnvironment relationEnvironment hostItems := by
   let fragment := input.val.extractOpenRaw occurrence.selection
     (occurrenceLayout input occurrence)
-  let checkedFragment : CheckedOpenDiagram  :=
+  let checkedFragment : Concrete.CheckedOpen  :=
     ⟨fragment, occurrenceFragment_wellFormed input occurrence⟩
-  let compiled := Splice.Input.compiledSpliceOpenRootItems checkedFragment
+  let compiled := Concrete.Splice.Input.compiledSpliceOpenRootItems checkedFragment
   obtain ⟨assignment, classesEq, hiddenEnvironment, fragmentItemsDenote⟩ :=
     relation_occurrence_openRoot_realization input comprehension occurrence
       witness model  hostContext hostExact fallback relationDenotes
-  let fragmentEnvironment := ConcreteElaboration.rootEnvironment
+  let fragmentEnvironment := Concrete.Elaboration.rootEnvironment
     fragment.exposedWires fragment.hiddenWires assignment.classes
       hiddenEnvironment
   let hostEnvironment := occurrenceHostEnvironment input occurrence witness
@@ -322,7 +325,7 @@ theorem relation_selectedOccurrence_environment
           fragmentOuterEnvironment input occurrence witness hostContext
             hostExact fallback exposedIndex := by
     intro rootIndex exposedIndex wireEq
-    change ConcreteElaboration.rootEnvironment fragment.exposedWires
+    change Concrete.Elaboration.rootEnvironment fragment.exposedWires
         fragment.hiddenWires assignment.classes hiddenEnvironment rootIndex = _
     rw [rootEnvironment_exposed fragment assignment.classes hiddenEnvironment
       rootIndex exposedIndex wireEq, classesEq]
@@ -334,7 +337,7 @@ theorem relation_selectedOccurrence_environment
       witness hostContext hostExact fragmentEnvironment fallback exposedValues
       index notInternal
   have environmentsAgree :
-      (IterationSoundness.extractionContextRelation input occurrence.selection
+      (VisualProof.Rule.IterationSoundness.extractionContextRelation input occurrence.selection
         (occurrenceLayout input occurrence) fragment.rootWires hostContext
       ).EnvironmentsAgree fragmentEnvironment hostEnvironment := by
     exact occurrenceHostEnvironment_agrees input occurrence witness hostContext
@@ -344,25 +347,25 @@ theorem relation_selectedOccurrence_environment
     (occurrenceLayout input occurrence).bodyContainer_eq_root_of_proxyCount_eq_zero
       (occurrenceLayout_proxyCount_zero input occurrence witness)
   let fragmentEnumeration :
-      ConcreteElaboration.BinderContext.Enumeration fragment.diagram
-        ConcreteElaboration.BinderContext.empty
+      Concrete.Elaboration.BinderContext.Enumeration fragment.diagram
+        Concrete.Elaboration.BinderContext.empty
           (occurrenceLayout input occurrence).bodyContainer :=
-    bodyEq.symm ▸ ConcreteElaboration.BinderContext.Enumeration.empty
+    bodyEq.symm ▸ Concrete.Elaboration.BinderContext.Enumeration.empty
       fragment.diagram
-  have fragmentExact : ConcreteElaboration.WireContext.Exact
+  have fragmentExact : Concrete.Elaboration.WireContext.Exact
       fragment.rootWires (occurrenceLayout input occurrence).bodyContainer := by
     rw [bodyEq]
-    exact ConcreteElaboration.openRootWires_exact
+    exact Concrete.Elaboration.openRootWires_exact
       (occurrenceFragment_wellFormed input occurrence)
-  let binderWitness := IterationSoundness.ExtractionBinderWitness.terminal input
+  let binderWitness := VisualProof.Rule.IterationSoundness.ExtractionBinderWitness.terminal input
     occurrence.selection (occurrenceLayout input occurrence)
-    ConcreteElaboration.BinderContext.empty fragmentEnumeration hostBinders
+    Concrete.Elaboration.BinderContext.empty fragmentEnumeration hostBinders
       hostCover
   have itemsSimulation :=
-    IterationSoundness.extractionCompileSelectedItems_denote input
+    VisualProof.Rule.IterationSoundness.extractionCompileSelectedItems_denote input
       occurrence.selection (occurrenceLayout input occurrence) model
       .forward fragment.diagram.regionCount hostFuel fragment.rootWires
-      hostContext ConcreteElaboration.BinderContext.empty hostBinders
+      hostContext Concrete.Elaboration.BinderContext.empty hostBinders
       fragmentEnumeration hostEnumeration hostCover fragmentExact hostExact
       compiled.items hostItems (by
         simpa [fragment, checkedFragment, bodyEq] using compiled.computation)
@@ -382,4 +385,4 @@ theorem relation_selectedOccurrence_environment
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

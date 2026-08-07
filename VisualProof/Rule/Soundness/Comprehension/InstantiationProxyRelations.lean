@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationTerminalCompiler
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -23,20 +25,20 @@ private theorem relationLookup_cast
 /-- Concrete binder targets carry a fixed target-indexed family of relation
 values through any intrinsic lexical context in which they are visible. -/
 def ProxyRelationsAt
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     {model : Model}
     {rels : RelCtx}
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index)) : Prop :=
@@ -47,20 +49,20 @@ def ProxyRelationsAt
 
 /-- Pushing a distinct child binder preserves every retained proxy value. -/
 theorem ProxyRelationsAt.push_other
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     {model : Model}
     {rels : RelCtx}
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
     (values : ∀ index,
       Relation model.Carrier (payload.binderSpine.arity index))
@@ -72,7 +74,7 @@ theorem ProxyRelationsAt.push_other
     ProxyRelationsAt payload state (binderContext.push child childArity)
       (childRelation, relEnv) values := by
   intro index relation hlookup
-  rw [ConcreteElaboration.BinderContext.push_other binderContext childArity
+  rw [Concrete.Elaboration.BinderContext.push_other binderContext childArity
     (hne index)] at hlookup
   cases hold : binderContext (state.binderTargets index) with
   | none => simp [hold] at hlookup
@@ -83,34 +85,34 @@ theorem ProxyRelationsAt.push_other
         exact congrArg Sigma.fst (Option.some.inj hlookup)
       subst ownedArity
       have relationEq : relation =
-          ConcreteElaboration.BinderContext.liftVar childArity ownedRelation := by
+          Concrete.Elaboration.BinderContext.liftVar childArity ownedRelation := by
         have hsigma := Option.some.inj hlookup
         cases hsigma
         rfl
       subst relation
       simpa [RelEnv.lookup,
-        ConcreteElaboration.BinderContext.liftVar] using
+        Concrete.Elaboration.BinderContext.liftVar] using
           fixed index ownedRelation hold
 
 /-- Every retained target has its certified arity in the quantified bubble's
 compiler leaf. -/
 theorem binderTargetRelation_exists
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
     {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
-    (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val
+    (hostLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf state.diagram.val
       state.bubble hostWitness)
     (index : Fin payload.binderSpine.proxyCount) :
     ∃ relation : RelVar hostWitness.toFocus.holeRels
@@ -124,15 +126,15 @@ theorem binderTargetRelation_exists
 /-- Canonical proxy values at the quantified bubble, indexed by the executor's
 binder-spine positions rather than by context-dependent relation variables. -/
 noncomputable def proxyRelationsAtBubble
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
@@ -140,7 +142,7 @@ noncomputable def proxyRelationsAtBubble
     {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
-    (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val
+    (hostLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf state.diagram.val
       state.bubble hostWitness)
     (relEnv : RelEnv model.Carrier hostWitness.toFocus.holeRels)
     (index : Fin payload.binderSpine.proxyCount) :
@@ -150,15 +152,15 @@ noncomputable def proxyRelationsAtBubble
       index))
 
 theorem proxyRelationsAtBubble_fixed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
@@ -166,7 +168,7 @@ theorem proxyRelationsAtBubble_fixed
     {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
-    (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val
+    (hostLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf state.diagram.val
       state.bubble hostWitness)
     (relEnv : RelEnv model.Carrier hostWitness.toFocus.holeRels) :
     ProxyRelationsAt payload state hostLeaf.binders relEnv
@@ -189,15 +191,15 @@ theorem proxyRelationsAtBubble_fixed
 /-- Pulling the terminal compiler's relation environment back to its native
 context reads exactly the target-indexed proxy values chosen at the bubble. -/
 theorem terminalRelationPullback_lookup
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -208,17 +210,17 @@ theorem terminalRelationPullback_lookup
     {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
-    (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val
+    (hostLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf state.diagram.val
       state.bubble hostWitness)
     (relEnv : RelEnv model.Carrier hostWitness.toFocus.holeRels)
     {arity : Nat}
     (relation : RelVar
-      (Splice.Input.compiledSpliceTerminalView
+      (Concrete.Splice.Input.compiledSpliceTerminalView
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments) hnonempty).witness.toFocus.holeRels arity) :
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
-    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
     let proxy : Fin payload.binderSpine.proxyCount := Classical.choose
       (spliceInput.plugLayout.terminalBodyBinder_is_proxy pattern.witness
         pattern.leaf hnonempty relation.index)
@@ -233,10 +235,10 @@ theorem terminalRelationPullback_lookup
   let proxy : Fin payload.binderSpine.proxyCount := Classical.choose
     ((instantiateSpliceInput comprehension attachments binders payload state
       site arguments).plugLayout.terminalBodyBinder_is_proxy
-        (Splice.Input.compiledSpliceTerminalView
+        (Concrete.Splice.Input.compiledSpliceTerminalView
           (instantiateSpliceInput comprehension attachments binders payload
             state site arguments) hnonempty).witness
-        (Splice.Input.compiledSpliceTerminalView
+        (Concrete.Splice.Input.compiledSpliceTerminalView
           (instantiateSpliceInput comprehension attachments binders payload
             state site arguments) hnonempty).leaf
         hnonempty relation.index)

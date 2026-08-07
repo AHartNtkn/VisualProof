@@ -1,7 +1,9 @@
 import VisualProof.Rule.Soundness.Iteration.ExtractionBinder
-import VisualProof.Diagram.Concrete.Elaboration.Simulation
+import VisualProof.Concrete.Elaboration.Simulation
 
 namespace VisualProof.Rule.IterationSoundness
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -12,7 +14,7 @@ open VisualProof.Theory
 container represents the anchor; copied material regions retain provenance.
 Other cases are total only so this can serve as the compiler's region map. -/
 def extractionRegionOrigin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
     Fin layout.regionCount → Fin input.val.regionCount :=
@@ -28,7 +30,7 @@ def extractionRegionOrigin
 
 /-- The host binder represented by an extracted region. -/
 def extractionBinderOrigin
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
     Fin layout.regionCount → Fin input.val.regionCount :=
@@ -41,7 +43,7 @@ def extractionBinderOrigin
         omega) region)
 
 @[simp] theorem extractionBinderOrigin_proxy
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (proxy : Fin layout.proxyCount) :
@@ -52,7 +54,7 @@ def extractionBinderOrigin
   simp [FragmentLayout.proxyCount, FragmentLayout.materialRegionCount]
 
 @[simp] theorem extractionBinderOrigin_materialRegion
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount) :
@@ -64,7 +66,7 @@ def extractionBinderOrigin
   simp [FragmentLayout.proxyCount, FragmentLayout.materialRegionCount]
 
 theorem extractionRegionOrigin_bodyContainer
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection) :
     extractionRegionOrigin input selection layout layout.bodyContainer =
@@ -72,7 +74,7 @@ theorem extractionRegionOrigin_bodyContainer
   simp [extractionRegionOrigin]
 
 @[simp] theorem extractionRegionOrigin_materialRegion
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount) :
@@ -91,7 +93,7 @@ theorem extractionRegionOrigin_bodyContainer
   simp [FragmentLayout.proxyCount, FragmentLayout.materialRegionCount]
 
 theorem extractionRegionOrigin_fragmentParent_of_selectedNode
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (node : Fin layout.nodeCount) :
@@ -111,12 +113,12 @@ theorem extractionRegionOrigin_fragmentParent_of_selectedNode
           selection.selectedRegions :=
       (selection.mem_selectedRegions _).2 hselected
     obtain ⟨index, hget, hmapped⟩ :=
-      ConcreteDiagram.fragmentParent_selectedRegion input selection layout
+      Concrete.Diagram.fragmentParent_selectedRegion input selection layout
         hmember
     rw [hmapped, extractionRegionOrigin_materialRegion, hget]
 
 theorem extractionBinderOrigin_fragmentBinder
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {binder : Fin input.val.regionCount}
@@ -153,7 +155,7 @@ theorem extractionBinderOrigin_fragmentBinder
             (layout.externalBinders.get index)) := by rw [hget']
       _ = extractionBinderOrigin input selection layout
           (layout.proxy index) := by
-        rw [ConcreteDiagram.fragmentBinder_externalBinder input selection
+        rw [Concrete.Diagram.fragmentBinder_externalBinder input selection
           layout]
       _ = layout.externalBinders.get index :=
         extractionBinderOrigin_proxy input selection layout index
@@ -162,7 +164,7 @@ theorem extractionBinderOrigin_fragmentBinder
 /-- Every copied node has exactly the host shape after applying extraction
 provenance to its owner and binder. -/
 theorem extractionNode_shape
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (node : Fin layout.nodeCount) :
@@ -203,13 +205,13 @@ theorem extractionNode_shape
       rw [howner, hbinderOrigin]
 
 theorem extractionBinderOrigin_terminalBinder
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {rels : RelCtx}
-    (binders : ConcreteElaboration.BinderContext
+    (binders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) rels)
-    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+    (enumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) binders
       layout.bodyContainer)
     (index : Fin rels.length) :
@@ -229,23 +231,23 @@ theorem extractionBinderOrigin_terminalBinder
 /-- Port lookup on a copied extraction node is exactly host lookup after the
 authoritative extraction wire-provenance map. -/
 theorem extractionResolvePort_map
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (fragmentExact : fragmentContext.Exact layout.bodyContainer)
     (hostExact : hostContext.Exact selection.val.anchor)
     (node : Fin layout.nodeCount)
     (port : CPort) :
-    ConcreteElaboration.resolvePort? input.val hostContext
+    Concrete.Elaboration.resolvePort? input.val hostContext
         (selection.selectedNodes.get node) port =
-      (ConcreteElaboration.resolvePort?
+      (Concrete.Elaboration.resolvePort?
         (input.val.extractDiagramRaw selection layout) fragmentContext node port
       ).map (extractionContextIndexMap input selection layout fragmentContext
         hostContext fragmentExact hostExact) := by
-  apply ConcreteElaboration.resolvePort?_map_of_occurrence
+  apply Concrete.Elaboration.resolvePort?_map_of_occurrence
     fragmentContext hostContext node (selection.selectedNodes.get node)
     (input.val.fragmentWireOrigin selection layout)
     (extractionContextIndexMap input selection layout fragmentContext
@@ -260,40 +262,40 @@ theorem extractionResolvePort_map
     obtain ⟨original, originalOccurs, mapped⟩ :=
       (input.val.mem_extractDiagramRaw_wire_endpoints_iff selection layout wire
         ⟨node, requested⟩).1 occurs
-    rw [ConcreteDiagram.fragmentEndpoint?_origin selection mapped] at originalOccurs
+    rw [Concrete.Diagram.fragmentEndpoint?_origin selection mapped] at originalOccurs
     exact originalOccurs
   · intro hostWire requested occurs
     obtain ⟨fragmentWire, fragmentOccurs⟩ :=
-      ConcreteDiagram.extractDiagramRaw_endpointOccurs_of_selected input selection
+      Concrete.Diagram.extractDiagramRaw_endpointOccurs_of_selected input selection
         layout node requested occurs
     refine ⟨fragmentWire, ?_, fragmentOccurs⟩
     obtain ⟨original, originalOccurs, mapped⟩ :=
       (input.val.mem_extractDiagramRaw_wire_endpoints_iff selection layout
         fragmentWire ⟨node, requested⟩).1 fragmentOccurs
-    rw [ConcreteDiagram.fragmentEndpoint?_origin selection mapped] at originalOccurs
-    exact ConcreteElaboration.endpoint_wire_unique
+    rw [Concrete.Diagram.fragmentEndpoint?_origin selection mapped] at originalOccurs
+    exact Concrete.Elaboration.endpoint_wire_unique
       input.property.wire_endpoints_are_disjoint originalOccurs occurs
   · exact input.property.wire_endpoints_are_disjoint
 
 /-- The two port indices returned by successful extracted and host lookups are
 related by extraction's concrete context relation. -/
 theorem extractionResolvePort_related
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (fragmentExact : fragmentContext.Exact layout.bodyContainer)
     (hostExact : hostContext.Exact selection.val.anchor)
     (node : Fin layout.nodeCount)
     (port : CPort)
     (fragmentIndex : Fin fragmentContext.length)
     (hostIndex : Fin hostContext.length)
-    (fragmentResolved : ConcreteElaboration.resolvePort?
+    (fragmentResolved : Concrete.Elaboration.resolvePort?
       (input.val.extractDiagramRaw selection layout) fragmentContext node port =
         some fragmentIndex)
-    (hostResolved : ConcreteElaboration.resolvePort? input.val hostContext
+    (hostResolved : Concrete.Elaboration.resolvePort? input.val hostContext
       (selection.selectedNodes.get node) port = some hostIndex) :
     (extractionContextRelation input selection layout fragmentContext
       hostContext).Rel fragmentIndex hostIndex := by
@@ -309,40 +311,40 @@ theorem extractionResolvePort_related
 transported backward because iteration needs the retained host occurrence to
 entail the extracted pattern occurrence. -/
 theorem extractionCompileNode_itemSimulation
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (model : Model)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (fragmentExact : fragmentContext.Exact layout.bodyContainer)
     (hostExact : hostContext.Exact selection.val.anchor)
     {fragmentRels hostRels : RelCtx}
-    (fragmentBinders : ConcreteElaboration.BinderContext
+    (fragmentBinders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) fragmentRels)
-    (fragmentEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (fragmentEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) fragmentBinders
       layout.bodyContainer)
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
     (hostCover : hostBinders.Covers selection.val.anchor)
     (node : Fin layout.nodeCount)
     (fragmentItem : Item  fragmentContext.length fragmentRels)
     (hostItem : Item  hostContext.length hostRels)
-    (fragmentCompiled : ConcreteElaboration.compileNode?
+    (fragmentCompiled : Concrete.Elaboration.compileNode?
       (input.val.extractDiagramRaw selection layout) fragmentContext
       fragmentBinders node = some fragmentItem)
-    (hostCompiled : ConcreteElaboration.compileNode?  input.val
+    (hostCompiled : Concrete.Elaboration.compileNode?  input.val
       hostContext hostBinders (selection.selectedNodes.get node) =
         some hostItem) :
-    ConcreteElaboration.ItemSimulation model  .backward
+    Concrete.Elaboration.ItemSimulation model  .backward
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
       (fragmentItem.renameRelations
         (extractionTerminalRelationRenaming input selection layout
           fragmentBinders fragmentEnumeration hostBinders hostCover))
       hostItem := by
-  apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+  apply Concrete.Elaboration.compileNode?_itemSimulation_of_related_ports
     model  .backward fragmentContext hostContext
     (extractionContextRelation input selection layout fragmentContext
       hostContext)

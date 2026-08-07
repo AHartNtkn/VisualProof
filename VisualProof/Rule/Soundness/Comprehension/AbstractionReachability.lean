@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionNode
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -26,7 +29,7 @@ def OuterReachable
 
 theorem outerReachable_root
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (_payload : ComprehensionAbstractPayload input wrap comprehension
+    (_payload : OperationComprehensionAbstractPayload input wrap comprehension
       occurrences) :
     trace.OuterReachable input.val.root := by
   refine ⟨trace.root_survives, ?_⟩
@@ -39,7 +42,7 @@ the wrap anchor; occurrence anchors inside the selected material belong to the
 specialized fixed-relation kernel. -/
 theorem outerReachable_focused_eq
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (region : Fin input.val.regionCount)
     (reachable : trace.OuterReachable region)
     (focused : ¬ trace.FrameRegular region) :
@@ -63,7 +66,7 @@ theorem outerReachable_focused_eq
 
 theorem outerReachable_child_of_regular
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (parent child : Fin input.val.regionCount)
     (reachable : trace.OuterReachable parent)
     (regular : trace.FrameRegular parent)
@@ -83,14 +86,14 @@ theorem outerReachable_child_of_regular
 
 theorem reachable_root
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (_payload : ComprehensionAbstractPayload input wrap comprehension
+    (_payload : OperationComprehensionAbstractPayload input wrap comprehension
       occurrences) :
     trace.Reachable input.val.root :=
   trace.root_survives
 
 theorem survives_of_reachable
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (_payload : ComprehensionAbstractPayload input wrap comprehension
+    (_payload : OperationComprehensionAbstractPayload input wrap comprehension
       occurrences)
     (region : Fin input.val.regionCount)
     (reachable : trace.Reachable region) :
@@ -99,7 +102,7 @@ theorem survives_of_reachable
 
 theorem reachable_child_of_regular
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (_payload : ComprehensionAbstractPayload input wrap comprehension
+    (_payload : OperationComprehensionAbstractPayload input wrap comprehension
       occurrences)
     (parent child : Fin input.val.regionCount)
     (_reachable : trace.Reachable parent)
@@ -128,4 +131,4 @@ theorem reachable_child_of_focus
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

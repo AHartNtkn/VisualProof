@@ -2,44 +2,46 @@ import VisualProof.Rule.Soundness.Modal
 
 namespace VisualProof.Rule.VacuousSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Theory
 open VisualProof.Diagram
 
-def bubbleRegion (input : ConcreteDiagram) :
+def bubbleRegion (input : Concrete.Diagram) :
     Fin (input.regionCount + 1) :=
   Fin.last input.regionCount
 
 @[simp] theorem vacuousIntroRaw_regionCount
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) :
     (vacuousIntroRaw input selection arity).regionCount =
       input.regionCount + 1 := rfl
 
 @[simp] theorem vacuousIntroRaw_nodeCount
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) :
     (vacuousIntroRaw input selection arity).nodeCount = input.nodeCount := rfl
 
 @[simp] theorem vacuousIntroRaw_wireCount
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) :
     (vacuousIntroRaw input selection arity).wireCount = input.wireCount := rfl
 
 @[simp] theorem vacuousIntroRaw_root
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) :
     (vacuousIntroRaw input selection arity).root = input.root.castSucc := rfl
 
 @[simp] theorem vacuousIntroRaw_wire
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (wire : Fin input.wireCount) :
     (vacuousIntroRaw input selection arity).wires wire =
       liftCWireRegions 1 (input.wires wire) := rfl
 
 theorem bubbleRegion_ne_lift
-    (input : ConcreteDiagram) (region : Fin input.regionCount) :
+    (input : Concrete.Diagram) (region : Fin input.regionCount) :
     bubbleRegion input ≠ region.castSucc := by
   intro equality
   have values := congrArg Fin.val equality
@@ -47,7 +49,7 @@ theorem bubbleRegion_ne_lift
   omega
 
 theorem vacuousIntroRaw_node
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (node : Fin input.nodeCount) :
     (vacuousIntroRaw input selection arity).nodes node =
       if node ∈ selection.val.directNodes then
@@ -55,7 +57,7 @@ theorem vacuousIntroRaw_node
       else liftCNode 1 (input.nodes node) := rfl
 
 theorem vacuousIntroRaw_oldRegion
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (region : Fin input.regionCount) :
     (vacuousIntroRaw input selection arity).regions region.castSucc =
       if region ∈ selection.val.childRoots then
@@ -65,14 +67,14 @@ theorem vacuousIntroRaw_oldRegion
   rfl
 
 @[simp] theorem vacuousIntroRaw_bubble
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) :
     (vacuousIntroRaw input selection arity).regions (bubbleRegion input) =
       .bubble selection.val.anchor.castSucc arity := by
   simp [vacuousIntroRaw, bubbleRegion]
 
 theorem vacuousIntroRaw_node_region
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (node : Fin input.nodeCount) :
     ((vacuousIntroRaw input selection arity).nodes node).region =
       if node ∈ selection.val.directNodes then bubbleRegion input
@@ -81,7 +83,7 @@ theorem vacuousIntroRaw_node_region
   split <;> cases input.nodes node <;> rfl
 
 theorem vacuousIntroRaw_oldRegion_parent
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (region : Fin input.regionCount) :
     ((vacuousIntroRaw input selection arity).regions
       region.castSucc).parent? =
@@ -102,7 +104,7 @@ theorem vacuousIntroRaw_oldRegion_parent
     cases input.regions region <;> rfl
 
 @[simp] theorem vacuousIntroRaw_bubble_parent
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) :
     ((vacuousIntroRaw input selection arity).regions
       (bubbleRegion input)).parent? = some selection.val.anchor.castSucc := by
@@ -110,12 +112,12 @@ theorem vacuousIntroRaw_oldRegion_parent
   rfl
 
 @[simp] theorem vacuousIntroRaw_exactScopeWires
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (region : Fin input.regionCount) :
-    ConcreteElaboration.exactScopeWires
+    Concrete.Elaboration.exactScopeWires
       (vacuousIntroRaw input selection arity) region.castSucc =
-        ConcreteElaboration.exactScopeWires input region := by
-  unfold ConcreteElaboration.exactScopeWires
+        Concrete.Elaboration.exactScopeWires input region := by
+  unfold Concrete.Elaboration.exactScopeWires
   apply congrArg filterFin
   funext wire
   apply Bool.eq_iff_iff.mpr
@@ -128,11 +130,11 @@ theorem vacuousIntroRaw_oldRegion_parent
     exact equality
 
 @[simp] theorem vacuousIntroRaw_bubble_exactScopeWires
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) :
-    ConcreteElaboration.exactScopeWires
+    Concrete.Elaboration.exactScopeWires
       (vacuousIntroRaw input selection arity) (bubbleRegion input) = [] := by
-  unfold ConcreteElaboration.exactScopeWires filterFin
+  unfold Concrete.Elaboration.exactScopeWires filterFin
   rw [show allFin (vacuousIntroRaw input selection arity).wireCount =
       allFin input.wireCount by rfl]
   apply List.filter_eq_nil_iff.mpr
@@ -140,18 +142,18 @@ theorem vacuousIntroRaw_oldRegion_parent
   have equality := decide_eq_true_eq.mp selected
   exact bubbleRegion_ne_lift input (input.wires wire).scope equality.symm
 
-def liftOccurrence (input : ConcreteDiagram) :
-    ConcreteElaboration.LocalOccurrence input.regionCount input.nodeCount →
-      ConcreteElaboration.LocalOccurrence (input.regionCount + 1)
+def liftOccurrence (input : Concrete.Diagram) :
+    Concrete.Elaboration.LocalOccurrence input.regionCount input.nodeCount →
+      Concrete.Elaboration.LocalOccurrence (input.regionCount + 1)
         input.nodeCount
   | .node node => .node node
   | .child child => .child child.castSucc
 
 structure LiftedContextWitness
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat)
-    (sourceContext : ConcreteElaboration.WireContext input)
-    (targetContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext
       (vacuousIntroRaw input selection arity)) : Type where
   contexts_eq : sourceContext = targetContext
 
@@ -160,9 +162,9 @@ namespace LiftedContextWitness
 def indexRelation
     (witness : LiftedContextWitness input selection arity
       sourceContext targetContext) :
-    ConcreteElaboration.ContextIndexRelation sourceContext.length
+    Concrete.Elaboration.ContextIndexRelation sourceContext.length
       targetContext.length :=
-  ConcreteElaboration.ContextIndexRelation.forwardMap
+  Concrete.Elaboration.ContextIndexRelation.forwardMap
     (Fin.cast (congrArg List.length witness.contexts_eq))
 
 def extend
@@ -173,17 +175,17 @@ def extend
       (sourceContext.extend region) (targetContext.extend region.castSucc) := by
   rcases witness with ⟨rfl⟩
   refine ⟨?_⟩
-  simp only [ConcreteElaboration.WireContext.extend,
+  simp only [Concrete.Elaboration.WireContext.extend,
     vacuousIntroRaw_exactScopeWires]
   rfl
 
 end LiftedContextWitness
 
 structure LiftedBinderWitness
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) {sourceRels targetRels : RelCtx}
-    (sourceBinders : ConcreteElaboration.BinderContext input sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext input sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext
       (vacuousIntroRaw input selection arity) targetRels) : Type where
   relationContexts_eq : sourceRels = targetRels
   binders_eq : ∀ region,
@@ -196,7 +198,7 @@ def relationMap
       (sourceRels := sourceRels) (targetRels := targetRels)
       sourceBinders targetBinders) : RelationRenaming sourceRels targetRels := by
   cases witness.relationContexts_eq
-  exact ConcreteElaboration.identityRelationRenaming sourceRels
+  exact Concrete.Elaboration.identityRelationRenaming sourceRels
 
 def push
     (witness : LiftedBinderWitness input selection arity
@@ -208,7 +210,7 @@ def push
   refine ⟨congrArg (List.cons binderArity) witness.relationContexts_eq, ?_⟩
   intro region
   cases witness.relationContexts_eq
-  simp only [ConcreteElaboration.BinderContext.push]
+  simp only [Concrete.Elaboration.BinderContext.push]
   by_cases equality : region = child
   · subst region
     simp
@@ -238,7 +240,7 @@ theorem relationMap_push
         RelationRenaming (binderArity :: sourceRels)
           (binderArity :: targetRels)) := by
   cases witness.relationContexts_eq
-  simpa [relationMap, ConcreteElaboration.identityRelationRenaming] using
+  simpa [relationMap, Concrete.Elaboration.identityRelationRenaming] using
     (RelationRenaming.lift_id_fun (source := sourceRels) binderArity).symm
 
 end LiftedBinderWitness
@@ -248,35 +250,35 @@ private theorem allFin_succ_last (n : Nat) :
   rw [allFin_eq_finRange, allFin_eq_finRange, List.finRange_succ_last]
 
 private def canonicalSelectedOccurrences
-    (input : ConcreteDiagram) (selection : CheckedSelection input) :=
+    (input : Concrete.Diagram) (selection : CheckedSelection input) :=
   (filterFin fun node =>
       decide (node ∈ selection.val.directNodes)).map
-        ConcreteElaboration.LocalOccurrence.node ++
+        Concrete.Elaboration.LocalOccurrence.node ++
     (filterFin fun child =>
       decide (child ∈ selection.val.childRoots)).map
-        ConcreteElaboration.LocalOccurrence.child
+        Concrete.Elaboration.LocalOccurrence.child
 
 private def canonicalKeptOccurrences
-    (input : ConcreteDiagram) (selection : CheckedSelection input) :=
+    (input : Concrete.Diagram) (selection : CheckedSelection input) :=
   (filterFin fun node => decide
       ((input.nodes node).region = selection.val.anchor ∧
         node ∉ selection.val.directNodes)).map
-      ConcreteElaboration.LocalOccurrence.node ++
+      Concrete.Elaboration.LocalOccurrence.node ++
     (filterFin fun child => decide
       ((input.regions child).parent? = some selection.val.anchor ∧
         child ∉ selection.val.childRoots)).map
-      ConcreteElaboration.LocalOccurrence.child
+      Concrete.Elaboration.LocalOccurrence.child
 
 private theorem selectedOccurrences_eq_canonical
-    (input : ConcreteDiagram) (selection : CheckedSelection input) :
+    (input : Concrete.Diagram) (selection : CheckedSelection input) :
     ModalSoundness.selectedOccurrences input selection =
       canonicalSelectedOccurrences input selection := by
   unfold ModalSoundness.selectedOccurrences canonicalSelectedOccurrences
-    ConcreteElaboration.localOccurrences ModalSoundness.occurrenceSelected
+    Concrete.Elaboration.localOccurrences ModalSoundness.occurrenceSelected
     filterFin
   simp only [List.filter_append, List.filter_map, List.filter_filter]
   congr 1
-  · apply congrArg (List.map ConcreteElaboration.LocalOccurrence.node)
+  · apply congrArg (List.map Concrete.Elaboration.LocalOccurrence.node)
     apply congrArg
       (fun predicate => List.filter predicate (allFin input.nodeCount))
     funext node
@@ -288,7 +290,7 @@ private theorem selectedOccurrences_eq_canonical
     · intro selected
       exact ⟨selected,
         selection.property.directNodes_at_anchor node selected⟩
-  · apply congrArg (List.map ConcreteElaboration.LocalOccurrence.child)
+  · apply congrArg (List.map Concrete.Elaboration.LocalOccurrence.child)
     apply congrArg
       (fun predicate => List.filter predicate (allFin input.regionCount))
     funext child
@@ -301,21 +303,21 @@ private theorem selectedOccurrences_eq_canonical
       exact ⟨selected, selection.property.childRoots_direct child selected⟩
 
 private theorem keptOccurrences_eq_canonical
-    (input : ConcreteDiagram) (selection : CheckedSelection input) :
+    (input : Concrete.Diagram) (selection : CheckedSelection input) :
     ModalSoundness.keptOccurrences input selection =
       canonicalKeptOccurrences input selection := by
   unfold ModalSoundness.keptOccurrences canonicalKeptOccurrences
-    ConcreteElaboration.localOccurrences ModalSoundness.occurrenceSelected
+    Concrete.Elaboration.localOccurrences ModalSoundness.occurrenceSelected
     filterFin
   simp only [List.filter_append, List.filter_map, List.filter_filter]
   congr 1
-  · apply congrArg (List.map ConcreteElaboration.LocalOccurrence.node)
+  · apply congrArg (List.map Concrete.Elaboration.LocalOccurrence.node)
     apply congrArg
       (fun predicate => List.filter predicate (allFin input.nodeCount))
     funext node
     apply Bool.eq_iff_iff.mpr
     simp [ModalSoundness.occurrenceSelected, and_comm]
-  · apply congrArg (List.map ConcreteElaboration.LocalOccurrence.child)
+  · apply congrArg (List.map Concrete.Elaboration.LocalOccurrence.child)
     apply congrArg
       (fun predicate => List.filter predicate (allFin input.regionCount))
     funext child
@@ -323,31 +325,31 @@ private theorem keptOccurrences_eq_canonical
     simp [ModalSoundness.occurrenceSelected, and_comm]
 
 theorem bubble_localOccurrences
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) :
-    ConcreteElaboration.localOccurrences
+    Concrete.Elaboration.localOccurrences
         (vacuousIntroRaw input selection arity) (bubbleRegion input) =
       (ModalSoundness.selectedOccurrences input selection).map
         (liftOccurrence input) := by
   rw [selectedOccurrences_eq_canonical]
-  unfold ConcreteElaboration.localOccurrences canonicalSelectedOccurrences
+  unfold Concrete.Elaboration.localOccurrences canonicalSelectedOccurrences
     filterFin
   simp only [vacuousIntroRaw_nodeCount, vacuousIntroRaw_regionCount,
     List.map_append, List.map_map, allFin_succ_last, List.filter_append,
     List.filter_map]
   have liftNode :
-      (liftOccurrence input ∘ ConcreteElaboration.LocalOccurrence.node) =
-        ConcreteElaboration.LocalOccurrence.node := by
+      (liftOccurrence input ∘ Concrete.Elaboration.LocalOccurrence.node) =
+        Concrete.Elaboration.LocalOccurrence.node := by
     funext node
     rfl
   have liftChild :
-      (liftOccurrence input ∘ ConcreteElaboration.LocalOccurrence.child) =
-        (ConcreteElaboration.LocalOccurrence.child ∘ Fin.castSucc) := by
+      (liftOccurrence input ∘ Concrete.Elaboration.LocalOccurrence.child) =
+        (Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castSucc) := by
     funext child
     rfl
   rw [liftNode, liftChild]
   congr 1
-  · apply congrArg (List.map ConcreteElaboration.LocalOccurrence.node)
+  · apply congrArg (List.map Concrete.Elaboration.LocalOccurrence.node)
     apply congrArg
       (fun predicate => List.filter predicate (allFin input.nodeCount))
     funext node
@@ -416,7 +418,7 @@ theorem bubble_localOccurrences
       exact noSelf (decide_eq_true_eq.mp selected)
     have mappedAddedEmpty :
         List.map
-            (ConcreteElaboration.LocalOccurrence.child
+            (Concrete.Elaboration.LocalOccurrence.child
               (regions := input.regionCount + 1)
               (nodes := input.nodeCount))
             (List.filter
@@ -426,13 +428,13 @@ theorem bubble_localOccurrences
               [Fin.last input.regionCount]) = [] := by
       exact congrArg
         (List.map
-          (ConcreteElaboration.LocalOccurrence.child
+          (Concrete.Elaboration.LocalOccurrence.child
             (regions := input.regionCount + 1)
             (nodes := input.nodeCount)))
         addedEmpty
     calc
       _ = List.map
-          (ConcreteElaboration.LocalOccurrence.child ∘ Fin.castSucc)
+          (Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castSucc)
           (List.filter
             ((fun child => decide
               (((vacuousIntroRaw input selection arity).regions child).parent? =
@@ -441,7 +443,7 @@ theorem bubble_localOccurrences
         have appended := congrArg
           (fun tail =>
             List.map
-                (ConcreteElaboration.LocalOccurrence.child ∘ Fin.castSucc)
+                (Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castSucc)
                 (List.filter
                   ((fun child => decide
                     (((vacuousIntroRaw input selection arity).regions
@@ -449,43 +451,43 @@ theorem bubble_localOccurrences
                     Fin.castSucc)
                   (allFin input.regionCount)) ++
               List.map
-                (ConcreteElaboration.LocalOccurrence.child
+                (Concrete.Elaboration.LocalOccurrence.child
                   (regions := input.regionCount + 1)
                   (nodes := input.nodeCount)) tail)
           addedEmpty
         exact appended.trans (by simp)
       _ = _ := congrArg
         (List.map
-          (ConcreteElaboration.LocalOccurrence.child ∘ Fin.castSucc))
+          (Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castSucc))
         oldChildren
 
 theorem anchor_localOccurrences
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) :
-    ConcreteElaboration.localOccurrences
+    Concrete.Elaboration.localOccurrences
         (vacuousIntroRaw input selection arity) selection.val.anchor.castSucc =
       (ModalSoundness.keptOccurrences input selection).map
           (liftOccurrence input) ++
-        [ConcreteElaboration.LocalOccurrence.child (bubbleRegion input)] := by
+        [Concrete.Elaboration.LocalOccurrence.child (bubbleRegion input)] := by
   rw [keptOccurrences_eq_canonical]
-  unfold ConcreteElaboration.localOccurrences canonicalKeptOccurrences
+  unfold Concrete.Elaboration.localOccurrences canonicalKeptOccurrences
     filterFin
   simp only [vacuousIntroRaw_nodeCount, vacuousIntroRaw_regionCount,
     List.map_append, List.map_map, allFin_succ_last, List.filter_append,
     List.filter_map]
   have liftNode :
-      (liftOccurrence input ∘ ConcreteElaboration.LocalOccurrence.node) =
-        ConcreteElaboration.LocalOccurrence.node := by
+      (liftOccurrence input ∘ Concrete.Elaboration.LocalOccurrence.node) =
+        Concrete.Elaboration.LocalOccurrence.node := by
     funext node
     rfl
   have liftChild :
-      (liftOccurrence input ∘ ConcreteElaboration.LocalOccurrence.child) =
-        (ConcreteElaboration.LocalOccurrence.child ∘ Fin.castSucc) := by
+      (liftOccurrence input ∘ Concrete.Elaboration.LocalOccurrence.child) =
+        (Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castSucc) := by
     funext child
     rfl
   rw [liftNode, liftChild, List.append_assoc]
   congr 1
-  · apply congrArg (List.map ConcreteElaboration.LocalOccurrence.node)
+  · apply congrArg (List.map Concrete.Elaboration.LocalOccurrence.node)
     apply congrArg
       (fun predicate => List.filter predicate (allFin input.nodeCount))
     funext node
@@ -570,23 +572,23 @@ theorem anchor_localOccurrences
       simp [CRegion.parent?]
     have oldMapped := congrArg
       (List.map
-        (ConcreteElaboration.LocalOccurrence.child
+        (Concrete.Elaboration.LocalOccurrence.child
           (nodes := input.nodeCount) ∘ Fin.castSucc))
       oldChildren
     have newMapped := congrArg
       (List.map
-        (ConcreteElaboration.LocalOccurrence.child
+        (Concrete.Elaboration.LocalOccurrence.child
           (regions := input.regionCount + 1) (nodes := input.nodeCount)))
       addedFilter
     calc
       _ = List.map
-            (ConcreteElaboration.LocalOccurrence.child ∘ Fin.castSucc)
+            (Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castSucc)
             (List.filter (fun child => decide
               ((input.regions child).parent? = some selection.val.anchor ∧
                 child ∉ selection.val.childRoots))
               (allFin input.regionCount)) ++
           List.map
-            (ConcreteElaboration.LocalOccurrence.child
+            (Concrete.Elaboration.LocalOccurrence.child
               (regions := input.regionCount + 1) (nodes := input.nodeCount))
             (List.filter
               (fun child => decide
@@ -596,7 +598,7 @@ theorem anchor_localOccurrences
         exact congrArg
           (fun old => old ++
             List.map
-              (ConcreteElaboration.LocalOccurrence.child
+              (Concrete.Elaboration.LocalOccurrence.child
                 (regions := input.regionCount + 1) (nodes := input.nodeCount))
               (List.filter
                 (fun child => decide
@@ -608,7 +610,7 @@ theorem anchor_localOccurrences
         have appended := congrArg
           (fun tail =>
             List.map
-                (ConcreteElaboration.LocalOccurrence.child ∘ Fin.castSucc)
+                (Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castSucc)
                 (List.filter (fun child => decide
                   ((input.regions child).parent? = some selection.val.anchor ∧
                     child ∉ selection.val.childRoots))
@@ -617,43 +619,43 @@ theorem anchor_localOccurrences
         exact appended.trans (by simp)
 
 theorem anchorOccurrences_perm_partition
-    (input : ConcreteDiagram) (selection : CheckedSelection input) :
+    (input : Concrete.Diagram) (selection : CheckedSelection input) :
     List.Perm
       (ModalSoundness.keptOccurrences input selection ++
         ModalSoundness.selectedOccurrences input selection)
-      (ConcreteElaboration.localOccurrences input selection.val.anchor) := by
+      (Concrete.Elaboration.localOccurrences input selection.val.anchor) := by
   simpa only [ModalSoundness.keptOccurrences,
     ModalSoundness.selectedOccurrences, Bool.not_not] using
     (List.filter_append_perm
       (fun occurrence =>
         !(ModalSoundness.occurrenceSelected selection occurrence))
-      (ConcreteElaboration.localOccurrences input selection.val.anchor))
+      (Concrete.Elaboration.localOccurrences input selection.val.anchor))
 
 theorem regular_localOccurrences
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (region : Fin input.regionCount)
     (regular : region ≠ selection.val.anchor) :
-    ConcreteElaboration.localOccurrences
+    Concrete.Elaboration.localOccurrences
         (vacuousIntroRaw input selection arity) region.castSucc =
-      (ConcreteElaboration.localOccurrences input region).map
+      (Concrete.Elaboration.localOccurrences input region).map
         (liftOccurrence input) := by
-  unfold ConcreteElaboration.localOccurrences filterFin
+  unfold Concrete.Elaboration.localOccurrences filterFin
   simp only [vacuousIntroRaw_nodeCount, vacuousIntroRaw_regionCount,
     List.map_append, List.map_map, allFin_succ_last, List.filter_append,
     List.filter_map]
   have liftNode :
-      (liftOccurrence input ∘ ConcreteElaboration.LocalOccurrence.node) =
-        ConcreteElaboration.LocalOccurrence.node := by
+      (liftOccurrence input ∘ Concrete.Elaboration.LocalOccurrence.node) =
+        Concrete.Elaboration.LocalOccurrence.node := by
     funext node
     rfl
   have liftChild :
-      (liftOccurrence input ∘ ConcreteElaboration.LocalOccurrence.child) =
-        (ConcreteElaboration.LocalOccurrence.child ∘ Fin.castSucc) := by
+      (liftOccurrence input ∘ Concrete.Elaboration.LocalOccurrence.child) =
+        (Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castSucc) := by
     funext child
     rfl
   rw [liftNode, liftChild]
   congr 1
-  · apply congrArg (List.map ConcreteElaboration.LocalOccurrence.node)
+  · apply congrArg (List.map Concrete.Elaboration.LocalOccurrence.node)
     apply congrArg
       (fun predicate => List.filter predicate (allFin input.nodeCount))
     funext node
@@ -742,19 +744,19 @@ theorem regular_localOccurrences
     have removedTail := congrArg
       (fun tail =>
         List.map
-            (ConcreteElaboration.LocalOccurrence.child ∘ Fin.castSucc)
+            (Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castSucc)
             (List.filter
               ((fun child => decide
                 (((vacuousIntroRaw input selection arity).regions child).parent? =
                   some region.castSucc)) ∘ Fin.castSucc)
               (allFin input.regionCount)) ++
           List.map
-            (ConcreteElaboration.LocalOccurrence.child
+            (Concrete.Elaboration.LocalOccurrence.child
               (regions := input.regionCount + 1) (nodes := input.nodeCount)) tail)
       noAddedChild
     calc
       _ = List.map
-          (ConcreteElaboration.LocalOccurrence.child ∘ Fin.castSucc)
+          (Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castSucc)
           (List.filter
             ((fun child => decide
               (((vacuousIntroRaw input selection arity).regions child).parent? =
@@ -763,11 +765,11 @@ theorem regular_localOccurrences
         removedTail.trans (by simp)
       _ = _ := congrArg
         (List.map
-          (ConcreteElaboration.LocalOccurrence.child ∘ Fin.castSucc))
+          (Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castSucc))
         oldChildren
 
 theorem regular_regionShape
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (parent child : Fin input.regionCount)
     (regular : parent ≠ selection.val.anchor)
     (childParent : (input.regions child).parent? = some parent) :
@@ -785,7 +787,7 @@ theorem regular_regionShape
   cases input.regions child <;> rfl
 
 theorem regular_nodeShape
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (region : Fin input.regionCount)
     (regular : region ≠ selection.val.anchor)
     (node : Fin input.nodeCount)
@@ -803,7 +805,7 @@ theorem regular_nodeShape
   cases input.nodes node <;> rfl
 
 theorem selected_nodeShape
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (node : Fin input.nodeCount)
     (selected : node ∈ selection.val.directNodes) :
     (vacuousIntroRaw input selection arity).nodes node =
@@ -816,7 +818,7 @@ theorem selected_nodeShape
   cases input.nodes node <;> rfl
 
 theorem unselected_nodeShape
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (node : Fin input.nodeCount)
     (unselected : node ∉ selection.val.directNodes) :
     (vacuousIntroRaw input selection arity).nodes node =
@@ -828,7 +830,7 @@ theorem unselected_nodeShape
   cases input.nodes node <;> rfl
 
 theorem selected_regionShape
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (child : Fin input.regionCount)
     (selected : child ∈ selection.val.childRoots) :
     (vacuousIntroRaw input selection arity).regions child.castSucc =
@@ -840,7 +842,7 @@ theorem selected_regionShape
   cases input.regions child <;> rfl
 
 theorem unselected_regionShape
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (child : Fin input.regionCount)
     (unselected : child ∉ selection.val.childRoots) :
     (vacuousIntroRaw input selection arity).regions child.castSucc =
@@ -852,22 +854,22 @@ theorem unselected_regionShape
   cases input.regions child <;> rfl
 
 theorem endpointOccurs
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (wire : Fin input.wireCount)
     (endpoint : CEndpoint input.nodeCount) :
     (vacuousIntroRaw input selection arity).EndpointOccurs wire endpoint ↔
       input.EndpointOccurs wire endpoint := by
-  simp only [ConcreteDiagram.EndpointOccurs, vacuousIntroRaw_wire,
+  simp only [Concrete.Diagram.EndpointOccurs, vacuousIntroRaw_wire,
     liftCWireRegions]
   rfl
 
 theorem endpointOwner
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat) (endpoint : CEndpoint input.nodeCount) :
-    ConcreteElaboration.endpointOwner?
+    Concrete.Elaboration.endpointOwner?
         (vacuousIntroRaw input selection arity) endpoint =
-      ConcreteElaboration.endpointOwner? input endpoint := by
-  unfold ConcreteElaboration.endpointOwner?
+      Concrete.Elaboration.endpointOwner? input endpoint := by
+  unfold Concrete.Elaboration.endpointOwner?
   apply congrArg List.head?
   unfold filterFin
   apply List.filter_congr
@@ -877,23 +879,23 @@ theorem endpointOwner
   exact endpointOccurs input selection arity wire endpoint
 
 theorem resolvePort
-    (input : ConcreteDiagram) (selection : CheckedSelection input)
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat)
-    (sourceContext : ConcreteElaboration.WireContext input)
-    (targetContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext
       (vacuousIntroRaw input selection arity))
     (witness : LiftedContextWitness input selection arity
       sourceContext targetContext)
     (node : Fin input.nodeCount) (port : CPort) :
-    ConcreteElaboration.resolvePort?
+    Concrete.Elaboration.resolvePort?
         (vacuousIntroRaw input selection arity) targetContext node port =
-      (ConcreteElaboration.resolvePort? input sourceContext node port).map
+      (Concrete.Elaboration.resolvePort? input sourceContext node port).map
         (Fin.cast (congrArg List.length witness.contexts_eq)) := by
   rcases witness with ⟨rfl⟩
-  simp only [ConcreteElaboration.resolvePort?, endpointOwner]
+  simp only [Concrete.Elaboration.resolvePort?, endpointOwner]
   generalize resultEq :
       (do
-        let wire ← ConcreteElaboration.endpointOwner? input ⟨node, port⟩
+        let wire ← Concrete.Elaboration.endpointOwner? input ⟨node, port⟩
         sourceContext.lookup? wire) = result
   cases result with
   | none => exact resultEq.trans rfl

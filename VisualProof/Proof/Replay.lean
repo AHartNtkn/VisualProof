@@ -2,16 +2,18 @@ import VisualProof.Rule.Soundness.All
 
 namespace VisualProof.Proof
 
+open VisualProof.Concrete
+
 open VisualProof
 open Diagram
 open Rule
 
 /-- Execute one rule on an open proof state. A successful concrete rewrite is
 rejected when it deletes any pinned boundary identity. -/
-def applyOpenStep (orientation : Orientation) (input : OpenProofState )
-    (action : Step input.diagram) :
-    Except StepError (OpenProofState ) :=
-  match applyStep orientation input.diagram action with
+def applyOpenStep (orientation : Orientation) (input : OperationState )
+    (action : OperationStep input.diagram) :
+    Except Error (OperationState ) :=
+  match applyRawOperation orientation input.diagram action with
   | .error error => .error error
   | .ok receipt =>
       match receipt.transportOpen input.boundary input.boundary_root_scoped with
@@ -19,21 +21,21 @@ def applyOpenStep (orientation : Orientation) (input : OpenProofState )
       | some result => .ok result
 
 /-- A typed executable proof program indexed by the complete open state. The
-continuation is indexed by the actual boundary-transported result of the sole
-dispatcher, so neither a diagram nor its boundary can be substituted. -/
+continuation is indexed by the actual boundary-transported raw proof-tower
+result, so neither a diagram nor its boundary can be substituted. -/
 inductive Program (orientation : Orientation) :
-    OpenProofState  → Type
+    OperationState  → Type
   | done (input) : Program orientation input
-  | step {input : OpenProofState }
-      (action : Step input.diagram)
+  | step {input : OperationState }
+      (action : OperationStep input.diagram)
       (next : ∀ result,
         applyOpenStep orientation input action = .ok result →
           Program orientation result) :
       Program orientation input
 
 def replay (orientation : Orientation) :
-    (input : OpenProofState ) → Program orientation input →
-      Except StepError (OpenProofState )
+    (input : OperationState ) → Program orientation input →
+      Except Error (OperationState )
   | input, .done _ => .ok input
   | input, .step action next =>
       match happly : applyOpenStep orientation input action with
@@ -41,10 +43,10 @@ def replay (orientation : Orientation) :
       | .ok result => replay orientation result (next result happly)
 
 /-- Closed replay is the empty-boundary specialization of open replay. -/
-def replayClosed (orientation : Orientation) (input : CheckedDiagram )
-    (program : Program orientation (OpenProofState.closed input)) :
-    Except StepError (OpenProofState ) :=
-  replay orientation (OpenProofState.closed input) program
+def replayClosed (orientation : Orientation) (input : Concrete.Checked )
+    (program : Program orientation (OperationState.closed input)) :
+    Except Error (OperationState ) :=
+  replay orientation (OperationState.closed input) program
 
 /-- Transport an ordered boundary assignment along the positional arity
 equality established by successful replay.  Aliased boundary positions remain
@@ -72,18 +74,18 @@ theorem transportArgs_trans
 The equality records that the same ordered boundary positions survive, while
 `sound` records the implication in the selected proof orientation. -/
 structure ReplayEntailment (orientation : Orientation)
-    (source target : OpenProofState )
+    (source target : OperationState )
     (model : Model) : Prop where
   boundaryLength : target.boundary.length = source.boundary.length
   sound : ∀ args : Fin source.boundary.length → model.Carrier,
-    DirectedImplication orientation
+    OperationImplication orientation
       (source.denote model  args)
       (target.denote model
         (transportArgs boundaryLength args))
 
 namespace ReplayEntailment
 
-theorem refl (orientation : Orientation) (state : OpenProofState )
+theorem refl (orientation : Orientation) (state : OperationState )
     (model : Model) :
     ReplayEntailment orientation state state model  := by
   refine ⟨rfl, ?_⟩
@@ -118,17 +120,17 @@ theorem trans
 end ReplayEntailment
 
 private theorem directedEntailment_implication
-    (sound : DirectedEntailment tag orientation before after) :
-    DirectedImplication orientation before after := by
-  unfold DirectedEntailment at sound
-  cases hmode : tag.semanticMode <;> simp only [hmode] at sound
+    (sound : OperationEntailment tag orientation before after) :
+    OperationImplication orientation before after := by
+  unfold OperationEntailment at sound
+  cases hmode : tag.operationMode <;> simp only [hmode] at sound
   · exact sound
   · cases orientation with
     | forward => exact sound.mp
     | backward => exact sound.mpr
 
-/-- One successful open step is semantically sound directly from the checked
-dispatcher theorem; replay has no separately supplied soundness authority. -/
+/-- One successful open step is semantically sound from the raw operation
+proof tower; replay has no separately supplied soundness assumption. -/
 theorem applyOpenStep_sound
     (happly : applyOpenStep orientation input action = .ok result) :
     ReplayEntailment orientation input result model := by
@@ -143,7 +145,7 @@ theorem applyOpenStep_sound
         receipt.transportOpen_result input.boundary
           input.boundary_root_scoped transported htransport
       cases happly
-      have stepSound := Rule.applyStep_sound hstep model input.boundary
+      have stepSound := Rule.applyOperation_sound hstep model input.boundary
         input.boundary_root_scoped mapped hboundary
       refine ⟨receipt.interface.transportBoundary_length hboundary, ?_⟩
       intro args

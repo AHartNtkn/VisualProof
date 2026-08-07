@@ -3,23 +3,25 @@ import VisualProof.Proof.Replay
 
 namespace VisualProof.Proof
 
+open VisualProof.Concrete
+
 open VisualProof
 open Diagram
 open Rule
 
 /-- The replay state determined by a checked open theorem side. -/
-def theoremSideState (side : CheckedOpenDiagram) : OpenProofState where
+def theoremSideState (side : Concrete.CheckedOpen) : OperationState where
   diagram := ⟨side.val.diagram, side.property.diagram_well_formed⟩
   boundary := side.val.boundary
   boundary_root_scoped := side.property.boundary_is_root_scoped
 
 @[simp] theorem theoremSideState_asCheckedOpen
-    (side : CheckedOpenDiagram) :
+    (side : Concrete.CheckedOpen) :
     (theoremSideState side).asCheckedOpen = side := by
   rfl
 
 @[simp] theorem theoremSideState_denote
-    (side : CheckedOpenDiagram)
+    (side : Concrete.CheckedOpen)
     (model : Model)
     (args : Fin side.val.boundary.length → model.Carrier) :
     (theoremSideState side).denote model args =
@@ -32,15 +34,15 @@ stated right side, and their boundary-pinned endpoints meet up to ordered
 concrete isomorphism. -/
 structure CheckedTheorem where
   schema : TheoremSchema
-  forwardFinish : OpenProofState
-  backwardFinish : OpenProofState
+  forwardFinish : OperationState
+  backwardFinish : OperationState
   forwardProgram : Program .forward (theoremSideState schema.left)
   backwardProgram : Program .backward (theoremSideState schema.right)
   forwardReplay : replay .forward (theoremSideState schema.left)
       forwardProgram = .ok forwardFinish
   backwardReplay : replay .backward (theoremSideState schema.right)
       backwardProgram = .ok backwardFinish
-  meet : OpenConcreteIso forwardFinish.asCheckedOpen.val
+  meet : Concrete.OpenIso forwardFinish.asCheckedOpen.val
     backwardFinish.asCheckedOpen.val
 
 /-- The semantic theorem certified by primitive replay and ordered endpoint

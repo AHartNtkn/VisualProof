@@ -2,12 +2,14 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationDrop
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
 namespace InstantiationDrop
 
-variable {origin : CheckedDiagram }
+variable {origin : Concrete.Checked }
 variable {p q : Nat}
 
 @[simp] theorem raw_regions
@@ -42,19 +44,19 @@ variable {p q : Nat}
   | succ steps ih =>
       cases hregion : state.diagram.val.regions region with
       | sheet =>
-          simp only [ConcreteDiagram.climb, raw_regions, hregion]
+          simp only [Concrete.Diagram.climb, raw_regions, hregion]
           rfl
       | cut parent =>
-          simpa [ConcreteDiagram.climb, raw_regions, hregion] using ih parent
+          simpa [Concrete.Diagram.climb, raw_regions, hregion] using ih parent
       | bubble parent arity =>
-          simpa [ConcreteDiagram.climb, raw_regions, hregion] using ih parent
+          simpa [Concrete.Diagram.climb, raw_regions, hregion] using ih parent
 
 theorem raw_encloses_iff
     (state : InstantiationState origin p q)
     (ancestor descendant : Fin state.diagram.val.regionCount) :
     (dropInstantiationAtomsRaw state).Encloses ancestor descendant ↔
       state.diagram.val.Encloses ancestor descendant := by
-  simp only [ConcreteDiagram.Encloses, raw_climb]
+  simp only [Concrete.Diagram.Encloses, raw_climb]
   constructor <;> intro h <;> exact h
 
 @[simp] theorem raw_wire_endpoints
@@ -143,7 +145,7 @@ theorem requiresPort_iff
     (dropInstantiationAtomsRaw state).RequiresPort node port ↔
       state.diagram.val.RequiresPort
         ((instantiationAtomDomain state).origin node) port := by
-  unfold ConcreteDiagram.RequiresPort
+  unfold Concrete.Diagram.RequiresPort
   rw [raw_node]
   cases hnode : state.diagram.val.nodes
       ((instantiationAtomDomain state).origin node) with
@@ -171,7 +173,7 @@ theorem raw_wellFormed
     (state : InstantiationState origin p q) :
     (dropInstantiationAtomsRaw state).WellFormed  where
   root_is_sheet := by
-    simpa [ConcreteDiagram.RootIsSheet] using
+    simpa [Concrete.Diagram.RootIsSheet] using
       state.diagram.property.root_is_sheet
   only_root_is_sheet := by
     intro region hsheet
@@ -275,7 +277,7 @@ theorem raw_wellFormed
 vacuous-binder step therefore composes with the existing certified modal
 simulation instead of relying on an unchecked intermediate. -/
 def checkedDrop (state : InstantiationState origin p q) :
-    CheckedDiagram  :=
+    Concrete.Checked  :=
   ⟨dropInstantiationAtomsRaw state, raw_wellFormed state⟩
 
 end InstantiationDrop

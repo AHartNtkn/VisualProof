@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvanceSiteForwardF
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -13,15 +15,15 @@ distinguished splice site.  The exact occurrence equivalence supplies every
 target position; recursive children use the same trace-level relation,
 proxy-family, and ordered parameter valuation. -/
 theorem advance_offsite_items_denote_fixed_forward
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -35,30 +37,30 @@ theorem advance_offsite_items_denote_fixed_forward
     (targets : BinderTargetsAtBubble payload state)
     (bubbleEnclosesRegion : state.diagram.val.Encloses state.bubble region)
     (sourceFuel targetFuel : Nat)
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw)
-    (targetContext : ConcreteElaboration.WireContext
+    (targetContext : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw)
     (sourceExact : sourceContext.Exact region)
     (targetExact : targetContext.Exact
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion region))
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw targetRels)
     (sourceCover : sourceBinders.Covers region)
     (targetCover : targetBinders.Covers
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion region))
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceBinders region)
-    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (targetEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw targetBinders
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -103,27 +105,27 @@ theorem advance_offsite_items_denote_fixed_forward
         values parameterValues direction sourceFuel targetFuel child)
     (sourceItems : ItemSeq  sourceContext.length sourceRels)
     (targetItems : ItemSeq  targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (sourceCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw
       (compileSurvivorRegion?
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible) sourceFuel)
       sourceContext sourceBinders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible).diagram.val region).filter
         (dropOccurrenceSurvives
           (coalescedInstantiationState comprehension attachments binders
             payload state site arguments hadmissible))) = some sourceItems)
-    (targetCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (targetCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload state
         atom tail site arguments hadmissible).diagram.val
       (compileSurvivorRegion?
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible) targetFuel)
       targetContext targetBinders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible).diagram.val
         ((instantiateSpliceInput comprehension attachments binders payload state
@@ -142,10 +144,10 @@ theorem advance_offsite_items_denote_fixed_forward
   let next := advanceInstantiationState comprehension attachments binders
     payload state atom tail site arguments hadmissible
   let sourceOccurrences :=
-    (ConcreteElaboration.localOccurrences coalesced.diagram.val region).filter
+    (Concrete.Elaboration.localOccurrences coalesced.diagram.val region).filter
       (dropOccurrenceSurvives coalesced)
   let targetOccurrences :=
-    (ConcreteElaboration.localOccurrences next.diagram.val
+    (Concrete.Elaboration.localOccurrences next.diagram.val
       (layout.frameRegion region)).filter (dropOccurrenceSurvives next)
   let positions := advanceOffsiteOccurrenceEquiv comprehension attachments
     binders payload state atom tail site arguments node_eq hadmissible region hne
@@ -155,10 +157,10 @@ theorem advance_offsite_items_denote_fixed_forward
     intro index
     exact advanceOffsiteOccurrenceEquiv_spec comprehension attachments binders
       payload state atom tail site arguments node_eq hadmissible region hne index
-  have sourceLength := ConcreteElaboration.compileOccurrencesWith?_length
+  have sourceLength := Concrete.Elaboration.compileOccurrencesWith?_length
     (compileSurvivorRegion?  coalesced sourceFuel) sourceContext
     sourceBinders sourceCompiled
-  have targetLength := ConcreteElaboration.compileOccurrencesWith?_length
+  have targetLength := Concrete.Elaboration.compileOccurrencesWith?_length
     (compileSurvivorRegion?  next targetFuel) targetContext
     targetBinders targetCompiled
   apply (denoteItemSeq_iff_get model  targetEnv targetRelEnv targetItems).2
@@ -170,10 +172,10 @@ theorem advance_offsite_items_denote_fixed_forward
     sourceOccurrences.get sourceOccurrenceIndex = occurrence
   have occurrenceMember : occurrence ∈ sourceOccurrences :=
     occurrenceEq ▸ List.get_mem sourceOccurrences sourceOccurrenceIndex
-  have sourceAt := ConcreteElaboration.compileOccurrencesWith?_get
+  have sourceAt := Concrete.Elaboration.compileOccurrencesWith?_get
     (compileSurvivorRegion?  coalesced sourceFuel) sourceContext
     sourceBinders sourceCompiled sourceOccurrenceIndex
-  have targetAt := ConcreteElaboration.compileOccurrencesWith?_get
+  have targetAt := Concrete.Elaboration.compileOccurrencesWith?_get
     (compileSurvivorRegion?  next targetFuel) targetContext
     targetBinders targetCompiled targetOccurrenceIndex
   have positionEq : positions sourceOccurrenceIndex = targetOccurrenceIndex :=
@@ -189,7 +191,7 @@ theorem advance_offsite_items_denote_fixed_forward
       _ = targetOccurrenceIndex.val := congrArg Fin.val positionEq
       _ = targetItemIndex.val := rfl
   rw [targetItemIndexEq] at targetAt
-  have sourceAt' : ConcreteElaboration.compileOccurrenceWith?
+  have sourceAt' : Concrete.Elaboration.compileOccurrenceWith?
       spliceInput.coalesceFrameRaw
       (compileSurvivorRegion?  coalesced sourceFuel)
       sourceContext sourceBinders occurrence =
@@ -206,16 +208,16 @@ theorem advance_offsite_items_denote_fixed_forward
   cases occurrence with
   | node node =>
       have nodeRegion :=
-        (ConcreteElaboration.mem_localOccurrences_node _ _ _).1
+        (Concrete.Elaboration.mem_localOccurrences_node _ _ _).1
           (List.mem_filter.mp occurrenceMember).1
       have simulation := frameNode_simulation_of_mapped spliceInput hadmissible
         region sourceContext targetContext sourceExact targetExact sourceBinders
         targetBinders sourceCover sourceEnumeration wireMap wireSpec relationMap
         relationSpec node nodeRegion model  .forward
         (sourceItems.get sourceItemIndex) (targetItems.get targetItemIndex)
-        (by simpa [ConcreteElaboration.compileOccurrenceWith?] using sourceAt')
+        (by simpa [Concrete.Elaboration.compileOccurrenceWith?] using sourceAt')
         (by simpa [layout,
-          Splice.Input.PlugLayout.mapFrameOccurrence, next] using targetAt)
+          Concrete.Splice.Input.PlugLayout.mapFrameOccurrence, next] using targetAt)
       have sourcePrepared :=
         (denoteItem_renameRelations model  relationMap
           (RelEnv.pullback relationMap targetRelEnv) targetRelEnv
@@ -236,7 +238,7 @@ theorem advance_offsite_items_denote_fixed_forward
         (sourceItems.get sourceItemIndex) (targetItems.get targetItemIndex)
         sourceAt'
         (by simpa [layout,
-          Splice.Input.PlugLayout.mapFrameOccurrence, next] using targetAt)
+          Concrete.Splice.Input.PlugLayout.mapFrameOccurrence, next] using targetAt)
         sourceDenotesItem
 
 end InstantiationSemantic

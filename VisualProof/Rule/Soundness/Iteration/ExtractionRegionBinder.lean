@@ -2,20 +2,22 @@ import VisualProof.Rule.Soundness.Iteration.ExtractionRegionCompiler
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
 
 private theorem directParent_encloses
-    {d : ConcreteDiagram} {parent child : Fin d.regionCount}
+    {d : Concrete.Diagram} {parent child : Fin d.regionCount}
     (hparent : (d.regions child).parent? = some parent) :
     d.Encloses parent child := by
   refine ⟨⟨1, by have := child.isLt; omega⟩, ?_⟩
-  simp [ConcreteDiagram.climb, hparent]
+  simp [Concrete.Diagram.climb, hparent]
 
 /-- A copied bubble binder has exactly the same arity at its host provenance. -/
 theorem extractionBinderOrigin_bubble
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (binder : Fin layout.regionCount)
@@ -40,7 +42,7 @@ theorem extractionBinderOrigin_bubble
         (input.val.extractedBinderSpine selection layout).arity proxy = arity :=
       (CRegion.bubble.inj sourceBubble).2
     obtain ⟨hostParent, hostBubble⟩ :=
-      ConcreteDiagram.extractedBinderSpine_target_region input selection layout
+      Concrete.Diagram.extractedBinderSpine_target_region input selection layout
         proxy
     refine ⟨hostParent, ?_⟩
     rw [extractionBinderOrigin_proxy]
@@ -68,7 +70,7 @@ theorem extractionBinderOrigin_bubble
         rw [extractionBinderOrigin_materialRegion, hostKind, arityEq]
 
 private theorem anchor_encloses_selectedRegion
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (region : Fin input.val.regionCount)
     (selected : region ∈ selection.selectedRegions) :
@@ -78,13 +80,13 @@ private theorem anchor_encloses_selectedRegion
   have anchorEnclosesChild : input.val.Encloses selection.val.anchor child :=
     directParent_encloses
       (selection.property.childRoots_direct child childMember)
-  exact ConcreteElaboration.checked_encloses_trans input.property
+  exact Concrete.Elaboration.checked_encloses_trans input.property
     anchorEnclosesChild childEncloses
 
 /-- A copied bubble visible at copied material maps to a host bubble visible at
 the corresponding host region. -/
 theorem extractionBinderOrigin_bubble_encloses_material
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
@@ -119,7 +121,7 @@ theorem extractionBinderOrigin_bubble_encloses_material
       have externalEnclosesAnchor :=
         CheckedSelection.usesExternalBinder_encloses_anchor input selection
           (selection.mem_externalBinders_uses externalMember)
-      exact ConcreteElaboration.checked_encloses_trans input.property
+      exact Concrete.Elaboration.checked_encloses_trans input.property
         externalEnclosesAnchor
         (anchor_encloses_selectedRegion input selection _
           (List.get_mem _ material))
@@ -130,17 +132,17 @@ theorem extractionBinderOrigin_bubble_encloses_material
 
 /-- Relation-variable transport at one copied material region. -/
 noncomputable def extractionMaterialRelationRenaming
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
     {sourceRels hostRels : RelCtx}
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) sourceRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) sourceBinders
       (layout.materialRegion material))
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
     (hostCover : hostBinders.Covers
       (selection.selectedRegions.get material)) :
     RelationRenaming sourceRels hostRels :=
@@ -165,17 +167,17 @@ noncomputable def extractionMaterialRelationRenaming
       (hostCover _ hostParent arity hostBubble provenance.2)
 
 theorem extractionMaterialRelationRenaming_lookup
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
     {sourceRels hostRels : RelCtx}
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) sourceRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) sourceBinders
       (layout.materialRegion material))
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
     (hostCover : hostBinders.Covers
       (selection.selectedRegions.get material))
     {arity : Nat} (relation : RelVar sourceRels arity) :
@@ -208,38 +210,38 @@ theorem extractionMaterialRelationRenaming_lookup
 /-- The generic node compiler kernel specialized to one recursively copied
 material region and its derived relation renaming. -/
 theorem extractionCompileNode_itemSimulationAtMaterial
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (membership : ∀ wire,
       input.val.fragmentWireOrigin selection layout wire ∈ hostContext ↔
         wire ∈ fragmentContext)
     (hostNodup : hostContext.Nodup)
     {fragmentRels hostRels : RelCtx}
-    (fragmentBinders : ConcreteElaboration.BinderContext
+    (fragmentBinders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) fragmentRels)
-    (fragmentEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (fragmentEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) fragmentBinders
       (layout.materialRegion material))
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
     (hostCover : hostBinders.Covers
       (selection.selectedRegions.get material))
     (node : Fin layout.nodeCount)
     (fragmentItem : Item  fragmentContext.length fragmentRels)
     (hostItem : Item  hostContext.length hostRels)
-    (fragmentCompiled : ConcreteElaboration.compileNode?
+    (fragmentCompiled : Concrete.Elaboration.compileNode?
       (input.val.extractDiagramRaw selection layout) fragmentContext
       fragmentBinders node = some fragmentItem)
-    (hostCompiled : ConcreteElaboration.compileNode?  input.val
+    (hostCompiled : Concrete.Elaboration.compileNode?  input.val
       hostContext hostBinders (selection.selectedNodes.get node) =
         some hostItem) :
-    ConcreteElaboration.ItemSimulation model  direction
+    Concrete.Elaboration.ItemSimulation model  direction
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
       (fragmentItem.renameRelations

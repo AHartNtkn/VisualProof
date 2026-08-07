@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationTraceBackward
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -22,15 +24,15 @@ def ParameterScopesAtBubble
 /-- One attachment-materialized operational splice preserves inherited
 parameter scope. -/
 theorem ParameterScopesAtBubble.advance
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -49,9 +51,9 @@ theorem ParameterScopesAtBubble.advance
   have scopeEq : spliceInput.coalescedScope
         (spliceInput.quotientWire (state.parameters position)) =
       (state.diagram.val.wires (state.parameters position)).scope := by
-    rw [Splice.Input.coalescedScope_eq_of_attachmentsRespectBoundary spliceInput
+    rw [Concrete.Splice.Input.coalescedScope_eq_of_attachmentsRespectBoundary spliceInput
       plan.attachmentsRespectBoundary]
-    rw [Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary_quotientWire]
+    rw [Concrete.Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary_quotientWire]
     rfl
   constructor
   · change layout.plugRaw.Encloses
@@ -82,15 +84,15 @@ theorem ParameterScopesAtBubble.advance
 
 /-- Parameter scope persists through the executor's complete accepted trace. -/
 theorem ParameterScopesAtBubble.afterTrace
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -109,13 +111,13 @@ theorem ParameterScopesAtBubble.afterTrace
 /-- The serialized parameter-scope certificate initializes the trace
 invariant, including repeated ordered parameters. -/
 theorem initial_parameterScopesAtBubble
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders) :
     ParameterScopesAtBubble (initialInstantiationState payload) := by
   intro position
@@ -147,7 +149,7 @@ theorem parameter_mem_droppedBubbleOuter
   · have localScope :
         ((dropInstantiationAtomsRaw state).wires
           (state.parameters position)).scope = state.bubble :=
-      (ConcreteElaboration.mem_exactScopeWires _ _ _).1 localMember
+      (Concrete.Elaboration.mem_exactScopeWires _ _ _).1 localMember
     exact False.elim ((scopes position).2 (by
       simpa only [InstantiationDrop.raw_wire_scope] using localScope))
 
@@ -158,7 +160,7 @@ noncomputable def droppedBubbleParameterIndex
     (scopes : ParameterScopesAtBubble state)
     (position : Fin parameterCount) :
     Fin (droppedBubbleView state).compilerLeaf.inheritedWires.length :=
-  Classical.choose (ConcreteElaboration.WireContext.lookup?_complete
+  Classical.choose (Concrete.Elaboration.WireContext.lookup?_complete
     (parameter_mem_droppedBubbleOuter state scopes position))
 
 @[simp] theorem droppedBubbleParameterIndex_get
@@ -168,8 +170,8 @@ noncomputable def droppedBubbleParameterIndex
     (droppedBubbleView state).compilerLeaf.inheritedWires.get
         (droppedBubbleParameterIndex state scopes position) =
       state.parameters position :=
-  ConcreteElaboration.WireContext.lookup?_sound
-    (Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete
+  Concrete.Elaboration.WireContext.lookup?_sound
+    (Classical.choose_spec (Concrete.Elaboration.WireContext.lookup?_complete
       (parameter_mem_droppedBubbleOuter state scopes position)))
 
 /-- Ordered parameter valuation read from the canonical final bubble focus.

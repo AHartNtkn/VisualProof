@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationTargetInvariant
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -13,15 +15,15 @@ namespace InstantiationSemantic
 valuation determine the relation used at every accepted copy site.  The two
 equalities are conditional on the executor's actual binder-spine case. -/
 structure TraceRelationContract
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    (origin : CheckedDiagram )
+    (origin : Concrete.Checked )
     (model : Model)
     (relationValue : Relation model.Carrier payload.arity)
     (values : ∀ index,
@@ -41,15 +43,15 @@ structure TraceRelationContract
 /-- A nonzero-spine relation selected at any one occurrence is the canonical
 trace relation at every occurrence. -/
 theorem TraceRelationContract.of_nonempty
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    (origin : CheckedDiagram )
+    (origin : Concrete.Checked )
     (reference : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (referenceSite : Fin reference.diagram.val.regionCount)
@@ -80,15 +82,15 @@ theorem TraceRelationContract.of_nonempty
 /-- In the zero-spine case the interpreted open comprehension is already the
 single trace relation; all nonzero obligations are vacuous. -/
 theorem TraceRelationContract.of_empty
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    (origin : CheckedDiagram )
+    (origin : Concrete.Checked )
     (hzero : payload.binderSpine.proxyCount = 0)
     (model : Model)
     (relationValue : Relation model.Carrier payload.arity)
@@ -108,15 +110,15 @@ theorem TraceRelationContract.of_empty
 /-- The fixed-relation premises consumed by every one-step region simulation
 are available uniformly along an accepted executor trace. -/
 def RelationContractsEveryStep
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -140,15 +142,15 @@ def RelationContractsEveryStep
         parameterValues
 
 theorem TraceRelationContract.everyStep
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}

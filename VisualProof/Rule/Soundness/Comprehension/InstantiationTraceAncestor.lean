@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationMaps
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -10,15 +12,15 @@ namespace InstantiationTrace
 /-- Climbing a source frame path through an accepted instantiation trace
 commutes with the composite frame embedding. -/
 theorem regionMap_climb_forward
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -39,33 +41,33 @@ theorem regionMap_climb_forward
       have mappedShape := trace.regionMap_shape start
       cases sourceShape : state.diagram.val.regions start with
       | sheet =>
-          simp [ConcreteDiagram.climb, sourceShape, CRegion.parent?] at climbed
+          simp [Concrete.Diagram.climb, sourceShape, CRegion.parent?] at climbed
       | cut parent =>
           rw [sourceShape] at mappedShape
           have tail : state.diagram.val.climb steps parent = some finish := by
-            simpa [ConcreteDiagram.climb, sourceShape, CRegion.parent?] using
+            simpa [Concrete.Diagram.climb, sourceShape, CRegion.parent?] using
               climbed
-          simpa [ConcreteDiagram.climb, mappedShape, CRegion.parent?] using
+          simpa [Concrete.Diagram.climb, mappedShape, CRegion.parent?] using
             ih parent finish tail
       | bubble parent arity =>
           rw [sourceShape] at mappedShape
           have tail : state.diagram.val.climb steps parent = some finish := by
-            simpa [ConcreteDiagram.climb, sourceShape, CRegion.parent?] using
+            simpa [Concrete.Diagram.climb, sourceShape, CRegion.parent?] using
               climbed
-          simpa [ConcreteDiagram.climb, mappedShape, CRegion.parent?] using
+          simpa [Concrete.Diagram.climb, mappedShape, CRegion.parent?] using
             ih parent finish tail
 
 /-- The composite frame embedding preserves lexical enclosure. -/
 theorem regionMap_encloses
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -84,15 +86,15 @@ theorem regionMap_encloses
 /-- Climbing from a frame region through an accepted instantiation trace stays
 in the composite frame image. -/
 theorem regionMap_climb_backward
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -115,43 +117,43 @@ theorem regionMap_climb_backward
       cases sourceShape : state.diagram.val.regions start with
       | sheet =>
           rw [sourceShape] at mappedShape
-          simp [ConcreteDiagram.climb, mappedShape, CRegion.parent?] at climbed
+          simp [Concrete.Diagram.climb, mappedShape, CRegion.parent?] at climbed
       | cut parent =>
           rw [sourceShape] at mappedShape
           have tail : result.diagram.val.climb steps
               (trace.regionMap parent) = some finish := by
-            simpa [ConcreteDiagram.climb, mappedShape, CRegion.parent?] using
+            simpa [Concrete.Diagram.climb, mappedShape, CRegion.parent?] using
               climbed
           obtain ⟨sourceFinish, sourceClimb, mappedFinish⟩ :=
             ih parent finish tail
           exact ⟨sourceFinish, by
-            simpa [ConcreteDiagram.climb, sourceShape, CRegion.parent?] using
+            simpa [Concrete.Diagram.climb, sourceShape, CRegion.parent?] using
               sourceClimb, mappedFinish⟩
       | bubble parent arity =>
           rw [sourceShape] at mappedShape
           have tail : result.diagram.val.climb steps
               (trace.regionMap parent) = some finish := by
-            simpa [ConcreteDiagram.climb, mappedShape, CRegion.parent?] using
+            simpa [Concrete.Diagram.climb, mappedShape, CRegion.parent?] using
               climbed
           obtain ⟨sourceFinish, sourceClimb, mappedFinish⟩ :=
             ih parent finish tail
           exact ⟨sourceFinish, by
-            simpa [ConcreteDiagram.climb, sourceShape, CRegion.parent?] using
+            simpa [Concrete.Diagram.climb, sourceShape, CRegion.parent?] using
               sourceClimb, mappedFinish⟩
 
 /-- Every terminal ancestor of a composite frame region has a unique source
 ancestor.  In particular, executor-inserted pattern regions can never become
 lexical ancestors of the moving quantified bubble. -/
 theorem ancestor_preimage
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -170,9 +172,9 @@ theorem ancestor_preimage
     trace.regionMap_climb_backward steps.val state.bubble ancestor climbed
   obtain ⟨rootSteps, rootClimb⟩ :=
     state.diagram.property.all_regions_reach_root sourceAncestor
-  have toRoot := ConcreteElaboration.climb_add sourceClimb rootClimb
+  have toRoot := Concrete.Elaboration.climb_add sourceClimb rootClimb
   have bound :=
-    ConcreteElaboration.ParentTraversal.checked_climb_to_root_steps_le_regionCount
+    Concrete.Elaboration.ParentTraversal.checked_climb_to_root_steps_le_regionCount
       state.diagram toRoot
   exact ⟨sourceAncestor, ⟨⟨steps.val, by omega⟩, sourceClimb⟩,
     mappedAncestor⟩

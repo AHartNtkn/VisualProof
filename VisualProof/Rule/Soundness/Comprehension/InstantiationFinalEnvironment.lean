@@ -4,6 +4,8 @@ import VisualProof.Rule.Soundness.Modal.EliminationFocusedItems
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -13,27 +15,27 @@ namespace FinalContextWitness
 /-- The selected original parent-and-bubble environment is the restriction of
 the single valuation induced by the exact promoted-focus context. -/
 theorem selectedTargetEnvironment_wireValue
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
-    {sourceContext : ConcreteElaboration.WireContext
+    {sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram}
-    {targetContext : ConcreteElaboration.WireContext input.val}
+    {targetContext : Concrete.Elaboration.WireContext input.val}
     (witness : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext)
     (sourceExact : (sourceContext.extend
@@ -70,20 +72,20 @@ theorem selectedTargetEnvironment_wireValue
 /-- Extend a target local valuation across executor-only source wires while
 fixing every certified image of an original local wire. -/
 noncomputable def sourceLocalEnvironment
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
@@ -93,9 +95,9 @@ noncomputable def sourceLocalEnvironment
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
       originalRegion = finalRegion)
     [Nonempty D]
-    (targetLocal : Fin (ConcreteElaboration.exactScopeWires input.val
+    (targetLocal : Fin (Concrete.Elaboration.exactScopeWires input.val
       originalRegion).length → D) :
-    Fin (ConcreteElaboration.exactScopeWires elimTrace.sourceDiagram
+    Fin (Concrete.Elaboration.exactScopeWires elimTrace.sourceDiagram
       finalRegion).length → D :=
   fun sourceIndex =>
     if preimage : ∃ targetIndex,
@@ -105,20 +107,20 @@ noncomputable def sourceLocalEnvironment
     else Classical.choice inferInstance
 
 theorem sourceLocalEnvironment_image
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
@@ -128,9 +130,9 @@ theorem sourceLocalEnvironment_image
     (mappedRegion : copyTrace.finalRegionMap elimTrace finalWellFormed
       originalRegion = finalRegion)
     [Nonempty D]
-    (targetLocal : Fin (ConcreteElaboration.exactScopeWires input.val
+    (targetLocal : Fin (Concrete.Elaboration.exactScopeWires input.val
       originalRegion).length → D)
-    (targetIndex : Fin (ConcreteElaboration.exactScopeWires input.val
+    (targetIndex : Fin (Concrete.Elaboration.exactScopeWires input.val
       originalRegion).length) :
     sourceLocalEnvironment finalWellFormed finalRegion
         originalRegion mappedRegion targetLocal
@@ -148,27 +150,27 @@ theorem sourceLocalEnvironment_image
   rw [chosenEq]
 
 theorem regularTargetEnvironment_outer
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext input.val)
     (context : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
@@ -179,7 +181,7 @@ theorem regularTargetEnvironment_outer
     (targetOuter : Fin targetContext.length → D)
     (outerAgreement : context.indexRelation.EnvironmentsAgree sourceOuter
       targetOuter)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       elimTrace.sourceDiagram finalRegion).length → D)
     (targetIndex : Fin targetContext.length) :
     let originalRegion := copyTrace.reverseRegionMap elimTrace finalWellFormed
@@ -187,7 +189,7 @@ theorem regularTargetEnvironment_outer
     let extended := context.extendRegular finalWellFormed
       finalRegion regular
     extended.targetEnvironment
-        (ConcreteElaboration.extendedEnvironment sourceContext finalRegion
+        (Concrete.Elaboration.extendedEnvironment sourceContext finalRegion
           sourceOuter sourceLocal)
         (DoubleCutElimTrace.extendedOuterIndex targetContext originalRegion
           targetIndex) =
@@ -217,10 +219,10 @@ theorem regularTargetEnvironment_outer
           originalRegion targetIndex).symm
   have sourceExtendedIndexEq : sourceExtendedIndex =
       extended.sourceIndex targetExtendedIndex :=
-    ConcreteElaboration.WireContext.lookup?_unique sourceExact.nodup
+    Concrete.Elaboration.WireContext.lookup?_unique sourceExact.nodup
       (extended.sourceIndex_lookup targetExtendedIndex) corresponding
   change extended.targetEnvironment
-      (ConcreteElaboration.extendedEnvironment sourceContext finalRegion
+      (Concrete.Elaboration.extendedEnvironment sourceContext finalRegion
         sourceOuter sourceLocal) targetExtendedIndex = targetOuter targetIndex
   unfold targetEnvironment
   simp only [Function.comp_apply]
@@ -229,27 +231,27 @@ theorem regularTargetEnvironment_outer
   exact outerAgreement sourceIndex targetIndex rfl
 
 theorem regularTargetEnvironment_local
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext input.val)
     (context : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
@@ -257,9 +259,9 @@ theorem regularTargetEnvironment_local
       finalRegion)
     (sourceExact : (sourceContext.extend finalRegion).Exact finalRegion)
     (sourceOuter : Fin sourceContext.length → D)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       elimTrace.sourceDiagram finalRegion).length → D)
-    (targetIndex : Fin (ConcreteElaboration.exactScopeWires input.val
+    (targetIndex : Fin (Concrete.Elaboration.exactScopeWires input.val
       (copyTrace.reverseRegionMap elimTrace finalWellFormed finalRegion)).length) :
     let originalRegion := copyTrace.reverseRegionMap elimTrace finalWellFormed
       finalRegion
@@ -268,7 +270,7 @@ theorem regularTargetEnvironment_local
     let extended := context.extendRegular finalWellFormed
       finalRegion regular
     extended.targetEnvironment
-        (ConcreteElaboration.extendedEnvironment sourceContext finalRegion
+        (Concrete.Elaboration.extendedEnvironment sourceContext finalRegion
           sourceOuter sourceLocal)
         (DoubleCutElimTrace.extendedLocalIndex targetContext originalRegion
           targetIndex) =
@@ -292,12 +294,12 @@ theorem regularTargetEnvironment_local
         copyTrace.finalWireMap elimTrace
           ((targetContext.extend originalRegion).get targetExtendedIndex) := by
     calc
-      _ = (ConcreteElaboration.exactScopeWires elimTrace.sourceDiagram
+      _ = (Concrete.Elaboration.exactScopeWires elimTrace.sourceDiagram
           finalRegion).get sourceLocalIndex :=
         DoubleCutElimTrace.extendedLocalIndex_get sourceContext finalRegion
           sourceLocalIndex
       _ = copyTrace.finalWireMap elimTrace
-          ((ConcreteElaboration.exactScopeWires input.val originalRegion).get
+          ((Concrete.Elaboration.exactScopeWires input.val originalRegion).get
             targetIndex) :=
         localSourceIndex_get finalWellFormed finalRegion
           originalRegion mappedRegion targetIndex
@@ -306,10 +308,10 @@ theorem regularTargetEnvironment_local
           originalRegion targetIndex).symm
   have sourceExtendedIndexEq : sourceExtendedIndex =
       extended.sourceIndex targetExtendedIndex :=
-    ConcreteElaboration.WireContext.lookup?_unique sourceExact.nodup
+    Concrete.Elaboration.WireContext.lookup?_unique sourceExact.nodup
       (extended.sourceIndex_lookup targetExtendedIndex) corresponding
   change extended.targetEnvironment
-      (ConcreteElaboration.extendedEnvironment sourceContext finalRegion
+      (Concrete.Elaboration.extendedEnvironment sourceContext finalRegion
         sourceOuter sourceLocal) targetExtendedIndex = sourceLocal sourceLocalIndex
   unfold targetEnvironment
   simp only [Function.comp_apply]
@@ -320,28 +322,28 @@ theorem regularTargetEnvironment_local
 /-- The complete valuation-selection contract used by regular local compiler
 transport in either semantic direction. -/
 theorem regularEnvironmentSelection
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
-    (direction : ConcreteElaboration.SimulationDirection)
-    (sourceContext : ConcreteElaboration.WireContext
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext input.val)
     (context : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext)
     (finalRegion : Fin elimTrace.sourceDiagram.regionCount)
@@ -360,16 +362,16 @@ theorem regularEnvironmentSelection
         | .forward => ∀ sourceLocal,
             ∃ targetLocal,
               extended.indexRelation.EnvironmentsAgree
-                (ConcreteElaboration.extendedEnvironment sourceContext
+                (Concrete.Elaboration.extendedEnvironment sourceContext
                   finalRegion sourceOuter sourceLocal)
-                (ConcreteElaboration.extendedEnvironment targetContext
+                (Concrete.Elaboration.extendedEnvironment targetContext
                   originalRegion targetOuter targetLocal)
         | .backward => ∀ targetLocal,
             ∃ sourceLocal,
               extended.indexRelation.EnvironmentsAgree
-                (ConcreteElaboration.extendedEnvironment sourceContext
+                (Concrete.Elaboration.extendedEnvironment sourceContext
                   finalRegion sourceOuter sourceLocal)
-                (ConcreteElaboration.extendedEnvironment targetContext
+                (Concrete.Elaboration.extendedEnvironment targetContext
                   originalRegion targetOuter targetLocal) := by
   dsimp only
   let originalRegion := copyTrace.reverseRegionMap elimTrace finalWellFormed
@@ -382,7 +384,7 @@ theorem regularEnvironmentSelection
   cases direction with
   | forward =>
       intro sourceLocal
-      let sourceEnvironment := ConcreteElaboration.extendedEnvironment
+      let sourceEnvironment := Concrete.Elaboration.extendedEnvironment
         sourceContext finalRegion sourceOuter sourceLocal
       let targetEnvironment := extended.targetEnvironment sourceEnvironment
       let targetLocal := DoubleCutElimTrace.localEnvironmentPart targetContext
@@ -405,7 +407,7 @@ theorem regularEnvironmentSelection
       intro targetLocal
       let sourceLocal := sourceLocalEnvironment finalWellFormed
         finalRegion originalRegion mappedRegion targetLocal
-      let sourceEnvironment := ConcreteElaboration.extendedEnvironment
+      let sourceEnvironment := Concrete.Elaboration.extendedEnvironment
         sourceContext finalRegion sourceOuter sourceLocal
       let targetEnvironment := extended.targetEnvironment sourceEnvironment
       refine ⟨sourceLocal, ?_⟩

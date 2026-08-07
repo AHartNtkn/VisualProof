@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Iteration.ExtractionContext
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -11,13 +13,13 @@ one of extraction's aligned external-binder proxies.  Material bubbles lie
 strictly below the terminal body and therefore cannot occur in this binder
 context. -/
 theorem extractionTerminalBinder_is_proxy
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {rels : RelCtx}
-    (binders : ConcreteElaboration.BinderContext
+    (binders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) rels)
-    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+    (enumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) binders
       layout.bodyContainer)
     (index : Fin rels.length) :
@@ -36,23 +38,23 @@ theorem extractionTerminalBinder_is_proxy
           (layout.materialRegion materialIndex) layout.bodyContainer := by
       simpa [materialEq] using enumeration.encloses index
     have bodyEnclosesMaterial :=
-      ConcreteDiagram.extractDiagramRaw_bodyContainer_encloses_materialRegion
+      Concrete.Diagram.extractDiagramRaw_bodyContainer_encloses_materialRegion
         input selection layout materialIndex
-    have equal := ConcreteElaboration.checked_encloses_antisymm
-      (ConcreteDiagram.extractDiagramRaw_wellFormed input selection layout)
+    have equal := Concrete.Elaboration.checked_encloses_antisymm
+      (Concrete.Diagram.extractDiagramRaw_wellFormed input selection layout)
       materialEnclosesBody bodyEnclosesMaterial
     exact False.elim
       (bodyContainer_ne_materialRegion layout materialIndex equal.symm)
 
 /-- The host binder represented by one terminal relation coordinate. -/
 noncomputable def extractionTerminalHostBinder
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {rels : RelCtx}
-    (binders : ConcreteElaboration.BinderContext
+    (binders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) rels)
-    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+    (enumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) binders
       layout.bodyContainer)
     (index : Fin rels.length) : Fin input.val.regionCount :=
@@ -61,13 +63,13 @@ noncomputable def extractionTerminalHostBinder
       enumeration index))
 
 theorem extractionTerminalHostBinder_proxy
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {rels : RelCtx}
-    (binders : ConcreteElaboration.BinderContext
+    (binders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) rels)
-    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+    (enumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) binders
       layout.bodyContainer)
     (index : Fin rels.length) :
@@ -79,13 +81,13 @@ theorem extractionTerminalHostBinder_proxy
       enumeration index)
 
 theorem extractionTerminalHostBinder_bubble
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {rels : RelCtx}
-    (binders : ConcreteElaboration.BinderContext
+    (binders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) rels)
-    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+    (enumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) binders
       layout.bodyContainer)
     (index : Fin rels.length) :
@@ -109,7 +111,7 @@ theorem extractionTerminalHostBinder_bubble
         rels.get index := by
     exact (CRegion.bubble.inj fragmentBubble).2
   obtain ⟨hostParent, hostBubble⟩ :=
-    ConcreteDiagram.extractedBinderSpine_target_region input selection layout
+    Concrete.Diagram.extractedBinderSpine_target_region input selection layout
       proxy
   refine ⟨hostParent, ?_⟩
   unfold extractionTerminalHostBinder
@@ -117,13 +119,13 @@ theorem extractionTerminalHostBinder_bubble
   rwa [arityEq] at hostBubble
 
 theorem extractionTerminalHostBinder_encloses_anchor
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {rels : RelCtx}
-    (binders : ConcreteElaboration.BinderContext
+    (binders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) rels)
-    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+    (enumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) binders
       layout.bodyContainer)
     (index : Fin rels.length) :
@@ -147,16 +149,16 @@ theorem extractionTerminalHostBinder_encloses_anchor
 /-- Relation-variable transport selected by the host compiler context at the
 same concrete external binder represented by the extracted proxy. -/
 noncomputable def extractionTerminalRelationRenaming
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {sourceRels hostRels : RelCtx}
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) sourceRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) sourceBinders
       layout.bodyContainer)
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
     (hostCover : hostBinders.Covers selection.val.anchor) :
     RelationRenaming sourceRels hostRels :=
   fun {arity} relation => by
@@ -178,16 +180,16 @@ noncomputable def extractionTerminalRelationRenaming
     exact Classical.choose (hostCover binder parent arity bubble' encloses)
 
 theorem extractionTerminalRelationRenaming_lookup
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     {sourceRels hostRels : RelCtx}
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) sourceRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) sourceBinders
       layout.bodyContainer)
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
     (hostCover : hostBinders.Covers selection.val.anchor)
     {arity : Nat} (relation : RelVar sourceRels arity) :
     hostBinders (extractionTerminalHostBinder input selection layout

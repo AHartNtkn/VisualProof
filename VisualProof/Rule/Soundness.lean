@@ -1,16 +1,18 @@
-import VisualProof.Rule.Comprehension
+import VisualProof.Concrete.Operation.Comprehension
 
 namespace VisualProof.Rule
+
+open VisualProof.Concrete
 
 open VisualProof
 open Diagram
 open Theory
 
-theorem OpenProofState.closed_denote_iff
-    (input : CheckedDiagram )
+theorem OperationState.closed_denote_iff
+    (input : Concrete.Checked )
     (model : Model)
     (args : Fin 0 → model.Carrier) :
-    (OpenProofState.closed input).denote model  args ↔
+    (OperationState.closed input).denote model  args ↔
       input.denote model  := by
   change denoteOpen model  input.asOpen.elaborate args ↔
     denoteRegion (relCtx := []) model  Fin.elim0 PUnit.unit input.elaborate
@@ -30,10 +32,11 @@ theorem OpenProofState.closed_denote_iff
     }
     exact ⟨assignment, rfl, by simpa using hbody⟩
 
-/-- The sole checked dispatcher for the complete calculus. -/
-def applyStep (orientation : Orientation)
-    (input : CheckedDiagram ) (step : Step input) :
-    Except StepError (StepReceipt input) :=
+/-- Raw operation dispatch retained only as the input relation for the existing
+per-operation proof towers. Public state execution is `Concrete.execute`. -/
+def applyRawOperation (orientation : Orientation)
+    (input : Concrete.Checked ) (step : OperationStep input) :
+    Except Error (OperationReceipt input) :=
   match step with
   | .boundRelationSpawn region binder arity =>
       applyBoundRelationSpawn orientation input region binder arity
@@ -61,11 +64,11 @@ def applyStep (orientation : Orientation)
       applyVacuousIntro input selection arity
   | .vacuousElim region =>
       applyVacuousElim input region
-def SuccessfulStepSound (orientation : Orientation)
-    (input result : CheckedDiagram )
-    (step : Step input) : Prop :=
+def SuccessfulOperationSound (orientation : Orientation)
+    (input result : Concrete.Checked )
+    (step : OperationStep input) : Prop :=
   ∀ model,
-    DirectedEntailment step.tag orientation
+    OperationEntailment step.tag orientation
       (input.denote model)
       (result.denote model)
 
@@ -73,26 +76,26 @@ def SuccessfulStepSound (orientation : Orientation)
 This is the theorem strength required by replay; closed soundness is its
 empty-boundary specialization. -/
 def SuccessfulReceiptSound (orientation : Orientation)
-    (input : CheckedDiagram )
-    (step : Step input) (receipt : StepReceipt input) : Prop :=
+    (input : Concrete.Checked )
+    (step : OperationStep input) (receipt : OperationReceipt input) : Prop :=
   ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin receipt.result.val.wireCount))
     (htransport : receipt.interface.transportBoundary boundary = some mapped),
     ∀ args : Fin boundary.length → model.Carrier,
-      let source : OpenProofState  := {
+      let source : OperationState  := {
         diagram := input
         boundary := boundary
         boundary_root_scoped := sourceRoot
       }
-      let target : OpenProofState  := {
+      let target : OperationState  := {
         diagram := receipt.result
         boundary := mapped
         boundary_root_scoped :=
           receipt.interface.transportBoundary_root_scoped sourceRoot htransport
       }
-      DirectedEntailment step.tag orientation
+      OperationEntailment step.tag orientation
         (source.denote model args)
         (target.denote model
           (args ∘ Fin.cast
@@ -105,7 +108,7 @@ rule, independently of replay orientation.  This is the common final step for
 the concrete equivalence appliers; it does not add a second soundness
 authority. -/
 theorem of_equivalence
-    (mode : step.tag.semanticMode = .equivalent)
+    (mode : step.tag.operationMode = .equivalent)
     (equivalent :
       ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
         (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -113,12 +116,12 @@ theorem of_equivalence
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
         ∀ args : Fin boundary.length → model.Carrier,
-          let source : OpenProofState  := {
+          let source : OperationState  := {
             diagram := input
             boundary := boundary
             boundary_root_scoped := sourceRoot
           }
-          let target : OpenProofState  := {
+          let target : OperationState  := {
             diagram := receipt.result
             boundary := mapped
             boundary_root_scoped :=
@@ -131,14 +134,14 @@ theorem of_equivalence
     SuccessfulReceiptSound orientation input step receipt := by
   intro model boundary sourceRoot mapped htransport args
   have hequivalent := equivalent model boundary sourceRoot mapped htransport args
-  unfold DirectedEntailment
+  unfold OperationEntailment
   rw [mode]
   exact hequivalent
 
 /-- A forward boundary-parametric implication discharges a directed rule in
 forward replay. -/
 theorem of_forward
-    (mode : step.tag.semanticMode = .directed)
+    (mode : step.tag.operationMode = .directed)
     (entails :
       ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
         (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -146,12 +149,12 @@ theorem of_forward
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
         ∀ args : Fin boundary.length → model.Carrier,
-          let source : OpenProofState  := {
+          let source : OperationState  := {
             diagram := input
             boundary := boundary
             boundary_root_scoped := sourceRoot
           }
-          let target : OpenProofState  := {
+          let target : OperationState  := {
             diagram := receipt.result
             boundary := mapped
             boundary_root_scoped :=
@@ -164,14 +167,14 @@ theorem of_forward
     SuccessfulReceiptSound .forward input step receipt := by
   intro model boundary sourceRoot mapped htransport args
   have hentails := entails model boundary sourceRoot mapped htransport args
-  unfold DirectedEntailment DirectedImplication
+  unfold OperationEntailment OperationImplication
   rw [mode]
   exact hentails
 
 /-- A reverse boundary-parametric implication discharges a directed rule in
 backward replay. -/
 theorem of_backward
-    (mode : step.tag.semanticMode = .directed)
+    (mode : step.tag.operationMode = .directed)
     (entails :
       ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
         (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -179,12 +182,12 @@ theorem of_backward
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
         ∀ args : Fin boundary.length → model.Carrier,
-          let source : OpenProofState  := {
+          let source : OperationState  := {
             diagram := input
             boundary := boundary
             boundary_root_scoped := sourceRoot
           }
-          let target : OpenProofState  := {
+          let target : OperationState  := {
             diagram := receipt.result
             boundary := mapped
             boundary_root_scoped :=
@@ -197,20 +200,20 @@ theorem of_backward
     SuccessfulReceiptSound .backward input step receipt := by
   intro model boundary sourceRoot mapped htransport args
   have hentails := entails model boundary sourceRoot mapped htransport args
-  unfold DirectedEntailment DirectedImplication
+  unfold OperationEntailment OperationImplication
   rw [mode]
   exact hentails
 
 /-- Close a successful receipt from semantics proved on the exact operational
-open result.  The realized receipt supplies the sole normalization from that
+open result. The realized receipt supplies the normalization from that
 ordered operational boundary to the checked target boundary. -/
 theorem of_realized_operational
-    {orientation : Orientation} {input : Diagram.CheckedDiagram }
-    {step : Step input} {receipt : StepReceipt input}
-    {raw : Diagram.ConcreteDiagram}
+    {orientation : Orientation} {input : Concrete.Checked }
+    {step : OperationStep input} {receipt : OperationReceipt input}
+    {raw : Concrete.Diagram}
     {expectedProvenance : WireProvenance input.val raw}
-    {expectedInterface : InterfaceTransport input.val raw}
-    (realizes : StepReceipt.Realizes receipt raw expectedProvenance
+    {expectedInterface : WireTransport input.val raw}
+    (realizes : OperationReceipt.Realizes receipt raw expectedProvenance
       expectedInterface)
     (operational :
       ∀ (boundary : List (Fin input.val.wireCount))
@@ -218,14 +221,14 @@ theorem of_realized_operational
           (input.val.wires wire).scope = input.val.root)
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
-        Diagram.CheckedOpenDiagram )
+        Concrete.CheckedOpen )
     (operationalIso :
       ∀ (boundary : List (Fin input.val.wireCount))
         (sourceRoot : ∀ wire, wire ∈ boundary →
           (input.val.wires wire).scope = input.val.root)
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
-        Diagram.OpenConcreteIso
+        Concrete.OpenIso
           (operational boundary sourceRoot mapped htransport).val
           (realizes.rawResultOpen mapped))
     (sound :
@@ -235,13 +238,13 @@ theorem of_realized_operational
         (mapped : List (Fin receipt.result.val.wireCount))
         (htransport : receipt.interface.transportBoundary boundary = some mapped),
         ∀ args : Fin boundary.length → model.Carrier,
-          let source : OpenProofState  := {
+          let source : OperationState  := {
             diagram := input
             boundary := boundary
             boundary_root_scoped := sourceRoot
           }
           let iso := operationalIso boundary sourceRoot mapped htransport
-          DirectedEntailment step.tag orientation
+          OperationEntailment step.tag orientation
             (source.denote model args)
             ((operational boundary sourceRoot mapped htransport).denote
               model
@@ -255,8 +258,8 @@ theorem of_realized_operational
   have hsound := sound model boundary sourceRoot mapped htransport args
   have hnormalize := realizes.operationalOpen_denote_iff_result sourceRoot
     htransport op iso model args
-  unfold DirectedEntailment at hsound ⊢
-  cases hmode : step.tag.semanticMode with
+  unfold OperationEntailment at hsound ⊢
+  cases hmode : step.tag.operationMode with
   | directed =>
       simp only [hmode] at hsound ⊢
       cases orientation with
@@ -269,33 +272,33 @@ theorem of_realized_operational
 end SuccessfulReceiptSound
 
 private def spawnOperationalOpen
-    (source : OpenProofState )
-    (node : Diagram.CNode source.diagram.val.regionCount)
+    (source : OperationState )
+    (node : Concrete.CNode source.diagram.val.regionCount)
     (scope : Fin source.diagram.val.regionCount) (portCount : Nat)
-    (port : Fin portCount → Diagram.CPort)
+    (port : Fin portCount → Concrete.CPort)
     (htarget : (spawnNodeRaw source.diagram.val node scope portCount port).WellFormed
-      ) : Diagram.CheckedOpenDiagram  :=
+      ) : Concrete.CheckedOpen  :=
   ⟨spawnNodeRawOpen source.asCheckedOpen.val node scope portCount port,
     spawnNodeRawOpen_wellFormed source.asCheckedOpen node scope portCount port
       htarget⟩
 
 private def spawnOperationalIso
-    {input : Diagram.CheckedDiagram } {receipt : StepReceipt input}
-    {node : Diagram.CNode input.val.regionCount}
+    {input : Concrete.Checked } {receipt : OperationReceipt input}
+    {node : Concrete.CNode input.val.regionCount}
     {scope : Fin input.val.regionCount} {portCount : Nat}
-    {port : Fin portCount → Diagram.CPort}
+    {port : Fin portCount → Concrete.CPort}
     (realizes : receipt.Realizes
       (spawnNodeRaw input.val node scope portCount port)
       (spawnNodeWireProvenance input.val node scope portCount port)
-      (spawnNodeInterfaceTransport input.val node scope portCount port))
+      (spawnNodeWireTransport input.val node scope portCount port))
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin receipt.result.val.wireCount))
     (htransport : receipt.interface.transportBoundary boundary = some mapped) :
-    Diagram.OpenConcreteIso
+    Concrete.OpenIso
       (spawnNodeRawOpen
-        (OpenProofState.asCheckedOpen {
+        (OperationState.asCheckedOpen {
           diagram := input
           boundary := boundary
           boundary_root_scoped := sourceRoot
@@ -303,26 +306,26 @@ private def spawnOperationalIso
       (realizes.rawResultOpen mapped) := by
   apply realizes.operationalIso_to_rawResultOpen htransport
     (boundary.map (Fin.castAdd portCount))
-  simpa using spawnNodeInterfaceTransport_transportBoundary
+  simpa using spawnNodeWireTransport_transportBoundary
     (input := input.val) (node := node) (scope := scope)
     (portCount := portCount) (port := port) boundary sourceRoot
 
 /-- Common receipt theorem for the three append-only spawn forms.  The
 operation-specific public theorems only supply their node and success facts. -/
 private theorem spawnReceipt_sound
-    (orientation : Orientation) (input : Diagram.CheckedDiagram )
-    (step : Step input) (receipt : StepReceipt input)
-    (node : Diagram.CNode input.val.regionCount)
+    (orientation : Orientation) (input : Concrete.Checked )
+    (step : OperationStep input) (receipt : OperationReceipt input)
+    (node : Concrete.CNode input.val.regionCount)
     (scope : Fin input.val.regionCount) (portCount : Nat)
-    (port : Fin portCount → Diagram.CPort)
+    (port : Fin portCount → Concrete.CPort)
     (hnode : node.region = scope)
     (realizes : receipt.Realizes
       (spawnNodeRaw input.val node scope portCount port)
       (spawnNodeWireProvenance input.val node scope portCount port)
-      (spawnNodeInterfaceTransport input.val node scope portCount port))
+      (spawnNodeWireTransport input.val node scope portCount port))
     (polarity : spawnPolarity orientation
       (concreteCutDepth input.val scope))
-    (mode : step.tag.semanticMode = .directed) :
+    (mode : step.tag.operationMode = .directed) :
     SuccessfulReceiptSound orientation input step receipt := by
   have htarget : (spawnNodeRaw input.val node scope portCount port).WellFormed
        := realizes.result_eq ▸ receipt.result.property
@@ -336,31 +339,31 @@ private theorem spawnReceipt_sound
     (operationalIso := fun boundary sourceRoot mapped htransport =>
       spawnOperationalIso realizes boundary sourceRoot mapped htransport)
   intro model boundary sourceRoot mapped htransport args
-  let source : OpenProofState  := {
+  let source : OperationState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
   }
   let view := Classical.choice
-    (Diagram.Splice.openSiteView_complete source.asCheckedOpen scope)
+    (Concrete.Splice.openSiteView_complete source.asCheckedOpen scope)
   have hdepth : concreteCutDepth input.val scope =
       view.focus.context.cutDepth := by
     simpa [source] using openSiteView_concreteCutDepth_eq view
   have projects := spawnNodeRawOpen_projects source.asCheckedOpen node scope
     portCount port hnode htarget view.route view.cutDepth model args
   dsimp only
-  unfold DirectedEntailment
+  unfold OperationEntailment
   rw [mode]
   cases orientation with
   | forward =>
-      simp only [DirectedImplication]
+      simp only [OperationImplication]
       have hodd : view.focus.context.cutDepth % 2 = 1 := by
         simpa [spawnPolarity, hdepth] using polarity
       intro hsource
       have hoperational := projects.2 hodd hsource
       simpa [source, spawnOperationalOpen] using hoperational
   | backward =>
-      simp only [DirectedImplication]
+      simp only [OperationImplication]
       have heven : view.focus.context.cutDepth % 2 = 0 := by
         simpa [spawnPolarity, hdepth] using polarity
       intro hoperational
@@ -371,9 +374,9 @@ private theorem spawnReceipt_sound
 selected by its checked orientation and site polarity. -/
 theorem applyBoundRelationSpawn_sound
     (orientation : Orientation)
-    (input : Diagram.CheckedDiagram )
+    (input : Concrete.Checked )
     (region binder : Fin input.val.regionCount) (arity : Nat)
-    (receipt : StepReceipt input)
+    (receipt : OperationReceipt input)
     (happly : applyBoundRelationSpawn orientation input region binder arity =
       .ok receipt) :
     SuccessfulReceiptSound orientation input
@@ -390,69 +393,69 @@ theorem applyBoundRelationSpawn_sound
 frame with exactly the variance selected by the original anchor polarity. -/
 private theorem canonicalErasureProjection
     (orientation : Orientation)
-    (decomposition : Diagram.Decomposition  host selection)
-    {result : Diagram.CheckedDiagram }
-    (hsplice : Diagram.Splice.Input.spliceChecked
-      (Diagram.Splice.Decomposition.originalFragmentInput decomposition) =
+    (decomposition : Concrete.Decomposition  host selection)
+    {result : Concrete.Checked }
+    (hsplice : Concrete.Splice.Input.spliceChecked
+      (Concrete.Splice.Decomposition.originalFragmentInput decomposition) =
         .ok result)
     (sourceBoundary : List (Fin
-      (Diagram.Splice.Decomposition.originalFragmentInput decomposition).frame.val.wireCount))
+      (Concrete.Splice.Decomposition.originalFragmentInput decomposition).frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      ((Diagram.Splice.Decomposition.originalFragmentInput decomposition).frame.val.wires
+      ((Concrete.Splice.Decomposition.originalFragmentInput decomposition).frame.val.wires
         wire).scope =
-      (Diagram.Splice.Decomposition.originalFragmentInput decomposition).frame.val.root)
+      (Concrete.Splice.Decomposition.originalFragmentInput decomposition).frame.val.root)
     (polarity : erasurePolarity orientation
       (concreteCutDepth host.val selection.val.anchor))
     (model : Model)
     (args : Fin
-      (Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-        (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
-        (Diagram.Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary
+      (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+        (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
+        (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    DirectedImplication orientation
+    OperationImplication orientation
       (denoteOpen model
-        (Diagram.Splice.Input.compiledSpliceSourceOpen
-          (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
+        (Concrete.Splice.Input.compiledSpliceSourceOpen
+          (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
           hsplice sourceBoundary sourceRoot) args)
       (denoteOpen model
-        (Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-          (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
-          (Diagram.Splice.Input.spliceChecked_sound hsplice).2.1
+        (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+          (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
+          (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1
           sourceBoundary sourceRoot).elaborate args) := by
   let spliceInput :=
-    Diagram.Splice.Decomposition.originalFragmentInput decomposition
+    Concrete.Splice.Decomposition.originalFragmentInput decomposition
   let hadmissible :=
-    (Diagram.Splice.Input.spliceChecked_sound hsplice).2.1
+    (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1
   let layout := spliceInput.plugLayout
   by_cases hsite : spliceInput.site = spliceInput.frame.val.root
   · cases orientation with
     | forward =>
-        simp only [DirectedImplication]
+        simp only [OperationImplication]
         by_cases hzero : spliceInput.binderSpine.proxyCount = 0
-        · simpa only [Diagram.Splice.Input.compiledSpliceSourceOpen,
+        · simpa only [Concrete.Splice.Input.compiledSpliceSourceOpen,
             hsite, hzero, dite_true, spliceInput, layout, hadmissible] using
-            Diagram.Splice.Input.compiledSpliceRootSourceOfEmpty_projects_coalesced
+            Concrete.Splice.Input.compiledSpliceRootSourceOfEmpty_projects_coalesced
               spliceInput layout hadmissible sourceBoundary sourceRoot hsite
               hzero model  args
-        · simpa only [Diagram.Splice.Input.compiledSpliceSourceOpen,
+        · simpa only [Concrete.Splice.Input.compiledSpliceSourceOpen,
             hsite, hzero, dite_true, dite_false, spliceInput, layout,
             hadmissible] using
-            Diagram.Splice.Input.compiledSpliceRootSourceOfNonempty_projects_coalesced
+            Concrete.Splice.Input.compiledSpliceRootSourceOfNonempty_projects_coalesced
               spliceInput layout hadmissible sourceBoundary sourceRoot hsite
               hzero model  args
     | backward =>
         have hzeroDepth : concreteCutDepth host.val selection.val.anchor = 0 := by
-          rw [← Diagram.Splice.Decomposition.originalSite_concreteCutDepth_eq
+          rw [← Concrete.Splice.Decomposition.originalSite_concreteCutDepth_eq
             decomposition]
           change concreteCutDepth spliceInput.frame.val spliceInput.site = 0
           rw [hsite]
           exact concreteCutDepth_root_eq_zero spliceInput.frame
         simp [erasurePolarity, hzeroDepth] at polarity
   · let sourceView :=
-      Diagram.Splice.Input.compiledSpliceCoalescedOpenView spliceInput
+      Concrete.Splice.Input.compiledSpliceCoalescedOpenView spliceInput
         hadmissible sourceBoundary sourceRoot
     let outputView :=
-      Diagram.Splice.Input.compiledSpliceOutputOpenView spliceInput layout
+      Concrete.Splice.Input.compiledSpliceOutputOpenView spliceInput layout
         hadmissible sourceBoundary sourceRoot
     let alignment := layout.compiledNestedFrameContextIso spliceInput
       hadmissible sourceBoundary sourceRoot hsite
@@ -472,96 +475,96 @@ private theorem canonicalErasureProjection
     have houtputDepth : outputView.focus.context.cutDepth =
         concreteCutDepth host.val selection.val.anchor := by
       have horiginal :=
-        Diagram.Splice.Decomposition.originalSite_concreteCutDepth_eq
+        Concrete.Splice.Decomposition.originalSite_concreteCutDepth_eq
           decomposition
       change concreteCutDepth spliceInput.frame.val spliceInput.site =
         concreteCutDepth host.val selection.val.anchor at horiginal
       exact halignedDepth.symm.trans (hsourceDepth.symm.trans horiginal)
     by_cases hzero : spliceInput.binderSpine.proxyCount = 0
     · have projects :=
-        Diagram.Splice.Input.compiledSpliceNestedSourceOfEmpty_projects_coalesced
+        Concrete.Splice.Input.compiledSpliceNestedSourceOfEmpty_projects_coalesced
           spliceInput layout hadmissible sourceBoundary sourceRoot hsite hzero
           model  args
       cases orientation with
       | forward =>
-          simp only [DirectedImplication]
+          simp only [OperationImplication]
           have heven : outputView.focus.context.cutDepth % 2 = 0 := by
             rw [houtputDepth]
             exact polarity
-          simpa only [Diagram.Splice.Input.compiledSpliceSourceOpen,
+          simpa only [Concrete.Splice.Input.compiledSpliceSourceOpen,
             hsite, hzero, dite_false, dite_true, spliceInput, layout,
             hadmissible, outputView] using projects.1 heven
       | backward =>
-          simp only [DirectedImplication]
+          simp only [OperationImplication]
           have hodd : outputView.focus.context.cutDepth % 2 = 1 := by
             rw [houtputDepth]
             exact polarity
-          simpa only [Diagram.Splice.Input.compiledSpliceSourceOpen,
+          simpa only [Concrete.Splice.Input.compiledSpliceSourceOpen,
             hsite, hzero, dite_false, dite_true, spliceInput, layout,
             hadmissible, outputView] using projects.2 hodd
     · have projects :=
-        Diagram.Splice.Input.compiledSpliceNestedSourceOfNonempty_projects_coalesced
+        Concrete.Splice.Input.compiledSpliceNestedSourceOfNonempty_projects_coalesced
           spliceInput layout hadmissible sourceBoundary sourceRoot hsite hzero
           model  args
       cases orientation with
       | forward =>
-          simp only [DirectedImplication]
+          simp only [OperationImplication]
           have heven : outputView.focus.context.cutDepth % 2 = 0 := by
             rw [houtputDepth]
             exact polarity
-          simpa only [Diagram.Splice.Input.compiledSpliceSourceOpen,
+          simpa only [Concrete.Splice.Input.compiledSpliceSourceOpen,
             hsite, hzero, dite_false, spliceInput, layout, hadmissible,
             outputView] using projects.1 heven
       | backward =>
-          simp only [DirectedImplication]
+          simp only [OperationImplication]
           have hodd : outputView.focus.context.cutDepth % 2 = 1 := by
             rw [houtputDepth]
             exact polarity
-          simpa only [Diagram.Splice.Input.compiledSpliceSourceOpen,
+          simpa only [Concrete.Splice.Input.compiledSpliceSourceOpen,
             hsite, hzero, dite_false, spliceInput, layout, hadmissible,
             outputView] using projects.2 hodd
 
 private def erasureOperationalOpen
-    {input : Diagram.CheckedDiagram }
-    {selection : Diagram.CheckedSelection input.val}
-    {receipt : StepReceipt input}
+    {input : Concrete.Checked }
+    {selection : Concrete.CheckedSelection input.val}
+    {receipt : OperationReceipt input}
     (realizes : receipt.Realizes (input.val.removeRaw selection {})
       (removeWireProvenance input selection)
-      (removeWireInterfaceTransport input selection))
+      (removeWireWireTransport input selection))
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin receipt.result.val.wireCount))
     (htransport : receipt.interface.transportBoundary boundary = some mapped) :
-    Diagram.CheckedOpenDiagram  :=
+    Concrete.CheckedOpen  :=
   ⟨realizes.rawResultOpen mapped,
     realizes.rawResultOpen_wellFormed sourceRoot htransport⟩
 
 private def erasureOperationalIso
-    {input : Diagram.CheckedDiagram }
-    {selection : Diagram.CheckedSelection input.val}
-    {receipt : StepReceipt input}
+    {input : Concrete.Checked }
+    {selection : Concrete.CheckedSelection input.val}
+    {receipt : OperationReceipt input}
     (realizes : receipt.Realizes (input.val.removeRaw selection {})
       (removeWireProvenance input selection)
-      (removeWireInterfaceTransport input selection))
+      (removeWireWireTransport input selection))
     (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
     (mapped : List (Fin receipt.result.val.wireCount))
     (htransport : receipt.interface.transportBoundary boundary = some mapped) :
-    Diagram.OpenConcreteIso
+    Concrete.OpenIso
       (erasureOperationalOpen realizes boundary sourceRoot mapped htransport).val
       (realizes.rawResultOpen mapped) :=
-  Diagram.OpenConcreteIso.refl _
+  Concrete.OpenIso.refl _
 
 /-- Every successful erasure receipt is sound at every ordered open boundary.
 Forward erasure uses even polarity; backward replay uses odd polarity and is
 therefore insertion under an odd number of cuts. -/
 theorem applyErasure_sound
     (orientation : Orientation)
-    (input : Diagram.CheckedDiagram )
-    (selection : Diagram.CheckedSelection input.val)
-    (receipt : StepReceipt input)
+    (input : Concrete.Checked )
+    (selection : Concrete.CheckedSelection input.val)
+    (receipt : OperationReceipt input)
     (happly : applyErasure orientation input selection = .ok receipt) :
     SuccessfulReceiptSound orientation input (.erasure selection)
       receipt := by
@@ -577,51 +580,51 @@ theorem applyErasure_sound
   intro model boundary sourceRoot mapped htransport args
   let rawMapped := realizes.targetBoundary mapped
   have hexpected :
-      (removeWireInterfaceTransport input selection).transportBoundary
+      (removeWireWireTransport input selection).transportBoundary
         boundary = some rawMapped :=
     realizes.transportBoundary_expected htransport
   have rawRoot : ∀ wire, wire ∈ rawMapped →
       ((input.val.removeRaw selection {}).wires wire).scope =
         (input.val.removeRaw selection {}).root :=
-    (removeWireInterfaceTransport input selection)
+    (removeWireWireTransport input selection)
       |>.transportBoundary_root_scoped sourceRoot hexpected
   let extraction := Classical.choose
-    (Diagram.extractChecked_complete  input selection)
-  let decomposition : Diagram.Decomposition  input selection := {
+    (Concrete.extractChecked_complete input selection)
+  let decomposition : Concrete.Decomposition  input selection := {
     frameDomains := {}
     frame := ⟨input.val.removeRaw selection {},
-      Diagram.ConcreteDiagram.removeRaw_wellFormed input selection {}⟩
+      Concrete.Diagram.removeRaw_wellFormed input selection {}⟩
     frame_eq := rfl
     extraction := extraction
   }
   let spliceResult := Classical.choose
-    (Diagram.Splice.Decomposition.reassemble_original_checked_complete
+    (Concrete.Splice.Decomposition.reassemble_original_checked_complete
       decomposition)
-  have hsplice : Diagram.Splice.Input.spliceChecked
-      (Diagram.Splice.Decomposition.originalFragmentInput decomposition) =
+  have hsplice : Concrete.Splice.Input.spliceChecked
+      (Concrete.Splice.Decomposition.originalFragmentInput decomposition) =
         .ok spliceResult :=
     Classical.choose_spec
-      (Diagram.Splice.Decomposition.reassemble_original_checked_complete
+      (Concrete.Splice.Decomposition.reassemble_original_checked_complete
         decomposition)
   have hcoalescedArity :
-      (Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-        (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
-        (Diagram.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped
+      (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+        (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
+        (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped
         rawRoot).val.boundary.length = boundary.length := by
     change (rawMapped.map
-      (Diagram.Splice.Decomposition.originalFragmentInput decomposition).quotientWire).length =
+      (Concrete.Splice.Decomposition.originalFragmentInput decomposition).quotientWire).length =
         boundary.length
     simpa using
-      (removeWireInterfaceTransport input selection)
+      (removeWireWireTransport input selection)
         |>.transportBoundary_length hexpected
   let commonArgs := args ∘ Fin.cast hcoalescedArity
   have projection := canonicalErasureProjection orientation decomposition
     hsplice rawMapped rawRoot success.1 model commonArgs
   have hdirect :=
-    Diagram.Splice.Decomposition.reassemble_original_source_open_denotation_iff_direct
+    Concrete.Splice.Decomposition.reassemble_original_source_open_denotation_iff_direct
       decomposition hsplice rawMapped rawRoot model commonArgs
   dsimp only at hdirect
-  let source : OpenProofState  := {
+  let source : OperationState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
@@ -629,46 +632,46 @@ theorem applyErasure_sound
   have horigins : rawMapped.map decomposition.frameDomains.wires.origin =
       boundary := by
     simpa [decomposition, rawMapped] using
-      removeWireInterfaceTransport_boundary_origins input selection {}
+      removeWireWireTransport_boundary_origins input selection {}
         boundary rawMapped hexpected
-  let sourceHostIso : Diagram.OpenConcreteIso source.asCheckedOpen.val
-      (Diagram.Splice.Decomposition.reassembleCanonicalHostOpen decomposition
+  let sourceHostIso : Concrete.OpenIso source.asCheckedOpen.val
+      (Concrete.Splice.Decomposition.reassembleCanonicalHostOpen decomposition
         rawMapped rawRoot).val := {
-    diagram := Diagram.ConcreteIso.refl input.val
+    diagram := Concrete.Iso.refl input.val
     boundary := by
-      change boundary.map (Diagram.ConcreteIso.refl input.val).wires =
+      change boundary.map (Concrete.Iso.refl input.val).wires =
         rawMapped.map decomposition.frameDomains.wires.origin
-      simpa [Diagram.ConcreteIso.refl, Diagram.FiniteEquiv.refl] using
+      simpa [Concrete.Iso.refl, FiniteEquiv.refl] using
         horigins.symm
   }
   have hsourceHost := sourceHostIso.denote_iff source.asCheckedOpen.property
-    (Diagram.Splice.Decomposition.reassembleCanonicalHostOpen decomposition
+    (Concrete.Splice.Decomposition.reassembleCanonicalHostOpen decomposition
       rawMapped rawRoot).property model args
   let outputArityEq :
-      (Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-        (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
-        (Diagram.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped
+      (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+        (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
+        (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped
         rawRoot).val.boundary.length =
-      (Diagram.Splice.Input.PlugLayout.checkedOutputOpenRoot
-        (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
-        (Diagram.Splice.Decomposition.originalFragmentInput decomposition).plugLayout
-        (Diagram.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped
+      (Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot
+        (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
+        (Concrete.Splice.Decomposition.originalFragmentInput decomposition).plugLayout
+        (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped
         rawRoot).val.boundary.length := by
-    simp [Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot,
-      Diagram.Splice.Input.PlugLayout.checkedOutputOpenRoot,
-      Diagram.Splice.Input.PlugLayout.coalescedOpenRoot,
-      Diagram.Splice.Input.PlugLayout.outputOpenRoot]
+    simp [Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot,
+      Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot,
+      Concrete.Splice.Input.PlugLayout.coalescedOpenRoot,
+      Concrete.Splice.Input.PlugLayout.outputOpenRoot]
   let directArgs :=
     (commonArgs ∘ Fin.cast outputArityEq.symm) ∘ Fin.cast
-      (Diagram.Splice.Decomposition.reassemble_original_output_open_iso
+      (Concrete.Splice.Decomposition.reassemble_original_output_open_iso
         decomposition rawMapped).boundary_length_eq.symm
   have hdirect' :
       denoteOpen model
-          (Diagram.Splice.Input.compiledSpliceSourceOpen
-            (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
+          (Concrete.Splice.Input.compiledSpliceSourceOpen
+            (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
             hsplice rawMapped rawRoot) commonArgs ↔
         denoteOpen model
-          (Diagram.Splice.Decomposition.reassembleCanonicalHostOpen decomposition
+          (Concrete.Splice.Decomposition.reassembleCanonicalHostOpen decomposition
             rawMapped rawRoot).elaborate directArgs := by
     simpa only [directArgs, outputArityEq] using hdirect
   have hdirectArgs : directArgs =
@@ -679,28 +682,28 @@ theorem applyErasure_sound
     rfl
   have hcompilerSource :
       denoteOpen model
-          (Diagram.Splice.Input.compiledSpliceSourceOpen
-            (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
+          (Concrete.Splice.Input.compiledSpliceSourceOpen
+            (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
             hsplice rawMapped rawRoot) commonArgs ↔
         source.denote model args := by
     rw [hdirect', hdirectArgs]
     exact hsourceHost.symm
   have hframeRawEq :
-      Diagram.Splice.Decomposition.originalFrameOpenRaw decomposition
+      Concrete.Splice.Decomposition.originalFrameOpenRaw decomposition
           rawMapped = realizes.rawResultOpen mapped := by
     rfl
-  let frameIso : Diagram.OpenConcreteIso
-      (Diagram.Splice.Input.PlugLayout.coalescedOpenRoot
-        (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
+  let frameIso : Concrete.OpenIso
+      (Concrete.Splice.Input.PlugLayout.coalescedOpenRoot
+        (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
         rawMapped)
       (realizes.rawResultOpen mapped) := by
     rw [← hframeRawEq]
-    exact Diagram.Splice.Decomposition.originalCoalescedFrameOpenIso
+    exact Concrete.Splice.Decomposition.originalCoalescedFrameOpenIso
       decomposition rawMapped
   have hframe := frameIso.denote_iff
-    (Diagram.Splice.Input.PlugLayout.coalescedOpenRoot_wellFormed
-      (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
-      (Diagram.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped rawRoot)
+    (Concrete.Splice.Input.PlugLayout.coalescedOpenRoot_wellFormed
+      (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
+      (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped rawRoot)
     (realizes.rawResultOpen_wellFormed sourceRoot htransport)
     model commonArgs
   let operationalIso := erasureOperationalIso realizes boundary sourceRoot
@@ -717,30 +720,30 @@ theorem applyErasure_sound
     rfl
   have hframe' :
       denoteOpen model
-          (Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-            (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
-            (Diagram.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped
+          (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+            (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
+            (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped
             rawRoot).elaborate commonArgs ↔
         (erasureOperationalOpen realizes boundary sourceRoot mapped htransport).denote
             model
             operationalArgs := by
     rw [← hopenArgs]
     change denoteOpen model
-        (Diagram.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-          (Diagram.Splice.Decomposition.originalFragmentInput decomposition)
-          (Diagram.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped
+        (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+          (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
+          (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1 rawMapped
           rawRoot).elaborate commonArgs ↔
       denoteOpen model
         (erasureOperationalOpen realizes boundary sourceRoot mapped htransport).elaborate
         frameArgs
     exact hframe
-  change DirectedEntailment .erasure orientation
+  change OperationEntailment .erasure orientation
     (source.denote model args)
     ((erasureOperationalOpen realizes boundary sourceRoot mapped htransport).denote
         model
         operationalArgs)
-  unfold DirectedEntailment
-  simp only [StepTag.semanticMode]
+  unfold OperationEntailment
+  simp only [StepTag.operationMode]
   cases orientation with
   | forward =>
       intro hsource
@@ -750,18 +753,18 @@ theorem applyErasure_sound
       exact hcompilerSource.mp (projection (hframe'.mpr hopen))
 
 theorem SuccessfulReceiptSound.closed
-    (receipt : StepReceipt input)
+    (receipt : OperationReceipt input)
     (sound : SuccessfulReceiptSound orientation input step receipt) :
-    SuccessfulStepSound orientation input receipt.result step := by
+    SuccessfulOperationSound orientation input receipt.result step := by
   intro model
   have hopen := sound model [] (by simp) [] rfl Fin.elim0
-  change DirectedEntailment step.tag orientation
-    ((OpenProofState.closed input).denote model Fin.elim0)
-    ((OpenProofState.closed receipt.result).denote model Fin.elim0) at hopen
-  unfold DirectedEntailment at hopen ⊢
-  cases hmode : step.tag.semanticMode <;> simp only [hmode] at hopen ⊢
+  change OperationEntailment step.tag orientation
+    ((OperationState.closed input).denote model Fin.elim0)
+    ((OperationState.closed receipt.result).denote model Fin.elim0) at hopen
+  unfold OperationEntailment at hopen ⊢
+  cases hmode : step.tag.operationMode <;> simp only [hmode] at hopen ⊢
   · cases orientation <;>
-      simpa only [OpenProofState.closed_denote_iff] using hopen
-  · simpa only [OpenProofState.closed_denote_iff] using hopen
+      simpa only [OperationState.closed_denote_iff] using hopen
+  · simpa only [OperationState.closed_denote_iff] using hopen
 
 end VisualProof.Rule

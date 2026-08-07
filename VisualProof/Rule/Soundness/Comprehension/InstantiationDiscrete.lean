@@ -1,7 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.InstantiationTraceRegion
-import VisualProof.Diagram.Concrete.Subgraph.Splice.Input.Discrete
+import VisualProof.Concrete.Subgraph.Splice.Input.Discrete
 
 namespace VisualProof.Rule
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -14,15 +16,15 @@ namespace InstantiationSemantic
 host quotient. The statement is independent of the current host state and of
 the ordered attachment tuple. -/
 theorem instantiateSpliceInput_boundary_nodup
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -36,15 +38,15 @@ theorem instantiateSpliceInput_boundary_nodup
 alias-free splice quotient. This is the exact source normalization needed to
 compose fixed-relation simulations over an executor trace. -/
 noncomputable def discreteDroppedStateIso
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -52,7 +54,7 @@ noncomputable def discreteDroppedStateIso
     (hadmissible : (instantiateSpliceInput comprehension attachments binders
       payload state site arguments).Admissible)
     (boundaryNodup : comprehension.val.boundary.Nodup) :
-    ConcreteIso
+    Concrete.Iso
       (dropInstantiationAtomsRaw
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible))
@@ -61,7 +63,7 @@ noncomputable def discreteDroppedStateIso
     payload state site arguments
   let coalesced := coalescedInstantiationState comprehension attachments binders
     payload state site arguments hadmissible
-  let wireEquiv := Splice.Input.discreteQuotientWireEquiv spliceInput
+  let wireEquiv := Concrete.Splice.Input.discreteQuotientWireEquiv spliceInput
     boundaryNodup
   exact {
     regionCount_eq := rfl
@@ -89,7 +91,7 @@ noncomputable def discreteDroppedStateIso
       intro quotient
       change spliceInput.coalescedScope quotient =
         (state.diagram.val.wires (wireEquiv quotient)).scope
-      exact Splice.Input.coalescedScope_eq_of_boundary_nodup spliceInput
+      exact Concrete.Splice.Input.coalescedScope_eq_of_boundary_nodup spliceInput
         boundaryNodup quotient
     wire_endpoints_perm := by
       intro quotient
@@ -99,10 +101,10 @@ noncomputable def discreteDroppedStateIso
           (CEndpoint.rename (.refl _))).Perm
         ((state.diagram.val.wires (wireEquiv quotient)).endpoints.filterMap
           (instantiationAtomDomain state).reindexEndpoint?)
-      rw [Splice.Input.coalescedEndpoints_eq_of_boundary_nodup spliceInput
+      rw [Concrete.Splice.Input.coalescedEndpoints_eq_of_boundary_nodup spliceInput
         boundaryNodup quotient]
       simpa [spliceInput, instantiateSpliceInput, wireEquiv, coalesced] using
-        (ConcreteIso.refl (dropInstantiationAtomsRaw state)).wire_endpoints_perm
+        (Concrete.Iso.refl (dropInstantiationAtomsRaw state)).wire_endpoints_perm
           (wireEquiv quotient)
   }
 
@@ -111,15 +113,15 @@ compilation on the actual dropped executor state.  The source side is stated
 through the survivor compiler used by the one-step semantic theorem; the
 target side is the ordinary compiler used by diagram denotation. -/
 theorem discreteDroppedRegionIso
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -138,26 +140,26 @@ theorem discreteDroppedRegionIso
       (discreteDroppedStateIso comprehension attachments binders payload state
         site arguments hadmissible boundaryNodup).regions sourceRegion =
         targetRegion)
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       (dropInstantiationAtomsRaw
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible)))
-    (targetContext : ConcreteElaboration.WireContext
+    (targetContext : Concrete.Elaboration.WireContext
       (dropInstantiationAtomsRaw state))
     (ambient : FiniteEquiv (Fin sourceContext.length)
       (Fin targetContext.length))
-    (contextsAgree : ConcreteElaboration.WireContextsAgree
+    (contextsAgree : Concrete.Elaboration.WireContextsAgree
       (discreteDroppedStateIso comprehension attachments binders payload state
         site arguments hadmissible boundaryNodup)
       sourceContext targetContext ambient)
     (targetExact : (targetContext.extend targetRegion).Exact targetRegion)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (dropInstantiationAtomsRaw
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible)) sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       (dropInstantiationAtomsRaw state) sourceRels)
-    (bindersAgree : ConcreteElaboration.BinderContextsAgree
+    (bindersAgree : Concrete.Elaboration.BinderContextsAgree
       (discreteDroppedStateIso comprehension attachments binders payload state
         site arguments hadmissible boundaryNodup)
       sourceBinders targetBinders)
@@ -167,7 +169,7 @@ theorem discreteDroppedRegionIso
       (coalescedInstantiationState comprehension attachments binders payload
         state site arguments hadmissible)
       sourceFuel sourceRegion sourceContext sourceBinders = some sourceBody)
-    (targetCompiled : ConcreteElaboration.compileRegion?
+    (targetCompiled : Concrete.Elaboration.compileRegion?
       (dropInstantiationAtomsRaw state) targetFuel targetRegion targetContext
       targetBinders = some targetBody) :
     RegionIso  ambient sourceRels sourceBody targetBody := by
@@ -175,14 +177,14 @@ theorem discreteDroppedRegionIso
     payload state site arguments hadmissible
   let iso := discreteDroppedStateIso comprehension attachments binders payload
     state site arguments hadmissible boundaryNodup
-  have sourceCompiled' : ConcreteElaboration.compileRegion?
+  have sourceCompiled' : Concrete.Elaboration.compileRegion?
       (dropInstantiationAtomsRaw coalesced) sourceFuel sourceRegion sourceContext
       sourceBinders = some sourceBody := by
     exact (drop_compileRegion_eq_survivor coalesced sourceFuel sourceRegion
       sourceContext sourceBinders).trans (by
         simpa [coalesced] using sourceCompiled)
   subst targetRegion
-  exact ConcreteElaboration.compileRegion?_equivariant iso
+  exact Concrete.Elaboration.compileRegion?_equivariant iso
     (InstantiationDrop.raw_wellFormed state) contextsAgree targetExact
     bindersAgree sourceCompiled' targetCompiled
 

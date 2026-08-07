@@ -1,6 +1,6 @@
-import VisualProof.Rule.Comprehension
+import VisualProof.Concrete.Operation.Comprehension
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -8,8 +8,8 @@ open Diagram
 
 namespace AbstractionRawTrace
 
-abbrev Domains (input : CheckedDiagram )
-    (occurrences : List (AbstractionOccurrence input)) :=
+abbrev Domains (input : Concrete.Checked )
+    (occurrences : List (OperationAbstractionOccurrence input)) :=
   abstractionDomains input occurrences
 
 abbrev domains
@@ -24,7 +24,7 @@ def bubble
 
 def diagram
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw) :
-    ConcreteDiagram where
+    Concrete.Diagram where
   regionCount := (Domains input occurrences).regions.count + 1
   nodeCount := (Domains input occurrences).nodes.count + occurrences.length
   wireCount := (Domains input occurrences).wires.count
@@ -152,4 +152,4 @@ theorem wire_result
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

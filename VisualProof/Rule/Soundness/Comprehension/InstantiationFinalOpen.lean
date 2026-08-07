@@ -2,23 +2,25 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalSimulation
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
 namespace InstantiationTrace
 
-variable {input : CheckedDiagram }
+variable {input : Concrete.Checked }
   {bubble : Fin input.val.regionCount}
-  {comprehension : CheckedOpenDiagram }
+  {comprehension : Concrete.CheckedOpen }
   {attachments : List (Fin input.val.wireCount)}
   {binders : List
     (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-  {payload : ComprehensionInstantiatePayload input bubble comprehension
+  {payload : OperationComprehensionInstantiatePayload input bubble comprehension
     attachments binders}
   {fuel : Nat}
   {result : InstantiationState input attachments.length
     payload.binderSpine.proxyCount}
-  {raw : ConcreteDiagram}
+  {raw : Concrete.Diagram}
 
 private theorem eraseDups_map_injective
     [BEq α] [LawfulBEq α] [BEq β] [LawfulBEq β]
@@ -50,12 +52,12 @@ def finalSourceOpen
       fuel (initialInstantiationState payload) result)
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
-    (boundary : List (Fin input.val.wireCount)) : OpenConcreteDiagram where
+    (boundary : List (Fin input.val.wireCount)) : Concrete.OpenDiagram where
   diagram := elimTrace.sourceDiagram
   boundary := boundary.map (copyTrace.finalWireMap elimTrace)
 
-def finalTargetOpen (input : CheckedDiagram )
-    (boundary : List (Fin input.val.wireCount)) : OpenConcreteDiagram where
+def finalTargetOpen (input : Concrete.Checked )
+    (boundary : List (Fin input.val.wireCount)) : Concrete.OpenDiagram where
   diagram := input.val
   boundary := boundary
 
@@ -68,7 +70,7 @@ theorem finalSourceOpen_exposedWires
     (copyTrace.finalSourceOpen elimTrace boundary).exposedWires =
       (finalTargetOpen input boundary).exposedWires.map
         (copyTrace.finalWireMap elimTrace) := by
-  unfold finalSourceOpen finalTargetOpen OpenConcreteDiagram.exposedWires
+  unfold finalSourceOpen finalTargetOpen Concrete.OpenDiagram.exposedWires
   exact eraseDups_map_injective _
     (copyTrace.finalWireMap_injective elimTrace) boundary
 
@@ -116,7 +118,7 @@ theorem finalOuter_sourceIndex_boundaryClass
   let target := finalTargetOpen input boundary
   let outer := copyTrace.finalOuterContextWitness elimTrace boundary
   symm
-  apply ConcreteElaboration.WireContext.lookup?_unique source.exposedWires_nodup
+  apply Concrete.Elaboration.WireContext.lookup?_unique source.exposedWires_nodup
     (outer.sourceIndex_lookup (target.boundaryClass position))
   calc
     source.exposedWires.get
@@ -134,7 +136,7 @@ theorem finalOuter_sourceIndex_boundaryClass
         (target.boundaryClass_sound position).symm
 
 theorem finalTargetOpen_wellFormed
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root) :
@@ -180,22 +182,22 @@ def finalRootContextWitness
     FinalContextWitness copyTrace elimTrace
       (copyTrace.finalSourceOpen elimTrace boundary).rootWires
       (finalTargetOpen input boundary).rootWires := by
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
         finalWellFormed boundary boundaryRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨finalTargetOpen input boundary,
       finalTargetOpen_wellFormed input boundary boundaryRoot⟩
   refine ⟨?_⟩
   intro wire member
-  apply (OpenConcreteDiagram.mem_rootWires_iff source.val source.property _).2
+  apply (Concrete.OpenDiagram.mem_rootWires_iff source.val source.property _).2
   change (elimTrace.sourceDiagram.wires
       (copyTrace.finalWireMap elimTrace wire)).scope =
     elimTrace.sourceDiagram.root
   rw [copyTrace.finalWireMap_scope elimTrace finalWellFormed]
   have targetScope :=
-    (OpenConcreteDiagram.mem_rootWires_iff target.val target.property wire).1
+    (Concrete.OpenDiagram.mem_rootWires_iff target.val target.property wire).1
       member
   have targetScope' : (input.val.wires wire).scope = input.val.root := by
     simpa [target, finalTargetOpen] using targetScope

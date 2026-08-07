@@ -1,18 +1,21 @@
 import VisualProof.Rule.Soundness.Modal.VacuousEliminationCompiler
 import VisualProof.Rule.Soundness.Modal.EliminationFocusedItems
 
-namespace VisualProof.Rule.VacuousElimTrace
+namespace VisualProof.Concrete.VacuousElimTrace
+
+open VisualProof.Concrete
+open VisualProof.Rule
 
 open VisualProof
 open VisualProof.Theory
 open VisualProof.Diagram
-open VisualProof.Rule.DoubleCutElimTrace
+open VisualProof.Concrete.DoubleCutElimTrace
 
 theorem focusedTargetEnvironment_outer
     (trace : VacuousElimTrace input bubble raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (sourceExact :
       (sourceContext.extend (trace.targetIndex wellFormed)).Exact
@@ -21,12 +24,12 @@ theorem focusedTargetEnvironment_outer
     (targetOuter : Fin targetContext.length → D)
     (outerAgreement :
       context.indexRelation.EnvironmentsAgree sourceOuter targetOuter)
-    (sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    (sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
       trace.sourceDiagram (trace.targetIndex wellFormed)).length → D)
     (targetIndex : Fin targetContext.length) :
     let focused := context.extendFocused wellFormed
     focused.targetEnvironment
-        (ConcreteElaboration.extendedEnvironment sourceContext
+        (Concrete.Elaboration.extendedEnvironment sourceContext
           (trace.targetIndex wellFormed) sourceOuter sourceLocal)
         (extendedOuterIndex targetContext trace.parent targetIndex) =
       targetOuter targetIndex := by
@@ -50,7 +53,7 @@ theorem focusedTargetEnvironment_outer
         (extendedOuterIndex_get targetContext trace.parent targetIndex).symm
   have sourceExtendedIndexEq :
       sourceExtendedIndex = focused.sourceIndex targetExtendedIndex :=
-    ConcreteElaboration.WireContext.lookup?_unique sourceExact.nodup
+    Concrete.Elaboration.WireContext.lookup?_unique sourceExact.nodup
       (focused.sourceIndex_lookup targetExtendedIndex) corresponding
   unfold PromotedContextWitness.targetEnvironment
   rw [← sourceExtendedIndexEq, extendedEnvironment_outer]
@@ -70,7 +73,7 @@ theorem PromotedContextWitness.targetEnvironment_eq_of_get
   have secondGet := second.sourceIndex_get secondIndex
   have indicesEqual :
       first.sourceIndex firstIndex = second.sourceIndex secondIndex := by
-    exact (ConcreteElaboration.WireContext.lookup?_unique sourceNodup
+    exact (Concrete.Elaboration.WireContext.lookup?_unique sourceNodup
       (first.sourceIndex_lookup firstIndex)
       (secondGet.trans sameWire.symm)).symm
   unfold PromotedContextWitness.targetEnvironment
@@ -79,8 +82,8 @@ theorem PromotedContextWitness.targetEnvironment_eq_of_get
 theorem selectedTargetEnvironment_outer
     (trace : VacuousElimTrace input bubble raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (sourceExact :
       (sourceContext.extend (trace.targetIndex wellFormed)).Exact
@@ -105,11 +108,11 @@ theorem selectedTargetEnvironment_outer
     sourceEnvironment _ _ sameWire
 
 theorem PromotedContextWitness.source_subset_target_at_focus
-    {input : ConcreteDiagram} {bubble : Fin input.regionCount}
-    {raw : ConcreteDiagram}
+    {input : Concrete.Diagram} {bubble : Fin input.regionCount}
+    {raw : Concrete.Diagram}
     {trace : VacuousElimTrace input bubble raw}
-    {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
-    {targetContext : ConcreteElaboration.WireContext input}
+    {sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram}
+    {targetContext : Concrete.Elaboration.WireContext input}
     (context : PromotedContextWitness trace sourceContext targetContext)
     (wellFormed : input.WellFormed )
     (sourceExact :
@@ -123,9 +126,9 @@ theorem PromotedContextWitness.source_subset_target_at_focus
   · have focusMember :=
       trace.bubbleWire_mem_focusExact wellFormed wire bubbleMember
     have extendedNodup :
-        (sourceContext ++ ConcreteElaboration.exactScopeWires
+        (sourceContext ++ Concrete.Elaboration.exactScopeWires
           trace.sourceDiagram (trace.targetIndex wellFormed)).Nodup := by
-      simpa [ConcreteElaboration.WireContext.extend] using sourceExact.nodup
+      simpa [Concrete.Elaboration.WireContext.extend] using sourceExact.nodup
     have parts := List.nodup_append.mp extendedNodup
     exact False.elim
       (parts.2.2 wire sourceMember wire focusMember rfl)
@@ -133,8 +136,8 @@ theorem PromotedContextWitness.source_subset_target_at_focus
 theorem selectedSourceEnvironment_outer
     (trace : VacuousElimTrace input bubble raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (sourceExact :
       (sourceContext.extend (trace.targetIndex wellFormed)).Exact
@@ -145,16 +148,16 @@ theorem selectedSourceEnvironment_outer
     (targetOuter : Fin targetContext.length → D)
     (outerAgreement :
       context.indexRelation.EnvironmentsAgree sourceOuter targetOuter)
-    (targetLocal : Fin (ConcreteElaboration.exactScopeWires input
+    (targetLocal : Fin (Concrete.Elaboration.exactScopeWires input
       trace.parent).length → D)
-    (bubbleLocal : Fin (ConcreteElaboration.exactScopeWires input
+    (bubbleLocal : Fin (Concrete.Elaboration.exactScopeWires input
       bubble).length → D)
     (sourceIndex : Fin sourceContext.length) :
     let targetFocusEnvironment :=
-      ConcreteElaboration.extendedEnvironment targetContext trace.parent
+      Concrete.Elaboration.extendedEnvironment targetContext trace.parent
         targetOuter targetLocal
     let targetSelectedEnvironment :=
-      ConcreteElaboration.extendedEnvironment
+      Concrete.Elaboration.extendedEnvironment
         (targetContext.extend trace.parent) bubble
         targetFocusEnvironment bubbleLocal
     let selected := context.extendSelected wellFormed
@@ -193,7 +196,7 @@ theorem selectedSourceEnvironment_outer
       targetSelectedIndex = selected.targetIndex
         (context.extendSelected_source_subset_target wellFormed)
         sourceExtendedIndex :=
-    ConcreteElaboration.WireContext.lookup?_unique targetSelectedNodup
+    Concrete.Elaboration.WireContext.lookup?_unique targetSelectedNodup
       (selected.targetIndex_lookup
         (context.extendSelected_source_subset_target wellFormed)
         sourceExtendedIndex)
@@ -208,23 +211,23 @@ theorem sourceFocused_partition_denote_iff
     (trace : VacuousElimTrace input bubble raw)
     (wellFormed : input.WellFormed )
     (model : Model)
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
     (keptItems selectedItems : ItemSeq
       (sourceContext.extend (trace.targetIndex wellFormed)).length rels)
     (sourceEnvironment : Fin sourceContext.length → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
     denoteRegion model  sourceEnvironment relations
-        (ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
+        (Concrete.Elaboration.finishRegion trace.sourceDiagram sourceContext
           (trace.targetIndex wellFormed) (keptItems.append selectedItems)) ↔
-      ∃ sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+      ∃ sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
           trace.sourceDiagram (trace.targetIndex wellFormed)).length →
             model.Carrier,
         denoteItemSeq model
-            (ConcreteElaboration.extendedEnvironment sourceContext
+            (Concrete.Elaboration.extendedEnvironment sourceContext
               (trace.targetIndex wellFormed) sourceEnvironment sourceLocal)
             relations keptItems ∧
           denoteItemSeq model
-            (ConcreteElaboration.extendedEnvironment sourceContext
+            (Concrete.Elaboration.extendedEnvironment sourceContext
               (trace.targetIndex wellFormed) sourceEnvironment sourceLocal)
             relations selectedItems := by
   rw [finishRegion_denote_iff]
@@ -235,7 +238,7 @@ theorem sourceFocused_partition_denote_iff
 theorem targetFocused_bubble_denote_iff
     (trace : VacuousElimTrace input bubble raw)
     (model : Model)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (keptItems : ItemSeq
       (targetContext.extend trace.parent).length rels)
     (selectedItems : ItemSeq
@@ -244,25 +247,25 @@ theorem targetFocused_bubble_denote_iff
     (targetEnvironment : Fin targetContext.length → model.Carrier)
     (relations : RelEnv model.Carrier rels) :
     denoteRegion model  targetEnvironment relations
-        (ConcreteElaboration.finishRegion input targetContext trace.parent
+        (Concrete.Elaboration.finishRegion input targetContext trace.parent
           (keptItems.append (.cons
             (.bubble trace.arity
-              (ConcreteElaboration.finishRegion input
+              (Concrete.Elaboration.finishRegion input
                 (targetContext.extend trace.parent) bubble selectedItems))
             .nil))) ↔
-      ∃ targetLocal : Fin (ConcreteElaboration.exactScopeWires input
+      ∃ targetLocal : Fin (Concrete.Elaboration.exactScopeWires input
           trace.parent).length → model.Carrier,
         denoteItemSeq model
-            (ConcreteElaboration.extendedEnvironment targetContext trace.parent
+            (Concrete.Elaboration.extendedEnvironment targetContext trace.parent
               targetEnvironment targetLocal)
             relations keptItems ∧
           ∃ fresh : Relation model.Carrier trace.arity,
-            ∃ bubbleLocal : Fin (ConcreteElaboration.exactScopeWires input
+            ∃ bubbleLocal : Fin (Concrete.Elaboration.exactScopeWires input
                 bubble).length → model.Carrier,
               denoteItemSeq (relCtx := trace.arity :: rels) model
-                (ConcreteElaboration.extendedEnvironment
+                (Concrete.Elaboration.extendedEnvironment
                   (targetContext.extend trace.parent) bubble
-                  (ConcreteElaboration.extendedEnvironment targetContext
+                  (Concrete.Elaboration.extendedEnvironment targetContext
                     trace.parent targetEnvironment targetLocal)
                   bubbleLocal)
                 ((fresh, relations) :
@@ -277,14 +280,14 @@ theorem targetFocused_bubble_denote_iff
   intro fresh
   exact finishRegion_denote_iff input
     (targetContext.extend trace.parent) bubble selectedItems model
-    (ConcreteElaboration.extendedEnvironment targetContext trace.parent
+    (Concrete.Elaboration.extendedEnvironment targetContext trace.parent
       targetEnvironment targetLocal)
     (fresh, relations)
 
 theorem targetSelected_exact
     (trace : VacuousElimTrace input bubble raw)
     (wellFormed : input.WellFormed )
-    (targetContext : ConcreteElaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (targetExact :
       (targetContext.extend trace.parent).Exact trace.parent) :
     ((targetContext.extend trace.parent).extend bubble).Exact bubble := by
@@ -292,4 +295,4 @@ theorem targetSelected_exact
     simp [trace.bubble_eq, CRegion.parent?]
   exact targetExact.extend_child wellFormed parentEq
 
-end VisualProof.Rule.VacuousElimTrace
+end VisualProof.Concrete.VacuousElimTrace

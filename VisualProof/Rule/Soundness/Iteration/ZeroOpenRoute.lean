@@ -1,8 +1,10 @@
 import VisualProof.Rule.Soundness.Iteration.OpenRoute
 import VisualProof.Rule.Soundness.Iteration.ZeroContraction
-import VisualProof.Diagram.Concrete.Subgraph.Splice.Input.Alignment.HostProjectionEmpty
+import VisualProof.Concrete.Subgraph.Splice.Input.Alignment.HostProjectionEmpty
 
 namespace VisualProof.Rule.IterationSoundness
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -10,7 +12,7 @@ open VisualProof.Diagram
 open VisualProof.Theory
 
 structure ProperIterationRootOpenTargetAlignment
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -20,14 +22,14 @@ structure ProperIterationRootOpenTargetAlignment
     (certificate : ProperIterationRootOpenAnchorContraction input selection target
       hadmissible sourceBoundary sourceRoot) where
   full : Region.ContextPath
-    (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+    (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
       (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot).elaborate.body
-    (Splice.Input.compiledSpliceCoalescedOpenView
+    (Concrete.Splice.Input.compiledSpliceCoalescedOpenView
       (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot).path
   full_eq_target : full =
-    (Splice.Input.compiledSpliceCoalescedOpenView
+    (Concrete.Splice.Input.compiledSpliceCoalescedOpenView
       (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot).intrinsicPath
   holeWires_eq : full.toFocus.holeWires =
@@ -37,7 +39,7 @@ structure ProperIterationRootOpenTargetAlignment
 
 /-- The proper iteration target remains nested in the coalesced frame. -/
 theorem ProperIterationRootOpenAnchorContraction.target_ne_root_fact
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -52,7 +54,7 @@ theorem ProperIterationRootOpenAnchorContraction.target_ne_root_fact
 /-- Coordinate transport from the executor's coalesced-open target focus to
 the contraction certificate's route-relative focus. -/
 noncomputable def ProperIterationRootOpenTargetAlignment.sourceWire
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -63,7 +65,7 @@ noncomputable def ProperIterationRootOpenTargetAlignment.sourceWire
       hadmissible sourceBoundary sourceRoot}
     (alignment : ProperIterationRootOpenTargetAlignment certificate) :
     FiniteEquiv
-      (Fin (Splice.Input.compiledSpliceCoalescedOpenView
+      (Fin (Concrete.Splice.Input.compiledSpliceCoalescedOpenView
         (iterationInput input selection target) hadmissible sourceBoundary
         sourceRoot).focus.holeWires)
       (Fin certificate.witness.toFocus.holeWires) :=
@@ -73,7 +75,7 @@ noncomputable def ProperIterationRootOpenTargetAlignment.sourceWire
     (FiniteEquiv.finCast alignment.holeWires_eq)
 
 def ProperIterationRootOpenTargetAlignment.sourceRelsEq
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -83,7 +85,7 @@ def ProperIterationRootOpenTargetAlignment.sourceRelsEq
     {certificate : ProperIterationRootOpenAnchorContraction input selection target
       hadmissible sourceBoundary sourceRoot}
     (alignment : ProperIterationRootOpenTargetAlignment certificate) :
-    (Splice.Input.compiledSpliceCoalescedOpenView
+    (Concrete.Splice.Input.compiledSpliceCoalescedOpenView
       (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot).focus.holeRels = certificate.witness.toFocus.holeRels :=
   (congrArg (fun witness => witness.toFocus.holeRels)
@@ -92,7 +94,7 @@ def ProperIterationRootOpenTargetAlignment.sourceRelsEq
 /-- Exact inherited-wire transport from the canonical coalesced-open target
 leaf to the route-relative terminal leaf retained by the contraction. -/
 noncomputable def ProperIterationRootOpenAnchorContraction.terminalSourceWire
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -102,18 +104,18 @@ noncomputable def ProperIterationRootOpenAnchorContraction.terminalSourceWire
     (certificate : ProperIterationRootOpenAnchorContraction input selection target
       hadmissible sourceBoundary sourceRoot) :
     FiniteEquiv
-      (Fin (Splice.Input.compiledSpliceCoalescedOpenView
+      (Fin (Concrete.Splice.Input.compiledSpliceCoalescedOpenView
         (iterationInput input selection target) hadmissible sourceBoundary
         sourceRoot).focus.holeWires)
       (Fin certificate.witness.toFocus.holeWires) :=
-  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView
+  let sourceView := Concrete.Splice.Input.compiledSpliceCoalescedOpenView
     (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot
-  let sourceLeaf := Splice.Input.compiledSpliceCoalescedNestedLeaf
+  let sourceLeaf := Concrete.Splice.Input.compiledSpliceCoalescedNestedLeaf
     (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot certificate.target_ne_root
   let terminalEquiv :=
-    Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+    Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
       sourceView.intrinsicPath sourceLeaf certificate.witness
       certificate.sourceTerminalLeaf
   (FiniteEquiv.finCast sourceLeaf.inheritedLength.symm).trans
@@ -123,7 +125,7 @@ noncomputable def ProperIterationRootOpenAnchorContraction.terminalSourceWire
 /-- The terminal compiler coordinate retained by the contraction is exactly
 the intrinsic hole coordinate of the executor's root-to-target context. -/
 theorem ProperIterationRootOpenAnchorContraction.terminalSourceWire_eq_sourceWire
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -134,14 +136,14 @@ theorem ProperIterationRootOpenAnchorContraction.terminalSourceWire_eq_sourceWir
       hadmissible sourceBoundary sourceRoot)
     (alignment : ProperIterationRootOpenTargetAlignment certificate) :
     certificate.terminalSourceWire = alignment.sourceWire := by
-  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView
+  let sourceView := Concrete.Splice.Input.compiledSpliceCoalescedOpenView
     (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot
-  let sourceLeaf := Splice.Input.compiledSpliceCoalescedNestedLeaf
+  let sourceLeaf := Concrete.Splice.Input.compiledSpliceCoalescedNestedLeaf
     (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot certificate.target_ne_root
   let terminalEquiv :=
-    Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+    Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
       sourceView.intrinsicPath sourceLeaf certificate.witness
       certificate.sourceTerminalLeaf
   have listsEq : certificate.sourceTerminalLeaf.inheritedWires =
@@ -155,7 +157,7 @@ theorem ProperIterationRootOpenAnchorContraction.terminalSourceWire_eq_sourceWir
   let certificateIndex := Fin.cast
     (congrArg List.length listsEq).symm sourceIndex
   have terminalSpec :=
-    Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv_spec
+    Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv_spec
       sourceView.intrinsicPath sourceLeaf certificate.witness
       certificate.sourceTerminalLeaf
       sourceIndex
@@ -167,7 +169,7 @@ theorem ProperIterationRootOpenAnchorContraction.terminalSourceWire_eq_sourceWir
       simpa [sourceIndex, certificateIndex, List.get_eq_getElem] using
         reference.symm)
   have nodup := certificate.sourceTerminalLeaf.wiresExact.nodup
-  rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at nodup
+  rw [Concrete.Elaboration.WireContext.extend, List.nodup_append] at nodup
   have indexEq := (List.getElem_inj nodup.1).mp terminalGet
   have terminalVal :
       (terminalEquiv sourceIndex).val =
@@ -183,7 +185,7 @@ theorem ProperIterationRootOpenAnchorContraction.terminalSourceWire_eq_sourceWir
 same complete source body as filling the executor's canonical target context
 with that replacement in target coordinates. -/
 theorem ProperIterationRootOpenAnchorContraction.modifiedBody_eq_targetFill
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -195,7 +197,7 @@ theorem ProperIterationRootOpenAnchorContraction.modifiedBody_eq_targetFill
     (alignment : ProperIterationRootOpenTargetAlignment certificate) :
     let anchorView := iterationCoalescedOpenAnchorView input selection target
       hadmissible sourceBoundary sourceRoot
-    let sourceView := Splice.Input.compiledSpliceCoalescedOpenView
+    let sourceView := Concrete.Splice.Input.compiledSpliceCoalescedOpenView
       (iterationInput input selection target) hadmissible sourceBoundary
         sourceRoot
     let replacementAtSource : Region  sourceView.focus.holeWires
@@ -210,7 +212,7 @@ theorem ProperIterationRootOpenAnchorContraction.modifiedBody_eq_targetFill
     alignmentWires, alignmentRels⟩
   let anchorView := iterationCoalescedOpenAnchorView input selection target
     hadmissible sourceBoundary sourceRoot
-  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView
+  let sourceView := Concrete.Splice.Input.compiledSpliceCoalescedOpenView
     (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot
   let nested := anchorView.intrinsicPath.nest certificate.witness
@@ -362,7 +364,7 @@ theorem ProperIterationRootOpenAnchorContraction.modifiedBody_eq_targetFill
 /-- The contraction certificate and the executor's canonical coalesced-open
 compiler choose the same concrete outer-wire map at the insertion site. -/
 theorem ProperIterationRootOpenAnchorContraction.actualWire_eq_compilerOuterWire
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -372,31 +374,31 @@ theorem ProperIterationRootOpenAnchorContraction.actualWire_eq_compilerOuterWire
     (certificate : ProperIterationRootOpenAnchorContraction input selection target
       hadmissible sourceBoundary sourceRoot) :
     let spliceInput := iterationInput input selection target
-    let sourceView := Splice.Input.compiledSpliceCoalescedOpenView spliceInput
+    let sourceView := Concrete.Splice.Input.compiledSpliceCoalescedOpenView spliceInput
       hadmissible sourceBoundary sourceRoot
-    let sourceLeaf := Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
+    let sourceLeaf := Concrete.Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
       hadmissible sourceBoundary sourceRoot certificate.target_ne_root
-    let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+    let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
     certificate.terminalSourceWire.trans certificate.actualWire =
-      Splice.Input.compilerLeafOuterWire sourceView.intrinsicPath sourceLeaf
+      Concrete.Splice.Input.compilerLeafOuterWire sourceView.intrinsicPath sourceLeaf
         host.intrinsicPath host.compilerLeaf
-        (Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+        (Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
           sourceView.intrinsicPath sourceLeaf host.intrinsicPath
           host.compilerLeaf) := by
   dsimp only
   let spliceInput := iterationInput input selection target
-  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView spliceInput
+  let sourceView := Concrete.Splice.Input.compiledSpliceCoalescedOpenView spliceInput
     hadmissible sourceBoundary sourceRoot
-  let sourceLeaf := Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
+  let sourceLeaf := Concrete.Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
     hadmissible sourceBoundary sourceRoot certificate.target_ne_root
-  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
   let terminalEquiv :=
-    Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+    Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
       sourceView.intrinsicPath sourceLeaf certificate.witness
       certificate.sourceTerminalLeaf
-  let canonicalWire := Splice.Input.compilerLeafOuterWire
+  let canonicalWire := Concrete.Splice.Input.compilerLeafOuterWire
     sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
-      (Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+      (Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
         sourceView.intrinsicPath sourceLeaf host.intrinsicPath
           host.compilerLeaf)
   apply FiniteEquiv.ext
@@ -404,7 +406,7 @@ theorem ProperIterationRootOpenAnchorContraction.actualWire_eq_compilerOuterWire
   apply Fin.ext
   apply (List.getElem_inj (by
     have nodup := host.compilerLeaf.wiresExact.nodup
-    rw [ConcreteElaboration.WireContext.extend, List.nodup_append] at nodup
+    rw [Concrete.Elaboration.WireContext.extend, List.nodup_append] at nodup
     exact nodup.1)).mp
   change host.compilerLeaf.inheritedWires.get
       (Fin.cast host.compilerLeaf.inheritedLength.symm
@@ -416,7 +418,7 @@ theorem ProperIterationRootOpenAnchorContraction.actualWire_eq_compilerOuterWire
   have certificateSpec := certificate.actualWireSpec
     (certificate.terminalSourceWire index)
   have terminalSpec :=
-    Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv_spec
+    Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv_spec
       sourceView.intrinsicPath sourceLeaf certificate.witness
       certificate.sourceTerminalLeaf
       (Fin.cast sourceLeaf.inheritedLength.symm index)
@@ -446,7 +448,7 @@ theorem ProperIterationRootOpenAnchorContraction.actualWire_eq_compilerOuterWire
 the canonical coalesced-open compiler wire gives the source actual used by
 the generic splice semantics. -/
 theorem iterationActualSplice_root_pulled_eq_compiled
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
     (hadmissible : (iterationInput input selection target).Admissible)
@@ -457,75 +459,75 @@ theorem iterationActualSplice_root_pulled_eq_compiled
       (iterationInput input selection target).coalesceFrameRaw.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount =
       0)
-    (hrels : (Splice.Input.compiledSpliceCoalescedOpenView
+    (hrels : (Concrete.Splice.Input.compiledSpliceCoalescedOpenView
       (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot).focus.holeRels =
-        (Splice.Input.compiledSpliceHostView
+        (Concrete.Splice.Input.compiledSpliceHostView
           (iterationInput input selection target) hadmissible
         ).focus.holeRels) :
     let spliceInput := iterationInput input selection target
-    let sourceView := Splice.Input.compiledSpliceCoalescedOpenView spliceInput
+    let sourceView := Concrete.Splice.Input.compiledSpliceCoalescedOpenView spliceInput
       hadmissible sourceBoundary sourceRoot
-    let sourceLeaf := Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
+    let sourceLeaf := Concrete.Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
       hadmissible sourceBoundary sourceRoot hnested
-    let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+    let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
     let sourceHostInherited :=
-      Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+      Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
         sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
-    let canonicalWire := Splice.Input.compilerLeafOuterWire
+    let canonicalWire := Concrete.Splice.Input.compilerLeafOuterWire
       sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
         sourceHostInherited
     let actual : Region  host.focus.holeWires host.focus.holeRels :=
       iterationActualSpliceOfEmpty input selection target hadmissible
     (hrels.symm ▸ actual).renameWires canonicalWire.symm =
-        Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
+        Concrete.Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
           spliceInput.plugLayout hadmissible sourceBoundary sourceRoot hnested
           hzero hrels := by
   dsimp only
   let spliceInput := iterationInput input selection target
-  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView spliceInput
+  let sourceView := Concrete.Splice.Input.compiledSpliceCoalescedOpenView spliceInput
     hadmissible sourceBoundary sourceRoot
-  let sourceLeaf := Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
+  let sourceLeaf := Concrete.Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
     hadmissible sourceBoundary sourceRoot hnested
-  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
-  let pattern := Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
+  let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let pattern := Concrete.Splice.Input.compiledSpliceOpenRootItems spliceInput.pattern
   let sourceHostInherited :=
-    Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+    Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
       sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
   let sourceHostWire :=
-    (Splice.Input.compilerLeafOuterWire sourceView.intrinsicPath sourceLeaf
+    (Concrete.Splice.Input.compilerLeafOuterWire sourceView.intrinsicPath sourceLeaf
       host.intrinsicPath host.compilerLeaf sourceHostInherited).trans
       (FiniteEquiv.finCast host.compilerLeaf.inheritedLength).symm
-  let canonicalWire := Splice.Input.compilerLeafOuterWire
+  let canonicalWire := Concrete.Splice.Input.compilerLeafOuterWire
     sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
       sourceHostInherited
-  let material := ConcreteElaboration.finishRoot
+  let material := Concrete.Elaboration.finishRoot
     spliceInput.pattern.val.exposedWires spliceInput.pattern.val.hiddenWires
     pattern.items
   let rawSource := Region.spliceAt
-    (ConcreteElaboration.exactScopeWires spliceInput.coalesceFrameRaw
+    (Concrete.Elaboration.exactScopeWires spliceInput.coalesceFrameRaw
       spliceInput.site).length
     (host.compilerLeaf.items.castWiresEq
-      (ConcreteElaboration.WireContext.length_extend
+      (Concrete.Elaboration.WireContext.length_extend
         host.compilerLeaf.inheritedWires spliceInput.site))
     material
     (fun index => Fin.cast
-      (ConcreteElaboration.WireContext.length_extend
+      (Concrete.Elaboration.WireContext.length_extend
         host.compilerLeaf.inheritedWires spliceInput.site)
       (spliceInput.plugLayout.exposedWireRenaming hadmissible host index))
-    (Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels)
+    (Concrete.Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels)
   let actual : Region  host.focus.holeWires host.focus.holeRels :=
     iterationActualSpliceOfEmpty input selection target hadmissible
   have actualEq : iterationActualSpliceOfEmpty input selection target
       hadmissible =
         rawSource.castWiresEq host.compilerLeaf.inheritedLength := by
-    let localWires := (ConcreteElaboration.exactScopeWires
+    let localWires := (Concrete.Elaboration.exactScopeWires
       spliceInput.coalesceFrameRaw spliceInput.site).length
     let items := host.compilerLeaf.items.castWiresEq
-      (ConcreteElaboration.WireContext.length_extend
+      (Concrete.Elaboration.WireContext.length_extend
         host.compilerLeaf.inheritedWires spliceInput.site)
     let wire := fun index => Fin.cast
-      (ConcreteElaboration.WireContext.length_extend
+      (Concrete.Elaboration.WireContext.length_extend
         host.compilerLeaf.inheritedWires spliceInput.site)
       (spliceInput.plugLayout.exposedWireRenaming hadmissible host index)
     simpa [iterationActualSpliceOfEmpty, spliceInput, host, pattern,
@@ -533,7 +535,7 @@ theorem iterationActualSplice_root_pulled_eq_compiled
       Region.castWiresEq_proof_irrel] using
       (spliceAt_castOuter
         host.compilerLeaf.inheritedLength items material wire
-        (Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels))
+        (Concrete.Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels))
   have wireEq : canonicalWire = sourceHostWire.trans
       (FiniteEquiv.finCast host.compilerLeaf.inheritedLength) := by
     apply FiniteEquiv.ext
@@ -546,7 +548,7 @@ theorem iterationActualSplice_root_pulled_eq_compiled
   exact pulledCastWires_eq hrels host.compilerLeaf.inheritedLength rawSource
     sourceHostWire canonicalWire wireEq
 theorem ProperIterationRootOpenAnchorContraction.replacementAtSource_iso_compiled
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -558,14 +560,14 @@ theorem ProperIterationRootOpenAnchorContraction.replacementAtSource_iso_compile
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0)
     (alignment : ProperIterationRootOpenTargetAlignment certificate) :
     let spliceInput := iterationInput input selection target
-    let sourceView := Splice.Input.compiledSpliceCoalescedOpenView spliceInput
+    let sourceView := Concrete.Splice.Input.compiledSpliceCoalescedOpenView spliceInput
       hadmissible sourceBoundary sourceRoot
-    let sourceLeaf := Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
+    let sourceLeaf := Concrete.Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
       hadmissible sourceBoundary sourceRoot certificate.target_ne_root
-    let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
-    let canonicalWire := Splice.Input.compilerLeafOuterWire
+    let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
+    let canonicalWire := Concrete.Splice.Input.compilerLeafOuterWire
       sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
-        (Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+        (Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
           sourceView.intrinsicPath sourceLeaf host.intrinsicPath
             host.compilerLeaf)
     let sourceRelsEq := alignment.sourceRelsEq
@@ -577,22 +579,22 @@ theorem ProperIterationRootOpenAnchorContraction.replacementAtSource_iso_compile
           certificate.terminalSourceWire.symm
     RegionIso  (canonicalWire.trans canonicalWire.symm)
       sourceView.focus.holeRels replacementAtSource
-      (Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
+      (Concrete.Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
         spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
         certificate.target_ne_root hzero hrels) := by
   dsimp only
   let spliceInput := iterationInput input selection target
-  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView spliceInput
+  let sourceView := Concrete.Splice.Input.compiledSpliceCoalescedOpenView spliceInput
     hadmissible sourceBoundary sourceRoot
-  let sourceLeaf := Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
+  let sourceLeaf := Concrete.Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
     hadmissible sourceBoundary sourceRoot certificate.target_ne_root
-  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
   let sourceRelsEq := alignment.sourceRelsEq
   let hrels := sourceRelsEq.trans certificate.actualRelsEq
   let sourceWire := certificate.terminalSourceWire
-  let canonicalWire := Splice.Input.compilerLeafOuterWire
+  let canonicalWire := Concrete.Splice.Input.compilerLeafOuterWire
     sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
-      (Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+      (Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
         sourceView.intrinsicPath sourceLeaf host.intrinsicPath
           host.compilerLeaf)
   let actual : Region  host.focus.holeWires host.focus.holeRels :=
@@ -602,7 +604,7 @@ theorem ProperIterationRootOpenAnchorContraction.replacementAtSource_iso_compile
     sourceRelsEq.symm ▸
       certificate.replacement.renameWires sourceWire.symm
   let compiledActual :=
-    Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
+    Concrete.Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
       spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
       certificate.target_ne_root hzero hrels
   have replacementToRaw := RegionIso.transportedReplacement_to_actual
@@ -632,30 +634,30 @@ theorem ProperIterationRootOpenAnchorContraction.replacementAtSource_iso_compile
   have renamedPulledEq := congrArg
     (fun region : Region  sourceView.focus.holeWires
         sourceView.focus.holeRels =>
-      region.renameRelations (Splice.Input.relationRenamingOfEq hrels))
+      region.renameRelations (Concrete.Splice.Input.relationRenamingOfEq hrels))
     pulledEq
   have compiledToRaw' : RegionIso  canonicalWire
       host.focus.holeRels
       (compiledActual.renameRelations
-        (Splice.Input.relationRenamingOfEq hrels)) actual := by
+        (Concrete.Splice.Input.relationRenamingOfEq hrels)) actual := by
     rw [← pulledEq]
     exact compiledToRaw
   have combined := replacementToRaw.trans compiledToRaw'.symm
   have normalized := RegionIso.of_renamed_relEq hrels
     (canonicalWire.trans canonicalWire.symm) replacementAtSource
     (compiledActual.renameRelations
-      (Splice.Input.relationRenamingOfEq hrels))
+      (Concrete.Splice.Input.relationRenamingOfEq hrels))
       (by simpa [replacementAtSource, sourceRelsEq, sourceWire, hrels] using
         combined)
   have castBack : hrels.symm ▸
       compiledActual.renameRelations
-        (Splice.Input.relationRenamingOfEq hrels) = compiledActual :=
+        (Concrete.Splice.Input.relationRenamingOfEq hrels) = compiledActual :=
     castBack_renameRelations_eq hrels compiledActual
   simpa [spliceInput, sourceView, sourceLeaf, host, canonicalWire,
     sourceRelsEq, hrels, replacementAtSource, compiledActual] using
     RegionIso.castTargetEq castBack normalized
 theorem properIterationRootOpenTargetAlignment_complete
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -667,7 +669,7 @@ theorem properIterationRootOpenTargetAlignment_complete
     Nonempty (ProperIterationRootOpenTargetAlignment certificate) := by
   let anchorView := iterationCoalescedOpenAnchorView input selection target
     hadmissible sourceBoundary sourceRoot
-  let targetView := Splice.Input.compiledSpliceCoalescedOpenView
+  let targetView := Concrete.Splice.Input.compiledSpliceCoalescedOpenView
     (iterationInput input selection target) hadmissible sourceBoundary
       sourceRoot
   let nested := anchorView.intrinsicPath.nest certificate.witness
@@ -675,7 +677,7 @@ theorem properIterationRootOpenTargetAlignment_complete
     iterationCoalescedOpenAnchorRoute_targetPath input selection target
       hadmissible sourceBoundary sourceRoot certificate.route
   let full : Region.ContextPath
-      (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+      (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
         (iterationInput input selection target) hadmissible sourceBoundary
         sourceRoot).elaborate.body targetView.path :=
     Region.ContextPath.castPath pathEq nested
@@ -696,7 +698,7 @@ theorem properIterationRootOpenTargetAlignment_complete
     holeRels_eq := holeRelsEq
   }⟩
 theorem properIterationRootOpen_compiledSource_equiv
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
     {hadmissible : (iterationInput input selection target).Admissible}
@@ -709,29 +711,29 @@ theorem properIterationRootOpen_compiledSource_equiv
     (alignment : ProperIterationRootOpenTargetAlignment certificate)
     (model : Model)
     (args : Fin
-      (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+      (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
         (iterationInput input selection target) hadmissible sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
     denoteOpen model
-        (Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+        (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
           (iterationInput input selection target) hadmissible sourceBoundary
           sourceRoot).elaborate args ↔
       denoteOpen model
-        (Splice.Input.compiledSpliceNestedSourceOfEmpty
+        (Concrete.Splice.Input.compiledSpliceNestedSourceOfEmpty
           (iterationInput input selection target)
           (iterationInput input selection target).plugLayout hadmissible
           sourceBoundary sourceRoot certificate.target_ne_root hzero) args := by
   let spliceInput := iterationInput input selection target
-  let source := (Splice.Input.PlugLayout.checkedCoalescedOpenRoot spliceInput
+  let source := (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot spliceInput
     hadmissible sourceBoundary sourceRoot).elaborate
-  let sourceView := Splice.Input.compiledSpliceCoalescedOpenView spliceInput
+  let sourceView := Concrete.Splice.Input.compiledSpliceCoalescedOpenView spliceInput
     hadmissible sourceBoundary sourceRoot
-  let sourceLeaf := Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
+  let sourceLeaf := Concrete.Splice.Input.compiledSpliceCoalescedNestedLeaf spliceInput
     hadmissible sourceBoundary sourceRoot certificate.target_ne_root
-  let host := Splice.Input.compiledSpliceHostView spliceInput hadmissible
-  let canonicalWire := Splice.Input.compilerLeafOuterWire
+  let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
+  let canonicalWire := Concrete.Splice.Input.compilerLeafOuterWire
     sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
-      (Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+      (Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
         sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf)
   let sourceRelsEq := alignment.sourceRelsEq
   let hrels := sourceRelsEq.trans certificate.actualRelsEq
@@ -740,7 +742,7 @@ theorem properIterationRootOpen_compiledSource_equiv
     sourceRelsEq.symm ▸
       certificate.replacement.renameWires alignment.sourceWire.symm
   let compiledActual :=
-    Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
+    Concrete.Splice.Input.compiledSpliceCoalescedActualOfEmpty spliceInput
       spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
       certificate.target_ne_root hzero hrels
   let anchorView := iterationCoalescedOpenAnchorView input selection target
@@ -782,30 +784,30 @@ theorem properIterationRootOpen_compiledSource_equiv
       replacementEquiv
   have whole := certificate.wholeOpen_equiv model  args
   have replacements :
-      denoteOpen model  (Splice.replaceOpenBody source modifiedBody) args ↔
-        denoteOpen model  (Splice.replaceOpenBody source compiledBody)
+      denoteOpen model  (Concrete.Splice.replaceOpenBody source modifiedBody) args ↔
+        denoteOpen model  (Concrete.Splice.replaceOpenBody source compiledBody)
           args := by
     constructor
-    · exact Splice.denote_replaceOpenBody_mono source modifiedBody compiledBody
+    · exact Concrete.Splice.denote_replaceOpenBody_mono source modifiedBody compiledBody
         model  args (fun environment => (bodyEquiv environment).mp)
-    · exact Splice.denote_replaceOpenBody_mono source compiledBody modifiedBody
+    · exact Concrete.Splice.denote_replaceOpenBody_mono source compiledBody modifiedBody
         model  args (fun environment => (bodyEquiv environment).mpr)
   obtain ⟨_terminalRels, terminalBinders⟩ :=
-    Splice.Input.compiledSpliceCoalescedHost_terminalLexical spliceInput
+    Concrete.Splice.Input.compiledSpliceCoalescedHost_terminalLexical spliceInput
       hadmissible sourceBoundary sourceRoot certificate.target_ne_root
-  have actualIso := Splice.Input.compiledSpliceNestedActualIsoOfEmpty
+  have actualIso := Concrete.Splice.Input.compiledSpliceNestedActualIsoOfEmpty
     spliceInput spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
     certificate.target_ne_root hzero hrels terminalBinders
   exact whole.trans (replacements.trans
-    (by simpa [Splice.Input.compiledSpliceNestedCoalescedActualOpenOfEmpty,
+    (by simpa [Concrete.Splice.Input.compiledSpliceNestedCoalescedActualOpenOfEmpty,
       source, sourceView, compiledBody, compiledActual, spliceInput] using
       actualIso.denoteOpen_iff model  args))
 theorem properIterationRootOpen_output_equiv
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {selection : CheckedSelection input.val}
     {target : Fin input.val.regionCount}
-    {result : CheckedDiagram }
-    (hsplice : Splice.Input.spliceChecked
+    {result : Concrete.Checked }
+    (hsplice : Concrete.Splice.Input.spliceChecked
       (iterationInput input selection target) = .ok result)
     {sourceBoundary : List (Fin input.val.wireCount)}
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
@@ -813,20 +815,20 @@ theorem properIterationRootOpen_output_equiv
     (hzero : (iterationInput input selection target).binderSpine.proxyCount
       = 0)
     (certificate : ProperIterationRootOpenAnchorContraction input selection target
-      (Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary
+      (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary
       sourceRoot)
     (alignment : ProperIterationRootOpenTargetAlignment certificate)
     (model : Model)
     (args : Fin sourceBoundary.length → model.Carrier) :
-    let source : OpenProofState  := {
+    let source : OperationState  := {
       diagram := input
       boundary := sourceBoundary
       boundary_root_scoped := sourceRoot
     }
-    let output := Splice.Input.PlugLayout.checkedOutputOpenRoot
+    let output := Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot
       (iterationInput input selection target)
       (iterationInput input selection target).plugLayout
-      (Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary sourceRoot
+      (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary sourceRoot
     source.denote model  args ↔
       output.denote model
         (args ∘ Fin.cast (by
@@ -834,15 +836,15 @@ theorem properIterationRootOpen_output_equiv
           exact List.length_map (as := sourceBoundary) _)) := by
   dsimp only
   let spliceInput := iterationInput input selection target
-  let hadmissible := (Splice.Input.spliceChecked_sound hsplice).2.1
-  let source : OpenProofState  := {
+  let hadmissible := (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1
+  let source : OperationState  := {
     diagram := input
     boundary := sourceBoundary
     boundary_root_scoped := sourceRoot
   }
-  let coalesced := Splice.Input.PlugLayout.checkedCoalescedOpenRoot spliceInput
+  let coalesced := Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot spliceInput
     hadmissible sourceBoundary sourceRoot
-  let output := Splice.Input.PlugLayout.checkedOutputOpenRoot spliceInput
+  let output := Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot spliceInput
     spliceInput.plugLayout hadmissible sourceBoundary sourceRoot
   let coalescedArity : coalesced.val.boundary.length =
       sourceBoundary.length := by
@@ -858,21 +860,21 @@ theorem properIterationRootOpen_output_equiv
       coalesced.denote model  compilerArgs := by
     symm
     simpa [source, coalesced, compilerArgs, coalescedArity,
-      CheckedOpenDiagram.denote, OpenProofState.denote, Function.comp_def] using
+      Concrete.CheckedOpen.denote, OperationState.denote, Function.comp_def] using
       frameEquiv
   have contraction := properIterationRootOpen_compiledSource_equiv hzero certificate
     alignment model  compilerArgs
   have hsite : spliceInput.site ≠ spliceInput.frame.val.root := by
-    simpa [spliceInput, Splice.Input.coalesceFrameRaw] using
+    simpa [spliceInput, Concrete.Splice.Input.coalesceFrameRaw] using
       certificate.target_ne_root
-  have executable := Splice.Input.spliceChecked_open_denotation_iff
+  have executable := Concrete.Splice.Input.spliceChecked_open_denotation_iff
     spliceInput hsplice sourceBoundary sourceRoot model  compilerArgs
   dsimp only at executable
   rw [denoteOpen_castArity] at executable
   exact sourceToCoalesced.trans (contraction.trans
     (by simpa [spliceInput, hadmissible, coalesced, output, compilerArgs,
-      coalescedArity, Splice.Input.compiledSpliceSourceOpen,
-      hsite, hzero, CheckedOpenDiagram.denote,
+      coalescedArity, Concrete.Splice.Input.compiledSpliceSourceOpen,
+      hsite, hzero, Concrete.CheckedOpen.denote,
       Function.comp_def] using executable))
 
 

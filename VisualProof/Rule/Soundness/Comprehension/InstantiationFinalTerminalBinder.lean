@@ -4,6 +4,8 @@ import VisualProof.Rule.Soundness.Modal.VacuousEliminationAncestor
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -16,22 +18,22 @@ theorem terminalParent_exact
     (trace : VacuousElimTrace input bubble raw)
     (targetWellFormed : input.WellFormed )
     (sourceWellFormed : trace.sourceDiagram.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
     (sourceExact : (sourceContext.extend
       (trace.targetIndex targetWellFormed)).Exact
         (trace.targetIndex targetWellFormed)) :
-    @ConcreteElaboration.WireContext.Exact input
-      (@ConcreteElaboration.WireContext.extend input sourceContext trace.parent)
+    @Concrete.Elaboration.WireContext.Exact input
+      (@Concrete.Elaboration.WireContext.extend input sourceContext trace.parent)
       trace.parent := by
   have sourceNodup :
-      (sourceContext ++ ConcreteElaboration.exactScopeWires
+      (sourceContext ++ Concrete.Elaboration.exactScopeWires
         trace.sourceDiagram (trace.targetIndex targetWellFormed)).Nodup := by
-    simpa [ConcreteElaboration.WireContext.extend] using sourceExact.nodup
+    simpa [Concrete.Elaboration.WireContext.extend] using sourceExact.nodup
   have sourceParts := List.nodup_append.mp sourceNodup
   constructor
-  · rw [ConcreteElaboration.WireContext.extend, List.nodup_append]
+  · rw [Concrete.Elaboration.WireContext.extend, List.nodup_append]
     refine ⟨sourceParts.1,
-      ConcreteElaboration.exactScopeWires_nodup input trace.parent, ?_⟩
+      Concrete.Elaboration.exactScopeWires_nodup input trace.parent, ?_⟩
     intro left leftMember right rightMember equality
     subst right
     have focusMember := trace.parentWire_mem_focusExact targetWellFormed left
@@ -46,9 +48,9 @@ theorem terminalParent_exact
         let sourceScope := (trace.sourceDiagram.wires wire).scope
         have sourceScopeNe : sourceScope ≠ trace.targetIndex targetWellFormed := by
           intro equality
-          have focusMember : wire ∈ ConcreteElaboration.exactScopeWires
+          have focusMember : wire ∈ Concrete.Elaboration.exactScopeWires
               trace.sourceDiagram (trace.targetIndex targetWellFormed) :=
-            (ConcreteElaboration.mem_exactScopeWires _ _ _).2 equality
+            (Concrete.Elaboration.mem_exactScopeWires _ _ _).2 equality
           exact sourceParts.2.2 wire outerMember wire focusMember rfl
         have originalScope : (input.wires wire).scope =
             trace.origin sourceScope :=
@@ -58,13 +60,13 @@ theorem terminalParent_exact
           sourceWellFormed sourceScope sourceVisible
         simpa [originalScope] using mapped
       · have scope : (input.wires wire).scope = trace.parent :=
-          (ConcreteElaboration.mem_exactScopeWires _ _ _).1 localMember
+          (Concrete.Elaboration.mem_exactScopeWires _ _ _).1 localMember
         rw [scope]
-        exact ConcreteDiagram.Encloses.refl input trace.parent
+        exact Concrete.Diagram.Encloses.refl input trace.parent
     · intro visible
       by_cases isLocal : (input.wires wire).scope = trace.parent
       · exact List.mem_append_right sourceContext
-          ((ConcreteElaboration.mem_exactScopeWires _ _ _).2 isLocal)
+          ((Concrete.Elaboration.mem_exactScopeWires _ _ _).2 isLocal)
       · obtain ⟨sourceAncestor, originEq, sourceVisible⟩ :=
           trace.sourceEnclosesFocus_iff_backward targetWellFormed
             sourceWellFormed (input.wires wire).scope visible
@@ -86,19 +88,19 @@ theorem terminalParent_exact
         · exact List.mem_append_left _ outerMember
         · have focusScope : (trace.sourceDiagram.wires wire).scope =
               trace.targetIndex targetWellFormed :=
-            (ConcreteElaboration.mem_exactScopeWires _ _ _).1 focusMember
+            (Concrete.Elaboration.mem_exactScopeWires _ _ _).1 focusMember
           exact False.elim (sourceAncestorNe (sourceScope.symm.trans focusScope))
 
 /-- A binder context covering an executor state also covers the atom-dropped
 compiler view, whose regions and enclosure relation are unchanged. -/
 theorem binderCover_to_drop
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (context : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (region : Fin state.diagram.val.regionCount)
-    (cover : @ConcreteElaboration.BinderContext.Covers state.diagram.val rels
+    (cover : @Concrete.Elaboration.BinderContext.Covers state.diagram.val rels
       context region) :
-    @ConcreteElaboration.BinderContext.Covers (dropInstantiationAtomsRaw state)
+    @Concrete.Elaboration.BinderContext.Covers (dropInstantiationAtomsRaw state)
       rels context region := by
   intro binder parent arity bubbleEq encloses
   apply cover binder parent arity
@@ -108,13 +110,13 @@ theorem binderCover_to_drop
 /-- Exact binder enumeration is preserved when executor-owned atoms are
 deleted from the compiler view. -/
 def binderEnumeration_to_drop
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (context : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (region : Fin state.diagram.val.regionCount)
-    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+    (enumeration : Concrete.Elaboration.BinderContext.Enumeration
       state.diagram.val context region) :
-    ConcreteElaboration.BinderContext.Enumeration
+    Concrete.Elaboration.BinderContext.Enumeration
       (dropInstantiationAtomsRaw state) context region where
   binder := enumeration.binder
   binder_injective := enumeration.binder_injective
@@ -134,8 +136,8 @@ region map.  Executor-created regions carry no unrelated binder. -/
 noncomputable def traceBinderContext
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (external : ConcreteElaboration.BinderContext state.diagram.val rels) :
-    ConcreteElaboration.BinderContext result.diagram.val rels :=
+    (external : Concrete.Elaboration.BinderContext state.diagram.val rels) :
+    Concrete.Elaboration.BinderContext result.diagram.val rels :=
   fun region =>
     if image : ∃ source, trace.regionMap source = region then
       external (Classical.choose image)
@@ -144,7 +146,7 @@ noncomputable def traceBinderContext
 @[simp] theorem traceBinderContext_regionMap
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (external : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (external : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (region : Fin state.diagram.val.regionCount) :
     traceBinderContext trace external (trace.regionMap region) =
       external region := by
@@ -160,20 +162,20 @@ noncomputable def traceBinderContext
 covers the copied terminal parent.  The proof uses the selected bubble as the
 ancestry anchor, excluding the deleted child itself. -/
 theorem traceBinderContext_covers_parent
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       (initialInstantiationState payload) result)
-    (external : ConcreteElaboration.BinderContext input.val rels)
+    (external : Concrete.Elaboration.BinderContext input.val rels)
     (externalCover : external.Covers payload.parent) :
     (traceBinderContext trace external).Covers
       (trace.regionMap payload.parent) := by
@@ -190,8 +192,8 @@ theorem traceBinderContext_covers_parent
   have parentEnclosesBubble : result.diagram.val.Encloses
       (trace.regionMap payload.parent) result.bubble := by
     refine ⟨⟨1, by have := result.bubble.isLt; omega⟩, ?_⟩
-    simp [ConcreteDiagram.climb, terminalBubbleShape, CRegion.parent?]
-  have targetEnclosesBubble := ConcreteElaboration.checked_encloses_trans
+    simp [Concrete.Diagram.climb, terminalBubbleShape, CRegion.parent?]
+  have targetEnclosesBubble := Concrete.Elaboration.checked_encloses_trans
     result.diagram.property targetEnclosesParent parentEnclosesBubble
   obtain ⟨sourceBinder, sourceEnclosesBubble, sourceMap⟩ :=
     trace.ancestor_preimage targetBinder targetEnclosesBubble
@@ -214,7 +216,7 @@ theorem traceBinderContext_covers_parent
       have sourceParentEq : (input.val.regions bubble).parent? =
           some payload.parent := by
         simp [payload.bubble_eq, CRegion.parent?]
-      rcases ConcreteElaboration.encloses_direct_child sourceParentEq
+      rcases Concrete.Elaboration.encloses_direct_child sourceParentEq
           sourceEnclosesBubble with sourceIsBubble | sourceEnclosesParent
       · subst sourceBinder
         rw [bubbleMap] at targetEnclosesParent
@@ -223,7 +225,7 @@ theorem traceBinderContext_covers_parent
               some (trace.regionMap payload.parent) := by
           simp [terminalBubbleShape, CRegion.parent?]
         exact False.elim
-          (ConcreteElaboration.checked_direct_child_not_encloses_parent
+          (Concrete.Elaboration.checked_direct_child_not_encloses_parent
             result.diagram.property terminalParentEq targetEnclosesParent)
       · obtain ⟨relation, externalLookup⟩ := externalCover sourceBinder
           sourceParent arity sourceShape sourceEnclosesParent
@@ -234,11 +236,11 @@ theorem traceBinderContext_covers_parent
 noncomputable def traceBinderEnumeration
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (external : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (external : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (region : Fin state.diagram.val.regionCount)
-    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+    (enumeration : Concrete.Elaboration.BinderContext.Enumeration
       state.diagram.val external region) :
-    ConcreteElaboration.BinderContext.Enumeration result.diagram.val
+    Concrete.Elaboration.BinderContext.Enumeration result.diagram.val
       (traceBinderContext trace external) (trace.regionMap region) where
   binder := fun index => trace.regionMap (enumeration.binder index)
   binder_injective := fun _ _ equality => enumeration.binder_injective
@@ -267,13 +269,13 @@ noncomputable def traceBinderEnumeration
 /-- The canonical external relation map for a copied binder context, extended
 by the moving bubble itself, preserves every intrinsic relation variable. -/
 theorem traceExternalRelationMap_traceBinderContext_push
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -281,9 +283,9 @@ theorem traceExternalRelationMap_traceBinderContext_push
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       (initialInstantiationState payload) result)
     {rels : RelCtx}
-    (external : ConcreteElaboration.BinderContext input.val rels)
+    (external : Concrete.Elaboration.BinderContext input.val rels)
     (arity : Nat)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       result.diagram.val
       ((traceBinderContext trace external).push result.bubble arity)
       result.bubble)
@@ -293,7 +295,7 @@ theorem traceExternalRelationMap_traceBinderContext_push
         ((traceBinderContext trace external).push result.bubble arity)
         sourceEnumeration (external.push bubble arity) targetCover fallback :
       RelationRenaming (arity :: rels) (arity :: rels)) =
-      (ConcreteElaboration.identityRelationRenaming (arity :: rels) :
+      (Concrete.Elaboration.identityRelationRenaming (arity :: rels) :
         RelationRenaming (arity :: rels) (arity :: rels)) := by
   apply @funext
   intro binderArity
@@ -317,8 +319,8 @@ theorem traceExternalRelationMap_traceBinderContext_push
           traceRegionPreimage trace fallback result.bubble = bubble := by
         rw [← bubbleMap, traceRegionPreimage_image]
       rw [preimageBubble]
-      simpa only [ConcreteElaboration.BinderContext.push_self] using sourceLookup
-    · rw [ConcreteElaboration.BinderContext.push_other _ arity ownerEq]
+      simpa only [Concrete.Elaboration.BinderContext.push_self] using sourceLookup
+    · rw [Concrete.Elaboration.BinderContext.push_other _ arity ownerEq]
         at sourceLookup
       unfold traceBinderContext at sourceLookup
       split at sourceLookup
@@ -335,7 +337,7 @@ theorem traceExternalRelationMap_traceBinderContext_push
             simpa [initialInstantiationState] using trace.regionMap_bubble
           exact ownerEq (sourceMap.symm.trans bubbleMap)
         rw [preimageEq]
-        rw [ConcreteElaboration.BinderContext.push_other external arity sourceNe]
+        rw [Concrete.Elaboration.BinderContext.push_other external arity sourceNe]
         simpa only [source] using sourceLookup
       next noImage => simp at sourceLookup
   have mappedLookup := traceExternalRelationMap_spec trace
@@ -352,20 +354,20 @@ namespace InstantiationTrace
 /-- At every admissible final compiler binder, the vacuous origin is the
 copy-trace image of the authoritative reverse region. -/
 theorem origin_eq_regionMap_reverse_of_admissible
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -382,7 +384,7 @@ theorem origin_eq_regionMap_reverse_of_admissible
       intro equality
       apply spec.1.1
       rw [equality]
-      exact ConcreteDiagram.Encloses.refl input.val bubble
+      exact Concrete.Diagram.Encloses.refl input.val bubble
     calc
       elimTrace.origin region = elimTrace.origin
           (copyTrace.finalRegionMap elimTrace finalWellFormed
@@ -406,28 +408,28 @@ theorem origin_eq_regionMap_reverse_of_admissible
 /-- The final-to-original binder witness factors through the terminal copied
 frame context before the eliminated bubble is reconstructed. -/
 noncomputable def terminalMappedBinderWitness
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     {copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result}
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     {elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw}
     {finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed }
     {sourceRels targetRels : RelCtx}
-    {sourceBinders : ConcreteElaboration.BinderContext
+    {sourceBinders : Concrete.Elaboration.BinderContext
       elimTrace.sourceDiagram sourceRels}
-    {targetBinders : ConcreteElaboration.BinderContext input.val targetRels}
+    {targetBinders : Concrete.Elaboration.BinderContext input.val targetRels}
     (witness : FinalBinderWitness copyTrace elimTrace finalWellFormed
       sourceBinders targetBinders) :
     VacuousElimTrace.MappedBinderWitness elimTrace sourceBinders
@@ -443,7 +445,7 @@ noncomputable def terminalMappedBinderWitness
 terminal side of vacuous reconstruction. -/
 def terminalPromotedContext
     (elimTrace : VacuousElimTrace input bubble raw)
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram) :
     VacuousElimTrace.PromotedContextWitness elimTrace sourceContext
       sourceContext where

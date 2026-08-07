@@ -1,9 +1,11 @@
 import VisualProof.Rule.Soundness
-import VisualProof.Rule.Comprehension.Semantics
+import VisualProof.Concrete.Operation.Comprehension.Semantics
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalAllowedRoot
 import VisualProof.Rule.Soundness.Comprehension.AbstractionRoot
 
 namespace VisualProof.Rule
+
+open VisualProof.Concrete
 
 open VisualProof
 open Diagram
@@ -11,15 +13,15 @@ open Theory
 
 theorem applyComprehensionInstantiate_sound
     (orientation : Orientation)
-    (input : Diagram.CheckedDiagram )
+    (input : Concrete.Checked )
     (bubble : Fin input.val.regionCount)
-    (comprehension : Diagram.CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    (receipt : StepReceipt input)
+    (receipt : OperationReceipt input)
     (happly : applyComprehensionInstantiate orientation input bubble
       comprehension attachments binders payload = .ok receipt) :
     SuccessfulReceiptSound orientation input
@@ -41,9 +43,9 @@ theorem applyComprehensionInstantiate_sound
       elimTrace.promotion.raw_eq_diagram) rawWellFormed
   let expectedInterface :=
     (copied.interface.compose
-      (InterfaceTransport.byWireCount copied.diagram.val
+      (WireTransport.byWireCount copied.diagram.val
         (dropInstantiationAtomsRaw copied) rfl)).compose
-      (vacuousElimInterfaceTransport hraw)
+      (vacuousElimWireTransport hraw)
   let operationalOpen := fun
       (boundary : List (Fin input.val.wireCount))
       (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -53,7 +55,7 @@ theorem applyComprehensionInstantiate_sound
         some _mapped) =>
     (⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
-        finalWellFormed boundary sourceRoot⟩ : CheckedOpenDiagram )
+        finalWellFormed boundary sourceRoot⟩ : Concrete.CheckedOpen )
   let operationalIso := fun
       (boundary : List (Fin input.val.wireCount))
       (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -64,11 +66,11 @@ theorem applyComprehensionInstantiate_sound
     let rawBoundary := boundary.map fun wire =>
       Fin.cast (vacuousElimRaw?_wireCount hraw).symm
         (copyTrace.wireMap wire)
-    let rawOpen : OpenConcreteDiagram := {
+    let rawOpen : Concrete.OpenDiagram := {
       diagram := raw
       boundary := rawBoundary
     }
-    let toRaw : OpenConcreteIso
+    let toRaw : Concrete.OpenIso
         (copyTrace.finalSourceOpen elimTrace boundary) rawOpen := {
       diagram := VacuousElimTrace.concreteIsoOfEq
         elimTrace.promotion.raw_eq_diagram.symm
@@ -98,12 +100,12 @@ theorem applyComprehensionInstantiate_sound
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := operationalOpen) (operationalIso := operationalIso)
   intro model boundary sourceRoot mapped htransport args
-  let source : OpenProofState  := {
+  let source : OperationState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
   }
-  let direction : ConcreteElaboration.SimulationDirection :=
+  let direction : Concrete.Elaboration.SimulationDirection :=
     match orientation with
     | .forward => .backward
     | .backward => .forward
@@ -133,24 +135,24 @@ theorem applyComprehensionInstantiate_sound
     rfl
   cases orientation with
   | forward =>
-      simpa [DirectedEntailment, DirectedImplication, source,
-        OpenProofState.denote, operationalOpen, direction, operationalArgsEq]
+      simpa [OperationEntailment, OperationImplication, source,
+        OperationState.denote, operationalOpen, direction, operationalArgsEq]
         using semantic
   | backward =>
-      simpa [DirectedEntailment, DirectedImplication, source,
-        OpenProofState.denote, operationalOpen, direction, operationalArgsEq]
+      simpa [OperationEntailment, OperationImplication, source,
+        OperationState.denote, operationalOpen, direction, operationalArgsEq]
         using semantic
 
 /-- Every successful comprehension-abstraction receipt is sound. -/
 theorem applyComprehensionAbstract_sound
     (orientation : Orientation)
-    (input : Diagram.CheckedDiagram )
-    (wrap : Diagram.CheckedSelection input.val)
-    (comprehension : Diagram.CheckedOpenDiagram )
-    (occurrences : List (AbstractionOccurrence input))
-    (payload : ComprehensionAbstractPayload input wrap comprehension
+    (input : Concrete.Checked )
+    (wrap : Concrete.CheckedSelection input.val)
+    (comprehension : Concrete.CheckedOpen )
+    (occurrences : List (OperationAbstractionOccurrence input))
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension
       occurrences)
-    (receipt : StepReceipt input)
+    (receipt : OperationReceipt input)
     (happly : applyComprehensionAbstract orientation input wrap comprehension
       occurrences payload = .ok receipt) :
     SuccessfulReceiptSound orientation input
@@ -175,7 +177,7 @@ theorem applyComprehensionAbstract_sound
     let expected := realizes.transportBoundary_expected htransport
     (⟨trace.targetOpen hraw boundary rawMapped expected,
       trace.targetOpen_wellFormed payload targetWellFormed hraw boundary
-        sourceRoot rawMapped expected⟩ : CheckedOpenDiagram )
+        sourceRoot rawMapped expected⟩ : Concrete.CheckedOpen )
   let operationalIso := fun
       (boundary : List (Fin input.val.wireCount))
       (_sourceRoot : ∀ wire, wire ∈ boundary →
@@ -190,17 +192,17 @@ theorem applyComprehensionAbstract_sound
   apply SuccessfulReceiptSound.of_realized_operational realizes
     (operational := operational) (operationalIso := operationalIso)
   intro model boundary sourceRoot mapped htransport args
-  let source : OpenProofState  := {
+  let source : OperationState  := {
     diagram := input
     boundary := boundary
     boundary_root_scoped := sourceRoot
   }
   let rawMapped := realizes.targetBoundary mapped
   have expected :
-      (comprehensionAbstractInterfaceTransport input wrap comprehension
+      (comprehensionAbstractWireTransport input wrap comprehension
         occurrences raw hraw).transportBoundary boundary = some rawMapped :=
     realizes.transportBoundary_expected htransport
-  let direction : ConcreteElaboration.SimulationDirection :=
+  let direction : Concrete.Elaboration.SimulationDirection :=
     match orientation with
     | .forward => .forward
     | .backward => .backward
@@ -227,12 +229,12 @@ theorem applyComprehensionAbstract_sound
     rfl
   cases orientation with
   | forward =>
-      simpa [DirectedEntailment, DirectedImplication, source,
-        OpenProofState.denote, operational, direction, operationalArgsEq]
+      simpa [OperationEntailment, OperationImplication, source,
+        OperationState.denote, operational, direction, operationalArgsEq]
         using semantic
   | backward =>
-      simpa [DirectedEntailment, DirectedImplication, source,
-        OpenProofState.denote, operational, direction, operationalArgsEq]
+      simpa [OperationEntailment, OperationImplication, source,
+        OperationState.denote, operational, direction, operationalArgsEq]
         using semantic
 
 end VisualProof.Rule

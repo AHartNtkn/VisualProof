@@ -2,30 +2,32 @@ import VisualProof.Rule.Soundness.Modal
 
 namespace VisualProof.Rule.ModalSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Theory
 open VisualProof.Diagram
 
 theorem doubleCutIntroFocusedItems
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (targetWellFormed :
       (doubleCutIntroRaw input.val selection).WellFormed )
     (model : Model)
     {sourceRels targetRels : RelCtx}
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
     (targetContext :
-      ConcreteElaboration.WireContext
+      Concrete.Elaboration.WireContext
         (doubleCutIntroRaw input.val selection))
     (context :
       LiftedContextWitness input.val selection sourceContext targetContext)
     (sourceBinders :
-      ConcreteElaboration.BinderContext input.val sourceRels)
+      Concrete.Elaboration.BinderContext input.val sourceRels)
     (targetBinders :
-      ConcreteElaboration.BinderContext
+      Concrete.Elaboration.BinderContext
         (doubleCutIntroRaw input.val selection) targetRels)
     (binderWitness :
       LiftedBinderWitness input.val selection sourceBinders targetBinders)
@@ -39,26 +41,26 @@ theorem doubleCutIntroFocusedItems
     (targetBindersCover :
       targetBinders.Covers (Fin.castAdd 2 selection.val.anchor))
     (sourceEnumeration :
-      ConcreteElaboration.BinderContext.Enumeration input.val sourceBinders
+      Concrete.Elaboration.BinderContext.Enumeration input.val sourceBinders
         selection.val.anchor)
     (targetEnumeration :
-      ConcreteElaboration.BinderContext.Enumeration
+      Concrete.Elaboration.BinderContext.Enumeration
         (doubleCutIntroRaw input.val selection) targetBinders
         (Fin.castAdd 2 selection.val.anchor))
     (recurseAt :
-      ∀ {childDirection : ConcreteElaboration.SimulationDirection}
+      ∀ {childDirection : Concrete.Elaboration.SimulationDirection}
         {child : Fin input.val.regionCount}
         {childSourceRels childTargetRels : RelCtx}
         {childSourceBinders :
-          ConcreteElaboration.BinderContext input.val childSourceRels}
+          Concrete.Elaboration.BinderContext input.val childSourceRels}
         {childTargetBinders :
-          ConcreteElaboration.BinderContext
+          Concrete.Elaboration.BinderContext
             (doubleCutIntroRaw input.val selection) childTargetRels}
         (childFuelTarget : Nat)
         (childSourceContext :
-          ConcreteElaboration.WireContext input.val)
+          Concrete.Elaboration.WireContext input.val)
         (childTargetContext :
-          ConcreteElaboration.WireContext
+          Concrete.Elaboration.WireContext
             (doubleCutIntroRaw input.val selection))
         (childContext :
           LiftedContextWitness input.val selection childSourceContext
@@ -70,9 +72,9 @@ theorem doubleCutIntroFocusedItems
             childTargetBinders) →
         childSourceBinders.Covers child →
         childTargetBinders.Covers (Fin.castAdd 2 child) →
-        ConcreteElaboration.BinderContext.Enumeration input.val
+        Concrete.Elaboration.BinderContext.Enumeration input.val
           childSourceBinders child →
-        ConcreteElaboration.BinderContext.Enumeration
+        Concrete.Elaboration.BinderContext.Enumeration
           (doubleCutIntroRaw input.val selection) childTargetBinders
           (Fin.castAdd 2 child) →
         (childSourceContext.extend child).Exact child →
@@ -82,13 +84,13 @@ theorem doubleCutIntroFocusedItems
             Region  childSourceContext.length childSourceRels)
           (targetBody :
             Region  childTargetContext.length childTargetRels),
-        ConcreteElaboration.compileRegion?  input.val fuelSource child
+        Concrete.Elaboration.compileRegion?  input.val fuelSource child
             childSourceContext childSourceBinders = some sourceBody →
-        ConcreteElaboration.compileRegion?
+        Concrete.Elaboration.compileRegion?
             (doubleCutIntroRaw input.val selection) childFuelTarget
             (Fin.castAdd 2 child) childTargetContext childTargetBinders =
           some targetBody →
-        ConcreteElaboration.RegionSimulation model  childDirection
+        Concrete.Elaboration.RegionSimulation model  childDirection
           childContext.indexRelation
           (sourceBody.renameRelations childBinderWitness.relationMap)
           targetBody)
@@ -99,22 +101,22 @@ theorem doubleCutIntroFocusedItems
       ItemSeq
         targetContext.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileOccurrencesWith?  input.val
-        (ConcreteElaboration.compileRegion?  input.val fuelSource)
+      Concrete.Elaboration.compileOccurrencesWith?  input.val
+        (Concrete.Elaboration.compileRegion?  input.val fuelSource)
         sourceContext sourceBinders
-        (ConcreteElaboration.localOccurrences input.val
+        (Concrete.Elaboration.localOccurrences input.val
           selection.val.anchor) = some sourceItems)
     (targetCompiled :
-      ConcreteElaboration.compileOccurrencesWith?
+      Concrete.Elaboration.compileOccurrencesWith?
         (doubleCutIntroRaw input.val selection)
-        (ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           (doubleCutIntroRaw input.val selection) fuelTarget)
         targetContext
         targetBinders
-        (ConcreteElaboration.localOccurrences
+        (Concrete.Elaboration.localOccurrences
           (doubleCutIntroRaw input.val selection)
           (Fin.castAdd 2 selection.val.anchor)) = some targetItems) :
-    ConcreteElaboration.ItemSeqSimulation model  direction
+    Concrete.Elaboration.ItemSeqSimulation model  direction
       context.indexRelation
       (sourceItems.renameRelations binderWitness.relationMap)
       targetItems := by
@@ -122,25 +124,25 @@ theorem doubleCutIntroFocusedItems
   rw [doubleCutIntroRaw_anchor_localOccurrences] at targetCompiled
   obtain ⟨keptTargetItems, outerTargetItems, keptTargetCompiled,
       outerTargetCompiled, targetItemsEq⟩ :=
-    ConcreteElaboration.compileOccurrencesWith?_append_split
+    Concrete.Elaboration.compileOccurrencesWith?_append_split
       (d := doubleCutIntroRaw input.val selection)
 
       (fun {rels} =>
-        ConcreteElaboration.compileRegion?
+        Concrete.Elaboration.compileRegion?
           (doubleCutIntroRaw input.val selection) fuelTarget)
       targetContext
       targetBinders
       ((keptOccurrences input.val selection).map
         (liftOccurrence input.val))
-      [ConcreteElaboration.LocalOccurrence.child
+      [Concrete.Elaboration.LocalOccurrence.child
         (doubleCutOuter input.val)]
       targetItems targetCompiled
   rw [targetItemsEq]
-  simp only [ConcreteElaboration.compileOccurrencesWith?] at outerTargetCompiled
-  simp only [ConcreteElaboration.compileOccurrenceWith?,
+  simp only [Concrete.Elaboration.compileOccurrencesWith?] at outerTargetCompiled
+  simp only [Concrete.Elaboration.compileOccurrenceWith?,
     doubleCutIntroRaw_outer] at outerTargetCompiled
   cases outerRegionResult :
-      ConcreteElaboration.compileRegion?
+      Concrete.Elaboration.compileRegion?
         (doubleCutIntroRaw input.val selection) fuelTarget
         (doubleCutOuter input.val)
         targetContext
@@ -151,25 +153,25 @@ theorem doubleCutIntroFocusedItems
       subst outerTargetItems
       cases fuelTarget with
       | zero =>
-          simp [ConcreteElaboration.compileRegion?] at outerRegionResult
+          simp [Concrete.Elaboration.compileRegion?] at outerRegionResult
       | succ outerFuel =>
-          simp only [ConcreteElaboration.compileRegion?] at outerRegionResult
+          simp only [Concrete.Elaboration.compileRegion?] at outerRegionResult
           rw [doubleCutIntroRaw_outer_localOccurrences] at outerRegionResult
           obtain ⟨outerItems, outerItemsResult, outerBodyEq⟩ :=
             Option.bind_eq_some_iff.mp outerRegionResult
           have outerBodyEq' :
-              ConcreteElaboration.finishRegion
+              Concrete.Elaboration.finishRegion
                   (doubleCutIntroRaw input.val selection)
                   targetContext
                   (doubleCutOuter input.val) outerItems =
                 outerBody :=
             Option.some.inj outerBodyEq
           subst outerBody
-          simp only [ConcreteElaboration.compileOccurrencesWith?,
-            ConcreteElaboration.compileOccurrenceWith?,
+          simp only [Concrete.Elaboration.compileOccurrencesWith?,
+            Concrete.Elaboration.compileOccurrenceWith?,
             doubleCutIntroRaw_inner] at outerItemsResult
           cases innerRegionResult :
-              ConcreteElaboration.compileRegion?
+              Concrete.Elaboration.compileRegion?
                 (doubleCutIntroRaw input.val selection) outerFuel
                 (doubleCutInner input.val)
                 (targetContext.extend
@@ -181,15 +183,15 @@ theorem doubleCutIntroFocusedItems
               subst outerItems
               cases outerFuel with
               | zero =>
-                  simp [ConcreteElaboration.compileRegion?] at innerRegionResult
+                  simp [Concrete.Elaboration.compileRegion?] at innerRegionResult
               | succ innerFuel =>
-                  simp only [ConcreteElaboration.compileRegion?] at innerRegionResult
+                  simp only [Concrete.Elaboration.compileRegion?] at innerRegionResult
                   rw [doubleCutIntroRaw_inner_localOccurrences] at innerRegionResult
                   obtain ⟨selectedTargetItems, selectedTargetCompiled,
                       innerBodyEq⟩ :=
                     Option.bind_eq_some_iff.mp innerRegionResult
                   have innerBodyEq' :
-                      ConcreteElaboration.finishRegion
+                      Concrete.Elaboration.finishRegion
                           (doubleCutIntroRaw input.val selection)
                           (targetContext.extend
                               (doubleCutOuter input.val))
@@ -202,15 +204,15 @@ theorem doubleCutIntroFocusedItems
                       ∀ {rels : RelCtx},
                         (child : Fin input.val.regionCount) →
                         (childContext :
-                          ConcreteElaboration.WireContext input.val) →
-                        ConcreteElaboration.BinderContext input.val rels →
+                          Concrete.Elaboration.WireContext input.val) →
+                        Concrete.Elaboration.BinderContext input.val rels →
                         Option
                           (Region  childContext.length rels) :=
                     fun {rels} =>
-                      ConcreteElaboration.compileRegion?  input.val
+                      Concrete.Elaboration.compileRegion?  input.val
                         fuelSource
                   obtain ⟨partitionSourceItems, partitionSourceCompiled⟩ :=
-                    ConcreteElaboration.compileOccurrencesWith?_complete
+                    Concrete.Elaboration.compileOccurrencesWith?_complete
                       sourceRecurse
                       sourceContext
                       sourceBinders
@@ -227,7 +229,7 @@ theorem doubleCutIntroFocusedItems
                   obtain ⟨keptSourceItems, selectedSourceItems,
                       keptSourceCompiled, selectedSourceCompiled,
                       partitionSourceItemsEq⟩ :=
-                    ConcreteElaboration.compileOccurrencesWith?_append_split
+                    Concrete.Elaboration.compileOccurrencesWith?_append_split
                       sourceRecurse
                       sourceContext
                       sourceBinders
@@ -243,22 +245,22 @@ theorem doubleCutIntroFocusedItems
                           (targetItem :
                             Item
                               targetContext.length sourceRels),
-                        ConcreteElaboration.compileOccurrenceWith?
+                        Concrete.Elaboration.compileOccurrenceWith?
                              input.val sourceRecurse
                             sourceContext
                             sourceBinders occurrence =
                           some sourceItem →
-                        ConcreteElaboration.compileOccurrenceWith?
+                        Concrete.Elaboration.compileOccurrenceWith?
 
                             (doubleCutIntroRaw input.val selection)
-                            (ConcreteElaboration.compileRegion?
+                            (Concrete.Elaboration.compileRegion?
                               (doubleCutIntroRaw input.val selection)
                               (innerFuel + 1 + 1))
                             targetContext
                             targetBinders
                             (liftOccurrence input.val occurrence) =
                           some targetItem →
-                        ConcreteElaboration.ItemSimulation model
+                        Concrete.Elaboration.ItemSimulation model
                           direction
                           context.indexRelation
                           (sourceItem.renameRelations
@@ -328,11 +330,11 @@ theorem doubleCutIntroFocusedItems
                     targetOuterExact.extend_child targetWellFormed
                       (doubleCutIntroRaw_inner_parent input.val selection)
                   have targetOuterBindersCover :=
-                    ConcreteElaboration.BinderContext.covers_cut_child
+                    Concrete.Elaboration.BinderContext.covers_cut_child
                       targetBindersCover
                       (doubleCutIntroRaw_outer input.val selection)
                   have targetInnerBindersCover :=
-                    ConcreteElaboration.BinderContext.covers_cut_child
+                    Concrete.Elaboration.BinderContext.covers_cut_child
                       targetOuterBindersCover
                       (doubleCutIntroRaw_inner input.val selection)
                   have targetOuterEnumeration :=
@@ -345,7 +347,7 @@ theorem doubleCutIntroFocusedItems
                       targetContext.extend
                           (doubleCutOuter input.val) =
                         targetContext := by
-                    unfold ConcreteElaboration.WireContext.extend
+                    unfold Concrete.Elaboration.WireContext.extend
                     rw [doubleCutIntroRaw_outer_exactScopeWires]
                     exact List.append_nil _
                   have selectedTargetContextEq :
@@ -354,7 +356,7 @@ theorem doubleCutIntroFocusedItems
                             (doubleCutInner input.val)) =
                         targetContext := by
                     apply Eq.trans _ targetOuterContextEq
-                    unfold ConcreteElaboration.WireContext.extend
+                    unfold Concrete.Elaboration.WireContext.extend
                     rw [doubleCutIntroRaw_inner_exactScopeWires]
                     exact List.append_nil _
                   have selectedContextWitness :
@@ -377,15 +379,15 @@ theorem doubleCutIntroFocusedItems
                                     (doubleCutOuter input.val)).extend
                                       (doubleCutInner input.val)).length
                               sourceRels),
-                        ConcreteElaboration.compileOccurrenceWith?
+                        Concrete.Elaboration.compileOccurrenceWith?
                              input.val sourceRecurse
                             sourceContext
                             sourceBinders occurrence =
                           some sourceItem →
-                        ConcreteElaboration.compileOccurrenceWith?
+                        Concrete.Elaboration.compileOccurrenceWith?
 
                             (doubleCutIntroRaw input.val selection)
-                            (ConcreteElaboration.compileRegion?
+                            (Concrete.Elaboration.compileRegion?
                               (doubleCutIntroRaw input.val selection)
                               innerFuel)
                             ((targetContext.extend
@@ -394,7 +396,7 @@ theorem doubleCutIntroFocusedItems
                             targetBinders
                             (liftOccurrence input.val occurrence) =
                           some targetItem →
-                        ConcreteElaboration.ItemSimulation model
+                        Concrete.Elaboration.ItemSimulation model
                           direction selectedContextWitness.indexRelation
                           (sourceItem.renameRelations
                             binderWitness.relationMap)
@@ -437,9 +439,9 @@ theorem doubleCutIntroFocusedItems
                     · simpa [sourceRecurse] using sourceOccurrenceCompiled
                     · exact targetOccurrenceCompiled
                   have keptSimulation :=
-                    ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+                    Concrete.Elaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
                       model  direction sourceRecurse
-                      (ConcreteElaboration.compileRegion?
+                      (Concrete.Elaboration.compileRegion?
                         (doubleCutIntroRaw input.val selection)
                         (innerFuel + 1 + 1))
                       sourceContext
@@ -452,9 +454,9 @@ theorem doubleCutIntroFocusedItems
                       keptPointwise keptSourceItems keptTargetItems
                       keptSourceCompiled keptTargetCompiled
                   have selectedSimulation :=
-                    ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+                    Concrete.Elaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
                       model  direction sourceRecurse
-                      (ConcreteElaboration.compileRegion?
+                      (Concrete.Elaboration.compileRegion?
                         (doubleCutIntroRaw input.val selection) innerFuel)
                       sourceContext
                       ((targetContext.extend
@@ -475,13 +477,13 @@ theorem doubleCutIntroFocusedItems
                       (relEnv : RelEnv model.Carrier sourceRels) :
                       denoteItem model  targetEnv relEnv
                           (.cut
-                            (ConcreteElaboration.finishRegion
+                            (Concrete.Elaboration.finishRegion
                               (doubleCutIntroRaw input.val selection)
                               targetContext
                               (doubleCutOuter input.val)
                               (.cons
                                 (.cut
-                                  (ConcreteElaboration.finishRegion
+                                  (Concrete.Elaboration.finishRegion
                                     (doubleCutIntroRaw input.val selection)
                                     (targetContext.extend
                                           (doubleCutOuter input.val))
@@ -532,20 +534,20 @@ theorem doubleCutIntroFocusedItems
                     rfl
                   rw [relationMapEq, ItemSeq.renameRelations_id] at keptSimulation selectedSimulation
                   have focusedItemsSimulation :
-                      ConcreteElaboration.ItemSeqSimulation model
+                      Concrete.Elaboration.ItemSeqSimulation model
                         direction
                         context.indexRelation
                         sourceItems
                         (keptTargetItems.append
                           (.cons
                             (.cut
-                              (ConcreteElaboration.finishRegion
+                              (Concrete.Elaboration.finishRegion
                                 (doubleCutIntroRaw input.val selection)
                                 targetContext
                                 (doubleCutOuter input.val)
                                 (.cons
                                   (.cut
-                                    (ConcreteElaboration.finishRegion
+                                    (Concrete.Elaboration.finishRegion
                                       (doubleCutIntroRaw input.val selection)
                                       (targetContext.extend
                                             (doubleCutOuter input.val))
@@ -580,8 +582,8 @@ theorem doubleCutIntroFocusedItems
                         selectedContextWitness.indexRelation.EnvironmentsAgree
                           sourceEnv selectedTargetEnv := by
                       unfold LiftedContextWitness.indexRelation
-                        ConcreteElaboration.ContextIndexRelation.EnvironmentsAgree
-                        ConcreteElaboration.ContextIndexRelation.forwardMap
+                        Concrete.Elaboration.ContextIndexRelation.EnvironmentsAgree
+                        Concrete.Elaboration.ContextIndexRelation.forwardMap
                       intro sourceIndex targetIndex related
                       subst targetIndex
                       have base := environments sourceIndex

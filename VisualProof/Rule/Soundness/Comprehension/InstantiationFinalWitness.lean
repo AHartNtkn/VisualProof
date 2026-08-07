@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationParameterInvariant
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -12,11 +14,11 @@ namespace InstantiationSemantic
 deleted; the drop changes neither wire identities nor wire scopes. -/
 theorem dropExact_to_state
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
     (region : Fin state.diagram.val.regionCount)
-    (exact : @ConcreteElaboration.WireContext.Exact
+    (exact : @Concrete.Elaboration.WireContext.Exact
       (dropInstantiationAtomsRaw state) context region) :
-    @ConcreteElaboration.WireContext.Exact state.diagram.val context region := by
+    @Concrete.Elaboration.WireContext.Exact state.diagram.val context region := by
   constructor
   · exact exact.nodup
   · intro wire
@@ -35,11 +37,11 @@ theorem dropExact_to_state
 /-- Binder coverage is unchanged by processed-atom deletion. -/
 theorem dropCover_to_state
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (context : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (region : Fin state.diagram.val.regionCount)
-    (cover : @ConcreteElaboration.BinderContext.Covers
+    (cover : @Concrete.Elaboration.BinderContext.Covers
       (dropInstantiationAtomsRaw state) rels context region) :
-    @ConcreteElaboration.BinderContext.Covers state.diagram.val rels context
+    @Concrete.Elaboration.BinderContext.Covers state.diagram.val rels context
       region := by
   intro binder parent arity bubbleEq encloses
   apply cover binder parent arity
@@ -49,11 +51,11 @@ theorem dropCover_to_state
 /-- Binder enumeration is unchanged by processed-atom deletion. -/
 def dropEnumeration_to_state
     (state : InstantiationState origin parameterCount proxyCount)
-    (context : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (context : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (region : Fin state.diagram.val.regionCount)
-    (enumeration : ConcreteElaboration.BinderContext.Enumeration
+    (enumeration : Concrete.Elaboration.BinderContext.Enumeration
       (dropInstantiationAtomsRaw state) context region) :
-    ConcreteElaboration.BinderContext.Enumeration state.diagram.val context
+    Concrete.Elaboration.BinderContext.Enumeration state.diagram.val context
       region where
   binder := enumeration.binder
   binder_injective := enumeration.binder_injective
@@ -72,19 +74,19 @@ def dropEnumeration_to_state
 /-- Every certified proxy target has a lexical relation variable in any
 compiler context covering the moving quantified bubble. -/
 theorem proxyRelation_exists_of_cover
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (cover : binderContext.Covers state.bubble)
     (index : Fin payload.binderSpine.proxyCount) :
     ∃ relation : RelVar rels (payload.binderSpine.arity index),
@@ -99,20 +101,20 @@ theorem proxyRelation_exists_of_cover
 form is independent of the proof-relevant intrinsic path used to obtain that
 context. -/
 noncomputable def proxyRelationsOfCover
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
     {model : Model}
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (cover : binderContext.Covers state.bubble)
     (relationEnvironment : RelEnv model.Carrier rels)
     (index : Fin payload.binderSpine.proxyCount) :
@@ -122,20 +124,20 @@ noncomputable def proxyRelationsOfCover
       index))
 
 theorem proxyRelationsOfCover_fixed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
     {model : Model}
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (cover : binderContext.Covers state.bubble)
     (relationEnvironment : RelEnv model.Carrier rels) :
     ProxyRelationsAt payload state binderContext relationEnvironment
@@ -159,19 +161,19 @@ theorem proxyRelationsOfCover_fixed
 covering the parent of the moving bubble.  Pushing the moving binder therefore
 does not manufacture any proxy relation. -/
 theorem proxyRelation_exists_of_parent_cover
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (parent : Fin state.diagram.val.regionCount)
     (bubbleShape : state.diagram.val.regions state.bubble =
       .bubble parent payload.arity)
@@ -186,27 +188,27 @@ theorem proxyRelation_exists_of_parent_cover
     simp [bubbleShape, CRegion.parent?]
   have targetEnclosesParent :
       state.diagram.val.Encloses (state.binderTargets index) parent :=
-    (ConcreteElaboration.encloses_direct_child bubbleParent
+    (Concrete.Elaboration.encloses_direct_child bubbleParent
       (targets.target_encloses index)).resolve_left (targets.target_ne index)
   exact cover (state.binderTargets index) targetParent
     (payload.binderSpine.arity index) targetShape targetEnclosesParent
 
 /-- Canonical proxy values read before the selected bubble binder is pushed. -/
 noncomputable def proxyRelationsOfParentCover
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
     {model : Model}
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (parent : Fin state.diagram.val.regionCount)
     (bubbleShape : state.diagram.val.regions state.bubble =
       .bubble parent payload.arity)
@@ -221,20 +223,20 @@ noncomputable def proxyRelationsOfParentCover
 /-- Pushing the selected bubble preserves the canonical proxy family obtained
 from its parent compiler context. -/
 theorem proxyRelationsOfParentCover_fixed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (targets : BinderTargetsAtBubble payload state)
     {model : Model}
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (parent : Fin state.diagram.val.regionCount)
     (bubbleShape : state.diagram.val.regions state.bubble =
       .bubble parent payload.arity)
@@ -274,7 +276,7 @@ moving bubble, outside its bubble-local suffix. -/
 theorem parameter_mem_outer_of_exact
     (state : InstantiationState origin parameterCount proxyCount)
     (scopes : ParameterScopesAtBubble state)
-    (outer : ConcreteElaboration.WireContext state.diagram.val)
+    (outer : Concrete.Elaboration.WireContext state.diagram.val)
     (exact : (outer.extend state.bubble).Exact state.bubble)
     (position : Fin parameterCount) :
     state.parameters position ∈ outer := by
@@ -285,29 +287,29 @@ theorem parameter_mem_outer_of_exact
   · have localScope :
         (state.diagram.val.wires (state.parameters position)).scope =
           state.bubble :=
-      (ConcreteElaboration.mem_exactScopeWires _ _ _).1 localMember
+      (Concrete.Elaboration.mem_exactScopeWires _ _ _).1 localMember
     exact False.elim ((scopes position).2 localScope)
 
 /-- Canonical parameter index in an arbitrary exact final bubble context. -/
 noncomputable def parameterIndexOfExact
     (state : InstantiationState origin parameterCount proxyCount)
     (scopes : ParameterScopesAtBubble state)
-    (outer : ConcreteElaboration.WireContext state.diagram.val)
+    (outer : Concrete.Elaboration.WireContext state.diagram.val)
     (exact : (outer.extend state.bubble).Exact state.bubble)
     (position : Fin parameterCount) : Fin outer.length :=
-  Classical.choose (ConcreteElaboration.WireContext.lookup?_complete
+  Classical.choose (Concrete.Elaboration.WireContext.lookup?_complete
     (parameter_mem_outer_of_exact state scopes outer exact position))
 
 @[simp] theorem parameterIndexOfExact_get
     (state : InstantiationState origin parameterCount proxyCount)
     (scopes : ParameterScopesAtBubble state)
-    (outer : ConcreteElaboration.WireContext state.diagram.val)
+    (outer : Concrete.Elaboration.WireContext state.diagram.val)
     (exact : (outer.extend state.bubble).Exact state.bubble)
     (position : Fin parameterCount) :
     outer.get (parameterIndexOfExact state scopes outer exact position) =
       state.parameters position :=
-  ConcreteElaboration.WireContext.lookup?_sound
-    (Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete
+  Concrete.Elaboration.WireContext.lookup?_sound
+    (Classical.choose_spec (Concrete.Elaboration.WireContext.lookup?_complete
       (parameter_mem_outer_of_exact state scopes outer exact position)))
 
 /-- Ordered parameter values in any exact final bubble context.  Repeated
@@ -315,7 +317,7 @@ positions deliberately select the same wire value. -/
 noncomputable def parameterValuesOfExact
     (state : InstantiationState origin parameterCount proxyCount)
     (scopes : ParameterScopesAtBubble state)
-    (outer : ConcreteElaboration.WireContext state.diagram.val)
+    (outer : Concrete.Elaboration.WireContext state.diagram.val)
     (exact : (outer.extend state.bubble).Exact state.bubble)
     (environment : Fin outer.length → D) : Fin parameterCount → D :=
   fun position => environment
@@ -324,7 +326,7 @@ noncomputable def parameterValuesOfExact
 theorem parameterValuesOfExact_fixed
     (state : InstantiationState origin parameterCount proxyCount)
     (scopes : ParameterScopesAtBubble state)
-    (outer : ConcreteElaboration.WireContext state.diagram.val)
+    (outer : Concrete.Elaboration.WireContext state.diagram.val)
     (exact : (outer.extend state.bubble).Exact state.bubble)
     (environment : Fin outer.length → D) :
     ParameterValuesAt state outer environment

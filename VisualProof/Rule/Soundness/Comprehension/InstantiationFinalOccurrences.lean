@@ -1,8 +1,10 @@
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalFrame
 import VisualProof.Rule.Soundness.Comprehension.InstantiationDropCompiler
-import VisualProof.Diagram.Concrete.Subgraph.Splice.Input.Presentation.Compiler
+import VisualProof.Concrete.Subgraph.Splice.Input.Presentation.Compiler
 
 namespace VisualProof.Rule
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -13,37 +15,37 @@ namespace InstantiationTrace
 /-- Composite image of a frame occurrence through every accepted copy step.
 This map precedes processed-atom compaction and final vacuous promotion. -/
 def frameOccurrenceMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result) :
-    ConcreteElaboration.LocalOccurrence state.diagram.val.regionCount
+    Concrete.Elaboration.LocalOccurrence state.diagram.val.regionCount
         state.diagram.val.nodeCount →
-      ConcreteElaboration.LocalOccurrence result.diagram.val.regionCount
+      Concrete.Elaboration.LocalOccurrence result.diagram.val.regionCount
         result.diagram.val.nodeCount
   | .node node => .node (trace.nodeMap node)
   | .child region => .child (trace.regionMap region)
 
 @[simp] theorem frameOccurrenceMap_node
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -54,15 +56,15 @@ def frameOccurrenceMap
   rfl
 
 @[simp] theorem frameOccurrenceMap_child
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -77,15 +79,15 @@ def frameOccurrenceMap
 moving quantified bubble.  The active site is enclosed by that bubble, so the
 executor's off-site frame theorem applies at every recursive step. -/
 theorem localOccurrences_frameMap_of_outside
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -93,19 +95,19 @@ theorem localOccurrences_frameMap_of_outside
       state result)
     (region : Fin state.diagram.val.regionCount)
     (outside : ¬ state.diagram.val.Encloses state.bubble region) :
-    ConcreteElaboration.localOccurrences result.diagram.val
+    Concrete.Elaboration.localOccurrences result.diagram.val
         (trace.regionMap region) =
-      (ConcreteElaboration.localOccurrences state.diagram.val region).map
+      (Concrete.Elaboration.localOccurrences state.diagram.val region).map
         trace.frameOccurrenceMap := by
   induction trace with
   | done fuel state pending_empty =>
-      change ConcreteElaboration.localOccurrences state.diagram.val region =
-        (ConcreteElaboration.localOccurrences state.diagram.val region).map
+      change Concrete.Elaboration.localOccurrences state.diagram.val region =
+        (Concrete.Elaboration.localOccurrences state.diagram.val region).map
           (fun occurrence => match occurrence with
             | .node node => .node node
             | .child child => .child child)
       have occurrenceMapId :
-          (fun occurrence : ConcreteElaboration.LocalOccurrence
+          (fun occurrence : Concrete.Elaboration.LocalOccurrence
               state.diagram.val.regionCount state.diagram.val.nodeCount =>
             match occurrence with
             | .node node => .node node
@@ -122,7 +124,7 @@ theorem localOccurrences_frameMap_of_outside
       let spliceInput := materializedInstantiationSpliceInput comprehension
         attachments binders payload state site arguments materialization
       let layout := spliceInput.plugLayout
-      let hadmissible := (Splice.Input.checkInput_sound checkedInputChecked).2
+      let hadmissible := (Concrete.Splice.Input.checkInput_sound checkedInputChecked).2
       let next := advanceMaterializedInstantiationState comprehension
         attachments binders payload state atom tail site arguments
           materialization hadmissible
@@ -145,7 +147,7 @@ theorem localOccurrences_frameMap_of_outside
           simp [replayPlan, next, advanceMaterializedInstantiationState,
             advanceInstantiationState, InstantiationCopyPlan.spliceInput,
             materializedInstantiationSpliceInput, spliceInput, layout,
-            Splice.Input.PlugLayout.plugRaw])
+            Concrete.Splice.Input.PlugLayout.plugRaw])
           (replayPlan.spliceInput.plugLayout.frameRegion region)
       have nodeEq : state.diagram.val.nodes atom = .atom site state.bubble := by
         simpa [candidate_eq] using node_eq
@@ -156,17 +158,17 @@ theorem localOccurrences_frameMap_of_outside
         intro equal
         exact outside (equal ▸ bubbleEnclosesSite)
       have first :=
-        Splice.Input.TwoInputPresentation.localOccurrences_frameRegion layout
+        Concrete.Splice.Input.TwoInputPresentation.localOccurrences_frameRegion layout
           region regionNeSite
       have first' :
-          ConcreteElaboration.localOccurrences next.diagram.val
+          Concrete.Elaboration.localOccurrences next.diagram.val
               mappedRegion =
-            (ConcreteElaboration.localOccurrences state.diagram.val region).map
+            (Concrete.Elaboration.localOccurrences state.diagram.val region).map
               layout.mapFrameOccurrence := by
         simpa [mappedRegion, replayPlan, next,
           advanceMaterializedInstantiationState, advanceInstantiationState,
           spliceInput, InstantiationCopyPlan.spliceInput,
-          ConcreteElaboration.localOccurrences] using first
+          Concrete.Elaboration.localOccurrences] using first
       have nextOutside :
           ¬ next.diagram.val.Encloses next.bubble
             mappedRegion := by
@@ -178,16 +180,16 @@ theorem localOccurrences_frameMap_of_outside
             spliceInput, InstantiationCopyPlan.spliceInput] using enclosed
         exact outside ((layout.frame_encloses_iff state.bubble region).1 mapped)
       have tailEq := ih mappedRegion nextOutside
-      change ConcreteElaboration.localOccurrences result.diagram.val
+      change Concrete.Elaboration.localOccurrences result.diagram.val
           (wholeTrace.regionMap region) =
-        (ConcreteElaboration.localOccurrences state.diagram.val region).map
+        (Concrete.Elaboration.localOccurrences state.diagram.val region).map
           wholeTrace.frameOccurrenceMap
       have mappedEq : wholeTrace.regionMap region =
           rest.regionMap mappedRegion := by
         rfl
       rw [mappedEq]
       rw [tailEq, first']
-      induction ConcreteElaboration.localOccurrences state.diagram.val region with
+      induction Concrete.Elaboration.localOccurrences state.diagram.val region with
       | nil => rfl
       | cons occurrence occurrences ih =>
           cases occurrence <;>
@@ -233,20 +235,20 @@ theorem dropOccurrenceOrigin_injective
       | node rightNode => cases equal
       | child rightChild =>
           congr 1
-          exact ConcreteElaboration.LocalOccurrence.child.inj equal
+          exact Concrete.Elaboration.LocalOccurrence.child.inj equal
 
 /-- Total occurrence map for an arbitrary source region outside the moving
 quantified bubble.  Unlike `droppedFrameOccurrenceMap`, this also applies to
 the quantified bubble's parent, whose child occurrence is needed by the
 focused compiler proof. -/
 def droppedOutsideOccurrenceMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -255,8 +257,8 @@ def droppedOutsideOccurrenceMap
       fuel (initialInstantiationState payload) result)
     (region : Fin input.val.regionCount)
     (outside : ¬ input.val.Encloses bubble region) :
-    ConcreteElaboration.LocalOccurrence input.val.regionCount input.val.nodeCount →
-      ConcreteElaboration.LocalOccurrence
+    Concrete.Elaboration.LocalOccurrence input.val.regionCount input.val.nodeCount →
+      Concrete.Elaboration.LocalOccurrence
         (dropInstantiationAtomsRaw result).regionCount
         (dropInstantiationAtomsRaw result).nodeCount
   | .node node =>
@@ -268,13 +270,13 @@ def droppedOutsideOccurrenceMap
   | .child child => .child (copyTrace.regionMap child)
 
 private theorem frameOccurrence_survives_of_outside
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -283,29 +285,29 @@ private theorem frameOccurrence_survives_of_outside
       fuel (initialInstantiationState payload) result)
     (region : Fin input.val.regionCount)
     (outside : ¬ input.val.Encloses bubble region)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount)
     (member : occurrence ∈
-      ConcreteElaboration.localOccurrences input.val region) :
+      Concrete.Elaboration.localOccurrences input.val region) :
     InstantiationSemantic.dropOccurrenceSurvives result
         (copyTrace.frameOccurrenceMap occurrence) = true := by
   cases occurrence with
   | node node =>
       have nodeRegion :=
-        (ConcreteElaboration.mem_localOccurrences_node input.val region node).1
+        (Concrete.Elaboration.mem_localOccurrences_node input.val region node).1
           member
       exact copyTrace.nodeMap_survives_drop node (fun enclosed =>
         outside (nodeRegion ▸ enclosed))
   | child child => rfl
 
 private theorem dropOrigin_droppedOutsideOccurrenceMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -314,21 +316,21 @@ private theorem dropOrigin_droppedOutsideOccurrenceMap
       fuel (initialInstantiationState payload) result)
     (region : Fin input.val.regionCount)
     (outside : ¬ input.val.Encloses bubble region)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount)
     (member : occurrence ∈
-      ConcreteElaboration.localOccurrences input.val region) :
+      Concrete.Elaboration.localOccurrences input.val region) :
     InstantiationSemantic.dropOccurrenceOrigin result
         (copyTrace.droppedOutsideOccurrenceMap region outside occurrence) =
       copyTrace.frameOccurrenceMap occurrence := by
   cases occurrence with
   | node node =>
       have nodeRegion :=
-        (ConcreteElaboration.mem_localOccurrences_node input.val region node).1
+        (Concrete.Elaboration.mem_localOccurrences_node input.val region node).1
           member
       simp only [droppedOutsideOccurrenceMap, dif_pos nodeRegion,
         InstantiationSemantic.dropOccurrenceOrigin, frameOccurrenceMap]
-      exact congrArg ConcreteElaboration.LocalOccurrence.node
+      exact congrArg Concrete.Elaboration.LocalOccurrence.node
         (copyTrace.droppedNodeMap_origin node (fun enclosed =>
           outside (nodeRegion ▸ enclosed)))
   | child child => rfl
@@ -336,13 +338,13 @@ private theorem dropOrigin_droppedOutsideOccurrenceMap
 /-- Atom compaction preserves the exact ordered local traversal of every
 region outside the moving quantified bubble, including its parent. -/
 theorem dropped_localOccurrences_of_outside
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -351,13 +353,13 @@ theorem dropped_localOccurrences_of_outside
       fuel (initialInstantiationState payload) result)
     (region : Fin input.val.regionCount)
     (outside : ¬ input.val.Encloses bubble region) :
-    ConcreteElaboration.localOccurrences (dropInstantiationAtomsRaw result)
+    Concrete.Elaboration.localOccurrences (dropInstantiationAtomsRaw result)
         (copyTrace.regionMap region) =
-      (ConcreteElaboration.localOccurrences input.val region).map
+      (Concrete.Elaboration.localOccurrences input.val region).map
         (copyTrace.droppedOutsideOccurrenceMap region outside) := by
-  let occurrences := ConcreteElaboration.localOccurrences input.val region
+  let occurrences := Concrete.Elaboration.localOccurrences input.val region
   have copied :
-      ConcreteElaboration.localOccurrences result.diagram.val
+      Concrete.Elaboration.localOccurrences result.diagram.val
           (copyTrace.regionMap region) =
         occurrences.map copyTrace.frameOccurrenceMap := by
     simpa [occurrences, initialInstantiationState] using
@@ -372,7 +374,7 @@ theorem dropped_localOccurrences_of_outside
     exact frameOccurrence_survives_of_outside copyTrace region outside
       occurrence member
   have originLeft :
-      (ConcreteElaboration.localOccurrences (dropInstantiationAtomsRaw result)
+      (Concrete.Elaboration.localOccurrences (dropInstantiationAtomsRaw result)
           (copyTrace.regionMap region)).map
           (InstantiationSemantic.dropOccurrenceOrigin result) =
         occurrences.map copyTrace.frameOccurrenceMap := by
@@ -391,7 +393,7 @@ theorem dropped_localOccurrences_of_outside
       exact dropOrigin_droppedOutsideOccurrenceMap copyTrace region outside
         occurrence member
     have mapPointwise : ∀ values : List
-        (ConcreteElaboration.LocalOccurrence input.val.regionCount
+        (Concrete.Elaboration.LocalOccurrence input.val.regionCount
           input.val.nodeCount),
         (∀ occurrence ∈ values,
           InstantiationSemantic.dropOccurrenceOrigin result
@@ -429,13 +431,13 @@ theorem dropped_localOccurrences_of_outside
 fallback branch is irrelevant to a regular local traversal; it makes the map
 total without pretending that nodes inside the rewritten bubble survive. -/
 def droppedFrameOccurrenceMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -444,8 +446,8 @@ def droppedFrameOccurrenceMap
       fuel (initialInstantiationState payload) result)
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region) :
-    ConcreteElaboration.LocalOccurrence input.val.regionCount input.val.nodeCount →
-      ConcreteElaboration.LocalOccurrence
+    Concrete.Elaboration.LocalOccurrence input.val.regionCount input.val.nodeCount →
+      Concrete.Elaboration.LocalOccurrence
         (dropInstantiationAtomsRaw result).regionCount
         (dropInstantiationAtomsRaw result).nodeCount
   | .node node =>
@@ -458,13 +460,13 @@ def droppedFrameOccurrenceMap
   | .child child => .child (copyTrace.regionMap child)
 
 private theorem frameOccurrence_survives_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -473,29 +475,29 @@ private theorem frameOccurrence_survives_of_regular
       fuel (initialInstantiationState payload) result)
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount)
     (member : occurrence ∈
-      ConcreteElaboration.localOccurrences input.val region) :
+      Concrete.Elaboration.localOccurrences input.val region) :
     InstantiationSemantic.dropOccurrenceSurvives result
         (copyTrace.frameOccurrenceMap occurrence) = true := by
   cases occurrence with
   | node node =>
       have nodeRegion :=
-        (ConcreteElaboration.mem_localOccurrences_node input.val region node).1
+        (Concrete.Elaboration.mem_localOccurrences_node input.val region node).1
           member
       exact copyTrace.nodeMap_survives_drop node
         (node_outside_bubble_of_regular payload region regular node nodeRegion)
   | child child => rfl
 
 private theorem dropOrigin_droppedFrameOccurrenceMap_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -504,21 +506,21 @@ private theorem dropOrigin_droppedFrameOccurrenceMap_of_regular
       fuel (initialInstantiationState payload) result)
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount)
     (member : occurrence ∈
-      ConcreteElaboration.localOccurrences input.val region) :
+      Concrete.Elaboration.localOccurrences input.val region) :
     InstantiationSemantic.dropOccurrenceOrigin result
         (copyTrace.droppedFrameOccurrenceMap region regular occurrence) =
       copyTrace.frameOccurrenceMap occurrence := by
   cases occurrence with
   | node node =>
       have nodeRegion :=
-        (ConcreteElaboration.mem_localOccurrences_node input.val region node).1
+        (Concrete.Elaboration.mem_localOccurrences_node input.val region node).1
           member
       simp only [droppedFrameOccurrenceMap, dif_pos nodeRegion,
         InstantiationSemantic.dropOccurrenceOrigin, frameOccurrenceMap]
-      exact congrArg ConcreteElaboration.LocalOccurrence.node
+      exact congrArg Concrete.Elaboration.LocalOccurrence.node
         (copyTrace.droppedNodeMap_origin node
           (node_outside_bubble_of_regular payload region regular node
             nodeRegion))
@@ -527,13 +529,13 @@ private theorem dropOrigin_droppedFrameOccurrenceMap_of_regular
 /-- Atom compaction preserves the exact ordered local traversal of every
 regular frame region. -/
 theorem dropped_localOccurrences_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -542,14 +544,14 @@ theorem dropped_localOccurrences_of_regular
       fuel (initialInstantiationState payload) result)
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region) :
-    ConcreteElaboration.localOccurrences (dropInstantiationAtomsRaw result)
+    Concrete.Elaboration.localOccurrences (dropInstantiationAtomsRaw result)
         (copyTrace.regionMap region) =
-      (ConcreteElaboration.localOccurrences input.val region).map
+      (Concrete.Elaboration.localOccurrences input.val region).map
         (copyTrace.droppedFrameOccurrenceMap region regular) := by
-  let occurrences := ConcreteElaboration.localOccurrences input.val region
+  let occurrences := Concrete.Elaboration.localOccurrences input.val region
   have outsideBubble : ¬ input.val.Encloses bubble region := regular.1
   have copied :
-      ConcreteElaboration.localOccurrences result.diagram.val
+      Concrete.Elaboration.localOccurrences result.diagram.val
           (copyTrace.regionMap region) =
         occurrences.map copyTrace.frameOccurrenceMap := by
     simpa [occurrences, initialInstantiationState] using
@@ -567,7 +569,7 @@ theorem dropped_localOccurrences_of_regular
     InstantiationSemantic.dropInstantiationAtomsRaw_localOccurrences_origin
       result (copyTrace.regionMap region)
   have originLeft :
-      (ConcreteElaboration.localOccurrences (dropInstantiationAtomsRaw result)
+      (Concrete.Elaboration.localOccurrences (dropInstantiationAtomsRaw result)
           (copyTrace.regionMap region)).map
           (InstantiationSemantic.dropOccurrenceOrigin result) =
         occurrences.map copyTrace.frameOccurrenceMap := by
@@ -585,7 +587,7 @@ theorem dropped_localOccurrences_of_regular
       exact dropOrigin_droppedFrameOccurrenceMap_of_regular copyTrace region
         regular occurrence member
     have mapPointwise : ∀ values : List
-        (ConcreteElaboration.LocalOccurrence input.val.regionCount
+        (Concrete.Elaboration.LocalOccurrence input.val.regionCount
           input.val.nodeCount),
         (∀ occurrence ∈ values,
           InstantiationSemantic.dropOccurrenceOrigin result
@@ -626,7 +628,7 @@ private theorem vacuousOccurrenceMap_injective
       cases right with
       | node rightNode =>
           congr 1
-          exact ConcreteElaboration.LocalOccurrence.node.inj equal
+          exact Concrete.Elaboration.LocalOccurrence.node.inj equal
       | child rightChild => cases equal
   | child leftChild =>
       cases right with
@@ -640,28 +642,28 @@ private theorem vacuousOccurrenceMap_injective
 instantiation trace.  On a regular local traversal every node takes the
 certified node branch; the fallback only totalizes the function. -/
 def finalFrameOccurrenceMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region) :
-    ConcreteElaboration.LocalOccurrence input.val.regionCount input.val.nodeCount →
-      ConcreteElaboration.LocalOccurrence
+    Concrete.Elaboration.LocalOccurrence input.val.regionCount input.val.nodeCount →
+      Concrete.Elaboration.LocalOccurrence
         elimTrace.sourceDiagram.regionCount elimTrace.sourceDiagram.nodeCount
   | .node node =>
       if nodeRegion : (input.val.nodes node).region = region then
@@ -674,30 +676,30 @@ def finalFrameOccurrenceMap
       .child (copyTrace.finalRegionMap elimTrace finalWellFormed child)
 
 private theorem vacuousOrigin_finalFrameOccurrenceMap_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       input.val.regionCount input.val.nodeCount)
     (member : occurrence ∈
-      ConcreteElaboration.localOccurrences input.val region) :
+      Concrete.Elaboration.localOccurrences input.val region) :
     elimTrace.occurrenceMap
         (copyTrace.finalFrameOccurrenceMap elimTrace finalWellFormed region
           regular occurrence) =
@@ -705,13 +707,13 @@ private theorem vacuousOrigin_finalFrameOccurrenceMap_of_regular
   cases occurrence with
   | node node =>
       have nodeRegion :=
-        (ConcreteElaboration.mem_localOccurrences_node input.val region node).1
+        (Concrete.Elaboration.mem_localOccurrences_node input.val region node).1
           member
       simp only [finalFrameOccurrenceMap, droppedFrameOccurrenceMap,
         dif_pos nodeRegion, VacuousElimTrace.occurrenceMap, finalNodeMap]
   | child child =>
       have childParent :=
-        (ConcreteElaboration.mem_localOccurrences_child input.val region child).1
+        (Concrete.Elaboration.mem_localOccurrences_child input.val region child).1
           member
       have childNeBubble : child ≠ bubble := by
         intro equal
@@ -723,41 +725,41 @@ private theorem vacuousOrigin_finalFrameOccurrenceMap_of_regular
         exact regular.2 parentEq.symm
       have originEq := copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
         finalWellFormed child childNeBubble
-      exact congrArg ConcreteElaboration.LocalOccurrence.child originEq
+      exact congrArg Concrete.Elaboration.LocalOccurrence.child originEq
 
 /-- The complete executor trace preserves the exact ordered local traversal
 of every region outside the quantified parent subtree. -/
 theorem final_localOccurrences_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region) :
-    ConcreteElaboration.localOccurrences elimTrace.sourceDiagram
+    Concrete.Elaboration.localOccurrences elimTrace.sourceDiagram
         (copyTrace.finalRegionMap elimTrace finalWellFormed region) =
-      (ConcreteElaboration.localOccurrences input.val region).map
+      (Concrete.Elaboration.localOccurrences input.val region).map
         (copyTrace.finalFrameOccurrenceMap elimTrace finalWellFormed region
           regular) := by
-  let occurrences := ConcreteElaboration.localOccurrences input.val region
+  let occurrences := Concrete.Elaboration.localOccurrences input.val region
   have regionNeBubble : region ≠ bubble := by
     intro equal
     subst region
-    exact regular.1 (ConcreteDiagram.Encloses.refl input.val bubble)
+    exact regular.1 (Concrete.Diagram.Encloses.refl input.val bubble)
   have mappedRegular : copyTrace.finalRegionMap elimTrace finalWellFormed
       region ≠ elimTrace.targetIndex finalWellFormed := by
     intro mapped
@@ -770,14 +772,14 @@ theorem final_localOccurrences_of_regular
   have promoted := elimTrace.regular_localOccurrences finalWellFormed
     (copyTrace.finalRegionMap elimTrace finalWellFormed region) mappedRegular
   have promotedOrigin :
-      (ConcreteElaboration.localOccurrences elimTrace.sourceDiagram
+      (Concrete.Elaboration.localOccurrences elimTrace.sourceDiagram
           (copyTrace.finalRegionMap elimTrace finalWellFormed region)).map
           elimTrace.occurrenceMap =
-        ConcreteElaboration.localOccurrences (dropInstantiationAtomsRaw result)
+        Concrete.Elaboration.localOccurrences (dropInstantiationAtomsRaw result)
           (copyTrace.regionMap region) := by
     rw [← promoted]
     exact congrArg
-      (ConcreteElaboration.localOccurrences (dropInstantiationAtomsRaw result))
+      (Concrete.Elaboration.localOccurrences (dropInstantiationAtomsRaw result))
       originRegion
   have dropped := copyTrace.dropped_localOccurrences_of_regular region regular
   have mappedOrigin :
@@ -795,7 +797,7 @@ theorem final_localOccurrences_of_regular
       exact vacuousOrigin_finalFrameOccurrenceMap_of_regular copyTrace elimTrace
         finalWellFormed region regular occurrence member
     have mapPointwise : ∀ values : List
-        (ConcreteElaboration.LocalOccurrence input.val.regionCount
+        (Concrete.Elaboration.LocalOccurrence input.val.regionCount
           input.val.nodeCount),
         (∀ occurrence ∈ values,
           elimTrace.occurrenceMap

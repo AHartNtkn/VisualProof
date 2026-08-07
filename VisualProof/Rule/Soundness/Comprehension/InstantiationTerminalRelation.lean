@@ -1,7 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.InstantiationAtomCompiler
-import VisualProof.Diagram.Concrete.Subgraph.Splice.Input.CompilerSource
+import VisualProof.Concrete.Subgraph.Splice.Input.CompilerSource
 
 namespace VisualProof.Rule
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -13,15 +15,15 @@ namespace InstantiationSemantic
 /-- The executor's retained binder targets, stated at the quantified bubble
 where its relation witness is chosen. -/
 structure BinderTargetsAtBubble
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount) : Prop where
   target_shape : ∀ index, ∃ parent,
@@ -34,15 +36,15 @@ structure BinderTargetsAtBubble
 /-- The terminal compiler variable and the proxy binder that produced it have
 the same arity. -/
 theorem terminalRelation_proxy_arity
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -50,12 +52,12 @@ theorem terminalRelation_proxy_arity
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     {arity : Nat}
     (relation : RelVar
-      (Splice.Input.compiledSpliceTerminalView
+      (Concrete.Splice.Input.compiledSpliceTerminalView
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments) hnonempty).witness.toFocus.holeRels arity) :
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
-    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
     let proxy : Fin payload.binderSpine.proxyCount := Classical.choose
       (spliceInput.plugLayout.terminalBodyBinder_is_proxy pattern.witness
         pattern.leaf hnonempty relation.index)
@@ -63,7 +65,7 @@ theorem terminalRelation_proxy_arity
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
   let layout := spliceInput.plugLayout
-  let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+  let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
   let proxy : Fin payload.binderSpine.proxyCount := Classical.choose
     (layout.terminalBodyBinder_is_proxy pattern.witness pattern.leaf hnonempty
       relation.index)
@@ -87,15 +89,15 @@ theorem terminalRelation_proxy_arity
 /-- A terminal compiler relation variable resolves to the relation owned by
 its certified host binder target at the quantified bubble. -/
 theorem terminalTargetRelation_exists
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -105,11 +107,11 @@ theorem terminalTargetRelation_exists
     {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
-    (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
+    (hostLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
       hostWitness)
     {arity : Nat}
     (relation : RelVar
-      (Splice.Input.compiledSpliceTerminalView
+      (Concrete.Splice.Input.compiledSpliceTerminalView
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments) hnonempty).witness.toFocus.holeRels arity) :
     ∃ target : RelVar hostWitness.toFocus.holeRels arity,
@@ -117,10 +119,10 @@ theorem terminalTargetRelation_exists
           (state.binderTargets (Classical.choose
             ((instantiateSpliceInput comprehension attachments binders payload
               state site arguments).plugLayout.terminalBodyBinder_is_proxy
-                (Splice.Input.compiledSpliceTerminalView
+                (Concrete.Splice.Input.compiledSpliceTerminalView
                   (instantiateSpliceInput comprehension attachments binders
                     payload state site arguments) hnonempty).witness
-                (Splice.Input.compiledSpliceTerminalView
+                (Concrete.Splice.Input.compiledSpliceTerminalView
                   (instantiateSpliceInput comprehension attachments binders
                     payload state site arguments) hnonempty).leaf
                 hnonempty relation.index))) =
@@ -128,7 +130,7 @@ theorem terminalTargetRelation_exists
   let spliceInput := instantiateSpliceInput comprehension attachments binders
     payload state site arguments
   let layout := spliceInput.plugLayout
-  let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+  let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
   let proxy : Fin payload.binderSpine.proxyCount := Classical.choose
     (layout.terminalBodyBinder_is_proxy pattern.witness pattern.leaf hnonempty
       relation.index)
@@ -160,15 +162,15 @@ theorem terminalTargetRelation_exists
 /-- Capture-avoiding renaming of the canonical terminal compiler relation
 context into the quantified bubble's current lexical relation context. -/
 noncomputable def terminalRelationRenamingAtBubble
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -178,10 +180,10 @@ noncomputable def terminalRelationRenamingAtBubble
     {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
-    (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
+    (hostLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
       hostWitness) :
     RelationRenaming
-      (Splice.Input.compiledSpliceTerminalView
+      (Concrete.Splice.Input.compiledSpliceTerminalView
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments) hnonempty).witness.toFocus.holeRels
       hostWitness.toFocus.holeRels :=
@@ -190,15 +192,15 @@ noncomputable def terminalRelationRenamingAtBubble
       targets hostWitness hostLeaf relation)
 
 theorem terminalRelationRenamingAtBubble_lookup
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -208,16 +210,16 @@ theorem terminalRelationRenamingAtBubble_lookup
     {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
-    (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
+    (hostLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
       hostWitness)
     {arity : Nat}
     (relation : RelVar
-      (Splice.Input.compiledSpliceTerminalView
+      (Concrete.Splice.Input.compiledSpliceTerminalView
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments) hnonempty).witness.toFocus.holeRels arity) :
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
-    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
     let proxy : Fin payload.binderSpine.proxyCount := Classical.choose
       (spliceInput.plugLayout.terminalBodyBinder_is_proxy pattern.witness
         pattern.leaf hnonempty relation.index)
@@ -233,15 +235,15 @@ theorem terminalRelationRenamingAtBubble_lookup
 /-- The terminal body's inherited compiler environment is the open pattern's
 distinct exposed-wire environment, preserving the boundary's alias quotient. -/
 noncomputable def terminalInheritedEnvironment
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -249,15 +251,15 @@ noncomputable def terminalInheritedEnvironment
     (hnonempty : payload.binderSpine.proxyCount ≠ 0)
     {D : Type}
     (assignment : BoundaryAssignment comprehension.elaborate D) :
-    Fin (Splice.Input.compiledSpliceTerminalView
+    Fin (Concrete.Splice.Input.compiledSpliceTerminalView
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments) hnonempty).leaf.inheritedWires.length → D :=
   fun index =>
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
     let layout := spliceInput.plugLayout
-    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
-    assignment.classes (Splice.Input.PlugLayout.exposedWireIndex spliceInput
+    let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    assignment.classes (Concrete.Splice.Input.PlugLayout.exposedWireIndex spliceInput
       (pattern.leaf.inheritedWires.get index)
       ((layout.terminalBody_inherited_mem_iff_exposed pattern.witness
         pattern.leaf hnonempty (pattern.leaf.inheritedWires.get index)).1
@@ -267,15 +269,15 @@ noncomputable def terminalInheritedEnvironment
 relations are the current certified host relations, while its ordered object
 boundary is supplied by relation arguments followed by fixed parameters. -/
 noncomputable def terminalRelationOfNonempty
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -287,14 +289,14 @@ noncomputable def terminalRelationOfNonempty
     {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
-    (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
+    (hostLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
       hostWitness)
     (relEnv : RelEnv model.Carrier hostWitness.toFocus.holeRels) :
     Relation model.Carrier payload.arity :=
   fun relationArguments =>
     let spliceInput := instantiateSpliceInput comprehension attachments binders
       payload state site arguments
-    let pattern := Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
+    let pattern := Concrete.Splice.Input.compiledSpliceTerminalView spliceInput hnonempty
     ∃ assignment : BoundaryAssignment comprehension.elaborate model.Carrier,
       assignment.args =
           Fin.addCases relationArguments (wireValue ∘ state.parameters) ∘
@@ -303,22 +305,22 @@ noncomputable def terminalRelationOfNonempty
           (terminalInheritedEnvironment payload state site arguments hnonempty
             assignment)
           relEnv
-          ((ConcreteElaboration.finishRegion comprehension.val.diagram
+          ((Concrete.Elaboration.finishRegion comprehension.val.diagram
               pattern.leaf.inheritedWires payload.binderSpine.bodyContainer
               pattern.leaf.items).renameRelations
             (terminalRelationRenamingAtBubble payload state site arguments
               hnonempty targets hostWitness hostLeaf))
 
 theorem terminalRelationOfNonempty_apply
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -330,7 +332,7 @@ theorem terminalRelationOfNonempty_apply
     {hostBody : Region  hostOuter hostRels}
     {hostPath : List Nat}
     (hostWitness : Region.ContextPath hostBody hostPath)
-    (hostLeaf : Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
+    (hostLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf state.diagram.val state.bubble
       hostWitness)
     (relEnv : RelEnv model.Carrier hostWitness.toFocus.holeRels)
     (relationArguments : Fin payload.arity → model.Carrier) :
@@ -344,12 +346,12 @@ theorem terminalRelationOfNonempty_apply
             (terminalInheritedEnvironment payload state site arguments
               hnonempty assignment)
             relEnv
-            ((ConcreteElaboration.finishRegion comprehension.val.diagram
-                (Splice.Input.compiledSpliceTerminalView
+            ((Concrete.Elaboration.finishRegion comprehension.val.diagram
+                (Concrete.Splice.Input.compiledSpliceTerminalView
                   (instantiateSpliceInput comprehension attachments binders
                     payload state site arguments) hnonempty).leaf.inheritedWires
                 payload.binderSpine.bodyContainer
-                (Splice.Input.compiledSpliceTerminalView
+                (Concrete.Splice.Input.compiledSpliceTerminalView
                   (instantiateSpliceInput comprehension attachments binders
                     payload state site arguments) hnonempty).leaf.items)
               |>.renameRelations

@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionOccurrenceCongruence
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -13,9 +16,9 @@ and are subsequently filled by the occurrence-family witness. -/
 theorem survivorEnvironmentSelection
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (targetWellFormed : trace.diagram.WellFormed )
-    (direction : ConcreteElaboration.SimulationDirection)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
     (region : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives region = true)
@@ -29,16 +32,16 @@ theorem survivorEnvironmentSelection
         | .forward => ∀ sourceLocal,
             ∃ targetLocal,
               extended.indexRelation.EnvironmentsAgree
-                (ConcreteElaboration.extendedEnvironment sourceContext region
+                (Concrete.Elaboration.extendedEnvironment sourceContext region
                   sourceOuter sourceLocal)
-                (ConcreteElaboration.extendedEnvironment targetContext
+                (Concrete.Elaboration.extendedEnvironment targetContext
                   (trace.regionMap region) targetOuter targetLocal)
         | .backward => ∀ targetLocal,
             ∃ sourceLocal,
               extended.indexRelation.EnvironmentsAgree
-                (ConcreteElaboration.extendedEnvironment sourceContext region
+                (Concrete.Elaboration.extendedEnvironment sourceContext region
                   sourceOuter sourceLocal)
-                (ConcreteElaboration.extendedEnvironment targetContext
+                (Concrete.Elaboration.extendedEnvironment targetContext
                   (trace.regionMap region) targetOuter targetLocal) := by
   dsimp only
   let extended := context.extend region survives
@@ -46,7 +49,7 @@ theorem survivorEnvironmentSelection
   cases direction with
   | forward =>
       intro sourceLocal
-      let sourceEnvironment := ConcreteElaboration.extendedEnvironment
+      let sourceEnvironment := Concrete.Elaboration.extendedEnvironment
         sourceContext region sourceOuter sourceLocal
       let targetEnvironment := extended.targetEnvironment sourceEnvironment
       let targetLocal := localEnvironmentPart targetContext
@@ -69,7 +72,7 @@ theorem survivorEnvironmentSelection
       intro targetLocal
       let sourceLocal := trace.sourceLocalOfTarget targetWellFormed region
         survives targetLocal
-      let sourceEnvironment := ConcreteElaboration.extendedEnvironment
+      let sourceEnvironment := Concrete.Elaboration.extendedEnvironment
         sourceContext region sourceOuter sourceLocal
       let targetEnvironment := extended.targetEnvironment sourceEnvironment
       refine ⟨sourceLocal, ?_⟩
@@ -97,4 +100,4 @@ theorem survivorEnvironmentSelection
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

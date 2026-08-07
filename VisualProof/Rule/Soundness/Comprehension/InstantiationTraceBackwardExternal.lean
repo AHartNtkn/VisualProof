@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationTraceAncestor
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -56,11 +58,11 @@ theorem traceRegionPreimage_of_encloses
 private theorem traceExternalRelation_exists
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       result.diagram.val sourceRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       result.diagram.val sourceBinders result.bubble)
-    (externalBinders : ConcreteElaboration.BinderContext
+    (externalBinders : Concrete.Elaboration.BinderContext
       state.diagram.val externalRels)
     (externalCover : externalBinders.Covers state.bubble)
     (fallback : Fin state.diagram.val.regionCount)
@@ -98,11 +100,11 @@ to any source-state binder context covering the moving bubble. -/
 noncomputable def traceExternalRelationMap
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       result.diagram.val sourceRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       result.diagram.val sourceBinders result.bubble)
-    (externalBinders : ConcreteElaboration.BinderContext
+    (externalBinders : Concrete.Elaboration.BinderContext
       state.diagram.val externalRels)
     (externalCover : externalBinders.Covers state.bubble)
     (fallback : Fin state.diagram.val.regionCount) :
@@ -114,11 +116,11 @@ noncomputable def traceExternalRelationMap
 theorem traceExternalRelationMap_spec
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       state result)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       result.diagram.val sourceRels)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       result.diagram.val sourceBinders result.bubble)
-    (externalBinders : ConcreteElaboration.BinderContext
+    (externalBinders : Concrete.Elaboration.BinderContext
       state.diagram.val externalRels)
     (externalCover : externalBinders.Covers state.bubble)
     (fallback : Fin state.diagram.val.regionCount)
@@ -139,15 +141,15 @@ valuation and an external relation environment.  `ownerMap` records concrete
 binder provenance; `relationMap` records the corresponding intrinsic variable
 renaming. -/
 structure ExternalAlignedBubblePresentation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (model : Model)
@@ -157,7 +159,7 @@ structure ExternalAlignedBubblePresentation
     (parameterValues : Fin attachments.length → model.Carrier)
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     {externalRels : RelCtx}
-    (externalBinders : ConcreteElaboration.BinderContext input.val externalRels)
+    (externalBinders : Concrete.Elaboration.BinderContext input.val externalRels)
     (externalRelations : RelEnv model.Carrier externalRels)
     (ownerMap : Fin state.diagram.val.regionCount →
       Fin input.val.regionCount) where
@@ -177,13 +179,13 @@ structure ExternalAlignedBubblePresentation
 environment.  Ancestor provenance supplies the binder mapping; callers retain
 control of the semantic relation values through the explicit agreement. -/
 noncomputable def ExternalAlignedBubblePresentation.ofTerminal
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -200,7 +202,7 @@ noncomputable def ExternalAlignedBubblePresentation.ofTerminal
     (presentation : BubblePresentation payload result model  relationValue
       values parameterValues)
     (wireAligned : presentation.OuterAligned wireValue)
-    (externalBinders : ConcreteElaboration.BinderContext
+    (externalBinders : Concrete.Elaboration.BinderContext
       input.val externalRels)
     (externalCover : externalBinders.Covers bubble)
     (externalRelations : RelEnv model.Carrier externalRels)
@@ -224,15 +226,15 @@ noncomputable def ExternalAlignedBubblePresentation.ofTerminal
   relationsAligned := relationsAligned
 
 theorem coalescedExternalAligned_nonempty
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -251,7 +253,7 @@ theorem coalescedExternalAligned_nonempty
         state atom tail site arguments hadmissible model  relationValue
         values parameterValues .backward sourceFuel targetFuel state.bubble)
     {externalRels : RelCtx}
-    (externalBinders : ConcreteElaboration.BinderContext input.val externalRels)
+    (externalBinders : Concrete.Elaboration.BinderContext input.val externalRels)
     (externalRelations : RelEnv model.Carrier externalRels)
     (targetWireValue : Fin
       (advanceInstantiationState comprehension attachments binders payload
@@ -283,7 +285,7 @@ theorem coalescedExternalAligned_nonempty
   let source := coalescedBubblePresentation_of_target comprehension attachments
     binders payload state atom tail site arguments hadmissible model
     relationValue values parameterValues simulations target.presentation
-  let sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+  let sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       spliceInput.coalesceFrameRaw source.binderContext state.bubble := by
     simpa [source, coalesced, spliceInput] using source.binderEnumeration
   let frameMap : RelationRenaming source.rels target.presentation.rels :=
@@ -330,15 +332,15 @@ theorem coalescedExternalAligned_nonempty
       (target.relationsAligned arity (frameMap relation))
 
 theorem externalAligned_nonempty_of_trace
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -352,7 +354,7 @@ theorem externalAligned_nonempty_of_trace
     (simulations : RegionSimulationsEveryStep trace model  relationValue
       values parameterValues)
     {externalRels : RelCtx}
-    (externalBinders : ConcreteElaboration.BinderContext input.val externalRels)
+    (externalBinders : Concrete.Elaboration.BinderContext input.val externalRels)
     (externalRelations : RelEnv model.Carrier externalRels)
     (targetWireValue : Fin result.diagram.val.wireCount → model.Carrier)
     (targetOwnerMap : Fin result.diagram.val.regionCount →
@@ -381,14 +383,14 @@ theorem externalAligned_nonempty_of_trace
         checkedInputChecked := checkedInputChecked
         next := advanceMaterializedInstantiationState comprehension attachments
           binders payload state atom tail site arguments materialization
-            (Splice.Input.checkInput_sound checkedInputChecked).2
+            (Concrete.Splice.Input.checkInput_sound checkedInputChecked).2
         next_eq := rfl
       }
       rcases simulations with ⟨simulation, restSimulations⟩
       obtain ⟨nextExternal⟩ := ih restSimulations targetWireValue targetOwnerMap
         target
       let hadmissible :=
-        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+        (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
       let nextWireValue := targetWireValue ∘ rest.wireMap
       let nextOwnerMap := targetOwnerMap ∘ rest.regionMap
       let operationalPresentation : BubblePresentation plan.operationalPayload
@@ -410,14 +412,14 @@ theorem externalAligned_nonempty_of_trace
         fixed := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using
             nextExternal.presentation.fixed
         proxies := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using
             nextExternal.presentation.proxies
         parameters := nextExternal.presentation.parameters
         denotes := nextExternal.presentation.denotes
@@ -450,7 +452,7 @@ theorem externalAligned_nonempty_of_trace
         state atom tail site arguments hadmissible model  relationValue
         values parameterValues
         (fun sourceFuel targetFuel => simulation .backward sourceFuel targetFuel
-          state.bubble (ConcreteDiagram.Encloses.refl _ _)) externalBinders
+          state.bubble (Concrete.Diagram.Encloses.refl _ _)) externalBinders
         externalRelations nextWireValue nextOwnerMap operationalTarget
       let spliceInput := plan.spliceInput
       let sourcePresentation := bubblePresentation_of_coalesced
@@ -484,14 +486,14 @@ theorem externalAligned_nonempty_of_trace
         fixed := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using
             sourcePresentation.fixed
         proxies := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using
             sourcePresentation.proxies
         parameters := sourcePresentation.parameters
         denotes := sourcePresentation.denotes
@@ -524,15 +526,15 @@ theorem externalAligned_nonempty_of_trace
 /-- Canonical fully aligned presentation transported through a complete
 accepted executor trace. -/
 noncomputable def externalAligned_of_trace
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -546,7 +548,7 @@ noncomputable def externalAligned_of_trace
     (simulations : RegionSimulationsEveryStep trace model  relationValue
       values parameterValues)
     {externalRels : RelCtx}
-    (externalBinders : ConcreteElaboration.BinderContext input.val externalRels)
+    (externalBinders : Concrete.Elaboration.BinderContext input.val externalRels)
     (externalRelations : RelEnv model.Carrier externalRels)
     (targetWireValue : Fin result.diagram.val.wireCount → model.Carrier)
     (targetOwnerMap : Fin result.diagram.val.regionCount →
@@ -565,13 +567,13 @@ noncomputable def externalAligned_of_trace
 recompiled by the authoritative compiler in any exact context for the original
 bubble.  Alignment supplies both environment agreement and binder provenance. -/
 theorem ExternalAlignedBubblePresentation.denoteRecompiled_initial
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {model : Model}
     {relationValue : Relation model.Carrier payload.arity}
@@ -580,21 +582,21 @@ theorem ExternalAlignedBubblePresentation.denoteRecompiled_initial
     {parameterValues : Fin attachments.length → model.Carrier}
     {wireValue : Fin input.val.wireCount → model.Carrier}
     {externalRels : RelCtx}
-    {externalBinders : ConcreteElaboration.BinderContext input.val externalRels}
+    {externalBinders : Concrete.Elaboration.BinderContext input.val externalRels}
     {externalRelations : RelEnv model.Carrier externalRels}
     {ownerMap : Fin input.val.regionCount → Fin input.val.regionCount}
     (aligned : ExternalAlignedBubblePresentation payload
       (initialInstantiationState payload) model  relationValue values
       parameterValues wireValue externalBinders externalRelations ownerMap)
     (ownerIdentity : ∀ region, ownerMap region = region)
-    (targetOuter : ConcreteElaboration.WireContext input.val)
+    (targetOuter : Concrete.Elaboration.WireContext input.val)
     (targetExact : (targetOuter.extend bubble).Exact bubble)
     (targetCover : externalBinders.Covers bubble)
-    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (targetEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val externalBinders bubble)
     (targetFuel : Nat)
     (targetBody : Region  targetOuter.length externalRels)
-    (targetCompiled : ConcreteElaboration.compileRegion?  input.val
+    (targetCompiled : Concrete.Elaboration.compileRegion?  input.val
       targetFuel bubble targetOuter externalBinders = some targetBody)
     (targetEnvironment : Fin targetOuter.length → model.Carrier)
     (targetAligned : ∀ index, targetEnvironment index =
@@ -611,7 +613,7 @@ theorem ExternalAlignedBubblePresentation.denoteRecompiled_initial
       simpa [ownerIdentity region] using
         aligned.binderAligned region arity relation lookup
   }
-  have sourceCompiled : ConcreteElaboration.compileRegion?  input.val
+  have sourceCompiled : Concrete.Elaboration.compileRegion?  input.val
       source.fuel bubble source.outer source.binderContext = some source.body := by
     have compilerEq := compileSurvivorRegion_eq_of_clean_subtree
        (state := initialInstantiationState payload)
@@ -621,7 +623,7 @@ theorem ExternalAlignedBubblePresentation.denoteRecompiled_initial
     have compilerEq' : compileSurvivorRegion?
         (initialInstantiationState payload) source.fuel bubble source.outer
           source.binderContext =
-        ConcreteElaboration.compileRegion?  input.val source.fuel
+        Concrete.Elaboration.compileRegion?  input.val source.fuel
           bubble source.outer source.binderContext := by
       simpa [initialInstantiationState] using compilerEq
     rw [← compilerEq']
@@ -635,7 +637,7 @@ theorem ExternalAlignedBubblePresentation.denoteRecompiled_initial
     targetExact source.body targetBody sourceCompiled targetCompiled
   have environmentAgreement : context.indexRelation.EnvironmentsAgree
       source.environment targetEnvironment := by
-    apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+    apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap
       context.index source.environment targetEnvironment).mpr
     funext index
     simp only [Function.comp_apply]

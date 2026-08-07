@@ -1,6 +1,8 @@
 import VisualProof.Rule.Soundness.AttachmentAliasSemanticSimulation
 
-namespace VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+namespace VisualProof.Concrete.Splice.AttachmentAliasMaterialization
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -14,7 +16,7 @@ inductive Mode
   | forward
   | backward
 
-def Mode.direction : Mode → ConcreteElaboration.SimulationDirection
+def Mode.direction : Mode → Concrete.Elaboration.SimulationDirection
   | .forward => .forward
   | .backward => .backward
 
@@ -94,27 +96,27 @@ theorem directChild_body_not_spine
       omega
 
 def indexRelation (mode : Mode)
-    {pattern : CheckedOpenDiagram }
+    {pattern : Concrete.CheckedOpen }
     {attachment : Fin pattern.val.boundary.length → Host}
     {spine : BinderSpine pattern.val.diagram}
-    {targetContext : ConcreteElaboration.WireContext
+    {targetContext : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer)}
-    {sourceContext : ConcreteElaboration.WireContext pattern.val.diagram}
+    {sourceContext : Concrete.Elaboration.WireContext pattern.val.diagram}
     (collapse : ContextCollapse pattern attachment spine targetContext
       sourceContext) :
-    ConcreteElaboration.ContextIndexRelation sourceContext.length
+    Concrete.Elaboration.ContextIndexRelation sourceContext.length
       targetContext.length :=
   match mode with
   | .forward =>
-      ConcreteElaboration.ContextIndexRelation.backwardMap collapse.indexMap
+      Concrete.Elaboration.ContextIndexRelation.backwardMap collapse.indexMap
   | .backward =>
-      ConcreteElaboration.ContextIndexRelation.forwardMap collapse.oldIndex
+      Concrete.Elaboration.ContextIndexRelation.forwardMap collapse.oldIndex
 
 theorem identityBinder_relationMap_same
-    {source target : ConcreteDiagram}
-    {sourceBinders : ConcreteElaboration.BinderContext source rels}
-    {targetBinders : ConcreteElaboration.BinderContext target rels}
-    (witness : ConcreteElaboration.IdentityBinderWitness source target
+    {source target : Concrete.Diagram}
+    {sourceBinders : Concrete.Elaboration.BinderContext source rels}
+    {targetBinders : Concrete.Elaboration.BinderContext target rels}
+    (witness : Concrete.Elaboration.IdentityBinderWitness source target
       sourceBinders targetBinders) :
     (fun {arity} => witness.relationMap (arity := arity)) =
       (fun {arity} relation => relation) := by
@@ -124,7 +126,7 @@ theorem identityBinder_relationMap_same
 
 noncomputable def concreteSimulation
     (mode : Mode)
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (contract : spine.TerminalBodyContract pattern.val)
@@ -133,7 +135,7 @@ noncomputable def concreteSimulation
         )
     (model : Model)
     :
-    ConcreteElaboration.ConcreteSemanticSimulation  pattern.val.diagram
+    Concrete.Elaboration.ConcreteSemanticSimulation  pattern.val.diagram
       (materializedDiagram pattern.val attachment spine.bodyContainer)
       model  where
   source_wellFormed := pattern.property.diagram_well_formed
@@ -155,9 +157,9 @@ noncomputable def concreteSimulation
     intro region regular
     exact materialized_regular_localOccurrences pattern.val attachment
       spine.bodyContainer region regular
-  BinderWitness := ConcreteElaboration.IdentityBinderWitness pattern.val.diagram
+  BinderWitness := Concrete.Elaboration.IdentityBinderWitness pattern.val.diagram
     (materializedDiagram pattern.val attachment spine.bodyContainer)
-  relationMap := ConcreteElaboration.IdentityBinderWitness.relationMap
+  relationMap := Concrete.Elaboration.IdentityBinderWitness.relationMap
   binders_empty := ⟨rfl, HEq.rfl⟩
   binders_push := by
     intro sourceRels targetRels sourceBinders targetBinders witness child parent
@@ -215,21 +217,21 @@ noncomputable def concreteSimulation
     subst targetRels
     have relationMapEq :
         (fun {arity} =>
-          ConcreteElaboration.IdentityBinderWitness.relationMap
+          Concrete.Elaboration.IdentityBinderWitness.relationMap
             (⟨rfl, bindersEq⟩ :
-              ConcreteElaboration.IdentityBinderWitness pattern.val.diagram
+              Concrete.Elaboration.IdentityBinderWitness pattern.val.diagram
                 (materializedDiagram pattern.val attachment spine.bodyContainer)
                 sourceBinders targetBinders) (arity := arity)) =
           (fun {arity} relation => relation) :=
       identityBinder_relationMap_same _
     rw [relationMapEq, ItemSeq.renameRelations_id] at itemSimulation ⊢
     simp only [id_eq] at targetExact targetCover targetEnumeration targetCompiled ⊢
-    change ∀ relEnv, ConcreteElaboration.DirectionalLocalTransport direction
+    change ∀ relEnv, Concrete.Elaboration.DirectionalLocalTransport direction
       sourceContext targetContext region region (indexRelation mode collapse)
       model  relEnv sourceItems targetItems
     let extendedCollapse := extendCollapse pattern attachment spine contract
       targetContext sourceContext collapse region targetExact sourceExact
-    apply ConcreteElaboration.directionalLocalTransport_of_agreement direction
+    apply Concrete.Elaboration.directionalLocalTransport_of_agreement direction
       sourceContext targetContext region region (indexRelation mode collapse)
       (indexRelation mode extendedCollapse) model  sourceItems targetItems
     · intro sourceOuter targetOuter outerAgrees
@@ -242,10 +244,10 @@ noncomputable def concreteSimulation
                 targetContext sourceContext collapse region targetExact sourceExact
                 sourceOuter sourceLocal
               refine ⟨targetLocalEnv, ?_⟩
-              apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+              apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
                 extendedCollapse.indexMap _ _).mpr
               have outerEq :=
-                (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+                (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
                   collapse.indexMap sourceOuter targetOuter).mp outerAgrees
               rw [← outerEq]
               exact extendedEnv_collapse pattern attachment spine contract
@@ -261,12 +263,12 @@ noncomputable def concreteSimulation
               let sourceLocalEnv := sourceLocal pattern attachment spine region
                 regionNeRoot targetLocalEnv
               refine ⟨sourceLocalEnv, ?_⟩
-              apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+              apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
                 extendedCollapse.indexMap _ _).mpr
               exact extendedEnv_uncollapse pattern attachment spine contract
                 targetContext sourceContext collapse region regionNeRoot
                 targetExact sourceExact sourceOuter targetOuter
-                ((ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+                ((Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
                   collapse.indexMap sourceOuter targetOuter).mp outerAgrees)
                 targetLocalEnv
       | backward =>
@@ -281,12 +283,12 @@ noncomputable def concreteSimulation
               let targetLocalEnv := targetLocalOldIndex pattern attachment spine
                 region regionNeRoot sourceLocalEnv
               refine ⟨targetLocalEnv, ?_⟩
-              apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+              apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap
                 extendedCollapse.oldIndex _ _).mpr
               exact extendedEnv_oldIndex_lift pattern attachment spine contract
                 targetContext sourceContext collapse region regionNeRoot
                 targetExact sourceExact sourceOuter targetOuter
-                ((ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+                ((Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap
                   collapse.oldIndex sourceOuter targetOuter).mp outerAgrees)
                 sourceLocalEnv
           | backward =>
@@ -295,12 +297,12 @@ noncomputable def concreteSimulation
                 targetContext sourceContext collapse region targetExact sourceExact
                 targetOuter targetLocalEnv
               refine ⟨sourceLocalEnv, ?_⟩
-              apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+              apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap
                 extendedCollapse.oldIndex _ _).mpr
               exact extendedEnv_oldIndex_general pattern attachment spine contract
                 targetContext sourceContext collapse region targetExact sourceExact
                 sourceOuter targetOuter
-                ((ConcreteElaboration.ContextIndexRelation.environmentsAgree_forwardMap
+                ((Concrete.Elaboration.ContextIndexRelation.environmentsAgree_forwardMap
                   collapse.oldIndex sourceOuter targetOuter).mp outerAgrees)
                 targetLocalEnv
     · exact itemSimulation
@@ -318,9 +320,9 @@ noncomputable def concreteSimulation
     subst targetRels
     have relationMapEq :
         (fun {arity} =>
-          ConcreteElaboration.IdentityBinderWitness.relationMap
+          Concrete.Elaboration.IdentityBinderWitness.relationMap
             (⟨rfl, bindersEq⟩ :
-              ConcreteElaboration.IdentityBinderWitness pattern.val.diagram
+              Concrete.Elaboration.IdentityBinderWitness pattern.val.diagram
                 (materializedDiagram pattern.val attachment spine.bodyContainer)
                 sourceBinders targetBinders) (arity := arity)) =
           (fun {arity} relation => relation) :=
@@ -351,9 +353,9 @@ noncomputable def concreteSimulation
     subst direction
     have relationMapEq :
         (fun {arity} =>
-          ConcreteElaboration.IdentityBinderWitness.relationMap
+          Concrete.Elaboration.IdentityBinderWitness.relationMap
             (⟨rfl, bindersEq⟩ :
-              ConcreteElaboration.IdentityBinderWitness pattern.val.diagram
+              Concrete.Elaboration.IdentityBinderWitness pattern.val.diagram
                 (materializedDiagram pattern.val attachment spine.bodyContainer)
                 sourceBinders targetBinders) (arity := arity)) =
           (fun {arity} relation => relation) :=
@@ -361,7 +363,7 @@ noncomputable def concreteSimulation
     rw [relationMapEq]
     rw [Region.renameRelations_id]
     simp only [id_eq] at targetExact targetCover targetEnumeration targetCompiled ⊢
-    apply ConcreteElaboration.finishRegion_denote mode.direction sourceContext
+    apply Concrete.Elaboration.finishRegion_denote mode.direction sourceContext
       targetContext spine.bodyContainer spine.bodyContainer
       (indexRelation mode collapse) model  sourceItems targetItems
     cases mode with
@@ -387,9 +389,9 @@ noncomputable def concreteSimulation
               targetBodyCompiled
             have childRelationMapEq :
                 (fun {arity} =>
-                  ConcreteElaboration.IdentityBinderWitness.relationMap
+                  Concrete.Elaboration.IdentityBinderWitness.relationMap
                     (⟨rfl, bindersEqual⟩ :
-                      ConcreteElaboration.IdentityBinderWitness
+                      Concrete.Elaboration.IdentityBinderWitness
                         pattern.val.diagram
                         (materializedDiagram pattern.val attachment
                           spine.bodyContainer)
@@ -422,9 +424,9 @@ noncomputable def concreteSimulation
               targetBodyCompiled
             have childRelationMapEq :
                 (fun {arity} =>
-                  ConcreteElaboration.IdentityBinderWitness.relationMap
+                  Concrete.Elaboration.IdentityBinderWitness.relationMap
                     (⟨rfl, bindersEqual⟩ :
-                      ConcreteElaboration.IdentityBinderWitness
+                      Concrete.Elaboration.IdentityBinderWitness
                         pattern.val.diagram
                         (materializedDiagram pattern.val attachment
                           spine.bodyContainer)
@@ -438,4 +440,4 @@ noncomputable def concreteSimulation
 
 end Semantic
 
-end VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+end VisualProof.Concrete.Splice.AttachmentAliasMaterialization

@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.WireJoin
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open Diagram
@@ -37,42 +39,42 @@ theorem quotientEnvironment_agrees
     (Classical.choose_spec (surjective (map sourceIndex))).symm
 
 noncomputable def localEnvironmentOfComplete
-    (context : Diagram.ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (complete : Fin (context.extend region).length → D) :
-    Fin (Diagram.ConcreteElaboration.exactScopeWires diagram region).length → D :=
+    Fin (Concrete.Elaboration.exactScopeWires diagram region).length → D :=
   fun localIndex =>
     complete
       (Fin.cast
-        (Diagram.ConcreteElaboration.WireContext.length_extend context
+        (Concrete.Elaboration.WireContext.length_extend context
           region).symm
         (Fin.natAdd context.length localIndex))
 
 theorem extendedEnvironment_localEnvironmentOfComplete
-    (context : Diagram.ConcreteElaboration.WireContext diagram)
+    (context : Concrete.Elaboration.WireContext diagram)
     (region : Fin diagram.regionCount)
     (outerEnv : Fin context.length → D)
     (complete : Fin (context.extend region).length → D)
     (inherited : ∀ index,
       complete
           (Fin.cast
-            (Diagram.ConcreteElaboration.WireContext.length_extend context
+            (Concrete.Elaboration.WireContext.length_extend context
               region).symm
             (Fin.castAdd
-              (Diagram.ConcreteElaboration.exactScopeWires diagram region).length
+              (Concrete.Elaboration.exactScopeWires diagram region).length
               index)) =
         outerEnv index) :
-    Diagram.ConcreteElaboration.extendedEnvironment context region outerEnv
+    Concrete.Elaboration.extendedEnvironment context region outerEnv
         (localEnvironmentOfComplete context region complete) =
       complete := by
   funext index
   let split :=
     Fin.cast
-      (Diagram.ConcreteElaboration.WireContext.length_extend context region)
+      (Concrete.Elaboration.WireContext.length_extend context region)
       index
   have recover :
       Fin.cast
-          (Diagram.ConcreteElaboration.WireContext.length_extend context
+          (Concrete.Elaboration.WireContext.length_extend context
             region).symm
           split =
         index := by
@@ -81,18 +83,18 @@ theorem extendedEnvironment_localEnvironmentOfComplete
   rw [← recover]
   refine Fin.addCases (fun inheritedIndex => ?_)
     (fun localIndex => ?_) split
-  · simpa [Diagram.ConcreteElaboration.extendedEnvironment,
+  · simpa [Concrete.Elaboration.extendedEnvironment,
       extendWireEnv] using (inherited inheritedIndex).symm
-  · simp [Diagram.ConcreteElaboration.extendedEnvironment,
+  · simp [Concrete.Elaboration.extendedEnvironment,
       localEnvironmentOfComplete, extendWireEnv]
 
 theorem wireJoin_extended_fiber_constant
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount)
     (distinct : outer ≠ inner)
-    (sourceContext : Diagram.ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext input)
     (targetContext :
-      Diagram.ConcreteElaboration.WireContext
+      Concrete.Elaboration.WireContext
         (WireJoinSoundness.Target input outer inner))
     (witness : WireJoinSoundness.ContextWitness input outer inner distinct
       sourceContext targetContext)
@@ -131,15 +133,15 @@ theorem wireJoin_extended_fiber_constant
 /-- At the absorbed wire's scope, a source valuation descends through the
 wire quotient exactly when the retained and absorbed wire values agree. -/
 theorem wireJoin_site_forward_selection
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     (wellFormed : input.WellFormed )
     (outer inner : Fin input.wireCount)
     (distinct : outer ≠ inner)
     (ordered :
       input.Encloses (input.wires outer).scope (input.wires inner).scope)
-    (sourceContext : Diagram.ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext input)
     (targetContext :
-      Diagram.ConcreteElaboration.WireContext
+      Concrete.Elaboration.WireContext
         (WireJoinSoundness.Target input outer inner))
     (witness : WireJoinSoundness.ContextWitness input outer inner distinct
       sourceContext targetContext)
@@ -150,26 +152,26 @@ theorem wireJoin_site_forward_selection
     (targetOuter : Fin targetContext.length → D)
     (outerAgrees : sourceOuter = targetOuter ∘ witness.indexMap)
     (sourceLocal :
-      Fin (Diagram.ConcreteElaboration.exactScopeWires input region).length → D)
+      Fin (Concrete.Elaboration.exactScopeWires input region).length → D)
     (joinedValues : ∀ outerIndex innerIndex,
       (sourceContext.extend region).get outerIndex = outer →
       (sourceContext.extend region).get innerIndex = inner →
-      Diagram.ConcreteElaboration.extendedEnvironment sourceContext region
+      Concrete.Elaboration.extendedEnvironment sourceContext region
           sourceOuter sourceLocal outerIndex =
-        Diagram.ConcreteElaboration.extendedEnvironment sourceContext region
+        Concrete.Elaboration.extendedEnvironment sourceContext region
           sourceOuter sourceLocal innerIndex) :
     ∃ targetLocal :
-        Fin (Diagram.ConcreteElaboration.exactScopeWires
+        Fin (Concrete.Elaboration.exactScopeWires
           (WireJoinSoundness.Target input outer inner) region).length → D,
-      Diagram.ConcreteElaboration.extendedEnvironment sourceContext region
+      Concrete.Elaboration.extendedEnvironment sourceContext region
           sourceOuter sourceLocal =
-        Diagram.ConcreteElaboration.extendedEnvironment targetContext region
+        Concrete.Elaboration.extendedEnvironment targetContext region
             targetOuter targetLocal ∘
           (witness.extend wellFormed ordered region sourceExact targetExact).indexMap := by
   let extendedWitness :=
     witness.extend wellFormed ordered region sourceExact targetExact
   let sourceComplete :=
-    Diagram.ConcreteElaboration.extendedEnvironment sourceContext region
+    Concrete.Elaboration.extendedEnvironment sourceContext region
       sourceOuter sourceLocal
   have fiberConstant : ∀ left right,
       extendedWitness.indexMap left = extendedWitness.indexMap right →
@@ -187,10 +189,10 @@ theorem wireJoin_site_forward_selection
   have targetInherited : ∀ targetIndex,
       targetComplete
           (Fin.cast
-            (Diagram.ConcreteElaboration.WireContext.length_extend targetContext
+            (Concrete.Elaboration.WireContext.length_extend targetContext
               region).symm
             (Fin.castAdd
-              (Diagram.ConcreteElaboration.exactScopeWires
+              (Concrete.Elaboration.exactScopeWires
                 (WireJoinSoundness.Target input outer inner) region).length
               targetIndex)) =
         targetOuter targetIndex := by
@@ -198,17 +200,17 @@ theorem wireJoin_site_forward_selection
     obtain ⟨sourceIndex, sourceIndexMap⟩ := witness.surjective targetIndex
     let sourceExtendedIndex : Fin (sourceContext.extend region).length :=
       Fin.cast
-        (Diagram.ConcreteElaboration.WireContext.length_extend sourceContext
+        (Concrete.Elaboration.WireContext.length_extend sourceContext
           region).symm
         (Fin.castAdd
-          (Diagram.ConcreteElaboration.exactScopeWires input region).length
+          (Concrete.Elaboration.exactScopeWires input region).length
           sourceIndex)
     let targetExtendedIndex : Fin (targetContext.extend region).length :=
       Fin.cast
-        (Diagram.ConcreteElaboration.WireContext.length_extend targetContext
+        (Concrete.Elaboration.WireContext.length_extend targetContext
           region).symm
         (Fin.castAdd
-          (Diagram.ConcreteElaboration.exactScopeWires
+          (Concrete.Elaboration.exactScopeWires
             (WireJoinSoundness.Target input outer inner) region).length
           targetIndex)
     have extendedIndexMap :
@@ -218,10 +220,10 @@ theorem wireJoin_site_forward_selection
       exact congrArg
         (fun index =>
           Fin.cast
-            (Diagram.ConcreteElaboration.WireContext.length_extend targetContext
+            (Concrete.Elaboration.WireContext.length_extend targetContext
               region).symm
             (Fin.castAdd
-              (Diagram.ConcreteElaboration.exactScopeWires
+              (Concrete.Elaboration.exactScopeWires
                 (WireJoinSoundness.Target input outer inner) region).length
               index))
         sourceIndexMap
@@ -232,7 +234,7 @@ theorem wireJoin_site_forward_selection
     have sourceValue :
         sourceComplete sourceExtendedIndex = sourceOuter sourceIndex := by
       simp [sourceComplete, sourceExtendedIndex,
-        Diagram.ConcreteElaboration.extendedEnvironment, extendWireEnv]
+        Concrete.Elaboration.extendedEnvironment, extendWireEnv]
     change targetComplete targetExtendedIndex = targetOuter targetIndex
     calc
       targetComplete targetExtendedIndex =
@@ -245,7 +247,7 @@ theorem wireJoin_site_forward_selection
     localEnvironmentOfComplete targetContext region targetComplete
   refine ⟨targetLocal, ?_⟩
   have targetCompleteEq :
-      Diagram.ConcreteElaboration.extendedEnvironment targetContext region
+      Concrete.Elaboration.extendedEnvironment targetContext region
           targetOuter targetLocal =
         targetComplete :=
     extendedEnvironment_localEnvironmentOfComplete targetContext region
@@ -254,19 +256,19 @@ theorem wireJoin_site_forward_selection
   exact completeAgrees
 
 noncomputable def rootLocalEnvironmentOfComplete
-    (ambient locals : Diagram.ConcreteElaboration.WireContext diagram)
+    (ambient locals : Concrete.Elaboration.WireContext diagram)
     (complete : Fin (ambient ++ locals).length → D) :
     Fin locals.length → D :=
   fun index => complete (WireJoinSoundness.rightIndex ambient locals index)
 
 theorem rootEnvironment_rootLocalEnvironmentOfComplete
-    (ambient locals : Diagram.ConcreteElaboration.WireContext diagram)
+    (ambient locals : Concrete.Elaboration.WireContext diagram)
     (outerEnv : Fin ambient.length → D)
     (complete : Fin (ambient ++ locals).length → D)
     (inherited : ∀ index,
       complete (WireJoinSoundness.leftIndex ambient locals index) =
         outerEnv index) :
-    Diagram.ConcreteElaboration.rootEnvironment ambient locals outerEnv
+    Concrete.Elaboration.rootEnvironment ambient locals outerEnv
         (rootLocalEnvironmentOfComplete ambient locals complete) =
       complete := by
   funext index
@@ -279,15 +281,15 @@ theorem rootEnvironment_rootLocalEnvironmentOfComplete
     rfl
   rw [← recover]
   refine Fin.addCases (fun inheritedIndex => ?_) (fun localIndex => ?_) split
-  · simpa [Diagram.ConcreteElaboration.rootEnvironment,
+  · simpa [Concrete.Elaboration.rootEnvironment,
       WireJoinSoundness.leftIndex, extendWireEnv] using
         (inherited inheritedIndex).symm
-  · simp [Diagram.ConcreteElaboration.rootEnvironment,
+  · simp [Concrete.Elaboration.rootEnvironment,
       rootLocalEnvironmentOfComplete, WireJoinSoundness.rightIndex,
       extendWireEnv]
 
 theorem wireJoin_root_forward_selection
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (ordered :
@@ -308,16 +310,16 @@ theorem wireJoin_root_forward_selection
     (joinedValues : ∀ outerIndex innerIndex,
       source.val.rootWires.get outerIndex = outer →
       source.val.rootWires.get innerIndex = inner →
-      Diagram.ConcreteElaboration.rootEnvironment source.val.exposedWires
+      Concrete.Elaboration.rootEnvironment source.val.exposedWires
           source.val.hiddenWires sourceOuter sourceHidden outerIndex =
-        Diagram.ConcreteElaboration.rootEnvironment source.val.exposedWires
+        Concrete.Elaboration.rootEnvironment source.val.exposedWires
           source.val.hiddenWires sourceOuter sourceHidden innerIndex) :
     ∃ targetHidden :
         Fin ((WireJoinSoundness.targetOpenRaw source.val outer inner distinct).hiddenWires.length) →
           D,
-      Diagram.ConcreteElaboration.rootEnvironment source.val.exposedWires
+      Concrete.Elaboration.rootEnvironment source.val.exposedWires
           source.val.hiddenWires sourceOuter sourceHidden =
-        Diagram.ConcreteElaboration.rootEnvironment
+        Concrete.Elaboration.rootEnvironment
             (WireJoinSoundness.targetOpenRaw source.val outer inner distinct).exposedWires
             (WireJoinSoundness.targetOpenRaw source.val outer inner distinct).hiddenWires
             targetOuter targetHidden ∘
@@ -330,12 +332,12 @@ theorem wireJoin_root_forward_selection
     WireJoinSoundness.rootWitness source outer inner distinct ordered
       targetWellFormed
   let sourceComplete :=
-    Diagram.ConcreteElaboration.rootEnvironment source.val.exposedWires
+    Concrete.Elaboration.rootEnvironment source.val.exposedWires
       source.val.hiddenWires sourceOuter sourceHidden
   have sourceExact :
-      Diagram.ConcreteElaboration.WireContext.Exact source.val.rootWires
+      Concrete.Elaboration.WireContext.Exact source.val.rootWires
         source.val.diagram.root :=
-    Diagram.Splice.openRootWires_exact source
+    Concrete.Splice.openRootWires_exact source
   have fiberConstant : ∀ left right,
       witness.indexMap left = witness.indexMap right →
         sourceComplete left = sourceComplete right :=
@@ -393,7 +395,7 @@ theorem wireJoin_root_forward_selection
       targetComplete
   refine ⟨targetHidden, ?_⟩
   have targetCompleteEq :
-      Diagram.ConcreteElaboration.rootEnvironment
+      Concrete.Elaboration.rootEnvironment
           (WireJoinSoundness.targetOpenRaw source.val outer inner distinct).exposedWires
           (WireJoinSoundness.targetOpenRaw source.val outer inner distinct).hiddenWires
           targetOuter targetHidden =
@@ -404,7 +406,7 @@ theorem wireJoin_root_forward_selection
   exact completeAgrees
 
 theorem open_body_denote_root_items
-    (checked : CheckedOpenDiagram )
+    (checked : Concrete.CheckedOpen )
     (model : Model)
     (outerEnv : Fin checked.val.exposedWires.length → model.Carrier)
     (bodyDenotes :
@@ -412,43 +414,43 @@ theorem open_body_denote_root_items
         (PUnit.unit : RelEnv model.Carrier []) checked.elaborate.body) :
     ∃ items : ItemSeq  checked.val.rootWires.length [],
       ∃ hiddenEnv : Fin checked.val.hiddenWires.length → model.Carrier,
-        Diagram.ConcreteElaboration.compileOccurrencesWith?
+        Concrete.Elaboration.compileOccurrencesWith?
             checked.val.diagram
-            (Diagram.ConcreteElaboration.compileRegion?
+            (Concrete.Elaboration.compileRegion?
               checked.val.diagram checked.val.diagram.regionCount)
             checked.val.rootWires
-            Diagram.ConcreteElaboration.BinderContext.empty
-            (Diagram.ConcreteElaboration.localOccurrences checked.val.diagram
+            Concrete.Elaboration.BinderContext.empty
+            (Concrete.Elaboration.localOccurrences checked.val.diagram
               checked.val.diagram.root) =
           some items ∧
         denoteItemSeq (relCtx := []) model
-          (Diagram.ConcreteElaboration.rootEnvironment
+          (Concrete.Elaboration.rootEnvironment
             checked.val.exposedWires checked.val.hiddenWires outerEnv hiddenEnv)
           (PUnit.unit : RelEnv model.Carrier []) items := by
   obtain ⟨body, rootCompiled, bodyEq⟩ :=
-    CheckedOpenDiagram.elaborate_body_computation checked
+    Concrete.CheckedOpen.elaborate_body_computation checked
   rw [bodyEq] at bodyDenotes
-  simp only [Diagram.ConcreteElaboration.compileRoot?] at rootCompiled
+  simp only [Concrete.Elaboration.compileRoot?] at rootCompiled
   cases itemsCompiled :
-      Diagram.ConcreteElaboration.compileOccurrencesWith?
+      Concrete.Elaboration.compileOccurrencesWith?
         checked.val.diagram
-        (Diagram.ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           checked.val.diagram checked.val.diagram.regionCount)
         (checked.val.exposedWires ++ checked.val.hiddenWires)
-        Diagram.ConcreteElaboration.BinderContext.empty
-        (Diagram.ConcreteElaboration.localOccurrences checked.val.diagram
+        Concrete.Elaboration.BinderContext.empty
+        (Concrete.Elaboration.localOccurrences checked.val.diagram
           checked.val.diagram.root) with
   | none =>
       simp [itemsCompiled] at rootCompiled
   | some items =>
       simp [itemsCompiled] at rootCompiled
       rw [← rootCompiled] at bodyDenotes
-      unfold Diagram.ConcreteElaboration.finishRoot at bodyDenotes
+      unfold Concrete.Elaboration.finishRoot at bodyDenotes
       simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
         at bodyDenotes
       obtain ⟨hiddenEnv, renamedDenotes⟩ := bodyDenotes
       refine ⟨items, hiddenEnv, ?_, ?_⟩
-      · simpa only [OpenConcreteDiagram.rootWires] using itemsCompiled
+      · simpa only [Concrete.OpenDiagram.rootWires] using itemsCompiled
       · exact (denoteItemSeq_renameWires (relCtx := []) model
           (Fin.cast (by simp))
           (extendWireEnv outerEnv hiddenEnv)
@@ -456,7 +458,7 @@ theorem open_body_denote_root_items
           renamedDenotes
 
 theorem exposedMap_fiber_constant_of_joined_values
-    (source : CheckedOpenDiagram )
+    (source : Concrete.CheckedOpen )
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
     (classes : Fin source.val.exposedWires.length → D)
@@ -464,9 +466,9 @@ theorem exposedMap_fiber_constant_of_joined_values
     (joinedValues : ∀ outerIndex innerIndex,
       source.val.rootWires.get outerIndex = outer →
       source.val.rootWires.get innerIndex = inner →
-      Diagram.ConcreteElaboration.rootEnvironment source.val.exposedWires
+      Concrete.Elaboration.rootEnvironment source.val.exposedWires
           source.val.hiddenWires classes hidden outerIndex =
-        Diagram.ConcreteElaboration.rootEnvironment source.val.exposedWires
+        Concrete.Elaboration.rootEnvironment source.val.exposedWires
           source.val.hiddenWires classes hidden innerIndex) :
     ∀ left right,
       WireJoinSoundness.exposedMap source.val outer inner distinct left =
@@ -500,9 +502,9 @@ theorem exposedMap_fiber_constant_of_joined_values
           source.val.hiddenWires left)
         (WireJoinSoundness.leftIndex source.val.exposedWires
           source.val.hiddenWires right)
-        (by simpa only [OpenConcreteDiagram.rootWires,
+        (by simpa only [Concrete.OpenDiagram.rootWires,
           WireJoinSoundness.get_leftIndex] using outerInner.1)
-        (by simpa only [OpenConcreteDiagram.rootWires,
+        (by simpa only [Concrete.OpenDiagram.rootWires,
           WireJoinSoundness.get_leftIndex] using outerInner.2)
     simpa using joined
   · have joined :=
@@ -511,9 +513,9 @@ theorem exposedMap_fiber_constant_of_joined_values
           source.val.hiddenWires right)
         (WireJoinSoundness.leftIndex source.val.exposedWires
           source.val.hiddenWires left)
-        (by simpa only [OpenConcreteDiagram.rootWires,
+        (by simpa only [Concrete.OpenDiagram.rootWires,
           WireJoinSoundness.get_leftIndex] using innerOuter.2)
-        (by simpa only [OpenConcreteDiagram.rootWires,
+        (by simpa only [Concrete.OpenDiagram.rootWires,
           WireJoinSoundness.get_leftIndex] using innerOuter.1)
     simpa using joined.symm
 
@@ -521,21 +523,21 @@ theorem exposedMap_fiber_constant_of_joined_values
 only.  This is the concrete criterion used by congruence payloads to expose
 their term equations at the joined output scope. -/
 theorem route_cutDepth_zero_of_equal
-    (checked : CheckedDiagram )
+    (checked : Concrete.Checked )
     {start target : Fin checked.val.regionCount} {path : List Nat}
-    (route : Diagram.Splice.RegionRoute checked.val start target path)
+    (route : Concrete.Splice.RegionRoute checked.val start target path)
     (depth : Nat) (routeDepth : route.HasCutDepth depth)
     (sameDepth :
       concreteCutDepth checked.val start =
         concreteCutDepth checked.val target) :
     depth = 0 := by
   let startView := Classical.choice
-    (Diagram.Splice.siteView_complete checked start)
+    (Concrete.Splice.siteView_complete checked start)
   let targetView := Classical.choice
-    (Diagram.Splice.siteView_complete checked target)
+    (Concrete.Splice.siteView_complete checked target)
   let composed := startView.route.trans route
   have pathEq : startView.path ++ path = targetView.path :=
-    Diagram.Splice.Input.RegionRoute.path_unique checked.property
+    Concrete.Splice.Input.RegionRoute.path_unique checked.property
       composed targetView.route
   have composedDepth :
       composed.HasCutDepth
@@ -553,7 +555,7 @@ theorem route_cutDepth_zero_of_equal
   have depthEq' :
       startView.focus.context.cutDepth + depth =
         targetView.focus.context.cutDepth := by
-    simpa [Diagram.Splice.SiteView.focus] using depthEq
+    simpa [Concrete.Splice.SiteView.focus] using depthEq
   have startEq := siteView_concreteCutDepth_eq startView
   have targetEq := siteView_concreteCutDepth_eq targetView
   omega
@@ -562,40 +564,40 @@ theorem route_cutDepth_zero_of_equal
 bubble-only compiler route.  The returned trace is the authoritative trace
 generated from the caller's existing compiler computation. -/
 theorem compiled_descendant_denotes_of_zero_route
-    (checked : CheckedDiagram )
+    (checked : Concrete.Checked )
     {start target : Fin checked.val.regionCount} {path : List Nat}
-    (route : Diagram.Splice.RegionRoute checked.val start target path)
+    (route : Concrete.Splice.RegionRoute checked.val start target path)
     (routeZero : route.HasCutDepth 0)
     {rels : RelCtx}
-    (context : Diagram.ConcreteElaboration.WireContext checked.val)
-    (binders : Diagram.ConcreteElaboration.BinderContext checked.val rels)
+    (context : Concrete.Elaboration.WireContext checked.val)
+    (binders : Concrete.Elaboration.BinderContext checked.val rels)
     (fuel : Nat)
     (items : ItemSeq  (context.extend start).length rels)
     (compiled :
-      Diagram.ConcreteElaboration.compileOccurrencesWith?  checked.val
-        (Diagram.ConcreteElaboration.compileRegion?  checked.val fuel)
+      Concrete.Elaboration.compileOccurrencesWith?  checked.val
+        (Concrete.Elaboration.compileRegion?  checked.val fuel)
         (context.extend start) binders
-        (Diagram.ConcreteElaboration.localOccurrences checked.val start) =
+        (Concrete.Elaboration.localOccurrences checked.val start) =
           some items)
     (wiresExact : (context.extend start).Exact start)
     (bindersCover : binders.Covers start)
     (binderEnumeration :
-      Diagram.ConcreteElaboration.BinderContext.Enumeration
+      Concrete.Elaboration.BinderContext.Enumeration
         checked.val binders start)
     (model : Model)
     (outerEnv : Fin context.length → model.Carrier)
     (localEnv :
-      Fin (Diagram.ConcreteElaboration.exactScopeWires
+      Fin (Concrete.Elaboration.exactScopeWires
         checked.val start).length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
     (denotes :
       denoteItemSeq model
-        (Diagram.ConcreteElaboration.extendedEnvironment context start
+        (Concrete.Elaboration.extendedEnvironment context start
           outerEnv localEnv)
         relEnv items) :
-    ∃ result : Diagram.Splice.CompilerTraceResult checked route context binders
+    ∃ result : Concrete.Splice.CompilerTraceResult checked route context binders
         (fuel + 1)
-        (Diagram.ConcreteElaboration.finishRegion checked.val context start
+        (Concrete.Elaboration.finishRegion checked.val context start
           items),
       ∃ holeEnv : Fin result.witness.toFocus.holeWires → model.Carrier,
         ∃ holeRelEnv :
@@ -603,24 +605,24 @@ theorem compiled_descendant_denotes_of_zero_route
           denoteRegion model  holeEnv holeRelEnv
             result.witness.toFocus.body := by
   have regionCompiled :
-      Diagram.ConcreteElaboration.compileRegion?  checked.val
+      Concrete.Elaboration.compileRegion?  checked.val
           (fuel + 1) start context binders =
-        some (Diagram.ConcreteElaboration.finishRegion checked.val context
+        some (Concrete.Elaboration.finishRegion checked.val context
           start items) := by
-    simp [Diagram.ConcreteElaboration.compileRegion?, compiled]
+    simp [Concrete.Elaboration.compileRegion?, compiled]
   obtain ⟨result⟩ :=
-    Diagram.Splice.compileRegion_route_context_complete checked route
+    Concrete.Splice.compileRegion_route_context_complete checked route
       regionCompiled wiresExact bindersCover binderEnumeration
   have startDenotes :
       denoteRegion model  outerEnv relEnv
-        (Diagram.ConcreteElaboration.finishRegion checked.val context start
+        (Concrete.Elaboration.finishRegion checked.val context start
           items) := by
-    unfold Diagram.ConcreteElaboration.finishRegion
+    unfold Concrete.Elaboration.finishRegion
     simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
     refine ⟨localEnv, ?_⟩
     exact (denoteItemSeq_renameWires model
       (Fin.cast
-        (Diagram.ConcreteElaboration.WireContext.length_extend context start))
+        (Concrete.Elaboration.WireContext.length_extend context start))
       (extendWireEnv outerEnv localEnv) relEnv items).mpr denotes
   have filledDenotes :
       denoteRegion model  outerEnv relEnv
@@ -637,12 +639,12 @@ theorem compiled_descendant_denotes_of_zero_route
 /-- Recover the actual compiled item-sequence denotation from the terminal
 body recorded by a compiler leaf. -/
 theorem compilerLeaf_items_denote
-    {checked : CheckedDiagram }
+    {checked : Concrete.Checked }
     {target : Fin checked.val.regionCount}
     {outer : Nat} {outerRels : RelCtx}
     {body : Region  outer outerRels} {path : List Nat}
     {witness : VisualProof.Diagram.Region.ContextPath body path}
-    (leaf : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
+    (leaf : VisualProof.Concrete.Splice.Region.ContextPath.CompilerLeaf
       checked.val target witness)
     (model : Model)
     (holeEnv : Fin witness.toFocus.holeWires → model.Carrier)
@@ -650,10 +652,10 @@ theorem compilerLeaf_items_denote
     (bodyDenotes :
       denoteRegion model  holeEnv holeRelEnv witness.toFocus.body) :
     ∃ localEnv :
-        Fin (Diagram.ConcreteElaboration.exactScopeWires
+        Fin (Concrete.Elaboration.exactScopeWires
           checked.val target).length → model.Carrier,
       denoteItemSeq model
-        (Diagram.ConcreteElaboration.extendedEnvironment
+        (Concrete.Elaboration.extendedEnvironment
           leaf.inheritedWires target
           (holeEnv ∘ Fin.cast leaf.inheritedLength)
           localEnv)
@@ -663,15 +665,15 @@ theorem compilerLeaf_items_denote
     (denoteRegion_renameWires model
       (Fin.cast leaf.inheritedLength)
       holeEnv holeRelEnv
-      (Diagram.ConcreteElaboration.finishRegion checked.val
+      (Concrete.Elaboration.finishRegion checked.val
         leaf.inheritedWires target leaf.items)).mp bodyDenotes
-  unfold Diagram.ConcreteElaboration.finishRegion at finishDenotes
+  unfold Concrete.Elaboration.finishRegion at finishDenotes
   simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires] at finishDenotes
   obtain ⟨localEnv, renamedItemsDenote⟩ := finishDenotes
   refine ⟨localEnv, ?_⟩
   exact (denoteItemSeq_renameWires model
     (Fin.cast
-      (Diagram.ConcreteElaboration.WireContext.length_extend
+      (Concrete.Elaboration.WireContext.length_extend
         leaf.inheritedWires target))
     (extendWireEnv (holeEnv ∘ Fin.cast leaf.inheritedLength) localEnv)
     holeRelEnv leaf.items).mp renamedItemsDenote
@@ -680,15 +682,15 @@ theorem compilerLeaf_items_denote
 inherited at the start and exposes a denotation of the terminal compiled
 items. -/
 theorem trace_leaf_items_denote_preserving_inherited
-    {checked : CheckedDiagram }
+    {checked : Concrete.Checked }
     {start target : Fin checked.val.regionCount} {path : List Nat}
     {outer : Nat} {rels : RelCtx}
     {body : Region  outer rels}
-    {route : Diagram.Splice.RegionRoute checked.val start target path}
+    {route : Concrete.Splice.RegionRoute checked.val start target path}
     {witness : VisualProof.Diagram.Region.ContextPath body path}
-    {state : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
+    {state : VisualProof.Concrete.Splice.Region.ContextPath.CompilerLeaf
       checked.val start (.here body)}
-    (trace : Diagram.Splice.CompilerTrace  checked.val route witness
+    (trace : Concrete.Splice.CompilerTrace  checked.val route witness
       state)
     (routeZero : route.HasCutDepth 0)
     (model : Model)
@@ -699,13 +701,13 @@ theorem trace_leaf_items_denote_preserving_inherited
         (outerEnv ∘ Fin.cast state.inheritedLength.symm) relEnv body) :
     ∃ leafOuter : Fin trace.leaf.inheritedWires.length → model.Carrier,
       ∃ leafLocal :
-          Fin (Diagram.ConcreteElaboration.exactScopeWires
+          Fin (Concrete.Elaboration.exactScopeWires
             checked.val target).length → model.Carrier,
         ∃ leafRelEnv :
             RelEnv model.Carrier witness.toFocus.holeRels,
           leafOuter ∘ trace.inheritedIndex = outerEnv ∧
             denoteItemSeq model
-              (Diagram.ConcreteElaboration.extendedEnvironment
+              (Concrete.Elaboration.extendedEnvironment
                 trace.leaf.inheritedWires target leafOuter leafLocal)
               leafRelEnv trace.leaf.items := by
   have filledDenotes :
@@ -740,20 +742,20 @@ theorem trace_leaf_items_denote_preserving_inherited
 /-- The terminal complete environment agrees with the starting inherited
 environment at every pair of compiler indices naming the same concrete wire. -/
 theorem trace_complete_environment_agrees
-    {checked : CheckedDiagram }
+    {checked : Concrete.Checked }
     {start target : Fin checked.val.regionCount} {path : List Nat}
     {outer : Nat} {rels : RelCtx}
     {body : Region  outer rels}
-    {route : Diagram.Splice.RegionRoute checked.val start target path}
+    {route : Concrete.Splice.RegionRoute checked.val start target path}
     {witness : VisualProof.Diagram.Region.ContextPath body path}
-    {state : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
+    {state : VisualProof.Concrete.Splice.Region.ContextPath.CompilerLeaf
       checked.val start (.here body)}
-    (trace : Diagram.Splice.CompilerTrace  checked.val route witness
+    (trace : Concrete.Splice.CompilerTrace  checked.val route witness
       state)
     (outerEnv : Fin state.inheritedWires.length → D)
     (leafOuter : Fin trace.leaf.inheritedWires.length → D)
     (leafLocal :
-      Fin (Diagram.ConcreteElaboration.exactScopeWires
+      Fin (Concrete.Elaboration.exactScopeWires
         checked.val target).length → D)
     (inheritedAgrees :
       leafOuter ∘ trace.inheritedIndex = outerEnv)
@@ -763,15 +765,15 @@ theorem trace_complete_environment_agrees
       state.inheritedWires.get sourceIndex =
         (trace.leaf.inheritedWires.extend target).get targetIndex) :
     outerEnv sourceIndex =
-      Diagram.ConcreteElaboration.extendedEnvironment
+      Concrete.Elaboration.extendedEnvironment
         trace.leaf.inheritedWires target leafOuter leafLocal targetIndex := by
   let inheritedTarget :
       Fin (trace.leaf.inheritedWires.extend target).length :=
     Fin.cast
-      (Diagram.ConcreteElaboration.WireContext.length_extend
+      (Concrete.Elaboration.WireContext.length_extend
         trace.leaf.inheritedWires target).symm
       (Fin.castAdd
-        (Diagram.ConcreteElaboration.exactScopeWires
+        (Concrete.Elaboration.exactScopeWires
           checked.val target).length
         (trace.inheritedIndex sourceIndex))
   have inheritedTargetGet :
@@ -781,7 +783,7 @@ theorem trace_complete_environment_agrees
       _ = trace.leaf.inheritedWires.get
           (trace.inheritedIndex sourceIndex) := by
             simp [inheritedTarget,
-              Diagram.ConcreteElaboration.WireContext.extend]
+              Concrete.Elaboration.WireContext.extend]
       _ = _ := trace.inheritedIndex_get sourceIndex
   have targetEq : targetIndex = inheritedTarget := by
     apply Fin.ext
@@ -792,90 +794,90 @@ theorem trace_complete_environment_agrees
   have agreesAt := congrFun inheritedAgrees sourceIndex
   rw [← agreesAt]
   simp [inheritedTarget,
-    Diagram.ConcreteElaboration.extendedEnvironment,
-    Diagram.ConcreteElaboration.WireContext.extend, extendWireEnv]
+    Concrete.Elaboration.extendedEnvironment,
+    Concrete.Elaboration.WireContext.extend, extendWireEnv]
 
 /-- A denoted compiler leaf together with exact agreement against the complete
 wire environment at the ancestor site from which it was reached. -/
 structure DenotedDescendantLeaf
-    (checked : CheckedDiagram )
+    (checked : Concrete.Checked )
     (target : Fin checked.val.regionCount)
     (model : Model)
-    (sourceContext : Diagram.ConcreteElaboration.WireContext checked.val)
+    (sourceContext : Concrete.Elaboration.WireContext checked.val)
     (sourceEnv : Fin sourceContext.length → model.Carrier) where
   outer : Nat
   rels : RelCtx
   body : Region  outer rels
   path : List Nat
   witness : VisualProof.Diagram.Region.ContextPath body path
-  leaf : VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf
+  leaf : VisualProof.Concrete.Splice.Region.ContextPath.CompilerLeaf
     checked.val target witness
   outerEnv : Fin leaf.inheritedWires.length → model.Carrier
   localEnv :
-    Fin (Diagram.ConcreteElaboration.exactScopeWires
+    Fin (Concrete.Elaboration.exactScopeWires
       checked.val target).length → model.Carrier
   relEnv : RelEnv model.Carrier witness.toFocus.holeRels
   itemsDenote :
     denoteItemSeq model
-      (Diagram.ConcreteElaboration.extendedEnvironment
+      (Concrete.Elaboration.extendedEnvironment
         leaf.inheritedWires target outerEnv localEnv)
       relEnv leaf.items
   agrees : ∀ sourceIndex targetIndex,
     sourceContext.get sourceIndex =
         (leaf.inheritedWires.extend target).get targetIndex →
       sourceEnv sourceIndex =
-        Diagram.ConcreteElaboration.extendedEnvironment
+        Concrete.Elaboration.extendedEnvironment
           leaf.inheritedWires target outerEnv localEnv targetIndex
 
 /-- Follow the already successful compiler computation down a bubble-only
 route, retaining both the descendant item semantics and exact wire-value
 agreement with the complete ancestor-site environment. -/
 theorem denoted_descendant_leaf
-    (checked : CheckedDiagram )
+    (checked : Concrete.Checked )
     {start target : Fin checked.val.regionCount} {path : List Nat}
-    (route : Diagram.Splice.RegionRoute checked.val start target path)
+    (route : Concrete.Splice.RegionRoute checked.val start target path)
     (routeZero : route.HasCutDepth 0)
     {rels : RelCtx}
-    (context : Diagram.ConcreteElaboration.WireContext checked.val)
-    (binders : Diagram.ConcreteElaboration.BinderContext checked.val rels)
+    (context : Concrete.Elaboration.WireContext checked.val)
+    (binders : Concrete.Elaboration.BinderContext checked.val rels)
     (fuel : Nat)
     (items : ItemSeq  (context.extend start).length rels)
     (compiled :
-      Diagram.ConcreteElaboration.compileOccurrencesWith?  checked.val
-        (Diagram.ConcreteElaboration.compileRegion?  checked.val fuel)
+      Concrete.Elaboration.compileOccurrencesWith?  checked.val
+        (Concrete.Elaboration.compileRegion?  checked.val fuel)
         (context.extend start) binders
-        (Diagram.ConcreteElaboration.localOccurrences checked.val start) =
+        (Concrete.Elaboration.localOccurrences checked.val start) =
           some items)
     (wiresExact : (context.extend start).Exact start)
     (bindersCover : binders.Covers start)
     (binderEnumeration :
-      Diagram.ConcreteElaboration.BinderContext.Enumeration
+      Concrete.Elaboration.BinderContext.Enumeration
         checked.val binders start)
     (model : Model)
     (outerEnv : Fin context.length → model.Carrier)
     (localEnv :
-      Fin (Diagram.ConcreteElaboration.exactScopeWires
+      Fin (Concrete.Elaboration.exactScopeWires
         checked.val start).length → model.Carrier)
     (relEnv : RelEnv model.Carrier rels)
     (itemsDenote :
       denoteItemSeq model
-        (Diagram.ConcreteElaboration.extendedEnvironment context start
+        (Concrete.Elaboration.extendedEnvironment context start
           outerEnv localEnv)
         relEnv items) :
     Nonempty (DenotedDescendantLeaf checked target model
       (context.extend start)
-      (Diagram.ConcreteElaboration.extendedEnvironment context start
+      (Concrete.Elaboration.extendedEnvironment context start
         outerEnv localEnv)) := by
   cases routeZero with
   | here =>
       let leaf :=
-        VisualProof.Diagram.Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+        VisualProof.Concrete.Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
           checked.val start context binders fuel
             items compiled wiresExact bindersCover binderEnumeration
       refine ⟨{
         outer := context.length
         rels := rels
-        body := Diagram.ConcreteElaboration.finishRegion checked.val context
+        body := Concrete.Elaboration.finishRegion checked.val context
           start items
         path := []
         witness := .here _
@@ -897,25 +899,25 @@ theorem denoted_descendant_leaf
       childKind tailZero =>
           let itemPosition : Fin items.length :=
             Fin.cast
-              (Diagram.ConcreteElaboration.compileOccurrencesWith?_length
-                (Diagram.ConcreteElaboration.compileRegion?
+              (Concrete.Elaboration.compileOccurrencesWith?_length
+                (Concrete.Elaboration.compileRegion?
                   checked.val fuel)
                 (context.extend start) binders compiled).symm
               position
           have compiledOccurrence :=
-            Diagram.ConcreteElaboration.compileOccurrencesWith?_get
-              (Diagram.ConcreteElaboration.compileRegion?
+            Concrete.Elaboration.compileOccurrencesWith?_get
+              (Concrete.Elaboration.compileRegion?
                 checked.val fuel)
               (context.extend start) binders compiled position
           have occurrenceGet :
-              (Diagram.ConcreteElaboration.localOccurrences checked.val
+              (Concrete.Elaboration.localOccurrences checked.val
                 start).get position = .child child := by
             simpa only [List.get_eq_getElem] using indexOf?_sound hposition
           rw [occurrenceGet] at compiledOccurrence
-          simp only [Diagram.ConcreteElaboration.compileOccurrenceWith?,
+          simp only [Concrete.Elaboration.compileOccurrenceWith?,
             childKind] at compiledOccurrence
           cases childCompiled :
-              Diagram.ConcreteElaboration.compileRegion?  checked.val
+              Concrete.Elaboration.compileRegion?  checked.val
                 fuel child (context.extend start)
                   (binders.push child arity) with
           | none =>
@@ -927,7 +929,7 @@ theorem denoted_descendant_leaf
                   compiledOccurrence.symm
               have itemDenote :=
                 (denoteItemSeq_iff_get model
-                  (Diagram.ConcreteElaboration.extendedEnvironment context
+                  (Concrete.Elaboration.extendedEnvironment context
                     start outerEnv localEnv)
                   relEnv items).mp itemsDenote itemPosition
               rw [itemEq] at itemDenote
@@ -937,15 +939,15 @@ theorem denoted_descendant_leaf
                 wiresExact.extend_child checked.property hparent
               have childCovers :
                   (binders.push child arity).Covers child :=
-                Diagram.ConcreteElaboration.BinderContext.push_covers_bubble_child
+                Concrete.Elaboration.BinderContext.push_covers_bubble_child
                   bindersCover childKind
               let childEnumeration :=
                 binderEnumeration.bubbleChild checked.property childKind
               obtain ⟨result⟩ :=
-                Diagram.Splice.compileRegion_route_context_complete checked
+                Concrete.Splice.compileRegion_route_context_complete checked
                   tail childCompiled childExact childCovers childEnumeration
               let siteEnv :=
-                Diagram.ConcreteElaboration.extendedEnvironment context start
+                Concrete.Elaboration.extendedEnvironment context start
                   outerEnv localEnv
               let stateOuter :
                   Fin result.state.inheritedWires.length → model.Carrier :=

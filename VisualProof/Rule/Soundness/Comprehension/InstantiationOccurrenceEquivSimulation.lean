@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvanceFrameNodeSem
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -13,61 +15,61 @@ pointwise item simulation to the complete ordered conjunction.  The
 logical conjunction is insensitive to the dense enumeration order, while the
 compiler receipts and `get` equations remain exact. -/
 theorem compileOccurrences_simulation_of_equiv
-    {source target : ConcreteDiagram}
+    {source target : Concrete.Diagram}
     (sourceRecurse : ∀ {rels : RelCtx},
       (region : Fin source.regionCount) →
-      (context : ConcreteElaboration.WireContext source) →
-      ConcreteElaboration.BinderContext source rels →
+      (context : Concrete.Elaboration.WireContext source) →
+      Concrete.Elaboration.BinderContext source rels →
       Option (Region  context.length rels))
     (targetRecurse : ∀ {rels : RelCtx},
       (region : Fin target.regionCount) →
-      (context : ConcreteElaboration.WireContext target) →
-      ConcreteElaboration.BinderContext target rels →
+      (context : Concrete.Elaboration.WireContext target) →
+      Concrete.Elaboration.BinderContext target rels →
       Option (Region  context.length rels))
-    (sourceContext : ConcreteElaboration.WireContext source)
-    (targetContext : ConcreteElaboration.WireContext target)
-    (sourceBinders : ConcreteElaboration.BinderContext source sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext target targetRels)
-    (sourceOccurrences : List (ConcreteElaboration.LocalOccurrence
+    (sourceContext : Concrete.Elaboration.WireContext source)
+    (targetContext : Concrete.Elaboration.WireContext target)
+    (sourceBinders : Concrete.Elaboration.BinderContext source sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext target targetRels)
+    (sourceOccurrences : List (Concrete.Elaboration.LocalOccurrence
       source.regionCount source.nodeCount))
-    (targetOccurrences : List (ConcreteElaboration.LocalOccurrence
+    (targetOccurrences : List (Concrete.Elaboration.LocalOccurrence
       target.regionCount target.nodeCount))
     (positions : FiniteEquiv (Fin sourceOccurrences.length)
       (Fin targetOccurrences.length))
-    (mapOccurrence : ConcreteElaboration.LocalOccurrence source.regionCount
-      source.nodeCount → ConcreteElaboration.LocalOccurrence target.regionCount
+    (mapOccurrence : Concrete.Elaboration.LocalOccurrence source.regionCount
+      source.nodeCount → Concrete.Elaboration.LocalOccurrence target.regionCount
         target.nodeCount)
     (positionSpec : ∀ index,
       targetOccurrences.get (positions index) =
         mapOccurrence (sourceOccurrences.get index))
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
-    (relation : ConcreteElaboration.ContextIndexRelation sourceContext.length
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (relation : Concrete.Elaboration.ContextIndexRelation sourceContext.length
       targetContext.length)
     (relationMap : RelationRenaming sourceRels targetRels)
     (pointwise : ∀ occurrence, occurrence ∈ sourceOccurrences →
       ∀ (sourceItem : Item  sourceContext.length sourceRels)
         (targetItem : Item  targetContext.length targetRels),
-      ConcreteElaboration.compileOccurrenceWith?  source sourceRecurse
+      Concrete.Elaboration.compileOccurrenceWith?  source sourceRecurse
           sourceContext sourceBinders occurrence = some sourceItem →
-      ConcreteElaboration.compileOccurrenceWith?  target targetRecurse
+      Concrete.Elaboration.compileOccurrenceWith?  target targetRecurse
           targetContext targetBinders (mapOccurrence occurrence) =
             some targetItem →
-      ConcreteElaboration.ItemSimulation model  direction relation
+      Concrete.Elaboration.ItemSimulation model  direction relation
         (sourceItem.renameRelations relationMap) targetItem)
     (sourceItems : ItemSeq  sourceContext.length sourceRels)
     (targetItems : ItemSeq  targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (sourceCompiled : Concrete.Elaboration.compileOccurrencesWith?
       source sourceRecurse sourceContext sourceBinders sourceOccurrences =
         some sourceItems)
-    (targetCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (targetCompiled : Concrete.Elaboration.compileOccurrencesWith?
       target targetRecurse targetContext targetBinders targetOccurrences =
         some targetItems) :
-    ConcreteElaboration.ItemSeqSimulation model  direction relation
+    Concrete.Elaboration.ItemSeqSimulation model  direction relation
       (sourceItems.renameRelations relationMap) targetItems := by
-  have sourceLength := ConcreteElaboration.compileOccurrencesWith?_length
+  have sourceLength := Concrete.Elaboration.compileOccurrencesWith?_length
     sourceRecurse sourceContext sourceBinders sourceCompiled
-  have targetLength := ConcreteElaboration.compileOccurrencesWith?_length
+  have targetLength := Concrete.Elaboration.compileOccurrencesWith?_length
     targetRecurse targetContext targetBinders targetCompiled
   intro sourceEnv targetEnv relEnv environments
   cases direction with
@@ -81,10 +83,10 @@ theorem compileOccurrences_simulation_of_equiv
       let sourcePreparedIndex := Fin.cast
         (ItemSeq.renameRelations_length sourceItems relationMap).symm
         sourceItemIndex
-      have sourceAt := ConcreteElaboration.compileOccurrencesWith?_get
+      have sourceAt := Concrete.Elaboration.compileOccurrencesWith?_get
         sourceRecurse sourceContext sourceBinders sourceCompiled
         sourceOccurrenceIndex
-      have targetAt := ConcreteElaboration.compileOccurrencesWith?_get
+      have targetAt := Concrete.Elaboration.compileOccurrencesWith?_get
         targetRecurse targetContext targetBinders targetCompiled
         targetOccurrenceIndex
       have positionEq : positions sourceOccurrenceIndex =
@@ -134,10 +136,10 @@ theorem compileOccurrences_simulation_of_equiv
       let sourceOccurrenceIndex := Fin.cast sourceLength sourceItemIndex
       let targetOccurrenceIndex := positions sourceOccurrenceIndex
       let targetItemIndex := Fin.cast targetLength.symm targetOccurrenceIndex
-      have sourceAt := ConcreteElaboration.compileOccurrencesWith?_get
+      have sourceAt := Concrete.Elaboration.compileOccurrencesWith?_get
         sourceRecurse sourceContext sourceBinders sourceCompiled
         sourceOccurrenceIndex
-      have targetAt := ConcreteElaboration.compileOccurrencesWith?_get
+      have targetAt := Concrete.Elaboration.compileOccurrencesWith?_get
         targetRecurse targetContext targetBinders targetCompiled
         targetOccurrenceIndex
       rw [positionSpec sourceOccurrenceIndex] at targetAt

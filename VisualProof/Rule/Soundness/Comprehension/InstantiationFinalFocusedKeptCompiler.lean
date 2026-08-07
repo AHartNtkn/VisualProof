@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalAllowed
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -10,36 +12,36 @@ open VisualProof.Theory
 namespace InstantiationTrace
 
 theorem focusedKeptOccurrence_itemSimulation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (sourceWellFormed : elimTrace.sourceDiagram.WellFormed )
     (finalWellFormed :
       (dropInstantiationAtomsRaw result).WellFormed )
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (fuelSource fuelTarget : Nat)
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       elimTrace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext input.val)
     (context : FinalContextWitness copyTrace elimTrace sourceContext
       targetContext)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       elimTrace.sourceDiagram sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext input.val targetRels)
+    (targetBinders : Concrete.Elaboration.BinderContext input.val targetRels)
     (binderWitness : FinalBinderWitness copyTrace elimTrace finalWellFormed
       sourceBinders targetBinders)
     (sourceExact : sourceContext.Exact
@@ -48,26 +50,26 @@ theorem focusedKeptOccurrence_itemSimulation
     (sourceBindersCover : sourceBinders.Covers
       (elimTrace.targetIndex finalWellFormed))
     (targetBindersCover : targetBinders.Covers payload.parent)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       elimTrace.sourceDiagram sourceBinders
         (elimTrace.targetIndex finalWellFormed))
-    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (targetEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val targetBinders payload.parent)
     (allowed : FinalAllowed elimTrace.sourceDiagram
       (elimTrace.targetIndex finalWellFormed) direction
       (elimTrace.targetIndex finalWellFormed))
     (recurseAt : ∀
-      {childDirection : ConcreteElaboration.SimulationDirection}
+      {childDirection : Concrete.Elaboration.SimulationDirection}
       {child : Fin elimTrace.sourceDiagram.regionCount}
       {childSourceRels childTargetRels : RelCtx}
-      {childSourceBinders : ConcreteElaboration.BinderContext
+      {childSourceBinders : Concrete.Elaboration.BinderContext
         elimTrace.sourceDiagram childSourceRels}
-      {childTargetBinders : ConcreteElaboration.BinderContext
+      {childTargetBinders : Concrete.Elaboration.BinderContext
         input.val childTargetRels}
       (childFuelTarget : Nat)
-      (childSourceContext : ConcreteElaboration.WireContext
+      (childSourceContext : Concrete.Elaboration.WireContext
         elimTrace.sourceDiagram)
-      (childTargetContext : ConcreteElaboration.WireContext input.val)
+      (childTargetContext : Concrete.Elaboration.WireContext input.val)
       (childContext : FinalContextWitness copyTrace elimTrace
         childSourceContext childTargetContext),
       copyTrace.FinalAdmissible elimTrace finalWellFormed child →
@@ -78,9 +80,9 @@ theorem focusedKeptOccurrence_itemSimulation
       childSourceBinders.Covers child →
       childTargetBinders.Covers
         (copyTrace.reverseRegionMap elimTrace finalWellFormed child) →
-      ConcreteElaboration.BinderContext.Enumeration elimTrace.sourceDiagram
+      Concrete.Elaboration.BinderContext.Enumeration elimTrace.sourceDiagram
         childSourceBinders child →
-      ConcreteElaboration.BinderContext.Enumeration input.val
+      Concrete.Elaboration.BinderContext.Enumeration input.val
         childTargetBinders
           (copyTrace.reverseRegionMap elimTrace finalWellFormed child) →
       (childSourceContext.extend child).Exact child →
@@ -91,33 +93,33 @@ theorem focusedKeptOccurrence_itemSimulation
           childSourceRels)
         (targetBody : Region  childTargetContext.length
           childTargetRels),
-      ConcreteElaboration.compileRegion?  elimTrace.sourceDiagram
+      Concrete.Elaboration.compileRegion?  elimTrace.sourceDiagram
           fuelSource child childSourceContext childSourceBinders =
         some sourceBody →
-      ConcreteElaboration.compileRegion?  input.val childFuelTarget
+      Concrete.Elaboration.compileRegion?  input.val childFuelTarget
           (copyTrace.reverseRegionMap elimTrace finalWellFormed child)
           childTargetContext childTargetBinders = some targetBody →
-      ConcreteElaboration.RegionSimulation model  childDirection
+      Concrete.Elaboration.RegionSimulation model  childDirection
         childContext.indexRelation
         (sourceBody.renameRelations childBinderWitness.relationMap)
         targetBody)
-    (occurrence : ConcreteElaboration.LocalOccurrence
+    (occurrence : Concrete.Elaboration.LocalOccurrence
       elimTrace.sourceDiagram.regionCount elimTrace.sourceDiagram.nodeCount)
     (member : occurrence ∈ elimTrace.keptOccurrences finalWellFormed)
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrenceWith?
+    (sourceCompiled : Concrete.Elaboration.compileOccurrenceWith?
       elimTrace.sourceDiagram
-      (ConcreteElaboration.compileRegion?  elimTrace.sourceDiagram
+      (Concrete.Elaboration.compileRegion?  elimTrace.sourceDiagram
         fuelSource)
       sourceContext sourceBinders occurrence = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileOccurrenceWith?
-      input.val (ConcreteElaboration.compileRegion?  input.val
+    (targetCompiled : Concrete.Elaboration.compileOccurrenceWith?
+      input.val (Concrete.Elaboration.compileRegion?  input.val
         fuelTarget)
       targetContext targetBinders
         (copyTrace.finalFocusOccurrenceMap elimTrace occurrence) =
           some targetItem) :
-    ConcreteElaboration.ItemSimulation model  direction
+    Concrete.Elaboration.ItemSimulation model  direction
       context.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   cases occurrence with
@@ -132,7 +134,7 @@ theorem focusedKeptOccurrence_itemSimulation
         targetItem sourceCompiled targetCompiled
   | child child =>
       have sourceParent :=
-        (ConcreteElaboration.mem_localOccurrences_child elimTrace.sourceDiagram
+        (Concrete.Elaboration.mem_localOccurrences_child elimTrace.sourceDiagram
           (elimTrace.targetIndex finalWellFormed) child).1
           (List.mem_filter.mp member).1
       have occurrenceEq := copyTrace.keptChild_finalFocus_eq_reverse elimTrace
@@ -166,12 +168,12 @@ theorem focusedKeptOccurrence_itemSimulation
               some payload.parent := by
             simpa [fallback] using targetParent
           exact False.elim
-            ((ConcreteElaboration.checked_direct_child_not_encloses_parent
+            ((Concrete.Elaboration.checked_direct_child_not_encloses_parent
               input.property selfParent)
-              (ConcreteDiagram.Encloses.refl input.val payload.parent))
+              (Concrete.Diagram.Encloses.refl input.val payload.parent))
       cases sourceKind : elimTrace.sourceDiagram.regions child with
       | sheet =>
-          simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind]
+          simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind]
             at sourceCompiled
       | cut actualParent =>
           have actualParentEq : actualParent =
@@ -180,25 +182,25 @@ theorem focusedKeptOccurrence_itemSimulation
             exact Option.some.inj sourceParent
           subst actualParent
           simp only [sourceKind] at targetKind
-          cases sourceResult : ConcreteElaboration.compileRegion?
+          cases sourceResult : Concrete.Elaboration.compileRegion?
               elimTrace.sourceDiagram fuelSource child sourceContext
               sourceBinders with
           | none =>
-              simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+              simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind,
                 sourceResult] at sourceCompiled
           | some sourceBody =>
-              simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+              simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind,
                 sourceResult] at sourceCompiled
               subst sourceItem
-              cases targetResult : ConcreteElaboration.compileRegion?
+              cases targetResult : Concrete.Elaboration.compileRegion?
                   input.val fuelTarget
                   (copyTrace.reverseRegionMap elimTrace finalWellFormed child)
                   targetContext targetBinders with
               | none =>
-                  simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
+                  simp [Concrete.Elaboration.compileOccurrenceWith?, targetKind,
                     targetResult] at targetCompiled
               | some targetBody =>
-                  simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
+                  simp [Concrete.Elaboration.compileOccurrenceWith?, targetKind,
                     targetResult] at targetCompiled
                   subst targetItem
                   have childAllowed : FinalAllowed elimTrace.sourceDiagram
@@ -209,9 +211,9 @@ theorem focusedKeptOccurrence_itemSimulation
                     (elimTrace.targetIndex finalWellFormed) sourceKind allowed
                   have bodies := recurseAt fuelTarget sourceContext targetContext
                     context childAdmissible childAllowed binderWitness
-                    (ConcreteElaboration.BinderContext.covers_cut_child
+                    (Concrete.Elaboration.BinderContext.covers_cut_child
                       sourceBindersCover sourceKind)
-                    (ConcreteElaboration.BinderContext.covers_cut_child
+                    (Concrete.Elaboration.BinderContext.covers_cut_child
                       targetBindersCover targetKind)
                     (sourceEnumeration.cutChild sourceWellFormed sourceKind)
                     (targetEnumeration.cutChild input.property targetKind)
@@ -239,25 +241,25 @@ theorem focusedKeptOccurrence_itemSimulation
           let sourcePushed := sourceBinders.push child arity
           let targetPushed := targetBinders.push
             (copyTrace.reverseRegionMap elimTrace finalWellFormed child) arity
-          cases sourceResult : ConcreteElaboration.compileRegion?
+          cases sourceResult : Concrete.Elaboration.compileRegion?
               elimTrace.sourceDiagram fuelSource child sourceContext
               sourcePushed with
           | none =>
-              simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+              simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind,
                 sourcePushed, sourceResult] at sourceCompiled
           | some sourceBody =>
-              simp [ConcreteElaboration.compileOccurrenceWith?, sourceKind,
+              simp [Concrete.Elaboration.compileOccurrenceWith?, sourceKind,
                 sourcePushed, sourceResult] at sourceCompiled
               subst sourceItem
-              cases targetResult : ConcreteElaboration.compileRegion?
+              cases targetResult : Concrete.Elaboration.compileRegion?
                   input.val fuelTarget
                   (copyTrace.reverseRegionMap elimTrace finalWellFormed child)
                   targetContext targetPushed with
               | none =>
-                  simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
+                  simp [Concrete.Elaboration.compileOccurrenceWith?, targetKind,
                     targetPushed, targetResult] at targetCompiled
               | some targetBody =>
-                  simp [ConcreteElaboration.compileOccurrenceWith?, targetKind,
+                  simp [Concrete.Elaboration.compileOccurrenceWith?, targetKind,
                     targetPushed, targetResult] at targetCompiled
                   subst targetItem
                   let pushedWitness := binderWitness.pushAdmissible child arity
@@ -271,9 +273,9 @@ theorem focusedKeptOccurrence_itemSimulation
                     allowed
                   have bodies := recurseAt fuelTarget sourceContext targetContext
                     context childAdmissible childAllowed pushedWitness
-                    (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                    (Concrete.Elaboration.BinderContext.push_covers_bubble_child
                       sourceBindersCover sourceKind)
-                    (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                    (Concrete.Elaboration.BinderContext.push_covers_bubble_child
                       targetBindersCover targetKind)
                     (sourceEnumeration.bubbleChild sourceWellFormed sourceKind)
                     (targetEnumeration.bubbleChild input.property targetKind)

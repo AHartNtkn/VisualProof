@@ -1,7 +1,10 @@
-import VisualProof.Diagram.Concrete.Elaboration.Simulation
+import VisualProof.Concrete.Elaboration.Simulation
 import VisualProof.Rule.Soundness.Comprehension.AbstractionBinder
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -31,7 +34,7 @@ theorem targetNode_endpoint_origin_occurs
   have wireEq := Option.some.inj wireResult
   have endpointsEq := congrArg CWire.endpoints wireEq
   rw [trace.targetWire_origin_index targetWire] at endpointsEq
-  unfold ConcreteDiagram.EndpointOccurs at occurs ⊢
+  unfold Concrete.Diagram.EndpointOccurs at occurs ⊢
   rw [← endpointsEq] at occurs
   rcases List.mem_append.mp occurs with frameOccurs | atomOccurs
   · rw [abstractFrameEndpoints, trace.domains.wires.origin_index]
@@ -95,13 +98,13 @@ exact survivor context and binder maps. -/
 theorem regularNode_itemSimulation
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (context : ContextWitness trace sourceContext targetContext)
     (sourceNodup : sourceContext.Nodup)
-    (sourceBinders : ConcreteElaboration.BinderContext input.val sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
+    (sourceBinders : Concrete.Elaboration.BinderContext input.val sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels)
     (binderWitness : BinderWitness trace sourceBinders targetBinders)
     (parent : Fin input.val.regionCount)
     (regular : trace.FrameRegular parent)
@@ -109,19 +112,19 @@ theorem regularNode_itemSimulation
     (nodeRegion : (input.val.nodes sourceNode).region = parent)
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileNode?  input.val
+    (sourceCompiled : Concrete.Elaboration.compileNode?  input.val
       sourceContext sourceBinders sourceNode = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode?  trace.diagram
+    (targetCompiled : Concrete.Elaboration.compileNode?  trace.diagram
       targetContext targetBinders
       (trace.targetNode sourceNode
         (trace.node_survives_of_regular parent regular sourceNode nodeRegion)) =
         some targetItem) :
-    ConcreteElaboration.ItemSimulation model  direction
+    Concrete.Elaboration.ItemSimulation model  direction
       context.indexRelation
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
   let nodeSurvives :=
     trace.node_survives_of_regular parent regular sourceNode nodeRegion
-  apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+  apply Concrete.Elaboration.compileNode?_itemSimulation_of_related_ports
     model  direction sourceContext targetContext context.indexRelation
     sourceBinders targetBinders binderWitness.relationMap sourceNode
     (trace.targetNode sourceNode nodeSurvives) trace.regionMap trace.regionMap
@@ -132,13 +135,13 @@ theorem regularNode_itemSimulation
       simp only [sourceShape] at shape ⊢ <;> exact shape
   · intro port sourceIndex targetIndex sourceResolved targetResolved
     obtain ⟨sourceWire, sourceOccurs, sourceGet⟩ :=
-      ConcreteElaboration.resolvePort?_sound sourceResolved
+      Concrete.Elaboration.resolvePort?_sound sourceResolved
     obtain ⟨targetWire, targetOccurs, targetGet⟩ :=
-      ConcreteElaboration.resolvePort?_sound targetResolved
+      Concrete.Elaboration.resolvePort?_sound targetResolved
     have originOccurs := trace.targetNode_endpoint_origin_occurs sourceNode
       nodeSurvives targetWire port targetOccurs
     have wireEq : trace.domains.wires.origin targetWire = sourceWire :=
-      ConcreteElaboration.endpoint_wire_unique
+      Concrete.Elaboration.endpoint_wire_unique
         input.property.wire_endpoints_are_disjoint originOccurs sourceOccurs
     have targetGet' : targetContext.get targetIndex = targetWire := by
       simpa only [List.get_eq_getElem] using targetGet
@@ -162,4 +165,4 @@ theorem regularNode_itemSimulation
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

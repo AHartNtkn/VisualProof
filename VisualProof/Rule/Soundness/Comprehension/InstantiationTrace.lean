@@ -1,6 +1,8 @@
-import VisualProof.Rule.Comprehension.Semantics
+import VisualProof.Concrete.Operation.Comprehension.Semantics
 
 namespace VisualProof.Rule
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -9,15 +11,15 @@ open VisualProof.Diagram
 constructor records the exact checked splice and the exact state transition
 used by the executor. -/
 inductive InstantiationTrace
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram } :
+    {origin : Concrete.Checked } :
     Nat →
       InstantiationState origin attachments.length
         payload.binderSpine.proxyCount →
@@ -47,15 +49,15 @@ inductive InstantiationTrace
 
 /-- A successful executor run exposes its complete checked-splice trace. -/
 def instantiateCopiesSuccessTrace
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (fuel : Nat)
     (state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)

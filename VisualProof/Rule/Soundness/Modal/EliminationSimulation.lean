@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Modal.EliminationFocusedCompiler
 
-namespace VisualProof.Rule.DoubleCutElimTrace
+namespace VisualProof.Concrete.DoubleCutElimTrace
+
+open VisualProof.Concrete
+open VisualProof.Rule
 
 open VisualProof
 open VisualProof.Theory
@@ -9,8 +12,8 @@ open VisualProof.Diagram
 theorem regularTargetEnvironment_outer
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (region : Fin trace.sourceDiagram.regionCount)
     (regular : region ≠ trace.targetIndex wellFormed)
@@ -20,12 +23,12 @@ theorem regularTargetEnvironment_outer
     (outerAgreement :
       context.indexRelation.EnvironmentsAgree sourceOuter targetOuter)
     (sourceLocal :
-      Fin (ConcreteElaboration.exactScopeWires trace.sourceDiagram
+      Fin (Concrete.Elaboration.exactScopeWires trace.sourceDiagram
         region).length → D)
     (targetIndex : Fin targetContext.length) :
     let extended := context.extendRegular wellFormed region regular
     extended.targetEnvironment
-        (ConcreteElaboration.extendedEnvironment sourceContext region
+        (Concrete.Elaboration.extendedEnvironment sourceContext region
           sourceOuter sourceLocal)
         (extendedOuterIndex targetContext (trace.origin region) targetIndex) =
       targetOuter targetIndex := by
@@ -48,7 +51,7 @@ theorem regularTargetEnvironment_outer
           targetIndex).symm
   have sourceExtendedIndexEq :
       sourceExtendedIndex = extended.sourceIndex targetExtendedIndex :=
-    ConcreteElaboration.WireContext.lookup?_unique sourceExact.nodup
+    Concrete.Elaboration.WireContext.lookup?_unique sourceExact.nodup
       (extended.sourceIndex_lookup targetExtendedIndex) corresponding
   unfold PromotedContextWitness.targetEnvironment
   rw [← sourceExtendedIndexEq]
@@ -58,28 +61,28 @@ theorem regularTargetEnvironment_outer
 theorem regularTargetEnvironment_local
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (region : Fin trace.sourceDiagram.regionCount)
     (regular : region ≠ trace.targetIndex wellFormed)
     (sourceExact : (sourceContext.extend region).Exact region)
     (sourceOuter : Fin sourceContext.length → D)
     (sourceLocal :
-      Fin (ConcreteElaboration.exactScopeWires trace.sourceDiagram
+      Fin (Concrete.Elaboration.exactScopeWires trace.sourceDiagram
         region).length → D)
-    (targetIndex : Fin (ConcreteElaboration.exactScopeWires input
+    (targetIndex : Fin (Concrete.Elaboration.exactScopeWires input
       (trace.origin region)).length) :
     let extended := context.extendRegular wellFormed region regular
     let scopeLengthEq :
-        (ConcreteElaboration.exactScopeWires input
+        (Concrete.Elaboration.exactScopeWires input
           (trace.origin region)).length =
-          (ConcreteElaboration.exactScopeWires trace.sourceDiagram
+          (Concrete.Elaboration.exactScopeWires trace.sourceDiagram
             region).length :=
       congrArg List.length
         (trace.regular_exactScopeWires wellFormed region regular).symm
     extended.targetEnvironment
-        (ConcreteElaboration.extendedEnvironment sourceContext region
+        (Concrete.Elaboration.extendedEnvironment sourceContext region
           sourceOuter sourceLocal)
         (extendedLocalIndex targetContext (trace.origin region) targetIndex) =
       sourceLocal (Fin.cast scopeLengthEq targetIndex) := by
@@ -93,9 +96,9 @@ theorem regularTargetEnvironment_local
   let targetExtendedIndex := extendedLocalIndex targetContext
     (trace.origin region) targetIndex
   have localWireEq :
-      (ConcreteElaboration.exactScopeWires trace.sourceDiagram region).get
+      (Concrete.Elaboration.exactScopeWires trace.sourceDiagram region).get
           sourceLocalIndex =
-        (ConcreteElaboration.exactScopeWires input
+        (Concrete.Elaboration.exactScopeWires input
           (trace.origin region)).get targetIndex := by
     simpa only [List.get_eq_getElem, Fin.val_cast] using
       (List.getElem_of_eq scopeEq sourceLocalIndex.isLt)
@@ -104,17 +107,17 @@ theorem regularTargetEnvironment_local
         (targetContext.extend (trace.origin region)).get
           targetExtendedIndex := by
     calc
-      _ = (ConcreteElaboration.exactScopeWires trace.sourceDiagram region).get
+      _ = (Concrete.Elaboration.exactScopeWires trace.sourceDiagram region).get
           sourceLocalIndex :=
         extendedLocalIndex_get sourceContext region sourceLocalIndex
-      _ = (ConcreteElaboration.exactScopeWires input
+      _ = (Concrete.Elaboration.exactScopeWires input
           (trace.origin region)).get targetIndex := localWireEq
       _ = _ :=
         (extendedLocalIndex_get targetContext (trace.origin region)
           targetIndex).symm
   have sourceExtendedIndexEq :
       sourceExtendedIndex = extended.sourceIndex targetExtendedIndex :=
-    ConcreteElaboration.WireContext.lookup?_unique sourceExact.nodup
+    Concrete.Elaboration.WireContext.lookup?_unique sourceExact.nodup
       (extended.sourceIndex_lookup targetExtendedIndex) corresponding
   unfold PromotedContextWitness.targetEnvironment
   rw [← sourceExtendedIndexEq]
@@ -127,7 +130,7 @@ noncomputable def semanticSimulation
     (targetWellFormed : input.WellFormed )
     (model : Model)
     :
-    ConcreteElaboration.ConcreteSemanticSimulation
+    Concrete.Elaboration.ConcreteSemanticSimulation
       trace.sourceDiagram input model  where
   source_wellFormed := sourceWellFormed
   target_wellFormed := targetWellFormed
@@ -215,7 +218,7 @@ noncomputable def semanticSimulation
     cases binderWitness.relationContexts_eq
     let promoted := context.down
     let extended := promoted.extendRegular targetWellFormed region regular
-    apply ConcreteElaboration.directionalLocalTransport_of_agreement
+    apply Concrete.Elaboration.directionalLocalTransport_of_agreement
       direction sourceContext targetContext region (trace.origin region)
       promoted.indexRelation extended.indexRelation model
       (sourceItems.renameRelations binderWitness.relationMap) targetItems
@@ -224,7 +227,7 @@ noncomputable def semanticSimulation
       | forward =>
           intro sourceLocal
           let sourceEnvironment :=
-            ConcreteElaboration.extendedEnvironment sourceContext region
+            Concrete.Elaboration.extendedEnvironment sourceContext region
               sourceOuter sourceLocal
           let targetEnvironment :=
             extended.targetEnvironment sourceEnvironment
@@ -248,18 +251,18 @@ noncomputable def semanticSimulation
       | backward =>
           intro targetLocal
           let scopeLengthEq :
-              (ConcreteElaboration.exactScopeWires input
+              (Concrete.Elaboration.exactScopeWires input
                 (trace.origin region)).length =
-                (ConcreteElaboration.exactScopeWires trace.sourceDiagram
+                (Concrete.Elaboration.exactScopeWires trace.sourceDiagram
                   region).length :=
             congrArg List.length
               (trace.regular_exactScopeWires targetWellFormed region regular).symm
           let sourceLocal :
-              Fin (ConcreteElaboration.exactScopeWires trace.sourceDiagram
+              Fin (Concrete.Elaboration.exactScopeWires trace.sourceDiagram
                 region).length → model.Carrier :=
             fun index => targetLocal (Fin.cast scopeLengthEq.symm index)
           let sourceEnvironment :=
-            ConcreteElaboration.extendedEnvironment sourceContext region
+            Concrete.Elaboration.extendedEnvironment sourceContext region
               sourceOuter sourceLocal
           let targetEnvironment :=
             extended.targetEnvironment sourceEnvironment
@@ -303,7 +306,7 @@ noncomputable def semanticSimulation
       allowed binderWitness sourceNode targetNode regular mapped nodeRegion
       sourceItem targetItem sourceCompiled targetCompiled
     have targetNodeEq : targetNode = sourceNode :=
-      ConcreteElaboration.LocalOccurrence.node.inj mapped.symm
+      Concrete.Elaboration.LocalOccurrence.node.inj mapped.symm
     subst targetNode
     exact trace.compileNode_itemSimulation targetWellFormed model  direction
       sourceContext targetContext sourceBinders targetBinders binderWitness
@@ -323,21 +326,21 @@ noncomputable def semanticSimulation
     let lawAtTarget :
         (targetExact : (targetContext.extend trace.target).Exact trace.target) →
         targetBinders.Covers trace.target →
-        ConcreteElaboration.BinderContext.Enumeration input targetBinders
+        Concrete.Elaboration.BinderContext.Enumeration input targetBinders
           trace.target →
         ∀ targetItems : ItemSeq
             (targetContext.extend trace.target).length targetRels,
-        ConcreteElaboration.compileOccurrencesWith?  input
-            (ConcreteElaboration.compileRegion?  input fuelTarget)
+        Concrete.Elaboration.compileOccurrencesWith?  input
+            (Concrete.Elaboration.compileRegion?  input fuelTarget)
             (targetContext.extend trace.target) targetBinders
-            (ConcreteElaboration.localOccurrences input trace.target) =
+            (Concrete.Elaboration.localOccurrences input trace.target) =
           some targetItems →
-        ConcreteElaboration.RegionSimulation model  direction
+        Concrete.Elaboration.RegionSimulation model  direction
           context.down.indexRelation
-          ((ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
+          ((Concrete.Elaboration.finishRegion trace.sourceDiagram sourceContext
             (trace.targetIndex targetWellFormed) sourceItems).renameRelations
               binderWitness.relationMap)
-          (ConcreteElaboration.finishRegion input targetContext trace.target
+          (Concrete.Elaboration.finishRegion input targetContext trace.target
             targetItems) := by
       intro targetExact targetBindersCover targetEnumeration targetItems
         targetCompiled
@@ -354,4 +357,4 @@ noncomputable def semanticSimulation
     exact lawAtOrigin targetExact targetBindersCover targetEnumeration
       targetItems targetCompiled
 
-end VisualProof.Rule.DoubleCutElimTrace
+end VisualProof.Concrete.DoubleCutElimTrace

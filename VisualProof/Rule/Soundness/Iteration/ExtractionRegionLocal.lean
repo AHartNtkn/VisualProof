@@ -2,41 +2,43 @@ import VisualProof.Rule.Soundness.Iteration.ExtractionRegionWitness
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
 
 /-- Index of the host-local wire represented by one extracted local wire. -/
 noncomputable def extractionMaterialLocalToHost
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount) :
-    Fin (ConcreteElaboration.exactScopeWires
+    Fin (Concrete.Elaboration.exactScopeWires
       (input.val.extractDiagramRaw selection layout)
       (layout.materialRegion material)).length →
-    Fin (ConcreteElaboration.exactScopeWires input.val
+    Fin (Concrete.Elaboration.exactScopeWires input.val
       (selection.selectedRegions.get material)).length :=
   fun index => Classical.choose (indexOf?_complete
     ((fragmentWireOrigin_mem_exactScopeWires_material_iff input selection
       layout
-      ((ConcreteElaboration.exactScopeWires
+      ((Concrete.Elaboration.exactScopeWires
         (input.val.extractDiagramRaw selection layout)
         (layout.materialRegion material)).get index) material).1
       (List.get_mem _ index)))
 
 theorem extractionMaterialLocalToHost_indexOf
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
-    (index : Fin (ConcreteElaboration.exactScopeWires
+    (index : Fin (Concrete.Elaboration.exactScopeWires
       (input.val.extractDiagramRaw selection layout)
       (layout.materialRegion material)).length) :
-    indexOf? (ConcreteElaboration.exactScopeWires input.val
+    indexOf? (Concrete.Elaboration.exactScopeWires input.val
         (selection.selectedRegions.get material))
         (input.val.fragmentWireOrigin selection layout
-          ((ConcreteElaboration.exactScopeWires
+          ((Concrete.Elaboration.exactScopeWires
             (input.val.extractDiagramRaw selection layout)
             (layout.materialRegion material)).get index)) =
       some (extractionMaterialLocalToHost input selection layout material
@@ -45,88 +47,88 @@ theorem extractionMaterialLocalToHost_indexOf
   exact Classical.choose_spec (indexOf?_complete
     ((fragmentWireOrigin_mem_exactScopeWires_material_iff input selection
       layout
-      ((ConcreteElaboration.exactScopeWires
+      ((Concrete.Elaboration.exactScopeWires
         (input.val.extractDiagramRaw selection layout)
         (layout.materialRegion material)).get index) material).1
       (List.get_mem _ index)))
 
 theorem extractionMaterialLocalToHost_spec
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
-    (index : Fin (ConcreteElaboration.exactScopeWires
+    (index : Fin (Concrete.Elaboration.exactScopeWires
       (input.val.extractDiagramRaw selection layout)
       (layout.materialRegion material)).length) :
-    (ConcreteElaboration.exactScopeWires input.val
+    (Concrete.Elaboration.exactScopeWires input.val
         (selection.selectedRegions.get material)).get
         (extractionMaterialLocalToHost input selection layout material index) =
       input.val.fragmentWireOrigin selection layout
-        ((ConcreteElaboration.exactScopeWires
+        ((Concrete.Elaboration.exactScopeWires
           (input.val.extractDiagramRaw selection layout)
           (layout.materialRegion material)).get index) := by
   unfold extractionMaterialLocalToHost
   exact indexOf?_sound (Classical.choose_spec (indexOf?_complete
     ((fragmentWireOrigin_mem_exactScopeWires_material_iff input selection
       layout
-      ((ConcreteElaboration.exactScopeWires
+      ((Concrete.Elaboration.exactScopeWires
         (input.val.extractDiagramRaw selection layout)
         (layout.materialRegion material)).get index) material).1
       (List.get_mem _ index))))
 
 /-- Index of the unique extracted local preimage of one host-local wire. -/
 noncomputable def extractionMaterialLocalFromHost
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount) :
-    Fin (ConcreteElaboration.exactScopeWires input.val
+    Fin (Concrete.Elaboration.exactScopeWires input.val
       (selection.selectedRegions.get material)).length →
-    Fin (ConcreteElaboration.exactScopeWires
+    Fin (Concrete.Elaboration.exactScopeWires
       (input.val.extractDiagramRaw selection layout)
       (layout.materialRegion material)).length :=
   fun index =>
     let evidence := hostExactScopeWire_has_fragmentPreimage input selection
       layout material
-      ((ConcreteElaboration.exactScopeWires input.val
+      ((Concrete.Elaboration.exactScopeWires input.val
         (selection.selectedRegions.get material)).get index)
       (List.get_mem _ index)
     Classical.choose (indexOf?_complete (Classical.choose_spec evidence).2)
 
 theorem extractionMaterialLocalFromHost_spec
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount)
-    (index : Fin (ConcreteElaboration.exactScopeWires input.val
+    (index : Fin (Concrete.Elaboration.exactScopeWires input.val
       (selection.selectedRegions.get material)).length) :
     input.val.fragmentWireOrigin selection layout
-        ((ConcreteElaboration.exactScopeWires
+        ((Concrete.Elaboration.exactScopeWires
           (input.val.extractDiagramRaw selection layout)
           (layout.materialRegion material)).get
           (extractionMaterialLocalFromHost input selection layout material
             index)) =
-      (ConcreteElaboration.exactScopeWires input.val
+      (Concrete.Elaboration.exactScopeWires input.val
         (selection.selectedRegions.get material)).get index := by
   unfold extractionMaterialLocalFromHost
   dsimp only
   let evidence := hostExactScopeWire_has_fragmentPreimage input selection
     layout material
-    ((ConcreteElaboration.exactScopeWires input.val
+    ((Concrete.Elaboration.exactScopeWires input.val
       (selection.selectedRegions.get material)).get index)
     (List.get_mem _ index)
   let fragmentWire := Classical.choose evidence
   have fragmentOrigin := (Classical.choose_spec evidence).1
   have found := indexOf?_sound (Classical.choose_spec (indexOf?_complete
     (Classical.choose_spec evidence).2))
-  have found' : (ConcreteElaboration.exactScopeWires
+  have found' : (Concrete.Elaboration.exactScopeWires
       (input.val.extractDiagramRaw selection layout)
       (layout.materialRegion material)).get
         (Classical.choose (indexOf?_complete
           (Classical.choose_spec evidence).2)) = fragmentWire := by
     simpa only [List.get_eq_getElem] using found
   change input.val.fragmentWireOrigin selection layout
-      ((ConcreteElaboration.exactScopeWires
+      ((Concrete.Elaboration.exactScopeWires
         (input.val.extractDiagramRaw selection layout)
         (layout.materialRegion material)).get _) = _
   rw [found']
@@ -135,15 +137,15 @@ theorem extractionMaterialLocalFromHost_spec
 /-- Exact local-wire provenance is a finite equivalence, not merely an
 injection. -/
 noncomputable def extractionMaterialLocalEquiv
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (material : Fin layout.materialRegionCount) :
     FiniteEquiv
-      (Fin (ConcreteElaboration.exactScopeWires
+      (Fin (Concrete.Elaboration.exactScopeWires
         (input.val.extractDiagramRaw selection layout)
         (layout.materialRegion material)).length)
-      (Fin (ConcreteElaboration.exactScopeWires input.val
+      (Fin (Concrete.Elaboration.exactScopeWires input.val
         (selection.selectedRegions.get material)).length) where
   toFun := extractionMaterialLocalToHost input selection layout material
   invFun := extractionMaterialLocalFromHost input selection layout material
@@ -151,7 +153,7 @@ noncomputable def extractionMaterialLocalEquiv
     intro index
     apply Fin.ext
     apply (List.getElem_inj
-      (ConcreteElaboration.exactScopeWires_nodup
+      (Concrete.Elaboration.exactScopeWires_nodup
         (input.val.extractDiagramRaw selection layout)
         (layout.materialRegion material))).mp
     have forward := extractionMaterialLocalToHost_spec input selection layout
@@ -170,64 +172,64 @@ noncomputable def extractionMaterialLocalEquiv
     have value := extractionMaterialLocalFromHost_spec input selection layout
       material index
     exact (indexOf?_unique_of_nodup
-      (ConcreteElaboration.exactScopeWires_nodup input.val
+      (Concrete.Elaboration.exactScopeWires_nodup input.val
         (selection.selectedRegions.get material)) found
       (by simpa only [List.get_eq_getElem] using value.symm)).symm
 
 def extendedLocalIndex
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount)
-    (index : Fin (ConcreteElaboration.exactScopeWires d region).length) :
+    (index : Fin (Concrete.Elaboration.exactScopeWires d region).length) :
     Fin (context.extend region).length :=
-  Fin.cast (ConcreteElaboration.WireContext.length_extend context region).symm
+  Fin.cast (Concrete.Elaboration.WireContext.length_extend context region).symm
     (Fin.natAdd context.length index)
 
 @[simp] theorem extendedLocalIndex_val
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount)
-    (index : Fin (ConcreteElaboration.exactScopeWires d region).length) :
+    (index : Fin (Concrete.Elaboration.exactScopeWires d region).length) :
     (extendedLocalIndex context region index).val = context.length + index.val :=
   rfl
 
 theorem extend_get_local
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount)
-    (index : Fin (ConcreteElaboration.exactScopeWires d region).length) :
+    (index : Fin (Concrete.Elaboration.exactScopeWires d region).length) :
     (context.extend region).get (extendedLocalIndex context region index) =
-      (ConcreteElaboration.exactScopeWires d region).get index := by
-  simp [ConcreteElaboration.WireContext.extend, extendedLocalIndex,
+      (Concrete.Elaboration.exactScopeWires d region).get index := by
+  simp [Concrete.Elaboration.WireContext.extend, extendedLocalIndex,
     List.get_eq_getElem, List.getElem_append_right]
 
 @[simp] theorem extendedEnvironment_outer
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount)
     (outer : Fin context.length → D)
-    (localEnv : Fin (ConcreteElaboration.exactScopeWires d region).length → D)
+    (localEnv : Fin (Concrete.Elaboration.exactScopeWires d region).length → D)
     (index : Fin context.length) :
-    ConcreteElaboration.extendedEnvironment context region outer localEnv
+    Concrete.Elaboration.extendedEnvironment context region outer localEnv
         (context.outerIndex region index) = outer index := by
-  unfold ConcreteElaboration.extendedEnvironment
+  unfold Concrete.Elaboration.extendedEnvironment
   simp only [Function.comp_apply]
   unfold extendWireEnv
-  rw [show Fin.cast (ConcreteElaboration.WireContext.length_extend context
+  rw [show Fin.cast (Concrete.Elaboration.WireContext.length_extend context
       region) (context.outerIndex region index) =
-      Fin.castAdd (ConcreteElaboration.exactScopeWires d region).length index by
+      Fin.castAdd (Concrete.Elaboration.exactScopeWires d region).length index by
     apply Fin.ext
     rfl]
   exact Fin.addCases_left index
 
 @[simp] theorem extendedEnvironment_local
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount)
     (outer : Fin context.length → D)
-    (localEnv : Fin (ConcreteElaboration.exactScopeWires d region).length → D)
-    (index : Fin (ConcreteElaboration.exactScopeWires d region).length) :
-    ConcreteElaboration.extendedEnvironment context region outer localEnv
+    (localEnv : Fin (Concrete.Elaboration.exactScopeWires d region).length → D)
+    (index : Fin (Concrete.Elaboration.exactScopeWires d region).length) :
+    Concrete.Elaboration.extendedEnvironment context region outer localEnv
         (extendedLocalIndex context region index) = localEnv index := by
-  unfold ConcreteElaboration.extendedEnvironment
+  unfold Concrete.Elaboration.extendedEnvironment
   simp only [Function.comp_apply]
   unfold extendWireEnv
-  rw [show Fin.cast (ConcreteElaboration.WireContext.length_extend context
+  rw [show Fin.cast (Concrete.Elaboration.WireContext.length_extend context
       region) (extendedLocalIndex context region index) =
       Fin.natAdd context.length index by
     apply Fin.ext
@@ -236,23 +238,23 @@ theorem extend_get_local
 
 /-- Every index in an extended context is canonically either ambient or local. -/
 theorem extendedIndex_cases
-    (context : ConcreteElaboration.WireContext d)
+    (context : Concrete.Elaboration.WireContext d)
     (region : Fin d.regionCount)
     (index : Fin (context.extend region).length) :
     (∃ outer : Fin context.length,
         index = context.outerIndex region outer) ∨
-      (∃ localIndex : Fin (ConcreteElaboration.exactScopeWires d region).length,
+      (∃ localIndex : Fin (Concrete.Elaboration.exactScopeWires d region).length,
         index = extendedLocalIndex context region localIndex) := by
   let splitIndex : Fin (context.length +
-      (ConcreteElaboration.exactScopeWires d region).length) :=
-    Fin.cast (ConcreteElaboration.WireContext.length_extend context region) index
+      (Concrete.Elaboration.exactScopeWires d region).length) :=
+    Fin.cast (Concrete.Elaboration.WireContext.length_extend context region) index
   have splitCases :
       (∃ outer : Fin context.length,
-          Fin.cast (ConcreteElaboration.WireContext.length_extend context
+          Fin.cast (Concrete.Elaboration.WireContext.length_extend context
             region).symm splitIndex = context.outerIndex region outer) ∨
         (∃ localIndex : Fin
-            (ConcreteElaboration.exactScopeWires d region).length,
-          Fin.cast (ConcreteElaboration.WireContext.length_extend context
+            (Concrete.Elaboration.exactScopeWires d region).length,
+          Fin.cast (Concrete.Elaboration.WireContext.length_extend context
             region).symm splitIndex =
             extendedLocalIndex context region localIndex) := by
     refine Fin.addCases (m := context.length)
@@ -268,12 +270,12 @@ theorem extendedIndex_cases
 values are forced by the outer agreement; copied local values are selected by
 the canonical full-context index map. -/
 theorem extractionExtendedEnvironmentsAgree_backward
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (membership : ∀ wire,
       input.val.fragmentWireOrigin selection layout wire ∈ hostContext ↔
         wire ∈ fragmentContext)
@@ -285,18 +287,18 @@ theorem extractionExtendedEnvironmentsAgree_backward
     (outerAgrees :
       (extractionContextRelation input selection layout fragmentContext
         hostContext).EnvironmentsAgree fragmentOuter hostOuter)
-    (hostLocal : Fin (ConcreteElaboration.exactScopeWires input.val
+    (hostLocal : Fin (Concrete.Elaboration.exactScopeWires input.val
       (selection.selectedRegions.get material)).length → D) :
-    ∃ fragmentLocal : Fin (ConcreteElaboration.exactScopeWires
+    ∃ fragmentLocal : Fin (Concrete.Elaboration.exactScopeWires
         (input.val.extractDiagramRaw selection layout)
         (layout.materialRegion material)).length → D,
       (extractionContextRelation input selection layout
         (fragmentContext.extend (layout.materialRegion material))
         (hostContext.extend (selection.selectedRegions.get material))
       ).EnvironmentsAgree
-        (ConcreteElaboration.extendedEnvironment fragmentContext
+        (Concrete.Elaboration.extendedEnvironment fragmentContext
           (layout.materialRegion material) fragmentOuter fragmentLocal)
-        (ConcreteElaboration.extendedEnvironment hostContext
+        (Concrete.Elaboration.extendedEnvironment hostContext
           (selection.selectedRegions.get material) hostOuter hostLocal) := by
   let fragmentRegion := layout.materialRegion material
   let hostRegion := selection.selectedRegions.get material
@@ -305,9 +307,9 @@ theorem extractionExtendedEnvironmentsAgree_backward
   let fullMap := extractionContextIndexMapOfMembership input selection layout
     (fragmentContext.extend fragmentRegion) (hostContext.extend hostRegion)
     extendedMembership
-  let hostFull := ConcreteElaboration.extendedEnvironment hostContext hostRegion
+  let hostFull := Concrete.Elaboration.extendedEnvironment hostContext hostRegion
     hostOuter hostLocal
-  let fragmentLocal : Fin (ConcreteElaboration.exactScopeWires
+  let fragmentLocal : Fin (Concrete.Elaboration.exactScopeWires
       (input.val.extractDiagramRaw selection layout) fragmentRegion).length → D :=
     fun index => hostFull
       (fullMap (extendedLocalIndex fragmentContext fragmentRegion index))
@@ -316,7 +318,7 @@ theorem extractionExtendedEnvironmentsAgree_backward
     selection layout (fragmentContext.extend fragmentRegion)
     (hostContext.extend hostRegion) extendedMembership hostExtendedNodup hostFull
   have fragmentFullEq :
-      ConcreteElaboration.extendedEnvironment fragmentContext fragmentRegion
+      Concrete.Elaboration.extendedEnvironment fragmentContext fragmentRegion
           fragmentOuter fragmentLocal = hostFull ∘ fullMap := by
     funext index
     rcases extendedIndex_cases fragmentContext fragmentRegion index with
@@ -339,13 +341,13 @@ theorem extractionExtendedEnvironmentsAgree_backward
             (fragmentContext.outerIndex fragmentRegion outerIndex) =
             fragmentContext.get outerIndex := by
           simpa only [List.get_eq_getElem] using
-            ConcreteElaboration.WireContext.extend_outer fragmentContext
+            Concrete.Elaboration.WireContext.extend_outer fragmentContext
               fragmentRegion outerIndex
         have hostGet : (hostContext.extend hostRegion).get
             (hostContext.outerIndex hostRegion hostOuterIndex) =
             hostContext.get hostOuterIndex := by
           simpa only [List.get_eq_getElem] using
-            ConcreteElaboration.WireContext.extend_outer hostContext hostRegion
+            Concrete.Elaboration.WireContext.extend_outer hostContext hostRegion
               hostOuterIndex
         exact chosenRelated.symm.trans
           ((congrArg (input.val.fragmentWireOrigin selection layout)
@@ -353,7 +355,7 @@ theorem extractionExtendedEnvironmentsAgree_backward
       simp only [Function.comp_apply]
       rw [extendedEnvironment_outer, chosenEq]
       change fragmentOuter outerIndex =
-        ConcreteElaboration.extendedEnvironment hostContext hostRegion hostOuter
+        Concrete.Elaboration.extendedEnvironment hostContext hostRegion hostOuter
           hostLocal (hostContext.outerIndex hostRegion hostOuterIndex)
       rw [extendedEnvironment_outer]
       exact outerAgrees outerIndex hostOuterIndex outerChosenRelated
@@ -366,12 +368,12 @@ theorem extractionExtendedEnvironmentsAgree_backward
 values are selected from the unique extracted preimages; ambient values remain
 the already-related host valuation. -/
 theorem extractionExtendedEnvironmentsAgree_forward
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (membership : ∀ wire,
       input.val.fragmentWireOrigin selection layout wire ∈ hostContext ↔
         wire ∈ fragmentContext)
@@ -383,23 +385,23 @@ theorem extractionExtendedEnvironmentsAgree_forward
     (outerAgrees :
       (extractionContextRelation input selection layout fragmentContext
         hostContext).EnvironmentsAgree fragmentOuter hostOuter)
-    (fragmentLocal : Fin (ConcreteElaboration.exactScopeWires
+    (fragmentLocal : Fin (Concrete.Elaboration.exactScopeWires
       (input.val.extractDiagramRaw selection layout)
       (layout.materialRegion material)).length → D) :
-    ∃ hostLocal : Fin (ConcreteElaboration.exactScopeWires input.val
+    ∃ hostLocal : Fin (Concrete.Elaboration.exactScopeWires input.val
         (selection.selectedRegions.get material)).length → D,
       (extractionContextRelation input selection layout
         (fragmentContext.extend (layout.materialRegion material))
         (hostContext.extend (selection.selectedRegions.get material))
       ).EnvironmentsAgree
-        (ConcreteElaboration.extendedEnvironment fragmentContext
+        (Concrete.Elaboration.extendedEnvironment fragmentContext
           (layout.materialRegion material) fragmentOuter fragmentLocal)
-        (ConcreteElaboration.extendedEnvironment hostContext
+        (Concrete.Elaboration.extendedEnvironment hostContext
           (selection.selectedRegions.get material) hostOuter hostLocal) := by
   let fragmentRegion := layout.materialRegion material
   let hostRegion := selection.selectedRegions.get material
   let localEquiv := extractionMaterialLocalEquiv input selection layout material
-  let hostLocal : Fin (ConcreteElaboration.exactScopeWires input.val
+  let hostLocal : Fin (Concrete.Elaboration.exactScopeWires input.val
       hostRegion).length → D := fun index => fragmentLocal (localEquiv.invFun index)
   refine ⟨hostLocal, ?_⟩
   intro fragmentIndex hostIndex related
@@ -414,7 +416,7 @@ theorem extractionExtendedEnvironmentsAgree_forward
         (hostContext.outerIndex hostRegion hostOuterIndex) =
         hostContext.get hostOuterIndex := by
       simpa only [List.get_eq_getElem] using
-        ConcreteElaboration.WireContext.extend_outer hostContext hostRegion
+        Concrete.Elaboration.WireContext.extend_outer hostContext hostRegion
           hostOuterIndex
     rw [hostGet] at related
     let fragmentWire := (fragmentContext.extend fragmentRegion).get fragmentIndex
@@ -435,7 +437,7 @@ theorem extractionExtendedEnvironmentsAgree_forward
           (fragmentContext.outerIndex fragmentRegion fragmentOuterIndex) =
           fragmentContext.get fragmentOuterIndex := by
         simpa only [List.get_eq_getElem] using
-          ConcreteElaboration.WireContext.extend_outer fragmentContext
+          Concrete.Elaboration.WireContext.extend_outer fragmentContext
             fragmentRegion fragmentOuterIndex
       exact fragmentGet.symm.trans outerGet.symm
     subst fragmentIndex
@@ -451,7 +453,7 @@ theorem extractionExtendedEnvironmentsAgree_forward
         (extendedLocalIndex hostContext hostRegion hostLocalIndex) at related
     have hostGet : (hostContext.extend hostRegion).get
         (extendedLocalIndex hostContext hostRegion hostLocalIndex) =
-        (ConcreteElaboration.exactScopeWires input.val hostRegion).get
+        (Concrete.Elaboration.exactScopeWires input.val hostRegion).get
           hostLocalIndex :=
       extend_get_local hostContext hostRegion hostLocalIndex
     rw [hostGet] at related
@@ -461,7 +463,7 @@ theorem extractionExtendedEnvironmentsAgree_forward
       material hostLocalIndex
     have fragmentWireEq :
         (fragmentContext.extend fragmentRegion).get fragmentIndex =
-          (ConcreteElaboration.exactScopeWires
+          (Concrete.Elaboration.exactScopeWires
             (input.val.extractDiagramRaw selection layout) fragmentRegion).get
             fragmentLocalIndex := by
       apply input.val.fragmentWireOrigin_injective selection layout
@@ -479,13 +481,13 @@ theorem extractionExtendedEnvironmentsAgree_forward
 /-- Direction-independent packaging of the two exact valuation-selection
 arguments required by `directionalLocalTransport_of_agreement`. -/
 theorem extractionDirectionalEnvironmentSelection
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (direction : ConcreteElaboration.SimulationDirection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (membership : ∀ wire,
       input.val.fragmentWireOrigin selection layout wire ∈ hostContext ↔
         wire ∈ fragmentContext)
@@ -506,9 +508,9 @@ theorem extractionDirectionalEnvironmentSelection
                 (hostContext.extend
                   (selection.selectedRegions.get material))
               ).EnvironmentsAgree
-                (ConcreteElaboration.extendedEnvironment fragmentContext
+                (Concrete.Elaboration.extendedEnvironment fragmentContext
                   (layout.materialRegion material) fragmentOuter fragmentLocal)
-                (ConcreteElaboration.extendedEnvironment hostContext
+                (Concrete.Elaboration.extendedEnvironment hostContext
                   (selection.selectedRegions.get material) hostOuter hostLocal)
         | .backward => ∀ hostLocal,
             ∃ fragmentLocal,
@@ -517,9 +519,9 @@ theorem extractionDirectionalEnvironmentSelection
                 (hostContext.extend
                   (selection.selectedRegions.get material))
               ).EnvironmentsAgree
-                (ConcreteElaboration.extendedEnvironment fragmentContext
+                (Concrete.Elaboration.extendedEnvironment fragmentContext
                   (layout.materialRegion material) fragmentOuter fragmentLocal)
-                (ConcreteElaboration.extendedEnvironment hostContext
+                (Concrete.Elaboration.extendedEnvironment hostContext
                   (selection.selectedRegions.get material) hostOuter hostLocal) := by
   intro fragmentOuter hostOuter outerAgrees
   cases direction with

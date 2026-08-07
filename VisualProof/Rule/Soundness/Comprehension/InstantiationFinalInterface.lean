@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Modal.VacuousEliminationRootSimulation
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -12,15 +14,15 @@ namespace InstantiationTrace
 root boundary through exactly the same composite host-wire map as the
 instantiation trace.  Repeated boundary positions remain repeated. -/
 theorem interface_transportBoundary_eq_map
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -56,17 +58,17 @@ theorem interface_transportBoundary_eq_map
             (layout.quotientBlockWire (spliceInput.quotientWire wire))).scope = _
         rw [layout.plugWire_quotientBlockWire]
         have scopeEq :=
-          Splice.Input.coalescedScope_eq_of_attachmentsRespectBoundary
+          Concrete.Splice.Input.coalescedScope_eq_of_attachmentsRespectBoundary
             spliceInput attachmentsRespectBoundary
               (spliceInput.quotientWire wire)
         rw [scopeEq]
         simp [oneMap, spliceInput] <;> rfl
       have oneTransport :
-          (spliceFrameInterfaceTransport spliceInput).transportBoundary current =
+          (spliceFrameWireTransport spliceInput).transportBoundary current =
             some (current.map oneMap) := by
-        apply InterfaceTransport.transportBoundary_eq_map
+        apply WireTransport.transportBoundary_eq_map
         intro wire member
-        unfold spliceFrameInterfaceTransport InterfaceTransport.rootFiltered
+        unfold spliceFrameWireTransport WireTransport.rootFiltered
         dsimp only
         have targetRoot :
             (layout.plugRaw.wires (oneMap wire)).scope =
@@ -82,7 +84,7 @@ theorem interface_transportBoundary_eq_map
       let next := advanceMaterializedInstantiationState comprehension
         attachments binders payload state atom tail site arguments
           materialization
-          (Splice.Input.checkInput_sound checkedInputChecked).2
+          (Concrete.Splice.Input.checkInput_sound checkedInputChecked).2
       have nextTransport :
           next.interface.transportBoundary boundary =
             some (current.map oneMap) := by
@@ -90,18 +92,18 @@ theorem interface_transportBoundary_eq_map
         rw [advanceInstantiationState_interface]
         calc
           (state.interface.compose
-                (spliceFrameInterfaceTransport spliceInput)).transportBoundary
+                (spliceFrameWireTransport spliceInput)).transportBoundary
               boundary =
               state.interface.transportBoundary boundary >>=
-                (spliceFrameInterfaceTransport spliceInput).transportBoundary :=
-            InterfaceTransport.transportBoundary_compose _ _ _
+                (spliceFrameWireTransport spliceInput).transportBoundary :=
+            WireTransport.transportBoundary_compose _ _ _
           _ = some (current.map oneMap) := by
             rw [stateTransport]
             exact oneTransport
       have nextRoot : ∀ wire, wire ∈ current.map oneMap →
           (next.diagram.val.wires wire).scope = next.diagram.val.root := by
         have transported :=
-          (spliceFrameInterfaceTransport spliceInput).transportBoundary_root_scoped
+          (spliceFrameWireTransport spliceInput).transportBoundary_root_scoped
             currentRoot oneTransport
         simpa [next, advanceMaterializedInstantiationState,
           advanceInstantiationState, spliceInput] using transported
@@ -112,13 +114,13 @@ theorem interface_transportBoundary_eq_map
 /-- Specialization of `interface_transportBoundary_eq_map` to the executor's
 identity-interface initial state. -/
 theorem initialInterface_transportBoundary_eq_map
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -133,8 +135,8 @@ theorem initialInterface_transportBoundary_eq_map
   have initialTransport :
       (initialInstantiationState payload).interface.transportBoundary boundary =
         some boundary := by
-    have mapped := InterfaceTransport.transportBoundary_eq_map
-      (InterfaceTransport.identity input.val) id
+    have mapped := WireTransport.transportBoundary_eq_map
+      (WireTransport.identity input.val) id
       (boundary := boundary) (by intro wire member; rfl)
     simpa [initialInstantiationState] using mapped
   exact trace.interface_transportBoundary_eq_map boundary boundary
@@ -144,20 +146,20 @@ theorem initialInterface_transportBoundary_eq_map
 atom deletion, and final vacuous promotion—transports an ordered source
 boundary exactly to the boundary used by `finalSourceOpen`. -/
 theorem finalInterface_transportBoundary_eq_map
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (trace : InstantiationTrace comprehension attachments binders payload fuel
       (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (hraw : vacuousElimRaw? (dropInstantiationAtomsRaw result) result.bubble =
       some raw)
     (finalWellFormed :
@@ -166,9 +168,9 @@ theorem finalInterface_transportBoundary_eq_map
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root) :
     let toDropped := result.interface.compose
-      (InterfaceTransport.byWireCount result.diagram.val
+      (WireTransport.byWireCount result.diagram.val
         (dropInstantiationAtomsRaw result) rfl)
-    (toDropped.compose (vacuousElimInterfaceTransport hraw)).transportBoundary
+    (toDropped.compose (vacuousElimWireTransport hraw)).transportBoundary
         boundary =
       some (boundary.map fun wire =>
         Fin.cast (vacuousElimRaw?_wireCount hraw).symm (trace.wireMap wire)) := by
@@ -179,19 +181,19 @@ theorem finalInterface_transportBoundary_eq_map
   have copiedRoot : ∀ wire, wire ∈ copiedBoundary →
       (result.diagram.val.wires wire).scope = result.diagram.val.root :=
     result.interface.transportBoundary_root_scoped sourceRoot copyTransport
-  let dropTransport := InterfaceTransport.byWireCount result.diagram.val
+  let dropTransport := WireTransport.byWireCount result.diagram.val
     (dropInstantiationAtomsRaw result) rfl
   have dropBoundary : dropTransport.transportBoundary copiedBoundary =
       some copiedBoundary := by
     let dropMap : Fin result.diagram.val.wireCount →
         Fin (dropInstantiationAtomsRaw result).wireCount := fun wire =>
       Fin.cast rfl wire
-    have mapped := InterfaceTransport.transportBoundary_eq_map dropTransport
+    have mapped := WireTransport.transportBoundary_eq_map dropTransport
       dropMap
       (boundary := copiedBoundary) (by
         intro wire member
-        unfold dropTransport InterfaceTransport.byWireCount
-          InterfaceTransport.rootFiltered
+        unfold dropTransport WireTransport.byWireCount
+          WireTransport.rootFiltered
         dsimp only
         have droppedRoot :
             ((dropInstantiationAtomsRaw result).wires wire).scope =
@@ -223,7 +225,7 @@ theorem finalInterface_transportBoundary_eq_map
       toDropped.transportBoundary boundary =
           result.interface.transportBoundary boundary >>=
             dropTransport.transportBoundary :=
-        InterfaceTransport.transportBoundary_compose _ _ _
+        WireTransport.transportBoundary_compose _ _ _
       _ = some copiedBoundary := by
         rw [copyTransport]
         exact dropBoundary
@@ -236,10 +238,10 @@ theorem finalInterface_transportBoundary_eq_map
       finalWellFormed copiedBoundary droppedRoot
   calc
     (toDropped.compose
-          (vacuousElimInterfaceTransport hraw)).transportBoundary boundary =
+          (vacuousElimWireTransport hraw)).transportBoundary boundary =
         toDropped.transportBoundary boundary >>=
-          (vacuousElimInterfaceTransport hraw).transportBoundary :=
-      InterfaceTransport.transportBoundary_compose _ _ _
+          (vacuousElimWireTransport hraw).transportBoundary :=
+      WireTransport.transportBoundary_compose _ _ _
     _ = some (copiedBoundary.map
           (Fin.cast (vacuousElimRaw?_wireCount hraw).symm)) := by
       rw [toDroppedBoundary]

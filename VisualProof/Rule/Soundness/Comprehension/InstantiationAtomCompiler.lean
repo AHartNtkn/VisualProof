@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationRelation
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -12,44 +14,44 @@ namespace InstantiationSemantic
 /-- The executor's endpoint-owner vector and the authoritative compiler's
 resolved argument vector name the same concrete wires. -/
 theorem resolvedArguments_wire_eq
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {parameterCount proxyCount : Nat}
     (state : InstantiationState origin parameterCount proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
     (arity : Nat)
     (arguments : Fin arity → Fin state.diagram.val.wireCount)
     (arguments_eq : instantiateArguments? state atom arity = some arguments)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
     (resolvedArguments : Fin arity → Fin context.length)
-    (resolved_eq : ConcreteElaboration.resolvePorts? state.diagram.val context
+    (resolved_eq : Concrete.Elaboration.resolvePorts? state.diagram.val context
       atom arity = some resolvedArguments) :
     ∀ index, context.get (resolvedArguments index) = arguments index := by
   intro index
-  have ownerResult : ConcreteElaboration.endpointOwner? state.diagram.val
+  have ownerResult : Concrete.Elaboration.endpointOwner? state.diagram.val
       { node := atom, port := .arg index } = some (arguments index) := by
     exact sequenceFin_sound arguments_eq index
-  have resolvedResult : ConcreteElaboration.resolvePort? state.diagram.val
+  have resolvedResult : Concrete.Elaboration.resolvePort? state.diagram.val
       context atom (.arg index) = some (resolvedArguments index) := by
     exact sequenceFin_sound resolved_eq index
   obtain ⟨wire, occurs, contextWire⟩ :=
-    ConcreteElaboration.resolvePort?_sound resolvedResult
+    Concrete.Elaboration.resolvePort?_sound resolvedResult
   have wire_eq : wire = arguments index :=
-    ConcreteElaboration.endpointOwner?_unique
+    Concrete.Elaboration.endpointOwner?_unique
       state.diagram.property.wire_endpoints_are_disjoint ownerResult occurs
   exact contextWire.trans wire_eq
 
 /-- A compiled executor-owned atom denotes exactly the fixed relation witness
 at the receipt-recorded endpoint-owner vector. -/
 theorem compiled_atom_iff_fixedRelation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -62,8 +64,8 @@ theorem compiled_atom_iff_fixedRelation
     (wireValue : Fin state.diagram.val.wireCount → model.Carrier)
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
-    (context : ConcreteElaboration.WireContext state.diagram.val)
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
     (fixed : FixedRelationAt payload state relationValue binderContext relEnv)
     (relation : RelVar rels payload.arity)
@@ -73,18 +75,18 @@ theorem compiled_atom_iff_fixedRelation
     (environment_eq : ∀ index,
       environment index = wireValue (context.get index))
     (item : Item  context.length rels)
-    (compiled : ConcreteElaboration.compileNode?  state.diagram.val
+    (compiled : Concrete.Elaboration.compileNode?  state.diagram.val
       context binderContext atom = some item) :
     denoteItem model  environment relEnv item ↔
       relationValue (wireValue ∘ arguments) := by
-  unfold ConcreteElaboration.compileNode? at compiled
+  unfold Concrete.Elaboration.compileNode? at compiled
   simp only [node_eq] at compiled
   rw [lookup] at compiled
   change (do
-    let resolvedArguments ← ConcreteElaboration.resolvePorts?
+    let resolvedArguments ← Concrete.Elaboration.resolvePorts?
       state.diagram.val context atom payload.arity
     pure (.atom relation resolvedArguments)) = some item at compiled
-  cases resolved_eq : ConcreteElaboration.resolvePorts? state.diagram.val
+  cases resolved_eq : Concrete.Elaboration.resolvePorts? state.diagram.val
       context atom payload.arity with
   | none => simp [resolved_eq] at compiled
   | some resolvedArguments =>
@@ -106,15 +108,15 @@ theorem compiled_atom_iff_fixedRelation
 /-- A denoting local compiler conjunction supplies the chosen relation at the
 executor-owned atom's exact arguments. -/
 theorem compiled_items_entail_fixedRelation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -128,8 +130,8 @@ theorem compiled_items_entail_fixedRelation
     (relationValue : Relation model.Carrier payload.arity)
     {rels : RelCtx}
     (fuel : Nat)
-    (context : ConcreteElaboration.WireContext state.diagram.val)
-    (binderContext : ConcreteElaboration.BinderContext state.diagram.val rels)
+    (context : Concrete.Elaboration.WireContext state.diagram.val)
+    (binderContext : Concrete.Elaboration.BinderContext state.diagram.val rels)
     (relEnv : RelEnv model.Carrier rels)
     (fixed : FixedRelationAt payload state relationValue binderContext relEnv)
     (relation : RelVar rels payload.arity)
@@ -139,35 +141,35 @@ theorem compiled_items_entail_fixedRelation
     (environment_eq : ∀ index,
       environment index = wireValue (context.get index))
     (items : ItemSeq  context.length rels)
-    (compiled : ConcreteElaboration.compileOccurrencesWith?
+    (compiled : Concrete.Elaboration.compileOccurrencesWith?
       state.diagram.val
-      (ConcreteElaboration.compileRegion?  state.diagram.val fuel)
+      (Concrete.Elaboration.compileRegion?  state.diagram.val fuel)
       context binderContext
-      (ConcreteElaboration.localOccurrences state.diagram.val site) =
+      (Concrete.Elaboration.localOccurrences state.diagram.val site) =
         some items)
     (denotes : denoteItemSeq model  environment relEnv items) :
     relationValue (wireValue ∘ arguments) := by
-  have atom_mem : ConcreteElaboration.LocalOccurrence.node atom ∈
-      ConcreteElaboration.localOccurrences state.diagram.val site := by
-    rw [ConcreteElaboration.mem_localOccurrences_node]
+  have atom_mem : Concrete.Elaboration.LocalOccurrence.node atom ∈
+      Concrete.Elaboration.localOccurrences state.diagram.val site := by
+    rw [Concrete.Elaboration.mem_localOccurrences_node]
     change (state.diagram.val.nodes atom).region = site
     rw [node_eq]
     rfl
   obtain ⟨occurrenceIndex, occurrenceIndex_eq⟩ :=
     indexOf?_complete atom_mem
   have occurrence_eq :
-      (ConcreteElaboration.localOccurrences state.diagram.val site).get
+      (Concrete.Elaboration.localOccurrences state.diagram.val site).get
           occurrenceIndex = .node atom :=
     indexOf?_sound occurrenceIndex_eq
   let itemIndex := Fin.cast
-    (ConcreteElaboration.compileOccurrencesWith?_length
-      (ConcreteElaboration.compileRegion?  state.diagram.val fuel)
+    (Concrete.Elaboration.compileOccurrencesWith?_length
+      (Concrete.Elaboration.compileRegion?  state.diagram.val fuel)
       context binderContext compiled).symm occurrenceIndex
-  have atom_compiled : ConcreteElaboration.compileNode?
+  have atom_compiled : Concrete.Elaboration.compileNode?
       state.diagram.val context binderContext atom =
         some (items.get itemIndex) := by
-    have atIndex := ConcreteElaboration.compileOccurrencesWith?_get
-      (ConcreteElaboration.compileRegion?  state.diagram.val fuel)
+    have atIndex := Concrete.Elaboration.compileOccurrencesWith?_get
+      (Concrete.Elaboration.compileRegion?  state.diagram.val fuel)
       context binderContext compiled occurrenceIndex
     rw [occurrence_eq] at atIndex
     exact atIndex

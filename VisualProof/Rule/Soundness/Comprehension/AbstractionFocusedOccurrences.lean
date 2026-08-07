@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionAtom
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -11,9 +14,9 @@ namespace AbstractionRawTrace
 /-- The partial occurrence map implemented by abstraction compaction. -/
 def survivingOccurrence?
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw) :
-    ConcreteElaboration.LocalOccurrence input.val.regionCount
+    Concrete.Elaboration.LocalOccurrence input.val.regionCount
         input.val.nodeCount →
-      Option (ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+      Option (Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
         trace.diagram.nodeCount)
   | .node node =>
       if survives : trace.domains.nodes.survives node = true then
@@ -28,7 +31,7 @@ def survivingOccurrence?
 def atomsAt
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (region : Fin input.val.regionCount) :
-    List (ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+    List (Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
       trace.diagram.nodeCount) :=
   (filterFin fun index : Fin occurrences.length => decide
       ((occurrences.get index).selection.val.anchor = region)).map
@@ -38,7 +41,7 @@ theorem mem_atomsAt
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (region : Fin input.val.regionCount)
     (index : Fin occurrences.length) :
-    ConcreteElaboration.LocalOccurrence.node (trace.targetAtom index) ∈
+    Concrete.Elaboration.LocalOccurrence.node (trace.targetAtom index) ∈
         trace.atomsAt region ↔
       (occurrences.get index).selection.val.anchor = region := by
   unfold atomsAt
@@ -48,7 +51,7 @@ theorem mem_atomsAt
     have indexEq : other = index := by
       apply Fin.ext
       have values := congrArg (fun value : Fin trace.diagram.nodeCount =>
-        value.val) (ConcreteElaboration.LocalOccurrence.node.inj equal)
+        value.val) (Concrete.Elaboration.LocalOccurrence.node.inj equal)
       simp only [targetAtom, Fin.val_natAdd] at values
       omega
     subst other
@@ -138,9 +141,9 @@ theorem targetNode_injective
 
 theorem survivingOccurrence?_some_injective
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    {first second : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    {first second : Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount}
-    {mapped : ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+    {mapped : Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
       trace.diagram.nodeCount}
     (firstMapped : trace.survivingOccurrence? first = some mapped)
     (secondMapped : trace.survivingOccurrence? second = some mapped) :
@@ -157,9 +160,9 @@ theorem survivingOccurrence?_some_injective
                 at firstMapped
               rw [trace.survivingOccurrence?_node secondNode secondSurvives]
                 at secondMapped
-              have equal := ConcreteElaboration.LocalOccurrence.node.inj
+              have equal := Concrete.Elaboration.LocalOccurrence.node.inj
                 (Option.some.inj (firstMapped.trans secondMapped.symm))
-              exact congrArg ConcreteElaboration.LocalOccurrence.node
+              exact congrArg Concrete.Elaboration.LocalOccurrence.node
                 (trace.targetNode_injective equal)
             · simp [survivingOccurrence?, secondSurvives] at secondMapped
           · simp [survivingOccurrence?, firstSurvives] at firstMapped
@@ -202,16 +205,16 @@ theorem survivingOccurrence?_some_injective
                 at firstMapped
               rw [trace.survivingOccurrence?_child secondChild secondSurvives]
                 at secondMapped
-              have equal := ConcreteElaboration.LocalOccurrence.child.inj
+              have equal := Concrete.Elaboration.LocalOccurrence.child.inj
                 (Option.some.inj (firstMapped.trans secondMapped.symm))
-              exact congrArg ConcreteElaboration.LocalOccurrence.child
+              exact congrArg Concrete.Elaboration.LocalOccurrence.child
                 (trace.targetRegion_injective equal)
             · simp [survivingOccurrence?, secondSurvives] at secondMapped
           · simp [survivingOccurrence?, firstSurvives] at firstMapped
 
 theorem survivingOccurrences_nodup
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (values : List (ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (values : List (Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount))
     (nodup : values.Nodup) :
     (values.filterMap trace.survivingOccurrence?).Nodup :=
@@ -228,7 +231,7 @@ theorem atomsAt_nodup
   apply different
   apply Fin.ext
   have values := congrArg (fun occurrence :
-      ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+      Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
         trace.diagram.nodeCount =>
     match occurrence with
     | .node node => node.val
@@ -237,13 +240,13 @@ theorem atomsAt_nodup
 
 theorem survivingOccurrences_ne_atoms
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (values : List (ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (values : List (Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount))
     (region : Fin input.val.regionCount)
-    (mapped : ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+    (mapped : Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
       trace.diagram.nodeCount)
     (mappedMember : mapped ∈ values.filterMap trace.survivingOccurrence?)
-    (atom : ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+    (atom : Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
       trace.diagram.nodeCount)
     (atomMember : atom ∈ trace.atomsAt region) :
     mapped ≠ atom := by
@@ -253,7 +256,7 @@ theorem survivingOccurrences_ne_atoms
   unfold atomsAt at atomMember
   obtain ⟨index, indexMember, atomEq⟩ := List.mem_map.mp atomMember
   have mappedAtom : mapped =
-      ConcreteElaboration.LocalOccurrence.node (trace.targetAtom index) :=
+      Concrete.Elaboration.LocalOccurrence.node (trace.targetAtom index) :=
     mappedEq.trans atomEq.symm
   cases source with
   | node node =>
@@ -261,7 +264,7 @@ theorem survivingOccurrences_ne_atoms
       · rw [trace.survivingOccurrence?_node node survives] at sourceMapped
         have sourceEq := Option.some.inj sourceMapped
         rw [← sourceEq] at mappedAtom
-        have equal := ConcreteElaboration.LocalOccurrence.node.inj mappedAtom
+        have equal := Concrete.Elaboration.LocalOccurrence.node.inj mappedAtom
         have values := congrArg Fin.val equal
         simp only [targetNode, targetAtom, Fin.val_castAdd, Fin.val_natAdd]
           at values
@@ -278,7 +281,7 @@ theorem survivingOccurrences_ne_atoms
 
 theorem focusedOccurrences_nodup
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (values : List (ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (values : List (Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount))
     (nodup : values.Nodup)
     (region : Fin input.val.regionCount) :
@@ -376,7 +379,7 @@ theorem targetRegion_parent_iff_nonwrap
 
 theorem targetAtom_region_iff_nonwrap
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (index : Fin occurrences.length)
     (region : Fin input.val.regionCount)
     (regionSurvives : trace.domains.regions.survives region = true)
@@ -473,13 +476,13 @@ theorem region_shape_of_surviving_not_root
 
 theorem mem_filterMap_targetNode_iff
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (values : List (ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (values : List (Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount))
     (node : Fin input.val.nodeCount)
     (survives : trace.domains.nodes.survives node = true) :
-    ConcreteElaboration.LocalOccurrence.node (trace.targetNode node survives) ∈
+    Concrete.Elaboration.LocalOccurrence.node (trace.targetNode node survives) ∈
         values.filterMap trace.survivingOccurrence? ↔
-      ConcreteElaboration.LocalOccurrence.node node ∈ values := by
+      Concrete.Elaboration.LocalOccurrence.node node ∈ values := by
   constructor
   · intro member
     obtain ⟨source, sourceMember, sourceMapped⟩ :=
@@ -494,14 +497,14 @@ theorem mem_filterMap_targetNode_iff
 
 theorem mem_filterMap_targetRegion_iff
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (values : List (ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (values : List (Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount))
     (region : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives region = true) :
-    ConcreteElaboration.LocalOccurrence.child
+    Concrete.Elaboration.LocalOccurrence.child
         (trace.targetRegion region survives) ∈
         values.filterMap trace.survivingOccurrence? ↔
-      ConcreteElaboration.LocalOccurrence.child region ∈ values := by
+      Concrete.Elaboration.LocalOccurrence.child region ∈ values := by
   constructor
   · intro member
     obtain ⟨source, sourceMember, sourceMapped⟩ :=
@@ -517,10 +520,10 @@ theorem mem_filterMap_targetRegion_iff
 
 theorem targetAtom_not_mem_filterMap
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (values : List (ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (values : List (Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount))
     (index : Fin occurrences.length) :
-    ConcreteElaboration.LocalOccurrence.node (trace.targetAtom index) ∉
+    Concrete.Elaboration.LocalOccurrence.node (trace.targetAtom index) ∉
       values.filterMap trace.survivingOccurrence? := by
   intro member
   obtain ⟨source, sourceMember, sourceMapped⟩ :=
@@ -529,7 +532,7 @@ theorem targetAtom_not_mem_filterMap
   | node node =>
       by_cases survives : trace.domains.nodes.survives node = true
       · rw [trace.survivingOccurrence?_node node survives] at sourceMapped
-        have equal := ConcreteElaboration.LocalOccurrence.node.inj
+        have equal := Concrete.Elaboration.LocalOccurrence.node.inj
           (Option.some.inj sourceMapped)
         have values := congrArg Fin.val equal
         simp only [targetNode, targetAtom, Fin.val_castAdd, Fin.val_natAdd]
@@ -546,9 +549,9 @@ theorem targetAtom_not_mem_filterMap
 
 theorem bubble_not_mem_filterMap
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (values : List (ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (values : List (Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount)) :
-    ConcreteElaboration.LocalOccurrence.child trace.bubble ∉
+    Concrete.Elaboration.LocalOccurrence.child trace.bubble ∉
       values.filterMap trace.survivingOccurrence? := by
   intro member
   obtain ⟨source, sourceMember, sourceMapped⟩ :=
@@ -563,7 +566,7 @@ theorem bubble_not_mem_filterMap
   | child child =>
       by_cases survives : trace.domains.regions.survives child = true
       · rw [trace.survivingOccurrence?_child child survives] at sourceMapped
-        have equal := ConcreteElaboration.LocalOccurrence.child.inj
+        have equal := Concrete.Elaboration.LocalOccurrence.child.inj
           (Option.some.inj sourceMapped)
         exact trace.targetRegion_ne_bubble child survives equal
       · simp [survivingOccurrence?, survives] at sourceMapped
@@ -573,12 +576,12 @@ theorem targetNode_not_mem_atomsAt
     (node : Fin input.val.nodeCount)
     (survives : trace.domains.nodes.survives node = true)
     (region : Fin input.val.regionCount) :
-    ConcreteElaboration.LocalOccurrence.node (trace.targetNode node survives) ∉
+    Concrete.Elaboration.LocalOccurrence.node (trace.targetNode node survives) ∉
       trace.atomsAt region := by
   intro member
   unfold atomsAt at member
   obtain ⟨index, indexMember, equal⟩ := List.mem_map.mp member
-  have nodeEq := ConcreteElaboration.LocalOccurrence.node.inj equal
+  have nodeEq := Concrete.Elaboration.LocalOccurrence.node.inj equal
   have values := congrArg Fin.val nodeEq
   simp only [targetNode, targetAtom, Fin.val_castAdd, Fin.val_natAdd] at values
   have bound := (trace.domains.nodes.index node survives).isLt
@@ -589,7 +592,7 @@ theorem targetRegion_not_mem_atomsAt
     (child : Fin input.val.regionCount)
     (survives : trace.domains.regions.survives child = true)
     (region : Fin input.val.regionCount) :
-    ConcreteElaboration.LocalOccurrence.child
+    Concrete.Elaboration.LocalOccurrence.child
         (trace.targetRegion child survives) ∉ trace.atomsAt region := by
   intro member
   unfold atomsAt at member
@@ -599,7 +602,7 @@ theorem targetRegion_not_mem_atomsAt
 theorem bubble_not_mem_atomsAt
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (region : Fin input.val.regionCount) :
-    ConcreteElaboration.LocalOccurrence.child trace.bubble ∉
+    Concrete.Elaboration.LocalOccurrence.child trace.bubble ∉
       trace.atomsAt region := by
   intro member
   unfold atomsAt at member
@@ -608,7 +611,7 @@ theorem bubble_not_mem_atomsAt
 
 theorem bubble_parent
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences) :
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences) :
     (trace.diagram.regions trace.bubble).parent? =
       some (trace.targetRegion wrap.val.anchor
         (wrap_anchor_survives payload)) := by
@@ -640,7 +643,7 @@ theorem targetNode_region_bubble_iff
 
 theorem targetAtom_region_bubble_iff
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (index : Fin occurrences.length) :
     (trace.diagram.nodes (trace.targetAtom index)).region = trace.bubble ↔
       (occurrences.get index).selection.val.anchor = wrap.val.anchor := by
@@ -705,72 +708,72 @@ theorem targetRegion_parent_bubble_iff
 
 theorem bubble_not_local_child
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences) :
-    ConcreteElaboration.LocalOccurrence.child trace.bubble ∉
-      ConcreteElaboration.localOccurrences trace.diagram trace.bubble := by
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences) :
+    Concrete.Elaboration.LocalOccurrence.child trace.bubble ∉
+      Concrete.Elaboration.localOccurrences trace.diagram trace.bubble := by
   intro member
   have equal :=
-    (ConcreteElaboration.mem_localOccurrences_child trace.diagram
+    (Concrete.Elaboration.mem_localOccurrences_child trace.diagram
       trace.bubble trace.bubble).1 member
   rw [trace.bubble_parent payload] at equal
   exact trace.targetRegion_ne_bubble wrap.val.anchor
     (wrap_anchor_survives payload) (Option.some.inj equal)
 
 theorem mem_selectedOccurrences_node_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (node : Fin input.val.nodeCount) :
-    ConcreteElaboration.LocalOccurrence.node node ∈
-        ModalSoundness.selectedOccurrences input.val selection ↔
+    Concrete.Elaboration.LocalOccurrence.node node ∈
+        VisualProof.Rule.ModalSoundness.selectedOccurrences input.val selection ↔
       node ∈ selection.val.directNodes := by
-  rw [ModalSoundness.selectedOccurrences, List.mem_filter]
-  simp only [ModalSoundness.occurrenceSelected, decide_eq_true_eq]
+  rw [VisualProof.Rule.ModalSoundness.selectedOccurrences, List.mem_filter]
+  simp only [VisualProof.Rule.ModalSoundness.occurrenceSelected, decide_eq_true_eq]
   constructor
   · exact And.right
   · intro direct
-    exact ⟨(ConcreteElaboration.mem_localOccurrences_node input.val
+    exact ⟨(Concrete.Elaboration.mem_localOccurrences_node input.val
       selection.val.anchor node).2
         (selection.property.directNodes_at_anchor node direct), direct⟩
 
 theorem mem_selectedOccurrences_child_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (child : Fin input.val.regionCount) :
-    ConcreteElaboration.LocalOccurrence.child child ∈
-        ModalSoundness.selectedOccurrences input.val selection ↔
+    Concrete.Elaboration.LocalOccurrence.child child ∈
+        VisualProof.Rule.ModalSoundness.selectedOccurrences input.val selection ↔
       child ∈ selection.val.childRoots := by
-  rw [ModalSoundness.selectedOccurrences, List.mem_filter]
-  simp only [ModalSoundness.occurrenceSelected, decide_eq_true_eq]
+  rw [VisualProof.Rule.ModalSoundness.selectedOccurrences, List.mem_filter]
+  simp only [VisualProof.Rule.ModalSoundness.occurrenceSelected, decide_eq_true_eq]
   constructor
   · exact And.right
   · intro direct
-    exact ⟨(ConcreteElaboration.mem_localOccurrences_child input.val
+    exact ⟨(Concrete.Elaboration.mem_localOccurrences_child input.val
       selection.val.anchor child).2
         (selection.property.childRoots_direct child direct), direct⟩
 
 theorem selectedOccurrences_nodup
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val) :
-    (ModalSoundness.selectedOccurrences input.val selection).Nodup := by
-  unfold ModalSoundness.selectedOccurrences
-  exact (ConcreteElaboration.localOccurrences_nodup input.val
+    (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val selection).Nodup := by
+  unfold VisualProof.Rule.ModalSoundness.selectedOccurrences
+  exact (Concrete.Elaboration.localOccurrences_nodup input.val
     selection.val.anchor).filter _
 
 /-- Every deleted direct source occurrence belongs to a certified occurrence
 whose selection is anchored at the current surviving region. -/
 theorem deleted_localOccurrence_has_anchor
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (region : Fin input.val.regionCount)
     (regionSurvives : trace.domains.regions.survives region = true)
-    (occurrence : ConcreteElaboration.LocalOccurrence input.val.regionCount
+    (occurrence : Concrete.Elaboration.LocalOccurrence input.val.regionCount
       input.val.nodeCount)
     (localMember : occurrence ∈
-      ConcreteElaboration.localOccurrences input.val region)
+      Concrete.Elaboration.localOccurrences input.val region)
     (deleted : trace.survivingOccurrence? occurrence = none) :
     ∃ index : Fin occurrences.length,
       (occurrences.get index).selection.val.anchor = region ∧
-      occurrence ∈ ModalSoundness.selectedOccurrences input.val
+      occurrence ∈ VisualProof.Rule.ModalSoundness.selectedOccurrences input.val
         (occurrences.get index).selection := by
   cases occurrence with
   | node node =>
@@ -786,7 +789,7 @@ theorem deleted_localOccurrence_has_anchor
       obtain ⟨index, occurrenceEq⟩ := List.mem_iff_get.mp occurrenceMember
       rw [← occurrenceEq] at selected
       have nodeRegion : (input.val.nodes node).region = region :=
-        (ConcreteElaboration.mem_localOccurrences_node input.val region node).1
+        (Concrete.Elaboration.mem_localOccurrences_node input.val region node).1
           localMember
       have direct : node ∈
           (occurrences.get index).selection.val.directNodes := by
@@ -807,14 +810,14 @@ theorem deleted_localOccurrence_has_anchor
         ((occurrences.get index).selection.property.directNodes_at_anchor
           node direct).symm.trans nodeRegion
       refine ⟨index, anchorEq, ?_⟩
-      rw [ModalSoundness.selectedOccurrences, List.mem_filter]
+      rw [VisualProof.Rule.ModalSoundness.selectedOccurrences, List.mem_filter]
       refine ⟨?_, ?_⟩
-      · change ConcreteElaboration.LocalOccurrence.node node ∈
-          ConcreteElaboration.localOccurrences input.val
+      · change Concrete.Elaboration.LocalOccurrence.node node ∈
+          Concrete.Elaboration.localOccurrences input.val
             (occurrences.get index).selection.val.anchor
         rw [anchorEq]
         exact localMember
-      simpa only [ModalSoundness.occurrenceSelected, decide_eq_true_eq,
+      simpa only [VisualProof.Rule.ModalSoundness.occurrenceSelected, decide_eq_true_eq,
         List.get_eq_getElem] using direct
   | child child =>
       have childSelected : child ∈ abstractionRegions occurrences := by
@@ -829,7 +832,7 @@ theorem deleted_localOccurrence_has_anchor
       obtain ⟨index, occurrenceEq⟩ := List.mem_iff_get.mp occurrenceMember
       rw [← occurrenceEq] at selected
       have childParent : (input.val.regions child).parent? = some region :=
-        (ConcreteElaboration.mem_localOccurrences_child input.val region child).1
+        (Concrete.Elaboration.mem_localOccurrences_child input.val region child).1
           localMember
       have anchorEq :
           (occurrences.get index).selection.val.anchor = region := by
@@ -844,10 +847,10 @@ theorem deleted_localOccurrence_has_anchor
             (((region_survives_iff input occurrences region).1 regionSurvives)
               inAbstraction)
       refine ⟨index, anchorEq, ?_⟩
-      rw [ModalSoundness.selectedOccurrences, List.mem_filter]
+      rw [VisualProof.Rule.ModalSoundness.selectedOccurrences, List.mem_filter]
       refine ⟨?_, ?_⟩
-      · change ConcreteElaboration.LocalOccurrence.child child ∈
-          ConcreteElaboration.localOccurrences input.val
+      · change Concrete.Elaboration.LocalOccurrence.child child ∈
+          Concrete.Elaboration.localOccurrences input.val
             (occurrences.get index).selection.val.anchor
         rw [anchorEq]
         exact localMember
@@ -861,14 +864,14 @@ theorem deleted_localOccurrence_has_anchor
             (occurrences.get index).selection.property.childRoots_direct root
               rootMember
           rw [anchorEq] at directParent
-          rcases ConcreteElaboration.encloses_direct_child childParent encloses
+          rcases Concrete.Elaboration.encloses_direct_child childParent encloses
             with equal | enclosesParent
           · exact equal
           · exact False.elim
-              (ConcreteElaboration.checked_direct_child_not_encloses_parent
+              (Concrete.Elaboration.checked_direct_child_not_encloses_parent
                 input.property directParent enclosesParent)
         simpa [rootEq] using rootMember
-      simpa only [ModalSoundness.occurrenceSelected, decide_eq_true_eq,
+      simpa only [VisualProof.Rule.ModalSoundness.occurrenceSelected, decide_eq_true_eq,
         List.get_eq_getElem] using direct
 
 /-- Away from the wrap anchor, target local traversal is exactly the compacted
@@ -876,20 +879,20 @@ source traversal plus the fresh atoms owned by that anchor, up to conjunction
 order. -/
 theorem targetLocalOccurrences_nonwrap
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (region : Fin input.val.regionCount)
     (regionSurvives : trace.domains.regions.survives region = true)
     (notWrap : region ≠ wrap.val.anchor) :
-    (ConcreteElaboration.localOccurrences trace.diagram
+    (Concrete.Elaboration.localOccurrences trace.diagram
       (trace.targetRegion region regionSurvives)).Perm
-        ((ConcreteElaboration.localOccurrences input.val region).filterMap
+        ((Concrete.Elaboration.localOccurrences input.val region).filterMap
             trace.survivingOccurrence? ++ trace.atomsAt region) := by
   apply perm_of_nodup_and_mem_iff
-  · exact ConcreteElaboration.localOccurrences_nodup trace.diagram
+  · exact Concrete.Elaboration.localOccurrences_nodup trace.diagram
       (trace.targetRegion region regionSurvives)
   · exact trace.focusedOccurrences_nodup
-      (ConcreteElaboration.localOccurrences input.val region)
-      (ConcreteElaboration.localOccurrences_nodup input.val region) region
+      (Concrete.Elaboration.localOccurrences input.val region)
+      (Concrete.Elaboration.localOccurrences_nodup input.val region) region
   · intro occurrence
     cases occurrence with
     | node node =>
@@ -906,53 +909,53 @@ theorem targetLocalOccurrences_nonwrap
             have values := congrArg Fin.val
               (trace.domains.nodes.index_origin compact)
             exact values
-          rw [← targetEq, ConcreteElaboration.mem_localOccurrences_node,
+          rw [← targetEq, Concrete.Elaboration.mem_localOccurrences_node,
             List.mem_append,
             trace.mem_filterMap_targetNode_iff
-              (ConcreteElaboration.localOccurrences input.val region)
+              (Concrete.Elaboration.localOccurrences input.val region)
               original survives]
           have notAtom := trace.targetNode_not_mem_atomsAt original survives
             region
           simp only [notAtom, or_false,
-            ConcreteElaboration.mem_localOccurrences_node]
+            Concrete.Elaboration.mem_localOccurrences_node]
           exact trace.targetNode_region_iff_nonwrap original survives region
             regionSurvives notWrap
-        · change (ConcreteElaboration.LocalOccurrence.node
+        · change (Concrete.Elaboration.LocalOccurrence.node
                 (trace.targetAtom index) ∈
-              ConcreteElaboration.localOccurrences trace.diagram
+              Concrete.Elaboration.localOccurrences trace.diagram
                 (trace.targetRegion region regionSurvives)) ↔
-            ConcreteElaboration.LocalOccurrence.node (trace.targetAtom index) ∈
-              (ConcreteElaboration.localOccurrences input.val region).filterMap
+            Concrete.Elaboration.LocalOccurrence.node (trace.targetAtom index) ∈
+              (Concrete.Elaboration.localOccurrences input.val region).filterMap
                   trace.survivingOccurrence? ++ trace.atomsAt region
-          rw [ConcreteElaboration.mem_localOccurrences_node, List.mem_append]
+          rw [Concrete.Elaboration.mem_localOccurrences_node, List.mem_append]
           have notSurvivor := trace.targetAtom_not_mem_filterMap
-            (ConcreteElaboration.localOccurrences input.val region) index
+            (Concrete.Elaboration.localOccurrences input.val region) index
           simp only [notSurvivor, false_or]
           rw [trace.mem_atomsAt region index]
           exact trace.targetAtom_region_iff_nonwrap payload index region
             regionSurvives notWrap
     | child child =>
         refine Fin.lastCases (motive := fun targetChild =>
-            ConcreteElaboration.LocalOccurrence.child targetChild ∈
-                ConcreteElaboration.localOccurrences trace.diagram
+            Concrete.Elaboration.LocalOccurrence.child targetChild ∈
+                Concrete.Elaboration.localOccurrences trace.diagram
                   (trace.targetRegion region regionSurvives) ↔
-              ConcreteElaboration.LocalOccurrence.child targetChild ∈
-                (ConcreteElaboration.localOccurrences input.val region).filterMap
+              Concrete.Elaboration.LocalOccurrence.child targetChild ∈
+                (Concrete.Elaboration.localOccurrences input.val region).filterMap
                     trace.survivingOccurrence? ++ trace.atomsAt region)
           ?_ (fun compact => ?_) child
-        · change (ConcreteElaboration.LocalOccurrence.child trace.bubble ∈
-              ConcreteElaboration.localOccurrences trace.diagram
+        · change (Concrete.Elaboration.LocalOccurrence.child trace.bubble ∈
+              Concrete.Elaboration.localOccurrences trace.diagram
                 (trace.targetRegion region regionSurvives)) ↔
-            ConcreteElaboration.LocalOccurrence.child trace.bubble ∈
-              (ConcreteElaboration.localOccurrences input.val region).filterMap
+            Concrete.Elaboration.LocalOccurrence.child trace.bubble ∈
+              (Concrete.Elaboration.localOccurrences input.val region).filterMap
                   trace.survivingOccurrence? ++ trace.atomsAt region
           have notSurvivor := trace.bubble_not_mem_filterMap
-            (ConcreteElaboration.localOccurrences input.val region)
+            (Concrete.Elaboration.localOccurrences input.val region)
           have notAtom := trace.bubble_not_mem_atomsAt region
           constructor
           · intro member
             have parentEq :=
-              (ConcreteElaboration.mem_localOccurrences_child trace.diagram
+              (Concrete.Elaboration.mem_localOccurrences_child trace.diagram
                 (trace.targetRegion region regionSurvives) trace.bubble).1 member
             rw [trace.bubble_parent payload] at parentEq
             exact False.elim (notWrap (trace.targetRegion_injective
@@ -971,12 +974,12 @@ theorem targetLocalOccurrences_nonwrap
             have values := congrArg Fin.val
               (trace.domains.regions.index_origin compact)
             exact values
-          change (ConcreteElaboration.LocalOccurrence.child
+          change (Concrete.Elaboration.LocalOccurrence.child
                 (Fin.castSucc compact) ∈
-              ConcreteElaboration.localOccurrences trace.diagram
+              Concrete.Elaboration.localOccurrences trace.diagram
                 (trace.targetRegion region regionSurvives)) ↔
-            ConcreteElaboration.LocalOccurrence.child (Fin.castSucc compact) ∈
-              (ConcreteElaboration.localOccurrences input.val region).filterMap
+            Concrete.Elaboration.LocalOccurrence.child (Fin.castSucc compact) ∈
+              (Concrete.Elaboration.localOccurrences input.val region).filterMap
                   trace.survivingOccurrence? ++ trace.atomsAt region
           rw [← targetEq]
           have notAtom := trace.targetRegion_not_mem_atomsAt original survives
@@ -984,7 +987,7 @@ theorem targetLocalOccurrences_nonwrap
           constructor
           · intro member
             have parentEq :=
-              (ConcreteElaboration.mem_localOccurrences_child trace.diagram
+              (Concrete.Elaboration.mem_localOccurrences_child trace.diagram
                 (trace.targetRegion region regionSurvives)
                 (trace.targetRegion original survives)).1 member
             have sourceParent :=
@@ -992,21 +995,21 @@ theorem targetLocalOccurrences_nonwrap
                 regionSurvives notWrap).1 parentEq
             apply List.mem_append.mpr
             exact Or.inl ((trace.mem_filterMap_targetRegion_iff
-              (ConcreteElaboration.localOccurrences input.val region)
+              (Concrete.Elaboration.localOccurrences input.val region)
               original survives).2
-                ((ConcreteElaboration.mem_localOccurrences_child input.val
+                ((Concrete.Elaboration.mem_localOccurrences_child input.val
                   region original).2 sourceParent))
           · intro member
             rcases List.mem_append.mp member with survivor | atom
-            · apply (ConcreteElaboration.mem_localOccurrences_child
+            · apply (Concrete.Elaboration.mem_localOccurrences_child
                 trace.diagram (trace.targetRegion region regionSurvives)
                 (trace.targetRegion original survives)).2
               apply (trace.targetRegion_parent_iff_nonwrap original survives
                 region regionSurvives notWrap).2
-              apply (ConcreteElaboration.mem_localOccurrences_child input.val
+              apply (Concrete.Elaboration.mem_localOccurrences_child input.val
                 region original).1
               exact (trace.mem_filterMap_targetRegion_iff
-                (ConcreteElaboration.localOccurrences input.val region)
+                (Concrete.Elaboration.localOccurrences input.val region)
                 original survives).1 survivor
             · exact False.elim (notAtom atom)
 
@@ -1014,14 +1017,14 @@ theorem targetLocalOccurrences_nonwrap
 occurrences and the relation atoms whose source occurrence is wrap-anchored. -/
 theorem bubbleLocalOccurrences
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences) :
-    (ConcreteElaboration.localOccurrences trace.diagram trace.bubble).Perm
-      ((ModalSoundness.selectedOccurrences input.val wrap).filterMap
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences) :
+    (Concrete.Elaboration.localOccurrences trace.diagram trace.bubble).Perm
+      ((VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap).filterMap
           trace.survivingOccurrence? ++ trace.atomsAt wrap.val.anchor) := by
   apply perm_of_nodup_and_mem_iff
-  · exact ConcreteElaboration.localOccurrences_nodup trace.diagram trace.bubble
+  · exact Concrete.Elaboration.localOccurrences_nodup trace.diagram trace.bubble
   · exact trace.focusedOccurrences_nodup
-      (ModalSoundness.selectedOccurrences input.val wrap)
+      (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap)
       (selectedOccurrences_nodup input wrap) wrap.val.anchor
   · intro occurrence
     cases occurrence with
@@ -1039,44 +1042,44 @@ theorem bubbleLocalOccurrences
             have values := congrArg Fin.val
               (trace.domains.nodes.index_origin compact)
             exact values
-          rw [← targetEq, ConcreteElaboration.mem_localOccurrences_node,
+          rw [← targetEq, Concrete.Elaboration.mem_localOccurrences_node,
             List.mem_append,
             trace.mem_filterMap_targetNode_iff
-              (ModalSoundness.selectedOccurrences input.val wrap)
+              (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap)
               original survives]
           have notAtom := trace.targetNode_not_mem_atomsAt original survives
             wrap.val.anchor
           rw [mem_selectedOccurrences_node_iff input wrap original]
           simp only [notAtom, or_false]
           exact trace.targetNode_region_bubble_iff original survives
-        · change (ConcreteElaboration.LocalOccurrence.node
+        · change (Concrete.Elaboration.LocalOccurrence.node
                 (trace.targetAtom index) ∈
-              ConcreteElaboration.localOccurrences trace.diagram trace.bubble) ↔
-            ConcreteElaboration.LocalOccurrence.node (trace.targetAtom index) ∈
-              (ModalSoundness.selectedOccurrences input.val wrap).filterMap
+              Concrete.Elaboration.localOccurrences trace.diagram trace.bubble) ↔
+            Concrete.Elaboration.LocalOccurrence.node (trace.targetAtom index) ∈
+              (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap).filterMap
                   trace.survivingOccurrence? ++ trace.atomsAt wrap.val.anchor
-          rw [ConcreteElaboration.mem_localOccurrences_node, List.mem_append]
+          rw [Concrete.Elaboration.mem_localOccurrences_node, List.mem_append]
           have notSurvivor := trace.targetAtom_not_mem_filterMap
-            (ModalSoundness.selectedOccurrences input.val wrap) index
+            (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap) index
           simp only [notSurvivor, false_or]
           rw [trace.mem_atomsAt wrap.val.anchor index]
           exact trace.targetAtom_region_bubble_iff payload index
     | child child =>
         refine Fin.lastCases (motive := fun targetChild =>
-            ConcreteElaboration.LocalOccurrence.child targetChild ∈
-                ConcreteElaboration.localOccurrences trace.diagram trace.bubble ↔
-              ConcreteElaboration.LocalOccurrence.child targetChild ∈
-                (ModalSoundness.selectedOccurrences input.val wrap).filterMap
+            Concrete.Elaboration.LocalOccurrence.child targetChild ∈
+                Concrete.Elaboration.localOccurrences trace.diagram trace.bubble ↔
+              Concrete.Elaboration.LocalOccurrence.child targetChild ∈
+                (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap).filterMap
                     trace.survivingOccurrence? ++ trace.atomsAt wrap.val.anchor)
           ?_ (fun compact => ?_) child
-        · change (ConcreteElaboration.LocalOccurrence.child trace.bubble ∈
-              ConcreteElaboration.localOccurrences trace.diagram trace.bubble) ↔
-            ConcreteElaboration.LocalOccurrence.child trace.bubble ∈
-              (ModalSoundness.selectedOccurrences input.val wrap).filterMap
+        · change (Concrete.Elaboration.LocalOccurrence.child trace.bubble ∈
+              Concrete.Elaboration.localOccurrences trace.diagram trace.bubble) ↔
+            Concrete.Elaboration.LocalOccurrence.child trace.bubble ∈
+              (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap).filterMap
                   trace.survivingOccurrence? ++ trace.atomsAt wrap.val.anchor
           have notLocal := trace.bubble_not_local_child payload
           have notSurvivor := trace.bubble_not_mem_filterMap
-            (ModalSoundness.selectedOccurrences input.val wrap)
+            (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap)
           have notAtom := trace.bubble_not_mem_atomsAt wrap.val.anchor
           constructor
           · exact False.elim ∘ notLocal
@@ -1094,11 +1097,11 @@ theorem bubbleLocalOccurrences
             have values := congrArg Fin.val
               (trace.domains.regions.index_origin compact)
             exact values
-          change (ConcreteElaboration.LocalOccurrence.child
+          change (Concrete.Elaboration.LocalOccurrence.child
                 (Fin.castSucc compact) ∈
-              ConcreteElaboration.localOccurrences trace.diagram trace.bubble) ↔
-            ConcreteElaboration.LocalOccurrence.child (Fin.castSucc compact) ∈
-              (ModalSoundness.selectedOccurrences input.val wrap).filterMap
+              Concrete.Elaboration.localOccurrences trace.diagram trace.bubble) ↔
+            Concrete.Elaboration.LocalOccurrence.child (Fin.castSucc compact) ∈
+              (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap).filterMap
                   trace.survivingOccurrence? ++ trace.atomsAt wrap.val.anchor
           rw [← targetEq]
           have notAtom := trace.targetRegion_not_mem_atomsAt original survives
@@ -1106,73 +1109,73 @@ theorem bubbleLocalOccurrences
           constructor
           · intro member
             have parentEq :=
-              (ConcreteElaboration.mem_localOccurrences_child trace.diagram
+              (Concrete.Elaboration.mem_localOccurrences_child trace.diagram
                 trace.bubble (trace.targetRegion original survives)).1 member
             have direct := (trace.targetRegion_parent_bubble_iff original
               survives).1 parentEq
             apply List.mem_append.mpr
             apply Or.inl
             apply (trace.mem_filterMap_targetRegion_iff
-              (ModalSoundness.selectedOccurrences input.val wrap)
+              (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap)
               original survives).2
             exact (mem_selectedOccurrences_child_iff input wrap original).2 direct
           · intro member
             rcases List.mem_append.mp member with survivor | atom
-            · apply (ConcreteElaboration.mem_localOccurrences_child trace.diagram
+            · apply (Concrete.Elaboration.mem_localOccurrences_child trace.diagram
                 trace.bubble (trace.targetRegion original survives)).2
               apply (trace.targetRegion_parent_bubble_iff original survives).2
               apply (mem_selectedOccurrences_child_iff input wrap original).1
               exact (trace.mem_filterMap_targetRegion_iff
-                (ModalSoundness.selectedOccurrences input.val wrap)
+                (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val wrap)
                 original survives).1 survivor
             · exact False.elim (notAtom atom)
 
 /-- Membership in the unselected wrap frame, specialized to nodes. -/
 theorem mem_keptOccurrences_node_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (node : Fin input.val.nodeCount) :
-    ConcreteElaboration.LocalOccurrence.node node ∈
-        ModalSoundness.keptOccurrences input.val selection ↔
+    Concrete.Elaboration.LocalOccurrence.node node ∈
+        VisualProof.Rule.ModalSoundness.keptOccurrences input.val selection ↔
       (input.val.nodes node).region = selection.val.anchor ∧
         node ∉ selection.val.directNodes := by
-  rw [ModalSoundness.keptOccurrences, List.mem_filter]
+  rw [VisualProof.Rule.ModalSoundness.keptOccurrences, List.mem_filter]
   constructor
   · intro member
-    refine ⟨(ConcreteElaboration.mem_localOccurrences_node input.val
+    refine ⟨(Concrete.Elaboration.mem_localOccurrences_node input.val
       selection.val.anchor node).1 member.1, ?_⟩
-    simpa [ModalSoundness.occurrenceSelected] using member.2
+    simpa [VisualProof.Rule.ModalSoundness.occurrenceSelected] using member.2
   · intro member
-    refine ⟨(ConcreteElaboration.mem_localOccurrences_node input.val
+    refine ⟨(Concrete.Elaboration.mem_localOccurrences_node input.val
       selection.val.anchor node).2 member.1, ?_⟩
-    simp [ModalSoundness.occurrenceSelected, member.2]
+    simp [VisualProof.Rule.ModalSoundness.occurrenceSelected, member.2]
 
 /-- Membership in the unselected wrap frame, specialized to child regions. -/
 theorem mem_keptOccurrences_child_iff
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (child : Fin input.val.regionCount) :
-    ConcreteElaboration.LocalOccurrence.child child ∈
-        ModalSoundness.keptOccurrences input.val selection ↔
+    Concrete.Elaboration.LocalOccurrence.child child ∈
+        VisualProof.Rule.ModalSoundness.keptOccurrences input.val selection ↔
       (input.val.regions child).parent? = some selection.val.anchor ∧
         child ∉ selection.val.childRoots := by
-  rw [ModalSoundness.keptOccurrences, List.mem_filter]
+  rw [VisualProof.Rule.ModalSoundness.keptOccurrences, List.mem_filter]
   constructor
   · intro member
-    refine ⟨(ConcreteElaboration.mem_localOccurrences_child input.val
+    refine ⟨(Concrete.Elaboration.mem_localOccurrences_child input.val
       selection.val.anchor child).1 member.1, ?_⟩
-    simpa [ModalSoundness.occurrenceSelected] using member.2
+    simpa [VisualProof.Rule.ModalSoundness.occurrenceSelected] using member.2
   · intro member
-    refine ⟨(ConcreteElaboration.mem_localOccurrences_child input.val
+    refine ⟨(Concrete.Elaboration.mem_localOccurrences_child input.val
       selection.val.anchor child).2 member.1, ?_⟩
-    simp [ModalSoundness.occurrenceSelected, member.2]
+    simp [VisualProof.Rule.ModalSoundness.occurrenceSelected, member.2]
 
 theorem keptOccurrences_nodup
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val) :
-    (ModalSoundness.keptOccurrences input.val selection).Nodup := by
-  unfold ModalSoundness.keptOccurrences
-  exact (ConcreteElaboration.localOccurrences_nodup input.val
+    (VisualProof.Rule.ModalSoundness.keptOccurrences input.val selection).Nodup := by
+  unfold VisualProof.Rule.ModalSoundness.keptOccurrences
+  exact (Concrete.Elaboration.localOccurrences_nodup input.val
     selection.val.anchor).filter _
 
 theorem targetNode_region_wrap_iff
@@ -1248,7 +1251,7 @@ theorem targetRegion_parent_wrap_iff
 
 theorem targetAtom_region_ne_wrap
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (wrapSurvives : trace.domains.regions.survives wrap.val.anchor = true)
     (index : Fin occurrences.length) :
     (trace.diagram.nodes (trace.targetAtom index)).region ≠
@@ -1269,28 +1272,28 @@ theorem targetAtom_region_ne_wrap
 fresh bubble while all unselected frame occurrences retain their provenance. -/
 theorem wrapAnchorLocalOccurrences
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences) :
-    (ConcreteElaboration.localOccurrences trace.diagram
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences) :
+    (Concrete.Elaboration.localOccurrences trace.diagram
       (trace.targetRegion wrap.val.anchor (wrap_anchor_survives payload))).Perm
-      ((ModalSoundness.keptOccurrences input.val wrap).filterMap
+      ((VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap).filterMap
           trace.survivingOccurrence? ++
-        [(ConcreteElaboration.LocalOccurrence.child trace.bubble :
-          ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+        [(Concrete.Elaboration.LocalOccurrence.child trace.bubble :
+          Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
             trace.diagram.nodeCount)]) := by
   let wrapSurvives := wrap_anchor_survives payload
   apply perm_of_nodup_and_mem_iff
-  · exact ConcreteElaboration.localOccurrences_nodup trace.diagram
+  · exact Concrete.Elaboration.localOccurrences_nodup trace.diagram
       (trace.targetRegion wrap.val.anchor wrapSurvives)
   · rw [List.nodup_append]
     refine ⟨trace.survivingOccurrences_nodup
-      (ModalSoundness.keptOccurrences input.val wrap)
+      (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap)
       (keptOccurrences_nodup input wrap), by simp, ?_⟩
     intro left leftMember right rightMember equal
     have rightEq := List.mem_singleton.mp rightMember
     rw [rightEq] at equal
     subst left
     exact trace.bubble_not_mem_filterMap
-      (ModalSoundness.keptOccurrences input.val wrap)
+      (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap)
       leftMember
   · intro occurrence
     cases occurrence with
@@ -1308,57 +1311,57 @@ theorem wrapAnchorLocalOccurrences
             have values := congrArg Fin.val
               (trace.domains.nodes.index_origin compact)
             exact values
-          rw [← targetEq, ConcreteElaboration.mem_localOccurrences_node,
+          rw [← targetEq, Concrete.Elaboration.mem_localOccurrences_node,
             List.mem_append,
             trace.mem_filterMap_targetNode_iff
-              (ModalSoundness.keptOccurrences input.val wrap)
+              (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap)
               original survives,
             mem_keptOccurrences_node_iff input wrap original]
           simp only [List.mem_singleton, reduceCtorEq, or_false]
           exact trace.targetNode_region_wrap_iff original survives wrapSurvives
-        · change (ConcreteElaboration.LocalOccurrence.node
+        · change (Concrete.Elaboration.LocalOccurrence.node
                 (trace.targetAtom index) ∈
-              ConcreteElaboration.localOccurrences trace.diagram
+              Concrete.Elaboration.localOccurrences trace.diagram
                 (trace.targetRegion wrap.val.anchor wrapSurvives)) ↔
-            ConcreteElaboration.LocalOccurrence.node (trace.targetAtom index) ∈
-              (ModalSoundness.keptOccurrences input.val wrap).filterMap
+            Concrete.Elaboration.LocalOccurrence.node (trace.targetAtom index) ∈
+              (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap).filterMap
                   trace.survivingOccurrence? ++
-                [(ConcreteElaboration.LocalOccurrence.child trace.bubble :
-                  ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+                [(Concrete.Elaboration.LocalOccurrence.child trace.bubble :
+                  Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
                     trace.diagram.nodeCount)]
-          rw [ConcreteElaboration.mem_localOccurrences_node, List.mem_append]
+          rw [Concrete.Elaboration.mem_localOccurrences_node, List.mem_append]
           have notLocal := trace.targetAtom_region_ne_wrap payload wrapSurvives index
           have notSurvivor := trace.targetAtom_not_mem_filterMap
-            (ModalSoundness.keptOccurrences input.val wrap) index
+            (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap) index
           simp only [notLocal, notSurvivor, List.mem_singleton, reduceCtorEq,
             or_false]
     | child child =>
         refine Fin.lastCases (motive := fun targetChild =>
-            ConcreteElaboration.LocalOccurrence.child targetChild ∈
-                ConcreteElaboration.localOccurrences trace.diagram
+            Concrete.Elaboration.LocalOccurrence.child targetChild ∈
+                Concrete.Elaboration.localOccurrences trace.diagram
                   (trace.targetRegion wrap.val.anchor wrapSurvives) ↔
-              ConcreteElaboration.LocalOccurrence.child targetChild ∈
-                (ModalSoundness.keptOccurrences input.val wrap).filterMap
+              Concrete.Elaboration.LocalOccurrence.child targetChild ∈
+                (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap).filterMap
                     trace.survivingOccurrence? ++
-                  [(ConcreteElaboration.LocalOccurrence.child trace.bubble :
-                    ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+                  [(Concrete.Elaboration.LocalOccurrence.child trace.bubble :
+                    Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
                       trace.diagram.nodeCount)])
           ?_ (fun compact => ?_) child
-        · change (ConcreteElaboration.LocalOccurrence.child trace.bubble ∈
-              ConcreteElaboration.localOccurrences trace.diagram
+        · change (Concrete.Elaboration.LocalOccurrence.child trace.bubble ∈
+              Concrete.Elaboration.localOccurrences trace.diagram
                 (trace.targetRegion wrap.val.anchor wrapSurvives)) ↔
-            ConcreteElaboration.LocalOccurrence.child trace.bubble ∈
-              (ModalSoundness.keptOccurrences input.val wrap).filterMap
+            Concrete.Elaboration.LocalOccurrence.child trace.bubble ∈
+              (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap).filterMap
                   trace.survivingOccurrence? ++
-                [(ConcreteElaboration.LocalOccurrence.child trace.bubble :
-                  ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+                [(Concrete.Elaboration.LocalOccurrence.child trace.bubble :
+                  Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
                     trace.diagram.nodeCount)]
           have localMember :=
-            (ConcreteElaboration.mem_localOccurrences_child trace.diagram
+            (Concrete.Elaboration.mem_localOccurrences_child trace.diagram
               (trace.targetRegion wrap.val.anchor wrapSurvives) trace.bubble).2
               (trace.bubble_parent payload)
           have notSurvivor := trace.bubble_not_mem_filterMap
-            (ModalSoundness.keptOccurrences input.val wrap)
+            (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap)
           constructor
           · intro _
             apply List.mem_append.mpr
@@ -1375,21 +1378,21 @@ theorem wrapAnchorLocalOccurrences
             have values := congrArg Fin.val
               (trace.domains.regions.index_origin compact)
             exact values
-          change (ConcreteElaboration.LocalOccurrence.child
+          change (Concrete.Elaboration.LocalOccurrence.child
                 (Fin.castSucc compact) ∈
-              ConcreteElaboration.localOccurrences trace.diagram
+              Concrete.Elaboration.localOccurrences trace.diagram
                 (trace.targetRegion wrap.val.anchor wrapSurvives)) ↔
-            ConcreteElaboration.LocalOccurrence.child (Fin.castSucc compact) ∈
-              (ModalSoundness.keptOccurrences input.val wrap).filterMap
+            Concrete.Elaboration.LocalOccurrence.child (Fin.castSucc compact) ∈
+              (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap).filterMap
                   trace.survivingOccurrence? ++
-                [(ConcreteElaboration.LocalOccurrence.child trace.bubble :
-                  ConcreteElaboration.LocalOccurrence trace.diagram.regionCount
+                [(Concrete.Elaboration.LocalOccurrence.child trace.bubble :
+                  Concrete.Elaboration.LocalOccurrence trace.diagram.regionCount
                     trace.diagram.nodeCount)]
           rw [← targetEq]
           constructor
           · intro member
             have parentEq :=
-              (ConcreteElaboration.mem_localOccurrences_child trace.diagram
+              (Concrete.Elaboration.mem_localOccurrences_child trace.diagram
                 (trace.targetRegion wrap.val.anchor wrapSurvives)
                 (trace.targetRegion original survives)).1 member
             have kept := (trace.targetRegion_parent_wrap_iff original survives
@@ -1397,25 +1400,25 @@ theorem wrapAnchorLocalOccurrences
             apply List.mem_append.mpr
             apply Or.inl
             apply (trace.mem_filterMap_targetRegion_iff
-              (ModalSoundness.keptOccurrences input.val wrap)
+              (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap)
               original survives).2
             exact (mem_keptOccurrences_child_iff input wrap original).2 kept
           · intro member
             rcases List.mem_append.mp member with survivor | fresh
-            · apply (ConcreteElaboration.mem_localOccurrences_child trace.diagram
+            · apply (Concrete.Elaboration.mem_localOccurrences_child trace.diagram
                 (trace.targetRegion wrap.val.anchor wrapSurvives)
                 (trace.targetRegion original survives)).2
               apply (trace.targetRegion_parent_wrap_iff original survives
                 wrapSurvives).2
               apply (mem_keptOccurrences_child_iff input wrap original).1
               exact (trace.mem_filterMap_targetRegion_iff
-                (ModalSoundness.keptOccurrences input.val wrap)
+                (VisualProof.Rule.ModalSoundness.keptOccurrences input.val wrap)
                 original survives).1 survivor
-            · have equal := ConcreteElaboration.LocalOccurrence.child.inj
+            · have equal := Concrete.Elaboration.LocalOccurrence.child.inj
                 (List.mem_singleton.mp fresh)
               exact False.elim
                 (trace.targetRegion_ne_bubble original survives equal)
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

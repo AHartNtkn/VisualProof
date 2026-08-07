@@ -1,20 +1,23 @@
 import VisualProof.Rule.Soundness.Modal.VacuousEliminationFocusedItems
 
-namespace VisualProof.Rule.VacuousElimTrace
+namespace VisualProof.Concrete.VacuousElimTrace
+
+open VisualProof.Concrete
+open VisualProof.Rule
 
 open VisualProof
 open VisualProof.Theory
 open VisualProof.Diagram
-open VisualProof.Rule.DoubleCutElimTrace
+open VisualProof.Concrete.DoubleCutElimTrace
 
 theorem focusedPartition_regionSimulation
     (trace : VacuousElimTrace input bubble raw)
     (wellFormed : input.WellFormed )
     (model : Model)
     {sourceRels targetRels : RelCtx}
-    (direction : ConcreteElaboration.SimulationDirection)
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (context : PromotedContextWitness trace sourceContext targetContext)
     (sourceExact :
       (sourceContext.extend (trace.targetIndex wellFormed)).Exact
@@ -36,24 +39,24 @@ theorem focusedPartition_regionSimulation
     (targetSelected : ItemSeq
       ((targetContext.extend trace.parent).extend bubble).length
       (trace.arity :: targetRels))
-    (keptSimulation : ConcreteElaboration.ItemSeqSimulation model
+    (keptSimulation : Concrete.Elaboration.ItemSeqSimulation model
       direction (context.extendFocused wellFormed).indexRelation
       (sourceKept.renameRelations relationMap) targetKept)
-    (selectedSimulation : ConcreteElaboration.ItemSeqSimulation model
+    (selectedSimulation : Concrete.Elaboration.ItemSeqSimulation model
       direction (context.extendSelected wellFormed).indexRelation
       (sourceSelected.renameRelations (fun relation =>
-        ConcreteElaboration.BinderContext.liftVar trace.arity
+        Concrete.Elaboration.BinderContext.liftVar trace.arity
           (relationMap relation)))
       targetSelected) :
-    ConcreteElaboration.RegionSimulation model  direction
+    Concrete.Elaboration.RegionSimulation model  direction
       context.indexRelation
-      ((ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
+      ((Concrete.Elaboration.finishRegion trace.sourceDiagram sourceContext
         (trace.targetIndex wellFormed)
         (sourceKept.append sourceSelected)).renameRelations relationMap)
-      (ConcreteElaboration.finishRegion input targetContext trace.parent
+      (Concrete.Elaboration.finishRegion input targetContext trace.parent
         (targetKept.append (.cons
           (.bubble trace.arity
-            (ConcreteElaboration.finishRegion input
+            (Concrete.Elaboration.finishRegion input
               (targetContext.extend trace.parent) bubble targetSelected))
           .nil))) := by
   intro sourceOuter targetOuter targetRelations outerAgreement
@@ -65,7 +68,7 @@ theorem focusedPartition_regionSimulation
     RelEnv.pullback_agrees relationMap targetRelations
   let bubbleMap : RelationRenaming sourceRels
       (trace.arity :: targetRels) :=
-    fun relation => ConcreteElaboration.BinderContext.liftVar trace.arity
+    fun relation => Concrete.Elaboration.BinderContext.liftVar trace.arity
       (relationMap relation)
   have bubbleAgrees (fresh : Relation model.Carrier trace.arity) :
       RelEnv.Agrees bubbleMap sourceRelations (fresh, targetRelations) := by
@@ -73,11 +76,11 @@ theorem focusedPartition_regionSimulation
     exact baseAgrees binderArity relation
   have sourceRename :
       denoteRegion model  sourceOuter targetRelations
-          ((ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
+          ((Concrete.Elaboration.finishRegion trace.sourceDiagram sourceContext
             (trace.targetIndex wellFormed)
             (sourceKept.append sourceSelected)).renameRelations relationMap) ↔
         denoteRegion model  sourceOuter sourceRelations
-          (ConcreteElaboration.finishRegion trace.sourceDiagram sourceContext
+          (Concrete.Elaboration.finishRegion trace.sourceDiagram sourceContext
             (trace.targetIndex wellFormed)
             (sourceKept.append sourceSelected)) :=
     denoteRegion_renameRelations model  relationMap sourceRelations
@@ -91,13 +94,13 @@ theorem focusedPartition_regionSimulation
           sourceContext sourceKept sourceSelected sourceOuter
           sourceRelations).mp (sourceRename.mp sourceDenotation)
       let sourceEnvironment :=
-        ConcreteElaboration.extendedEnvironment sourceContext
+        Concrete.Elaboration.extendedEnvironment sourceContext
           (trace.targetIndex wellFormed) sourceOuter sourceLocal
       let targetFocusPulled := focused.targetEnvironment sourceEnvironment
       let targetLocal := localEnvironmentPart targetContext trace.parent
         targetFocusPulled
       have targetFocusEq :
-          ConcreteElaboration.extendedEnvironment targetContext trace.parent
+          Concrete.Elaboration.extendedEnvironment targetContext trace.parent
               targetOuter targetLocal = targetFocusPulled := by
         apply extendedEnvironment_of_parts
         intro targetIndex
@@ -120,7 +123,7 @@ theorem focusedPartition_regionSimulation
       let bubbleLocal := localEnvironmentPart
         (targetContext.extend trace.parent) bubble targetSelectedPulled
       have targetSelectedEq :
-          ConcreteElaboration.extendedEnvironment
+          Concrete.Elaboration.extendedEnvironment
               (targetContext.extend trace.parent) bubble targetFocusPulled
               bubbleLocal = targetSelectedPulled := by
         apply extendedEnvironment_of_parts
@@ -159,10 +162,10 @@ theorem focusedPartition_regionSimulation
           targetKept targetSelected targetOuter targetRelations).mp
           targetDenotation
       let targetFocusEnvironment :=
-        ConcreteElaboration.extendedEnvironment targetContext trace.parent
+        Concrete.Elaboration.extendedEnvironment targetContext trace.parent
           targetOuter targetLocal
       let targetSelectedEnvironment :=
-        ConcreteElaboration.extendedEnvironment
+        Concrete.Elaboration.extendedEnvironment
           (targetContext.extend trace.parent) bubble targetFocusEnvironment
           bubbleLocal
       let sourceSubset :=
@@ -172,7 +175,7 @@ theorem focusedPartition_regionSimulation
       let sourceLocal := localEnvironmentPart sourceContext
         (trace.targetIndex wellFormed) sourceEnvironment
       have sourceEnvironmentEq :
-          ConcreteElaboration.extendedEnvironment sourceContext
+          Concrete.Elaboration.extendedEnvironment sourceContext
               (trace.targetIndex wellFormed) sourceOuter sourceLocal =
             sourceEnvironment := by
         apply extendedEnvironment_of_parts
@@ -226,4 +229,4 @@ theorem focusedPartition_regionSimulation
       · rw [sourceEnvironmentEq]
         exact sourceSelectedDenotation
 
-end VisualProof.Rule.VacuousElimTrace
+end VisualProof.Concrete.VacuousElimTrace

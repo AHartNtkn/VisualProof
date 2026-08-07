@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Modal.VacuousElimination
 
-namespace VisualProof.Rule.VacuousElimTrace
+namespace VisualProof.Concrete.VacuousElimTrace
+
+open VisualProof.Concrete
+open VisualProof.Rule
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -22,19 +25,19 @@ private theorem sourceAncestor_maps
   induction steps generalizing descendant ancestor with
   | zero =>
       have equality : descendant = ancestor := by
-        simpa [ConcreteDiagram.climb] using Option.some.inj climb
+        simpa [Concrete.Diagram.climb] using Option.some.inj climb
       subst ancestor
-      exact ConcreteDiagram.Encloses.refl input (trace.origin descendant)
+      exact Concrete.Diagram.Encloses.refl input (trace.origin descendant)
   | succ steps induction =>
       cases parentEq : (trace.sourceDiagram.regions descendant).parent? with
-      | none => simp [ConcreteDiagram.climb, parentEq] at climb
+      | none => simp [Concrete.Diagram.climb, parentEq] at climb
       | some parent =>
           have tail : trace.sourceDiagram.climb steps parent = some ancestor := by
-            simpa [ConcreteDiagram.climb, parentEq] using climb
+            simpa [Concrete.Diagram.climb, parentEq] using climb
           have parentNeFocus : parent ≠ trace.targetIndex targetWellFormed := by
             intro equality
             subst parent
-            exact (ConcreteElaboration.checked_direct_child_not_encloses_parent
+            exact (Concrete.Elaboration.checked_direct_child_not_encloses_parent
               sourceWellFormed parentEq) descendantEnclosesFocus
           have originalParent :
               (input.regions (trace.origin descendant)).parent? =
@@ -44,17 +47,17 @@ private theorem sourceAncestor_maps
           have parentEnclosesDescendant : trace.sourceDiagram.Encloses parent
               descendant := by
             refine ⟨⟨1, by have := descendant.isLt; omega⟩, ?_⟩
-            simp [ConcreteDiagram.climb, parentEq]
+            simp [Concrete.Diagram.climb, parentEq]
           have parentEnclosesFocus :=
-            ConcreteElaboration.checked_encloses_trans sourceWellFormed
+            Concrete.Elaboration.checked_encloses_trans sourceWellFormed
               parentEnclosesDescendant descendantEnclosesFocus
           have mappedTail := induction parent ancestor parentEnclosesFocus
             (by omega) tail
           have originalParentEncloses : input.Encloses (trace.origin parent)
               (trace.origin descendant) := by
             refine ⟨⟨1, by have := (trace.origin descendant).isLt; omega⟩, ?_⟩
-            simp [ConcreteDiagram.climb, originalParent]
-          exact ConcreteElaboration.checked_encloses_trans targetWellFormed
+            simp [Concrete.Diagram.climb, originalParent]
+          exact Concrete.Elaboration.checked_encloses_trans targetWellFormed
             mappedTail originalParentEncloses
 
 /-- An enclosure of the promoted focus reflects to enclosure of the original
@@ -70,7 +73,7 @@ theorem sourceEnclosesFocus_iff_forward
   obtain ⟨steps, climb⟩ := encloses
   have mapped := sourceAncestor_maps trace targetWellFormed sourceWellFormed
     (trace.targetIndex targetWellFormed) ancestor
-    (ConcreteDiagram.Encloses.refl trace.sourceDiagram
+    (Concrete.Diagram.Encloses.refl trace.sourceDiagram
       (trace.targetIndex targetWellFormed)) steps.val steps.isLt climb
   have focusOrigin : trace.origin (trace.targetIndex targetWellFormed) =
       trace.parent := trace.targetIndex_origin targetWellFormed
@@ -99,21 +102,21 @@ private theorem targetAncestor_lifts
   induction steps generalizing targetCurrent sourceCurrent ancestor with
   | zero =>
       have equality : targetCurrent = ancestor := by
-        simpa [ConcreteDiagram.climb] using Option.some.inj climb
+        simpa [Concrete.Diagram.climb] using Option.some.inj climb
       subst ancestor
       exact ⟨sourceCurrent, currentOrigin,
         sourceCurrentEnclosesFocus⟩
   | succ steps induction =>
       cases parentEq : (input.regions targetCurrent).parent? with
-      | none => simp [ConcreteDiagram.climb, parentEq] at climb
+      | none => simp [Concrete.Diagram.climb, parentEq] at climb
       | some parent =>
           have tail : input.climb steps parent = some ancestor := by
-            simpa [ConcreteDiagram.climb, parentEq] using climb
+            simpa [Concrete.Diagram.climb, parentEq] using climb
           have parentEnclosesCurrent : input.Encloses parent targetCurrent := by
             refine ⟨⟨1, by have := targetCurrent.isLt; omega⟩, ?_⟩
-            simp [ConcreteDiagram.climb, parentEq]
+            simp [Concrete.Diagram.climb, parentEq]
           have parentEnclosesTarget :=
-            ConcreteElaboration.checked_encloses_trans targetWellFormed
+            Concrete.Elaboration.checked_encloses_trans targetWellFormed
               parentEnclosesCurrent targetCurrentEnclosesParent
           have parentNeBubble : parent ≠ bubble := by
             intro equality
@@ -121,7 +124,7 @@ private theorem targetAncestor_lifts
             have bubbleParent : (input.regions bubble).parent? =
                 some trace.parent := by
               simp [trace.bubble_eq, CRegion.parent?]
-            exact (ConcreteElaboration.checked_direct_child_not_encloses_parent
+            exact (Concrete.Elaboration.checked_direct_child_not_encloses_parent
               targetWellFormed bubbleParent) parentEnclosesTarget
           let sourceParent := (vacuousRegionDomain input bubble).index parent
             (by simp [vacuousRegionDomain, parentNeBubble])
@@ -136,7 +139,7 @@ private theorem targetAncestor_lifts
                     trace.parent := trace.targetIndex_origin targetWellFormed
               exact sourceParentOrigin.symm.trans
                 ((congrArg trace.origin equality).trans focusOrigin)
-            exact (ConcreteElaboration.checked_direct_child_not_encloses_parent
+            exact (Concrete.Elaboration.checked_direct_child_not_encloses_parent
               targetWellFormed parentEq)
                 (by simpa [parentIsTarget] using targetCurrentEnclosesParent)
           have sourceParentEq :
@@ -148,9 +151,9 @@ private theorem targetAncestor_lifts
           have sourceParentEnclosesCurrent :
               trace.sourceDiagram.Encloses sourceParent sourceCurrent := by
             refine ⟨⟨1, by have := sourceCurrent.isLt; omega⟩, ?_⟩
-            simp [ConcreteDiagram.climb, sourceParentEq]
+            simp [Concrete.Diagram.climb, sourceParentEq]
           have sourceParentEnclosesFocus :=
-            ConcreteElaboration.checked_encloses_trans sourceWellFormed
+            Concrete.Elaboration.checked_encloses_trans sourceWellFormed
               sourceParentEnclosesCurrent sourceCurrentEnclosesFocus
           exact induction (ancestor := ancestor) parent sourceParent
             sourceParentOrigin
@@ -172,8 +175,8 @@ theorem sourceEnclosesFocus_iff_backward
   exact targetAncestor_lifts trace targetWellFormed sourceWellFormed
     trace.parent (trace.targetIndex targetWellFormed)
     (trace.targetIndex_origin targetWellFormed)
-    (ConcreteDiagram.Encloses.refl input trace.parent)
-    (ConcreteDiagram.Encloses.refl trace.sourceDiagram
+    (Concrete.Diagram.Encloses.refl input trace.parent)
+    (Concrete.Diagram.Encloses.refl trace.sourceDiagram
       (trace.targetIndex targetWellFormed)) steps.val steps.isLt climb
 
-end VisualProof.Rule.VacuousElimTrace
+end VisualProof.Concrete.VacuousElimTrace

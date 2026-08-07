@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationTraceBackward
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -11,15 +13,15 @@ namespace InstantiationSemantic
 /-- A bubble presentation whose inherited valuation is the restriction of one
 wire-indexed valuation on the executor state. -/
 def BubblePresentation.OuterAligned
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
     {model : Model}
@@ -34,15 +36,15 @@ def BubblePresentation.OuterAligned
     wireValue (presentation.outer.get index)
 
 theorem coalescedBubblePresentation_of_target_outerAligned
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -88,7 +90,7 @@ theorem coalescedBubblePresentation_of_target_outerAligned
       (spliceInput.plugLayout.frameRegion state.bubble)).Exact
       (spliceInput.plugLayout.frameRegion state.bubble) := by
     simpa [spliceInput, advanceInstantiationState] using target.outerExact
-  let sourceExact : @ConcreteElaboration.WireContext.Exact
+  let sourceExact : @Concrete.Elaboration.WireContext.Exact
       coalesced.diagram.val (sourceOuter.extend state.bubble) state.bubble := by
     apply exact_of_drop coalesced
     simpa [sourceOuter, sourceLeaf, sourceView] using sourceLeaf.wiresExact
@@ -102,15 +104,15 @@ theorem coalescedBubblePresentation_of_target_outerAligned
       sourceExact targetExact index)
 
 theorem bubblePresentation_of_coalesced_outerAligned
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (site : Fin state.diagram.val.regionCount)
@@ -145,16 +147,16 @@ theorem bubblePresentation_of_coalesced_outerAligned
   let coalesced := coalescedInstantiationState comprehension attachments binders
     payload state site arguments hadmissible
   let actualIso :=
-    Splice.Input.coalescedFrameIsoOfAttachmentsRespectBoundary spliceInput
+    Concrete.Splice.Input.coalescedFrameIsoOfAttachmentsRespectBoundary spliceInput
       respects
   let targetView := droppedBubbleView state
   let targetLeaf := targetView.compilerLeaf
   let targetOuter := targetLeaf.inheritedWires
-  let sourceExact : @ConcreteElaboration.WireContext.Exact
+  let sourceExact : @Concrete.Elaboration.WireContext.Exact
       spliceInput.coalesceFrameRaw (source.outer.extend state.bubble)
       state.bubble := by
     simpa [coalesced, spliceInput] using source.outerExact
-  let targetExact : @ConcreteElaboration.WireContext.Exact state.diagram.val
+  let targetExact : @Concrete.Elaboration.WireContext.Exact state.diagram.val
       (targetOuter.extend state.bubble) state.bubble := by
     apply exact_of_drop state
     simpa [targetOuter, targetLeaf, targetView] using targetLeaf.wiresExact
@@ -172,28 +174,28 @@ theorem bubblePresentation_of_coalesced_outerAligned
   rw [aligned, mappedAtIndex]
   change sourceWireValue (source.outer.get sourceIndex) =
     sourceWireValue (spliceInput.quotientWire
-      (Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
+      (Concrete.Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
         spliceInput respects
         (source.outer.get sourceIndex)))
   rw [show spliceInput.quotientWire
-      (Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
+      (Concrete.Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
         spliceInput respects
         (source.outer.get sourceIndex)) = source.outer.get sourceIndex by
-    exact (Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
+    exact (Concrete.Splice.Input.discreteQuotientWireEquivOfAttachmentsRespectBoundary
       spliceInput respects).left_inv _]
 
 /-- A bubble presentation paired with the fact that its inherited environment
 is the restriction of a single valuation on the executor state. -/
 structure AlignedBubblePresentation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (model : Model)
@@ -209,15 +211,15 @@ structure AlignedBubblePresentation
 /-- Backward semantic transport over the complete executor trace preserves
 alignment with the composite trace wire map. -/
 theorem alignedBubblePresentation_nonempty_of_trace
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}
@@ -253,13 +255,13 @@ theorem alignedBubblePresentation_nonempty_of_trace
         checkedInputChecked := checkedInputChecked
         next := advanceMaterializedInstantiationState comprehension attachments
           binders payload state atom tail site arguments materialization
-            (Splice.Input.checkInput_sound checkedInputChecked).2
+            (Concrete.Splice.Input.checkInput_sound checkedInputChecked).2
         next_eq := rfl
       }
       rcases simulations with ⟨simulation, restSimulations⟩
       obtain ⟨nextAligned⟩ := ih restSimulations targetWireValue target
       let hadmissible :=
-        (Splice.Input.checkInput_sound plan.checkedInputChecked).2
+        (Concrete.Splice.Input.checkInput_sound plan.checkedInputChecked).2
       let operationalTarget : BubblePresentation plan.operationalPayload
           (advanceInstantiationState plan.materialization.result attachments
             binders plan.operationalPayload state atom tail site arguments
@@ -279,14 +281,14 @@ theorem alignedBubblePresentation_nonempty_of_trace
         fixed := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using
             nextAligned.presentation.fixed
         proxies := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using
             nextAligned.presentation.proxies
         parameters := nextAligned.presentation.parameters
         denotes := nextAligned.presentation.denotes
@@ -302,7 +304,7 @@ theorem alignedBubblePresentation_nonempty_of_trace
         plan.operationalPayload state atom tail site arguments hadmissible model
          relationValue values parameterValues
         (fun sourceFuel targetFuel => simulation .backward sourceFuel targetFuel
-          state.bubble (ConcreteDiagram.Encloses.refl _ _)) operationalTarget
+          state.bubble (Concrete.Diagram.Encloses.refl _ _)) operationalTarget
       have coalescedAligned : coalesced.OuterAligned
           (nextWireValue ∘ spliceInput.plugLayout.frameWire) := by
         exact coalescedBubblePresentation_of_target_outerAligned
@@ -310,7 +312,7 @@ theorem alignedBubblePresentation_nonempty_of_trace
           plan.operationalPayload state atom tail site arguments hadmissible model
            relationValue values parameterValues
           (fun sourceFuel targetFuel => simulation .backward sourceFuel
-            targetFuel state.bubble (ConcreteDiagram.Encloses.refl _ _))
+            targetFuel state.bubble (Concrete.Diagram.Encloses.refl _ _))
           operationalTarget nextWireValue operationalAligned
       let source := bubblePresentation_of_coalesced
         plan.materialization.result attachments binders
@@ -342,13 +344,13 @@ theorem alignedBubblePresentation_nonempty_of_trace
         fixed := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using source.fixed
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using source.fixed
         proxies := by
           simpa [InstantiationCopyPlan.operationalPayload,
             materializedInstantiationPayload,
-            Splice.AttachmentAliasMaterialization.Certificate.spine,
-            Splice.AttachmentAliasMaterialization.binderSpine] using
+            Concrete.Splice.AttachmentAliasMaterialization.Certificate.spine,
+            Concrete.Splice.AttachmentAliasMaterialization.binderSpine] using
             source.proxies
         parameters := source.parameters
         denotes := source.denotes
@@ -360,15 +362,15 @@ theorem alignedBubblePresentation_nonempty_of_trace
 /-- Canonical aligned presentation extracted from the propositional trace
 composition theorem. -/
 noncomputable def alignedBubblePresentation_of_trace
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     {fuel : Nat}
     {state result : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount}

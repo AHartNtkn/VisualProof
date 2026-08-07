@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalMaps
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -10,13 +12,13 @@ namespace InstantiationTrace
 /-- Pointwise-preserved source frame: outside the rewritten bubble and away
 from the parent focus where vacuous elimination performs the replacement. -/
 def FrameRegular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
     (region : Fin input.val.regionCount) : Prop :=
   ¬ input.val.Encloses bubble region ∧ region ≠ payload.parent
@@ -24,13 +26,13 @@ def FrameRegular
 /-- A copied region can be the final moving bubble only when it was the
 original quantified bubble. -/
 theorem regionMap_ne_result_bubble
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -48,20 +50,20 @@ theorem regionMap_ne_result_bubble
 /-- Away from the deleted bubble, the composite final region map has the
 expected copy-trace origin. -/
 theorem origin_finalRegionMap_of_ne_bubble
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -79,13 +81,13 @@ theorem origin_finalRegionMap_of_ne_bubble
 /-- The copy trace preserves the direct-parent relation of every original
 frame child through the post-copy atom compaction. -/
 theorem dropped_region_parent
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
@@ -118,20 +120,20 @@ theorem dropped_region_parent
 /-- Every child of a regular source region remains a child of the mapped
 regular region after copying, atom compaction, and vacuous promotion. -/
 theorem final_region_parent_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -145,7 +147,7 @@ theorem final_region_parent_of_regular
   have parentNeBubble : parent ≠ bubble := by
     intro equal
     subst parent
-    exact regular.1 (ConcreteDiagram.Encloses.refl input.val bubble)
+    exact regular.1 (Concrete.Diagram.Encloses.refl input.val bubble)
   have childNeBubble : child ≠ bubble := by
     intro equal
     subst child
@@ -182,20 +184,20 @@ theorem final_region_parent_of_regular
 preserves each direct child constructor and maps its parent through the
 composite final region map. -/
 theorem final_region_shape_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -217,7 +219,7 @@ theorem final_region_shape_of_regular
   have parentNeBubble : parent ≠ bubble := by
     intro equal
     subst parent
-    exact regular.1 (ConcreteDiagram.Encloses.refl input.val bubble)
+    exact regular.1 (Concrete.Diagram.Encloses.refl input.val bubble)
   have childNeBubble : child ≠ bubble := by
     intro equal
     subst child
@@ -315,13 +317,13 @@ theorem final_region_shape_of_regular
 /-- A node owned by a regular region lies outside the quantified bubble and
 therefore survives the executor's post-copy atom compaction. -/
 theorem node_outside_bubble_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
     (region : Fin input.val.regionCount)
     (regular : FrameRegular payload region)
@@ -334,20 +336,20 @@ theorem node_outside_bubble_of_regular
 /-- Dense final node index of an original node known to lie outside the
 quantified bubble.  Vacuous promotion preserves the compacted node carrier. -/
 def finalNodeMap
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (node : Fin input.val.nodeCount)
@@ -358,20 +360,20 @@ def finalNodeMap
 /-- The composite node map sends every node owned by a regular region to the
 mapped regular region. -/
 theorem finalNodeMap_region
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -390,7 +392,7 @@ theorem finalNodeMap_region
   have regionNeBubble : region ≠ bubble := by
     intro equal
     apply regular.1
-    simpa [equal] using ConcreteDiagram.Encloses.refl input.val bubble
+    simpa [equal] using Concrete.Diagram.Encloses.refl input.val bubble
   have mappedRegular : copyTrace.finalRegionMap elimTrace finalWellFormed
       region ≠ elimTrace.targetIndex finalWellFormed := by
     intro mapped
@@ -418,20 +420,20 @@ theorem finalNodeMap_region
 /-- Retained nodes in regular regions preserve their complete constructor,
 including atom binders transported through the composite region map. -/
 theorem final_node_shape_of_regular
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    {comprehension : CheckedOpenDiagram }
+    {comprehension : Concrete.CheckedOpen }
     {attachments : List (Fin input.val.wireCount)}
     {binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-    {payload : ComprehensionInstantiatePayload input bubble comprehension
+    {payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders}
     {fuel : Nat}
     {result : InstantiationState input attachments.length
       payload.binderSpine.proxyCount}
     (copyTrace : InstantiationTrace comprehension attachments binders payload
       fuel (initialInstantiationState payload) result)
-    {raw : ConcreteDiagram}
+    {raw : Concrete.Diagram}
     (elimTrace : VacuousElimTrace (dropInstantiationAtomsRaw result)
       result.bubble raw)
     (finalWellFormed :
@@ -457,7 +459,7 @@ theorem final_node_shape_of_regular
   have regionNeBubble : region ≠ bubble := by
     intro equal
     apply regular.1
-    simpa [equal] using ConcreteDiagram.Encloses.refl input.val bubble
+    simpa [equal] using Concrete.Diagram.Encloses.refl input.val bubble
   have originRegion := copyTrace.origin_finalRegionMap_of_ne_bubble elimTrace
     finalWellFormed region regionNeBubble
   have mappedRegular : copyTrace.finalRegionMap elimTrace finalWellFormed

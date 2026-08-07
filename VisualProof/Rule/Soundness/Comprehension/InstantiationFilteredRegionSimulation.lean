@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationFilteredSimulation
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -16,18 +18,18 @@ authoritative compilation at the same fuel.  Filtering removes only nodes;
 every recursive child remains in the traversal, so the survivor receipt
 already certifies exactly the recursive fuel needed by the full compiler. -/
 theorem compileRegion?_exists_of_survivor
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin parameterCount proxyCount) :
     ∀ {rels : RelCtx} (fuel : Nat)
       (region : Fin state.diagram.val.regionCount)
-      (context : ConcreteElaboration.WireContext state.diagram.val)
-      (binders : ConcreteElaboration.BinderContext state.diagram.val rels),
+      (context : Concrete.Elaboration.WireContext state.diagram.val)
+      (binders : Concrete.Elaboration.BinderContext state.diagram.val rels),
       (context.extend region).Exact region →
       binders.Covers region →
       (∃ survivorBody, compileSurvivorRegion?  state fuel region
         context binders = some survivorBody) →
       ∃ sourceBody,
-        ConcreteElaboration.compileRegion?  state.diagram.val fuel
+        Concrete.Elaboration.compileRegion?  state.diagram.val fuel
           region context binders = some sourceBody := by
   intro rels fuel
   induction fuel generalizing rels with
@@ -40,11 +42,11 @@ theorem compileRegion?_exists_of_survivor
       obtain ⟨survivorBody, survivorCompiled⟩ := survivor
       let extended := context.extend region
       let occurrences :=
-        ConcreteElaboration.localOccurrences state.diagram.val region
+        Concrete.Elaboration.localOccurrences state.diagram.val region
       unfold compileSurvivorRegion? at survivorCompiled
       dsimp only at survivorCompiled
       cases survivorItemsResult :
-          ConcreteElaboration.compileOccurrencesWith?
+          Concrete.Elaboration.compileOccurrencesWith?
             state.diagram.val (compileSurvivorRegion?  state fuel)
             extended binders
             (occurrences.filter (dropOccurrenceSurvives state)) with
@@ -55,36 +57,36 @@ theorem compileRegion?_exists_of_survivor
             simpa [extended] using exact
           have occurrenceSuccess : ∀ occurrence, occurrence ∈ occurrences →
               ∃ item,
-                ConcreteElaboration.compileOccurrenceWith?
+                Concrete.Elaboration.compileOccurrenceWith?
                   state.diagram.val
-                  (ConcreteElaboration.compileRegion?
+                  (Concrete.Elaboration.compileRegion?
                     state.diagram.val fuel)
                   extended binders occurrence = some item := by
             intro occurrence member
             cases occurrence with
             | node node =>
                 have nodeRegion :=
-                  (ConcreteElaboration.mem_localOccurrences_node
+                  (Concrete.Elaboration.mem_localOccurrences_node
                     state.diagram.val region node).mp member
-                simpa [ConcreteElaboration.compileOccurrenceWith?] using
-                  ConcreteElaboration.compileNode?_complete
+                simpa [Concrete.Elaboration.compileOccurrenceWith?] using
+                  Concrete.Elaboration.compileNode?_complete
                     state.diagram.property hextended.covers cover nodeRegion
             | child child =>
                 have childParent :=
-                  (ConcreteElaboration.mem_localOccurrences_child
+                  (Concrete.Elaboration.mem_localOccurrences_child
                     state.diagram.val region child).mp member
                 have keptMember :
-                    ConcreteElaboration.LocalOccurrence.child child ∈
+                    Concrete.Elaboration.LocalOccurrence.child child ∈
                       occurrences.filter (dropOccurrenceSurvives state) := by
                   exact List.mem_filter.mpr ⟨member, rfl⟩
                 obtain ⟨position, positionEq⟩ := indexOf?_complete keptMember
                 have occurrenceEq :
                     (occurrences.filter (dropOccurrenceSurvives state)).get
                         position =
-                      ConcreteElaboration.LocalOccurrence.child child :=
+                      Concrete.Elaboration.LocalOccurrence.child child :=
                   indexOf?_sound positionEq
                 have survivorAt :=
-                  ConcreteElaboration.compileOccurrencesWith?_get
+                  Concrete.Elaboration.compileOccurrencesWith?_get
                     (compileSurvivorRegion?  state fuel) extended
                     binders survivorItemsResult position
                 rw [occurrenceEq] at survivorAt
@@ -103,18 +105,18 @@ theorem compileRegion?_exists_of_survivor
                         compileSurvivorRegion?  state fuel child
                           extended binders with
                     | none =>
-                        simp [ConcreteElaboration.compileOccurrenceWith?,
+                        simp [Concrete.Elaboration.compileOccurrenceWith?,
                           childKind, childSurvivorResult] at survivorAt
                     | some childSurvivor =>
                         obtain ⟨childSource, childSourceResult⟩ :=
                           ih child extended binders
                             (hextended.extend_child state.diagram.property
                               childParent)
-                            (ConcreteElaboration.BinderContext.covers_cut_child
+                            (Concrete.Elaboration.BinderContext.covers_cut_child
                               cover childKind)
                             ⟨childSurvivor, childSurvivorResult⟩
                         exact ⟨.cut childSource, by
-                          simp [ConcreteElaboration.compileOccurrenceWith?,
+                          simp [Concrete.Elaboration.compileOccurrenceWith?,
                             childKind, childSourceResult]⟩
                 | bubble parent arity =>
                     have parentEq : parent = region := by
@@ -125,27 +127,27 @@ theorem compileRegion?_exists_of_survivor
                         compileSurvivorRegion?  state fuel child
                           extended pushed with
                     | none =>
-                        simp [ConcreteElaboration.compileOccurrenceWith?,
+                        simp [Concrete.Elaboration.compileOccurrenceWith?,
                           childKind, pushed, childSurvivorResult] at survivorAt
                     | some childSurvivor =>
                         obtain ⟨childSource, childSourceResult⟩ :=
                           ih child extended pushed
                             (hextended.extend_child state.diagram.property
                               childParent)
-                            (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                            (Concrete.Elaboration.BinderContext.push_covers_bubble_child
                               cover childKind)
                             ⟨childSurvivor, childSurvivorResult⟩
                         exact ⟨.bubble arity childSource, by
-                          simp [ConcreteElaboration.compileOccurrenceWith?,
+                          simp [Concrete.Elaboration.compileOccurrenceWith?,
                             childKind, pushed, childSourceResult]⟩
           obtain ⟨sourceItems, sourceItemsResult⟩ :=
-            ConcreteElaboration.compileOccurrencesWith?_complete
-              (ConcreteElaboration.compileRegion?  state.diagram.val
+            Concrete.Elaboration.compileOccurrencesWith?_complete
+              (Concrete.Elaboration.compileRegion?  state.diagram.val
                 fuel)
               extended binders occurrences occurrenceSuccess
-          refine ⟨ConcreteElaboration.finishRegion state.diagram.val context
+          refine ⟨Concrete.Elaboration.finishRegion state.diagram.val context
             region sourceItems, ?_⟩
-          unfold ConcreteElaboration.compileRegion?
+          unfold Concrete.Elaboration.compileRegion?
           dsimp only
           rw [sourceItemsResult]
           rfl
@@ -158,50 +160,50 @@ theorem compileRegion_filter_simulation
     (model : Model)
     (removed : ∀ {rels : RelCtx}
       (region : Fin state.diagram.val.regionCount)
-      (context : ConcreteElaboration.WireContext state.diagram.val)
-      (binders : ConcreteElaboration.BinderContext state.diagram.val rels)
+      (context : Concrete.Elaboration.WireContext state.diagram.val)
+      (binders : Concrete.Elaboration.BinderContext state.diagram.val rels)
       (node : Fin state.diagram.val.nodeCount)
       (item : Item  context.length rels),
-      ConcreteElaboration.LocalOccurrence.node node ∈
-          ConcreteElaboration.localOccurrences state.diagram.val region →
+      Concrete.Elaboration.LocalOccurrence.node node ∈
+          Concrete.Elaboration.localOccurrences state.diagram.val region →
       dropOccurrenceSurvives state (.node node) = false →
-      ConcreteElaboration.compileNode?  state.diagram.val context
+      Concrete.Elaboration.compileNode?  state.diagram.val context
           binders node = some item →
       ∀ (env : Fin context.length → model.Carrier)
         (relEnv : RelEnv model.Carrier rels),
         denoteItem model  env relEnv item) :
     ∀ {rels : RelCtx}
-      (direction : ConcreteElaboration.SimulationDirection)
+      (direction : Concrete.Elaboration.SimulationDirection)
       (fuel : Nat)
       (region : Fin state.diagram.val.regionCount)
-      (context : ConcreteElaboration.WireContext state.diagram.val)
-      (binders : ConcreteElaboration.BinderContext state.diagram.val rels)
+      (context : Concrete.Elaboration.WireContext state.diagram.val)
+      (binders : Concrete.Elaboration.BinderContext state.diagram.val rels)
       (sourceBody targetBody : Region  context.length rels),
-      ConcreteElaboration.compileRegion?  state.diagram.val fuel
+      Concrete.Elaboration.compileRegion?  state.diagram.val fuel
           region context binders = some sourceBody →
       compileSurvivorRegion?  state fuel region context binders =
           some targetBody →
-      ConcreteElaboration.RegionSimulation model  direction
-        (ConcreteElaboration.ContextIndexRelation.forwardMap id)
+      Concrete.Elaboration.RegionSimulation model  direction
+        (Concrete.Elaboration.ContextIndexRelation.forwardMap id)
         sourceBody targetBody := by
   intro rels direction fuel
   induction fuel generalizing rels direction with
   | zero =>
       intro region context binders sourceBody targetBody sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp [Concrete.Elaboration.compileRegion?] at sourceCompiled
   | succ fuel ih =>
       intro region context binders sourceBody targetBody sourceCompiled
         targetCompiled
-      unfold ConcreteElaboration.compileRegion? at sourceCompiled
+      unfold Concrete.Elaboration.compileRegion? at sourceCompiled
       unfold compileSurvivorRegion? at targetCompiled
       dsimp only at sourceCompiled targetCompiled
       let extended := context.extend region
       let occurrences :=
-        ConcreteElaboration.localOccurrences state.diagram.val region
+        Concrete.Elaboration.localOccurrences state.diagram.val region
       cases sourceItemsResult :
-          ConcreteElaboration.compileOccurrencesWith?
+          Concrete.Elaboration.compileOccurrencesWith?
             state.diagram.val
-            (ConcreteElaboration.compileRegion?  state.diagram.val
+            (Concrete.Elaboration.compileRegion?  state.diagram.val
               fuel)
             extended binders occurrences with
       | none => simp [extended, occurrences, sourceItemsResult] at sourceCompiled
@@ -209,7 +211,7 @@ theorem compileRegion_filter_simulation
           simp [extended, occurrences, sourceItemsResult] at sourceCompiled
           subst sourceBody
           cases targetItemsResult :
-              ConcreteElaboration.compileOccurrencesWith?
+              Concrete.Elaboration.compileOccurrencesWith?
                 state.diagram.val
                 (compileSurvivorRegion?  state fuel)
                 extended binders
@@ -220,23 +222,23 @@ theorem compileRegion_filter_simulation
               simp [extended, occurrences, targetItemsResult] at targetCompiled
               subst targetBody
               have itemSimulation :
-                  ConcreteElaboration.ItemSeqSimulation model  direction
-                    (ConcreteElaboration.ContextIndexRelation.forwardMap id)
+                  Concrete.Elaboration.ItemSeqSimulation model  direction
+                    (Concrete.Elaboration.ContextIndexRelation.forwardMap id)
                     sourceItems targetItems := by
                 apply compileOccurrencesWith_filter_simulation
                   state.diagram.val
-                  (ConcreteElaboration.compileRegion?
+                  (Concrete.Elaboration.compileRegion?
                     state.diagram.val fuel)
                   (compileSurvivorRegion?  state fuel)
                   extended binders (dropOccurrenceSurvives state) model
                   direction
-                  (ConcreteElaboration.ContextIndexRelation.forwardMap id)
+                  (Concrete.Elaboration.ContextIndexRelation.forwardMap id)
                   occurrences
                 · intro occurrence member survives sourceItem targetItem
                     sourceOccurrenceCompiled targetOccurrenceCompiled
                   cases occurrence with
                   | node node =>
-                      simp only [ConcreteElaboration.compileOccurrenceWith?]
+                      simp only [Concrete.Elaboration.compileOccurrenceWith?]
                         at sourceOccurrenceCompiled targetOccurrenceCompiled
                       rw [sourceOccurrenceCompiled] at targetOccurrenceCompiled
                       cases targetOccurrenceCompiled
@@ -248,18 +250,18 @@ theorem compileRegion_filter_simulation
                   | child child =>
                       cases childKind : state.diagram.val.regions child with
                       | sheet =>
-                          simp [ConcreteElaboration.compileOccurrenceWith?,
+                          simp [Concrete.Elaboration.compileOccurrenceWith?,
                             childKind] at sourceOccurrenceCompiled
                       | cut parent =>
                           cases sourceChildResult :
-                              ConcreteElaboration.compileRegion?
+                              Concrete.Elaboration.compileRegion?
                                 state.diagram.val fuel child extended binders with
                           | none =>
-                              simp [ConcreteElaboration.compileOccurrenceWith?,
+                              simp [Concrete.Elaboration.compileOccurrenceWith?,
                                 childKind, sourceChildResult]
                                 at sourceOccurrenceCompiled
                           | some sourceChild =>
-                              simp [ConcreteElaboration.compileOccurrenceWith?,
+                              simp [Concrete.Elaboration.compileOccurrenceWith?,
                                 childKind, sourceChildResult]
                                 at sourceOccurrenceCompiled
                               subst sourceItem
@@ -267,11 +269,11 @@ theorem compileRegion_filter_simulation
                                   compileSurvivorRegion?  state fuel
                                     child extended binders with
                               | none =>
-                                  simp [ConcreteElaboration.compileOccurrenceWith?,
+                                  simp [Concrete.Elaboration.compileOccurrenceWith?,
                                     childKind, targetChildResult]
                                     at targetOccurrenceCompiled
                               | some targetChild =>
-                                  simp [ConcreteElaboration.compileOccurrenceWith?,
+                                  simp [Concrete.Elaboration.compileOccurrenceWith?,
                                     childKind, targetChildResult]
                                     at targetOccurrenceCompiled
                                   subst targetItem
@@ -292,14 +294,14 @@ theorem compileRegion_filter_simulation
                       | bubble parent arity =>
                           let pushed := binders.push child arity
                           cases sourceChildResult :
-                              ConcreteElaboration.compileRegion?
+                              Concrete.Elaboration.compileRegion?
                                 state.diagram.val fuel child extended pushed with
                           | none =>
-                              simp [ConcreteElaboration.compileOccurrenceWith?,
+                              simp [Concrete.Elaboration.compileOccurrenceWith?,
                                 childKind, pushed, sourceChildResult]
                                 at sourceOccurrenceCompiled
                           | some sourceChild =>
-                              simp [ConcreteElaboration.compileOccurrenceWith?,
+                              simp [Concrete.Elaboration.compileOccurrenceWith?,
                                 childKind, pushed, sourceChildResult]
                                 at sourceOccurrenceCompiled
                               subst sourceItem
@@ -307,11 +309,11 @@ theorem compileRegion_filter_simulation
                                   compileSurvivorRegion?  state fuel
                                     child extended pushed with
                               | none =>
-                                  simp [ConcreteElaboration.compileOccurrenceWith?,
+                                  simp [Concrete.Elaboration.compileOccurrenceWith?,
                                     childKind, pushed, targetChildResult]
                                     at targetOccurrenceCompiled
                               | some targetChild =>
-                                  simp [ConcreteElaboration.compileOccurrenceWith?,
+                                  simp [Concrete.Elaboration.compileOccurrenceWith?,
                                     childKind, pushed, targetChildResult]
                                     at targetOccurrenceCompiled
                                   subst targetItem
@@ -343,14 +345,14 @@ theorem compileRegion_filter_simulation
                       simp [dropOccurrenceSurvives] at rejected
                 · exact sourceItemsResult
                 · exact targetItemsResult
-              apply ConcreteElaboration.finishRegion_denote direction context
+              apply Concrete.Elaboration.finishRegion_denote direction context
                 context region region
-                (ConcreteElaboration.ContextIndexRelation.forwardMap id)
+                (Concrete.Elaboration.ContextIndexRelation.forwardMap id)
                 model  sourceItems targetItems
-              apply ConcreteElaboration.directionalLocalTransport_of_agreement
+              apply Concrete.Elaboration.directionalLocalTransport_of_agreement
                 direction context context region region
-                (ConcreteElaboration.ContextIndexRelation.forwardMap id)
-                (ConcreteElaboration.ContextIndexRelation.forwardMap id)
+                (Concrete.Elaboration.ContextIndexRelation.forwardMap id)
+                (Concrete.Elaboration.ContextIndexRelation.forwardMap id)
                 model  sourceItems targetItems
               · intro sourceOuter targetOuter outerAgrees
                 have outerEq : sourceOuter = targetOuter := by

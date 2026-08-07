@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Iteration.ExtractionRegionOccurrence
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -9,12 +11,12 @@ open VisualProof.Diagram
 /-- Exact provenance agreement of ambient contexts is preserved when both
 compilers descend into corresponding copied material. -/
 theorem extractionContextMembership_extend_material
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (ambient : ∀ wire,
       input.val.fragmentWireOrigin selection layout wire ∈ hostContext ↔
         wire ∈ fragmentContext)
@@ -44,12 +46,12 @@ theorem extractionContextMembership_extend_material
 /-- Canonical lexical index transport from any pair of contexts known to
 contain exactly the same provenance wires. -/
 noncomputable def extractionContextIndexMapOfMembership
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (membership : ∀ wire,
       input.val.fragmentWireOrigin selection layout wire ∈ hostContext ↔
         wire ∈ fragmentContext) :
@@ -58,12 +60,12 @@ noncomputable def extractionContextIndexMapOfMembership
     (List.get_mem fragmentContext index)))
 
 theorem extractionContextIndexMapOfMembership_spec
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (membership : ∀ wire,
       input.val.fragmentWireOrigin selection layout wire ∈ hostContext ↔
         wire ∈ fragmentContext)
@@ -77,12 +79,12 @@ theorem extractionContextIndexMapOfMembership_spec
     ((membership _).2 (List.get_mem fragmentContext index)))) |>.symm
 
 theorem extractionContextEnvironmentsAgreeOfMembership
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (membership : ∀ wire,
       input.val.fragmentWireOrigin selection layout wire ∈ hostContext ↔
         wire ∈ fragmentContext)
@@ -105,25 +107,25 @@ theorem extractionContextEnvironmentsAgreeOfMembership
 /-- Port resolution transports through any recursively corresponding pair of
 contexts; terminal exactness is only one way to establish membership equality. -/
 theorem extractionResolvePort_mapOfMembership
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (membership : ∀ wire,
       input.val.fragmentWireOrigin selection layout wire ∈ hostContext ↔
         wire ∈ fragmentContext)
     (hostNodup : hostContext.Nodup)
     (node : Fin layout.nodeCount)
     (port : CPort) :
-    ConcreteElaboration.resolvePort? input.val hostContext
+    Concrete.Elaboration.resolvePort? input.val hostContext
         (selection.selectedNodes.get node) port =
-      (ConcreteElaboration.resolvePort?
+      (Concrete.Elaboration.resolvePort?
         (input.val.extractDiagramRaw selection layout) fragmentContext node port
       ).map (extractionContextIndexMapOfMembership input selection layout
         fragmentContext hostContext membership) := by
-  apply ConcreteElaboration.resolvePort?_map_of_occurrence
+  apply Concrete.Elaboration.resolvePort?_map_of_occurrence
     fragmentContext hostContext node (selection.selectedNodes.get node)
     (input.val.fragmentWireOrigin selection layout)
     (extractionContextIndexMapOfMembership input selection layout
@@ -137,28 +139,28 @@ theorem extractionResolvePort_mapOfMembership
     obtain ⟨original, originalOccurs, mapped⟩ :=
       (input.val.mem_extractDiagramRaw_wire_endpoints_iff selection layout wire
         ⟨node, requested⟩).1 occurs
-    rw [ConcreteDiagram.fragmentEndpoint?_origin selection mapped] at originalOccurs
+    rw [Concrete.Diagram.fragmentEndpoint?_origin selection mapped] at originalOccurs
     exact originalOccurs
   · intro hostWire requested occurs
     obtain ⟨fragmentWire, fragmentOccurs⟩ :=
-      ConcreteDiagram.extractDiagramRaw_endpointOccurs_of_selected input
+      Concrete.Diagram.extractDiagramRaw_endpointOccurs_of_selected input
         selection layout node requested occurs
     refine ⟨fragmentWire, ?_, fragmentOccurs⟩
     obtain ⟨original, originalOccurs, mapped⟩ :=
       (input.val.mem_extractDiagramRaw_wire_endpoints_iff selection layout
         fragmentWire ⟨node, requested⟩).1 fragmentOccurs
-    rw [ConcreteDiagram.fragmentEndpoint?_origin selection mapped] at originalOccurs
-    exact ConcreteElaboration.endpoint_wire_unique
+    rw [Concrete.Diagram.fragmentEndpoint?_origin selection mapped] at originalOccurs
+    exact Concrete.Elaboration.endpoint_wire_unique
       input.property.wire_endpoints_are_disjoint originalOccurs occurs
   · exact input.property.wire_endpoints_are_disjoint
 
 theorem extractionResolvePort_relatedOfMembership
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (membership : ∀ wire,
       input.val.fragmentWireOrigin selection layout wire ∈ hostContext ↔
         wire ∈ fragmentContext)
@@ -167,10 +169,10 @@ theorem extractionResolvePort_relatedOfMembership
     (port : CPort)
     (fragmentIndex : Fin fragmentContext.length)
     (hostIndex : Fin hostContext.length)
-    (fragmentResolved : ConcreteElaboration.resolvePort?
+    (fragmentResolved : Concrete.Elaboration.resolvePort?
       (input.val.extractDiagramRaw selection layout) fragmentContext node port =
         some fragmentIndex)
-    (hostResolved : ConcreteElaboration.resolvePort? input.val hostContext
+    (hostResolved : Concrete.Elaboration.resolvePort? input.val hostContext
       (selection.selectedNodes.get node) port = some hostIndex) :
     (extractionContextRelation input selection layout fragmentContext
       hostContext).Rel fragmentIndex hostIndex := by

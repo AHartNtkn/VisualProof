@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationCleanSubtreeCompile
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 
@@ -11,8 +13,8 @@ namespace InstantiationSemantic
 parents from a frame region stays in the frame block and therefore cannot
 reach a material region. -/
 theorem material_not_encloses_frame
-    {input : Splice.Input }
-    (layout : Splice.Input.PlugLayout input)
+    {input : Concrete.Splice.Input }
+    (layout : Concrete.Splice.Input.PlugLayout input)
     (material : Fin input.pattern.val.diagram.regionCount)
     (hmaterial : input.binderSpine.IsMaterialRegion material)
     (frame : Fin input.frame.val.regionCount) :
@@ -23,46 +25,46 @@ theorem material_not_encloses_frame
   | zero =>
       have equality : layout.frameRegion frame =
           layout.bodyRegion material := by
-        simpa [ConcreteDiagram.climb] using Option.some.inj climb
+        simpa [Concrete.Diagram.climb] using Option.some.inj climb
       rw [layout.bodyRegion_material material hmaterial] at equality
       exact layout.frameRegion_ne_materialRegion frame _ equality
   | succ steps induction =>
       cases frameRegion : input.frame.val.regions frame with
       | sheet =>
-          simp [ConcreteDiagram.climb, Splice.Input.PlugLayout.plugRaw,
-            frameRegion, Splice.Input.PlugLayout.mapFrameRegion,
+          simp [Concrete.Diagram.climb, Concrete.Splice.Input.PlugLayout.plugRaw,
+            frameRegion, Concrete.Splice.Input.PlugLayout.mapFrameRegion,
             CRegion.parent?] at climb
       | cut parent =>
           have tail : layout.plugRaw.climb steps
               (layout.frameRegion parent) =
                 some (layout.bodyRegion material) := by
-            simpa [ConcreteDiagram.climb,
-              Splice.Input.PlugLayout.plugRaw, frameRegion,
-              Splice.Input.PlugLayout.mapFrameRegion, CRegion.parent?]
+            simpa [Concrete.Diagram.climb,
+              Concrete.Splice.Input.PlugLayout.plugRaw, frameRegion,
+              Concrete.Splice.Input.PlugLayout.mapFrameRegion, CRegion.parent?]
               using climb
           exact induction parent (by omega) tail
       | bubble parent arity =>
           have tail : layout.plugRaw.climb steps
               (layout.frameRegion parent) =
                 some (layout.bodyRegion material) := by
-            simpa [ConcreteDiagram.climb,
-              Splice.Input.PlugLayout.plugRaw, frameRegion,
-              Splice.Input.PlugLayout.mapFrameRegion, CRegion.parent?]
+            simpa [Concrete.Diagram.climb,
+              Concrete.Splice.Input.PlugLayout.plugRaw, frameRegion,
+              Concrete.Splice.Input.PlugLayout.mapFrameRegion, CRegion.parent?]
               using climb
           exact induction parent (by omega) tail
 
 /-- Every inserted material subtree is clean for the next survivor compiler.
 The executor records processed atoms solely as retained-frame node images. -/
 theorem advance_material_clean
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -110,15 +112,15 @@ theorem advance_material_clean
 /-- On every inserted material subtree, the next survivor compiler is exactly
 the authoritative ordered compiler. -/
 theorem advance_compileSurvivorRegion_eq_material
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -131,10 +133,10 @@ theorem advance_compileSurvivorRegion_eq_material
     (fuel : Nat)
     (material : Fin comprehension.val.diagram.regionCount)
     (hmaterial : payload.binderSpine.IsMaterialRegion material)
-    (context : ConcreteElaboration.WireContext
+    (context : Concrete.Elaboration.WireContext
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val)
-    (relBinders : ConcreteElaboration.BinderContext
+    (relBinders : Concrete.Elaboration.BinderContext
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val rels) :
     let spliceInput := instantiateSpliceInput comprehension attachments binders
@@ -144,7 +146,7 @@ theorem advance_compileSurvivorRegion_eq_material
       payload state atom tail site arguments hadmissible
     compileSurvivorRegion?  next fuel (layout.bodyRegion material)
         context relBinders =
-      ConcreteElaboration.compileRegion?  next.diagram.val fuel
+      Concrete.Elaboration.compileRegion?  next.diagram.val fuel
         (layout.bodyRegion material) context relBinders := by
   dsimp only
   apply compileSurvivorRegion_eq_of_clean_subtree

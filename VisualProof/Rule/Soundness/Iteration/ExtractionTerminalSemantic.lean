@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Iteration.ExtractionRegionSemantic
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
@@ -11,7 +13,7 @@ open VisualProof.Rule.ModalSoundness
 /-- A copied direct cut in the extracted terminal body has the corresponding
 direct cut shape at the selection anchor. -/
 theorem extractionTerminalDirectChild_cut
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (child : Fin layout.regionCount)
@@ -52,7 +54,7 @@ theorem extractionTerminalDirectChild_cut
 /-- A copied direct bubble in the extracted terminal body has the corresponding
 direct bubble shape and arity at the selection anchor. -/
 theorem extractionTerminalDirectChild_bubble
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (child : Fin layout.regionCount)
@@ -95,12 +97,12 @@ theorem extractionTerminalDirectChild_bubble
 local witnesses of the extracted terminal body while preserving every given
 ambient value. -/
 theorem extractionTerminalExtendedEnvironmentsAgree_backward
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (fragmentExact :
       (fragmentContext.extend layout.bodyContainer).Exact layout.bodyContainer)
     (hostExact : hostContext.Exact selection.val.anchor)
@@ -109,19 +111,19 @@ theorem extractionTerminalExtendedEnvironmentsAgree_backward
     (outerAgrees :
       (extractionContextRelation input selection layout fragmentContext
         hostContext).EnvironmentsAgree fragmentOuter hostEnv) :
-    ∃ fragmentLocal : Fin (ConcreteElaboration.exactScopeWires
+    ∃ fragmentLocal : Fin (Concrete.Elaboration.exactScopeWires
         (input.val.extractDiagramRaw selection layout)
         layout.bodyContainer).length → D,
       (extractionContextRelation input selection layout
         (fragmentContext.extend layout.bodyContainer) hostContext
       ).EnvironmentsAgree
-        (ConcreteElaboration.extendedEnvironment fragmentContext
+        (Concrete.Elaboration.extendedEnvironment fragmentContext
           layout.bodyContainer fragmentOuter fragmentLocal)
         hostEnv := by
   let fragmentExtended := fragmentContext.extend layout.bodyContainer
   let fullMap := extractionContextIndexMap input selection layout
     fragmentExtended hostContext fragmentExact hostExact
-  let fragmentLocal : Fin (ConcreteElaboration.exactScopeWires
+  let fragmentLocal : Fin (Concrete.Elaboration.exactScopeWires
       (input.val.extractDiagramRaw selection layout)
       layout.bodyContainer).length → D :=
     fun index => hostEnv
@@ -137,7 +139,7 @@ theorem extractionTerminalExtendedEnvironmentsAgree_backward
         (fragmentContext.outerIndex layout.bodyContainer outerIndex) =
         fragmentContext.get outerIndex := by
       simpa only [List.get_eq_getElem] using
-        ConcreteElaboration.WireContext.extend_outer fragmentContext
+        Concrete.Elaboration.WireContext.extend_outer fragmentContext
           layout.bodyContainer outerIndex
     exact (congrArg (input.val.fragmentWireOrigin selection layout)
       outerGet).symm.trans related
@@ -159,23 +161,23 @@ occurrence block from any exact extracted context at the terminal container.
 Keeping this item-sequence kernel separate permits both the nested terminal
 presentation and the zero-spine open-root presentation to use one proof. -/
 theorem extractionCompileSelectedItems_denote
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     {fragmentRels hostRels : RelCtx}
     (fragmentFuel hostFuel : Nat)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
-    (fragmentBinders : ConcreteElaboration.BinderContext
+    (hostContext : Concrete.Elaboration.WireContext input.val)
+    (fragmentBinders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) fragmentRels)
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
-    (fragmentEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
+    (fragmentEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) fragmentBinders
       layout.bodyContainer)
-    (hostEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (hostEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val hostBinders selection.val.anchor)
     (hostCover : hostBinders.Covers selection.val.anchor)
     (fragmentExact : fragmentContext.Exact layout.bodyContainer)
@@ -183,22 +185,22 @@ theorem extractionCompileSelectedItems_denote
     (fragmentItems : ItemSeq  fragmentContext.length fragmentRels)
     (hostItems : ItemSeq  hostContext.length hostRels)
     (fragmentCompiled :
-      ConcreteElaboration.compileOccurrencesWith?
+      Concrete.Elaboration.compileOccurrencesWith?
         (input.val.extractDiagramRaw selection layout)
-        (ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           (input.val.extractDiagramRaw selection layout) fragmentFuel)
         fragmentContext fragmentBinders
-        (ConcreteElaboration.localOccurrences
+        (Concrete.Elaboration.localOccurrences
           (input.val.extractDiagramRaw selection layout) layout.bodyContainer) =
         some fragmentItems)
     (hostCompiled :
-      ConcreteElaboration.compileOccurrencesWith?  input.val
-        (ConcreteElaboration.compileRegion?  input.val hostFuel)
+      Concrete.Elaboration.compileOccurrencesWith?  input.val
+        (Concrete.Elaboration.compileRegion?  input.val hostFuel)
         hostContext hostBinders (selectedOccurrences input.val selection) =
         some hostItems) :
     let binderWitness := ExtractionBinderWitness.terminal input selection layout
       fragmentBinders fragmentEnumeration hostBinders hostCover
-    ConcreteElaboration.ItemSeqSimulation model  direction
+    Concrete.Elaboration.ItemSeqSimulation model  direction
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
       (fragmentItems.renameRelations binderWitness.relationMap) hostItems := by
@@ -212,36 +214,36 @@ theorem extractionCompileSelectedItems_denote
     exact fragmentWireOrigin_mem_context_iff input selection layout
       fragmentContext hostContext fragmentExact hostExact
   obtain ⟨mappedHostItems, mappedHostCompiled⟩ :=
-    ConcreteElaboration.compileOccurrencesWith?_complete
-      (ConcreteElaboration.compileRegion?  input.val hostFuel)
+    Concrete.Elaboration.compileOccurrencesWith?_complete
+      (Concrete.Elaboration.compileRegion?  input.val hostFuel)
       hostContext hostBinders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (input.val.extractDiagramRaw selection layout)
         layout.bodyContainer).map occurrenceMap)
       (by
         intro hostOccurrence hostMember
         apply ModalSoundness.compileOccurrence_success_of_mem input.val
-          (ConcreteElaboration.compileRegion?  input.val hostFuel)
+          (Concrete.Elaboration.compileRegion?  input.val hostFuel)
           hostContext hostBinders hostCompiled
         exact (extractionHostOccurrenceMap_terminal_perm_selected input
           selection layout).mem_iff.mp hostMember)
-  have mappedSimulation : ConcreteElaboration.ItemSeqSimulation model
+  have mappedSimulation : Concrete.Elaboration.ItemSeqSimulation model
       direction
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
       (fragmentItems.renameRelations binderWitness.relationMap)
       mappedHostItems := by
     apply
-      ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+      Concrete.Elaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
         model  direction
-        (ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           (input.val.extractDiagramRaw selection layout) fragmentFuel)
-        (ConcreteElaboration.compileRegion?  input.val hostFuel)
+        (Concrete.Elaboration.compileRegion?  input.val hostFuel)
         fragmentContext hostContext fragmentBinders hostBinders
         (extractionContextRelation input selection layout fragmentContext
           hostContext)
         binderWitness.relationMap occurrenceMap
-        (ConcreteElaboration.localOccurrences
+        (Concrete.Elaboration.localOccurrences
           (input.val.extractDiagramRaw selection layout) layout.bodyContainer)
     · intro occurrence occurrenceMember fragmentItem hostItem
         fragmentOccurrenceCompiled hostOccurrenceCompiled
@@ -259,7 +261,7 @@ theorem extractionCompileSelectedItems_denote
           · exact hostOccurrenceCompiled
       | child child =>
           have childParent :=
-            (ConcreteElaboration.mem_localOccurrences_child _ _ _).1
+            (Concrete.Elaboration.mem_localOccurrences_child _ _ _).1
               occurrenceMember
           obtain ⟨childMaterial, childEq⟩ := terminalChild_is_material input
             selection layout child childParent
@@ -268,21 +270,21 @@ theorem extractionCompileSelectedItems_denote
           have mappedChild := extractionHostOccurrenceMap_materialChild
              input selection layout childMaterial
           have hostOccurrenceCompiled' :
-              ConcreteElaboration.compileOccurrenceWith?  input.val
-                (ConcreteElaboration.compileRegion?  input.val hostFuel)
+              Concrete.Elaboration.compileOccurrenceWith?  input.val
+                (Concrete.Elaboration.compileRegion?  input.val hostFuel)
                 hostContext hostBinders
                 (.child (selection.selectedRegions.get childMaterial)) =
                   some hostItem := by
             exact (congrArg (fun occurrence =>
-              ConcreteElaboration.compileOccurrenceWith?  input.val
-                (ConcreteElaboration.compileRegion?  input.val hostFuel)
+              Concrete.Elaboration.compileOccurrenceWith?  input.val
+                (Concrete.Elaboration.compileRegion?  input.val hostFuel)
                 hostContext hostBinders occurrence) mappedChild).symm.trans
               hostOccurrenceCompiled
           cases fragmentKind :
               (input.val.extractDiagramRaw selection layout).regions
                 (layout.materialRegion childMaterial) with
           | sheet =>
-              simp [ConcreteElaboration.compileOccurrenceWith?, fragmentKind]
+              simp [Concrete.Elaboration.compileOccurrenceWith?, fragmentKind]
                 at fragmentOccurrenceCompiled
           | cut actualParent =>
               have actualParentEq : actualParent = layout.bodyContainer := by
@@ -294,24 +296,24 @@ theorem extractionCompileSelectedItems_denote
               have hostKind' : input.val.regions
                   (selection.selectedRegions.get childMaterial) =
                     .cut selection.val.anchor := by simpa using hostKind
-              unfold ConcreteElaboration.compileOccurrenceWith?
+              unfold Concrete.Elaboration.compileOccurrenceWith?
                 at hostOccurrenceCompiled'
               dsimp only at hostOccurrenceCompiled'
               rw [hostKind'] at hostOccurrenceCompiled'
               cases fragmentResult :
-                  ConcreteElaboration.compileRegion?
+                  Concrete.Elaboration.compileRegion?
                     (input.val.extractDiagramRaw selection layout) fragmentFuel
                     (layout.materialRegion childMaterial) fragmentContext
                     fragmentBinders with
               | none =>
-                  simp [ConcreteElaboration.compileOccurrenceWith?, fragmentKind,
+                  simp [Concrete.Elaboration.compileOccurrenceWith?, fragmentKind,
                     fragmentResult] at fragmentOccurrenceCompiled
               | some fragmentChild =>
-                  simp [ConcreteElaboration.compileOccurrenceWith?, fragmentKind,
+                  simp [Concrete.Elaboration.compileOccurrenceWith?, fragmentKind,
                     fragmentResult] at fragmentOccurrenceCompiled
                   subst fragmentItem
                   cases hostResult :
-                      ConcreteElaboration.compileRegion?  input.val
+                      Concrete.Elaboration.compileRegion?  input.val
                         hostFuel (selection.selectedRegions.get childMaterial)
                         hostContext hostBinders with
                   | none =>
@@ -328,7 +330,7 @@ theorem extractionCompileSelectedItems_denote
                         hostFuel childMaterial fragmentContext hostContext
                         membership fragmentBinders hostBinders
                         (fragmentEnumeration.cutChild
-                          (ConcreteDiagram.extractDiagramRaw_wellFormed input
+                          (Concrete.Diagram.extractDiagramRaw_wellFormed input
                             selection layout) fragmentKind)
                         (hostEnumeration.cutChild input.property hostKind')
                         (binderWitness.cutChild
@@ -336,7 +338,7 @@ theorem extractionCompileSelectedItems_denote
                           (selection.selectedRegions.get childMaterial)
                           fragmentKind hostKind')
                         (fragmentExact.extend_child
-                          (ConcreteDiagram.extractDiagramRaw_wellFormed input
+                          (Concrete.Diagram.extractDiagramRaw_wellFormed input
                             selection layout) childParent)
                         (hostExact.extend_child input.property
                           (by simpa only [CRegion.parent?] using
@@ -364,7 +366,7 @@ theorem extractionCompileSelectedItems_denote
               have hostKind' : input.val.regions
                   (selection.selectedRegions.get childMaterial) =
                     .bubble selection.val.anchor arity := by simpa using hostKind
-              unfold ConcreteElaboration.compileOccurrenceWith?
+              unfold Concrete.Elaboration.compileOccurrenceWith?
                 at hostOccurrenceCompiled'
               dsimp only at hostOccurrenceCompiled'
               rw [hostKind'] at hostOccurrenceCompiled'
@@ -374,19 +376,19 @@ theorem extractionCompileSelectedItems_denote
               let hostPushed := hostBinders.push
                 (selection.selectedRegions.get childMaterial) arity
               cases fragmentResult :
-                  ConcreteElaboration.compileRegion?
+                  Concrete.Elaboration.compileRegion?
                     (input.val.extractDiagramRaw selection layout) fragmentFuel
                     (layout.materialRegion childMaterial) fragmentContext
                     fragmentPushed with
               | none =>
-                  simp [ConcreteElaboration.compileOccurrenceWith?, fragmentKind,
+                  simp [Concrete.Elaboration.compileOccurrenceWith?, fragmentKind,
                     fragmentPushed, fragmentResult] at fragmentOccurrenceCompiled
               | some fragmentChild =>
-                  simp [ConcreteElaboration.compileOccurrenceWith?, fragmentKind,
+                  simp [Concrete.Elaboration.compileOccurrenceWith?, fragmentKind,
                     fragmentPushed, fragmentResult] at fragmentOccurrenceCompiled
                   subst fragmentItem
                   cases hostResult :
-                      ConcreteElaboration.compileRegion?  input.val
+                      Concrete.Elaboration.compileRegion?  input.val
                         hostFuel (selection.selectedRegions.get childMaterial)
                         hostContext hostPushed with
                   | none =>
@@ -407,12 +409,12 @@ theorem extractionCompileSelectedItems_denote
                         hostFuel childMaterial fragmentContext hostContext
                         membership fragmentPushed hostPushed
                         (fragmentEnumeration.bubbleChild
-                          (ConcreteDiagram.extractDiagramRaw_wellFormed input
+                          (Concrete.Diagram.extractDiagramRaw_wellFormed input
                             selection layout) fragmentKind)
                         (hostEnumeration.bubbleChild input.property hostKind')
                         childWitness
                         (fragmentExact.extend_child
-                          (ConcreteDiagram.extractDiagramRaw_wellFormed input
+                          (Concrete.Diagram.extractDiagramRaw_wellFormed input
                             selection layout) childParent)
                         (hostExact.extend_child input.property
                           (by simpa only [CRegion.parent?] using
@@ -434,7 +436,7 @@ theorem extractionCompileSelectedItems_denote
     · exact mappedHostCompiled
   intro fragmentEnv hostEnv relEnv environments
   have permuted := ModalSoundness.compileOccurrences_denote_perm input.val
-    (ConcreteElaboration.compileRegion?  input.val hostFuel)
+    (Concrete.Elaboration.compileRegion?  input.val hostFuel)
     hostContext hostBinders
     (extractionHostOccurrenceMap_terminal_perm_selected input selection layout)
     mappedHostCompiled hostCompiled model  hostEnv relEnv
@@ -451,22 +453,22 @@ theorem extractionCompileSelectedItems_denote
 /-- The selected anchor block entails the extracted terminal material.  This
 is the compiler-level copy law consumed by iteration contraction. -/
 theorem extractionCompileTerminal_selected_denote
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (model : Model)
     {fragmentRels hostRels : RelCtx}
     (fragmentFuel hostFuel : Nat)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
-    (fragmentBinders : ConcreteElaboration.BinderContext
+    (hostContext : Concrete.Elaboration.WireContext input.val)
+    (fragmentBinders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) fragmentRels)
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
-    (fragmentEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
+    (fragmentEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (input.val.extractDiagramRaw selection layout) fragmentBinders
       layout.bodyContainer)
-    (hostEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (hostEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val hostBinders selection.val.anchor)
     (hostCover : hostBinders.Covers selection.val.anchor)
     (fragmentExact :
@@ -476,25 +478,25 @@ theorem extractionCompileTerminal_selected_denote
       (fragmentContext.extend layout.bodyContainer).length fragmentRels)
     (hostItems : ItemSeq  hostContext.length hostRels)
     (fragmentCompiled :
-      ConcreteElaboration.compileOccurrencesWith?
+      Concrete.Elaboration.compileOccurrencesWith?
         (input.val.extractDiagramRaw selection layout)
-        (ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           (input.val.extractDiagramRaw selection layout) fragmentFuel)
         (fragmentContext.extend layout.bodyContainer) fragmentBinders
-        (ConcreteElaboration.localOccurrences
+        (Concrete.Elaboration.localOccurrences
           (input.val.extractDiagramRaw selection layout) layout.bodyContainer) =
         some fragmentItems)
     (hostCompiled :
-      ConcreteElaboration.compileOccurrencesWith?  input.val
-        (ConcreteElaboration.compileRegion?  input.val hostFuel)
+      Concrete.Elaboration.compileOccurrencesWith?  input.val
+        (Concrete.Elaboration.compileRegion?  input.val hostFuel)
         hostContext hostBinders (selectedOccurrences input.val selection) =
         some hostItems) :
     let binderWitness := ExtractionBinderWitness.terminal input selection layout
       fragmentBinders fragmentEnumeration hostBinders hostCover
-    ConcreteElaboration.RegionSimulation model  .backward
+    Concrete.Elaboration.RegionSimulation model  .backward
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
-      ((ConcreteElaboration.finishRegion
+      ((Concrete.Elaboration.finishRegion
           (input.val.extractDiagramRaw selection layout) fragmentContext
           layout.bodyContainer fragmentItems).renameRelations
         binderWitness.relationMap)
@@ -510,36 +512,36 @@ theorem extractionCompileTerminal_selected_denote
     exact fragmentWireOrigin_mem_context_iff input selection layout
       fragmentExtended hostContext fragmentExact hostExact
   obtain ⟨mappedHostItems, mappedHostCompiled⟩ :=
-    ConcreteElaboration.compileOccurrencesWith?_complete
-      (ConcreteElaboration.compileRegion?  input.val hostFuel)
+    Concrete.Elaboration.compileOccurrencesWith?_complete
+      (Concrete.Elaboration.compileRegion?  input.val hostFuel)
       hostContext hostBinders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (input.val.extractDiagramRaw selection layout)
         layout.bodyContainer).map occurrenceMap)
       (by
         intro hostOccurrence hostMember
         apply ModalSoundness.compileOccurrence_success_of_mem input.val
-          (ConcreteElaboration.compileRegion?  input.val hostFuel)
+          (Concrete.Elaboration.compileRegion?  input.val hostFuel)
           hostContext hostBinders hostCompiled
         exact (extractionHostOccurrenceMap_terminal_perm_selected input
           selection layout).mem_iff.mp hostMember)
-  have mappedSimulation : ConcreteElaboration.ItemSeqSimulation model
+  have mappedSimulation : Concrete.Elaboration.ItemSeqSimulation model
       .backward
       (extractionContextRelation input selection layout fragmentExtended
         hostContext)
       (fragmentItems.renameRelations binderWitness.relationMap)
       mappedHostItems := by
     apply
-      ConcreteElaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
+      Concrete.Elaboration.ConcreteSemanticSimulation.compileOccurrences_denote_of_pointwise
         model  .backward
-        (ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           (input.val.extractDiagramRaw selection layout) fragmentFuel)
-        (ConcreteElaboration.compileRegion?  input.val hostFuel)
+        (Concrete.Elaboration.compileRegion?  input.val hostFuel)
         fragmentExtended hostContext fragmentBinders hostBinders
         (extractionContextRelation input selection layout fragmentExtended
           hostContext)
         binderWitness.relationMap occurrenceMap
-        (ConcreteElaboration.localOccurrences
+        (Concrete.Elaboration.localOccurrences
           (input.val.extractDiagramRaw selection layout) layout.bodyContainer)
     · intro occurrence occurrenceMember fragmentItem hostItem
         fragmentOccurrenceCompiled hostOccurrenceCompiled
@@ -557,7 +559,7 @@ theorem extractionCompileTerminal_selected_denote
           · exact hostOccurrenceCompiled
       | child child =>
           have childParent :=
-            (ConcreteElaboration.mem_localOccurrences_child _ _ _).1
+            (Concrete.Elaboration.mem_localOccurrences_child _ _ _).1
               occurrenceMember
           obtain ⟨childMaterial, childEq⟩ := terminalChild_is_material input
             selection layout child childParent
@@ -566,21 +568,21 @@ theorem extractionCompileTerminal_selected_denote
           have mappedChild := extractionHostOccurrenceMap_materialChild
              input selection layout childMaterial
           have hostOccurrenceCompiled' :
-              ConcreteElaboration.compileOccurrenceWith?  input.val
-                (ConcreteElaboration.compileRegion?  input.val hostFuel)
+              Concrete.Elaboration.compileOccurrenceWith?  input.val
+                (Concrete.Elaboration.compileRegion?  input.val hostFuel)
                 hostContext hostBinders
                 (.child (selection.selectedRegions.get childMaterial)) =
                   some hostItem := by
             exact (congrArg (fun occurrence =>
-              ConcreteElaboration.compileOccurrenceWith?  input.val
-                (ConcreteElaboration.compileRegion?  input.val hostFuel)
+              Concrete.Elaboration.compileOccurrenceWith?  input.val
+                (Concrete.Elaboration.compileRegion?  input.val hostFuel)
                 hostContext hostBinders occurrence) mappedChild).symm.trans
               hostOccurrenceCompiled
           cases fragmentKind :
               (input.val.extractDiagramRaw selection layout).regions
                 (layout.materialRegion childMaterial) with
           | sheet =>
-              simp [ConcreteElaboration.compileOccurrenceWith?, fragmentKind]
+              simp [Concrete.Elaboration.compileOccurrenceWith?, fragmentKind]
                 at fragmentOccurrenceCompiled
           | cut actualParent =>
               have actualParentEq : actualParent = layout.bodyContainer := by
@@ -593,24 +595,24 @@ theorem extractionCompileTerminal_selected_denote
                   (selection.selectedRegions.get childMaterial) =
                     .cut selection.val.anchor := by
                 simpa using hostKind
-              unfold ConcreteElaboration.compileOccurrenceWith?
+              unfold Concrete.Elaboration.compileOccurrenceWith?
                 at hostOccurrenceCompiled'
               dsimp only at hostOccurrenceCompiled'
               rw [hostKind'] at hostOccurrenceCompiled'
               cases fragmentResult :
-                  ConcreteElaboration.compileRegion?
+                  Concrete.Elaboration.compileRegion?
                     (input.val.extractDiagramRaw selection layout) fragmentFuel
                     (layout.materialRegion childMaterial) fragmentExtended
                     fragmentBinders with
               | none =>
-                  simp [ConcreteElaboration.compileOccurrenceWith?, fragmentKind,
+                  simp [Concrete.Elaboration.compileOccurrenceWith?, fragmentKind,
                     fragmentResult] at fragmentOccurrenceCompiled
               | some fragmentChild =>
-                  simp [ConcreteElaboration.compileOccurrenceWith?, fragmentKind,
+                  simp [Concrete.Elaboration.compileOccurrenceWith?, fragmentKind,
                     fragmentResult] at fragmentOccurrenceCompiled
                   subst fragmentItem
                   cases hostResult :
-                      ConcreteElaboration.compileRegion?  input.val
+                      Concrete.Elaboration.compileRegion?  input.val
                         hostFuel (selection.selectedRegions.get childMaterial)
                         hostContext hostBinders with
                   | none =>
@@ -627,7 +629,7 @@ theorem extractionCompileTerminal_selected_denote
                         hostFuel childMaterial fragmentExtended hostContext
                         fullMembership fragmentBinders hostBinders
                         (fragmentEnumeration.cutChild
-                          (ConcreteDiagram.extractDiagramRaw_wellFormed input
+                          (Concrete.Diagram.extractDiagramRaw_wellFormed input
                             selection layout) fragmentKind)
                         (hostEnumeration.cutChild input.property hostKind')
                         (binderWitness.cutChild
@@ -635,7 +637,7 @@ theorem extractionCompileTerminal_selected_denote
                           (selection.selectedRegions.get childMaterial)
                           fragmentKind hostKind')
                         (fragmentExact.extend_child
-                          (ConcreteDiagram.extractDiagramRaw_wellFormed input
+                          (Concrete.Diagram.extractDiagramRaw_wellFormed input
                             selection layout) childParent)
                         (hostExact.extend_child input.property
                           (by simpa only [CRegion.parent?] using
@@ -657,7 +659,7 @@ theorem extractionCompileTerminal_selected_denote
                   (selection.selectedRegions.get childMaterial) =
                     .bubble selection.val.anchor arity := by
                 simpa using hostKind
-              unfold ConcreteElaboration.compileOccurrenceWith?
+              unfold Concrete.Elaboration.compileOccurrenceWith?
                 at hostOccurrenceCompiled'
               dsimp only at hostOccurrenceCompiled'
               rw [hostKind'] at hostOccurrenceCompiled'
@@ -667,19 +669,19 @@ theorem extractionCompileTerminal_selected_denote
               let hostPushed := hostBinders.push
                 (selection.selectedRegions.get childMaterial) arity
               cases fragmentResult :
-                  ConcreteElaboration.compileRegion?
+                  Concrete.Elaboration.compileRegion?
                     (input.val.extractDiagramRaw selection layout) fragmentFuel
                     (layout.materialRegion childMaterial) fragmentExtended
                     fragmentPushed with
               | none =>
-                  simp [ConcreteElaboration.compileOccurrenceWith?, fragmentKind,
+                  simp [Concrete.Elaboration.compileOccurrenceWith?, fragmentKind,
                     fragmentPushed, fragmentResult] at fragmentOccurrenceCompiled
               | some fragmentChild =>
-                  simp [ConcreteElaboration.compileOccurrenceWith?, fragmentKind,
+                  simp [Concrete.Elaboration.compileOccurrenceWith?, fragmentKind,
                     fragmentPushed, fragmentResult] at fragmentOccurrenceCompiled
                   subst fragmentItem
                   cases hostResult :
-                      ConcreteElaboration.compileRegion?  input.val
+                      Concrete.Elaboration.compileRegion?  input.val
                         hostFuel (selection.selectedRegions.get childMaterial)
                         hostContext hostPushed with
                   | none =>
@@ -700,12 +702,12 @@ theorem extractionCompileTerminal_selected_denote
                         hostFuel childMaterial fragmentExtended hostContext
                         fullMembership fragmentPushed hostPushed
                         (fragmentEnumeration.bubbleChild
-                          (ConcreteDiagram.extractDiagramRaw_wellFormed input
+                          (Concrete.Diagram.extractDiagramRaw_wellFormed input
                             selection layout) fragmentKind)
                         (hostEnumeration.bubbleChild input.property hostKind')
                         childWitness
                         (fragmentExact.extend_child
-                          (ConcreteDiagram.extractDiagramRaw_wellFormed input
+                          (Concrete.Diagram.extractDiagramRaw_wellFormed input
                             selection layout) childParent)
                         (hostExact.extend_child input.property
                           (by simpa only [CRegion.parent?] using
@@ -717,7 +719,7 @@ theorem extractionCompileTerminal_selected_denote
                         (relationValue, relEnv) environments hostDenotes⟩
     · exact fragmentCompiled
     · exact mappedHostCompiled
-  have selectedSimulation : ConcreteElaboration.ItemSeqSimulation model
+  have selectedSimulation : Concrete.Elaboration.ItemSeqSimulation model
       .backward
       (extractionContextRelation input selection layout fragmentExtended
         hostContext)
@@ -725,11 +727,11 @@ theorem extractionCompileTerminal_selected_denote
     intro fragmentEnv hostEnv relEnv environments hostDenotes
     apply mappedSimulation fragmentEnv hostEnv relEnv environments
     exact (ModalSoundness.compileOccurrences_denote_perm input.val
-      (ConcreteElaboration.compileRegion?  input.val hostFuel)
+      (Concrete.Elaboration.compileRegion?  input.val hostFuel)
       hostContext hostBinders
       (extractionHostOccurrenceMap_terminal_perm_selected input selection layout)
       mappedHostCompiled hostCompiled model  hostEnv relEnv).mpr hostDenotes
-  rw [ConcreteElaboration.finishRegion_renameRelations]
+  rw [Concrete.Elaboration.finishRegion_renameRelations]
   intro fragmentOuter hostEnv relEnv outerAgrees hostDenotes
   have hostItemsDenote :=
     (denoteRegion_mk_zero_iff model  hostEnv relEnv hostItems).1 hostDenotes
@@ -738,14 +740,14 @@ theorem extractionCompileTerminal_selected_denote
       fragmentContext hostContext fragmentExact hostExact fragmentOuter hostEnv
       outerAgrees
   have fragmentItemsDenote := selectedSimulation
-    (ConcreteElaboration.extendedEnvironment fragmentContext
+    (Concrete.Elaboration.extendedEnvironment fragmentContext
       layout.bodyContainer fragmentOuter fragmentLocal)
     hostEnv relEnv fullAgrees hostItemsDenote
-  unfold ConcreteElaboration.finishRegion
+  unfold Concrete.Elaboration.finishRegion
   simp only [denoteRegion_mk, ItemSeq.castWiresEq_eq_renameWires]
   refine ⟨fragmentLocal, ?_⟩
   exact (denoteItemSeq_renameWires model
-    (Fin.cast (ConcreteElaboration.WireContext.length_extend fragmentContext
+    (Fin.cast (Concrete.Elaboration.WireContext.length_extend fragmentContext
       layout.bodyContainer))
     (extendWireEnv fragmentOuter fragmentLocal) relEnv
     (fragmentItems.renameRelations binderWitness.relationMap)).mpr
@@ -755,15 +757,15 @@ theorem extractionCompileTerminal_selected_denote
 ordered boundary remains ambient while its nonboundary root wires are chosen
 as existential witnesses from the exact host-anchor valuation. -/
 theorem extractionCompileRoot_selected_denote
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (hzero : layout.proxyCount = 0)
     (model : Model)
     (hostFuel : Nat)
-    (hostContext : ConcreteElaboration.WireContext input.val)
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
-    (hostEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (hostContext : Concrete.Elaboration.WireContext input.val)
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
+    (hostEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.val hostBinders selection.val.anchor)
     (hostCover : hostBinders.Covers selection.val.anchor)
     (hostExact : hostContext.Exact selection.val.anchor)
@@ -771,29 +773,29 @@ theorem extractionCompileRoot_selected_denote
       (input.val.extractOpenRaw selection layout).rootWires.length [])
     (hostItems : ItemSeq  hostContext.length hostRels)
     (fragmentCompiled :
-      ConcreteElaboration.compileOccurrencesWith?
+      Concrete.Elaboration.compileOccurrencesWith?
         (input.val.extractDiagramRaw selection layout)
-        (ConcreteElaboration.compileRegion?
+        (Concrete.Elaboration.compileRegion?
           (input.val.extractDiagramRaw selection layout)
           (input.val.extractDiagramRaw selection layout).regionCount)
         (input.val.extractOpenRaw selection layout).rootWires
-        ConcreteElaboration.BinderContext.empty
-        (ConcreteElaboration.localOccurrences
+        Concrete.Elaboration.BinderContext.empty
+        (Concrete.Elaboration.localOccurrences
           (input.val.extractDiagramRaw selection layout)
           (input.val.extractDiagramRaw selection layout).root) =
         some fragmentItems)
     (hostCompiled :
-      ConcreteElaboration.compileOccurrencesWith?  input.val
-        (ConcreteElaboration.compileRegion?  input.val hostFuel)
+      Concrete.Elaboration.compileOccurrencesWith?  input.val
+        (Concrete.Elaboration.compileRegion?  input.val hostFuel)
         hostContext hostBinders (selectedOccurrences input.val selection) =
         some hostItems) :
     let fragment := input.val.extractOpenRaw selection layout
     let relationMap : RelationRenaming [] hostRels :=
-      Splice.Input.PlugLayout.emptyRelationRenaming hostRels
-    ConcreteElaboration.RegionSimulation model  .backward
+      Concrete.Splice.Input.PlugLayout.emptyRelationRenaming hostRels
+    Concrete.Elaboration.RegionSimulation model  .backward
       (extractionContextRelation input selection layout fragment.exposedWires
         hostContext)
-      ((ConcreteElaboration.finishRoot fragment.exposedWires
+      ((Concrete.Elaboration.finishRoot fragment.exposedWires
         fragment.hiddenWires fragmentItems).renameRelations relationMap)
       (Region.mk 0 hostItems) := by
   dsimp only
@@ -801,27 +803,27 @@ theorem extractionCompileRoot_selected_denote
   have bodyEq : layout.bodyContainer = fragment.diagram.root :=
     layout.bodyContainer_eq_root_of_proxyCount_eq_zero hzero
   let fragmentEnumeration :
-      ConcreteElaboration.BinderContext.Enumeration fragment.diagram
-        ConcreteElaboration.BinderContext.empty layout.bodyContainer :=
-    bodyEq.symm ▸ ConcreteElaboration.BinderContext.Enumeration.empty
+      Concrete.Elaboration.BinderContext.Enumeration fragment.diagram
+        Concrete.Elaboration.BinderContext.empty layout.bodyContainer :=
+    bodyEq.symm ▸ Concrete.Elaboration.BinderContext.Enumeration.empty
       fragment.diagram
-  have fragmentExact : ConcreteElaboration.WireContext.Exact
+  have fragmentExact : Concrete.Elaboration.WireContext.Exact
       fragment.rootWires layout.bodyContainer := by
     rw [bodyEq]
-    exact ConcreteElaboration.openRootWires_exact
-      (ConcreteDiagram.extractOpenRaw_wellFormed input selection layout)
+    exact Concrete.Elaboration.openRootWires_exact
+      (Concrete.Diagram.extractOpenRaw_wellFormed input selection layout)
   have itemsSimulation := extractionCompileSelectedItems_denote input selection
     layout model  .backward
     (input.val.extractDiagramRaw selection layout).regionCount hostFuel
-    fragment.rootWires hostContext ConcreteElaboration.BinderContext.empty
+    fragment.rootWires hostContext Concrete.Elaboration.BinderContext.empty
     hostBinders fragmentEnumeration hostEnumeration hostCover fragmentExact
     hostExact fragmentItems hostItems
     (by simpa [fragment, bodyEq] using fragmentCompiled) hostCompiled
   have relationMapEq :
       ((ExtractionBinderWitness.terminal input selection layout
-        ConcreteElaboration.BinderContext.empty fragmentEnumeration hostBinders
+        Concrete.Elaboration.BinderContext.empty fragmentEnumeration hostBinders
         hostCover).relationMap : RelationRenaming [] hostRels) =
-          (Splice.Input.PlugLayout.emptyRelationRenaming hostRels :
+          (Concrete.Splice.Input.PlugLayout.emptyRelationRenaming hostRels :
             RelationRenaming [] hostRels) := by
     apply @funext
     intro arity
@@ -843,7 +845,7 @@ theorem extractionCompileRoot_selected_denote
     fun index => hostEnv (fullMap
       (Fin.cast rootLengthEq
         (Fin.natAdd fragment.exposedWires.length index)))
-  let fragmentFull := ConcreteElaboration.rootEnvironment
+  let fragmentFull := Concrete.Elaboration.rootEnvironment
     fragment.exposedWires fragment.hiddenWires fragmentOuter fragmentHidden
   have fullAgrees :
       (extractionContextRelation input selection layout fragment.rootWires
@@ -879,7 +881,7 @@ theorem extractionCompileRoot_selected_denote
           hostContext[hostIndex.val]'_ at branchRelated
         rw [List.getElem_append_left exposedIndex.isLt] at branchRelated
         exact branchRelated
-      simpa [fragmentFull, ConcreteElaboration.rootEnvironment,
+      simpa [fragmentFull, Concrete.Elaboration.rootEnvironment,
         rootLengthEq, appendIndex, extendWireEnv] using
           outerAgrees exposedIndex hostIndex outerRelated
     · have chosen := extractionContextIndexMap_spec input selection layout
@@ -895,13 +897,13 @@ theorem extractionCompileRoot_selected_denote
         unfold extractionContextRelation at chosen branchRelated
         exact chosen.symm.trans (by
           simpa [rootLengthEq, appendIndex, fragment,
-            OpenConcreteDiagram.rootWires,
+            Concrete.OpenDiagram.rootWires,
             List.get_eq_getElem] using branchRelated)
-      simpa [fragmentFull, ConcreteElaboration.rootEnvironment,
+      simpa [fragmentFull, Concrete.Elaboration.rootEnvironment,
         rootLengthEq, extendWireEnv] using congrArg hostEnv hostIndexEq
   have fragmentItemsDenote := itemsSimulation fragmentFull hostEnv relEnv
     fullAgrees hostItemsDenote
-  unfold ConcreteElaboration.finishRoot
+  unfold Concrete.Elaboration.finishRoot
   simp only [Region.renameRelations, denoteRegion_mk,
     ItemSeq.castWiresEq_eq_renameWires]
   refine ⟨fragmentHidden, ?_⟩
@@ -909,23 +911,23 @@ theorem extractionCompileRoot_selected_denote
     (Fin.cast rootLengthEq.symm)
     (extendWireEnv fragmentOuter fragmentHidden) relEnv
     (fragmentItems.renameRelations
-      (Splice.Input.PlugLayout.emptyRelationRenaming hostRels))).mpr
-      (by simpa [fragmentFull, ConcreteElaboration.rootEnvironment] using
+      (Concrete.Splice.Input.PlugLayout.emptyRelationRenaming hostRels))).mpr
+      (by simpa [fragmentFull, Concrete.Elaboration.rootEnvironment] using
         fragmentItemsDenote)
   change denoteItemSeq model
     (extendWireEnv fragmentOuter fragmentHidden) relEnv
     ((fragmentItems.renameWires (Fin.cast rootLengthEq.symm)).renameRelations
-      (Splice.Input.PlugLayout.emptyRelationRenaming hostRels))
+      (Concrete.Splice.Input.PlugLayout.emptyRelationRenaming hostRels))
   have commute :
       (fragmentItems.renameWires
           (Fin.cast rootLengthEq.symm)).renameRelations
-          (Splice.Input.PlugLayout.emptyRelationRenaming hostRels) =
+          (Concrete.Splice.Input.PlugLayout.emptyRelationRenaming hostRels) =
         (fragmentItems.renameRelations
-          (Splice.Input.PlugLayout.emptyRelationRenaming hostRels)).renameWires
+          (Concrete.Splice.Input.PlugLayout.emptyRelationRenaming hostRels)).renameWires
           (Fin.cast rootLengthEq.symm) :=
     ItemSeq.renameWires_renameRelations fragmentItems
       (Fin.cast rootLengthEq.symm)
-      (Splice.Input.PlugLayout.emptyRelationRenaming hostRels)
+      (Concrete.Splice.Input.PlugLayout.emptyRelationRenaming hostRels)
   exact commute.symm ▸ renamedDenote
 
 end VisualProof.Rule.IterationSoundness

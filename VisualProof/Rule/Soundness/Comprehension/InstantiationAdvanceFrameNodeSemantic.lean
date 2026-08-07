@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvanceFrameSemanti
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -12,20 +14,20 @@ namespace InstantiationSemantic
 compiled to the exact wire/relation renaming of its source item, so its
 denotation is equivalent in both simulation directions. -/
 theorem frameNode_simulation_of_mapped
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (hadmissible : input.Admissible)
     (region : Fin input.coalesceFrameRaw.regionCount)
-    (sourceContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetContext : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (sourceContext : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetContext : Concrete.Elaboration.WireContext input.plugLayout.plugRaw)
     (sourceExact : sourceContext.Exact region)
     (targetExact : targetContext.Exact
       (input.plugLayout.frameRegion region))
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       input.coalesceFrameRaw sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       input.plugLayout.plugRaw targetRels)
     (sourceCover : sourceBinders.Covers region)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.coalesceFrameRaw sourceBinders region)
     (wireMap : Fin sourceContext.length → Fin targetContext.length)
     (wireSpec : ∀ index, targetContext.get (wireMap index) =
@@ -39,16 +41,16 @@ theorem frameNode_simulation_of_mapped
     (node : Fin input.coalesceFrameRaw.nodeCount)
     (nodeRegion : (input.coalesceFrameRaw.nodes node).region = region)
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileNode?
+    (sourceCompiled : Concrete.Elaboration.compileNode?
       input.coalesceFrameRaw sourceContext sourceBinders node = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode?
+    (targetCompiled : Concrete.Elaboration.compileNode?
       input.plugLayout.plugRaw targetContext targetBinders
         (input.plugLayout.frameNode node) = some targetItem) :
-    ConcreteElaboration.ItemSimulation model  direction
-      (ConcreteElaboration.ContextIndexRelation.forwardMap wireMap)
+    Concrete.Elaboration.ItemSimulation model  direction
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap wireMap)
       (sourceItem.renameRelations relationMap) targetItem := by
   have mapped := input.plugLayout.compileFrameNode_at_region_of_maps
     input hadmissible region sourceContext targetContext sourceExact targetExact
@@ -81,20 +83,20 @@ splice compiler's exact quotient/frame wire map and binder renaming directly,
 so it remains valid at the distinguished site where the local wire carriers
 need not be related by the off-site finite equivalence. -/
 theorem frameNode_denotes_of_mapped
-    (input : Splice.Input )
+    (input : Concrete.Splice.Input )
     (hadmissible : input.Admissible)
     (region : Fin input.coalesceFrameRaw.regionCount)
-    (sourceContext : ConcreteElaboration.WireContext input.coalesceFrameRaw)
-    (targetContext : ConcreteElaboration.WireContext input.plugLayout.plugRaw)
+    (sourceContext : Concrete.Elaboration.WireContext input.coalesceFrameRaw)
+    (targetContext : Concrete.Elaboration.WireContext input.plugLayout.plugRaw)
     (sourceExact : sourceContext.Exact region)
     (targetExact : targetContext.Exact
       (input.plugLayout.frameRegion region))
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       input.coalesceFrameRaw sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       input.plugLayout.plugRaw targetRels)
     (sourceCover : sourceBinders.Covers region)
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       input.coalesceFrameRaw sourceBinders region)
     (wireMap : Fin sourceContext.length → Fin targetContext.length)
     (wireSpec : ∀ index, targetContext.get (wireMap index) =
@@ -116,9 +118,9 @@ theorem frameNode_denotes_of_mapped
     (relationsAgree : RelEnv.Agrees relationMap sourceRelEnv targetRelEnv)
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileNode?
+    (sourceCompiled : Concrete.Elaboration.compileNode?
       input.coalesceFrameRaw sourceContext sourceBinders node = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileNode?
+    (targetCompiled : Concrete.Elaboration.compileNode?
       input.plugLayout.plugRaw targetContext targetBinders
         (input.plugLayout.frameNode node) = some targetItem)
     (targetDenotes : denoteItem model  targetEnv targetRelEnv targetItem) :

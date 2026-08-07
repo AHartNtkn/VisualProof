@@ -1,7 +1,9 @@
 import VisualProof.Rule.Soundness.Modal.Root
-import VisualProof.Rule.Structural.Semantics
+import VisualProof.Concrete.Operation.Structural.Semantics
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -48,39 +50,39 @@ theorem inner_parent
   simp [trace.inner_eq, CRegion.parent?]
 
 private theorem directParent_encloses
-    (input : ConcreteDiagram)
+    (input : Concrete.Diagram)
     {child parent : Fin input.regionCount}
     (parentEq : (input.regions child).parent? = some parent) :
     input.Encloses parent child := by
   refine ⟨⟨1, by have := child.isLt; omega⟩, ?_⟩
-  simp [ConcreteDiagram.climb, parentEq]
+  simp [Concrete.Diagram.climb, parentEq]
 
 theorem outer_ne_inner
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed ) :
     outer ≠ trace.inner := by
   intro equality
-  apply ConcreteElaboration.checked_direct_child_not_encloses_parent
+  apply Concrete.Elaboration.checked_direct_child_not_encloses_parent
     wellFormed trace.inner_parent
   rw [← equality]
-  exact ConcreteDiagram.Encloses.refl input outer
+  exact Concrete.Diagram.Encloses.refl input outer
 
 theorem outer_ne_target
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed ) :
     outer ≠ trace.target := by
   intro equality
-  apply ConcreteElaboration.checked_direct_child_not_encloses_parent
+  apply Concrete.Elaboration.checked_direct_child_not_encloses_parent
     wellFormed trace.outer_parent
   rw [← equality]
-  exact ConcreteDiagram.Encloses.refl input outer
+  exact Concrete.Diagram.Encloses.refl input outer
 
 theorem inner_ne_target
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed ) :
     trace.inner ≠ trace.target := by
   intro equality
-  apply ConcreteElaboration.checked_direct_child_not_encloses_parent
+  apply Concrete.Elaboration.checked_direct_child_not_encloses_parent
     wellFormed trace.inner_parent
   have encloses := directParent_encloses input trace.outer_parent
   simpa [equality] using encloses
@@ -194,7 +196,7 @@ theorem regionMap_root
       Fin.cast trace.promotion.raw_regionCount raw.root =
         trace.promotion.root := by
     apply Fin.ext
-    exact congrArg (fun diagram : ConcreteDiagram => diagram.root.val)
+    exact congrArg (fun diagram : Concrete.Diagram => diagram.root.val)
       trace.promotion.raw_eq
   rw [rootCast]
   exact trace.promotion.root_origin
@@ -582,10 +584,10 @@ theorem regular_exactScopeWires
     (region :
       Fin (doubleCutRegionDomain input outer trace.inner).count)
     (regular : region ≠ trace.targetIndex wellFormed) :
-    ConcreteElaboration.exactScopeWires trace.promotion.diagram region =
-      ConcreteElaboration.exactScopeWires input
+    Concrete.Elaboration.exactScopeWires trace.promotion.diagram region =
+      Concrete.Elaboration.exactScopeWires input
         ((doubleCutRegionDomain input outer trace.inner).origin region) := by
-  unfold ConcreteElaboration.exactScopeWires filterFin
+  unfold Concrete.Elaboration.exactScopeWires filterFin
     PromoteDiagramTrace.diagram
   apply congrArg
     (fun predicate => List.filter predicate (allFin input.wireCount))
@@ -938,7 +940,7 @@ theorem focused_regionShape
       simp [originalParentEq]
 
 abbrev sourceDiagram
-    (trace : DoubleCutElimTrace input outer raw) : ConcreteDiagram :=
+    (trace : DoubleCutElimTrace input outer raw) : Concrete.Diagram :=
   trace.promotion.diagram
 
 def origin
@@ -953,9 +955,9 @@ theorem origin_injective
 
 def occurrenceMap
     (trace : DoubleCutElimTrace input outer raw) :
-    ConcreteElaboration.LocalOccurrence
+    Concrete.Elaboration.LocalOccurrence
         trace.sourceDiagram.regionCount trace.sourceDiagram.nodeCount →
-      ConcreteElaboration.LocalOccurrence input.regionCount input.nodeCount
+      Concrete.Elaboration.LocalOccurrence input.regionCount input.nodeCount
   | .node node => .node node
   | .child child =>
       .child
@@ -963,9 +965,9 @@ def occurrenceMap
 
 def wireIdentityRelation
     (trace : DoubleCutElimTrace input outer raw)
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input) :
-    ConcreteElaboration.ContextIndexRelation
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input) :
+    Concrete.Elaboration.ContextIndexRelation
       sourceContext.length targetContext.length where
   Rel sourceIndex targetIndex :=
     sourceContext.get sourceIndex = targetContext.get targetIndex
@@ -973,9 +975,9 @@ def wireIdentityRelation
 structure PromotedBinderWitness
     (trace : DoubleCutElimTrace input outer raw)
     {sourceRels targetRels : RelCtx}
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       trace.sourceDiagram sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext input targetRels) : Type
+    (targetBinders : Concrete.Elaboration.BinderContext input targetRels) : Type
     where
   relationContexts_eq : sourceRels = targetRels
   binders_eq : ∀ region,
@@ -990,16 +992,16 @@ def relationMap
       sourceBinders targetBinders) :
     RelationRenaming sourceRels targetRels := by
   cases witness.relationContexts_eq
-  exact ConcreteElaboration.identityRelationRenaming sourceRels
+  exact Concrete.Elaboration.identityRelationRenaming sourceRels
 
 def push
-    {input : ConcreteDiagram} {outer : Fin input.regionCount}
-    {raw : ConcreteDiagram}
+    {input : Concrete.Diagram} {outer : Fin input.regionCount}
+    {raw : Concrete.Diagram}
     {trace : DoubleCutElimTrace input outer raw}
     {sourceRels targetRels : RelCtx}
-    {sourceBinders : ConcreteElaboration.BinderContext
+    {sourceBinders : Concrete.Elaboration.BinderContext
       trace.sourceDiagram sourceRels}
-    {targetBinders : ConcreteElaboration.BinderContext input targetRels}
+    {targetBinders : Concrete.Elaboration.BinderContext input targetRels}
     (witness : PromotedBinderWitness trace sourceBinders targetBinders)
     (child parent : Fin trace.sourceDiagram.regionCount) (arity : Nat) :
     PromotedBinderWitness trace
@@ -1008,7 +1010,7 @@ def push
   refine ⟨congrArg (List.cons arity) witness.relationContexts_eq, ?_⟩
   intro region
   cases witness.relationContexts_eq
-  simp only [ConcreteElaboration.BinderContext.push]
+  simp only [Concrete.Elaboration.BinderContext.push]
   by_cases equality : region = child
   · subst region
     simp
@@ -1020,13 +1022,13 @@ def push
     rw [eq_of_heq (witness.binders_eq region)]
 
 theorem relationMap_push
-    {input : ConcreteDiagram} {outer : Fin input.regionCount}
-    {raw : ConcreteDiagram}
+    {input : Concrete.Diagram} {outer : Fin input.regionCount}
+    {raw : Concrete.Diagram}
     {trace : DoubleCutElimTrace input outer raw}
     {sourceRels targetRels : RelCtx}
-    {sourceBinders : ConcreteElaboration.BinderContext
+    {sourceBinders : Concrete.Elaboration.BinderContext
       trace.sourceDiagram sourceRels}
-    {targetBinders : ConcreteElaboration.BinderContext input targetRels}
+    {targetBinders : Concrete.Elaboration.BinderContext input targetRels}
     (witness : PromotedBinderWitness trace
       (sourceRels := sourceRels) (targetRels := targetRels)
       sourceBinders targetBinders)
@@ -1036,34 +1038,34 @@ theorem relationMap_push
       (RelationRenaming.lift (relationMap witness) arity :
         RelationRenaming (arity :: sourceRels) (arity :: targetRels)) := by
   cases witness.relationContexts_eq
-  simpa [relationMap, ConcreteElaboration.identityRelationRenaming] using
+  simpa [relationMap, Concrete.Elaboration.identityRelationRenaming] using
     (RelationRenaming.lift_id_fun (source := sourceRels) arity).symm
 
 end PromotedBinderWitness
 
 structure PromotedContextWitness
     (trace : DoubleCutElimTrace input outer raw)
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input) : Prop where
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input) : Prop where
   target_subset_source : ∀ wire, wire ∈ targetContext → wire ∈ sourceContext
   source_subset_target_or_inner : ∀ wire, wire ∈ sourceContext →
     wire ∈ targetContext ∨
-      wire ∈ ConcreteElaboration.exactScopeWires input trace.inner
+      wire ∈ Concrete.Elaboration.exactScopeWires input trace.inner
 
 namespace PromotedContextWitness
 
 def indexRelation
     (witness : PromotedContextWitness trace sourceContext targetContext) :
-    ConcreteElaboration.ContextIndexRelation
+    Concrete.Elaboration.ContextIndexRelation
       sourceContext.length targetContext.length :=
   trace.wireIdentityRelation sourceContext targetContext
 
 def extendRegular
-    {input : ConcreteDiagram} {outer : Fin input.regionCount}
-    {raw : ConcreteDiagram}
+    {input : Concrete.Diagram} {outer : Fin input.regionCount}
+    {raw : Concrete.Diagram}
     {trace : DoubleCutElimTrace input outer raw}
-    {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
-    {targetContext : ConcreteElaboration.WireContext input}
+    {sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram}
+    {targetContext : Concrete.Elaboration.WireContext input}
     (witness : PromotedContextWitness trace sourceContext targetContext)
     (wellFormed : input.WellFormed )
     (region : Fin trace.sourceDiagram.regionCount)
@@ -1086,7 +1088,7 @@ def extendRegular
       · exact Or.inl (List.mem_append_left _ targetMember)
       · exact Or.inr innerMember
     · exact Or.inl (List.mem_append_right targetContext (by
-        change wire ∈ ConcreteElaboration.exactScopeWires input
+        change wire ∈ Concrete.Elaboration.exactScopeWires input
           ((doubleCutRegionDomain input outer trace.inner).origin region)
         rw [← trace.regular_exactScopeWires wellFormed region regular]
         exact localMember))
@@ -1094,7 +1096,7 @@ def extendRegular
 noncomputable def sourceIndex
     (witness : PromotedContextWitness trace sourceContext targetContext)
     (targetIndex : Fin targetContext.length) : Fin sourceContext.length :=
-  Classical.choose (ConcreteElaboration.WireContext.lookup?_complete
+  Classical.choose (Concrete.Elaboration.WireContext.lookup?_complete
     (witness.target_subset_source (targetContext.get targetIndex)
       (List.get_mem targetContext targetIndex)))
 
@@ -1103,7 +1105,7 @@ theorem sourceIndex_lookup
     (targetIndex : Fin targetContext.length) :
     sourceContext.lookup? (targetContext.get targetIndex) =
       some (witness.sourceIndex targetIndex) :=
-  Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete
+  Classical.choose_spec (Concrete.Elaboration.WireContext.lookup?_complete
     (witness.target_subset_source (targetContext.get targetIndex)
       (List.get_mem targetContext targetIndex)))
 
@@ -1112,7 +1114,7 @@ theorem sourceIndex_get
     (targetIndex : Fin targetContext.length) :
     sourceContext.get (witness.sourceIndex targetIndex) =
       targetContext.get targetIndex :=
-  ConcreteElaboration.WireContext.lookup?_sound
+  Concrete.Elaboration.WireContext.lookup?_sound
     (witness.sourceIndex_lookup targetIndex)
 
 noncomputable def targetEnvironment
@@ -1129,7 +1131,7 @@ theorem targetEnvironment_agrees
       (witness.targetEnvironment sourceEnvironment) := by
   intro sourceIndex targetIndex related
   have sourceIndexEq :=
-    ConcreteElaboration.WireContext.lookup?_unique sourceNodup
+    Concrete.Elaboration.WireContext.lookup?_unique sourceNodup
       (witness.sourceIndex_lookup targetIndex) related
   subst sourceIndex
   rfl
@@ -1138,7 +1140,7 @@ noncomputable def targetIndex
     (witness : PromotedContextWitness trace sourceContext targetContext)
     (sourceSubset : ∀ wire, wire ∈ sourceContext → wire ∈ targetContext)
     (sourceIndex : Fin sourceContext.length) : Fin targetContext.length :=
-  Classical.choose (ConcreteElaboration.WireContext.lookup?_complete
+  Classical.choose (Concrete.Elaboration.WireContext.lookup?_complete
     (sourceSubset (sourceContext.get sourceIndex)
       (List.get_mem sourceContext sourceIndex)))
 
@@ -1148,7 +1150,7 @@ theorem targetIndex_lookup
     (sourceIndex : Fin sourceContext.length) :
     targetContext.lookup? (sourceContext.get sourceIndex) =
       some (witness.targetIndex sourceSubset sourceIndex) :=
-  Classical.choose_spec (ConcreteElaboration.WireContext.lookup?_complete
+  Classical.choose_spec (Concrete.Elaboration.WireContext.lookup?_complete
     (sourceSubset (sourceContext.get sourceIndex)
       (List.get_mem sourceContext sourceIndex)))
 
@@ -1158,7 +1160,7 @@ theorem targetIndex_get
     (sourceIndex : Fin sourceContext.length) :
     targetContext.get (witness.targetIndex sourceSubset sourceIndex) =
       sourceContext.get sourceIndex :=
-  ConcreteElaboration.WireContext.lookup?_sound
+  Concrete.Elaboration.WireContext.lookup?_sound
     (witness.targetIndex_lookup sourceSubset sourceIndex)
 
 noncomputable def sourceEnvironment
@@ -1179,7 +1181,7 @@ theorem sourceEnvironment_agrees
       targetEnvironment := by
   intro sourceIndex targetIndex related
   have targetIndexEq :=
-    ConcreteElaboration.WireContext.lookup?_unique targetNodup
+    Concrete.Elaboration.WireContext.lookup?_unique targetNodup
       (witness.targetIndex_lookup sourceSubset sourceIndex) related.symm
   subst targetIndex
   rfl
@@ -1192,7 +1194,7 @@ private theorem promoted_endpointOccurs
     (endpoint : CEndpoint input.nodeCount) :
   trace.sourceDiagram.EndpointOccurs wire endpoint ↔
       input.EndpointOccurs wire endpoint := by
-  simp only [ConcreteDiagram.EndpointOccurs]
+  simp only [Concrete.Diagram.EndpointOccurs]
   change endpoint ∈ (trace.promotion.wires wire).endpoints ↔
     endpoint ∈ (input.wires wire).endpoints
   rw [trace.promotedWire_endpoints wire]
@@ -1200,34 +1202,34 @@ private theorem promoted_endpointOccurs
 theorem resolvedPorts_related
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
     (node : Fin input.nodeCount) (port : CPort)
     (sourceIndex : Fin sourceContext.length)
     (targetIndex : Fin targetContext.length)
     (sourceResolved :
-      ConcreteElaboration.resolvePort? trace.sourceDiagram sourceContext
+      Concrete.Elaboration.resolvePort? trace.sourceDiagram sourceContext
         node port = some sourceIndex)
     (targetResolved :
-      ConcreteElaboration.resolvePort? input targetContext node port =
+      Concrete.Elaboration.resolvePort? input targetContext node port =
         some targetIndex) :
     (trace.wireIdentityRelation sourceContext targetContext).Rel
       sourceIndex targetIndex := by
   obtain ⟨sourceWire, sourceOccurs, sourceGet⟩ :=
-    ConcreteElaboration.resolvePort?_sound sourceResolved
+    Concrete.Elaboration.resolvePort?_sound sourceResolved
   obtain ⟨targetWire, targetOccurs, targetGet⟩ :=
-    ConcreteElaboration.resolvePort?_sound targetResolved
+    Concrete.Elaboration.resolvePort?_sound targetResolved
   have sourceOccursInput :
       input.EndpointOccurs sourceWire ⟨node, port⟩ :=
     (trace.promoted_endpointOccurs sourceWire ⟨node, port⟩).1 sourceOccurs
   have wireEq : sourceWire = targetWire :=
-    ConcreteElaboration.endpoint_wire_unique
+    Concrete.Elaboration.endpoint_wire_unique
       wellFormed.wire_endpoints_are_disjoint sourceOccursInput targetOccurs
   exact sourceGet.trans (wireEq.trans targetGet.symm)
 
 def occurrenceSelected
     (trace : DoubleCutElimTrace input outer raw) :
-    ConcreteElaboration.LocalOccurrence
+    Concrete.Elaboration.LocalOccurrence
         trace.sourceDiagram.regionCount trace.sourceDiagram.nodeCount →
       Bool
   | .node node =>
@@ -1240,54 +1242,54 @@ def occurrenceSelected
 @[simp] theorem occurrenceMap_map_nodes
     (trace : DoubleCutElimTrace input outer raw)
     (nodes : List (Fin input.nodeCount)) :
-    (nodes.map ConcreteElaboration.LocalOccurrence.node).map
+    (nodes.map Concrete.Elaboration.LocalOccurrence.node).map
         trace.occurrenceMap =
-      nodes.map ConcreteElaboration.LocalOccurrence.node := by
+      nodes.map Concrete.Elaboration.LocalOccurrence.node := by
   induction nodes with
   | nil => rfl
   | cons node rest induction =>
-      change ConcreteElaboration.LocalOccurrence.node node ::
-          (rest.map ConcreteElaboration.LocalOccurrence.node).map
+      change Concrete.Elaboration.LocalOccurrence.node node ::
+          (rest.map Concrete.Elaboration.LocalOccurrence.node).map
             trace.occurrenceMap =
-        ConcreteElaboration.LocalOccurrence.node node ::
-          rest.map ConcreteElaboration.LocalOccurrence.node
+        Concrete.Elaboration.LocalOccurrence.node node ::
+          rest.map Concrete.Elaboration.LocalOccurrence.node
       rw [induction]
 
 @[simp] theorem occurrenceMap_map_children
     (trace : DoubleCutElimTrace input outer raw)
     (children :
       List (Fin (doubleCutRegionDomain input outer trace.inner).count)) :
-    (children.map ConcreteElaboration.LocalOccurrence.child).map
+    (children.map Concrete.Elaboration.LocalOccurrence.child).map
         trace.occurrenceMap =
-      children.map (ConcreteElaboration.LocalOccurrence.child ∘
+      children.map (Concrete.Elaboration.LocalOccurrence.child ∘
         (doubleCutRegionDomain input outer trace.inner).origin) := by
   induction children with
   | nil => rfl
   | cons child rest induction =>
-      change ConcreteElaboration.LocalOccurrence.child
+      change Concrete.Elaboration.LocalOccurrence.child
             ((doubleCutRegionDomain input outer trace.inner).origin child) ::
-          (rest.map ConcreteElaboration.LocalOccurrence.child).map
+          (rest.map Concrete.Elaboration.LocalOccurrence.child).map
             trace.occurrenceMap =
-        ConcreteElaboration.LocalOccurrence.child
+        Concrete.Elaboration.LocalOccurrence.child
             ((doubleCutRegionDomain input outer trace.inner).origin child) ::
-          rest.map (ConcreteElaboration.LocalOccurrence.child ∘
+          rest.map (Concrete.Elaboration.LocalOccurrence.child ∘
             (doubleCutRegionDomain input outer trace.inner).origin)
       rw [induction]
 
 def selectedOccurrences
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed ) :
-    List (ConcreteElaboration.LocalOccurrence
+    List (Concrete.Elaboration.LocalOccurrence
       trace.sourceDiagram.regionCount trace.sourceDiagram.nodeCount) :=
-  (ConcreteElaboration.localOccurrences trace.sourceDiagram
+  (Concrete.Elaboration.localOccurrences trace.sourceDiagram
       (trace.targetIndex wellFormed)).filter trace.occurrenceSelected
 
 def keptOccurrences
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed ) :
-    List (ConcreteElaboration.LocalOccurrence
+    List (Concrete.Elaboration.LocalOccurrence
       trace.sourceDiagram.regionCount trace.sourceDiagram.nodeCount) :=
-  (ConcreteElaboration.localOccurrences trace.sourceDiagram
+  (Concrete.Elaboration.localOccurrences trace.sourceDiagram
       (trace.targetIndex wellFormed)).filter
         (fun occurrence => !trace.occurrenceSelected occurrence)
 
@@ -1295,12 +1297,12 @@ theorem kept_node_region
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
     (node : Fin input.nodeCount)
-    (member : ConcreteElaboration.LocalOccurrence.node node ∈
+    (member : Concrete.Elaboration.LocalOccurrence.node node ∈
       trace.keptOccurrences wellFormed) :
     (input.nodes node).region = trace.target := by
   have filtered := List.mem_filter.mp member
   have atFocus :=
-    (ConcreteElaboration.mem_localOccurrences_node trace.sourceDiagram
+    (Concrete.Elaboration.mem_localOccurrences_node trace.sourceDiagram
       (trace.targetIndex wellFormed) node).mp filtered.1
   have notInner : (input.nodes node).region ≠ trace.inner := by
     simpa [occurrenceSelected] using filtered.2
@@ -1313,7 +1315,7 @@ theorem selected_node_region
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
     (node : Fin input.nodeCount)
-    (member : ConcreteElaboration.LocalOccurrence.node node ∈
+    (member : Concrete.Elaboration.LocalOccurrence.node node ∈
       trace.selectedOccurrences wellFormed) :
     (input.nodes node).region = trace.inner := by
   exact of_decide_eq_true (List.mem_filter.mp member).2
@@ -1322,12 +1324,12 @@ theorem kept_child_parent
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
     (child : Fin trace.sourceDiagram.regionCount)
-    (member : ConcreteElaboration.LocalOccurrence.child child ∈
+    (member : Concrete.Elaboration.LocalOccurrence.child child ∈
       trace.keptOccurrences wellFormed) :
     (input.regions (trace.origin child)).parent? = some trace.target := by
   have filtered := List.mem_filter.mp member
   have atFocus :=
-    (ConcreteElaboration.mem_localOccurrences_child trace.sourceDiagram
+    (Concrete.Elaboration.mem_localOccurrences_child trace.sourceDiagram
       (trace.targetIndex wellFormed) child).mp filtered.1
   have notInner :
       (input.regions (trace.origin child)).parent? ≠ some trace.inner := by
@@ -1341,7 +1343,7 @@ theorem selected_child_parent
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
     (child : Fin trace.sourceDiagram.regionCount)
-    (member : ConcreteElaboration.LocalOccurrence.child child ∈
+    (member : Concrete.Elaboration.LocalOccurrence.child child ∈
       trace.selectedOccurrences wellFormed) :
     (input.regions (trace.origin child)).parent? = some trace.inner := by
   simpa [occurrenceSelected, origin] using
@@ -1353,59 +1355,59 @@ theorem focusOccurrences_perm_partition
     List.Perm
       (trace.keptOccurrences wellFormed ++
         trace.selectedOccurrences wellFormed)
-      (ConcreteElaboration.localOccurrences trace.sourceDiagram
+      (Concrete.Elaboration.localOccurrences trace.sourceDiagram
         (trace.targetIndex wellFormed)) := by
   simpa only [keptOccurrences, selectedOccurrences, Bool.not_not] using
     (List.filter_append_perm
       (fun occurrence => !trace.occurrenceSelected occurrence)
-      (ConcreteElaboration.localOccurrences trace.sourceDiagram
+      (Concrete.Elaboration.localOccurrences trace.sourceDiagram
         (trace.targetIndex wellFormed)))
 
 def targetKeptOccurrences
     (trace : DoubleCutElimTrace input outer raw) :
-    List (ConcreteElaboration.LocalOccurrence input.regionCount
+    List (Concrete.Elaboration.LocalOccurrence input.regionCount
       input.nodeCount) :=
-  (ConcreteElaboration.localOccurrences input trace.target).filter
+  (Concrete.Elaboration.localOccurrences input trace.target).filter
     (fun occurrence => decide
-      (occurrence ≠ ConcreteElaboration.LocalOccurrence.child outer))
+      (occurrence ≠ Concrete.Elaboration.LocalOccurrence.child outer))
 
 private def canonicalSelectedOccurrences
     (trace : DoubleCutElimTrace input outer raw) :
-    List (ConcreteElaboration.LocalOccurrence
+    List (Concrete.Elaboration.LocalOccurrence
       trace.sourceDiagram.regionCount trace.sourceDiagram.nodeCount) :=
   (filterFin fun node =>
       decide ((input.nodes node).region = trace.inner)).map
-        ConcreteElaboration.LocalOccurrence.node ++
+        Concrete.Elaboration.LocalOccurrence.node ++
     (filterFin fun child =>
       decide ((input.regions
         ((doubleCutRegionDomain input outer trace.inner).origin child)).parent? =
           some trace.inner)).map
-        ConcreteElaboration.LocalOccurrence.child
+        Concrete.Elaboration.LocalOccurrence.child
 
 private def canonicalKeptOccurrences
     (trace : DoubleCutElimTrace input outer raw) :
-    List (ConcreteElaboration.LocalOccurrence
+    List (Concrete.Elaboration.LocalOccurrence
       trace.sourceDiagram.regionCount trace.sourceDiagram.nodeCount) :=
   (filterFin fun node =>
       decide ((input.nodes node).region = trace.target)).map
-        ConcreteElaboration.LocalOccurrence.node ++
+        Concrete.Elaboration.LocalOccurrence.node ++
     (filterFin fun child =>
       decide ((input.regions
         ((doubleCutRegionDomain input outer trace.inner).origin child)).parent? =
           some trace.target)).map
-        ConcreteElaboration.LocalOccurrence.child
+        Concrete.Elaboration.LocalOccurrence.child
 
 private def canonicalTargetKeptOccurrences
     (trace : DoubleCutElimTrace input outer raw) :
-    List (ConcreteElaboration.LocalOccurrence input.regionCount
+    List (Concrete.Elaboration.LocalOccurrence input.regionCount
       input.nodeCount) :=
   (filterFin fun node =>
       decide ((input.nodes node).region = trace.target)).map
-        ConcreteElaboration.LocalOccurrence.node ++
+        Concrete.Elaboration.LocalOccurrence.node ++
     (filterFin fun child =>
       decide ((input.regions child).parent? = some trace.target ∧
         child ≠ outer)).map
-        ConcreteElaboration.LocalOccurrence.child
+        Concrete.Elaboration.LocalOccurrence.child
 
 private theorem selectedOccurrences_eq_canonical
     (trace : DoubleCutElimTrace input outer raw)
@@ -1413,12 +1415,12 @@ private theorem selectedOccurrences_eq_canonical
     trace.selectedOccurrences wellFormed =
       trace.canonicalSelectedOccurrences := by
   unfold selectedOccurrences canonicalSelectedOccurrences
-    ConcreteElaboration.localOccurrences occurrenceSelected filterFin
+    Concrete.Elaboration.localOccurrences occurrenceSelected filterFin
     sourceDiagram PromoteDiagramTrace.diagram
   simp only [List.filter_append, List.filter_map, List.filter_filter]
   congr 1
   · apply congrArg
-      (List.map ConcreteElaboration.LocalOccurrence.node)
+      (List.map Concrete.Elaboration.LocalOccurrence.node)
     apply congrArg
       (fun predicate => List.filter predicate (allFin input.nodeCount))
     funext node
@@ -1432,7 +1434,7 @@ private theorem selectedOccurrences_eq_canonical
         (trace.promotedNode_region_eq_targetIndex_iff
           wellFormed node).2 (Or.inr inner)⟩
   · apply congrArg
-      (List.map ConcreteElaboration.LocalOccurrence.child)
+      (List.map Concrete.Elaboration.LocalOccurrence.child)
     apply congrArg
       (fun predicate =>
         List.filter predicate
@@ -1454,12 +1456,12 @@ private theorem keptOccurrences_eq_canonical
     (wellFormed : input.WellFormed ) :
     trace.keptOccurrences wellFormed = trace.canonicalKeptOccurrences := by
   unfold keptOccurrences canonicalKeptOccurrences
-    ConcreteElaboration.localOccurrences occurrenceSelected filterFin
+    Concrete.Elaboration.localOccurrences occurrenceSelected filterFin
     sourceDiagram PromoteDiagramTrace.diagram
   simp only [List.filter_append, List.filter_map, List.filter_filter]
   congr 1
   · apply congrArg
-      (List.map ConcreteElaboration.LocalOccurrence.node)
+      (List.map Concrete.Elaboration.LocalOccurrence.node)
     apply congrArg
       (fun predicate => List.filter predicate (allFin input.nodeCount))
     funext node
@@ -1481,7 +1483,7 @@ private theorem keptOccurrences_eq_canonical
         (trace.promotedNode_region_eq_targetIndex_iff
           wellFormed node).2 (Or.inl atTarget)⟩
   · apply congrArg
-      (List.map ConcreteElaboration.LocalOccurrence.child)
+      (List.map Concrete.Elaboration.LocalOccurrence.child)
     apply congrArg
       (fun predicate => List.filter predicate
         (allFin (doubleCutRegionDomain input outer trace.inner).count))
@@ -1515,11 +1517,11 @@ private theorem targetKeptOccurrences_eq_canonical
     (trace : DoubleCutElimTrace input outer raw) :
     trace.targetKeptOccurrences = trace.canonicalTargetKeptOccurrences := by
   unfold targetKeptOccurrences canonicalTargetKeptOccurrences
-    ConcreteElaboration.localOccurrences filterFin
+    Concrete.Elaboration.localOccurrences filterFin
   simp only [List.filter_append, List.filter_map, List.filter_filter]
   congr 1
   apply congrArg
-    (List.map ConcreteElaboration.LocalOccurrence.child)
+    (List.map Concrete.Elaboration.LocalOccurrence.child)
   apply congrArg
     (fun predicate => List.filter predicate (allFin input.regionCount))
   funext child
@@ -1528,10 +1530,10 @@ private theorem targetKeptOccurrences_eq_canonical
   constructor
   · rintro ⟨different, parent⟩
     exact ⟨parent, fun equality => different (congrArg
-      ConcreteElaboration.LocalOccurrence.child equality)⟩
+      Concrete.Elaboration.LocalOccurrence.child equality)⟩
   · rintro ⟨parent, different⟩
     exact ⟨fun equality => different
-      (ConcreteElaboration.LocalOccurrence.child.inj equality), parent⟩
+      (Concrete.Elaboration.LocalOccurrence.child.inj equality), parent⟩
 
 private theorem allFin_map_domain_origin
     (trace : DoubleCutElimTrace input outer raw) :
@@ -1558,10 +1560,10 @@ theorem child_of_inner_survives
     exact trace.inner_ne_target wellFormed targetEq.symm
   have childNeInner : child ≠ trace.inner := by
     intro equality
-    apply ConcreteElaboration.checked_direct_child_not_encloses_parent
+    apply Concrete.Elaboration.checked_direct_child_not_encloses_parent
       wellFormed parentEq
     rw [equality]
-    exact ConcreteDiagram.Encloses.refl input trace.inner
+    exact Concrete.Diagram.Encloses.refl input trace.inner
   simp [doubleCutRegionDomain, childNeOuter, childNeInner]
 
 theorem child_of_regular_survives
@@ -1633,16 +1635,16 @@ theorem targetKeptOccurrences_eq_mapped
     (List.filter (fun node =>
         decide ((input.nodes node).region = trace.target))
         (allFin input.nodeCount)).map
-          ConcreteElaboration.LocalOccurrence.node ++
+          Concrete.Elaboration.LocalOccurrence.node ++
       (List.filter (fun child =>
         decide ((input.regions child).parent? = some trace.target ∧
           child ≠ outer))
         (allFin input.regionCount)).map
-          ConcreteElaboration.LocalOccurrence.child =
+          Concrete.Elaboration.LocalOccurrence.child =
     (((List.filter (fun node =>
         decide ((input.nodes node).region = trace.target))
         (allFin input.nodeCount)).map
-          (ConcreteElaboration.LocalOccurrence.node
+          (Concrete.Elaboration.LocalOccurrence.node
             (regions :=
               (doubleCutRegionDomain input outer trace.inner).count))) ++
       ((List.filter (fun child =>
@@ -1651,7 +1653,7 @@ theorem targetKeptOccurrences_eq_mapped
             some trace.target))
         (allFin
           (doubleCutRegionDomain input outer trace.inner).count)).map
-          (ConcreteElaboration.LocalOccurrence.child
+          (Concrete.Elaboration.LocalOccurrence.child
             (nodes := input.nodeCount)))).map
       trace.occurrenceMap
   dsimp only [sourceDiagram, PromoteDiagramTrace.diagram] at *
@@ -1659,13 +1661,13 @@ theorem targetKeptOccurrences_eq_mapped
   simp only [List.map_map, occurrenceMap, Function.comp_apply]
   congr 1
   change
-    List.map ConcreteElaboration.LocalOccurrence.child
+    List.map Concrete.Elaboration.LocalOccurrence.child
         (List.filter (fun child => decide
           ((input.regions child).parent? = some trace.target ∧
             child ≠ outer))
           (allFin input.regionCount)) =
       List.map
-        (ConcreteElaboration.LocalOccurrence.child ∘
+        (Concrete.Elaboration.LocalOccurrence.child ∘
           (doubleCutRegionDomain input outer trace.inner).origin)
         (List.filter (fun child => decide
           ((input.regions
@@ -1675,7 +1677,7 @@ theorem targetKeptOccurrences_eq_mapped
             (doubleCutRegionDomain input outer trace.inner).count))
   rw [← List.map_map]
   apply congrArg
-    (List.map ConcreteElaboration.LocalOccurrence.child)
+    (List.map Concrete.Elaboration.LocalOccurrence.child)
   change
     List.filter (fun child => decide
       ((input.regions child).parent? = some trace.target ∧ child ≠ outer))
@@ -1707,21 +1709,21 @@ theorem targetKeptOccurrences_eq_mapped
 
 theorem targetOuterComplement
     (trace : DoubleCutElimTrace input outer raw) :
-    (ConcreteElaboration.localOccurrences input trace.target).filter
+    (Concrete.Elaboration.localOccurrences input trace.target).filter
         (fun occurrence =>
           !decide (occurrence ≠
-            ConcreteElaboration.LocalOccurrence.child outer)) =
-      [ConcreteElaboration.LocalOccurrence.child outer] := by
+            Concrete.Elaboration.LocalOccurrence.child outer)) =
+      [Concrete.Elaboration.LocalOccurrence.child outer] := by
   let occurrences :=
-    ConcreteElaboration.localOccurrences input trace.target
-  let chosen : ConcreteElaboration.LocalOccurrence
+    Concrete.Elaboration.localOccurrences input trace.target
+  let chosen : Concrete.Elaboration.LocalOccurrence
       input.regionCount input.nodeCount :=
     .child outer
   apply eq_singleton_of_nodup_mem_unique
-  · exact (ConcreteElaboration.localOccurrences_nodup input trace.target).filter _
+  · exact (Concrete.Elaboration.localOccurrences_nodup input trace.target).filter _
   · apply List.mem_filter.mpr
     refine ⟨?_, by simp [chosen]⟩
-    exact (ConcreteElaboration.mem_localOccurrences_child input trace.target
+    exact (Concrete.Elaboration.mem_localOccurrences_child input trace.target
       outer).mpr trace.outer_parent
   · intro occurrence member
     have selected := (List.mem_filter.mp member).2
@@ -1732,39 +1734,39 @@ theorem targetFocusOccurrences_perm
     (wellFormed : input.WellFormed ) :
     List.Perm
       ((trace.keptOccurrences wellFormed).map trace.occurrenceMap ++
-        [ConcreteElaboration.LocalOccurrence.child outer])
-      (ConcreteElaboration.localOccurrences input trace.target) := by
+        [Concrete.Elaboration.LocalOccurrence.child outer])
+      (Concrete.Elaboration.localOccurrences input trace.target) := by
   have partition := List.filter_append_perm
-    (fun occurrence : ConcreteElaboration.LocalOccurrence
+    (fun occurrence : Concrete.Elaboration.LocalOccurrence
       input.regionCount input.nodeCount =>
-      decide (occurrence ≠ ConcreteElaboration.LocalOccurrence.child outer))
-    (ConcreteElaboration.localOccurrences input trace.target)
+      decide (occurrence ≠ Concrete.Elaboration.LocalOccurrence.child outer))
+    (Concrete.Elaboration.localOccurrences input trace.target)
   change List.Perm
     (trace.targetKeptOccurrences ++
-      (ConcreteElaboration.localOccurrences input trace.target).filter
+      (Concrete.Elaboration.localOccurrences input trace.target).filter
         (fun occurrence =>
           !decide (occurrence ≠
-            ConcreteElaboration.LocalOccurrence.child outer)))
-    (ConcreteElaboration.localOccurrences input trace.target) at partition
+            Concrete.Elaboration.LocalOccurrence.child outer)))
+    (Concrete.Elaboration.localOccurrences input trace.target) at partition
   rw [trace.targetKeptOccurrences_eq_mapped wellFormed,
     trace.targetOuterComplement] at partition
   exact partition
 
 theorem outer_localOccurrences
     (trace : DoubleCutElimTrace input outer raw) :
-    ConcreteElaboration.localOccurrences input outer =
-      [ConcreteElaboration.LocalOccurrence.child trace.inner] := by
+    Concrete.Elaboration.localOccurrences input outer =
+      [Concrete.Elaboration.LocalOccurrence.child trace.inner] := by
   have nodesEmpty :
       (filterFin fun node =>
         decide ((input.nodes node).region = outer)) = [] :=
     List.isEmpty_iff.mp trace.outer_nodes_empty
-  unfold ConcreteElaboration.localOccurrences
+  unfold Concrete.Elaboration.localOccurrences
   rw [nodesEmpty, trace.children_eq]
   rfl
 
 theorem outer_exactScopeWires
     (trace : DoubleCutElimTrace input outer raw) :
-    ConcreteElaboration.exactScopeWires input outer = [] := by
+    Concrete.Elaboration.exactScopeWires input outer = [] := by
   exact List.isEmpty_iff.mp trace.outer_wires_empty
 
 theorem targetWire_mem_focusExact
@@ -1772,11 +1774,11 @@ theorem targetWire_mem_focusExact
     (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount)
     (member : wire ∈
-      ConcreteElaboration.exactScopeWires input trace.target) :
-    wire ∈ ConcreteElaboration.exactScopeWires trace.sourceDiagram
+      Concrete.Elaboration.exactScopeWires input trace.target) :
+    wire ∈ Concrete.Elaboration.exactScopeWires trace.sourceDiagram
       (trace.targetIndex wellFormed) := by
-  rw [ConcreteElaboration.mem_exactScopeWires] at member
-  unfold ConcreteElaboration.exactScopeWires
+  rw [Concrete.Elaboration.mem_exactScopeWires] at member
+  unfold Concrete.Elaboration.exactScopeWires
   change wire ∈ filterFin (fun candidate : Fin input.wireCount =>
     decide ((trace.promotion.wires candidate).scope =
       trace.targetIndex wellFormed))
@@ -1789,11 +1791,11 @@ theorem innerWire_mem_focusExact
     (wellFormed : input.WellFormed )
     (wire : Fin input.wireCount)
     (member : wire ∈
-      ConcreteElaboration.exactScopeWires input trace.inner) :
-    wire ∈ ConcreteElaboration.exactScopeWires trace.sourceDiagram
+      Concrete.Elaboration.exactScopeWires input trace.inner) :
+    wire ∈ Concrete.Elaboration.exactScopeWires trace.sourceDiagram
       (trace.targetIndex wellFormed) := by
-  rw [ConcreteElaboration.mem_exactScopeWires] at member
-  unfold ConcreteElaboration.exactScopeWires
+  rw [Concrete.Elaboration.mem_exactScopeWires] at member
+  unfold Concrete.Elaboration.exactScopeWires
   change wire ∈ filterFin (fun candidate : Fin input.wireCount =>
     decide ((trace.promotion.wires candidate).scope =
       trace.targetIndex wellFormed))
@@ -1802,11 +1804,11 @@ theorem innerWire_mem_focusExact
     wellFormed wire).2 (Or.inr member))
 
 def PromotedContextWitness.extendFocused
-    {input : ConcreteDiagram} {outer : Fin input.regionCount}
-    {raw : ConcreteDiagram}
+    {input : Concrete.Diagram} {outer : Fin input.regionCount}
+    {raw : Concrete.Diagram}
     {trace : DoubleCutElimTrace input outer raw}
-    {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
-    {targetContext : ConcreteElaboration.WireContext input}
+    {sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram}
+    {targetContext : Concrete.Elaboration.WireContext input}
     (witness : PromotedContextWitness trace sourceContext targetContext)
     (wellFormed : input.WellFormed ) :
     PromotedContextWitness trace
@@ -1825,22 +1827,22 @@ def PromotedContextWitness.extendFocused
         targetMember | innerMember
       · exact Or.inl (List.mem_append_left _ targetMember)
       · exact Or.inr innerMember
-    · rw [ConcreteElaboration.mem_exactScopeWires] at localMember
+    · rw [Concrete.Elaboration.mem_exactScopeWires] at localMember
       rcases (trace.promotedWire_scope_eq_targetIndex_iff
         wellFormed wire).1 localMember with targetScope | innerScope
       · exact Or.inl (List.mem_append_right targetContext (by
-          rw [ConcreteElaboration.mem_exactScopeWires]
+          rw [Concrete.Elaboration.mem_exactScopeWires]
           exact targetScope))
       · exact Or.inr (by
-          exact (ConcreteElaboration.mem_exactScopeWires input trace.inner
+          exact (Concrete.Elaboration.mem_exactScopeWires input trace.inner
             wire).2 innerScope)
 
 def PromotedContextWitness.extendSelected
-    {input : ConcreteDiagram} {outer : Fin input.regionCount}
-    {raw : ConcreteDiagram}
+    {input : Concrete.Diagram} {outer : Fin input.regionCount}
+    {raw : Concrete.Diagram}
     {trace : DoubleCutElimTrace input outer raw}
-    {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
-    {targetContext : ConcreteElaboration.WireContext input}
+    {sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram}
+    {targetContext : Concrete.Elaboration.WireContext input}
     (witness : PromotedContextWitness trace sourceContext targetContext)
     (wellFormed : input.WellFormed ) :
     PromotedContextWitness trace
@@ -1866,23 +1868,23 @@ def PromotedContextWitness.extendSelected
       · exact Or.inl (List.mem_append_left _
           (List.mem_append_left _ (List.mem_append_left _ targetMember)))
       · exact Or.inl (List.mem_append_right _ innerMember)
-    · rw [ConcreteElaboration.mem_exactScopeWires] at focusLocal
+    · rw [Concrete.Elaboration.mem_exactScopeWires] at focusLocal
       rcases (trace.promotedWire_scope_eq_targetIndex_iff
         wellFormed wire).1 focusLocal with targetScope | innerScope
       · exact Or.inl (List.mem_append_left _
           (List.mem_append_left _ (List.mem_append_right targetContext (by
-            rw [ConcreteElaboration.mem_exactScopeWires]
+            rw [Concrete.Elaboration.mem_exactScopeWires]
             exact targetScope))))
       · exact Or.inl (List.mem_append_right _ (by
-          exact (ConcreteElaboration.mem_exactScopeWires input trace.inner
+          exact (Concrete.Elaboration.mem_exactScopeWires input trace.inner
             wire).2 innerScope))
 
 theorem PromotedContextWitness.extendSelected_source_subset_target
-    {input : ConcreteDiagram} {outer : Fin input.regionCount}
-    {raw : ConcreteDiagram}
+    {input : Concrete.Diagram} {outer : Fin input.regionCount}
+    {raw : Concrete.Diagram}
     {trace : DoubleCutElimTrace input outer raw}
-    {sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram}
-    {targetContext : ConcreteElaboration.WireContext input}
+    {sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram}
+    {targetContext : Concrete.Elaboration.WireContext input}
     (witness : PromotedContextWitness trace sourceContext targetContext)
     (wellFormed : input.WellFormed ) :
     ∀ wire,
@@ -1899,49 +1901,49 @@ theorem PromotedContextWitness.extendSelected_source_subset_target
 theorem inner_localOccurrences
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed ) :
-    ConcreteElaboration.localOccurrences input trace.inner =
+    Concrete.Elaboration.localOccurrences input trace.inner =
       (trace.selectedOccurrences wellFormed).map trace.occurrenceMap := by
   rw [trace.selectedOccurrences_eq_canonical wellFormed]
   unfold canonicalSelectedOccurrences
-    ConcreteElaboration.localOccurrences filterFin
+    Concrete.Elaboration.localOccurrences filterFin
   change
     (List.filter (fun node =>
         decide ((input.nodes node).region = trace.inner))
         (allFin input.nodeCount)).map
-          ConcreteElaboration.LocalOccurrence.node ++
+          Concrete.Elaboration.LocalOccurrence.node ++
       (List.filter (fun child =>
         decide ((input.regions child).parent? = some trace.inner))
         (allFin input.regionCount)).map
-          ConcreteElaboration.LocalOccurrence.child =
+          Concrete.Elaboration.LocalOccurrence.child =
     (((List.filter (fun node =>
         decide ((input.nodes node).region = trace.inner))
         (allFin input.nodeCount)).map
-          ConcreteElaboration.LocalOccurrence.node) ++
+          Concrete.Elaboration.LocalOccurrence.node) ++
       ((List.filter (fun child =>
         decide ((input.regions
           ((doubleCutRegionDomain input outer trace.inner).origin child)).parent? =
             some trace.inner))
         (allFin
           (doubleCutRegionDomain input outer trace.inner).count)).map
-            ConcreteElaboration.LocalOccurrence.child)).map
+            Concrete.Elaboration.LocalOccurrence.child)).map
       trace.occurrenceMap
   have mappedAppend :
       (((List.filter (fun node =>
           decide ((input.nodes node).region = trace.inner))
           (allFin input.nodeCount)).map
-            ConcreteElaboration.LocalOccurrence.node) ++
+            Concrete.Elaboration.LocalOccurrence.node) ++
         ((List.filter (fun child =>
           decide ((input.regions
             ((doubleCutRegionDomain input outer trace.inner).origin child)).parent? =
               some trace.inner))
           (allFin
             (doubleCutRegionDomain input outer trace.inner).count)).map
-              ConcreteElaboration.LocalOccurrence.child)).map
+              Concrete.Elaboration.LocalOccurrence.child)).map
           trace.occurrenceMap =
         ((List.filter (fun node =>
           decide ((input.nodes node).region = trace.inner))
           (allFin input.nodeCount)).map
-            ConcreteElaboration.LocalOccurrence.node).map
+            Concrete.Elaboration.LocalOccurrence.node).map
               trace.occurrenceMap ++
         ((List.filter (fun child =>
           decide ((input.regions
@@ -1949,7 +1951,7 @@ theorem inner_localOccurrences
               some trace.inner))
           (allFin
             (doubleCutRegionDomain input outer trace.inner).count)).map
-              ConcreteElaboration.LocalOccurrence.child).map
+              Concrete.Elaboration.LocalOccurrence.child).map
                 trace.occurrenceMap :=
     map_append_elimination trace.occurrenceMap _ _
   rw [mappedAppend, occurrenceMap_map_nodes,
@@ -1957,7 +1959,7 @@ theorem inner_localOccurrences
   congr 1
   rw [← List.map_map]
   apply congrArg
-    (List.map ConcreteElaboration.LocalOccurrence.child)
+    (List.map Concrete.Elaboration.LocalOccurrence.child)
   change
     List.filter (fun child =>
       decide ((input.regions child).parent? = some trace.inner))
@@ -1990,16 +1992,16 @@ theorem regular_localOccurrences
     (region :
       Fin (doubleCutRegionDomain input outer trace.inner).count)
     (regular : region ≠ trace.targetIndex wellFormed) :
-    ConcreteElaboration.localOccurrences input
+    Concrete.Elaboration.localOccurrences input
         ((doubleCutRegionDomain input outer trace.inner).origin region) =
-      (ConcreteElaboration.localOccurrences trace.sourceDiagram region).map
+      (Concrete.Elaboration.localOccurrences trace.sourceDiagram region).map
         trace.occurrenceMap := by
-  unfold ConcreteElaboration.localOccurrences filterFin
+  unfold Concrete.Elaboration.localOccurrences filterFin
   rw [List.map_append]
   simp only [List.map_map, occurrenceMap, Function.comp_apply]
   congr 1
   · apply congrArg
-      (List.map ConcreteElaboration.LocalOccurrence.node)
+      (List.map Concrete.Elaboration.LocalOccurrence.node)
     apply congrArg
       (fun predicate => List.filter predicate (allFin input.nodeCount))
     funext node
@@ -2031,13 +2033,13 @@ theorem regular_localOccurrences
       exact trace.promotedRegion_parent_eq_regular_iff
         wellFormed child region regular
     change
-      List.map ConcreteElaboration.LocalOccurrence.child
+      List.map Concrete.Elaboration.LocalOccurrence.child
           (List.filter (fun child => decide
             ((input.regions child).parent? = some
               ((doubleCutRegionDomain input outer trace.inner).origin region)))
             (allFin input.regionCount)) =
         List.map
-          (ConcreteElaboration.LocalOccurrence.child ∘
+          (Concrete.Elaboration.LocalOccurrence.child ∘
             (doubleCutRegionDomain input outer trace.inner).origin)
           (List.filter
             (fun child => decide
@@ -2047,7 +2049,7 @@ theorem regular_localOccurrences
     rw [sourceChildren]
     rw [← List.map_map]
     apply congrArg
-      (List.map ConcreteElaboration.LocalOccurrence.child)
+      (List.map Concrete.Elaboration.LocalOccurrence.child)
     change
       List.filter (fun child => decide
         ((input.regions child).parent? = some
@@ -2082,12 +2084,12 @@ theorem compileNode_itemSimulation
     (trace : DoubleCutElimTrace input outer raw)
     (wellFormed : input.WellFormed )
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
-    (sourceContext : ConcreteElaboration.WireContext trace.sourceDiagram)
-    (targetContext : ConcreteElaboration.WireContext input)
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (sourceContext : Concrete.Elaboration.WireContext trace.sourceDiagram)
+    (targetContext : Concrete.Elaboration.WireContext input)
+    (sourceBinders : Concrete.Elaboration.BinderContext
       trace.sourceDiagram sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext input targetRels)
+    (targetBinders : Concrete.Elaboration.BinderContext input targetRels)
     (binderWitness : PromotedBinderWitness trace sourceBinders targetBinders)
     (node : Fin input.nodeCount)
     (regionMap :
@@ -2103,15 +2105,15 @@ theorem compileNode_itemSimulation
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length targetRels)
     (sourceCompiled :
-      ConcreteElaboration.compileNode?  trace.sourceDiagram
+      Concrete.Elaboration.compileNode?  trace.sourceDiagram
         sourceContext sourceBinders node = some sourceItem)
     (targetCompiled :
-      ConcreteElaboration.compileNode?  input targetContext
+      Concrete.Elaboration.compileNode?  input targetContext
         targetBinders node = some targetItem) :
-    ConcreteElaboration.ItemSimulation model  direction
+    Concrete.Elaboration.ItemSimulation model  direction
       (trace.wireIdentityRelation sourceContext targetContext)
       (sourceItem.renameRelations binderWitness.relationMap) targetItem := by
-  apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+  apply Concrete.Elaboration.compileNode?_itemSimulation_of_related_ports
     (source := trace.sourceDiagram) (target := input)
     model  direction sourceContext targetContext
     (trace.wireIdentityRelation sourceContext targetContext)
@@ -2131,4 +2133,4 @@ theorem compileNode_itemSimulation
 
 end DoubleCutElimTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

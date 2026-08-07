@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Iteration.ExtractionRegionContext
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -9,22 +11,22 @@ open VisualProof.Theory
 /-- Node compiler simulation parameterized only by the two recursive
 invariants: exact wire-context membership and binder lookup provenance. -/
 theorem extractionCompileNode_itemSimulationOfMembership
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
     (model : Model)
-    (direction : ConcreteElaboration.SimulationDirection)
-    (fragmentContext : ConcreteElaboration.WireContext
+    (direction : Concrete.Elaboration.SimulationDirection)
+    (fragmentContext : Concrete.Elaboration.WireContext
       (input.val.extractDiagramRaw selection layout))
-    (hostContext : ConcreteElaboration.WireContext input.val)
+    (hostContext : Concrete.Elaboration.WireContext input.val)
     (membership : ∀ wire,
       input.val.fragmentWireOrigin selection layout wire ∈ hostContext ↔
         wire ∈ fragmentContext)
     (hostNodup : hostContext.Nodup)
     {fragmentRels hostRels : RelCtx}
-    (fragmentBinders : ConcreteElaboration.BinderContext
+    (fragmentBinders : Concrete.Elaboration.BinderContext
       (input.val.extractDiagramRaw selection layout) fragmentRels)
-    (hostBinders : ConcreteElaboration.BinderContext input.val hostRels)
+    (hostBinders : Concrete.Elaboration.BinderContext input.val hostRels)
     (relationMap : RelationRenaming fragmentRels hostRels)
     (node : Fin layout.nodeCount)
     (bindersRelated : ∀ region binder arity
@@ -36,17 +38,17 @@ theorem extractionCompileNode_itemSimulationOfMembership
         some ⟨arity, relationMap fragmentRelation⟩)
     (fragmentItem : Item  fragmentContext.length fragmentRels)
     (hostItem : Item  hostContext.length hostRels)
-    (fragmentCompiled : ConcreteElaboration.compileNode?
+    (fragmentCompiled : Concrete.Elaboration.compileNode?
       (input.val.extractDiagramRaw selection layout) fragmentContext
       fragmentBinders node = some fragmentItem)
-    (hostCompiled : ConcreteElaboration.compileNode?  input.val
+    (hostCompiled : Concrete.Elaboration.compileNode?  input.val
       hostContext hostBinders (selection.selectedNodes.get node) =
         some hostItem) :
-    ConcreteElaboration.ItemSimulation model  direction
+    Concrete.Elaboration.ItemSimulation model  direction
       (extractionContextRelation input selection layout fragmentContext
         hostContext)
       (fragmentItem.renameRelations relationMap) hostItem := by
-  apply ConcreteElaboration.compileNode?_itemSimulation_of_related_ports
+  apply Concrete.Elaboration.compileNode?_itemSimulation_of_related_ports
     model  direction fragmentContext hostContext
     (extractionContextRelation input selection layout fragmentContext
       hostContext)

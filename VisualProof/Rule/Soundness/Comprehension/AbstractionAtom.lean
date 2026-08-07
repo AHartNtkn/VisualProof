@@ -1,6 +1,9 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionSelected
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -12,11 +15,11 @@ namespace AbstractionRawTrace
 /-- The original owner of a fresh abstraction-atom argument is exactly the
 executor-recorded ordered occurrence argument at that position. -/
 theorem targetAtom_endpoint_origin
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (occurrenceIndex : Fin occurrences.length)
     (argumentIndex : Fin (occurrences.get occurrenceIndex).args.length)
@@ -35,7 +38,7 @@ theorem targetAtom_endpoint_origin
   have wireEq := Option.some.inj wireResult
   have endpointsEq := congrArg CWire.endpoints wireEq
   rw [trace.targetWire_origin_index targetWire] at endpointsEq
-  unfold ConcreteDiagram.EndpointOccurs at occurs
+  unfold Concrete.Diagram.EndpointOccurs at occurs
   rw [← endpointsEq] at occurs
   rcases List.mem_append.mp occurs with frameOccurs | atomOccurs
   · rw [abstractFrameEndpoints, trace.domains.wires.origin_index]
@@ -81,18 +84,18 @@ theorem targetAtom_endpoint_origin
 /-- Resolved compiler arguments for a fresh abstraction atom retain the exact
 ordered source wire vector, including repeated aliases. -/
 theorem resolvedTargetAtom_origin
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
     (occurrenceIndex : Fin occurrences.length)
-    (witness : AbstractionWitness input comprehension
+    (witness : OperationAbstractionWitness input comprehension
       (occurrences.get occurrenceIndex))
-    (context : ConcreteElaboration.WireContext trace.diagram)
+    (context : Concrete.Elaboration.WireContext trace.diagram)
     (resolved : Fin comprehension.val.boundary.length → Fin context.length)
-    (resolvedEq : ConcreteElaboration.resolvePorts? trace.diagram context
+    (resolvedEq : Concrete.Elaboration.resolvePorts? trace.diagram context
       (trace.targetAtom occurrenceIndex) comprehension.val.boundary.length =
         some resolved) :
     ∀ index,
@@ -100,12 +103,12 @@ theorem resolvedTargetAtom_origin
         (occurrences.get occurrenceIndex).args.get
           (Fin.cast witness.args_length.symm index) := by
   intro index
-  have portResolved : ConcreteElaboration.resolvePort? trace.diagram context
+  have portResolved : Concrete.Elaboration.resolvePort? trace.diagram context
       (trace.targetAtom occurrenceIndex) (.arg index) =
         some (resolved index) :=
     sequenceFin_sound resolvedEq index
   obtain ⟨wire, occurs, contextWire⟩ :=
-    ConcreteElaboration.resolvePort?_sound portResolved
+    Concrete.Elaboration.resolvePort?_sound portResolved
   have origin := trace.targetAtom_endpoint_origin occurrenceIndex
     (Fin.cast witness.args_length.symm index) wire (by
       simpa using occurs)
@@ -114,18 +117,18 @@ theorem resolvedTargetAtom_origin
 /-- The authoritative target compiler emits the fresh head relation at the
 same source-wire valuation certified for the selected occurrence. -/
 theorem compiledTargetAtom_denote_iff_relation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension
       occurrences)
     (occurrenceIndex : Fin occurrences.length)
     (model : Model)
-    (sourceContext : ConcreteElaboration.WireContext input.val)
-    (targetContext : ConcreteElaboration.WireContext trace.diagram)
+    (sourceContext : Concrete.Elaboration.WireContext input.val)
+    (targetContext : Concrete.Elaboration.WireContext trace.diagram)
     (contextWitness : ContextWitness trace sourceContext targetContext)
     (sourceExact : sourceContext.Exact
       (occurrences.get occurrenceIndex).selection.val.anchor)
@@ -133,11 +136,11 @@ theorem compiledTargetAtom_denote_iff_relation
     (targetEnvironment : Fin targetContext.length → model.Carrier)
     (environments : contextWitness.indexRelation.EnvironmentsAgree
       sourceEnvironment targetEnvironment)
-    (targetBinders : ConcreteElaboration.BinderContext trace.diagram targetRels)
+    (targetBinders : Concrete.Elaboration.BinderContext trace.diagram targetRels)
     (targetRelationEnvironment : RelEnv model.Carrier targetRels)
     (item : Item  targetContext.length
       (comprehension.val.boundary.length :: targetRels))
-    (compiled : ConcreteElaboration.compileNode?  trace.diagram
+    (compiled : Concrete.Elaboration.compileNode?  trace.diagram
       targetContext
       (targetBinders.push trace.bubble comprehension.val.boundary.length)
       (trace.targetAtom occurrenceIndex) = some item) :
@@ -156,13 +159,13 @@ theorem compiledTargetAtom_denote_iff_relation
       (Fin.natAdd trace.domains.nodes.count occurrenceIndex) =
         .atom (trace.atomOwners occurrenceIndex) trace.bubble := by
     simpa only [targetAtom] using trace.diagram_atom occurrenceIndex
-  simp only [ConcreteElaboration.compileNode?, targetAtom, atomShape,
-    ConcreteElaboration.BinderContext.push_self] at compiled
+  simp only [Concrete.Elaboration.compileNode?, targetAtom, atomShape,
+    Concrete.Elaboration.BinderContext.push_self] at compiled
   obtain ⟨relation, relationEq, compiled⟩ :=
     Option.bind_eq_some_iff.mp compiled
   have relationValueEq : relation =
       ⟨comprehension.val.boundary.length,
-        ConcreteElaboration.BinderContext.head
+        Concrete.Elaboration.BinderContext.head
           comprehension.val.boundary.length⟩ :=
     (Option.some.inj relationEq).symm
   subst relation
@@ -205,4 +208,4 @@ theorem compiledTargetAtom_denote_iff_relation
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

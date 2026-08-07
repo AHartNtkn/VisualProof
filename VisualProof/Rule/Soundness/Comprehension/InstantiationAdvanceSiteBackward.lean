@@ -2,6 +2,8 @@ import VisualProof.Rule.Soundness.Comprehension.InstantiationAdvanceCurrentFixed
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -11,15 +13,15 @@ namespace InstantiationSemantic
 /-- Recursive child occurrences at the distinguished splice site transport
 backward under the trace's fixed moving relation and proxy family. -/
 theorem advance_site_child_denotes_fixed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -33,30 +35,30 @@ theorem advance_site_child_denotes_fixed
     (sourceFuel targetFuel : Nat)
     (parentRegion : Fin state.diagram.val.regionCount)
     (bubbleEnclosesParent : state.diagram.val.Encloses state.bubble parentRegion)
-    (sourceContext : ConcreteElaboration.WireContext
+    (sourceContext : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw)
-    (targetContext : ConcreteElaboration.WireContext
+    (targetContext : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw)
     (sourceExact : sourceContext.Exact parentRegion)
     (targetExact : targetContext.Exact
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion parentRegion))
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw targetRels)
     (sourceCover : sourceBinders.Covers parentRegion)
     (targetCover : targetBinders.Covers
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion parentRegion))
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceBinders parentRegion)
-    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (targetEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw targetBinders
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -100,8 +102,8 @@ theorem advance_site_child_denotes_fixed
         state atom tail site arguments hadmissible model  relationValue
         values parameterValues direction sourceFuel targetFuel child)
     (child : Fin state.diagram.val.regionCount)
-    (member : ConcreteElaboration.LocalOccurrence.child child ∈
-      (ConcreteElaboration.localOccurrences
+    (member : Concrete.Elaboration.LocalOccurrence.child child ∈
+      (Concrete.Elaboration.localOccurrences
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible).diagram.val parentRegion).filter
         (dropOccurrenceSurvives
@@ -109,14 +111,14 @@ theorem advance_site_child_denotes_fixed
             payload state site arguments hadmissible)))
     (sourceItem : Item  sourceContext.length sourceRels)
     (targetItem : Item  targetContext.length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrenceWith?
+    (sourceCompiled : Concrete.Elaboration.compileOccurrenceWith?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw
       (compileSurvivorRegion?
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible) sourceFuel)
       sourceContext sourceBinders (.child child) = some sourceItem)
-    (targetCompiled : ConcreteElaboration.compileOccurrenceWith?
+    (targetCompiled : Concrete.Elaboration.compileOccurrenceWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       (compileSurvivorRegion?
@@ -137,28 +139,28 @@ theorem advance_site_child_denotes_fixed
   let next := advanceInstantiationState comprehension attachments binders
     payload state atom tail site arguments hadmissible
   have childParent :=
-    (ConcreteElaboration.mem_localOccurrences_child _ _ _).1
+    (Concrete.Elaboration.mem_localOccurrences_child _ _ _).1
       (List.mem_filter.mp member).1
   have stateChildParent' :
       (state.diagram.val.regions child).parent? = some parentRegion := by
     simpa [coalesced, coalescedInstantiationState, spliceInput,
-      Splice.Input.coalesceFrameRaw_regions, CRegion.parent?] using childParent
+      Concrete.Splice.Input.coalesceFrameRaw_regions, CRegion.parent?] using childParent
   have parentEnclosesChild :
       state.diagram.val.Encloses parentRegion child := by
     have hpositive := child.isLt
     refine ⟨⟨1, by omega⟩, ?_⟩
-    simp [ConcreteDiagram.climb, stateChildParent']
+    simp [Concrete.Diagram.climb, stateChildParent']
   have bubbleEnclosesChild :
       state.diagram.val.Encloses state.bubble child :=
-    ConcreteElaboration.checked_encloses_trans state.diagram.property
+    Concrete.Elaboration.checked_encloses_trans state.diagram.property
       bubbleEnclosesParent parentEnclosesChild
   cases childKind : coalesced.diagram.val.regions child with
   | sheet =>
       have frameKind : spliceInput.frame.val.regions child = .sheet := by
         simpa [coalesced, coalescedInstantiationState, spliceInput,
-          Splice.Input.coalesceFrameRaw_regions] using childKind
+          Concrete.Splice.Input.coalesceFrameRaw_regions] using childKind
       dsimp only [spliceInput] at frameKind
-      simp [ConcreteElaboration.compileOccurrenceWith?, frameKind] at sourceCompiled
+      simp [Concrete.Elaboration.compileOccurrenceWith?, frameKind] at sourceCompiled
   | cut parent =>
       have parentEq : parent = parentRegion := by
         rw [childKind] at childParent
@@ -167,14 +169,14 @@ theorem advance_site_child_denotes_fixed
       have frameKind : spliceInput.frame.val.regions child =
           .cut parentRegion := by
         simpa [coalesced, coalescedInstantiationState, spliceInput,
-          Splice.Input.coalesceFrameRaw_regions] using childKind
+          Concrete.Splice.Input.coalesceFrameRaw_regions] using childKind
       dsimp only [spliceInput] at frameKind
       have targetKind := layout.plugRaw_frameRegion_cut child parentRegion (by
         simpa [coalesced, coalescedInstantiationState, spliceInput] using
           childKind)
       have targetKindExplicit := targetKind
       dsimp only [layout, spliceInput] at targetKindExplicit
-      simp [ConcreteElaboration.compileOccurrenceWith?, frameKind] at sourceCompiled
+      simp [Concrete.Elaboration.compileOccurrenceWith?, frameKind] at sourceCompiled
       change (compileSurvivorRegion?  coalesced sourceFuel child
           sourceContext sourceBinders).bind (fun body => some (.cut body)) =
         some sourceItem at sourceCompiled
@@ -187,8 +189,8 @@ theorem advance_site_child_denotes_fixed
           rw [sourceChildResult] at sourceCompiled
           simp at sourceCompiled
           subst sourceItem
-          simp [layout, Splice.Input.PlugLayout.mapFrameOccurrence,
-            ConcreteElaboration.compileOccurrenceWith?, targetKindExplicit]
+          simp [layout, Concrete.Splice.Input.PlugLayout.mapFrameOccurrence,
+            Concrete.Elaboration.compileOccurrenceWith?, targetKindExplicit]
             at targetCompiled
           change (compileSurvivorRegion?  next targetFuel
               (layout.frameRegion child) targetContext targetBinders).bind
@@ -213,9 +215,9 @@ theorem advance_site_child_denotes_fixed
                   (by simpa [CRegion.parent?] using
                     congrArg CRegion.parent? targetKind))
                 sourceBinders targetBinders
-                (ConcreteElaboration.BinderContext.covers_cut_child sourceCover
+                (Concrete.Elaboration.BinderContext.covers_cut_child sourceCover
                   childKind)
-                (ConcreteElaboration.BinderContext.covers_cut_child targetCover
+                (Concrete.Elaboration.BinderContext.covers_cut_child targetCover
                   targetKind)
                 (sourceEnumeration.cutChild
                   (spliceInput.coalesceFrameRaw_wellFormed hadmissible)
@@ -249,7 +251,7 @@ theorem advance_site_child_denotes_fixed
       have frameKind : spliceInput.frame.val.regions child =
           .bubble parentRegion arity := by
         simpa [coalesced, coalescedInstantiationState, spliceInput,
-          Splice.Input.coalesceFrameRaw_regions] using childKind
+          Concrete.Splice.Input.coalesceFrameRaw_regions] using childKind
       dsimp only [spliceInput] at frameKind
       have targetKind := layout.plugRaw_frameRegion_bubble child parentRegion arity (by
         simpa [coalesced, coalescedInstantiationState, spliceInput] using
@@ -258,7 +260,7 @@ theorem advance_site_child_denotes_fixed
       dsimp only [layout, spliceInput] at targetKindExplicit
       let sourcePushed := sourceBinders.push child arity
       let targetPushed := targetBinders.push (layout.frameRegion child) arity
-      simp [ConcreteElaboration.compileOccurrenceWith?, frameKind,
+      simp [Concrete.Elaboration.compileOccurrenceWith?, frameKind,
         sourcePushed] at sourceCompiled
       change (compileSurvivorRegion?  coalesced sourceFuel child
           sourceContext sourcePushed).bind (fun body => some (.bubble arity body)) =
@@ -272,8 +274,8 @@ theorem advance_site_child_denotes_fixed
           rw [sourceChildResult] at sourceCompiled
           simp at sourceCompiled
           subst sourceItem
-          simp [layout, Splice.Input.PlugLayout.mapFrameOccurrence,
-            ConcreteElaboration.compileOccurrenceWith?, targetKindExplicit,
+          simp [layout, Concrete.Splice.Input.PlugLayout.mapFrameOccurrence,
+            Concrete.Elaboration.compileOccurrenceWith?, targetKindExplicit,
             targetPushed] at targetCompiled
           change (compileSurvivorRegion?  next targetFuel
               (layout.frameRegion child) targetContext targetPushed).bind
@@ -291,21 +293,21 @@ theorem advance_site_child_denotes_fixed
               have stateChildParent :
                   (state.diagram.val.regions child).parent? = some parentRegion := by
                 simpa [coalesced, coalescedInstantiationState, spliceInput,
-                  Splice.Input.coalesceFrameRaw_regions, CRegion.parent?] using
+                  Concrete.Splice.Input.coalesceFrameRaw_regions, CRegion.parent?] using
                     childParent
               have bubbleNeChild : state.bubble ≠ child := by
                 intro equality
                 subst child
-                exact ConcreteElaboration.checked_direct_child_not_encloses_parent
+                exact Concrete.Elaboration.checked_direct_child_not_encloses_parent
                   state.diagram.property stateChildParent bubbleEnclosesParent
               have targetsNeChild : ∀ index, state.binderTargets index ≠ child := by
                 intro index equality
                 subst child
                 have targetEnclosesSite :=
-                  ConcreteElaboration.checked_encloses_trans
+                  Concrete.Elaboration.checked_encloses_trans
                     state.diagram.property (targets.target_encloses index)
                     bubbleEnclosesParent
-                exact ConcreteElaboration.checked_direct_child_not_encloses_parent
+                exact Concrete.Elaboration.checked_direct_child_not_encloses_parent
                   state.diagram.property stateChildParent targetEnclosesSite
               change ∃ childRelation : Relation model.Carrier arity,
                 denoteRegion (relCtx := arity :: targetRels) model  targetEnv
@@ -343,9 +345,9 @@ theorem advance_site_child_denotes_fixed
                   (by simpa [CRegion.parent?] using
                     congrArg CRegion.parent? targetKind))
                 sourcePushed targetPushed
-                (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                (Concrete.Elaboration.BinderContext.push_covers_bubble_child
                   sourceCover childKind)
-                (ConcreteElaboration.BinderContext.push_covers_bubble_child
+                (Concrete.Elaboration.BinderContext.push_covers_bubble_child
                   targetCover targetKind)
                 (sourceEnumeration.bubbleChild
                   (spliceInput.coalesceFrameRaw_wellFormed hadmissible)
@@ -375,15 +377,15 @@ theorem advance_site_child_denotes_fixed
 /-- A denoting target survivor block at the splice site reconstructs the
 source survivor block under the single trace-level relation witness. -/
 theorem advance_site_items_denote_fixed
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {bubble : Fin input.val.regionCount}
-    (comprehension : CheckedOpenDiagram )
+    (comprehension : Concrete.CheckedOpen )
     (attachments : List (Fin input.val.wireCount))
     (binders : List
       (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount))
-    (payload : ComprehensionInstantiatePayload input bubble comprehension
+    (payload : OperationComprehensionInstantiatePayload input bubble comprehension
       attachments binders)
-    {origin : CheckedDiagram }
+    {origin : Concrete.Checked }
     (state : InstantiationState origin attachments.length
       payload.binderSpine.proxyCount)
     (atom : Fin state.diagram.val.nodeCount)
@@ -398,10 +400,10 @@ theorem advance_site_items_denote_fixed
     (shape : BubbleHasPayloadArity payload state)
     (targets : BinderTargetsAtBubble payload state)
     (sourceFuel targetFuel : Nat)
-    (sourceOuter : ConcreteElaboration.WireContext
+    (sourceOuter : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw)
-    (targetOuter : ConcreteElaboration.WireContext
+    (targetOuter : Concrete.Elaboration.WireContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw)
     (sourceExact : (sourceOuter.extend site).Exact site)
@@ -410,20 +412,20 @@ theorem advance_site_items_denote_fixed
         site arguments).plugLayout.frameRegion site)).Exact
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion site))
-    (sourceBinders : ConcreteElaboration.BinderContext
+    (sourceBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceRels)
-    (targetBinders : ConcreteElaboration.BinderContext
+    (targetBinders : Concrete.Elaboration.BinderContext
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw targetRels)
     (sourceCover : sourceBinders.Covers site)
     (targetCover : targetBinders.Covers
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion site))
-    (sourceEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw sourceBinders site)
-    (targetEnumeration : ConcreteElaboration.BinderContext.Enumeration
+    (targetEnumeration : Concrete.Elaboration.BinderContext.Enumeration
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw targetBinders
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -448,9 +450,9 @@ theorem advance_site_items_denote_fixed
     (targetOuterEnv : Fin targetOuter.length → model.Carrier)
     (targetRelEnv : RelEnv model.Carrier targetRels)
     (outerAgrees :
-      (ConcreteElaboration.ContextIndexRelation.forwardMap outerMap)
+      (Concrete.Elaboration.ContextIndexRelation.forwardMap outerMap)
         |>.EnvironmentsAgree sourceOuterEnv targetOuterEnv)
-    (targetLocal : Fin (ConcreteElaboration.exactScopeWires
+    (targetLocal : Fin (Concrete.Elaboration.exactScopeWires
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw
       ((instantiateSpliceInput comprehension attachments binders payload state
@@ -463,20 +465,20 @@ theorem advance_site_items_denote_fixed
     (fullItems : ItemSeq  (targetOuter.extend
       ((instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.frameRegion site)).length targetRels)
-    (sourceCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (sourceCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).coalesceFrameRaw
       (compileSurvivorRegion?
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible) sourceFuel)
       (sourceOuter.extend site) sourceBinders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (coalescedInstantiationState comprehension attachments binders payload
           state site arguments hadmissible).diagram.val site).filter
         (dropOccurrenceSurvives
           (coalescedInstantiationState comprehension attachments binders
             payload state site arguments hadmissible))) = some sourceItems)
-    (targetCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (targetCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (advanceInstantiationState comprehension attachments binders payload
         state atom tail site arguments hadmissible).diagram.val
       (compileSurvivorRegion?
@@ -485,7 +487,7 @@ theorem advance_site_items_denote_fixed
       (targetOuter.extend
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)) targetBinders
-      ((ConcreteElaboration.localOccurrences
+      ((Concrete.Elaboration.localOccurrences
         (advanceInstantiationState comprehension attachments binders payload
           state atom tail site arguments hadmissible).diagram.val
         ((instantiateSpliceInput comprehension attachments binders payload state
@@ -493,22 +495,22 @@ theorem advance_site_items_denote_fixed
         (dropOccurrenceSurvives
           (advanceInstantiationState comprehension attachments binders payload
             state atom tail site arguments hadmissible))) = some targetItems)
-    (fullCompiled : ConcreteElaboration.compileOccurrencesWith?
+    (fullCompiled : Concrete.Elaboration.compileOccurrencesWith?
       (instantiateSpliceInput comprehension attachments binders payload state
         site arguments).plugLayout.plugRaw
-      (ConcreteElaboration.compileRegion?
+      (Concrete.Elaboration.compileRegion?
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.plugRaw targetFuel)
       (targetOuter.extend
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)) targetBinders
-      (ConcreteElaboration.localOccurrences
+      (Concrete.Elaboration.localOccurrences
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.plugRaw
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site)) = some fullItems)
     (targetDenotes : denoteItemSeq model
-      (ConcreteElaboration.extendedEnvironment targetOuter
+      (Concrete.Elaboration.extendedEnvironment targetOuter
         ((instantiateSpliceInput comprehension attachments binders payload state
           site arguments).plugLayout.frameRegion site) targetOuterEnv targetLocal)
       targetRelEnv targetItems)
@@ -537,11 +539,11 @@ theorem advance_site_items_denote_fixed
       FixedAdvanceRegionSimulation comprehension attachments binders payload
         state atom tail site arguments hadmissible model  relationValue
         values parameterValues direction sourceFuel targetFuel child) :
-    ∃ sourceLocal : Fin (ConcreteElaboration.exactScopeWires
+    ∃ sourceLocal : Fin (Concrete.Elaboration.exactScopeWires
         (instantiateSpliceInput comprehension attachments binders payload state
           site arguments).coalesceFrameRaw site).length → model.Carrier,
       denoteItemSeq model
-        (ConcreteElaboration.extendedEnvironment sourceOuter site sourceOuterEnv
+        (Concrete.Elaboration.extendedEnvironment sourceOuter site sourceOuterEnv
           sourceLocal)
         (RelEnv.pullback relationMap targetRelEnv) sourceItems := by
   let spliceInput := instantiateSpliceInput comprehension attachments binders
@@ -549,7 +551,7 @@ theorem advance_site_items_denote_fixed
   let sourceContext := sourceOuter.extend site
   let targetContext := targetOuter.extend
     (spliceInput.plugLayout.frameRegion site)
-  let targetEnv := ConcreteElaboration.extendedEnvironment targetOuter
+  let targetEnv := Concrete.Elaboration.extendedEnvironment targetOuter
     (spliceInput.plugLayout.frameRegion site) targetOuterEnv targetLocal
   have targetExtendedParameters : ParameterValuesAt
       (advanceInstantiationState comprehension attachments binders payload
@@ -560,11 +562,11 @@ theorem advance_site_items_denote_fixed
         state atom tail site arguments hadmissible)
       targetOuter targetOuterEnv parameterValues targetParameters
       (spliceInput.plugLayout.frameRegion site) targetLocal
-  let outputBody := ConcreteElaboration.finishRegion
+  let outputBody := Concrete.Elaboration.finishRegion
     spliceInput.plugLayout.plugRaw targetOuter
     (spliceInput.plugLayout.frameRegion site) fullItems
   let outputWitness : Region.ContextPath outputBody [] := .here _
-  let outputLeaf := Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
+  let outputLeaf := Concrete.Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
     spliceInput.plugLayout.plugRaw (spliceInput.plugLayout.frameRegion site)
     targetOuter targetBinders targetFuel fullItems fullCompiled targetExact
     targetCover targetEnumeration
@@ -572,7 +574,7 @@ theorem advance_site_items_denote_fixed
     site_sourceLocalEnvironment_exists spliceInput sourceOuter targetOuter
       sourceExact targetExact outerMap outerSpec sourceOuterEnv targetOuterEnv
       outerAgrees targetLocal fallback
-  let sourceEnv := ConcreteElaboration.extendedEnvironment sourceOuter site
+  let sourceEnv := Concrete.Elaboration.extendedEnvironment sourceOuter site
     sourceOuterEnv sourceLocal
   let wireMap := siteSourceWireMap spliceInput outputWitness outputLeaf
     sourceContext sourceExact
@@ -586,7 +588,7 @@ theorem advance_site_items_denote_fixed
     have targetEq := siteSourceWireMap_environment spliceInput outputWitness
       outputLeaf sourceContext sourceExact targetEnv fallback index
     exact sourceEq.trans targetEq.symm
-  let quotientValues := Splice.Input.siteQuotientEnvironment spliceInput
+  let quotientValues := Concrete.Splice.Input.siteQuotientEnvironment spliceInput
     targetContext targetExact targetEnv fallback
   have quotientParameters :
       (fun index => quotientValues
@@ -618,7 +620,7 @@ theorem advance_site_items_denote_fixed
     rw [quotientParameters]
     exact emptyRelationEq hzero
   have currentDenotes : ∀ sourceItem,
-      ConcreteElaboration.compileNode?  spliceInput.coalesceFrameRaw
+      Concrete.Elaboration.compileNode?  spliceInput.coalesceFrameRaw
         sourceContext sourceBinders atom = some sourceItem →
       denoteItem model  sourceEnv
         (RelEnv.pullback relationMap targetRelEnv) sourceItem := by

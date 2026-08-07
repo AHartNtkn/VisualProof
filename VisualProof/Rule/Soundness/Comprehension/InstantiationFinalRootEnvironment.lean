@@ -3,6 +3,8 @@ import VisualProof.Rule.Soundness.Modal.EliminationRoot
 
 namespace VisualProof.Rule
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Diagram
 open VisualProof.Theory
@@ -82,7 +84,7 @@ theorem sourceEnvironment_agrees
       (witness.sourceEnvironment sourceNodup targetNodup wireInjective fallback
         targetEnvironment)
       targetEnvironment := by
-  apply (ConcreteElaboration.ContextIndexRelation.environmentsAgree_backwardMap
+  apply (Concrete.Elaboration.ContextIndexRelation.environmentsAgree_backwardMap
     _ _ _).2
   funext targetIndex
   exact witness.sourceEnvironment_sourceIndex sourceNodup targetNodup
@@ -90,18 +92,18 @@ theorem sourceEnvironment_agrees
 
 end FinalContextWitness
 
-variable {input : CheckedDiagram }
+variable {input : Concrete.Checked }
   {bubble : Fin input.val.regionCount}
-  {comprehension : CheckedOpenDiagram }
+  {comprehension : Concrete.CheckedOpen }
   {attachments : List (Fin input.val.wireCount)}
   {binders : List
     (Fin comprehension.val.diagram.regionCount × Fin input.val.regionCount)}
-  {payload : ComprehensionInstantiatePayload input bubble comprehension
+  {payload : OperationComprehensionInstantiatePayload input bubble comprehension
     attachments binders}
   {fuel : Nat}
   {result : InstantiationState input attachments.length
     payload.binderSpine.proxyCount}
-  {raw : ConcreteDiagram}
+  {raw : Concrete.Diagram}
 
 /-- Root valuation selection for the exact mapped ordered boundary.  This is
 the root analogue of `regularEnvironmentSelection`: target root wires embed
@@ -118,13 +120,13 @@ theorem finalRootEnvironmentSelection
     (boundary : List (Fin input.val.wireCount))
     (boundaryRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
-    (direction : ConcreteElaboration.SimulationDirection)
+    (direction : Concrete.Elaboration.SimulationDirection)
     [Nonempty D] :
-    let source : CheckedOpenDiagram  :=
+    let source : Concrete.CheckedOpen  :=
       ⟨copyTrace.finalSourceOpen elimTrace boundary,
         copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
           finalWellFormed boundary boundaryRoot⟩
-    let target : CheckedOpenDiagram  :=
+    let target : Concrete.CheckedOpen  :=
       ⟨finalTargetOpen input boundary,
         finalTargetOpen_wellFormed input boundary boundaryRoot⟩
     let outer := copyTrace.finalOuterContextWitness elimTrace boundary
@@ -137,35 +139,35 @@ theorem finalRootEnvironmentSelection
         | .forward => ∀ sourceLocal,
             ∃ targetLocal,
               combined.indexRelation.EnvironmentsAgree
-                (ConcreteElaboration.rootEnvironment source.val.exposedWires
+                (Concrete.Elaboration.rootEnvironment source.val.exposedWires
                   source.val.hiddenWires sourceOuter sourceLocal)
-                (ConcreteElaboration.rootEnvironment target.val.exposedWires
+                (Concrete.Elaboration.rootEnvironment target.val.exposedWires
                   target.val.hiddenWires targetOuter targetLocal)
         | .backward => ∀ targetLocal,
             ∃ sourceLocal,
               combined.indexRelation.EnvironmentsAgree
-                (ConcreteElaboration.rootEnvironment source.val.exposedWires
+                (Concrete.Elaboration.rootEnvironment source.val.exposedWires
                   source.val.hiddenWires sourceOuter sourceLocal)
-                (ConcreteElaboration.rootEnvironment target.val.exposedWires
+                (Concrete.Elaboration.rootEnvironment target.val.exposedWires
                   target.val.hiddenWires targetOuter targetLocal) := by
   dsimp only
-  let source : CheckedOpenDiagram  :=
+  let source : Concrete.CheckedOpen  :=
     ⟨copyTrace.finalSourceOpen elimTrace boundary,
       copyTrace.finalSourceOpen_wellFormed elimTrace sourceWellFormed
         finalWellFormed boundary boundaryRoot⟩
-  let target : CheckedOpenDiagram  :=
+  let target : Concrete.CheckedOpen  :=
     ⟨finalTargetOpen input boundary,
       finalTargetOpen_wellFormed input boundary boundaryRoot⟩
   let outer := copyTrace.finalOuterContextWitness elimTrace boundary
   let combined := copyTrace.finalRootContextWitness elimTrace finalWellFormed
     boundary boundaryRoot sourceWellFormed
-  have sourceRootExact : ConcreteElaboration.WireContext.Exact
+  have sourceRootExact : Concrete.Elaboration.WireContext.Exact
       source.val.rootWires source.val.diagram.root :=
-    ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+    Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
       source
-  have targetRootExact : ConcreteElaboration.WireContext.Exact
+  have targetRootExact : Concrete.Elaboration.WireContext.Exact
       target.val.rootWires target.val.diagram.root :=
-    ConcreteElaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
+    Concrete.Elaboration.ConcreteSemanticSimulation.checkedOpen_rootContext_exact
       target
   have outerGet (targetIndex : Fin target.val.exposedWires.length) :
       combined.sourceIndex
@@ -174,7 +176,7 @@ theorem finalRootEnvironmentSelection
         rootOuterIndex source.val.exposedWires source.val.hiddenWires
           (outer.sourceIndex targetIndex) := by
     symm
-    apply ConcreteElaboration.WireContext.lookup?_unique sourceRootExact.nodup
+    apply Concrete.Elaboration.WireContext.lookup?_unique sourceRootExact.nodup
       (combined.sourceIndex_lookup
         (rootOuterIndex target.val.exposedWires target.val.hiddenWires
           targetIndex))
@@ -196,14 +198,14 @@ theorem finalRootEnvironmentSelection
   cases direction with
   | forward =>
       intro sourceLocal
-      let sourceEnvironment := ConcreteElaboration.rootEnvironment
+      let sourceEnvironment := Concrete.Elaboration.rootEnvironment
         source.val.exposedWires source.val.hiddenWires sourceOuter sourceLocal
       let targetEnvironment := combined.targetEnvironment sourceEnvironment
       let targetLocal := rootLocalPart target.val.exposedWires
         target.val.hiddenWires targetEnvironment
       refine ⟨targetLocal, ?_⟩
       have targetEnvironmentEq :
-          ConcreteElaboration.rootEnvironment target.val.exposedWires
+          Concrete.Elaboration.rootEnvironment target.val.exposedWires
               target.val.hiddenWires targetOuter targetLocal =
             targetEnvironment := by
         apply rootEnvironment_of_parts
@@ -220,7 +222,7 @@ theorem finalRootEnvironmentSelection
       exact combined.targetEnvironment_agrees sourceEnvironment
   | backward =>
       intro targetLocal
-      let targetEnvironment := ConcreteElaboration.rootEnvironment
+      let targetEnvironment := Concrete.Elaboration.rootEnvironment
         target.val.exposedWires target.val.hiddenWires targetOuter targetLocal
       let fallback : D := Classical.choice inferInstance
       let sourceEnvironment := combined.sourceEnvironment sourceRootExact.nodup
@@ -231,7 +233,7 @@ theorem finalRootEnvironmentSelection
         source.val.hiddenWires sourceEnvironment
       refine ⟨sourceLocal, ?_⟩
       have sourceEnvironmentEq :
-          ConcreteElaboration.rootEnvironment source.val.exposedWires
+          Concrete.Elaboration.rootEnvironment source.val.exposedWires
               source.val.hiddenWires sourceOuter sourceLocal =
             sourceEnvironment := by
         apply rootEnvironment_of_parts
@@ -274,7 +276,7 @@ theorem finalRootEnvironmentSelection
             rootOuterIndex source.val.exposedWires source.val.hiddenWires
               sourceIndex := by
           symm
-          apply ConcreteElaboration.WireContext.lookup?_unique
+          apply Concrete.Elaboration.WireContext.lookup?_unique
             sourceRootExact.nodup
             (combined.sourceIndex_lookup
               (rootOuterIndex target.val.exposedWires target.val.hiddenWires
@@ -299,7 +301,7 @@ theorem finalRootEnvironmentSelection
         rw [← combinedIndex]
         have outerIndexEq : outer.sourceIndex targetIndex = sourceIndex := by
           symm
-          apply ConcreteElaboration.WireContext.lookup?_unique
+          apply Concrete.Elaboration.WireContext.lookup?_unique
             (List.nodup_append.mp sourceRootExact.nodup).1
             (outer.sourceIndex_lookup targetIndex)
           exact mappedGet

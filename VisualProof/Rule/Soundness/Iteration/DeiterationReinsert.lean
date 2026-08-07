@@ -2,89 +2,91 @@ import VisualProof.Rule.Soundness.Iteration.DeiterationExtraction
 
 namespace VisualProof.Rule.IterationSoundness
 
+open VisualProof.Concrete
+
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
 
 noncomputable def deiterationExtraction
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val) :
     CheckedExtraction  input selection where
   raw := {}
   fragment :=
     ⟨input.val.extractOpenRaw selection {},
-      ConcreteDiagram.extractOpenRaw_wellFormed input selection {}⟩
+      Concrete.Diagram.extractOpenRaw_wellFormed input selection {}⟩
   fragment_eq := rfl
 
 noncomputable def deiterationDecomposition
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val) :
     Decomposition  input selection where
   frameDomains := deiterationDomains input selection
   frame :=
     ⟨input.val.removeRaw selection (deiterationDomains input selection),
-      ConcreteDiagram.removeRaw_wellFormed input selection
+      Concrete.Diagram.removeRaw_wellFormed input selection
         (deiterationDomains input selection)⟩
   frame_eq := rfl
   extraction := deiterationExtraction input selection
 
 noncomputable def deiterationRemoved
-    (input : CheckedDiagram )
-    (selection : CheckedSelection input.val) : CheckedDiagram  :=
+    (input : Concrete.Checked )
+    (selection : CheckedSelection input.val) : Concrete.Checked  :=
   (deiterationDecomposition input selection).frame
 
 noncomputable def deiterationReinsertTarget
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val) :
     Fin (deiterationRemoved input selection).val.regionCount :=
-  Splice.Decomposition.originalSite
+  Concrete.Splice.Decomposition.originalSite
     (deiterationDecomposition input selection)
 
 noncomputable def deiterationReinsertInput
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) : Splice.Input  :=
+    (witness : OperationDeiterationWitness input selection) : Concrete.Splice.Input  :=
   iterationInput (deiterationRemoved input selection)
     (deiterationRetainedSelection input selection witness)
     (deiterationReinsertTarget input selection)
 
 @[simp] theorem deiterationRemoved_val
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val) :
     (deiterationRemoved input selection).val =
       input.val.removeRaw selection (deiterationDomains input selection) := rfl
 
 @[simp] theorem deiterationReinsertInput_frame
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationReinsertInput input selection witness).frame =
       deiterationRemoved input selection := rfl
 
 @[simp] theorem deiterationReinsertInput_site
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationReinsertInput input selection witness).site =
       deiterationReinsertTarget input selection := rfl
 
 theorem deiterationSelectedRegions_length_eq
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     witness.justifier.selectedRegions.length =
       selection.selectedRegions.length := by
   have regionCountEq := witness.occurrence.diagram.regionCount_eq
   have externalCountEq := congrArg List.length witness.sameExternalBinders
-  simp only [selectedFragment, ConcreteDiagram.extractOpenRaw,
-    ConcreteDiagram.extractDiagramRaw, FragmentLayout.regionCount,
+  simp only [selectedFragment, Concrete.Diagram.extractOpenRaw,
+    Concrete.Diagram.extractDiagramRaw, FragmentLayout.regionCount,
     FragmentLayout.proxyCount, FragmentLayout.materialRegionCount] at regionCountEq
   omega
 
 theorem deiterationJustifier_not_selects_selectionAnchor
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     ¬ witness.justifier.val.SelectsRegion selection.val.anchor := by
   intro selectedAnchor
   have anchorMember : selection.val.anchor ∈
@@ -122,9 +124,9 @@ theorem deiterationJustifier_not_selects_selectionAnchor
             input.val.Encloses selection.val.anchor child := by
           have positive := child.isLt
           refine ⟨⟨1, by omega⟩, ?_⟩
-          simp [ConcreteDiagram.climb,
+          simp [Concrete.Diagram.climb,
             selection.property.childRoots_direct child childMember]
-        exact ConcreteElaboration.checked_encloses_trans input.property
+        exact Concrete.Elaboration.checked_encloses_trans input.property
           anchorEnclosesChild childEncloses
       have selectedRegion : witness.justifier.val.SelectsRegion region :=
         SelectionRequest.SelectsRegion.downward input.property selectedAnchor
@@ -134,7 +136,7 @@ theorem deiterationJustifier_not_selects_selectionAnchor
         regionMember
 
 theorem deiterationSelectionAnchor_survives
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val) :
     (deiterationDomains input selection).regions.survives
         selection.val.anchor = true := by
@@ -143,30 +145,30 @@ theorem deiterationSelectionAnchor_survives
   intro selected
   obtain ⟨child, childMember, childEncloses⟩ :=
     (selection.mem_selectedRegions selection.val.anchor).1 selected
-  exact ConcreteElaboration.checked_direct_child_not_encloses_parent
+  exact Concrete.Elaboration.checked_direct_child_not_encloses_parent
     input.property (selection.property.childRoots_direct child childMember)
     childEncloses
 
 theorem deiterationReinsert_encloses
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationRemoved input selection).val.Encloses
       (deiterationRetainedSelection input selection witness).val.anchor
       (deiterationReinsertTarget input selection) := by
   let domains := deiterationDomains input selection
-  have transported := ConcreteDiagram.removeRaw_encloses input selection domains
+  have transported := Concrete.Diagram.removeRaw_encloses input selection domains
     (deiterationJustifierAnchor_survives input selection witness)
     (deiterationSelectionAnchor_survives input selection)
     witness.ancestor
   simpa [domains, deiterationRemoved, deiterationDecomposition,
-    deiterationReinsertTarget, Splice.Decomposition.originalSite,
+    deiterationReinsertTarget, Concrete.Splice.Decomposition.originalSite,
     deiterationRetainedSelection, deiterationRetainedRequest] using transported
 
 theorem deiterationReinsert_not_selected
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     ¬ (deiterationRetainedSelection input selection witness).val.SelectsRegion
       (deiterationReinsertTarget input selection) := by
   change ¬ (deiterationRetainedRequest input selection witness).SelectsRegion
@@ -182,9 +184,9 @@ theorem deiterationReinsert_not_selected
   exact deiterationJustifier_not_selects_selectionAnchor input selection witness
 
 theorem deiterationReinsertInput_admissible
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     (deiterationReinsertInput input selection witness).Admissible where
   attachments_visible := by
     intro position
@@ -195,10 +197,10 @@ theorem deiterationReinsertInput_admissible
       change (frame.val.extractBoundaryRaw retained layout).length =
         retained.touchingWires.length
       exact frame.val.extractBoundaryRaw_length retained layout) position
-    have touching := Splice.Decomposition.touchingWire_scope_encloses_anchor
+    have touching := Concrete.Splice.Decomposition.touchingWire_scope_encloses_anchor
       frame retained touch
     have target := deiterationReinsert_encloses input selection witness
-    have combined := ConcreteElaboration.checked_encloses_trans frame.property
+    have combined := Concrete.Elaboration.checked_encloses_trans frame.property
       touching target
     simpa [deiterationReinsertInput, iterationInput, frame, retained, layout,
       touch] using combined
@@ -212,7 +214,7 @@ theorem deiterationReinsertInput_admissible
       |>.externalBinderTarget_injective equality
   binder_targets_match := by
     intro index
-    exact ConcreteDiagram.extractedBinderSpine_target_region
+    exact Concrete.Diagram.extractedBinderSpine_target_region
       (deiterationRemoved input selection)
       (deiterationRetainedSelection input selection witness)
       (deiterationRetainedLayout input selection witness) index
@@ -229,7 +231,7 @@ theorem deiterationReinsertInput_admissible
       ((retained.mem_externalBinders_iff_uses frame
         (layout.externalBinders.get index)).1 member)
     have anchorTarget := deiterationReinsert_encloses input selection witness
-    have combined := ConcreteElaboration.checked_encloses_trans frame.property
+    have combined := Concrete.Elaboration.checked_encloses_trans frame.property
       binderAnchor anchorTarget
     simpa [deiterationReinsertInput, iterationInput, frame, retained, layout]
       using combined
@@ -237,25 +239,25 @@ theorem deiterationReinsertInput_admissible
 /-- The certified inverse insertion is accepted by the splice checker for
 every executor-accepted deiteration witness. -/
 theorem deiterationReinsert_complete
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
-    ∃ result, Splice.Input.spliceChecked
+    (witness : OperationDeiterationWitness input selection) :
+    ∃ result, Concrete.Splice.Input.spliceChecked
       (deiterationReinsertInput input selection witness) = .ok result :=
   (deiterationReinsertInput input selection witness).spliceChecked_complete
     (deiterationReinsertInput_admissible input selection witness)
 
 noncomputable def deiterationReinsertResult
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) : CheckedDiagram  :=
+    (witness : OperationDeiterationWitness input selection) : Concrete.Checked  :=
   Classical.choose (deiterationReinsert_complete input selection witness)
 
 theorem deiterationReinsertResult_spec
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
-    Splice.Input.spliceChecked
+    (witness : OperationDeiterationWitness input selection) :
+    Concrete.Splice.Input.spliceChecked
         (deiterationReinsertInput input selection witness) =
       .ok (deiterationReinsertResult input selection witness) :=
   Classical.choose_spec (deiterationReinsert_complete input selection witness)
@@ -264,9 +266,9 @@ theorem deiterationReinsertResult_spec
 the enclosing, non-selection, and checked-splice branches are all discharged
 from the deiteration witness rather than assumed. -/
 theorem applyIteration_deiterationReinsert_complete
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     ∃ receipt, applyIteration (deiterationRemoved input selection)
       (deiterationRetainedSelection input selection witness)
       (deiterationReinsertTarget input selection) = .ok receipt := by
@@ -278,7 +280,7 @@ theorem applyIteration_deiterationReinsert_complete
       (deiterationReinsert_not_selected input selection witness selected)
   · split
     · rename_i error hsplice
-      have accepted : Splice.Input.spliceChecked
+      have accepted : Concrete.Splice.Input.spliceChecked
           (iterationInput (deiterationRemoved input selection)
             (deiterationRetainedSelection input selection witness)
             (deiterationReinsertTarget input selection)) =
@@ -289,17 +291,17 @@ theorem applyIteration_deiterationReinsert_complete
     · exact ⟨_, rfl⟩
 
 noncomputable def deiterationReinsertReceipt
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
-    StepReceipt (deiterationRemoved input selection) :=
+    (witness : OperationDeiterationWitness input selection) :
+    OperationReceipt (deiterationRemoved input selection) :=
   Classical.choose
     (applyIteration_deiterationReinsert_complete input selection witness)
 
 theorem deiterationReinsertReceipt_spec
-    (input : CheckedDiagram )
+    (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
-    (witness : DeiterationWitness input selection) :
+    (witness : OperationDeiterationWitness input selection) :
     applyIteration (deiterationRemoved input selection)
         (deiterationRetainedSelection input selection witness)
         (deiterationReinsertTarget input selection) =

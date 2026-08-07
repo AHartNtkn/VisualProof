@@ -1,7 +1,10 @@
 import VisualProof.Rule.Soundness.Comprehension.AbstractionFocusedRegionCompiler
 import VisualProof.Rule.Soundness.Modal.EliminationFocusedItems
 
-namespace VisualProof.Rule
+namespace VisualProof.Concrete
+
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Diagram
@@ -13,17 +16,17 @@ namespace AbstractionRawTrace
 under the fixed comprehension relation.  Occurrence anchors may appear at
 either cut polarity; all other material follows the survivor compiler map. -/
 theorem fixedRegionSimulation
-    {input : CheckedDiagram }
+    {input : Concrete.Checked }
     {wrap : CheckedSelection input.val}
-    {comprehension : CheckedOpenDiagram }
-    {occurrences : List (AbstractionOccurrence input)}
-    {raw : ConcreteDiagram}
+    {comprehension : Concrete.CheckedOpen }
+    {occurrences : List (OperationAbstractionOccurrence input)}
+    {raw : Concrete.Diagram}
     (trace : AbstractionRawTrace input wrap comprehension occurrences raw)
-    (payload : ComprehensionAbstractPayload input wrap comprehension occurrences)
+    (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
     (targetWellFormed : trace.diagram.WellFormed )
     (model : Model)
     :
-    ∀ (direction : ConcreteElaboration.SimulationDirection)
+    ∀ (direction : Concrete.Elaboration.SimulationDirection)
       (sourceFuel targetFuel : Nat)
       (region : Fin input.val.regionCount),
       trace.domains.regions.survives region = true →
@@ -41,7 +44,7 @@ theorem fixedRegionSimulation
         sourceNodup sourceBinders targetBinders binderWitness sourceCover
         targetCover sourceEnumeration targetEnumeration sourceExact targetExact
         sourceBody targetBody sourceCompiled
-      simp [ConcreteElaboration.compileRegion?] at sourceCompiled
+      simp [Concrete.Elaboration.compileRegion?] at sourceCompiled
   | succ sourceFuel induction =>
       intro targetFuel
       cases targetFuel with
@@ -52,7 +55,7 @@ theorem fixedRegionSimulation
             sourceNodup sourceBinders targetBinders binderWitness sourceCover
             targetCover sourceEnumeration targetEnumeration sourceExact
             targetExact sourceBody targetBody sourceCompiled targetCompiled
-          simp [ConcreteElaboration.compileRegion?] at targetCompiled
+          simp [Concrete.Elaboration.compileRegion?] at targetCompiled
       | succ targetFuel =>
           intro region regionSurvives notWrap regionSelected allowed
           unfold FixedRegionSimulation
@@ -60,27 +63,27 @@ theorem fixedRegionSimulation
             sourceNodup sourceBinders targetBinders binderWitness sourceCover
             targetCover sourceEnumeration targetEnumeration sourceExact
             targetExact sourceBody targetBody sourceCompiled targetCompiled
-          simp only [ConcreteElaboration.compileRegion?]
+          simp only [Concrete.Elaboration.compileRegion?]
             at sourceCompiled targetCompiled
           let sourceExtended := sourceContext.extend region
           let targetExtended := targetContext.extend (trace.regionMap region)
-          cases sourceItemsResult : ConcreteElaboration.compileOccurrencesWith?
+          cases sourceItemsResult : Concrete.Elaboration.compileOccurrencesWith?
                input.val
-              (ConcreteElaboration.compileRegion?  input.val sourceFuel)
+              (Concrete.Elaboration.compileRegion?  input.val sourceFuel)
               sourceExtended sourceBinders
-              (ConcreteElaboration.localOccurrences input.val region) with
+              (Concrete.Elaboration.localOccurrences input.val region) with
           | none =>
               simp [sourceExtended, sourceItemsResult] at sourceCompiled
           | some sourceItems =>
               simp [sourceExtended, sourceItemsResult] at sourceCompiled
               subst sourceBody
               cases targetItemsResult :
-                  ConcreteElaboration.compileOccurrencesWith?
+                  Concrete.Elaboration.compileOccurrencesWith?
                     trace.diagram
-                    (ConcreteElaboration.compileRegion?  trace.diagram
+                    (Concrete.Elaboration.compileRegion?  trace.diagram
                       targetFuel)
                     targetExtended targetBinders
-                    (ConcreteElaboration.localOccurrences trace.diagram
+                    (Concrete.Elaboration.localOccurrences trace.diagram
                       (trace.regionMap region)) with
               | none =>
                   simp [targetExtended, targetItemsResult] at targetCompiled
@@ -89,37 +92,37 @@ theorem fixedRegionSimulation
                   subst targetBody
                   let sourceRecurse : ∀ {rels : RelCtx},
                       (child : Fin input.val.regionCount) →
-                      (childContext : ConcreteElaboration.WireContext input.val) →
-                      ConcreteElaboration.BinderContext input.val rels →
+                      (childContext : Concrete.Elaboration.WireContext input.val) →
+                      Concrete.Elaboration.BinderContext input.val rels →
                       Option (Region  childContext.length rels) :=
-                    fun {rels} => ConcreteElaboration.compileRegion?
+                    fun {rels} => Concrete.Elaboration.compileRegion?
                       input.val sourceFuel
                   let targetRecurse : ∀ {rels : RelCtx},
                       (child : Fin trace.diagram.regionCount) →
-                      (childContext : ConcreteElaboration.WireContext
+                      (childContext : Concrete.Elaboration.WireContext
                         trace.diagram) →
-                      ConcreteElaboration.BinderContext trace.diagram rels →
+                      Concrete.Elaboration.BinderContext trace.diagram rels →
                       Option (Region  childContext.length rels) :=
-                    fun {rels} => ConcreteElaboration.compileRegion?
+                    fun {rels} => Concrete.Elaboration.compileRegion?
                       trace.diagram targetFuel
                   let sourceSurvivors := trace.survivingSources
-                    (ConcreteElaboration.localOccurrences input.val region)
+                    (Concrete.Elaboration.localOccurrences input.val region)
                   let indices := anchorIndices occurrences region
                   let sourceSelected := selectedAt input occurrences region
                   let targetSurvivors :=
                     sourceSurvivors.map trace.survivorOccurrence
-                  let targetAtoms : List (ConcreteElaboration.LocalOccurrence
+                  let targetAtoms : List (Concrete.Elaboration.LocalOccurrence
                       trace.diagram.regionCount trace.diagram.nodeCount) :=
                     indices.map fun index =>
-                      ConcreteElaboration.LocalOccurrence.node
+                      Concrete.Elaboration.LocalOccurrence.node
                         (trace.targetAtom index)
                   have sourcePartition :
                       (sourceSurvivors ++ sourceSelected).Perm
-                        (ConcreteElaboration.localOccurrences input.val region) :=
+                        (Concrete.Elaboration.localOccurrences input.val region) :=
                     trace.localOccurrences_perm_focusedPartition payload region
                       regionSurvives
                   have targetPartition :
-                      (ConcreteElaboration.localOccurrences trace.diagram
+                      (Concrete.Elaboration.localOccurrences trace.diagram
                           (trace.regionMap region)).Perm
                         (targetSurvivors ++ targetAtoms) := by
                     rw [trace.regionMap_of_survives region regionSurvives]
@@ -129,46 +132,46 @@ theorem fixedRegionSimulation
                       indices, atomsAt, anchorIndices,
                       trace.survivingSources_map_survivor] using rawPartition
                   obtain ⟨sourcePartitionItems, sourcePartitionCompiled⟩ :=
-                    ConcreteElaboration.compileOccurrencesWith?_complete
+                    Concrete.Elaboration.compileOccurrencesWith?_complete
                       sourceRecurse sourceExtended sourceBinders
                       (sourceSurvivors ++ sourceSelected) (by
                         intro occurrence member
-                        exact ModalSoundness.compileOccurrence_success_of_mem
+                        exact VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem
                           input.val sourceRecurse sourceExtended sourceBinders
                           sourceItemsResult
                           ((sourcePartition.mem_iff).1 member))
                   obtain ⟨sourceSurvivorItems, sourceSelectedItems,
                       sourceSurvivorCompiled, sourceSelectedCompiled,
                       sourcePartitionEq⟩ :=
-                    ConcreteElaboration.compileOccurrencesWith?_append_split
+                    Concrete.Elaboration.compileOccurrencesWith?_append_split
                       sourceRecurse sourceExtended sourceBinders sourceSurvivors
                       sourceSelected sourcePartitionItems sourcePartitionCompiled
                   obtain ⟨targetPartitionItems, targetPartitionCompiled⟩ :=
-                    ConcreteElaboration.compileOccurrencesWith?_complete
+                    Concrete.Elaboration.compileOccurrencesWith?_complete
                       targetRecurse targetExtended targetBinders
                       (targetSurvivors ++ targetAtoms) (by
                         intro occurrence member
-                        exact ModalSoundness.compileOccurrence_success_of_mem
+                        exact VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem
                           trace.diagram targetRecurse targetExtended targetBinders
                           targetItemsResult
                           ((targetPartition.mem_iff).2 member))
                   obtain ⟨targetSurvivorItems, targetAtomItems,
                       targetSurvivorCompiled, targetAtomCompiled,
                       targetPartitionEq⟩ :=
-                    ConcreteElaboration.compileOccurrencesWith?_append_split
+                    Concrete.Elaboration.compileOccurrencesWith?_append_split
                       targetRecurse targetExtended targetBinders targetSurvivors
                       targetAtoms targetPartitionItems targetPartitionCompiled
                   have sourceBlockExists : ∀ index, index ∈ indices →
                       ∃ items : ItemSeq  sourceExtended.length
                           sourceRels,
-                        ConcreteElaboration.compileOccurrencesWith?
+                        Concrete.Elaboration.compileOccurrencesWith?
                           input.val sourceRecurse sourceExtended sourceBinders
-                          (ModalSoundness.selectedOccurrences input.val
+                          (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val
                             (occurrences.get index).selection) = some items := by
                     intro index indexMember
-                    apply ConcreteElaboration.compileOccurrencesWith?_complete
+                    apply Concrete.Elaboration.compileOccurrencesWith?_complete
                     intro occurrence occurrenceMember
-                    apply ModalSoundness.compileOccurrence_success_of_mem
+                    apply VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem
                       input.val sourceRecurse sourceExtended sourceBinders
                       sourceSelectedCompiled
                     exact (mem_selectedAt input occurrences region occurrence).2
@@ -180,9 +183,9 @@ theorem fixedRegionSimulation
                       Classical.choose (sourceBlockExists index member)
                     else .nil
                   have sourceFamilyCompiled : ∀ index, index ∈ indices →
-                      ConcreteElaboration.compileOccurrencesWith?
+                      Concrete.Elaboration.compileOccurrencesWith?
                         input.val sourceRecurse sourceExtended sourceBinders
-                        (ModalSoundness.selectedOccurrences input.val
+                        (VisualProof.Rule.ModalSoundness.selectedOccurrences input.val
                           (occurrences.get index).selection) =
                             some (sourceFamilyItems index) := by
                     intro index member
@@ -192,7 +195,7 @@ theorem fixedRegionSimulation
                   have sourceFamilyAggregateCompiled :=
                     compileOccurrenceFamilyItems sourceRecurse sourceExtended
                       sourceBinders indices
-                      (fun index => ModalSoundness.selectedOccurrences input.val
+                      (fun index => VisualProof.Rule.ModalSoundness.selectedOccurrences input.val
                         (occurrences.get index).selection)
                       sourceFamilyItems sourceFamilyCompiled
                   have sourceFamilyEq :
@@ -204,17 +207,17 @@ theorem fixedRegionSimulation
                         sourceSelectedCompiled)
                   have targetAtomExists : ∀ index, index ∈ indices →
                       ∃ item : Item  targetExtended.length targetRels,
-                        ConcreteElaboration.compileNode?  trace.diagram
+                        Concrete.Elaboration.compileNode?  trace.diagram
                           targetExtended targetBinders (trace.targetAtom index) =
                             some item := by
                     intro index indexMember
                     obtain ⟨item, compiled⟩ :=
-                      ModalSoundness.compileOccurrence_success_of_mem
+                      VisualProof.Rule.ModalSoundness.compileOccurrence_success_of_mem
                         trace.diagram targetRecurse targetExtended targetBinders
                         targetAtomCompiled (by
                           exact List.mem_map.mpr ⟨index, indexMember, rfl⟩)
                     exact ⟨item, by
-                      simpa [ConcreteElaboration.compileOccurrenceWith?] using
+                      simpa [Concrete.Elaboration.compileOccurrenceWith?] using
                         compiled⟩
                   let targetFamilyItems : Fin occurrences.length →
                       Item  targetExtended.length targetRels :=
@@ -222,7 +225,7 @@ theorem fixedRegionSimulation
                       Classical.choose (targetAtomExists index member)
                     else .cut (.mk 0 .nil)
                   have targetFamilyCompiled : ∀ index, index ∈ indices →
-                      ConcreteElaboration.compileNode?  trace.diagram
+                      Concrete.Elaboration.compileNode?  trace.diagram
                         targetExtended targetBinders (trace.targetAtom index) =
                           some (targetFamilyItems index) := by
                     intro index member
@@ -232,11 +235,11 @@ theorem fixedRegionSimulation
                   have targetFamilyAggregateCompiled :=
                     compileOccurrenceFamilyAtomItems targetRecurse targetExtended
                       targetBinders indices
-                      (fun index => ConcreteElaboration.LocalOccurrence.node
+                      (fun index => Concrete.Elaboration.LocalOccurrence.node
                         (trace.targetAtom index))
                       targetFamilyItems (by
                         intro index member
-                        simpa [ConcreteElaboration.compileOccurrenceWith?] using
+                        simpa [Concrete.Elaboration.compileOccurrenceWith?] using
                           targetFamilyCompiled index member)
                   have targetFamilyEq :
                       occurrenceFamilyAtomItems targetFamilyItems indices =
@@ -245,14 +248,14 @@ theorem fixedRegionSimulation
                     exact targetFamilyAggregateCompiled.symm.trans (by
                       simpa [targetAtoms] using targetAtomCompiled)
                   have sourceCanonicalCompiled :
-                      ConcreteElaboration.compileOccurrencesWith?
+                      Concrete.Elaboration.compileOccurrencesWith?
                         input.val sourceRecurse sourceExtended sourceBinders
                         (sourceSurvivors ++ sourceSelected) =
                           some (sourceSurvivorItems.append sourceSelectedItems) := by
                     rw [← sourcePartitionEq]
                     exact sourcePartitionCompiled
                   have targetCanonicalCompiled :
-                      ConcreteElaboration.compileOccurrencesWith?
+                      Concrete.Elaboration.compileOccurrencesWith?
                         trace.diagram targetRecurse targetExtended targetBinders
                         (targetSurvivors ++ targetAtoms) =
                           some (targetSurvivorItems.append targetAtomItems) := by
@@ -261,19 +264,19 @@ theorem fixedRegionSimulation
                   have sourceCanonicalNodup :
                       (sourceSurvivors ++ sourceSelected).Nodup :=
                     (sourcePartition.nodup_iff).2
-                      (ConcreteElaboration.localOccurrences_nodup input.val
+                      (Concrete.Elaboration.localOccurrences_nodup input.val
                         region)
                   have targetCanonicalNodup :
                       (targetSurvivors ++ targetAtoms).Nodup :=
                     (targetPartition.nodup_iff).1
-                      (ConcreteElaboration.localOccurrences_nodup trace.diagram
+                      (Concrete.Elaboration.localOccurrences_nodup trace.diagram
                         (trace.regionMap region))
                   have survivorMembers : ∀ occurrence,
                       occurrence ∈ sourceSurvivors → occurrence ∈
-                        ConcreteElaboration.localOccurrences input.val region := by
+                        Concrete.Elaboration.localOccurrences input.val region := by
                     intro occurrence member
                     exact (mem_survivingSources trace
-                      (ConcreteElaboration.localOccurrences input.val region)
+                      (Concrete.Elaboration.localOccurrences input.val region)
                       occurrence).1 member |>.1
                   have survivorMaps : ∀ occurrence,
                       occurrence ∈ sourceSurvivors →
@@ -282,10 +285,10 @@ theorem fixedRegionSimulation
                     intro occurrence member
                     exact Option.isSome_iff_exists.mp
                       ((mem_survivingSources trace
-                        (ConcreteElaboration.localOccurrences input.val region)
+                        (Concrete.Elaboration.localOccurrences input.val region)
                         occurrence).1 member |>.2)
                   have recurseAt : ∀
-                      (childDirection : ConcreteElaboration.SimulationDirection)
+                      (childDirection : Concrete.Elaboration.SimulationDirection)
                       (child : Fin input.val.regionCount),
                       child ∈ wrap.selectedRegions →
                       trace.domains.regions.survives child = true →
@@ -312,7 +315,7 @@ theorem fixedRegionSimulation
                   letI : Nonempty model.Carrier := model.nonempty
                   intro sourceEnvironment targetEnvironment targetRelations
                     environments fixed
-                  rw [ConcreteElaboration.finishRegion_renameRelations]
+                  rw [Concrete.Elaboration.finishRegion_renameRelations]
                   let sourceRelations := RelEnv.pullback
                     binderWitness.relationMap targetRelations
                   have relationAgreement := RelEnv.pullback_agrees
@@ -336,10 +339,10 @@ theorem fixedRegionSimulation
                           regionSurvives sourceExact sourceEnvironment
                           targetEnvironment environments sourceLocal
                       let sourceLocalEnvironment :=
-                        ConcreteElaboration.extendedEnvironment sourceContext
+                        Concrete.Elaboration.extendedEnvironment sourceContext
                           region sourceEnvironment sourceLocal
                       let targetLocalEnvironment :=
-                        ConcreteElaboration.extendedEnvironment targetContext
+                        Concrete.Elaboration.extendedEnvironment targetContext
                           (trace.regionMap region) targetEnvironment targetLocal
                       have sourceRawDenote : denoteItemSeq model
                           sourceLocalEnvironment sourceRelations sourceItems :=
@@ -351,7 +354,7 @@ theorem fixedRegionSimulation
                         compileOccurrences_perm_denote_iff input.val
                           sourceRecurse sourceExtended sourceBinders
                           sourcePartition sourceCanonicalNodup
-                          (ConcreteElaboration.localOccurrences_nodup input.val
+                          (Concrete.Elaboration.localOccurrences_nodup input.val
                             region)
                           sourceCanonicalCompiled sourceItemsResult model
                           sourceLocalEnvironment sourceRelations
@@ -401,7 +404,7 @@ theorem fixedRegionSimulation
                         compileOccurrences_perm_denote_iff trace.diagram
                           targetRecurse targetExtended targetBinders
                           targetPartition
-                          (ConcreteElaboration.localOccurrences_nodup
+                          (Concrete.Elaboration.localOccurrences_nodup
                             trace.diagram (trace.regionMap region))
                           targetCanonicalNodup targetItemsResult
                           targetCanonicalCompiled model
@@ -420,13 +423,13 @@ theorem fixedRegionSimulation
                           targetContext (trace.regionMap region) targetItems model
                            targetEnvironment targetRelations).1 targetDenotes
                       let targetLocalEnvironment :=
-                        ConcreteElaboration.extendedEnvironment targetContext
+                        Concrete.Elaboration.extendedEnvironment targetContext
                           (trace.regionMap region) targetEnvironment targetLocal
                       have targetPermutation :=
                         compileOccurrences_perm_denote_iff trace.diagram
                           targetRecurse targetExtended targetBinders
                           targetPartition
-                          (ConcreteElaboration.localOccurrences_nodup
+                          (Concrete.Elaboration.localOccurrences_nodup
                             trace.diagram (trace.regionMap region))
                           targetCanonicalNodup targetItemsResult
                           targetCanonicalCompiled model
@@ -443,7 +446,7 @@ theorem fixedRegionSimulation
                           regionSurvives sourceExact sourceEnvironment
                           targetEnvironment environments targetLocal
                       let baseSourceEnvironment :=
-                        ConcreteElaboration.extendedEnvironment sourceContext
+                        Concrete.Elaboration.extendedEnvironment sourceContext
                           region sourceEnvironment baseSourceLocal
                       have targetFamilyDenote : denoteItemSeq model
                           targetLocalEnvironment targetRelations
@@ -485,7 +488,7 @@ theorem fixedRegionSimulation
                         compileOccurrences_perm_denote_iff input.val
                           sourceRecurse sourceExtended sourceBinders
                           sourcePartition sourceCanonicalNodup
-                          (ConcreteElaboration.localOccurrences_nodup input.val
+                          (Concrete.Elaboration.localOccurrences_nodup input.val
                             region)
                           sourceCanonicalCompiled sourceItemsResult model
                           chosenSourceEnvironment sourceRelations
@@ -540,4 +543,4 @@ theorem fixedRegionSimulation
 
 end AbstractionRawTrace
 
-end VisualProof.Rule
+end VisualProof.Concrete

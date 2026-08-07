@@ -1,6 +1,8 @@
 import VisualProof.Rule.Soundness.AttachmentAliasSemanticContext
 
-namespace VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+namespace VisualProof.Concrete.Splice.AttachmentAliasMaterialization
+
+open VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
@@ -14,23 +16,23 @@ namespace Semantic
 /-- A compiled inserted alias occurrence is exactly an equality between its
 old-wire output and its fresh-wire input. -/
 theorem aliasOccurrence_denotes_iff
-    (pattern : OpenConcreteDiagram)
+    (pattern : Concrete.OpenDiagram)
     (attachment : Fin pattern.boundary.length → Host)
     (bodyContainer : Fin pattern.diagram.regionCount)
-    (context : ConcreteElaboration.WireContext
+    (context : Concrete.Elaboration.WireContext
       (materializedDiagram pattern attachment bodyContainer))
-    (binders : ConcreteElaboration.BinderContext
+    (binders : Concrete.Elaboration.BinderContext
       (materializedDiagram pattern attachment bodyContainer) rels)
     (recurse : ∀ {currentRels : RelCtx},
       Fin pattern.diagram.regionCount →
-      (currentContext : ConcreteElaboration.WireContext
+      (currentContext : Concrete.Elaboration.WireContext
         (materializedDiagram pattern attachment bodyContainer)) →
-      ConcreteElaboration.BinderContext
+      Concrete.Elaboration.BinderContext
         (materializedDiagram pattern attachment bodyContainer) currentRels →
       Option (Region  currentContext.length currentRels))
     (aliasIndex : Fin (aliasCount pattern attachment))
     (items : ItemSeq  context.length rels)
-    (compiled : ConcreteElaboration.compileOccurrencesWith?
+    (compiled : Concrete.Elaboration.compileOccurrencesWith?
       (materializedDiagram pattern attachment bodyContainer) recurse context
       binders [.node (aliasNode pattern attachment aliasIndex)] = some items)
     (model : Model)
@@ -38,16 +40,16 @@ theorem aliasOccurrence_denotes_iff
     (relEnv : RelEnv model.Carrier rels) :
     denoteItemSeq model  env relEnv items ↔
       ∀ output input,
-        ConcreteElaboration.resolvePort?
+        Concrete.Elaboration.resolvePort?
             (materializedDiagram pattern attachment bodyContainer) context
             (aliasNode pattern attachment aliasIndex) (.arg 0) = some output →
-        ConcreteElaboration.resolvePort?
+        Concrete.Elaboration.resolvePort?
             (materializedDiagram pattern attachment bodyContainer) context
             (aliasNode pattern attachment aliasIndex) (.arg 1) = some input →
         env output = env input := by
-  simp only [ConcreteElaboration.compileOccurrencesWith?,
-    ConcreteElaboration.compileOccurrenceWith?] at compiled
-  unfold ConcreteElaboration.compileNode? at compiled
+  simp only [Concrete.Elaboration.compileOccurrencesWith?,
+    Concrete.Elaboration.compileOccurrenceWith?] at compiled
+  unfold Concrete.Elaboration.compileNode? at compiled
   have aliasShape :
       (materializedDiagram pattern attachment bodyContainer).nodes
           (aliasNode pattern attachment aliasIndex) =
@@ -55,7 +57,7 @@ theorem aliasOccurrence_denotes_iff
     simp [materializedDiagram, aliasNode]
   rw [aliasShape] at compiled
   simp only at compiled
-  cases argumentsResult : ConcreteElaboration.resolvePorts?
+  cases argumentsResult : Concrete.Elaboration.resolvePorts?
       (materializedDiagram pattern attachment bodyContainer) context
       (aliasNode pattern attachment aliasIndex) 2 with
   | none =>
@@ -68,7 +70,7 @@ theorem aliasOccurrence_denotes_iff
       simp only [denoteItemSeq_cons, denoteItem_identity,
         denoteItemSeq_nil, and_true]
       have portResult (index : Fin 2) :
-          ConcreteElaboration.resolvePort?
+          Concrete.Elaboration.resolvePort?
               (materializedDiagram pattern attachment bodyContainer) context
               (aliasNode pattern attachment aliasIndex) (.arg index) =
             some (arguments index) :=
@@ -77,7 +79,7 @@ theorem aliasOccurrence_denotes_iff
       · intro equality output input outputResult inputResult
         have outputEq : output = arguments 0 := by
           have atZero :
-              ConcreteElaboration.resolvePort?
+              Concrete.Elaboration.resolvePort?
                   (materializedDiagram pattern attachment bodyContainer) context
                   (aliasNode pattern attachment aliasIndex) (.arg 0) =
                 some (arguments 0) := by
@@ -86,7 +88,7 @@ theorem aliasOccurrence_denotes_iff
           exact Option.some.inj atZero
         have inputEq : input = arguments 1 := by
           have atOne :
-              ConcreteElaboration.resolvePort?
+              Concrete.Elaboration.resolvePort?
                   (materializedDiagram pattern attachment bodyContainer) context
                   (aliasNode pattern attachment aliasIndex) (.arg 1) =
                 some (arguments 1) := by
@@ -108,30 +110,30 @@ theorem aliasOccurrence_denotes_iff
 
 /-- Under the collapse environment, every inserted identity block denotes. -/
 theorem aliasOccurrences_denote_of_collapse
-    (pattern : CheckedOpenDiagram )
+    (pattern : Concrete.CheckedOpen )
     (attachment : Fin pattern.val.boundary.length → Host)
     (spine : BinderSpine pattern.val.diagram)
     (targetWellFormed :
       (materializedDiagram pattern.val attachment spine.bodyContainer).WellFormed
         )
-    (targetContext : ConcreteElaboration.WireContext
+    (targetContext : Concrete.Elaboration.WireContext
       (materializedDiagram pattern.val attachment spine.bodyContainer))
-    (sourceContext : ConcreteElaboration.WireContext pattern.val.diagram)
+    (sourceContext : Concrete.Elaboration.WireContext pattern.val.diagram)
     (collapse : ContextCollapse pattern attachment spine targetContext sourceContext)
     (sourceNodup : sourceContext.Nodup)
     (targetExact : targetContext.Exact spine.bodyContainer)
-    (binders : ConcreteElaboration.BinderContext
+    (binders : Concrete.Elaboration.BinderContext
       (materializedDiagram pattern.val attachment spine.bodyContainer) rels)
     (recurse : ∀ {currentRels : RelCtx},
       Fin pattern.val.diagram.regionCount →
-      (currentContext : ConcreteElaboration.WireContext
+      (currentContext : Concrete.Elaboration.WireContext
         (materializedDiagram pattern.val attachment spine.bodyContainer)) →
-      ConcreteElaboration.BinderContext
+      Concrete.Elaboration.BinderContext
         (materializedDiagram pattern.val attachment spine.bodyContainer)
           currentRels →
       Option (Region  currentContext.length currentRels))
     (items : ItemSeq  targetContext.length rels)
-    (compiled : ConcreteElaboration.compileOccurrencesWith?
+    (compiled : Concrete.Elaboration.compileOccurrencesWith?
       (materializedDiagram pattern.val attachment spine.bodyContainer) recurse
       targetContext binders (aliasOccurrences pattern.val attachment) = some items)
     (model : Model)
@@ -144,7 +146,7 @@ theorem aliasOccurrences_denote_of_collapse
   unfold aliasOccurrences at compiled
   have general : ∀ (aliases : List (Fin (aliasCount pattern.val attachment)))
       (items : ItemSeq  targetContext.length rels),
-      ConcreteElaboration.compileOccurrencesWith?
+      Concrete.Elaboration.compileOccurrencesWith?
           (materializedDiagram pattern.val attachment spine.bodyContainer) recurse
           targetContext binders
           (aliases.map fun current =>
@@ -154,14 +156,14 @@ theorem aliasOccurrences_denote_of_collapse
     induction aliases with
     | nil =>
       intro currentItems currentCompiled
-      simp [ConcreteElaboration.compileOccurrencesWith?] at currentCompiled
+      simp [Concrete.Elaboration.compileOccurrencesWith?] at currentCompiled
       subst currentItems
       simp
     | cons aliasIndex rest induction =>
       intro currentItems currentCompiled
-      simp only [List.map_cons, ConcreteElaboration.compileOccurrencesWith?]
+      simp only [List.map_cons, Concrete.Elaboration.compileOccurrencesWith?]
         at currentCompiled
-      cases headResult : ConcreteElaboration.compileOccurrenceWith?
+      cases headResult : Concrete.Elaboration.compileOccurrenceWith?
           (materializedDiagram pattern.val attachment spine.bodyContainer)
           recurse targetContext binders
           (.node (aliasNode pattern.val attachment aliasIndex)) with
@@ -169,7 +171,7 @@ theorem aliasOccurrences_denote_of_collapse
           rw [headResult] at currentCompiled
           simp at currentCompiled
       | some head =>
-          cases tailResult : ConcreteElaboration.compileOccurrencesWith?
+          cases tailResult : Concrete.Elaboration.compileOccurrencesWith?
               (materializedDiagram pattern.val attachment spine.bodyContainer)
               recurse targetContext binders
               (rest.map fun current =>
@@ -183,13 +185,13 @@ theorem aliasOccurrences_denote_of_collapse
               subst currentItems
               rw [denoteItemSeq_cons]
               constructor
-              · have oneCompiled : ConcreteElaboration.compileOccurrencesWith?
+              · have oneCompiled : Concrete.Elaboration.compileOccurrencesWith?
 
                     (materializedDiagram pattern.val attachment spine.bodyContainer)
                     recurse targetContext binders
                     [.node (aliasNode pattern.val attachment aliasIndex)] =
                       some (.cons head .nil) := by
-                  simp only [ConcreteElaboration.compileOccurrencesWith?]
+                  simp only [Concrete.Elaboration.compileOccurrencesWith?]
                   rw [headResult]
                   rfl
                 have blockDenotes := (aliasOccurrence_denotes_iff pattern.val attachment
@@ -198,23 +200,23 @@ theorem aliasOccurrences_denote_of_collapse
                   (sourceEnv ∘ collapse.indexMap) relEnv).2 (by
                     intro output input outputResult inputResult
                     obtain ⟨outputWire, outputOccurs, outputGet⟩ :=
-                      ConcreteElaboration.resolvePort?_sound outputResult
+                      Concrete.Elaboration.resolvePort?_sound outputResult
                     obtain ⟨inputWire, inputOccurs, inputGet⟩ :=
-                      ConcreteElaboration.resolvePort?_sound inputResult
+                      Concrete.Elaboration.resolvePort?_sound inputResult
                     have inputWireEq : inputWire = aliasWire pattern.val attachment
                         aliasIndex := by
-                      apply ConcreteElaboration.endpoint_wire_unique
+                      apply Concrete.Elaboration.endpoint_wire_unique
                         targetWellFormed.wire_endpoints_are_disjoint inputOccurs
-                      unfold ConcreteDiagram.EndpointOccurs
+                      unfold Concrete.Diagram.EndpointOccurs
                       simp only [materializedDiagram, aliasWire,
                         Fin.addCases_right]
                       exact List.mem_cons_self
                     have outputWireEq : outputWire = liftOldWire pattern.val attachment
                         (pattern.val.boundary.get
                           (aliasOrigin pattern.val attachment aliasIndex)) := by
-                      apply ConcreteElaboration.endpoint_wire_unique
+                      apply Concrete.Elaboration.endpoint_wire_unique
                         targetWellFormed.wire_endpoints_are_disjoint outputOccurs
-                      unfold ConcreteDiagram.EndpointOccurs
+                      unfold Concrete.Diagram.EndpointOccurs
                       rw [materialized_old_wire_endpoints]
                       apply List.mem_append_right
                       unfold aliasOutputs
@@ -245,4 +247,4 @@ theorem aliasOccurrences_denote_of_collapse
 
 end Semantic
 
-end VisualProof.Diagram.Splice.AttachmentAliasMaterialization
+end VisualProof.Concrete.Splice.AttachmentAliasMaterialization
