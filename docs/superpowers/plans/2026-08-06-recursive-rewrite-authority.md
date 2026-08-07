@@ -696,7 +696,9 @@ Do not define `Vacuity` until Task 5 proves `Vacuity.Local.sound_iff`.
 - Create `VisualProof/Rule/Soundness/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean`
 - Modify direct importers of `VisualProof/Rule/Structural/Semantics.lean`
 
-Move the implementation-independent Region theorems for conjunction erasure, wire collapse, ancestor copying, double cut, and vacuous bubbles into `Rule/Laws.lean`. `Rule/Laws.lean` may import only recursive diagram syntax, renaming, context, algebra, isomorphism, and semantics. The operational structural module retains only concrete implementation material and imports the pure laws it uses.
+Move the implementation-independent Region theorems for conjunction erasure, wire collapse, ancestor copying, double cut, and vacuous bubbles into `Rule/Laws.lean`. `Rule/Laws.lean` may import only recursive diagram syntax, renaming, context reachability, algebra, isomorphism, and semantics. The operational structural module retains only concrete implementation material and imports the pure laws it uses.
+
+The ancestor-copy law quantifies only descendant wire and relation environments that are recursively reachable through the selected `DiagramContext`. `DiagramContext.Reachable` supplies the inherited-environment equations for `outerWire` and `outerRelation`; arbitrary descendant valuations have no such relationship to the retained ancestor and cannot validate copying it.
 
 Add the generic contextual theorem:
 
