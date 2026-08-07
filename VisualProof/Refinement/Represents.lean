@@ -60,6 +60,16 @@ theorem represents_unique
   subst secondTranslated
   exact firstIso.symm.trans secondIso
 
+theorem StateRepresents.unique
+    {state : Concrete.State arity}
+    {first second : OpenDiagram arity}
+    (firstRep : StateRepresents state first)
+    (secondRep : StateRepresents state second) :
+    OpenDiagram.Isomorphic first second := by
+  rcases state with ⟨checked, boundaryLength⟩
+  cases boundaryLength
+  exact represents_unique firstRep secondRep
+
 theorem representation_complete (diagram : OpenDiagram arity) :
     ∃ (concrete : Concrete.OpenDiagram)
       (arity_eq : concrete.boundary.length = arity),
