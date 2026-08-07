@@ -693,14 +693,15 @@ Do not define `Vacuity` until Task 5 proves `Vacuity.Local.sound_iff`.
 **Files:**
 
 - Create `VisualProof/Rule/Laws.lean`
+- Create `VisualProof/Rule/Soundness/Contextual.lean`
 - Create `VisualProof/Rule/Soundness/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean`
 - Modify direct importers of `VisualProof/Rule/Structural/Semantics.lean`
 
-Move the implementation-independent Region theorems for conjunction erasure, wire collapse, ancestor copying, double cut, and vacuous bubbles into `Rule/Laws.lean`. `Rule/Laws.lean` may import only recursive diagram syntax, renaming, context reachability, algebra, isomorphism, and semantics. The operational structural module retains only concrete implementation material and imports the pure laws it uses.
+Move the implementation-independent Region theorems for conjunction erasure, wire collapse, ancestor copying, double cut, and vacuous bubbles into `Rule/Laws.lean`. `Rule/Laws.lean` may import only recursive diagram syntax, renaming, context reachability, algebra, isomorphism, and semantics. The operational structural module retains only concrete implementation material and imports no pure-law aggregate unless it directly uses a declaration from it.
 
 The ancestor-copy law quantifies only descendant wire and relation environments that are recursively reachable through the selected `DiagramContext`. `DiagramContext.Reachable` supplies the inherited-environment equations for `outerWire` and `outerRelation`; arbitrary descendant valuations have no such relationship to the retained ancestor and cannot validate copying it.
 
-Add the generic contextual theorem:
+Give the generic contextual theorem the neutral owner `Rule/Soundness/Contextual.lean`; no family soundness module owns it or serves as another family's import path:
 
 ```lean
 theorem Contextual.sound
