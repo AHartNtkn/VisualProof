@@ -4,7 +4,7 @@ goal:
   title: "Recursive Rewrite Authority"
   slug: "recursive-rewrite-authority"
   kind: existing_plan
-  tranche: "Move flat representation and execution behind the Concrete implementation boundary."
+  tranche: "Define the exhaustive recursive relational Step and its semantic soundness theorem."
   status: active
   oracle:
     signal: "Kernel-checked Lean theorems prove one recursive relational calculus with structural semantics and a separate concrete refinement layer."
@@ -65,7 +65,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/recursive-rewrite-authority/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/recursive-rewrite-authority"
 
-active_task: T111
+active_task: T113
 
 tasks:
   - id: T001
@@ -448,14 +448,16 @@ tasks:
   - id: T111
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 6 as one atomic migration: move every flat representation and executable rewrite responsibility into VisualProof.Concrete and eliminate old public paths and search modules."
     inputs:
       - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 6"
     allowed_files:
-      - "VisualProof/**/*.lean"
+      - "VisualProof/**"
+      - "VisualProof.lean"
       - "lakefile.toml"
+      - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-6-report.md"
     constraints:
       - "Lean only; TypeScript is outside scope."
       - "No compatibility wrappers, aliases, or old-path re-exports."
@@ -471,6 +473,90 @@ tasks:
       - "A missing semantic or product decision changes the concrete operation contract."
       - "The atomic migration cannot compile without an obsolete public wrapper."
       - "A required change falls outside Lean or lakefile.toml."
+    receipt:
+      result: done
+      changed_files:
+        - "VisualProof/Concrete.lean"
+        - "VisualProof/Concrete/State.lean"
+        - "VisualProof/Concrete/Transport.lean"
+        - "VisualProof/Concrete/Step.lean"
+        - "VisualProof/Concrete/Step/Core.lean"
+        - "VisualProof/Rule/Soundness.lean"
+        - "VisualProof/Rule/Soundness/All.lean"
+        - "VisualProof/Proof/Replay.lean"
+        - "VisualProof/Proof/Theorem.lean"
+        - "VisualProof/Proof/Theory.lean"
+        - "VisualProof/Audit.lean"
+        - "VisualProof.lean"
+        - "lakefile.toml"
+        - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-6-report.md"
+      commands:
+        - cmd: "focused Concrete, retained proof, replay, and audit builds"
+          status: pass
+        - cmd: "lake build"
+          status: pass
+        - cmd: "lake exe visualproof_step_tags"
+          status: pass
+        - cmd: "authority, old-path, search, proof-hole, and project-axiom scans"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "Established one state-indexed concrete executor with twelve supplied-evidence requests, positional boundary transport, arbitrary insertion, polarity checking, and no search or parallel execution authority."
+      harness: codex
+  - id: T112
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit T111 for the concrete authority boundary, exact operation surface, supplied-evidence execution, and absence of parallel execution or semantic authorities."
+    inputs:
+      - "T111 receipt"
+      - "Task 6 implementation and remediation review packages"
+    constraints:
+      - "Read-only."
+      - "Reject occurrence discovery, semantic classification by concrete tags, or any callable second dispatcher."
+      - "Reject completion if insertion polarity or positional wire-sever behavior is not enforced."
+    expected_output:
+      - "approved | changes_required"
+    receipt:
+      result: done
+      decision: approved
+      full_outcome_complete: false
+      rationale: "Task 6 is approved after remediation: insertion enforces polarity, tag-level semantic classification is absent, replay uses Concrete.execute exclusively, and all builds and authority scans pass."
+      harness: codex
+  - id: T113
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Execute plan Task 7: define the exhaustive six-family relational Rule.Step and prove isomorphism transport and semantic soundness with no concrete dependency."
+    inputs:
+      - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 7"
+    allowed_files:
+      - "VisualProof/Rule/Step.lean"
+      - "VisualProof/Rule/Soundness.lean"
+      - "VisualProof/Rule/Soundness/**/*.lean"
+      - "VisualProof/Refinement/**/*.lean"
+      - "VisualProof/Proof/**/*.lean"
+      - "VisualProof/Audit.lean"
+      - "VisualProof.lean"
+    constraints:
+      - "Step has exactly Erasure, WireSever, Iteration, DoubleCut, Comprehension, and Vacuity constructors."
+      - "Step.sound is ordinary implication and delegates exhaustively to the six family soundness theorems."
+      - "The dependency closure of Rule.Step and Rule.Soundness contains no Concrete or Refinement module."
+      - "Relocate remaining implementation proof material as required; do not preserve parallel authorities or compatibility paths."
+      - "Lean only; TypeScript is outside scope."
+    verify:
+      - "lake env lean -DwarningAsError=true VisualProof/Rule/Step.lean"
+      - "lake env lean -DwarningAsError=true VisualProof/Rule/Soundness.lean"
+      - "lake env lean --deps VisualProof/Rule/Soundness.lean"
+      - "lake build"
+      - "proof-hole, project-axiom, and forbidden-dependency scans"
+      - "git diff --check"
+    stop_if:
+      - "A family relation lacks the iso or soundness theorem required by the aggregate."
+      - "A dependency cycle requires concrete execution data in abstract Step or Step.sound."
+      - "A required semantic decision is absent from the plan and existing family theorems."
     receipt: null
   - id: T999
     type: judge
