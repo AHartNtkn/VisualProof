@@ -621,6 +621,65 @@ theorem execute_wireSever_success
     (applyWireSever_success orientation source.diagram wire keep result
       operationSuccess).1⟩
 
+/-- Structural inversion of a successful iteration request. -/
+theorem execute_iteration_success
+    {arity : Nat}
+    {source : State arity}
+    {orientation : Orientation}
+    (selection : CheckedSelection source.checked.val.diagram)
+    (target : Fin source.checked.val.diagram.regionCount)
+    {receipt : Receipt source}
+    (success : execute orientation source (.iteration selection target) =
+      .ok receipt) :
+    ∃ result : OperationReceipt source.diagram,
+      applyIteration source.diagram selection target = .ok result ∧
+      result.toReceipt source = some receipt ∧
+      source.checked.val.diagram.Encloses selection.val.anchor target ∧
+      ¬ selection.val.SelectsRegion target ∧
+      Splice.Input.spliceChecked
+        (iterationInput source.diagram selection target) = .ok result.result ∧
+      result.Realizes
+        (iterationInput source.diagram selection target).plugLayout.plugRaw
+        (iterationWireProvenance source.diagram selection target)
+        (iterationWireTransport source.diagram selection target) := by
+  change finish source (applyIteration source.diagram selection target) =
+    .ok receipt at success
+  obtain ⟨result, operationSuccess, packed⟩ :=
+    (finish_eq_ok_iff source _ receipt).1 success
+  obtain ⟨encloses, notSelected, spliceSuccess⟩ :=
+    applyIteration_success source.diagram selection target result
+      operationSuccess
+  exact ⟨result, operationSuccess, packed, encloses, notSelected,
+    spliceSuccess, applyIteration_realizes operationSuccess⟩
+
+/-- Structural inversion of a successful deiteration request. -/
+theorem execute_deiteration_success
+    {arity : Nat}
+    {source : State arity}
+    {orientation : Orientation}
+    (selection : CheckedSelection source.checked.val.diagram)
+    (witness : DeiterationWitness source selection)
+    {receipt : Receipt source}
+    (success : execute orientation source (.deiteration selection witness) =
+      .ok receipt) :
+    ∃ result : OperationReceipt source.diagram,
+      applyDeiteration source.diagram selection witness.operation = .ok result ∧
+      result.toReceipt source = some receipt ∧
+      result.result.val = source.checked.val.diagram.removeRaw selection {} ∧
+      result.Realizes (source.checked.val.diagram.removeRaw selection {})
+        (removeWireProvenance source.diagram selection)
+        (removeWireWireTransport source.diagram selection) := by
+  change finish source
+      (applyDeiteration source.diagram selection witness.operation) =
+        .ok receipt at success
+  obtain ⟨result, operationSuccess, packed⟩ :=
+    (finish_eq_ok_iff source _ receipt).1 success
+  exact ⟨result, operationSuccess, packed,
+    applyDeiteration_success_shape source.diagram selection witness.operation
+      result operationSuccess,
+    applyDeiteration_realizes source.diagram selection witness.operation result
+      operationSuccess⟩
+
 /-- Structural inversion of a successful supplied insertion. -/
 theorem execute_boundRelationSpawn_success
     {arity : Nat}
