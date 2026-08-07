@@ -65,7 +65,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/recursive-rewrite-authority/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/recursive-rewrite-authority"
 
-active_task: T103
+active_task: T105
 
 tasks:
   - id: T001
@@ -165,7 +165,7 @@ tasks:
   - id: T103
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 2 after T101 review: complete context polarity, relation-context renaming, and occurrence evidence."
     allowed_files:
@@ -190,6 +190,78 @@ tasks:
       - "T102 requires changes."
       - "Need files outside allowed_files."
       - "The theorem dependency closure would require an incomplete definition."
+    receipt:
+      result: done
+      changed_files:
+        - "VisualProof/Diagram/Rename.lean"
+        - "VisualProof/Diagram/Context.lean"
+        - "VisualProof/Diagram/ContextReachability.lean"
+        - "VisualProof/Diagram/Algebra.lean"
+        - "VisualProof/Diagram/Isomorphism.lean"
+        - "VisualProof/Diagram/OpenIsomorphism.lean"
+        - "VisualProof/Diagram/Occurrence.lean"
+        - "VisualProof.lean"
+      commands:
+        - cmd: "lake env lean VisualProof/Diagram/Rename.lean"
+          status: pass
+        - cmd: "lake env lean VisualProof/Diagram/Context.lean"
+          status: pass
+        - cmd: "lake env lean VisualProof/Diagram/ContextReachability.lean"
+          status: pass
+        - cmd: "lake env lean VisualProof/Diagram/Algebra.lean"
+          status: pass
+        - cmd: "lake env lean VisualProof/Diagram/Isomorphism.lean"
+          status: pass
+        - cmd: "lake env lean VisualProof/Diagram/OpenIsomorphism.lean"
+          status: pass
+        - cmd: "lake env lean VisualProof/Diagram/Occurrence.lean"
+          status: pass
+        - cmd: "lake build"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "Defined polarity-aware context transport, typed outer relation renaming, structural context isomorphism, and proof-relevant occurrence evidence with stable open interfaces."
+      harness: codex
+  - id: T104
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit T103 for occurrence ownership, polarity semantics, import direction, and proof quality."
+    inputs:
+      - "T103 receipt"
+      - "Task 2 review package"
+    constraints:
+      - "Read-only."
+      - "Reject proof-irrelevant occurrence data or context transport across unaccounted external permutations."
+      - "Reject concrete dependencies or import cycles."
+    expected_output:
+      - "approved | changes_required"
+    receipt:
+      result: done
+      decision: approved
+      full_outcome_complete: false
+      rationale: "Task 2 is spec compliant and approved with no findings; occurrence evidence and polarity transport have the required ownership and dependency direction."
+      harness: codex
+  - id: T105
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Execute plan Task 3: define the shared relational rule shapes, polarity action, contextual closure, and isomorphism transport."
+    inputs:
+      - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 3"
+    allowed_files:
+      - "VisualProof/Rule/Relation.lean"
+      - "VisualProof.lean"
+    verify:
+      - "lake env lean -DwarningAsError=true VisualProof/Rule/Relation.lean"
+      - "lake build"
+      - "git diff --check"
+    stop_if:
+      - "Need files outside allowed_files."
+      - "A displayed signature does not elaborate."
+      - "The relation layer would acquire a concrete dependency."
     receipt: null
   - id: T999
     type: judge
