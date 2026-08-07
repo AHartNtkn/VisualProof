@@ -876,7 +876,7 @@ theorem rootRouteChildrenEq
     Concrete.Splice.Input.RegionRoute.encloses sourceTail inputWellFormed
   have targetEncloses : input.Encloses targetChild
       (input.wires inner).scope := by
-    rw [← target_encloses_iff input outer inner] 
+    rw [← target_encloses_iff input outer inner]
     exact Concrete.Splice.Input.RegionRoute.encloses targetTail
       targetWellFormed
   have targetParent' : (input.regions targetChild).parent? = some input.root := by
