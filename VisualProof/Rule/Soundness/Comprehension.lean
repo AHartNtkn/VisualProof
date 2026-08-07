@@ -260,15 +260,19 @@ theorem sound
       (relEnv : RelEnv model.Carrier rels),
       denoteRegion model env relEnv specialized →
       denoteRegion model env relEnv quantified := by
-  intro model env relEnv specializedDenotes
-  have bodyDenotes := step.instantiates.sound model env relEnv specializedDenotes
-  have bubbleDenotes :
-      denoteRegion model env relEnv
-        (singleton (.bubble step.arity step.body)) := by
-    apply (denote_singleton_iff (.bubble step.arity step.body)
-      model env relEnv).mpr
-    exact ⟨OpenDiagram.asRelation model step.pattern, bodyDenotes⟩
-  exact (iso_denotation step.quantified_iso model env relEnv).mpr bubbleDenotes
+  cases step with
+  | comprehend hostLocal hostItems relationArity pattern body specialized
+      instantiates wireMap relationMap =>
+      intro model env relEnv specializedDenotes
+      apply Region.denote_spliceAt_mono model env relEnv hostLocal hostItems
+        specialized (singleton (.bubble relationArity body)) wireMap relationMap
+      intro patternEnv materialDenotes
+      have bodyDenotes := instantiates.sound model patternEnv
+        (RelEnv.pullback relationMap relEnv) materialDenotes
+      apply (denote_singleton_iff (.bubble relationArity body) model patternEnv
+        (RelEnv.pullback relationMap relEnv)).mpr
+      exact ⟨OpenDiagram.asRelation model pattern, bodyDenotes⟩
+      exact specializedDenotes
 
 end Local
 
@@ -282,7 +286,6 @@ theorem sound
       denoteOpen model target args := by
   apply Contextual.sound (step := step)
   intro wires rels specialized quantified localStep
-  rcases localStep with ⟨localStep⟩
   exact Comprehension.Local.sound localStep
 
 end Comprehension

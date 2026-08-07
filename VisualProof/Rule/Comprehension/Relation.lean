@@ -206,22 +206,27 @@ def Instantiates
     (Mapping.instantiateHead pattern)
     quantified specialized
 
-structure Local
-    (specialized quantified : Region wires rels) where
-  arity : Nat
-  pattern : OpenDiagram arity
-  body : Region wires (arity :: rels)
-  instantiates :
-    Instantiates pattern body specialized
-  quantified_iso :
-    Core.Isomorphic quantified
-      (singleton (.bubble arity body))
+inductive Local : LocalRule
+  | comprehend
+      (hostLocal : Nat)
+      (hostItems : ItemSeq (wires + hostLocal) rels)
+      (relationArity : Nat)
+      (pattern : OpenDiagram relationArity)
+      (body : Region materialWires (relationArity :: materialRels))
+      (specialized : Region materialWires materialRels)
+      (instantiates : Instantiates pattern body specialized)
+      (wireMap : Fin materialWires → Fin (wires + hostLocal))
+      (relationMap : RelationRenaming materialRels rels) :
+      Local
+        (Region.spliceAt hostLocal hostItems specialized wireMap relationMap)
+        (Region.spliceAt hostLocal hostItems
+          (singleton (.bubble relationArity body)) wireMap relationMap)
 
 end Comprehension
 
 def Comprehension : Rule :=
   Contextual fun specialized quantified =>
-    Nonempty (Comprehension.Local specialized quantified)
+    Comprehension.Local specialized quantified
 
 theorem Comprehension.iso
     (sourceIso : OpenDiagramIso source source')
