@@ -1,5 +1,5 @@
 import VisualProof.Rule.Comprehension.Relation
-import VisualProof.Rule.Soundness.Erasure
+import VisualProof.Rule.Soundness.Contextual
 
 namespace VisualProof.Rule
 

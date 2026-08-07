@@ -1,4 +1,5 @@
 import VisualProof.Rule.Soundness.Modal.Vacuous
+import VisualProof.Rule.Laws
 
 namespace VisualProof.Rule.VacuousSoundness
 

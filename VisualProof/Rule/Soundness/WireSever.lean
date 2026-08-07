@@ -1,4 +1,4 @@
-import VisualProof.Rule.Soundness.Erasure
+import VisualProof.Rule.Soundness.Contextual
 import VisualProof.Rule.WireSever
 
 namespace VisualProof.Rule

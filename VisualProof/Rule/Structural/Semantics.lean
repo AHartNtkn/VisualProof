@@ -1,6 +1,5 @@
 import VisualProof.Rule.Structural.Iteration
 import VisualProof.Diagram.ContextReachability
-import VisualProof.Rule.Laws
 
 namespace VisualProof.Rule
 

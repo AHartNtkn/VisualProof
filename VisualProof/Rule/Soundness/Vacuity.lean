@@ -1,6 +1,6 @@
 import VisualProof.Rule.Vacuity
 import VisualProof.Rule.Laws
-import VisualProof.Rule.Soundness.Erasure
+import VisualProof.Rule.Soundness.Contextual
 
 namespace VisualProof.Rule
 
