@@ -663,7 +663,6 @@ theorem execute_deiteration_success
     (success : execute orientation source (.deiteration selection witness) =
       .ok receipt) :
     ∃ result : OperationReceipt source.diagram,
-      applyDeiteration source.diagram selection witness.operation = .ok result ∧
       result.toReceipt source = some receipt ∧
       result.result.val = source.checked.val.diagram.removeRaw selection {} ∧
       result.Realizes (source.checked.val.diagram.removeRaw selection {})
@@ -674,7 +673,7 @@ theorem execute_deiteration_success
         .ok receipt at success
   obtain ⟨result, operationSuccess, packed⟩ :=
     (finish_eq_ok_iff source _ receipt).1 success
-  exact ⟨result, operationSuccess, packed,
+  exact ⟨result, packed,
     applyDeiteration_success_shape source.diagram selection witness.operation
       result operationSuccess,
     applyDeiteration_realizes source.diagram selection witness.operation result
