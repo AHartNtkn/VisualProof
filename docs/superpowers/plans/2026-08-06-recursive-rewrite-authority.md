@@ -179,7 +179,7 @@ theorem DiagramContext.fill_iso
 Prove unchanged-interface transport in `OpenIsomorphism.lean`:
 
 ```lean
-theorem OpenDiagram.withBody_iso
+def OpenDiagram.withBody_iso
     {diagram : OpenDiagram arity}
     {before after : Region diagram.externalClasses []}
     (h : Core.Isomorphic before after) :
