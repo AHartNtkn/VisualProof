@@ -155,7 +155,7 @@ def DiagramContext.outerRelation :
 
 structure Occurrence
     (pattern : Region holeWires holeRels)
-    (host : OpenDiagram arity) : Prop where
+    (host : OpenDiagram arity) where
   interface : OpenDiagram arity
   context : DiagramContext interface.externalClasses holeWires [] holeRels
   host_iso : OpenDiagramIso host
@@ -215,12 +215,12 @@ theorem DiagramContext.denote_fill
 Prove occurrence transport:
 
 ```lean
-theorem Occurrence.transportHost
+def Occurrence.transportHost
     (occurrence : Occurrence pattern host)
     (iso : OpenDiagramIso host host') :
     Occurrence pattern host'
 
-theorem Occurrence.transportPattern
+def Occurrence.transportPattern
     (occurrence : Occurrence pattern host)
     (iso : Core.Isomorphic pattern pattern') :
     Occurrence pattern' host
