@@ -33,6 +33,55 @@ theorem region_zero_iso
   rw [extended]
   exact items
 
+theorem empty_finish_iso
+    (target : Concrete.Diagram)
+    (context : Concrete.Elaboration.WireContext target)
+    (region : Fin target.regionCount)
+    (scope : Concrete.Elaboration.exactScopeWires target region = [])
+    {sourceWires : Nat} {rels : RelCtx}
+    (wire : FiniteEquiv (Fin sourceWires)
+      (Fin (context.extend region).length))
+    {sourceItems : ItemSeq sourceWires rels}
+    {targetItems : ItemSeq (context.extend region).length rels}
+    (items : ItemSeqIso wire rels sourceItems targetItems) :
+    RegionIso
+      (wire.trans (FiniteEquiv.finCast
+        ((Concrete.Elaboration.WireContext.length_extend context region).trans
+          (by simpa using congrArg List.length scope))))
+      rels (.mk 0 sourceItems)
+      (Concrete.Elaboration.finishRegion target context region targetItems) := by
+  let emptyLength :
+      (Concrete.Elaboration.exactScopeWires target region).length = 0 := by
+    simpa using congrArg List.length scope
+  have contextSum : context.length +
+      (Concrete.Elaboration.exactScopeWires target region).length =
+      context.length := by rw [emptyLength, Nat.add_zero]
+  have extendedContextLength : (context.extend region).length =
+      context.length :=
+    (Concrete.Elaboration.WireContext.length_extend context region).trans
+      contextSum
+  let outerWire : FiniteEquiv (Fin sourceWires) (Fin context.length) :=
+    wire.trans (FiniteEquiv.finCast extendedContextLength)
+  let localWire := FiniteEquiv.finCast emptyLength.symm
+  unfold Concrete.Elaboration.finishRegion
+  apply RegionIso.mk localWire
+  rw [ItemSeq.castWiresEq_eq_renameWires]
+  have transported := items.trans (ItemSeqIso.renameWiresEquiv targetItems
+    (FiniteEquiv.finCast
+      (Concrete.Elaboration.WireContext.length_extend context region)))
+  have combined : wire.trans (FiniteEquiv.finCast
+        (Concrete.Elaboration.WireContext.length_extend context region)) =
+      extendWireEquiv outerWire localWire := by
+    apply FiniteEquiv.ext
+    intro index
+    apply Fin.ext
+    change (wire index).val =
+      (extendWireEquiv outerWire localWire (Fin.castAdd 0 index)).val
+    rw [extendWireEquiv_outer]
+    rfl
+  rw [combined] at transported
+  exact transported
+
 theorem singleton_iso
     {sourceWires targetWires : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
@@ -49,6 +98,16 @@ theorem singleton_iso
   have zero : index = ⟨0, by simp [ItemSeq.length]⟩ := Fin.ext value
   subst index
   simpa [ItemSeq.get] using item
+
+private theorem ItemSeqIso.changeWire
+    {first second : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    (equality : first = second)
+    {source : ItemSeq sourceWires rels}
+    {target : ItemSeq targetWires rels}
+    (iso : ItemSeqIso first rels source target) :
+    ItemSeqIso second rels source target := by
+  subst second
+  exact iso
 
 theorem splice_partition_eq
     (input : Concrete.Diagram)
@@ -1047,5 +1106,236 @@ theorem target_partition
                       subst innerBody
                       exact ⟨kept, selected, innerFuel + 1 + 1, innerFuel,
                         keptCompiled, selectedCompiled, rfl⟩
+
+theorem focus
+    (input : Concrete.Checked) (selection : CheckedSelection input.val)
+    {outerWires : Nat} {sourceRels targetRels : RelCtx}
+    {sourceBody : Region outerWires sourceRels}
+    (leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
+      selection.val.anchor (.here sourceBody))
+    (targetContext : Concrete.Elaboration.WireContext
+      (doubleCutIntroRaw input.val selection))
+    (context : Context input.val selection leaf.inheritedWires targetContext)
+    (targetBinders : Concrete.Elaboration.BinderContext
+      (doubleCutIntroRaw input.val selection) targetRels)
+    (binders : Binders input.val selection leaf.binders targetBinders)
+    {targetFuel : Nat} {targetBody : Region targetContext.length targetRels}
+    (targetCompiled : Concrete.Elaboration.compileRegion?
+      (doubleCutIntroRaw input.val selection) targetFuel
+      (Fin.castAdd 2 selection.val.anchor) targetContext targetBinders =
+        some targetBody) :
+    ∃ (kept selected : ItemSeq
+        (leaf.inheritedWires.extend selection.val.anchor).length sourceRels),
+      let before := partitionBefore input.val leaf.inheritedWires
+        selection.val.anchor kept selected
+      let after := partitionAfter input.val leaf.inheritedWires
+        selection.val.anchor kept selected
+      Rule.DoubleCut.Local before after ∧
+      RegionIso (FiniteEquiv.finCast leaf.inheritedLength.symm) sourceRels
+        sourceBody before ∧
+      RegionIso
+        (FiniteEquiv.finCast (congrArg List.length context.equality)).symm
+        sourceRels
+        (Eq.mp (congrArg (Region targetContext.length) binders.rels.symm)
+          targetBody) after := by
+  cases binders.rels
+  obtain ⟨kept, selected, keptCompiled, selectedCompiled, partition⟩ :=
+    source_partition input selection leaf
+  obtain ⟨targetKept, targetSelected, keptFuel, selectedFuel,
+      targetKeptCompiled, targetSelectedCompiled, targetBodyEq⟩ :=
+    target_partition input.val selection targetContext targetBinders
+      targetCompiled
+  let sourceExtended := leaf.inheritedWires.extend selection.val.anchor
+  let targetExtended := targetContext.extend
+    (Fin.castAdd 2 selection.val.anchor)
+  let targetNested := (targetExtended.extend (outer input.val)).extend
+    (inner input.val)
+  have targetNestedEq : targetNested = targetExtended := by
+    dsimp only [targetNested]
+    unfold Concrete.Elaboration.WireContext.extend
+    rw [inner_exactScopeWires, List.append_nil, outer_exactScopeWires,
+      List.append_nil]
+  let extendedContext := context.extend selection.val.anchor
+  let selectedContext : Context input.val selection sourceExtended
+      targetNested :=
+    ⟨extendedContext.equality.trans targetNestedEq.symm⟩
+  have keptItemsIso := kept_iso input.val selection input.property
+    sourceExtended targetExtended extendedContext leaf.binders targetBinders binders
+    keptCompiled targetKeptCompiled
+  have selectedItemsIso := selected_iso input.val selection input.property
+    sourceExtended targetNested selectedContext leaf.binders targetBinders binders
+    selectedCompiled targetSelectedCompiled
+  have bindersRelsEq : binders.rels = rfl := Subsingleton.elim _ _
+  cases bindersRelsEq
+  let before := partitionBefore input.val leaf.inheritedWires
+    selection.val.anchor kept selected
+  let after := partitionAfter input.val leaf.inheritedWires
+    selection.val.anchor kept selected
+  refine ⟨kept, selected, partition_local input.val leaf.inheritedWires
+    selection.val.anchor kept selected, ?_, ?_⟩
+  · rw [partitionBefore_eq_finish]
+    have sourceComputed : sourceBody =
+        Region.castWiresEq leaf.inheritedLength
+          (Concrete.Elaboration.finishRegion input.val leaf.inheritedWires
+            selection.val.anchor leaf.items) := by
+      simpa using leaf.bodyComputation
+    have presentation := RegionIso.renameWiresEquiv sourceBody
+      (FiniteEquiv.finCast leaf.inheritedLength.symm)
+    have renamedEq : sourceBody.renameWires
+          (FiniteEquiv.finCast leaf.inheritedLength.symm) =
+        Concrete.Elaboration.finishRegion input.val leaf.inheritedWires
+          selection.val.anchor leaf.items := by
+      calc
+        _ = (Region.castWiresEq leaf.inheritedLength
+            (Concrete.Elaboration.finishRegion input.val leaf.inheritedWires
+              selection.val.anchor leaf.items)).renameWires
+              (FiniteEquiv.finCast leaf.inheritedLength.symm) :=
+          congrArg (fun region => region.renameWires
+            (FiniteEquiv.finCast leaf.inheritedLength.symm)) sourceComputed
+        _ = _ := by
+          rw [Region.castWiresEq_eq_renameWires,
+            Region.renameWires_comp]
+          have maps :
+              (FiniteEquiv.finCast leaf.inheritedLength.symm).toFun ∘
+                  Fin.cast leaf.inheritedLength =
+                (id : Fin leaf.inheritedWires.length →
+                  Fin leaf.inheritedWires.length) := by
+            funext index
+            apply Fin.ext
+            rfl
+          rw [maps, Region.renameWires_id]
+    have sourcePresentation : RegionIso
+        (FiniteEquiv.finCast leaf.inheritedLength.symm) sourceRels sourceBody
+        (Concrete.Elaboration.finishRegion input.val leaf.inheritedWires
+          selection.val.anchor leaf.items) :=
+      cast (congrArg (fun target => RegionIso
+        (FiniteEquiv.finCast leaf.inheritedLength.symm) sourceRels sourceBody
+        target) renamedEq) presentation
+    have partitionItems : ItemSeqIso
+        (FiniteEquiv.refl
+          (Fin (leaf.inheritedWires.extend selection.val.anchor).length))
+        sourceRels (kept.append selected) leaf.items := by
+      cases partition with
+      | mk localWire itemsIso =>
+          have localWireEq : localWire = FiniteEquiv.refl (Fin 0) := by
+            apply FiniteEquiv.ext
+            intro index
+            exact Fin.elim0 index
+          subst localWire
+          have extendedEq : extendWireEquiv
+              (FiniteEquiv.refl
+                (Fin (leaf.inheritedWires.extend
+                  selection.val.anchor).length))
+              (FiniteEquiv.refl (Fin 0)) =
+            FiniteEquiv.refl
+              (Fin ((leaf.inheritedWires.extend
+                selection.val.anchor).length + 0)) := by
+            apply FiniteEquiv.ext
+            intro index
+            refine Fin.addCases (fun outerIndex => ?_)
+              (fun localIndex => Fin.elim0 localIndex) index
+            rw [extendWireEquiv_outer]
+            rfl
+          rw [extendedEq] at itemsIso
+          exact itemsIso
+    have canonical : RegionIso
+        (FiniteEquiv.refl (Fin leaf.inheritedWires.length)) sourceRels
+        (Concrete.Elaboration.finishRegion input.val leaf.inheritedWires
+          selection.val.anchor (kept.append selected))
+        (Concrete.Elaboration.finishRegion input.val leaf.inheritedWires
+          selection.val.anchor leaf.items) := by
+      apply Concrete.Elaboration.regionIso_of_cast
+        (Concrete.Elaboration.WireContext.length_extend
+          leaf.inheritedWires selection.val.anchor)
+        (Concrete.Elaboration.WireContext.length_extend
+          leaf.inheritedWires selection.val.anchor)
+        (FiniteEquiv.refl (Fin leaf.inheritedWires.length))
+        (FiniteEquiv.refl
+          (Fin (Concrete.Elaboration.exactScopeWires input.val
+            selection.val.anchor).length))
+        (kept.append selected) leaf.items
+      have expectedEq : Concrete.Elaboration.castFinEquiv
+          (Concrete.Elaboration.WireContext.length_extend
+            leaf.inheritedWires selection.val.anchor)
+          (Concrete.Elaboration.WireContext.length_extend
+            leaf.inheritedWires selection.val.anchor)
+          (extendWireEquiv
+            (FiniteEquiv.refl (Fin leaf.inheritedWires.length))
+            (FiniteEquiv.refl
+              (Fin (Concrete.Elaboration.exactScopeWires input.val
+                selection.val.anchor).length))) =
+        FiniteEquiv.refl
+          (Fin (leaf.inheritedWires.extend selection.val.anchor).length) := by
+        apply FiniteEquiv.ext
+        intro index
+        apply Fin.ext
+        change (extendWireEquiv
+          (FiniteEquiv.refl (Fin leaf.inheritedWires.length))
+          (FiniteEquiv.refl
+            (Fin (Concrete.Elaboration.exactScopeWires input.val
+              selection.val.anchor).length))
+          (Fin.cast
+            (Concrete.Elaboration.WireContext.length_extend
+              leaf.inheritedWires selection.val.anchor) index)).val = index.val
+        have castVal : (Fin.cast
+            (Concrete.Elaboration.WireContext.length_extend
+              leaf.inheritedWires selection.val.anchor) index).val =
+            index.val := rfl
+        rw [← castVal]
+        refine Fin.addCases (fun outerIndex => ?_) (fun localIndex => ?_)
+          (Fin.cast
+            (Concrete.Elaboration.WireContext.length_extend
+              leaf.inheritedWires selection.val.anchor) index)
+        · rw [extendWireEquiv_outer]
+          rfl
+        · rw [extendWireEquiv_local]
+          rfl
+      rw [expectedEq]
+      exact partitionItems
+    simpa using sourcePresentation.trans canonical.symm
+  · have innerBodyIso := empty_finish_iso
+      (doubleCutIntroRaw input.val selection)
+      (targetExtended.extend (outer input.val)) (inner input.val)
+      (inner_exactScopeWires input.val selection) _ selectedItemsIso
+    have innerItemsIso := singleton_iso (ItemIso.cut innerBodyIso)
+    have outerBodyIso := empty_finish_iso
+      (doubleCutIntroRaw input.val selection) targetExtended (outer input.val)
+      (outer_exactScopeWires input.val selection) _ innerItemsIso
+    have wrappedIso := singleton_iso (ItemIso.cut outerBodyIso)
+    have wrappedIso' : ItemSeqIso
+        (FiniteEquiv.finCast
+          (congrArg List.length extendedContext.equality)) sourceRels
+        (wrappedItems selected)
+        (.cons (.cut
+          (Concrete.Elaboration.finishRegion
+            (doubleCutIntroRaw input.val selection) targetExtended
+            (outer input.val) (.cons (.cut
+              (Concrete.Elaboration.finishRegion
+                (doubleCutIntroRaw input.val selection)
+                (targetExtended.extend (outer input.val))
+                (inner input.val) targetSelected)) .nil))) .nil) := by
+      apply ItemSeqIso.changeWire _ wrappedIso
+      apply FiniteEquiv.ext
+      intro index
+      apply Fin.ext
+      rfl
+    have targetItemsIso := ItemSeqIso.append keptItemsIso wrappedIso'
+    have targetCanonical := finishRegion_iso input.val selection
+      leaf.inheritedWires targetContext context selection.val.anchor
+      targetItemsIso
+    have sourceCanonical :
+        partitionAfter input.val leaf.inheritedWires selection.val.anchor
+            kept selected =
+          Concrete.Elaboration.finishRegion input.val leaf.inheritedWires
+            selection.val.anchor (kept.append (wrappedItems selected)) :=
+      partitionAfter_eq_finish input.val leaf.inheritedWires
+        selection.val.anchor kept selected
+    have targetCanonical' : RegionIso
+        (FiniteEquiv.finCast (congrArg List.length context.equality)) sourceRels
+        after targetBody := by
+      dsimp only [after]
+      rw [sourceCanonical, targetBodyEq]
+      exact targetCanonical
+    simpa using targetCanonical'.symm
 
 end VisualProof.Refinement.Implementation.DoubleCutIntroCompile
