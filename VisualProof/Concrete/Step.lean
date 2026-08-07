@@ -1,5 +1,6 @@
 import VisualProof.Concrete.Transport
 import VisualProof.Concrete.Operation.Comprehension
+import VisualProof.Concrete.Subgraph.Splice.Input.Discrete
 
 namespace VisualProof.Concrete
 
@@ -18,6 +19,7 @@ structure Insertion {arity : Nat} (source : State arity) where
   input : Concrete.Splice.Input
   frame_eq : input.frame = source.diagram
   admissible : input.Admissible
+  respects : input.AttachmentsRespectBoundary
 
 /-- One supplied abstraction occurrence in the current execution state. -/
 structure AbstractionOccurrence {arity : Nat} (source : State arity) where
