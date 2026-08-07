@@ -65,7 +65,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/recursive-rewrite-authority/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/recursive-rewrite-authority"
 
-active_task: T107
+active_task: T109
 
 tasks:
   - id: T001
@@ -300,7 +300,7 @@ tasks:
   - id: T107
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 4: define the complete relation bases for Erasure, WireSever, Iteration, DoubleCut, Comprehension, and Vacuity."
     inputs:
@@ -325,6 +325,76 @@ tasks:
       - "Need files outside allowed_files."
       - "A displayed signature or complete definition does not elaborate."
       - "Any relation module would acquire a concrete or execution dependency."
+    receipt:
+      result: done
+      changed_files:
+        - "VisualProof/Rule/Erasure.lean"
+        - "VisualProof/Rule/WireSever.lean"
+        - "VisualProof/Rule/Iteration.lean"
+        - "VisualProof/Rule/DoubleCut.lean"
+        - "VisualProof/Rule/Comprehension/Relation.lean"
+        - "VisualProof/Rule/Vacuity.lean"
+      commands:
+        - cmd: "strict compilation of all six relation modules"
+          status: pass
+        - cmd: "lake build"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "Defined all six recursive rule bases with typed interfaces, structural occurrence evidence, and no concrete dependency."
+      harness: codex
+  - id: T108
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit T107 for exact family scope, witness ownership, typed substitution, dependency direction, and proof quality."
+    inputs:
+      - "T107 receipt"
+      - "Task 4 review package"
+    constraints:
+      - "Read-only."
+      - "Reject concrete, matcher, executor, Step, or semantic-proof dependencies."
+      - "Reject incomplete or proof-irrelevant mathematical witnesses."
+    expected_output:
+      - "approved | changes_required"
+    receipt:
+      result: done
+      decision: approved
+      full_outcome_complete: false
+      rationale: "Task 4 is compliant and approved with no Critical, Important, or Minor findings."
+      harness: codex
+  - id: T109
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Execute plan Task 5: isolate recursive semantic laws and prove soundness for all six rule families."
+    inputs:
+      - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 5"
+    allowed_files:
+      - "VisualProof/Rule/Laws.lean"
+      - "VisualProof/Rule/Soundness/Erasure.lean"
+      - "VisualProof/Rule/Soundness/WireSever.lean"
+      - "VisualProof/Rule/Soundness/Iteration.lean"
+      - "VisualProof/Rule/Soundness/DoubleCut.lean"
+      - "VisualProof/Rule/Soundness/Comprehension.lean"
+      - "VisualProof/Rule/Soundness/Vacuity.lean"
+      - "VisualProof/Rule/Iteration.lean"
+      - "VisualProof/Rule/DoubleCut.lean"
+      - "VisualProof/Rule/Vacuity.lean"
+      - "VisualProof/Rule/Structural/Semantics.lean"
+      - "direct importers of VisualProof/Rule/Structural/Semantics.lean"
+    verify:
+      - "strict compilation of all six soundness modules"
+      - "lake build"
+      - "git diff --check"
+      - "dependency closure scan excludes concrete modules"
+      - "proof-hole and local-axiom scan"
+    stop_if:
+      - "Need a non-importer outside allowed_files."
+      - "A theorem dependency closure requires an incomplete definition."
+      - "A semantic proof would depend on concrete execution data."
     receipt: null
   - id: T999
     type: judge
