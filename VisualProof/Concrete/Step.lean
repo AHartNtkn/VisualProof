@@ -773,6 +773,46 @@ theorem execute_vacuousElim_success
     applyVacuousElim_realizes operationSuccess
   exact ⟨result, raw, rawSuccess, packed, realizes⟩
 
+/-- Structural inversion of a successful comprehension-abstraction request. -/
+theorem execute_comprehensionAbstract_success
+    {arity : Nat}
+    {source : State arity}
+    {orientation : Orientation}
+    (wrap : CheckedSelection source.checked.val.diagram)
+    (comprehension : CheckedOpen)
+    (occurrences : List (AbstractionOccurrence source))
+    (payload : ComprehensionAbstractPayload source wrap comprehension
+      occurrences)
+    {receipt : Receipt source}
+    (success : execute orientation source
+      (.comprehensionAbstract wrap comprehension occurrences payload) =
+        .ok receipt) :
+    erasurePolarity orientation
+        (concreteCutDepth source.checked.val.diagram wrap.val.anchor) ∧
+      ∃ (result : OperationReceipt source.diagram)
+        (raw : Concrete.Diagram)
+        (rawSuccess :
+          (comprehensionAbstractRaw? source.diagram wrap comprehension
+            (occurrences.map AbstractionOccurrence.operation)).map
+              Subtype.val = some raw),
+        result.toReceipt source = some receipt ∧
+        result.Realizes raw
+          (comprehensionAbstractWireProvenance source.diagram wrap
+            comprehension (occurrences.map AbstractionOccurrence.operation)
+            raw rawSuccess)
+          (comprehensionAbstractWireTransport source.diagram wrap
+            comprehension (occurrences.map AbstractionOccurrence.operation)
+            raw rawSuccess) := by
+  change finish source
+      (applyComprehensionAbstract orientation source.diagram wrap
+        comprehension (occurrences.map AbstractionOccurrence.operation)
+        payload.operation) = .ok receipt at success
+  obtain ⟨result, operationSuccess, packed⟩ :=
+    (finish_eq_ok_iff source _ receipt).1 success
+  obtain ⟨polarity, raw, rawSuccess, realizes⟩ :=
+    applyComprehensionAbstract_realizes operationSuccess
+  exact ⟨polarity, result, raw, rawSuccess, packed, realizes⟩
+
 /-- Structural inversion of a successful supplied insertion. -/
 theorem execute_boundRelationSpawn_success
     {arity : Nat}
