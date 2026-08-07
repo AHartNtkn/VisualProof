@@ -1813,8 +1813,7 @@ theorem applyWireSever_sound
     (keep : List (CEndpoint input.val.nodeCount))
     (receipt : OperationReceipt input)
     (happly : applyWireSever orientation input wire keep = .ok receipt) :
-    SuccessfulReceiptSound orientation input (.wireSever wire keep)
-      receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   have realizes := applyWireSever_realizes happly
   have success := applyWireSever_success orientation input wire keep receipt
     happly
@@ -1854,7 +1853,6 @@ theorem applyWireSever_sound
         (severBoundaryLengthEq source.asCheckedOpen.val wire keep))
       boundaryWitness
   dsimp only
-  unfold OperationEntailment OperationImplication
   cases orientation with
   | forward =>
       intro sourceDenotes
@@ -2106,8 +2104,7 @@ theorem applyWireJoin_sound
     (first second : Fin input.val.wireCount)
     (receipt : OperationReceipt input)
     (happly : applyWireJoin orientation input first second = .ok receipt) :
-    SuccessfulReceiptSound orientation input
-      (.wireJoin first second) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   exact WireJoinSoundness.wireJoinReceipt_sound orientation input
     first second receipt happly
 
@@ -2170,8 +2167,7 @@ private theorem applyIteration_sound_proper_nonempty
     (anchorNeRoot : selection.val.anchor ≠ input.val.root)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0) :
-    SuccessfulReceiptSound orientation input
-      (.iteration selection target) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   have realizes := applyIteration_realizes happly
   have success := applyIteration_success input selection target receipt happly
   let hsplice := success.2.2
@@ -2192,8 +2188,9 @@ private theorem applyIteration_sound_proper_nonempty
     IterationSoundness.properIterationOpenTargetAlignment_complete certificate
   have semantic := IterationSoundness.properIterationOpen_output_equiv
     hsplice sourceRoot hnonempty certificate alignment model args
-  simpa only [OperationEntailment, StepTag.operationMode,
-    iterationOperationalOpen] using semantic
+  cases orientation with
+  | forward => simpa only [iterationOperationalOpen] using semantic.mp
+  | backward => simpa only [iterationOperationalOpen] using semantic.mpr
 
 /-- Receipt bridge for the proper nested, empty-spine iteration case. -/
 private theorem applyIteration_sound_proper_zero
@@ -2207,8 +2204,7 @@ private theorem applyIteration_sound_proper_zero
     (anchorNeRoot : selection.val.anchor ≠ input.val.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount =
       0) :
-    SuccessfulReceiptSound orientation input
-      (.iteration selection target) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   have realizes := applyIteration_realizes happly
   have success := applyIteration_success input selection target receipt happly
   let hsplice := success.2.2
@@ -2230,8 +2226,9 @@ private theorem applyIteration_sound_proper_zero
       certificate
   have semantic := IterationSoundness.properIterationRootOpen_output_equiv
     hsplice sourceRoot hzero certificate alignment model args
-  simpa only [OperationEntailment, StepTag.operationMode,
-    iterationOperationalOpen] using semantic
+  cases orientation with
+  | forward => simpa only [iterationOperationalOpen] using semantic.mp
+  | backward => simpa only [iterationOperationalOpen] using semantic.mpr
 
 /-- Receipt bridge for a proper root-anchor, nonempty-spine iteration. -/
 private theorem applyIteration_sound_root_nonempty
@@ -2245,8 +2242,7 @@ private theorem applyIteration_sound_root_nonempty
     (hanchor : selection.val.anchor = input.val.root)
     (hnonempty : (iterationInput input selection target).binderSpine.proxyCount
       ≠ 0) :
-    SuccessfulReceiptSound orientation input
-      (.iteration selection target) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   have realizes := applyIteration_realizes happly
   have success := applyIteration_success input selection target receipt happly
   let hsplice := success.2.2
@@ -2272,8 +2268,9 @@ private theorem applyIteration_sound_root_nonempty
   have semantic :=
     IterationSoundness.properIterationOrderedRoot_output_equiv_nonempty
       hsplice sourceRoot hnonempty certificate alignment model args
-  simpa only [OperationEntailment, StepTag.operationMode,
-    iterationOperationalOpen] using semantic
+  cases orientation with
+  | forward => simpa only [iterationOperationalOpen] using semantic.mp
+  | backward => simpa only [iterationOperationalOpen] using semantic.mpr
 
 /-- Receipt bridge for a proper root-anchor, empty-spine iteration. -/
 private theorem applyIteration_sound_root_zero
@@ -2286,8 +2283,7 @@ private theorem applyIteration_sound_root_zero
     (targetNe : target ≠ selection.val.anchor)
     (hanchor : selection.val.anchor = input.val.root)
     (hzero : (iterationInput input selection target).binderSpine.proxyCount = 0) :
-    SuccessfulReceiptSound orientation input
-      (.iteration selection target) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   have realizes := applyIteration_realizes happly
   have success := applyIteration_success input selection target receipt happly
   let hsplice := success.2.2
@@ -2312,8 +2308,9 @@ private theorem applyIteration_sound_root_zero
   have semantic :=
     IterationSoundness.properIterationOrderedRoot_output_equiv_zero
       hsplice sourceRoot hzero certificate alignment model args
-  simpa only [OperationEntailment, StepTag.operationMode,
-    iterationOperationalOpen] using semantic
+  cases orientation with
+  | forward => simpa only [iterationOperationalOpen] using semantic.mp
+  | backward => simpa only [iterationOperationalOpen] using semantic.mpr
 
 /-- Receipt bridge for every executor-accepted same-site iteration. -/
 private theorem applyIteration_sound_same
@@ -2324,8 +2321,7 @@ private theorem applyIteration_sound_same
     (receipt : OperationReceipt input)
     (happly : applyIteration input selection target = .ok receipt)
     (targetEq : target = selection.val.anchor) :
-    SuccessfulReceiptSound orientation input
-      (.iteration selection target) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   have realizes := applyIteration_realizes happly
   have success := applyIteration_success input selection target receipt happly
   let hsplice := success.2.2
@@ -2344,8 +2340,9 @@ private theorem applyIteration_sound_same
     · have semantic :=
         IterationSoundness.sameSite_root_output_equiv_nonempty hsplice
           sourceRoot targetEq success.2.1 hroot hnonempty model args
-      simpa only [OperationEntailment, StepTag.operationMode,
-        iterationOperationalOpen] using semantic
+      cases orientation with
+      | forward => simpa only [iterationOperationalOpen] using semantic.mp
+      | backward => simpa only [iterationOperationalOpen] using semantic.mpr
     · have hzero :
           (iterationInput input selection target).binderSpine.proxyCount = 0 :=
         Nat.eq_zero_of_not_pos (fun positive =>
@@ -2353,15 +2350,17 @@ private theorem applyIteration_sound_same
       have semantic := IterationSoundness.sameSite_root_output_equiv_zero
         hsplice sourceRoot targetEq success.2.1 hroot hzero
         model args
-      simpa only [OperationEntailment, StepTag.operationMode,
-        iterationOperationalOpen] using semantic
+      cases orientation with
+      | forward => simpa only [iterationOperationalOpen] using semantic.mp
+      | backward => simpa only [iterationOperationalOpen] using semantic.mpr
   · by_cases hnonempty :
         (iterationInput input selection target).binderSpine.proxyCount ≠ 0
     · have semantic :=
         IterationSoundness.sameSite_nested_output_equiv_nonempty hsplice
           sourceRoot targetEq success.2.1 hroot hnonempty model args
-      simpa only [OperationEntailment, StepTag.operationMode,
-        iterationOperationalOpen] using semantic
+      cases orientation with
+      | forward => simpa only [iterationOperationalOpen] using semantic.mp
+      | backward => simpa only [iterationOperationalOpen] using semantic.mpr
     · have hzero :
           (iterationInput input selection target).binderSpine.proxyCount = 0 :=
         Nat.eq_zero_of_not_pos (fun positive =>
@@ -2369,8 +2368,9 @@ private theorem applyIteration_sound_same
       have semantic := IterationSoundness.sameSite_nested_output_equiv_zero
         hsplice sourceRoot targetEq success.2.1 hroot hzero
         model args
-      simpa only [OperationEntailment, StepTag.operationMode,
-        iterationOperationalOpen] using semantic
+      cases orientation with
+      | forward => simpa only [iterationOperationalOpen] using semantic.mp
+      | backward => simpa only [iterationOperationalOpen] using semantic.mpr
 
 /-- Every successful iteration receipt preserves ordered-open semantics. -/
 theorem applyIteration_sound
@@ -2380,8 +2380,7 @@ theorem applyIteration_sound
     (target : Fin input.val.regionCount)
     (receipt : OperationReceipt input)
     (happly : applyIteration input selection target = .ok receipt) :
-    SuccessfulReceiptSound orientation input
-      (.iteration selection target) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   by_cases targetNe : target ≠ selection.val.anchor
   · by_cases anchorNeRoot : selection.val.anchor ≠ input.val.root
     · by_cases hnonempty :
@@ -2413,7 +2412,7 @@ theorem applyIteration_sound
       receipt happly targetEq
 
 /-- The certified survivor occurrence can always be copied back into the
-deiteration hole, and the public iteration theorem supplies its complete
+deiteration hole, and the operation-specific iteration theorem supplies its complete
 ordered-open semantic equivalence for every anchor and binder-spine case. -/
 private theorem deiterationReinsert_sound
     (orientation : Orientation)
@@ -2422,10 +2421,6 @@ private theorem deiterationReinsert_sound
     (witness : OperationDeiterationWitness input selection) :
     SuccessfulReceiptSound orientation
       (IterationSoundness.deiterationRemoved input selection)
-      (.iteration
-        (IterationSoundness.deiterationRetainedSelection input selection
-          witness)
-        (IterationSoundness.deiterationReinsertTarget input selection))
       (IterationSoundness.deiterationReinsertReceipt input selection
         witness) :=
   applyIteration_sound orientation
@@ -2443,11 +2438,11 @@ theorem applyDeiteration_sound
     (witness : OperationDeiterationWitness input selection)
     (receipt : OperationReceipt input)
     (happly : applyDeiteration input selection witness = .ok receipt) :
-    SuccessfulReceiptSound orientation input
-      (.deiteration selection witness) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   exact IterationSoundness.deiteration_sound_of_reinsert orientation
     input selection witness receipt happly
-    (deiterationReinsert_sound orientation input selection witness)
+    (deiterationReinsert_sound .forward input selection witness)
+    (deiterationReinsert_sound .backward input selection witness)
 
 /-- Every successful double-cut introduction receipt is equivalent. -/
 theorem applyDoubleCutIntro_sound
@@ -2456,8 +2451,7 @@ theorem applyDoubleCutIntro_sound
     (selection : Concrete.CheckedSelection input.val)
     (receipt : OperationReceipt input)
     (happly : applyDoubleCutIntro input selection = .ok receipt) :
-    SuccessfulReceiptSound orientation input
-      (.doubleCutIntro selection) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   have realizes := applyDoubleCutIntro_realizes happly
   have targetWellFormed :
       (doubleCutIntroRaw input.val selection).WellFormed  :=
@@ -2509,15 +2503,15 @@ theorem applyDoubleCutIntro_sound
       (ModalSoundness.doubleCutIntroBoundaryWitness source.asCheckedOpen
         selection targetWellFormed .backward model  args)
   dsimp only
-  unfold OperationEntailment
-  simp only [StepTag.operationMode]
-  constructor
-  · intro sourceDenotes
-    have targetDenotes := forward sourceDenotes
-    simpa [source, target] using targetDenotes
-  · intro targetDenotes
-    apply backward
-    simpa [source, target] using targetDenotes
+  cases orientation with
+  | forward =>
+      intro sourceDenotes
+      have targetDenotes := forward sourceDenotes
+      simpa [source, target] using targetDenotes
+  | backward =>
+      intro targetDenotes
+      apply backward
+      simpa [source, target] using targetDenotes
 
 /-- Every successful double-cut elimination receipt is equivalent. -/
 theorem applyDoubleCutElim_sound
@@ -2526,8 +2520,7 @@ theorem applyDoubleCutElim_sound
     (region : Fin input.val.regionCount)
     (receipt : OperationReceipt input)
     (happly : applyDoubleCutElim input region = .ok receipt) :
-    SuccessfulReceiptSound orientation input
-      (.doubleCutElim region) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   obtain ⟨raw, hraw, realizes⟩ := applyDoubleCutElim_realizes happly
   let trace := doubleCutElimTrace hraw
   have rawWellFormed : raw.WellFormed  :=
@@ -2608,15 +2601,15 @@ theorem applyDoubleCutElim_sound
       (trace.boundaryWitness sourceWellFormed input.property boundary
         sourceRoot .backward model  args)
   dsimp only
-  unfold OperationEntailment
-  simp only [StepTag.operationMode]
-  constructor
-  · intro sourceDenotes
-    have targetDenotes := backward sourceDenotes
-    simpa [source, target, original, operational] using targetDenotes
-  · intro targetDenotes
-    apply forward
-    simpa [source, target, original, operational] using targetDenotes
+  cases orientation with
+  | forward =>
+      intro sourceDenotes
+      have targetDenotes := backward sourceDenotes
+      simpa [source, target, original, operational] using targetDenotes
+  | backward =>
+      intro targetDenotes
+      apply forward
+      simpa [source, target, original, operational] using targetDenotes
 
 /-- Every successful vacuous-cut introduction receipt is equivalent. -/
 theorem applyVacuousIntro_sound
@@ -2625,8 +2618,7 @@ theorem applyVacuousIntro_sound
     (selection : Concrete.CheckedSelection input.val) (arity : Nat)
     (receipt : OperationReceipt input)
     (happly : applyVacuousIntro input selection arity = .ok receipt) :
-    SuccessfulReceiptSound orientation input
-      (.vacuousIntro selection arity) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   have realizes := applyVacuousIntro_realizes happly
   have targetWellFormed :
       (vacuousIntroRaw input.val selection arity).WellFormed  :=
@@ -2679,15 +2671,15 @@ theorem applyVacuousIntro_sound
       (VacuousSoundness.vacuousIntroBoundaryWitness source.asCheckedOpen
         selection arity targetWellFormed .backward model  args)
   dsimp only
-  unfold OperationEntailment
-  simp only [StepTag.operationMode]
-  constructor
-  · intro sourceDenotes
-    have targetDenotes := forward sourceDenotes
-    simpa [source, target] using targetDenotes
-  · intro targetDenotes
-    apply backward
-    simpa [source, target] using targetDenotes
+  cases orientation with
+  | forward =>
+      intro sourceDenotes
+      have targetDenotes := forward sourceDenotes
+      simpa [source, target] using targetDenotes
+  | backward =>
+      intro targetDenotes
+      apply backward
+      simpa [source, target] using targetDenotes
 
 /-- Every successful vacuous-cut elimination receipt is equivalent. -/
 theorem applyVacuousElim_sound
@@ -2696,8 +2688,7 @@ theorem applyVacuousElim_sound
     (region : Fin input.val.regionCount)
     (receipt : OperationReceipt input)
     (happly : applyVacuousElim input region = .ok receipt) :
-    SuccessfulReceiptSound orientation input
-      (.vacuousElim region) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   obtain ⟨raw, hraw, realizes⟩ := applyVacuousElim_realizes happly
   let trace := vacuousElimTrace hraw
   have rawWellFormed : raw.WellFormed  :=
@@ -2802,15 +2793,15 @@ theorem applyVacuousElim_sound
       (trace.boundaryWitness sourceWellFormed input.property boundary
         sourceRoot .backward model  freshForward args)
   dsimp only
-  unfold OperationEntailment
-  simp only [StepTag.operationMode]
-  constructor
-  · intro sourceDenotes
-    have targetDenotes := backward sourceDenotes
-    simpa [source, target, original, operational] using targetDenotes
-  · intro targetDenotes
-    apply forward
-    simpa [source, target, original, operational] using targetDenotes
+  cases orientation with
+  | forward =>
+      intro sourceDenotes
+      have targetDenotes := backward sourceDenotes
+      simpa [source, target, original, operational] using targetDenotes
+  | backward =>
+      intro targetDenotes
+      apply forward
+      simpa [source, target, original, operational] using targetDenotes
 
 
 end VisualProof.Rule

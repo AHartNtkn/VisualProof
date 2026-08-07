@@ -918,9 +918,11 @@ theorem spawn_context_sound
     (localProjection : ∀ holeEnv holeRelEnv,
       denoteRegion model  holeEnv holeRelEnv target →
         denoteRegion model  holeEnv holeRelEnv source) :
-    OperationImplication orientation
-      (denoteRegion model  env rels (ctx.fill source))
-      (denoteRegion model  env rels (ctx.fill target)) := by
+    (match orientation with
+    | .forward => denoteRegion model env rels (ctx.fill source) →
+        denoteRegion model env rels (ctx.fill target)
+    | .backward => denoteRegion model env rels (ctx.fill target) →
+        denoteRegion model env rels (ctx.fill source)) := by
   cases orientation with
   | forward =>
       exact context_anti model  env rels polarity localProjection

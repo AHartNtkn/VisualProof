@@ -24,9 +24,7 @@ theorem applyComprehensionInstantiate_sound
     (receipt : OperationReceipt input)
     (happly : applyComprehensionInstantiate orientation input bubble
       comprehension attachments binders payload = .ok receipt) :
-    SuccessfulReceiptSound orientation input
-      (.comprehensionInstantiate bubble comprehension attachments binders
-        payload) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   obtain ⟨polarity, copied, hcopy, raw, hraw, checked, hcheck, receiptEq,
       realizes⟩ := applyComprehensionInstantiate_realizes happly
   let initial := initialInstantiationState payload
@@ -135,11 +133,11 @@ theorem applyComprehensionInstantiate_sound
     rfl
   cases orientation with
   | forward =>
-      simpa [OperationEntailment, OperationImplication, source,
+      simpa [source,
         OperationState.denote, operationalOpen, direction, operationalArgsEq]
         using semantic
   | backward =>
-      simpa [OperationEntailment, OperationImplication, source,
+      simpa [source,
         OperationState.denote, operationalOpen, direction, operationalArgsEq]
         using semantic
 
@@ -155,9 +153,7 @@ theorem applyComprehensionAbstract_sound
     (receipt : OperationReceipt input)
     (happly : applyComprehensionAbstract orientation input wrap comprehension
       occurrences payload = .ok receipt) :
-    SuccessfulReceiptSound orientation input
-      (.comprehensionAbstract wrap comprehension occurrences payload)
-      receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   obtain ⟨polarity, raw, hraw, realizes⟩ :=
     applyComprehensionAbstract_realizes happly
   let trace := Classical.choice (comprehensionAbstractRaw?_trace hraw)
@@ -229,11 +225,11 @@ theorem applyComprehensionAbstract_sound
     rfl
   cases orientation with
   | forward =>
-      simpa [OperationEntailment, OperationImplication, source,
+      simpa [source,
         OperationState.denote, operational, direction, operationalArgsEq]
         using semantic
   | backward =>
-      simpa [OperationEntailment, OperationImplication, source,
+      simpa [source,
         OperationState.denote, operational, direction, operationalArgsEq]
         using semantic
 

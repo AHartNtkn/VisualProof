@@ -21,14 +21,15 @@ theorem deiteration_sound_of_reinsert
     (witness : OperationDeiterationWitness input selection)
     (receipt : OperationReceipt input)
     (happly : applyDeiteration input selection witness = .ok receipt)
-    (reinsertSound :
-      SuccessfulReceiptSound orientation
+    (reinsertForward :
+      SuccessfulReceiptSound .forward
         (deiterationRemoved input selection)
-        (.iteration (deiterationRetainedSelection input selection witness)
-          (deiterationReinsertTarget input selection))
+        (deiterationReinsertReceipt input selection witness))
+    (reinsertBackward :
+      SuccessfulReceiptSound .backward
+        (deiterationRemoved input selection)
         (deiterationReinsertReceipt input selection witness)) :
-    SuccessfulReceiptSound orientation input
-      (.deiteration selection witness) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   have realizes := applyDeiteration_realizes input selection witness receipt
     happly
   apply SuccessfulReceiptSound.of_realized_operational realizes
@@ -88,7 +89,9 @@ theorem deiteration_sound_of_reinsert
     args ∘ Fin.cast
       ((removeWireWireTransport input selection)
         |>.transportBoundary_length hexpected)
-  have hReinsert := reinsertSound model rawMapped rawRoot reinsertMapped
+  have hReinsertForward := reinsertForward model rawMapped rawRoot reinsertMapped
+    hReinsertTransport removedArgs
+  have hReinsertBackward := reinsertBackward model rawMapped rawRoot reinsertMapped
     hReinsertTransport removedArgs
   let removed : OperationState  := {
     diagram := deiterationRemoved input selection
@@ -108,7 +111,7 @@ theorem deiteration_sound_of_reinsert
           (removedArgs ∘ Fin.cast
             (reinsertReceipt.interface.transportBoundary_length
               hReinsertTransport)) := by
-    simpa only [OperationEntailment, StepTag.operationMode] using hReinsert
+    exact ⟨hReinsertForward, hReinsertBackward⟩
   have hNormalize := reinsertRealizes.operationalOpen_denote_iff_result
     rawRoot hReinsertTransport reinsertOpen reinsertIso
     model
@@ -205,21 +208,19 @@ theorem deiteration_sound_of_reinsert
       ((Concrete.OpenIso.refl (realizes.rawResultOpen mapped)).boundary_length_eq.trans
         ((realizes.rawResultOpen_boundary_length mapped).trans
           (receipt.interface.transportBoundary_length htransport)))
-  change OperationEntailment .deiteration orientation
-    (source.denote model args)
-    (operational.denote model
-      operationalArgs)
-  unfold OperationEntailment
-  simp only [StepTag.operationMode]
-  change source.denote model args ↔
-    removed.denote model
-      operationalArgs
+  change match orientation with
+    | .forward => source.denote model args →
+        removed.denote model operationalArgs
+    | .backward => removed.denote model operationalArgs →
+        source.denote model args
   have hOperationalArgs : operationalArgs = removedArgs := by
     funext position
     apply congrArg args
     apply Fin.ext
     rfl
   rw [hOperationalArgs]
-  exact hRemovedSource.symm
+  cases orientation with
+  | forward => exact hRemovedSource.mpr
+  | backward => exact hRemovedSource.mp
 
 end VisualProof.Rule.IterationSoundness

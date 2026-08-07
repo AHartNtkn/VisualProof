@@ -2270,7 +2270,7 @@ private def operationalIso
 private theorem orderedReceipt_sound
     (orientation : Orientation)
     (input : Concrete.Checked )
-    (stepFirst stepSecond outer inner : Fin input.val.wireCount)
+    (outer inner : Fin input.val.wireCount)
     (receipt : OperationReceipt input)
     (realizes : receipt.Realizes
       (Target input.val outer inner)
@@ -2281,8 +2281,7 @@ private theorem orderedReceipt_sound
       (input.val.wires outer).scope (input.val.wires inner).scope)
     (polarity : spawnPolarity orientation
       (concreteCutDepth input.val (input.val.wires inner).scope)) :
-    SuccessfulReceiptSound orientation input
-      (.wireJoin stepFirst stepSecond) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   have targetWellFormed :
       (Target input.val outer inner).WellFormed  :=
     realizes.result_eq ▸ receipt.result.property
@@ -2323,7 +2322,6 @@ private theorem orderedReceipt_sound
         (boundaryLengthEq source.asCheckedOpen.val outer inner distinct))
       boundaryTransport
   dsimp only
-  unfold OperationEntailment OperationImplication
   cases orientation with
   | forward =>
       intro sourceDenotes
@@ -2344,8 +2342,7 @@ theorem wireJoinReceipt_sound
     (receipt : OperationReceipt input)
     (applyResult :
       applyWireJoin orientation input first second = .ok receipt) :
-    SuccessfulReceiptSound orientation input
-      (.wireJoin first second) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   unfold applyWireJoin at applyResult
   split at applyResult
   · contradiction
@@ -2359,7 +2356,7 @@ theorem wireJoinReceipt_sound
         · contradiction
         · rename_i checked checkResult
           cases applyResult
-          apply orderedReceipt_sound orientation input first second
+          apply orderedReceipt_sound orientation input
             first second _ _ distinct ordered polarity
           exact OperationReceipt.ofChecked_realizes _ _ _ _ checked checkResult
       · contradiction
@@ -2371,7 +2368,7 @@ theorem wireJoinReceipt_sound
           · contradiction
           · rename_i checked checkResult
             cases applyResult
-            apply orderedReceipt_sound orientation input first second
+            apply orderedReceipt_sound orientation input
               second first _ _
                 (fun equality => distinct equality.symm)
                 reverseOrdered polarity

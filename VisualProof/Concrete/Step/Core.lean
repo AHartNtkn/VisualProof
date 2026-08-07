@@ -290,31 +290,6 @@ theorem StepTag.all_nodup : StepTag.all.Nodup := by
 theorem StepTag.mem_all (tag : StepTag) : tag ∈ StepTag.all := by
   cases tag <;> native_decide
 
-inductive OperationMode
-  | directed
-  | equivalent
-  deriving DecidableEq, Repr
-
-/-- Whether a rule is genuinely one-way or a polarity-blind equivalence. -/
-def StepTag.operationMode : StepTag → OperationMode
-  | .boundRelationSpawn | .wireJoin
-  | .erasure | .wireSever | .comprehensionInstantiate
-  | .comprehensionAbstract => .directed
-  | .iteration | .deiteration | .doubleCutIntro | .doubleCutElim
-  | .vacuousIntro | .vacuousElim => .equivalent
-
-def OperationImplication (orientation : Orientation)
-    (before after : Prop) : Prop :=
-  match orientation with
-  | .forward => before → after
-  | .backward => after → before
-
-def OperationEntailment (tag : StepTag) (orientation : Orientation)
-    (before after : Prop) : Prop :=
-  match tag.operationMode with
-  | .directed => OperationImplication orientation before after
-  | .equivalent => before ↔ after
-
 inductive Error
   | invalidRegion
   | invalidNode
@@ -1377,55 +1352,5 @@ structure OperationComprehensionInstantiatePayload
   binderTargetsProper : ∀ index,
     input.val.Encloses (binderTargets index) bubble ∧
       binderTargets index ≠ bubble
-
-/--
-Raw proof-tower index for one operation against a checked diagram. Finite
-references cannot be stale, and selection closure is already validated.
--/
-inductive OperationStep (input : Concrete.Checked )
-  | boundRelationSpawn (region binder : Fin input.val.regionCount)
-      (arity : Nat)
-  | wireJoin (first second : Fin input.val.wireCount)
-  | erasure (selection : Concrete.CheckedSelection input.val)
-  | wireSever (wire : Fin input.val.wireCount)
-      (keep : List (Concrete.CEndpoint input.val.nodeCount))
-  | iteration (selection : Concrete.CheckedSelection input.val)
-      (target : Fin input.val.regionCount)
-  | deiteration (selection : Concrete.CheckedSelection input.val)
-      (witness : OperationDeiterationWitness input selection)
-  | doubleCutIntro (selection : Concrete.CheckedSelection input.val)
-  | doubleCutElim (region : Fin input.val.regionCount)
-  | comprehensionInstantiate (bubble : Fin input.val.regionCount)
-      (comprehension : Concrete.CheckedOpen )
-      (attachments : List (Fin input.val.wireCount))
-      (binders : List
-        (Fin comprehension.val.diagram.regionCount ×
-          Fin input.val.regionCount))
-      (payload : OperationComprehensionInstantiatePayload input bubble comprehension
-        attachments binders)
-  | comprehensionAbstract (wrap : Concrete.CheckedSelection input.val)
-      (comprehension : Concrete.CheckedOpen )
-      (occurrences : List (OperationAbstractionOccurrence input))
-      (payload : OperationComprehensionAbstractPayload input wrap comprehension occurrences)
-  | vacuousIntro (selection : Concrete.CheckedSelection input.val)
-      (arity : Nat)
-  | vacuousElim (region : Fin input.val.regionCount)
-
-def OperationStep.tag : OperationStep input → StepTag
-  | .boundRelationSpawn .. => .boundRelationSpawn
-  | .wireJoin .. => .wireJoin
-  | .erasure .. => .erasure
-  | .wireSever .. => .wireSever
-  | .iteration .. => .iteration
-  | .deiteration .. => .deiteration
-  | .doubleCutIntro .. => .doubleCutIntro
-  | .doubleCutElim .. => .doubleCutElim
-  | .comprehensionInstantiate .. => .comprehensionInstantiate
-  | .comprehensionAbstract .. => .comprehensionAbstract
-  | .vacuousIntro .. => .vacuousIntro
-  | .vacuousElim .. => .vacuousElim
-
-theorem OperationStep.tag_mem_all (step : OperationStep input) :
-    step.tag ∈ StepTag.all := StepTag.mem_all step.tag
 
 end VisualProof.Concrete

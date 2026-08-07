@@ -32,52 +32,18 @@ theorem OperationState.closed_denote_iff
     }
     exact ⟨assignment, rfl, by simpa using hbody⟩
 
-/-- Raw operation dispatch retained only as the input relation for the existing
-per-operation proof towers. Public state execution is `Concrete.execute`. -/
-def applyRawOperation (orientation : Orientation)
-    (input : Concrete.Checked ) (step : OperationStep input) :
-    Except Error (OperationReceipt input) :=
-  match step with
-  | .boundRelationSpawn region binder arity =>
-      applyBoundRelationSpawn orientation input region binder arity
-  | .wireJoin first second =>
-      applyWireJoin orientation input first second
-  | .erasure selection =>
-      applyErasure orientation input selection
-  | .wireSever wire keep =>
-      applyWireSever orientation input wire keep
-  | .iteration selection target =>
-      applyIteration input selection target
-  | .deiteration selection witness =>
-      applyDeiteration input selection witness
-  | .doubleCutIntro selection =>
-      applyDoubleCutIntro input selection
-  | .doubleCutElim region =>
-      applyDoubleCutElim input region
-  | .comprehensionInstantiate bubble comprehension attachments binders payload =>
-      applyComprehensionInstantiate orientation input bubble comprehension
-        attachments binders payload
-  | .comprehensionAbstract wrap comprehension occurrences payload =>
-      applyComprehensionAbstract orientation input wrap comprehension
-        occurrences payload
-  | .vacuousIntro selection arity =>
-      applyVacuousIntro input selection arity
-  | .vacuousElim region =>
-      applyVacuousElim input region
 def SuccessfulOperationSound (orientation : Orientation)
-    (input result : Concrete.Checked )
-    (step : OperationStep input) : Prop :=
+    (input result : Concrete.Checked ) : Prop :=
   ∀ model,
-    OperationEntailment step.tag orientation
-      (input.denote model)
-      (result.denote model)
+    match orientation with
+    | .forward => input.denote model → result.denote model
+    | .backward => result.denote model → input.denote model
 
-/-- Boundary-parametric soundness of an interface-bearing successful result.
-This is the theorem strength required by replay; closed soundness is its
-empty-boundary specialization. -/
+/-- Boundary-parametric semantic implication for an operation-specific raw
+receipt. Closed soundness is its empty-boundary specialization. -/
 def SuccessfulReceiptSound (orientation : Orientation)
     (input : Concrete.Checked )
-    (step : OperationStep input) (receipt : OperationReceipt input) : Prop :=
+    (receipt : OperationReceipt input) : Prop :=
   ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ boundary →
       (input.val.wires wire).scope = input.val.root)
@@ -95,20 +61,21 @@ def SuccessfulReceiptSound (orientation : Orientation)
         boundary_root_scoped :=
           receipt.interface.transportBoundary_root_scoped sourceRoot htransport
       }
-      OperationEntailment step.tag orientation
-        (source.denote model args)
-        (target.denote model
-          (args ∘ Fin.cast
-            (receipt.interface.transportBoundary_length htransport)))
+      match orientation with
+      | .forward => source.denote model args →
+          target.denote model
+            (args ∘ Fin.cast
+              (receipt.interface.transportBoundary_length htransport))
+      | .backward => target.denote model
+            (args ∘ Fin.cast
+              (receipt.interface.transportBoundary_length htransport)) →
+          source.denote model args
 
 namespace SuccessfulReceiptSound
 
-/-- A boundary-parametric semantic equivalence discharges every equivalence
-rule, independently of replay orientation.  This is the common final step for
-the concrete equivalence appliers; it does not add a second soundness
-authority. -/
+/-- Project a boundary-parametric semantic equivalence in either requested
+orientation. -/
 theorem of_equivalence
-    (mode : step.tag.operationMode = .equivalent)
     (equivalent :
       ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
         (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -131,17 +98,15 @@ theorem of_equivalence
             target.denote model
               (args ∘ Fin.cast
                 (receipt.interface.transportBoundary_length htransport))) :
-    SuccessfulReceiptSound orientation input step receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   intro model boundary sourceRoot mapped htransport args
   have hequivalent := equivalent model boundary sourceRoot mapped htransport args
-  unfold OperationEntailment
-  rw [mode]
-  exact hequivalent
+  cases orientation with
+  | forward => exact hequivalent.mp
+  | backward => exact hequivalent.mpr
 
-/-- A forward boundary-parametric implication discharges a directed rule in
-forward replay. -/
+/-- Package a forward boundary-parametric implication. -/
 theorem of_forward
-    (mode : step.tag.operationMode = .directed)
     (entails :
       ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
         (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -164,17 +129,13 @@ theorem of_forward
             target.denote model
               (args ∘ Fin.cast
                 (receipt.interface.transportBoundary_length htransport))) :
-    SuccessfulReceiptSound .forward input step receipt := by
+    SuccessfulReceiptSound .forward input receipt := by
   intro model boundary sourceRoot mapped htransport args
   have hentails := entails model boundary sourceRoot mapped htransport args
-  unfold OperationEntailment OperationImplication
-  rw [mode]
   exact hentails
 
-/-- A reverse boundary-parametric implication discharges a directed rule in
-backward replay. -/
+/-- Package a reverse boundary-parametric implication. -/
 theorem of_backward
-    (mode : step.tag.operationMode = .directed)
     (entails :
       ∀ (model : Model) (boundary : List (Fin input.val.wireCount))
         (sourceRoot : ∀ wire, wire ∈ boundary →
@@ -197,11 +158,9 @@ theorem of_backward
               (args ∘ Fin.cast
                 (receipt.interface.transportBoundary_length htransport)) →
             source.denote model args) :
-    SuccessfulReceiptSound .backward input step receipt := by
+    SuccessfulReceiptSound .backward input receipt := by
   intro model boundary sourceRoot mapped htransport args
   have hentails := entails model boundary sourceRoot mapped htransport args
-  unfold OperationEntailment OperationImplication
-  rw [mode]
   exact hentails
 
 /-- Close a successful receipt from semantics proved on the exact operational
@@ -209,7 +168,7 @@ open result. The realized receipt supplies the normalization from that
 ordered operational boundary to the checked target boundary. -/
 theorem of_realized_operational
     {orientation : Orientation} {input : Concrete.Checked }
-    {step : OperationStep input} {receipt : OperationReceipt input}
+    {receipt : OperationReceipt input}
     {raw : Concrete.Diagram}
     {expectedProvenance : WireProvenance input.val raw}
     {expectedInterface : WireTransport input.val raw}
@@ -244,30 +203,28 @@ theorem of_realized_operational
             boundary_root_scoped := sourceRoot
           }
           let iso := operationalIso boundary sourceRoot mapped htransport
-          OperationEntailment step.tag orientation
-            (source.denote model args)
-            ((operational boundary sourceRoot mapped htransport).denote
-              model
-              (args ∘ Fin.cast (iso.boundary_length_eq.trans
-                ((realizes.rawResultOpen_boundary_length mapped).trans
-                  (receipt.interface.transportBoundary_length htransport)))))) :
-    SuccessfulReceiptSound orientation input step receipt := by
+          match orientation with
+          | .forward => source.denote model args →
+              (operational boundary sourceRoot mapped htransport).denote model
+                (args ∘ Fin.cast (iso.boundary_length_eq.trans
+                  ((realizes.rawResultOpen_boundary_length mapped).trans
+                    (receipt.interface.transportBoundary_length htransport))))
+          | .backward =>
+              (operational boundary sourceRoot mapped htransport).denote model
+                  (args ∘ Fin.cast (iso.boundary_length_eq.trans
+                    ((realizes.rawResultOpen_boundary_length mapped).trans
+                      (receipt.interface.transportBoundary_length htransport)))) →
+                source.denote model args) :
+    SuccessfulReceiptSound orientation input receipt := by
   intro model boundary sourceRoot mapped htransport args
   let op := operational boundary sourceRoot mapped htransport
   let iso := operationalIso boundary sourceRoot mapped htransport
   have hsound := sound model boundary sourceRoot mapped htransport args
   have hnormalize := realizes.operationalOpen_denote_iff_result sourceRoot
     htransport op iso model args
-  unfold OperationEntailment at hsound ⊢
-  cases hmode : step.tag.operationMode with
-  | directed =>
-      simp only [hmode] at hsound ⊢
-      cases orientation with
-      | forward => exact fun hsource => hnormalize.mp (hsound hsource)
-      | backward => exact fun htarget => hsound (hnormalize.mpr htarget)
-  | equivalent =>
-      simp only [hmode] at hsound ⊢
-      exact hsound.trans hnormalize
+  cases orientation with
+  | forward => exact fun hsource => hnormalize.mp (hsound hsource)
+  | backward => exact fun htarget => hsound (hnormalize.mpr htarget)
 
 end SuccessfulReceiptSound
 
@@ -314,7 +271,7 @@ private def spawnOperationalIso
 operation-specific public theorems only supply their node and success facts. -/
 private theorem spawnReceipt_sound
     (orientation : Orientation) (input : Concrete.Checked )
-    (step : OperationStep input) (receipt : OperationReceipt input)
+    (receipt : OperationReceipt input)
     (node : Concrete.CNode input.val.regionCount)
     (scope : Fin input.val.regionCount) (portCount : Nat)
     (port : Fin portCount → Concrete.CPort)
@@ -324,9 +281,8 @@ private theorem spawnReceipt_sound
       (spawnNodeWireProvenance input.val node scope portCount port)
       (spawnNodeWireTransport input.val node scope portCount port))
     (polarity : spawnPolarity orientation
-      (concreteCutDepth input.val scope))
-    (mode : step.tag.operationMode = .directed) :
-    SuccessfulReceiptSound orientation input step receipt := by
+      (concreteCutDepth input.val scope)) :
+    SuccessfulReceiptSound orientation input receipt := by
   have htarget : (spawnNodeRaw input.val node scope portCount port).WellFormed
        := realizes.result_eq ▸ receipt.result.property
   apply SuccessfulReceiptSound.of_realized_operational realizes
@@ -352,18 +308,14 @@ private theorem spawnReceipt_sound
   have projects := spawnNodeRawOpen_projects source.asCheckedOpen node scope
     portCount port hnode htarget view.route view.cutDepth model args
   dsimp only
-  unfold OperationEntailment
-  rw [mode]
   cases orientation with
   | forward =>
-      simp only [OperationImplication]
       have hodd : view.focus.context.cutDepth % 2 = 1 := by
         simpa [spawnPolarity, hdepth] using polarity
       intro hsource
       have hoperational := projects.2 hodd hsource
       simpa [source, spawnOperationalOpen] using hoperational
   | backward =>
-      simp only [OperationImplication]
       have heven : view.focus.context.cutDepth % 2 = 0 := by
         simpa [spawnPolarity, hdepth] using polarity
       intro hoperational
@@ -379,15 +331,13 @@ theorem applyBoundRelationSpawn_sound
     (receipt : OperationReceipt input)
     (happly : applyBoundRelationSpawn orientation input region binder arity =
       .ok receipt) :
-    SuccessfulReceiptSound orientation input
-      (.boundRelationSpawn region binder arity) receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   have realizes := applyBoundRelationSpawn_realizes happly
   have success := applyBoundRelationSpawn_success orientation input region binder
     arity receipt happly
-  exact spawnReceipt_sound orientation input
-    (.boundRelationSpawn region binder arity) receipt
+  exact spawnReceipt_sound orientation input receipt
     (.atom region binder) region arity (fun index => .arg index)
-    rfl realizes success.1 rfl
+    rfl realizes success.1
 
 /-- The canonical splice source of a decomposition projects to its retained
 frame with exactly the variance selected by the original anchor polarity. -/
@@ -412,16 +362,25 @@ private theorem canonicalErasureProjection
         (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
         (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1 sourceBoundary
         sourceRoot).val.boundary.length → model.Carrier) :
-    OperationImplication orientation
-      (denoteOpen model
-        (Concrete.Splice.Input.compiledSpliceSourceOpen
-          (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
-          hsplice sourceBoundary sourceRoot) args)
-      (denoteOpen model
-        (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-          (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
-          (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1
-          sourceBoundary sourceRoot).elaborate args) := by
+    (match orientation with
+    | .forward => denoteOpen model
+          (Concrete.Splice.Input.compiledSpliceSourceOpen
+            (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
+            hsplice sourceBoundary sourceRoot) args →
+        denoteOpen model
+          (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+            (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
+            (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1
+            sourceBoundary sourceRoot).elaborate args
+    | .backward => denoteOpen model
+          (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
+            (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
+            (Concrete.Splice.Input.spliceChecked_sound hsplice).2.1
+            sourceBoundary sourceRoot).elaborate args →
+        denoteOpen model
+          (Concrete.Splice.Input.compiledSpliceSourceOpen
+            (Concrete.Splice.Decomposition.originalFragmentInput decomposition)
+            hsplice sourceBoundary sourceRoot) args) := by
   let spliceInput :=
     Concrete.Splice.Decomposition.originalFragmentInput decomposition
   let hadmissible :=
@@ -430,7 +389,6 @@ private theorem canonicalErasureProjection
   by_cases hsite : spliceInput.site = spliceInput.frame.val.root
   · cases orientation with
     | forward =>
-        simp only [OperationImplication]
         by_cases hzero : spliceInput.binderSpine.proxyCount = 0
         · simpa only [Concrete.Splice.Input.compiledSpliceSourceOpen,
             hsite, hzero, dite_true, spliceInput, layout, hadmissible] using
@@ -487,7 +445,6 @@ private theorem canonicalErasureProjection
           model  args
       cases orientation with
       | forward =>
-          simp only [OperationImplication]
           have heven : outputView.focus.context.cutDepth % 2 = 0 := by
             rw [houtputDepth]
             exact polarity
@@ -495,7 +452,6 @@ private theorem canonicalErasureProjection
             hsite, hzero, dite_false, dite_true, spliceInput, layout,
             hadmissible, outputView] using projects.1 heven
       | backward =>
-          simp only [OperationImplication]
           have hodd : outputView.focus.context.cutDepth % 2 = 1 := by
             rw [houtputDepth]
             exact polarity
@@ -508,7 +464,6 @@ private theorem canonicalErasureProjection
           model  args
       cases orientation with
       | forward =>
-          simp only [OperationImplication]
           have heven : outputView.focus.context.cutDepth % 2 = 0 := by
             rw [houtputDepth]
             exact polarity
@@ -516,7 +471,6 @@ private theorem canonicalErasureProjection
             hsite, hzero, dite_false, spliceInput, layout, hadmissible,
             outputView] using projects.1 heven
       | backward =>
-          simp only [OperationImplication]
           have hodd : outputView.focus.context.cutDepth % 2 = 1 := by
             rw [houtputDepth]
             exact polarity
@@ -558,7 +512,7 @@ private def erasureOperationalIso
   Concrete.OpenIso.refl _
 
 /-- Every successful erasure receipt is sound at every ordered open boundary.
-Forward erasure uses even polarity; backward replay uses odd polarity and is
+Forward erasure uses even polarity; backward erasure uses odd polarity and is
 therefore insertion under an odd number of cuts. -/
 theorem applyErasure_sound
     (orientation : Orientation)
@@ -566,8 +520,7 @@ theorem applyErasure_sound
     (selection : Concrete.CheckedSelection input.val)
     (receipt : OperationReceipt input)
     (happly : applyErasure orientation input selection = .ok receipt) :
-    SuccessfulReceiptSound orientation input (.erasure selection)
-      receipt := by
+    SuccessfulReceiptSound orientation input receipt := by
   have realizes := applyErasure_realizes orientation input selection receipt
     happly
   have success := applyErasure_success orientation input selection receipt
@@ -737,13 +690,7 @@ theorem applyErasure_sound
         (erasureOperationalOpen realizes boundary sourceRoot mapped htransport).elaborate
         frameArgs
     exact hframe
-  change OperationEntailment .erasure orientation
-    (source.denote model args)
-    ((erasureOperationalOpen realizes boundary sourceRoot mapped htransport).denote
-        model
-        operationalArgs)
-  unfold OperationEntailment
-  simp only [StepTag.operationMode]
+  dsimp only
   cases orientation with
   | forward =>
       intro hsource
@@ -754,17 +701,19 @@ theorem applyErasure_sound
 
 theorem SuccessfulReceiptSound.closed
     (receipt : OperationReceipt input)
-    (sound : SuccessfulReceiptSound orientation input step receipt) :
-    SuccessfulOperationSound orientation input receipt.result step := by
+    (sound : SuccessfulReceiptSound orientation input receipt) :
+    SuccessfulOperationSound orientation input receipt.result := by
   intro model
-  have hopen := sound model [] (by simp) [] rfl Fin.elim0
-  change OperationEntailment step.tag orientation
-    ((OperationState.closed input).denote model Fin.elim0)
-    ((OperationState.closed receipt.result).denote model Fin.elim0) at hopen
-  unfold OperationEntailment at hopen ⊢
-  cases hmode : step.tag.operationMode <;> simp only [hmode] at hopen ⊢
-  · cases orientation <;>
+  cases orientation with
+  | forward =>
+      have hopen := sound model [] (by simp) [] rfl Fin.elim0
+      change (OperationState.closed input).denote model Fin.elim0 →
+        (OperationState.closed receipt.result).denote model Fin.elim0 at hopen
       simpa only [OperationState.closed_denote_iff] using hopen
-  · simpa only [OperationState.closed_denote_iff] using hopen
+  | backward =>
+      have hopen := sound model [] (by simp) [] rfl Fin.elim0
+      change (OperationState.closed receipt.result).denote model Fin.elim0 →
+        (OperationState.closed input).denote model Fin.elim0 at hopen
+      simpa only [OperationState.closed_denote_iff] using hopen
 
 end VisualProof.Rule

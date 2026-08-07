@@ -413,7 +413,7 @@ private def finishWireSever (orientation : Orientation) {arity : Nat}
         }
       }
 
-private def executeInsertion {arity : Nat} (source : State arity)
+private def executeInsertionAdmissible {arity : Nat} (source : State arity)
     (insertion : Insertion source) : Except Error (Receipt source) := by
   rcases insertion with ⟨input, frame_eq, admissible⟩
   let diagramEq : input.frame.val = source.checked.val.diagram :=
@@ -454,13 +454,23 @@ private def executeInsertion {arity : Nat} (source : State arity)
         }
       }
 
+private def executeInsertion (orientation : Orientation) {arity : Nat}
+    (source : State arity) (insertion : Insertion source) :
+    Except Error (Receipt source) :=
+  if spawnPolarity orientation
+      (concreteCutDepth insertion.input.frame.val insertion.input.site) then
+    executeInsertionAdmissible source insertion
+  else
+    .error .wrongPolarity
+
 /-- Execute one fully specified request. Occurrences, insertions, and boundary
 partitions are consumed from the request; execution performs no discovery. -/
 def execute (orientation : Orientation) {arity : Nat}
     (source : State arity) (request : Step source) :
     Except Error (Receipt source) :=
   match request with
-  | .boundRelationSpawn insertion => executeInsertion source insertion
+  | .boundRelationSpawn insertion =>
+      executeInsertion orientation source insertion
   | .wireJoin first second =>
       finish source (applyWireJoin orientation source.diagram first second)
   | .erasure selection =>
