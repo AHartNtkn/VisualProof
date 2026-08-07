@@ -4,7 +4,7 @@ goal:
   title: "Recursive Rewrite Authority"
   slug: "recursive-rewrite-authority"
   kind: existing_plan
-  tranche: "Define the exhaustive recursive relational Step and its semantic soundness theorem."
+  tranche: "Prove concrete translation, encoding, and representation laws modulo recursive diagram isomorphism."
   status: active
   oracle:
     signal: "Kernel-checked Lean theorems prove one recursive relational calculus with structural semantics and a separate concrete refinement layer."
@@ -65,7 +65,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/recursive-rewrite-authority/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/recursive-rewrite-authority"
 
-active_task: T113
+active_task: T115
 
 tasks:
   - id: T001
@@ -527,7 +527,7 @@ tasks:
   - id: T113
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 7: define the exhaustive six-family relational Rule.Step and prove isomorphism transport and semantic soundness with no concrete dependency."
     inputs:
@@ -535,11 +535,13 @@ tasks:
     allowed_files:
       - "VisualProof/Rule/Step.lean"
       - "VisualProof/Rule/Soundness.lean"
+      - "VisualProof/Rule/Soundness/*.lean"
       - "VisualProof/Rule/Soundness/**/*.lean"
       - "VisualProof/Refinement/**/*.lean"
       - "VisualProof/Proof/**/*.lean"
       - "VisualProof/Audit.lean"
       - "VisualProof.lean"
+      - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-7-report.md"
     constraints:
       - "Step has exactly Erasure, WireSever, Iteration, DoubleCut, Comprehension, and Vacuity constructors."
       - "Step.sound is ordinary implication and delegates exhaustively to the six family soundness theorems."
@@ -557,6 +559,91 @@ tasks:
       - "A family relation lacks the iso or soundness theorem required by the aggregate."
       - "A dependency cycle requires concrete execution data in abstract Step or Step.sound."
       - "A required semantic decision is absent from the plan and existing family theorems."
+    receipt:
+      result: done
+      changed_files:
+        - "VisualProof/Rule/Step.lean"
+        - "VisualProof/Rule/Soundness.lean"
+        - "VisualProof/Refinement/Implementation/Soundness.lean"
+        - "VisualProof/Rule/Soundness/Contextual.lean"
+        - "VisualProof/Rule/Soundness/Erasure.lean"
+        - "VisualProof/Rule/Soundness/WireSever.lean"
+        - "VisualProof/Rule/Soundness/Iteration.lean"
+        - "VisualProof/Rule/Soundness/DoubleCut.lean"
+        - "VisualProof/Rule/Soundness/Comprehension.lean"
+        - "VisualProof/Rule/Soundness/Vacuity.lean"
+        - "VisualProof/Rule/Soundness/Structural.lean"
+        - "VisualProof/Rule/Soundness/HighLevel.lean"
+        - "VisualProof/Rule/Soundness/WireJoin.lean"
+        - "VisualProof/Rule/Soundness/Modal.lean"
+        - "VisualProof/Rule/Soundness/Iteration/DeiterationSemantic.lean"
+        - "VisualProof.lean"
+        - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-7-report.md"
+      commands:
+        - cmd: "strict Step, Soundness, relocated-helper, and consumer compilation"
+          status: pass
+        - cmd: "lake env lean --deps VisualProof/Rule/Soundness.lean"
+          status: pass
+        - cmd: "recursive source-closure and kernel-axiom audit"
+          status: pass
+        - cmd: "lake build"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "Defined the exact six-family relational Step, proved isomorphism transport and exhaustive ordinary-implication soundness, and isolated operational proof helpers below Refinement."
+      harness: codex
+  - id: T114
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit T113 for exhaustive family coverage, ordinary semantic implication, dependency purity, and honest relocation of operational proof helpers."
+    inputs:
+      - "T113 receipt"
+      - "Task 7 review package"
+    constraints:
+      - "Read-only."
+      - "Reject any Concrete or Refinement dependency in Rule.Step or Rule.Soundness."
+      - "Reject a renamed alias or parallel semantic authority."
+    expected_output:
+      - "approved | changes_required"
+    receipt:
+      result: done
+      decision: approved
+      full_outcome_complete: false
+      rationale: "Task 7 is approved with no findings: both theorems are exhaustive over exactly six families, the abstract closure is pure, operational helpers have refinement ownership, and all validation passes."
+      harness: codex
+  - id: T115
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Execute plan Task 8: define open validation and translation, a recursive encoder, Represents/StateRepresents, and prove representation existence, uniqueness, and completeness modulo OpenDiagramIso."
+    inputs:
+      - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 8"
+    allowed_files:
+      - "VisualProof/Concrete/Translate.lean"
+      - "VisualProof/Concrete/Encode.lean"
+      - "VisualProof/Concrete.lean"
+      - "VisualProof/Refinement/Represents.lean"
+      - "VisualProof.lean"
+      - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-8-report.md"
+    constraints:
+      - "Concrete.translate is exactly open validation followed by elaboration."
+      - "Represents is successful translation modulo OpenDiagramIso; uniqueness concludes isomorphism, not equality."
+      - "Encoding preserves ordered boundary positions and repeated aliases and returns a checked State at the same arity."
+      - "Representation completeness is unconditional."
+      - "Do not introduce a matcher, search, compatibility representation, or second translation authority."
+      - "Lean only; TypeScript is outside scope."
+    verify:
+      - "strict Translate, Encode, and Represents compilation"
+      - "lake build"
+      - "translation/representation ownership, proof-hole, project-axiom, and matcher scans"
+      - "git diff --check"
+    stop_if:
+      - "The existing recursive/flat syntax lacks information required for a total representation encoder."
+      - "An isomorphism theorem needed for round-trip or uniqueness is absent and cannot be proved within allowed files."
+      - "A required change to representation semantics falls outside the plan."
     receipt: null
   - id: T999
     type: judge
