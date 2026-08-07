@@ -679,6 +679,51 @@ theorem execute_deiteration_success
     applyDeiteration_realizes source.diagram selection witness.operation result
       operationSuccess⟩
 
+/-- Structural inversion of a successful double-cut introduction request. -/
+theorem execute_doubleCutIntro_success
+    {arity : Nat}
+    {source : State arity}
+    {orientation : Orientation}
+    (selection : CheckedSelection source.checked.val.diagram)
+    {receipt : Receipt source}
+    (success : execute orientation source (.doubleCutIntro selection) =
+      .ok receipt) :
+    ∃ result : OperationReceipt source.diagram,
+      result.toReceipt source = some receipt ∧
+      result.Realizes
+        (doubleCutIntroRaw source.checked.val.diagram selection)
+        (doubleCutIntroWireProvenance source.checked.val.diagram selection)
+        (doubleCutIntroWireTransport source.checked.val.diagram selection) := by
+  change finish source (applyDoubleCutIntro source.diagram selection) =
+    .ok receipt at success
+  obtain ⟨result, operationSuccess, packed⟩ :=
+    (finish_eq_ok_iff source _ receipt).1 success
+  exact ⟨result, packed, applyDoubleCutIntro_realizes operationSuccess⟩
+
+/-- Structural inversion of a successful double-cut elimination request. -/
+theorem execute_doubleCutElim_success
+    {arity : Nat}
+    {source : State arity}
+    {orientation : Orientation}
+    (outer : Fin source.checked.val.diagram.regionCount)
+    {receipt : Receipt source}
+    (success : execute orientation source (.doubleCutElim outer) =
+      .ok receipt) :
+    ∃ (result : OperationReceipt source.diagram)
+      (raw : Concrete.Diagram)
+      (rawSuccess : doubleCutElimRaw? source.checked.val.diagram outer =
+        some raw),
+      result.toReceipt source = some receipt ∧
+      result.Realizes raw (doubleCutElimWireProvenance rawSuccess)
+        (doubleCutElimWireTransport rawSuccess) := by
+  change finish source (applyDoubleCutElim source.diagram outer) =
+    .ok receipt at success
+  obtain ⟨result, operationSuccess, packed⟩ :=
+    (finish_eq_ok_iff source _ receipt).1 success
+  obtain ⟨raw, rawSuccess, realizes⟩ :=
+    applyDoubleCutElim_realizes operationSuccess
+  exact ⟨result, raw, rawSuccess, packed, realizes⟩
+
 /-- Structural inversion of a successful supplied insertion. -/
 theorem execute_boundRelationSpawn_success
     {arity : Nat}
