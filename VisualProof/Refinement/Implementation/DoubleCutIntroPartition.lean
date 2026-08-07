@@ -582,6 +582,62 @@ theorem kept_child_iff (child : Fin input.regionCount) :
         child ∉ selection.val.childRoots := by
   simp [keptOccurrences, occurrenceSelected]
 
+theorem source_items_partition
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    (recurse : ∀ {rels : RelCtx},
+      (region : Fin input.val.regionCount) →
+      (context : Concrete.Elaboration.WireContext input.val) →
+      Concrete.Elaboration.BinderContext input.val rels →
+      Option (Region context.length rels))
+    (context : Concrete.Elaboration.WireContext input.val)
+    (binders : Concrete.Elaboration.BinderContext input.val rels)
+    {items : ItemSeq context.length rels}
+    (compiled : Concrete.Elaboration.compileOccurrencesWith? input.val
+      recurse context binders
+      (Concrete.Elaboration.localOccurrences input.val selection.val.anchor) =
+        some items) :
+    ∃ (kept selected : ItemSeq context.length rels),
+      Concrete.Elaboration.compileOccurrencesWith? input.val recurse context
+          binders (keptOccurrences input.val selection) = some kept ∧
+      Concrete.Elaboration.compileOccurrencesWith? input.val recurse context
+          binders (selectedOccurrences input.val selection) = some selected ∧
+      ItemSeqIso (FiniteEquiv.refl (Fin context.length)) rels
+        (kept.append selected) items := by
+  let partitioned := keptOccurrences input.val selection ++
+    selectedOccurrences input.val selection
+  have eachCompiled : ∀ occurrence, occurrence ∈ partitioned →
+      ∃ item, Concrete.Elaboration.compileOccurrenceWith? input.val recurse
+        context binders occurrence = some item := by
+    intro occurrence member
+    exact VisualProof.Refinement.Implementation.IterationPartition.compileOccurrence_success_of_mem
+      input.val recurse context binders compiled
+      ((occurrences_perm input.val selection).mem_iff.mp member)
+  obtain ⟨partitionedItems, partitionedCompiled⟩ :=
+    Concrete.Elaboration.compileOccurrencesWith?_complete recurse context
+      binders partitioned eachCompiled
+  obtain ⟨kept, selected, keptCompiled, selectedCompiled, partitionedEq⟩ :=
+    Concrete.Elaboration.compileOccurrencesWith?_append_split recurse context
+      binders (keptOccurrences input.val selection)
+      (selectedOccurrences input.val selection) partitionedItems
+      partitionedCompiled
+  have combinedCompiled :
+      Concrete.Elaboration.compileOccurrencesWith? input.val recurse context
+          binders partitioned = some (kept.append selected) := by
+    simpa [partitioned, partitionedEq] using partitionedCompiled
+  have partitionNodup : partitioned.Nodup :=
+    ((occurrences_perm input.val selection).nodup_iff).2
+      (Concrete.Elaboration.localOccurrences_nodup input.val
+        selection.val.anchor)
+  have itemIso :=
+    VisualProof.Refinement.Implementation.IterationPartition.compileOccurrences_perm_iso
+      input.val recurse context binders (occurrences_perm input.val selection)
+      partitionNodup
+      (Concrete.Elaboration.localOccurrences_nodup input.val
+        selection.val.anchor)
+      combinedCompiled compiled
+  exact ⟨kept, selected, keptCompiled, selectedCompiled, itemIso⟩
+
 theorem source_partition
     (input : Concrete.Checked)
     (selection : CheckedSelection input.val)
