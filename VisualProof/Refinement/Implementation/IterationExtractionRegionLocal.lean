@@ -177,4 +177,59 @@ noncomputable def extractionMaterialLocalEquiv
       (by simpa only [List.get_eq_getElem] using value.symm)).symm
 
 
+def extendedLocalIndex
+    (context : Concrete.Elaboration.WireContext d)
+    (region : Fin d.regionCount)
+    (index : Fin (Concrete.Elaboration.exactScopeWires d region).length) :
+    Fin (context.extend region).length :=
+  Fin.cast (Concrete.Elaboration.WireContext.length_extend context region).symm
+    (Fin.natAdd context.length index)
+
+@[simp] theorem extendedLocalIndex_val
+    (context : Concrete.Elaboration.WireContext d)
+    (region : Fin d.regionCount)
+    (index : Fin (Concrete.Elaboration.exactScopeWires d region).length) :
+    (extendedLocalIndex context region index).val = context.length + index.val :=
+  rfl
+
+theorem extend_get_local
+    (context : Concrete.Elaboration.WireContext d)
+    (region : Fin d.regionCount)
+    (index : Fin (Concrete.Elaboration.exactScopeWires d region).length) :
+    (context.extend region).get (extendedLocalIndex context region index) =
+      (Concrete.Elaboration.exactScopeWires d region).get index := by
+  simp [Concrete.Elaboration.WireContext.extend, extendedLocalIndex,
+    List.get_eq_getElem, List.getElem_append_right]
+
+/-- Every index in an extended context is canonically either ambient or local. -/
+theorem extendedIndex_cases
+    (context : Concrete.Elaboration.WireContext d)
+    (region : Fin d.regionCount)
+    (index : Fin (context.extend region).length) :
+    (∃ outer : Fin context.length,
+        index = context.outerIndex region outer) ∨
+      (∃ localIndex : Fin (Concrete.Elaboration.exactScopeWires d region).length,
+        index = extendedLocalIndex context region localIndex) := by
+  let splitIndex : Fin (context.length +
+      (Concrete.Elaboration.exactScopeWires d region).length) :=
+    Fin.cast (Concrete.Elaboration.WireContext.length_extend context region) index
+  have splitCases :
+      (∃ outer : Fin context.length,
+          Fin.cast (Concrete.Elaboration.WireContext.length_extend context
+            region).symm splitIndex = context.outerIndex region outer) ∨
+        (∃ localIndex : Fin
+            (Concrete.Elaboration.exactScopeWires d region).length,
+          Fin.cast (Concrete.Elaboration.WireContext.length_extend context
+            region).symm splitIndex =
+            extendedLocalIndex context region localIndex) := by
+    refine Fin.addCases (m := context.length)
+      (fun outer => Or.inl ⟨outer, ?_⟩)
+      (fun localIndex => Or.inr ⟨localIndex, ?_⟩) splitIndex
+    · apply Fin.ext
+      rfl
+    · apply Fin.ext
+      rfl
+  simpa only [splitIndex, Fin.cast_cast, Fin.cast_refl] using splitCases
+
+
 end VisualProof.Refinement.Implementation.IterationExtraction
