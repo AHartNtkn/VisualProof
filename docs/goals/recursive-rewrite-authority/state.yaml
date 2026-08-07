@@ -65,7 +65,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/recursive-rewrite-authority/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/recursive-rewrite-authority"
 
-active_task: T101
+active_task: T103
 
 tasks:
   - id: T001
@@ -91,15 +91,15 @@ tasks:
       changed_files:
         - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md"
       commands:
-        - command: "git diff --check"
+        - cmd: "git diff --check"
           status: pass
-        - command: "lake build"
+        - cmd: "lake build"
           status: pass
       harness: codex
   - id: T101
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 1: stabilize the diagram kernel and prove the generic unchanged-interface open semantic lift."
     inputs:
@@ -120,11 +120,30 @@ tasks:
       - "Need files outside allowed_files."
       - "The theorem dependency closure would require an incomplete definition."
       - "Verification fails twice for an out-of-scope cause."
-    receipt: null
+    receipt:
+      result: done
+      changed_files:
+        - "VisualProof/Diagram/Boundary.lean"
+        - "VisualProof/Diagram/Semantics.lean"
+      commands:
+        - cmd: "lake env lean -DwarningAsError=true VisualProof/Diagram/Boundary.lean"
+          status: pass
+        - cmd: "lake env lean -DwarningAsError=true VisualProof/Diagram/Isomorphism.lean"
+          status: pass
+        - cmd: "lake env lean -DwarningAsError=true VisualProof/Diagram/OpenIsomorphism.lean"
+          status: pass
+        - cmd: "lake env lean -DwarningAsError=true VisualProof/Diagram/Semantics.lean"
+          status: pass
+        - cmd: "lake build"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "Added boundary-preserving body replacement, alias equality, and the generic open semantic implication/equivalence lifts."
+      harness: codex
   - id: T102
     type: judge
     assignee: Judge
-    status: queued
+    status: done
     reasoning_hint: high
     objective: "Audit T101 for plan compliance, theorem ownership, dependency direction, and validation evidence."
     inputs:
@@ -137,20 +156,33 @@ tasks:
     expected_output:
       - "approved | changes_required"
       - "Exact findings with file and line"
-    receipt: null
+    receipt:
+      result: done
+      decision: approved
+      full_outcome_complete: false
+      rationale: "Task 1 is spec compliant and approved with no Critical, Important, or Minor findings; the goal continues with Task 2."
+      harness: codex
   - id: T103
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Execute plan Task 2 after T101 review: complete context polarity, relation-context renaming, and occurrence evidence."
     allowed_files:
+      - "VisualProof/Diagram/Rename.lean"
       - "VisualProof/Diagram/Context.lean"
+      - "VisualProof/Diagram/ContextReachability.lean"
       - "VisualProof/Diagram/Algebra.lean"
+      - "VisualProof/Diagram/Isomorphism.lean"
+      - "VisualProof/Diagram/OpenIsomorphism.lean"
       - "VisualProof/Diagram/Occurrence.lean"
       - "VisualProof.lean"
     verify:
+      - "lake env lean -DwarningAsError=true VisualProof/Diagram/Rename.lean"
       - "lake env lean -DwarningAsError=true VisualProof/Diagram/Context.lean"
+      - "lake env lean -DwarningAsError=true VisualProof/Diagram/ContextReachability.lean"
+      - "lake env lean -DwarningAsError=true VisualProof/Diagram/Isomorphism.lean"
+      - "lake env lean -DwarningAsError=true VisualProof/Diagram/OpenIsomorphism.lean"
       - "lake env lean -DwarningAsError=true VisualProof/Diagram/Occurrence.lean"
       - "lake build"
       - "git diff --check"
