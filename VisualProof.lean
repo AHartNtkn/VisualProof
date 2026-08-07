@@ -16,6 +16,7 @@ import VisualProof.Concrete.Subgraph.OccurrenceExtraction
 import VisualProof.Concrete.Subgraph.OccurrenceSelection
 import VisualProof.Concrete.StepTags
 import VisualProof.Rule.Relation
+import VisualProof.Rule.Step
 import VisualProof.Concrete.Step
 import VisualProof.Concrete.Operation.Structural
 import VisualProof.Concrete.Operation.Comprehension

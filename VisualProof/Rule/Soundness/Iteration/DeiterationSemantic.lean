@@ -1,9 +1,10 @@
 import VisualProof.Rule.Soundness.Iteration.DeiterationSpliceOccurrence
-import VisualProof.Rule.Soundness
+import VisualProof.Refinement.Implementation.Soundness
 
 namespace VisualProof.Rule.IterationSoundness
 
 open VisualProof.Concrete
+open VisualProof.Refinement.Implementation
 
 open VisualProof
 open VisualProof.Data.Finite

@@ -1,4 +1,4 @@
-import VisualProof.Rule.Soundness
+import VisualProof.Refinement.Implementation.Soundness
 import VisualProof.Concrete.Operation.Comprehension.Semantics
 import VisualProof.Rule.Soundness.Comprehension.InstantiationFinalAllowedRoot
 import VisualProof.Rule.Soundness.Comprehension.AbstractionRoot
@@ -6,6 +6,7 @@ import VisualProof.Rule.Soundness.Comprehension.AbstractionRoot
 namespace VisualProof.Rule
 
 open VisualProof.Concrete
+open VisualProof.Refinement.Implementation
 
 open VisualProof
 open Diagram

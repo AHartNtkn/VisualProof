@@ -1,5 +1,5 @@
 import VisualProof.Concrete.Elaboration.Simulation
-import VisualProof.Rule.Soundness
+import VisualProof.Refinement.Implementation.Soundness
 import VisualProof.Rule.Soundness.Modal.EliminationRootSimulation
 import VisualProof.Rule.Soundness.Modal.VacuousEliminationRootSimulation
 import VisualProof.Rule.Soundness.Modal.VacuousRoot
@@ -13,6 +13,7 @@ import VisualProof.Rule.Soundness.WireJoin
 namespace VisualProof.Rule
 
 open VisualProof.Concrete
+open VisualProof.Refinement.Implementation
 
 open VisualProof
 open VisualProof.Data.Finite

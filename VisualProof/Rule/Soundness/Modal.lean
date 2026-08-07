@@ -1,9 +1,10 @@
 import VisualProof.Concrete.Operation.Structural.Semantics
-import VisualProof.Rule.Soundness
+import VisualProof.Refinement.Implementation.Soundness
 
 namespace VisualProof.Rule.ModalSoundness
 
 open VisualProof.Concrete
+open VisualProof.Refinement.Implementation
 
 open VisualProof
 open VisualProof.Data.Finite

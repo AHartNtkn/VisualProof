@@ -3,8 +3,6 @@ import VisualProof.Rule.Laws
 
 namespace VisualProof.Rule
 
-open VisualProof.Concrete
-
 open Theory
 open Diagram
 
