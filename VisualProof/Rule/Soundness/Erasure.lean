@@ -20,7 +20,7 @@ theorem sound
       denoteRegion model env relEnv after := by
   cases step
   intro model env relEnv denotes
-  exact (Region.denote_conjoin model env relEnv _ _).mp denotes |>.1
+  exact Region.denote_spliceAt_host model env relEnv _ _ _ _ _ denotes
 
 end Erasure.Local
 

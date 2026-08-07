@@ -10,8 +10,14 @@ namespace Erasure
 
 inductive Local : LocalRule
   | erase
-      (kept removed : Region wires rels) :
-      Local (kept.conjoin removed) kept
+      (hostLocal : Nat)
+      (hostItems : ItemSeq (wires + hostLocal) rels)
+      (material : Region materialWires materialRels)
+      (wireMap : Fin materialWires → Fin (wires + hostLocal))
+      (relationMap : RelationRenaming materialRels rels) :
+      Local
+        (Region.spliceAt hostLocal hostItems material wireMap relationMap)
+        (.mk hostLocal hostItems)
 
 end Erasure
 
