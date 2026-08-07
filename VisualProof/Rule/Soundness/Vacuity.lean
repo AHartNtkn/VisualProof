@@ -19,9 +19,20 @@ theorem sound_iff
       (relEnv : RelEnv model.Carrier rels),
       denoteRegion model env relEnv before ↔
       denoteRegion model env relEnv after := by
-  cases step
-  intro model env relEnv
-  exact (denote_vacuousBubbleRegion _ _ model env relEnv).symm
+  cases step with
+  | introduce arity hostLocal hostItems body wireMap relationMap =>
+      intro model env relEnv
+      constructor
+      · apply Region.denote_spliceAt_mono model env relEnv hostLocal hostItems
+          body (Vacuity.wrap arity body) wireMap relationMap
+        intro patternEnv bodyDenotes
+        exact (denote_vacuousBubbleRegion arity body model patternEnv
+          (RelEnv.pullback relationMap relEnv)).mpr bodyDenotes
+      · apply Region.denote_spliceAt_mono model env relEnv hostLocal hostItems
+          (Vacuity.wrap arity body) body wireMap relationMap
+        intro patternEnv wrappedDenotes
+        exact (denote_vacuousBubbleRegion arity body model patternEnv
+          (RelEnv.pullback relationMap relEnv)).mp wrappedDenotes
 
 end Vacuity.Local
 
