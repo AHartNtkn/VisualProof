@@ -41,4 +41,23 @@ theorem DoubleCut.iso
     DoubleCut source' target' :=
   Contextual.iso sourceIso step targetIso
 
+theorem DoubleCut.symm
+    {arity : Nat}
+    {source target : OpenDiagram arity}
+    (step : DoubleCut source target) :
+    DoubleCut target source := by
+  rcases step with ⟨wires, rels, before, after, occurrence, targetIso,
+    localEvidence⟩
+  let reverseOccurrence : Occurrence after target := {
+    interface := occurrence.interface
+    context := occurrence.context
+    host_iso := targetIso
+  }
+  refine ⟨wires, rels, after, before, reverseOccurrence,
+    occurrence.host_iso, ?_⟩
+  cases polarity : occurrence.context.polarity <;>
+    simp only [polarity, atPolarity, converse, symmetric] at localEvidence ⊢
+  · exact localEvidence.elim Or.inr Or.inl
+  · exact localEvidence.elim Or.inr Or.inl
+
 end VisualProof.Rule
