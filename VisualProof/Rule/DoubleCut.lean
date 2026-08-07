@@ -21,4 +21,16 @@ inductive Local : LocalRule
 
 end DoubleCut
 
+def DoubleCut : Rule :=
+  Contextual (symmetric DoubleCut.Local)
+
+theorem DoubleCut.iso
+    {arity : Nat}
+    {source source' target target' : OpenDiagram arity}
+    (sourceIso : OpenDiagramIso source source')
+    (step : DoubleCut source target)
+    (targetIso : OpenDiagramIso target target') :
+    DoubleCut source' target' :=
+  Contextual.iso sourceIso step targetIso
+
 end VisualProof.Rule
