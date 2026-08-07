@@ -520,4 +520,63 @@ def execute (orientation : Orientation) {arity : Nat}
   | .vacuousElim region =>
       finish source (applyVacuousElim source.diagram region)
 
+/-- Structural inversion of a successful supplied insertion. -/
+theorem execute_boundRelationSpawn_success
+    {arity : Nat}
+    {source : State arity}
+    {orientation : Orientation}
+    (insertion : Insertion source)
+    {receipt : Receipt source}
+    (success : execute orientation source (.boundRelationSpawn insertion) =
+      .ok receipt) :
+    let diagramEq : insertion.input.frame.val = source.checked.val.diagram :=
+      congrArg Subtype.val insertion.frame_eq
+    let wireCountEq : insertion.input.frame.val.wireCount =
+        source.checked.val.diagram.wireCount :=
+      congrArg Concrete.Diagram.wireCount diagramEq
+    let sourceBoundary : List (Fin insertion.input.frame.val.wireCount) :=
+      source.checked.val.boundary.map (Fin.cast wireCountEq.symm)
+    spawnPolarity orientation
+        (concreteCutDepth insertion.input.frame.val insertion.input.site) ∧
+      ∃ (result : Checked)
+        (spliceSuccess : insertion.input.spliceChecked = .ok result)
+        (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+          (insertion.input.frame.val.wires wire).scope =
+            insertion.input.frame.val.root),
+        receipt.target.checked =
+          insertion.input.spliceCheckedResultOpen spliceSuccess sourceBoundary
+            sourceRoot := by
+  rcases insertion with ⟨input, frameEq, admissible, respects⟩
+  dsimp only
+  change executeInsertion orientation source
+      ⟨input, frameEq, admissible, respects⟩ = .ok receipt at success
+  unfold executeInsertion at success
+  split at success
+  · rename_i polarity
+    refine ⟨polarity, ?_⟩
+    unfold executeInsertionAdmissible at success
+    simp only at success
+    split at success <;> try contradiction
+    rename_i result spliceSuccess
+    cases success
+    let diagramEq : input.frame.val =
+        source.checked.val.diagram :=
+      congrArg Subtype.val frameEq
+    let wireCountEq : input.frame.val.wireCount =
+        source.checked.val.diagram.wireCount :=
+      congrArg Concrete.Diagram.wireCount diagramEq
+    let sourceBoundary : List (Fin input.frame.val.wireCount) :=
+      source.checked.val.boundary.map (Fin.cast wireCountEq.symm)
+    have sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+        (input.frame.val.wires wire).scope = input.frame.val.root := by
+      intro wire wireMem
+      obtain ⟨original, originalMem, rfl⟩ := List.mem_map.mp wireMem
+      have rootScope := source.checked.property.boundary_is_root_scoped
+        original originalMem
+      exact rootScoped_cast diagramEq original rootScope
+    refine ⟨result, spliceSuccess, sourceRoot, ?_⟩
+    apply Subtype.ext
+    rfl
+  · contradiction
+
 end VisualProof.Concrete
