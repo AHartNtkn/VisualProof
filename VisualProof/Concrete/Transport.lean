@@ -50,4 +50,30 @@ def OperationReceipt.toReceipt {arity : Nat} (source : State arity)
         }
       }
 
+theorem OperationReceipt.toReceipt_result
+    {arity : Nat} {source : State arity}
+    {result : OperationReceipt source.diagram}
+    {receipt : Receipt source}
+    (packed : result.toReceipt source = some receipt) :
+    receipt.target.checked.val.diagram = result.result.val := by
+  unfold OperationReceipt.toReceipt at packed
+  split at packed <;> try contradiction
+  cases packed
+  rfl
+
+theorem OperationReceipt.toReceipt_boundary
+    {arity : Nat} {source : State arity}
+    {result : OperationReceipt source.diagram}
+    {receipt : Receipt source}
+    (packed : result.toReceipt source = some receipt) :
+    result.interface.transportBoundary source.checked.val.boundary =
+      some (receipt.target.checked.val.boundary.map
+        (Fin.cast (congrArg Concrete.Diagram.wireCount
+          (result.toReceipt_result packed)))) := by
+  unfold OperationReceipt.toReceipt at packed
+  split at packed <;> try contradiction
+  rename_i mapped htransport
+  cases packed
+  simpa using htransport
+
 end VisualProof.Concrete
