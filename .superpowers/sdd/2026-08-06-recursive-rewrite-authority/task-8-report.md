@@ -24,6 +24,9 @@
   uniqueness, and unconditional completeness use that single authority.
 - Plan corrections `9aec272b` and `e2fccde6` precede this implementation and
   supply the exact-input `OpenValidation` and propositional isomorphism sorts.
+- Occurrence provenance has one implementation path: `OccurrenceDraft` and
+  `RegionRecord` supply the exact local-occurrence permutation consumed by the
+  recursive compiler inverse.
 
 ## Theorem-driven development
 
@@ -57,6 +60,8 @@
   enumeration, occurrence search, compatibility representation, or
   `Concrete.elaborate` alias.
 - `git diff --check` passed.
+- The strict owner checks, full build, authority/hole/search scans, and diff
+  check were repeated after the review-driven provenance narrowing.
 
 ## Concerns
 
