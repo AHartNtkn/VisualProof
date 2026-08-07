@@ -1215,5 +1215,87 @@ theorem iso_denotation
       denoteRegion model  env relEnv right :=
   hiso.denotation model  env env relEnv (fun _ => rfl)
 
+private theorem ItemSeq.frame_length
+    (frameAfter : ItemSeq wires rels) (before after : Item wires rels) :
+    (frameBefore : ItemSeq wires rels) →
+      (frameBefore.append (.cons before frameAfter)).length =
+        (frameBefore.append (.cons after frameAfter)).length
+  | .nil => rfl
+  | .cons _ tail => congrArg Nat.succ
+      (ItemSeq.frame_length frameAfter before after tail)
+
+private theorem ItemSeq.frame_get_iso
+    (frameAfter : ItemSeq wires rels)
+    {before after : Item wires rels}
+    (replacement : ItemIso (FiniteEquiv.refl (Fin wires)) rels before after) :
+    (frameBefore : ItemSeq wires rels) →
+    ∀ index,
+      ItemIso (FiniteEquiv.refl (Fin wires)) rels
+        ((frameBefore.append (.cons before frameAfter)).get index)
+        ((frameBefore.append (.cons after frameAfter)).get
+          (Fin.cast (ItemSeq.frame_length frameAfter before after frameBefore)
+            index))
+  | .nil, index =>
+      Fin.cases replacement
+        (fun rest => ItemIso.refl (frameAfter.get rest)) index
+  | .cons head tail, index => by
+      refine Fin.cases (ItemIso.refl head) (fun rest => ?_) index
+      simpa [ItemSeq.frame_length, ItemSeq.append, ItemSeq.length, ItemSeq.get]
+        using ItemSeq.frame_get_iso frameAfter replacement tail rest
+
+private theorem ItemSeqIso.frame_refl
+    (frameBefore frameAfter : ItemSeq wires rels)
+    {before after : Item wires rels}
+    (replacement : ItemIso (FiniteEquiv.refl (Fin wires)) rels before after) :
+    ItemSeqIso (FiniteEquiv.refl (Fin wires)) rels
+      (frameBefore.append (.cons before frameAfter))
+      (frameBefore.append (.cons after frameAfter)) := by
+  let lengthEquality :=
+    ItemSeq.frame_length frameAfter before after frameBefore
+  let positions : FiniteEquiv
+      (Fin (frameBefore.append (.cons before frameAfter)).length)
+      (Fin (frameBefore.append (.cons after frameAfter)).length) := {
+    toFun := Fin.cast lengthEquality
+    invFun := Fin.cast lengthEquality.symm
+    left_inv := by
+      intro index
+      apply Fin.ext
+      rfl
+    right_inv := by
+      intro index
+      apply Fin.ext
+      rfl
+  }
+  refine ItemSeqIso.permute positions ?_
+  intro index
+  exact ItemSeq.frame_get_iso frameAfter replacement frameBefore index
+
+private theorem extendWireEquiv_refl (outer localWires : Nat) :
+    extendWireEquiv (FiniteEquiv.refl (Fin outer))
+        (FiniteEquiv.refl (Fin localWires)) =
+      FiniteEquiv.refl (Fin (outer + localWires)) := by
+  apply FiniteEquiv.ext
+  intro index
+  refine Fin.addCases (fun _ => ?_) (fun _ => ?_) index <;>
+    simp [extendWireEquiv, FiniteEquiv.refl]
+
+theorem DiagramContext.fill_iso
+    (context : DiagramContext outerWires holeWires outerRels holeRels)
+    {before after : Region holeWires holeRels}
+    (h : Core.Isomorphic before after) :
+    Core.Isomorphic (context.fill before) (context.fill after) := by
+  induction context with
+  | hole => exact h
+  | cut localWires frameBefore frameAfter child induction =>
+      refine RegionIso.mk (FiniteEquiv.refl (Fin localWires)) ?_
+      rw [extendWireEquiv_refl]
+      exact ItemSeqIso.frame_refl frameBefore frameAfter
+        (ItemIso.cut (induction h))
+  | bubble localWires frameBefore frameAfter arity child induction =>
+      refine RegionIso.mk (FiniteEquiv.refl (Fin localWires)) ?_
+      rw [extendWireEquiv_refl]
+      exact ItemSeqIso.frame_refl frameBefore frameAfter
+        (ItemIso.bubble (induction h))
+
 
 end VisualProof.Diagram

@@ -8,6 +8,14 @@ open Theory
 abbrev RelationRenaming (source target : RelCtx) :=
   {arity : Nat} -> RelVar source arity -> RelVar target arity
 
+def RelationRenaming.weaken (head : Nat) :
+    RelationRenaming rels (head :: rels) :=
+  fun relation => ⟨relation.index.succ, relation.hasArity⟩
+
+def RelationRenaming.empty :
+    RelationRenaming [] rels :=
+  fun relation => Fin.elim0 relation.index
+
 def extendWireRenaming (rho : Fin source -> Fin target) (localWires : Nat) :
     Fin (source + localWires) -> Fin (target + localWires) :=
   Fin.addCases

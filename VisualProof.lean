@@ -8,6 +8,7 @@ import VisualProof.Diagram.Context
 import VisualProof.Diagram.Isomorphism
 import VisualProof.Diagram.Algebra
 import VisualProof.Diagram.OpenIsomorphism
+import VisualProof.Diagram.Occurrence
 import VisualProof.Diagram.Concrete
 import VisualProof.Diagram.Concrete.Occurrence
 import VisualProof.Diagram.Concrete.OccurrenceEmbedding

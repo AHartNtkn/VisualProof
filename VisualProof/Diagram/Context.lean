@@ -20,6 +20,10 @@ inductive DiagramContext :
         (arity :: outerRels) holeRels) :
       DiagramContext  outerWires holeWires outerRels holeRels
 
+inductive Polarity
+  | positive
+  | negative
+
 namespace DiagramContext
 
 def cutDepth : DiagramContext  outerWires holeWires outerRels holeRels ->
@@ -27,6 +31,11 @@ def cutDepth : DiagramContext  outerWires holeWires outerRels holeRels ->
   | .hole => 0
   | .cut _ _ _ child => child.cutDepth + 1
   | .bubble _ _ _ _ child => child.cutDepth
+
+def polarity
+    (context : DiagramContext outerWires holeWires outerRels holeRels) :
+    Polarity :=
+  if context.cutDepth % 2 = 0 then .positive else .negative
 
 def fill : DiagramContext  outerWires holeWires outerRels holeRels ->
     Region  holeWires holeRels -> Region  outerWires outerRels
@@ -77,6 +86,19 @@ def outerWire :
       child.outerWire ∘ Fin.castAdd localWires
   | .bubble localWires _ _ _ child =>
       child.outerWire ∘ Fin.castAdd localWires
+
+/-- Canonical embedding of the relations visible outside a context into the
+relation environment visible at its hole. -/
+def outerRelation :
+    (context :
+      DiagramContext outerWires holeWires outerRels holeRels) →
+    RelationRenaming outerRels holeRels
+  | .hole => fun relation => relation
+  | .cut _ _ _ child => child.outerRelation
+  | .bubble _ _ _ arity child =>
+      fun relation =>
+        child.outerRelation
+          (RelationRenaming.weaken arity relation)
 
 /-- Transporting the hole relation index commutes with adding a cut frame. -/
 theorem cut_transport_holeRels

@@ -1198,6 +1198,33 @@ theorem DiagramContext.fill_equiv
       exact context_anti model  env rels hodd
         (fun holeEnv holeRelEnv => (hequiv holeEnv holeRelEnv).mp)
 
+theorem DiagramContext.denote_fill
+    (context :
+      DiagramContext outerWires holeWires outerRels holeRels)
+    {before after : Region holeWires holeRels}
+    (model : Model)
+    (h : ∀
+      (env : Fin holeWires → model.Carrier)
+      (rels : RelEnv model.Carrier holeRels),
+      denoteRegion model env rels before →
+      denoteRegion model env rels after) :
+    ∀ (env : Fin outerWires → model.Carrier)
+      (rels : RelEnv model.Carrier outerRels),
+      match context.polarity with
+      | .positive =>
+          denoteRegion model env rels (context.fill before) →
+          denoteRegion model env rels (context.fill after)
+      | .negative =>
+          denoteRegion model env rels (context.fill after) →
+          denoteRegion model env rels (context.fill before) := by
+  intro env rels
+  by_cases heven : context.cutDepth % 2 = 0
+  · simp only [DiagramContext.polarity, if_pos heven]
+    exact context_mono model env rels heven h
+  · have hodd : context.cutDepth % 2 = 1 := by omega
+    simp only [DiagramContext.polarity, if_neg heven]
+    exact context_anti model env rels hodd h
+
 /-- A boundary assignment is determined by its ordered arguments because every
 external class is represented by at least one boundary position. -/
 theorem BoundaryAssignment.classes_eq_of_args_eq

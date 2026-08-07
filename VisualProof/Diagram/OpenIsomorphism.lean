@@ -131,5 +131,16 @@ theorem denoteOpen_iff {source target : OpenDiagram  arity}
 
 end OpenDiagramIso
 
+def OpenDiagram.withBody_iso
+    {diagram : OpenDiagram arity}
+    {before after : Region diagram.externalClasses []}
+    (h : Core.Isomorphic before after) :
+    OpenDiagramIso
+      (diagram.withBody before)
+      (diagram.withBody after) where
+  external := FiniteEquiv.refl (Fin diagram.externalClasses)
+  boundary := fun _ => rfl
+  body := h
+
 
 end VisualProof.Diagram

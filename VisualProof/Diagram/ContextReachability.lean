@@ -7,16 +7,6 @@ open VisualProof.Theory
 
 namespace DiagramContext
 
-/-- Canonical embedding of the relations visible outside a context into the
-relation environment visible at its hole. -/
-def outerRelation :
-    DiagramContext  outerWires holeWires outerRels holeRels →
-      RelationRenaming outerRels holeRels
-  | .hole => fun relation => relation
-  | .cut _ _ _ child => child.outerRelation
-  | .bubble _ _ _ _ child => fun relation =>
-      child.outerRelation ⟨relation.index.succ, relation.hasArity⟩
-
 /-- Environments that can actually reach a context hole while evaluating its
 surrounding region.  Unlike an unconstrained hole valuation, inherited wire
 and relation values are tied to the outer valuation. -/
