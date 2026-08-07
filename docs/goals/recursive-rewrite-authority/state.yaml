@@ -4,7 +4,7 @@ goal:
   title: "Recursive Rewrite Authority"
   slug: "recursive-rewrite-authority"
   kind: existing_plan
-  tranche: "Execute Tasks 1-3 of the reviewed recursive rewrite authority plan."
+  tranche: "Define and prove the six recursive rewrite families in plan Tasks 4-5."
   status: active
   oracle:
     signal: "Kernel-checked Lean theorems prove one recursive relational calculus with structural semantics and a separate concrete refinement layer."
@@ -65,7 +65,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/recursive-rewrite-authority/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/recursive-rewrite-authority"
 
-active_task: T105
+active_task: T107
 
 tasks:
   - id: T001
@@ -246,7 +246,7 @@ tasks:
   - id: T105
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 3: define the shared relational rule shapes, polarity action, contextual closure, and isomorphism transport."
     inputs:
@@ -262,6 +262,69 @@ tasks:
       - "Need files outside allowed_files."
       - "A displayed signature does not elaborate."
       - "The relation layer would acquire a concrete dependency."
+    receipt:
+      result: done
+      changed_files:
+        - "VisualProof/Rule/Relation.lean"
+        - "VisualProof.lean"
+      commands:
+        - cmd: "lake env lean -DwarningAsError=true VisualProof/Rule/Relation.lean"
+          status: pass
+        - cmd: "lake build"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "Defined the shared recursive relation shapes, polarity action, contextual closure, and endpoint-isomorphism transport."
+      harness: codex
+  - id: T106
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit T105 for relational ownership, polarity scope, isomorphism direction, import direction, and proof quality."
+    inputs:
+      - "T105 receipt"
+      - "Task 3 review package"
+    constraints:
+      - "Read-only."
+      - "Reject concrete or execution dependencies."
+      - "Reject target isomorphisms treated as propositions rather than existential data."
+    expected_output:
+      - "approved | changes_required"
+    receipt:
+      result: done
+      decision: approved
+      full_outcome_complete: false
+      rationale: "Task 3 is compliant and approved with no Critical, Important, or Minor findings."
+      harness: codex
+  - id: T107
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Execute plan Task 4: define the complete relation bases for Erasure, WireSever, Iteration, DoubleCut, Comprehension, and Vacuity."
+    inputs:
+      - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 4"
+    allowed_files:
+      - "VisualProof/Rule/Erasure.lean"
+      - "VisualProof/Rule/WireSever.lean"
+      - "VisualProof/Rule/Iteration.lean"
+      - "VisualProof/Rule/DoubleCut.lean"
+      - "VisualProof/Rule/Comprehension/Relation.lean"
+      - "VisualProof/Rule/Vacuity.lean"
+    verify:
+      - "lake env lean -DwarningAsError=true VisualProof/Rule/Erasure.lean"
+      - "lake env lean -DwarningAsError=true VisualProof/Rule/WireSever.lean"
+      - "lake env lean -DwarningAsError=true VisualProof/Rule/Iteration.lean"
+      - "lake env lean -DwarningAsError=true VisualProof/Rule/DoubleCut.lean"
+      - "lake env lean -DwarningAsError=true VisualProof/Rule/Comprehension/Relation.lean"
+      - "lake env lean -DwarningAsError=true VisualProof/Rule/Vacuity.lean"
+      - "lake build"
+      - "git diff --check"
+    stop_if:
+      - "Need files outside allowed_files."
+      - "A displayed signature or complete definition does not elaborate."
+      - "Any relation module would acquire a concrete or execution dependency."
     receipt: null
   - id: T999
     type: judge
