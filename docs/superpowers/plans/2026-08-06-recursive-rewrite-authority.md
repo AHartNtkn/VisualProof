@@ -1052,15 +1052,24 @@ The proof is six constructor cases delegating to family soundness. Validate the 
 - Create `VisualProof/Refinement/Represents.lean`
 - Modify `VisualProof.lean`
 
-Implement an actual open validator. It checks the underlying flat diagram and proves every boundary wire is in root scope. Its error records either the existing well-formedness error or the offending boundary position. The dependent success value is a proof about the exact input, so input preservation is definitional:
+Implement an actual open validator. It checks the underlying flat diagram and proves every boundary wire is in root scope. Its error records either the existing well-formedness error or the offending boundary position. `Except` requires its success parameter in `Type`, so package the proposition in a proof-carrying type indexed by the exact input; input preservation remains definitional:
 
 ```lean
+structure Concrete.OpenValidation
+    (concrete : Concrete.OpenDiagram) where
+  valid : concrete.WellFormed
+
+def Concrete.OpenValidation.checked
+    (validation : Concrete.OpenValidation concrete) :
+    Concrete.CheckedOpen :=
+  ⟨concrete, validation.valid⟩
+
 def Concrete.checkOpen (concrete : Concrete.OpenDiagram) :
-    Except Concrete.Error concrete.WellFormed
+    Except Concrete.Error (Concrete.OpenValidation concrete)
 
 theorem Concrete.checkOpen_complete
     (valid : concrete.WellFormed) :
-    Concrete.checkOpen concrete = .ok valid
+    Concrete.checkOpen concrete = .ok ⟨valid⟩
 ```
 
 Keep elaboration total on `Concrete.CheckedOpen`. Define translation exactly as open validation followed by elaboration:
@@ -1070,10 +1079,10 @@ def Concrete.translate (concrete : Concrete.OpenDiagram) :
     Except Concrete.Error (OpenDiagram concrete.boundary.length) :=
   match Concrete.checkOpen concrete with
   | .error error => .error error
-  | .ok valid => .ok (Concrete.elaborate ⟨concrete, valid⟩)
+  | .ok validation => .ok validation.checked.elaborate
 
 theorem Concrete.translate_checked (checked : Concrete.CheckedOpen) :
-    Concrete.translate checked.val = .ok (Concrete.elaborate checked)
+    Concrete.translate checked.val = .ok checked.elaborate
 ```
 
 Define:
