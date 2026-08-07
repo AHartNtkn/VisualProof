@@ -305,7 +305,7 @@ private def ComprehensionAbstractPayload.operation
     exact payload.anchors_not_nested left' right' different
       (by simpa [left', right', AbstractionOccurrence.operation] using member)
 
-private def finish {arity : Nat} (source : State arity)
+def finish {arity : Nat} (source : State arity)
     (result : Except Error (OperationReceipt source.diagram)) :
     Except Error (Receipt source) :=
   match result with
@@ -314,6 +314,27 @@ private def finish {arity : Nat} (source : State arity)
       match receipt.toReceipt source with
       | none => .error .boundaryMismatch
       | some completed => .ok completed
+
+theorem finish_eq_ok_iff {arity : Nat} (source : State arity)
+    (operation : Except Error (OperationReceipt source.diagram))
+    (receipt : Receipt source) :
+    finish source operation = .ok receipt ↔
+      ∃ operationReceipt,
+        operation = .ok operationReceipt ∧
+        operationReceipt.toReceipt source = some receipt := by
+  cases operation with
+  | error error => simp [finish]
+  | ok operationReceipt =>
+      cases hpacked : operationReceipt.toReceipt source with
+      | none => simp [finish, hpacked]
+      | some completed =>
+          simp only [finish, hpacked, Except.ok.injEq]
+          constructor
+          · rintro rfl
+            exact ⟨operationReceipt, rfl, hpacked⟩
+          · rintro ⟨candidate, equality, packed⟩
+            cases equality
+            exact Option.some.inj (hpacked.symm.trans packed)
 
 private def spliceError : Splice.Input.Error → Error
   | .attachmentNotVisible => .binderEscape
