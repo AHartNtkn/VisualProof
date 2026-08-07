@@ -17,17 +17,19 @@ theorem sound_iff
       denoteOpen model source args ↔
       denoteOpen model target args := by
   intro model args
+  let copy : Region step.descendantWires step.descendantRels :=
+    (step.selected.renameWires step.descendant.outerWire).renameRelations
+      step.descendant.outerRelation
   have copied :
-      ∀ (ancestorEnv : Fin step.ancestorWires → model.Carrier)
+      ∀ (ancestorEnv : Fin
+          (step.ancestorWires + step.anchorLocal) → model.Carrier)
         (ancestorRelEnv : RelEnv model.Carrier step.ancestorRels),
         denoteRegion model ancestorEnv ancestorRelEnv step.selected →
           ∀ (descendantEnv : Fin step.descendantWires → model.Carrier)
             (descendantRelEnv : RelEnv model.Carrier step.descendantRels)
             (reachable : step.descendant.Reachable ancestorEnv ancestorRelEnv
               descendantEnv descendantRelEnv),
-            denoteRegion model descendantEnv descendantRelEnv
-              ((step.selected.renameWires step.descendant.outerWire).renameRelations
-                step.descendant.outerRelation) := by
+            denoteRegion model descendantEnv descendantRelEnv copy := by
     intro ancestorEnv ancestorRelEnv selectedDenotes
       descendantEnv descendantRelEnv reachable
     apply (denoteRegion_renameRelations model step.descendant.outerRelation
@@ -39,23 +41,31 @@ theorem sound_iff
     exact selectedDenotes
   have bodyEquiv :
       ∀ env : Fin step.interface.externalClasses → model.Carrier,
-        denoteRegion (relCtx := []) model env PUnit.unit
+        denoteRegion (relCtx := []) model env
+            (PUnit.unit : RelEnv model.Carrier [])
             (step.outer.fill
-              (step.selected.conjoin
-                (step.descendant.fill step.remainder))) ↔
-          denoteRegion (relCtx := []) model env PUnit.unit
+              (Region.adjoinAt step.anchorLocal .nil
+                (step.selected.conjoin
+                  (step.descendant.fill step.remainder)))) ↔
+          denoteRegion (relCtx := []) model env
+            (PUnit.unit : RelEnv model.Carrier [])
             (step.outer.fill
-              (step.selected.conjoin
-                (step.descendant.fill
-                  (((step.selected.renameWires step.descendant.outerWire)
-                    |>.renameRelations step.descendant.outerRelation).conjoin
-                    step.remainder)))) := by
+              (Region.adjoinAt step.anchorLocal .nil
+                (step.selected.conjoin
+                  (step.descendant.fill
+                    (copy.conjoin step.remainder))))) := by
     intro env
-    exact ancestorCopy_sound step.outer step.descendant step.selected
-      step.remainder
-      ((step.selected.renameWires step.descendant.outerWire).renameRelations
-        step.descendant.outerRelation)
-      model env PUnit.unit copied
+    apply step.outer.fill_equiv
+    intro holeEnv holeRelEnv
+    exact Region.adjoinAt_equiv model holeEnv holeRelEnv .nil _ _
+      (fun siteEnv =>
+        ancestorCopy_sound
+          (.hole : DiagramContext
+            (step.ancestorWires + step.anchorLocal)
+            (step.ancestorWires + step.anchorLocal)
+            step.ancestorRels step.ancestorRels)
+          step.descendant step.selected step.remainder copy model siteEnv holeRelEnv
+          copied)
   exact (step.source_iso.denoteOpen_iff model args).trans
     ((OpenDiagram.denote_body_iff (diagram := step.interface) bodyEquiv).trans
       (step.target_iso.denoteOpen_iff model args).symm)

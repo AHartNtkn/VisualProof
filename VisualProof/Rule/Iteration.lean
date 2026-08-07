@@ -12,6 +12,7 @@ structure Base
     (source target : OpenDiagram arity) where
   interface : OpenDiagram arity
   ancestorWires : Nat
+  anchorLocal : Nat
   descendantWires : Nat
   ancestorRels : RelCtx
   descendantRels : RelCtx
@@ -19,26 +20,28 @@ structure Base
     DiagramContext interface.externalClasses ancestorWires
       [] ancestorRels
   descendant :
-    DiagramContext ancestorWires descendantWires
+    DiagramContext (ancestorWires + anchorLocal) descendantWires
       ancestorRels descendantRels
   selected :
-    Region ancestorWires ancestorRels
+    Region (ancestorWires + anchorLocal) ancestorRels
   remainder :
     Region descendantWires descendantRels
   source_iso :
     OpenDiagramIso source
       (interface.withBody
         (outer.fill
-          (selected.conjoin
-            (descendant.fill remainder))))
+          (Region.adjoinAt anchorLocal .nil
+            (selected.conjoin
+              (descendant.fill remainder)))))
   target_iso :
     OpenDiagramIso target
       (interface.withBody
         (outer.fill
-          (selected.conjoin
-            (descendant.fill
-              (((selected.renameWires descendant.outerWire).renameRelations
-                  descendant.outerRelation).conjoin remainder)))))
+          (Region.adjoinAt anchorLocal .nil
+            (selected.conjoin
+              (descendant.fill
+                (((selected.renameWires descendant.outerWire).renameRelations
+                    descendant.outerRelation).conjoin remainder))))))
 
 def Base.iso
     (sourceIso : OpenDiagramIso source source')
@@ -47,6 +50,7 @@ def Base.iso
     Base source' target' where
   interface := step.interface
   ancestorWires := step.ancestorWires
+  anchorLocal := step.anchorLocal
   descendantWires := step.descendantWires
   ancestorRels := step.ancestorRels
   descendantRels := step.descendantRels
