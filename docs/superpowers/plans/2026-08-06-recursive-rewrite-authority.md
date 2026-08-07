@@ -156,9 +156,10 @@ def DiagramContext.outerRelation :
 structure Occurrence
     (pattern : Region holeWires holeRels)
     (host : OpenDiagram arity) : Prop where
-  context : DiagramContext host.externalClasses holeWires [] holeRels
+  interface : OpenDiagram arity
+  context : DiagramContext interface.externalClasses holeWires [] holeRels
   host_iso : OpenDiagramIso host
-    (host.withBody (context.fill pattern))
+    (interface.withBody (context.fill pattern))
 ```
 
 Introduce `RelationRenaming.weaken` and `RelationRenaming.empty` in `Rename.lean`. Move the existing `DiagramContext.outerRelation` from `ContextReachability.lean` into `Context.lean`; do not duplicate it. Update `ContextReachability.lean` to consume the moved declaration.
@@ -225,6 +226,8 @@ theorem Occurrence.transportPattern
     Occurrence pattern' host
 ```
 
+`transportHost` retains `occurrence.interface` and `occurrence.context` and composes `iso.symm` with `occurrence.host_iso`. This is why the occurrence owns an independent interface carrier rather than indexing its context by `host.externalClasses`: an open isomorphism may permute external classes. `transportPattern` uses `DiagramContext.fill_iso` and `OpenDiagram.withBody_iso` on that same interface.
+
 Do not assert occurrence uniqueness.
 - Express every capture claim through typed wire/relation renaming. No `FreshFor` declaration or theorem is introduced.
 
@@ -268,7 +271,8 @@ def Contextual (local : LocalRule) : Rule :=
       atPolarity occurrence.context.polarity
           (@local wires rels) before after ∧
         OpenDiagramIso target
-          (source.withBody (occurrence.context.fill after))
+          (occurrence.interface.withBody
+            (occurrence.context.fill after))
 ```
 
 Add relation and contextual isomorphism transport. Do not define `Step` yet.
