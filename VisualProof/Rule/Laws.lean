@@ -1,4 +1,4 @@
-import VisualProof.Diagram.Algebra
+import VisualProof.Diagram.ContextReachability
 
 namespace VisualProof.Rule
 
@@ -80,7 +80,9 @@ theorem ancestorCopy_sound
       (ancestorRelEnv : RelEnv model.Carrier ancestorRels),
       denoteRegion model ancestorEnv ancestorRelEnv ancestor →
         ∀ (descendantEnv : Fin descendantWires → model.Carrier)
-          (descendantRelEnv : RelEnv model.Carrier descendantRels),
+          (descendantRelEnv : RelEnv model.Carrier descendantRels)
+          (_reachable : descendant.Reachable ancestorEnv ancestorRelEnv
+            descendantEnv descendantRelEnv),
           denoteRegion model descendantEnv descendantRelEnv copy) :
     denoteRegion model env rels
         (outer.fill (ancestor.conjoin (descendant.fill body))) ↔
@@ -93,19 +95,19 @@ theorem ancestorCopy_sound
   constructor
   · rintro ⟨hancestor, hbody⟩
     refine ⟨hancestor, ?_⟩
-    apply (descendant.fill_equiv body (copy.conjoin body) model
-      ancestorEnv ancestorRelEnv (fun descendantEnv descendantRelEnv => by
+    apply (descendant.fill_equiv_of_reachable body (copy.conjoin body) model
+      ancestorEnv ancestorRelEnv (fun descendantEnv descendantRelEnv reachable => by
         rw [Region.denote_conjoin]
         exact ⟨fun h => ⟨copyTransport ancestorEnv ancestorRelEnv hancestor
-          descendantEnv descendantRelEnv, h⟩, And.right⟩)).mp
+          descendantEnv descendantRelEnv reachable, h⟩, And.right⟩)).mp
     exact hbody
   · rintro ⟨hancestor, hbody⟩
     refine ⟨hancestor, ?_⟩
-    apply (descendant.fill_equiv body (copy.conjoin body) model
-      ancestorEnv ancestorRelEnv (fun descendantEnv descendantRelEnv => by
+    apply (descendant.fill_equiv_of_reachable body (copy.conjoin body) model
+      ancestorEnv ancestorRelEnv (fun descendantEnv descendantRelEnv reachable => by
         rw [Region.denote_conjoin]
         exact ⟨fun h => ⟨copyTransport ancestorEnv ancestorRelEnv hancestor
-          descendantEnv descendantRelEnv, h⟩, And.right⟩)).mpr
+          descendantEnv descendantRelEnv reachable, h⟩, And.right⟩)).mpr
     exact hbody
 
 def doubleCutRegion (body : Region wires rels) :

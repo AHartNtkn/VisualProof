@@ -59,4 +59,23 @@ def Base.iso
 
 end Iteration
 
+def Iteration : Rule :=
+  symmetric fun source target =>
+    Nonempty (Iteration.Base source target)
+
+theorem Iteration.iso
+    {arity : Nat}
+    {source source' target target' : OpenDiagram arity}
+    (sourceIso : OpenDiagramIso source source')
+    (step : Iteration source target)
+    (targetIso : OpenDiagramIso target target') :
+    Iteration source' target' := by
+  cases step with
+  | inl forward =>
+      rcases forward with ⟨forward⟩
+      exact Or.inl ⟨Iteration.Base.iso sourceIso forward targetIso⟩
+  | inr backward =>
+      rcases backward with ⟨backward⟩
+      exact Or.inr ⟨Iteration.Base.iso targetIso backward sourceIso⟩
+
 end VisualProof.Rule
