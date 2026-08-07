@@ -272,7 +272,7 @@ theorem sound
 
 end Local
 
-theorem Comprehension.sound
+theorem sound
     {arity : Nat}
     {source target : OpenDiagram arity}
     (step : Comprehension source target) :
