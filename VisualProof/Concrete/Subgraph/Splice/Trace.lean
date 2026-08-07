@@ -1,8 +1,5 @@
 import VisualProof.Concrete.Subgraph.Decomposition
 import VisualProof.Concrete.Elaboration.Compile
-import VisualProof.Concrete.Elaboration.Simulation
-import VisualProof.Diagram.ContextReachability
-import VisualProof.Concrete.Semantics
 import VisualProof.Diagram.Algebra
 
 namespace VisualProof.Data.Finite.FinitePartition
@@ -302,7 +299,7 @@ inductive RegionRoute.HasCutDepth {d : Diagram} :
 
 theorem RegionRoute.hasCutDepth_exists
     (route : RegionRoute d start target path)
-    (wellFormed : d.WellFormed ) :
+    (_wellFormed : d.WellFormed ) :
     ∃ depth, route.HasCutDepth depth := by
   induction route with
   | here =>
@@ -1175,7 +1172,7 @@ theorem CompilerTrace.binder_lookup_outerRelation
         intro equal
         have binderEncloses := state.binderEnumeration.encloses relation.index
         have childParent : (diagram.regions child).parent? = some start := by
-          simpa [childKind, CRegion.parent?]
+          simp [childKind, CRegion.parent?]
         exact Elaboration.checked_direct_child_not_encloses_parent
           wellFormed childParent
           (by simpa [binder, equal] using binderEncloses)
@@ -2096,56 +2093,6 @@ theorem contextFocusAtRegion_complete (checked : Checked )
     contextPathAtRegion_complete checked region
   exact ⟨path, hpath, ⟨witness.toFocus⟩⟩
 
-/-- A local region isomorphism remains denotationally valid after its source is
-transported to the target wire carrier and the two regions are placed in any
-common diagram context.  This is the generic ancestry-lifting step used by the
-whole-root splice/compiler commuting theorems below. -/
-theorem regionIso_fill_denotation
-    {sourceWires targetWires outerWires : Nat}
-    {rels outerRels : Theory.RelCtx}
-    {source : Region  sourceWires rels}
-    {target : Region  targetWires rels}
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    (hiso : RegionIso  wire rels source target)
-    (context : DiagramContext  outerWires targetWires outerRels rels)
-    (model : Model)
-    (env : Fin outerWires → model.Carrier)
-    (relEnv : RelEnv model.Carrier outerRels) :
-    denoteRegion model  env relEnv
-        (context.fill (source.renameWires wire)) ↔
-      denoteRegion model  env relEnv (context.fill target) := by
-  apply DiagramContext.fill_equiv
-  intro holeEnv holeRelEnv
-  rw [denoteRegion_renameWires]
-  exact hiso.denotation model  (holeEnv ∘ wire) holeEnv holeRelEnv
-    (fun _ => rfl)
-
-/-- Version of `RegionIso.fill_denotation` where the compiler records the
-target region on a propositionally equal wire carrier. -/
-theorem regionIso_fill_denotation_cast
-    {sourceWires targetWires holeWires outerWires : Nat}
-    {rels outerRels : Theory.RelCtx}
-    {source : Region  sourceWires rels}
-    {target : Region  targetWires rels}
-    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-    (hiso : RegionIso  wire rels source target)
-    (targetWiresEq : targetWires = holeWires)
-    (context : DiagramContext  outerWires holeWires outerRels rels)
-    (model : Model)
-    (env : Fin outerWires → model.Carrier)
-    (relEnv : RelEnv model.Carrier outerRels) :
-    denoteRegion model  env relEnv
-        (context.fill
-          (source.renameWires
-            (wire.trans (FiniteEquiv.finCast targetWiresEq)))) ↔
-      denoteRegion model  env relEnv
-        (context.fill (target.castWiresEq targetWiresEq)) := by
-  have hcast := RegionIso.renameWiresEquiv target
-    (FiniteEquiv.finCast targetWiresEq)
-  have hcomposed := hiso.trans hcast
-  simpa only [Region.castWiresEq_eq_renameWires] using
-    regionIso_fill_denotation hcomposed context model  env relEnv
-
 /-- Replace only the body of an open diagram, retaining its external carrier
 and its ordered (possibly repeated) boundary-class map definitionally. -/
 def replaceOpenBody (diagram : VisualProof.Diagram.OpenDiagram arity)
@@ -2155,60 +2102,6 @@ def replaceOpenBody (diagram : VisualProof.Diagram.OpenDiagram arity)
   boundary := diagram.boundary
   boundary_surjective := diagram.boundary_surjective
   body := body
-
-/-- Pointwise body implication lifts through an unchanged open interface.
-The external carrier and ordered boundary map are definitionally shared, so
-repeated aliases retain exactly the same argument-equality obligations. -/
-theorem denote_replaceOpenBody_mono
-    (diagram : VisualProof.Diagram.OpenDiagram arity)
-    (before after : Region  diagram.externalClasses [])
-    (model : Model)
-    (args : Fin arity → model.Carrier)
-    (entails : ∀ env : Fin diagram.externalClasses → model.Carrier,
-      denoteRegion (relCtx := []) model  env PUnit.unit before →
-        denoteRegion (relCtx := []) model  env PUnit.unit after) :
-    denoteOpen model  (replaceOpenBody diagram before) args →
-      denoteOpen model  (replaceOpenBody diagram after) args := by
-  rintro ⟨sourceAssignment, hargs, hbody⟩
-  let targetAssignment : BoundaryAssignment
-      (replaceOpenBody diagram after) model.Carrier := {
-    args := sourceAssignment.args
-    classes := sourceAssignment.classes
-    agrees := sourceAssignment.agrees
-  }
-  exact ⟨targetAssignment, hargs, entails sourceAssignment.classes hbody⟩
-
-/-- Pointwise body equivalence lifts to open denotation without changing the
-ordered boundary interface.  In particular repeated boundary aliases are
-preserved because both assignments use the same class and argument maps. -/
-theorem denote_replaceOpenBody_iff
-    (diagram : VisualProof.Diagram.OpenDiagram arity)
-    (body : Region  diagram.externalClasses [])
-    (model : Model)
-    (args : Fin arity → model.Carrier)
-    (hequiv : ∀ env : Fin diagram.externalClasses → model.Carrier,
-      denoteRegion (relCtx := []) model  env PUnit.unit body ↔
-        denoteRegion (relCtx := []) model  env PUnit.unit diagram.body) :
-    denoteOpen model  (replaceOpenBody diagram body) args ↔
-      denoteOpen model  diagram args := by
-  constructor
-  · rintro ⟨sourceAssignment, hargs, hbody⟩
-    let targetAssignment : BoundaryAssignment diagram model.Carrier := {
-      args := sourceAssignment.args
-      classes := sourceAssignment.classes
-      agrees := sourceAssignment.agrees
-    }
-    refine ⟨targetAssignment, hargs, ?_⟩
-    exact (hequiv sourceAssignment.classes).mp hbody
-  · rintro ⟨targetAssignment, hargs, hbody⟩
-    let sourceAssignment : BoundaryAssignment
-        (replaceOpenBody diagram body) model.Carrier := {
-      args := targetAssignment.args
-      classes := targetAssignment.classes
-      agrees := targetAssignment.agrees
-    }
-    refine ⟨sourceAssignment, hargs, ?_⟩
-    exact (hequiv targetAssignment.classes).mpr hbody
 
 def contextAtRegion? (checked : Checked )
     (region : Fin checked.val.regionCount) :

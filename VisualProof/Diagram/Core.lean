@@ -1,4 +1,3 @@
-import VisualProof.Model
 import VisualProof.Theory.Relation
 
 namespace VisualProof.Diagram

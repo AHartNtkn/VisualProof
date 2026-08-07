@@ -1,4 +1,5 @@
-import VisualProof.Concrete.Semantics
+import VisualProof.Concrete.Elaboration.Compile
+import VisualProof.Diagram.Semantics
 
 namespace VisualProof.Proof
 
@@ -18,8 +19,8 @@ structure TheoremSchema where
 /-- Semantic validity of a meta-level theorem schema. -/
 def TheoremSchema.Valid (schema : TheoremSchema) (model : Model) : Prop :=
   ∀ args : Fin schema.left.val.boundary.length → model.Carrier,
-    schema.left.denote model args →
-      schema.right.denote model
+    VisualProof.Diagram.denoteOpen model schema.left.elaborate args →
+      VisualProof.Diagram.denoteOpen model schema.right.elaborate
         (args ∘ Fin.cast schema.sameBoundaryArity.symm)
 
 end VisualProof.Proof

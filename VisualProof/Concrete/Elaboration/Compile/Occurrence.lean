@@ -50,19 +50,6 @@ def elaborate_equivalent {source target : OpenDiagram}
       equiv.boundaryClass_commute position
   · exact hbody
 
-/-- Public ordered-open semantic contract for a certified occurrence. -/
-theorem denote_iff {source target : OpenDiagram}
-    (equiv : OpenOccurrenceEquiv source target)
-    (hsource : source.WellFormed )
-    (htarget : target.WellFormed )
-    (model : Model)
-    (args : Fin source.boundary.length → model.Carrier) :
-    denoteOpen model  (source.elaborate hsource) args ↔
-      denoteOpen model
-        ((target.elaborate htarget).castArity
-          equiv.boundary_length_eq.symm) args :=
-  (equiv.elaborate_equivalent hsource htarget).denoteOpen_iff model  args
-
 end OpenOccurrenceEquiv
 
 

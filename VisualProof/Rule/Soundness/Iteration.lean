@@ -1,5 +1,6 @@
 import VisualProof.Rule.Iteration
 import VisualProof.Rule.Laws
+import VisualProof.Diagram.Semantics.OpenIsomorphism
 
 namespace VisualProof.Rule
 

@@ -1,8 +1,6 @@
-import VisualProof.Concrete.Semantics
+import VisualProof.Concrete.Open
 
 namespace VisualProof.Concrete
-
-open VisualProof.Diagram
 
 /-- A checked concrete open diagram whose ordered boundary arity is part of
 the execution-state type. -/
@@ -23,10 +21,5 @@ def State.closed (diagram : Concrete.Checked) : State 0 where
     }
   }
   boundary_length := rfl
-
-def State.denote (source : State arity) (model : Model)
-    (args : Fin arity → model.Carrier) : Prop :=
-  source.checked.denote model
-    (args ∘ Fin.cast source.boundary_length)
 
 end VisualProof.Concrete

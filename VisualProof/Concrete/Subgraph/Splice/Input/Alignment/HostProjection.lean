@@ -291,196 +291,6 @@ theorem compiledSpliceRootHostItems_computation
       (compiledSpliceHostView_root_holeRels_eq_nil input hadmissible hsite)
   simpa [hsite, hfuel] using hcomputation
 
-theorem compiledSpliceRootHostOfNonempty_denote_iff_coalesced
-    (input : Input ) (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hsite : input.site = input.frame.val.root)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Model)
-    (args : Fin
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-        sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model
-        (compiledSpliceRootHostOfNonempty input layout hadmissible
-          sourceBoundary sourceRoot hsite hnonempty) args ↔
-      denoteOpen model
-        (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-          sourceRoot).elaborate args := by
-  let checked := PlugLayout.checkedCoalescedOpenRoot input hadmissible
-    sourceBoundary sourceRoot
-  let source := compiledSpliceRootHostOfNonempty input layout hadmissible
-    sourceBoundary sourceRoot hsite hnonempty
-  let host := compiledSpliceHostView input hadmissible
-  let hrels := compiledSpliceHostView_root_holeRels_eq_nil input hadmissible
-    hsite
-  let hostItems : ItemSeq
-      (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
-    cast (congrArg
-      (ItemSeq
-        (host.compilerLeaf.inheritedWires.extend input.site).length) hrels)
-      host.compilerLeaf.items
-  let extra := (Elaboration.exactScopeWires
-    input.pattern.val.diagram input.binderSpine.bodyContainer).length
-  let canonical := Region.mk
-    ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
-      extra)
-    (hostItems.renameWires
-      (PlugLayout.rootHostOpenEmbedding input hadmissible sourceBoundary
-        sourceRoot hsite extra))
-  have hbody : source.body = canonical := by
-    exact compiledSpliceRootHostOfNonempty_body_eq_canonical input layout
-      hadmissible sourceBoundary sourceRoot hsite hnonempty
-  change denoteOpen model  source args ↔
-    denoteOpen model  checked.elaborate args
-  change denoteOpen model
-      (replaceOpenBody checked.elaborate source.body) args ↔
-    denoteOpen model  checked.elaborate args
-  rw [hbody]
-  apply denote_replaceOpenBody_iff
-  intro env
-  let context := host.compilerLeaf.inheritedWires.extend input.site
-  have hexact : context.Exact input.coalesceFrameRaw.root := by
-    change context.Exact input.frame.val.root
-    rw [← hsite]
-    exact host.compilerLeaf.wiresExact
-  have hclosed : Elaboration.compileOccurrencesWith?
-      input.coalesceFrameRaw
-      (Elaboration.compileRegion?  input.coalesceFrameRaw
-        input.coalesceFrameRaw.regionCount)
-      context Elaboration.BinderContext.empty
-      (Elaboration.localOccurrences input.coalesceFrameRaw
-        input.coalesceFrameRaw.root) = some hostItems := by
-    exact compiledSpliceRootHostItems_computation input hadmissible hsite
-  have hsemantic := PlugLayout.denote_expandedCoalescedRootItems_iff
-    input hadmissible sourceBoundary sourceRoot context hexact hostItems hclosed
-    extra model  env
-  simpa [canonical, extra, hostItems, context, hrels,
-    PlugLayout.rootHostOpenEmbedding] using
-    hsemantic
-
-theorem compiledSpliceRootHostOfEmpty_denote_iff_coalesced
-    (input : Input ) (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hsite : input.site = input.frame.val.root)
-    (hzero : input.binderSpine.proxyCount = 0)
-    (model : Model)
-    (args : Fin
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-        sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model
-        (compiledSpliceRootHostOfEmpty input layout hadmissible
-          sourceBoundary sourceRoot hsite hzero) args ↔
-      denoteOpen model
-        (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-          sourceRoot).elaborate args := by
-  let checked := PlugLayout.checkedCoalescedOpenRoot input hadmissible
-    sourceBoundary sourceRoot
-  let source := compiledSpliceRootHostOfEmpty input layout hadmissible
-    sourceBoundary sourceRoot hsite hzero
-  let host := compiledSpliceHostView input hadmissible
-  let hrels := compiledSpliceHostView_root_holeRels_eq_nil input hadmissible
-    hsite
-  let hostItems : ItemSeq
-      (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
-    cast (congrArg
-      (ItemSeq
-        (host.compilerLeaf.inheritedWires.extend input.site).length) hrels)
-      host.compilerLeaf.items
-  let extra := input.pattern.val.hiddenWires.length
-  let canonical := Region.mk
-    ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
-      extra)
-    (hostItems.renameWires
-      (PlugLayout.rootHostOpenEmbedding input hadmissible sourceBoundary
-        sourceRoot hsite extra))
-  have hbody : source.body = canonical := by
-    exact compiledSpliceRootHostOfEmpty_body_eq_canonical input layout
-      hadmissible sourceBoundary sourceRoot hsite hzero
-  change denoteOpen model  source args ↔
-    denoteOpen model  checked.elaborate args
-  change denoteOpen model
-      (replaceOpenBody checked.elaborate source.body) args ↔
-    denoteOpen model  checked.elaborate args
-  rw [hbody]
-  apply denote_replaceOpenBody_iff
-  intro env
-  let context := host.compilerLeaf.inheritedWires.extend input.site
-  have hexact : context.Exact input.coalesceFrameRaw.root := by
-    change context.Exact input.frame.val.root
-    rw [← hsite]
-    exact host.compilerLeaf.wiresExact
-  have hclosed : Elaboration.compileOccurrencesWith?
-      input.coalesceFrameRaw
-      (Elaboration.compileRegion?  input.coalesceFrameRaw
-        input.coalesceFrameRaw.regionCount)
-      context Elaboration.BinderContext.empty
-      (Elaboration.localOccurrences input.coalesceFrameRaw
-        input.coalesceFrameRaw.root) = some hostItems := by
-    exact compiledSpliceRootHostItems_computation input hadmissible hsite
-  have hsemantic := PlugLayout.denote_expandedCoalescedRootItems_iff
-    input hadmissible sourceBoundary sourceRoot context hexact hostItems hclosed
-    extra model  env
-  simpa [canonical, extra, hostItems, context, hrels,
-    PlugLayout.rootHostOpenEmbedding] using
-    hsemantic
-
-theorem compiledSpliceRootSourceOfNonempty_projects_coalesced
-    (input : Input ) (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hsite : input.site = input.frame.val.root)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Model)
-    (args : Fin
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-        sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model
-        (compiledSpliceRootSourceOfNonempty input layout hadmissible
-          sourceBoundary sourceRoot hsite hnonempty) args →
-      denoteOpen model
-        (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-          sourceRoot).elaborate args := by
-  intro hsource
-  apply (compiledSpliceRootHostOfNonempty_denote_iff_coalesced input layout
-    hadmissible sourceBoundary sourceRoot hsite hnonempty model  args).mp
-  exact compiledSpliceRootSourceOfNonempty_projects_compiledHost input layout
-    hadmissible sourceBoundary sourceRoot hsite hnonempty model  args
-    hsource
-
-theorem compiledSpliceRootSourceOfEmpty_projects_coalesced
-    (input : Input ) (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hsite : input.site = input.frame.val.root)
-    (hzero : input.binderSpine.proxyCount = 0)
-    (model : Model)
-    (args : Fin
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-        sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model
-        (compiledSpliceRootSourceOfEmpty input layout hadmissible
-          sourceBoundary sourceRoot hsite hzero) args →
-      denoteOpen model
-        (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-          sourceRoot).elaborate args := by
-  intro hsource
-  apply (compiledSpliceRootHostOfEmpty_denote_iff_coalesced input layout
-    hadmissible sourceBoundary sourceRoot hsite hzero model  args).mp
-  exact compiledSpliceRootSourceOfEmpty_projects_compiledHost input layout
-    hadmissible sourceBoundary sourceRoot hsite hzero model  args hsource
-
-/-- Direct children on two routes from the same region to the same terminal
-region coincide. -/
 theorem RegionRoute.firstChild_eq
     {diagram : Diagram} (hwf : diagram.WellFormed )
     {start leftChild rightChild target : Fin diagram.regionCount}
@@ -556,7 +366,7 @@ theorem CompilerTrace.sameDiagramTerminalLexical
     (targetTrace : CompilerTrace  diagram targetRoute targetWitness
       targetState)
     (hbinders : sourceState.binders = targetState.binders) :
-    ∃ hrels : sourceWitness.toFocus.holeRels =
+    ∃ _hrels : sourceWitness.toFocus.holeRels =
         targetWitness.toFocus.holeRels,
       HEq sourceTrace.leaf.binders targetTrace.leaf.binders := by
   induction sourceTrace generalizing targetPath targetOuter with
@@ -944,7 +754,7 @@ theorem CompilerTrace.tailAtEnclosed
       (tailTrace : CompilerTrace  diagram tailRoute tailWitness
         tailState),
       tailState.binders = anchorTrace.leaf.binders ∧
-        ∃ hrels : tailWitness.toFocus.holeRels =
+        ∃ _hrels : tailWitness.toFocus.holeRels =
             targetWitness.toFocus.holeRels,
           HEq tailTrace.leaf.binders targetTrace.leaf.binders := by
   induction anchorTrace generalizing targetPath targetOuter with
@@ -1068,7 +878,7 @@ theorem OpenCompilerTrace.sameDiagramClosedTerminalLexical
       targetWitness targetState)
     (targetBinders : targetState.binders =
       Elaboration.BinderContext.empty) :
-    ∃ hrels : sourceWitness.toFocus.holeRels =
+    ∃ _hrels : sourceWitness.toFocus.holeRels =
         targetWitness.toFocus.holeRels,
       HEq (sourceTrace.leaf.nestedOfNe hnested).binders
         targetTrace.leaf.binders := by
@@ -1467,7 +1277,7 @@ theorem compiledSpliceCoalescedHost_terminalLexical
     let sourceLeaf := compiledSpliceCoalescedNestedLeaf input hadmissible
       sourceBoundary sourceRoot hnested
     let host := compiledSpliceHostView input hadmissible
-    ∃ hrels : sourceView.focus.holeRels = host.focus.holeRels,
+    ∃ _hrels : sourceView.focus.holeRels = host.focus.holeRels,
       HEq sourceLeaf.binders host.compilerLeaf.binders := by
   dsimp only
   let sourceView := compiledSpliceCoalescedOpenView input hadmissible
@@ -1711,7 +1521,7 @@ private theorem compiledNestedProjectedHostFocusIso
     let alignment := layout.compiledNestedFrameContextIso input hadmissible
       sourceBoundary sourceRoot hnested
     let hostRelation : RelationRenaming host.focus.holeRels
-        outputView.focus.holeRels := fun {arity} relation =>
+        outputView.focus.holeRels := fun {_arity} relation =>
       layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
         outputView.intrinsicPath outputLeaf relation
     let projected :=
@@ -1745,7 +1555,7 @@ private theorem compiledNestedProjectedHostFocusIso
     VisualProof.Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
       sourceView.intrinsicPath sourceLeaf host.intrinsicPath host.compilerLeaf
   let hostRelation : RelationRenaming host.focus.holeRels
-      outputView.focus.holeRels := fun {arity} relation =>
+      outputView.focus.holeRels := fun {_arity} relation =>
     layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
       outputView.intrinsicPath outputLeaf relation
   let rootWire :=
@@ -1927,7 +1737,7 @@ theorem compiledNestedActualFocusIsoOfNonempty
     let sourceActual :=
       (hrels.symm ▸ rawSource).renameWires sourceHostWire.symm
     let hostRelation : RelationRenaming host.focus.holeRels
-        outputView.focus.holeRels := fun {arity} relation =>
+        outputView.focus.holeRels := fun {_arity} relation =>
       layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
         outputView.intrinsicPath outputLeaf relation
     let rootWire :=
@@ -1979,7 +1789,7 @@ theorem compiledNestedActualFocusIsoOfNonempty
   let sourceActual :=
     (hrels.symm ▸ rawSource).renameWires sourceHostWire.symm
   let hostRelation : RelationRenaming host.focus.holeRels
-      outputView.focus.holeRels := fun {arity} relation =>
+      outputView.focus.holeRels := fun {_arity} relation =>
     layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
       outputView.intrinsicPath outputLeaf relation
   let rootWire :=
@@ -2150,7 +1960,7 @@ noncomputable def compiledSpliceOutputActualOfNonempty
       host.intrinsicPath host.compilerLeaf pattern.witness pattern.leaf
       hnonempty)
   let hostRelation : RelationRenaming host.focus.holeRels
-      outputView.focus.holeRels := fun {arity} relation =>
+      outputView.focus.holeRels := fun {_arity} relation =>
     layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
       outputView.intrinsicPath outputLeaf relation
   let rootWire :=
@@ -2298,15 +2108,13 @@ private theorem compiledNestedProjectedHostRootIso
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hnested : input.site ≠ input.frame.val.root) :
-    let sourceView := compiledSpliceCoalescedOpenView input hadmissible
-      sourceBoundary sourceRoot
     let host := compiledSpliceHostView input hadmissible
     let outputView := compiledSpliceOutputOpenView input layout hadmissible
       sourceBoundary sourceRoot
     let outputLeaf := compiledSpliceOutputNestedLeaf input layout hadmissible
       sourceBoundary sourceRoot hnested
     let hostRelation : RelationRenaming host.focus.holeRels
-        outputView.focus.holeRels := fun {arity} relation =>
+        outputView.focus.holeRels := fun {_arity} relation =>
       layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
         outputView.intrinsicPath outputLeaf relation
     let projected :=
@@ -2426,111 +2234,5 @@ noncomputable def compiledSpliceNestedHostIso
             PlugLayout.coalescedOpenRoot]) position)
   · exact compiledNestedProjectedHostRootIso input layout hadmissible
       sourceBoundary sourceRoot hnested
-
-theorem compiledSpliceNestedHostOpen_denote_iff_coalesced
-    (input : Input ) (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hnested : input.site ≠ input.frame.val.root)
-    (model : Model)
-    (args : Fin
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-        sourceRoot).val.boundary.length → model.Carrier) :
-    denoteOpen model
-        (compiledSpliceNestedHostOpen input layout hadmissible sourceBoundary
-          sourceRoot hnested) args ↔
-      denoteOpen model
-        (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-          sourceRoot).elaborate args := by
-  exact (compiledSpliceNestedHostIso input layout hadmissible sourceBoundary
-    sourceRoot hnested).denoteOpen_iff model  args |>.symm
-
-/-- Nested nonempty splices project directly to the canonical coalesced frame,
-with variance determined by the enclosing cut parity. -/
-theorem compiledSpliceNestedSourceOfNonempty_projects_coalesced
-    (input : Input ) (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hnested : input.site ≠ input.frame.val.root)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Model)
-    (args : Fin
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-        sourceRoot).val.boundary.length → model.Carrier) :
-    let view := compiledSpliceOutputOpenView input layout hadmissible
-      sourceBoundary sourceRoot
-    (view.focus.context.cutDepth % 2 = 0 →
-      denoteOpen model
-          (compiledSpliceNestedSourceOfNonempty input layout hadmissible
-            sourceBoundary sourceRoot hnested hnonempty) args →
-        denoteOpen model
-          (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-            sourceRoot).elaborate args) ∧
-    (view.focus.context.cutDepth % 2 = 1 →
-      denoteOpen model
-          (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-            sourceRoot).elaborate args →
-        denoteOpen model
-          (compiledSpliceNestedSourceOfNonempty input layout hadmissible
-            sourceBoundary sourceRoot hnested hnonempty) args) := by
-  dsimp only
-  have hostProjection :=
-    compiledSpliceNestedSourceOfNonempty_projects_host input layout
-      hadmissible sourceBoundary sourceRoot hnested hnonempty model  args
-  have hostCanonical :=
-    compiledSpliceNestedHostOpen_denote_iff_coalesced input layout hadmissible
-      sourceBoundary sourceRoot hnested model  args
-  constructor
-  · intro heven hsource
-    exact hostCanonical.mp (hostProjection.1 heven hsource)
-  · intro hodd hcanonical
-    exact hostProjection.2 hodd (hostCanonical.mpr hcanonical)
-
-/-- Nested empty splices project directly to the canonical coalesced frame,
-with variance determined by the enclosing cut parity. -/
-theorem compiledSpliceNestedSourceOfEmpty_projects_coalesced
-    (input : Input ) (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hnested : input.site ≠ input.frame.val.root)
-    (hzero : input.binderSpine.proxyCount = 0)
-    (model : Model)
-    (args : Fin
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-        sourceRoot).val.boundary.length → model.Carrier) :
-    let view := compiledSpliceOutputOpenView input layout hadmissible
-      sourceBoundary sourceRoot
-    (view.focus.context.cutDepth % 2 = 0 →
-      denoteOpen model
-          (compiledSpliceNestedSourceOfEmpty input layout hadmissible
-            sourceBoundary sourceRoot hnested hzero) args →
-        denoteOpen model
-          (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-            sourceRoot).elaborate args) ∧
-    (view.focus.context.cutDepth % 2 = 1 →
-      denoteOpen model
-          (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-            sourceRoot).elaborate args →
-        denoteOpen model
-          (compiledSpliceNestedSourceOfEmpty input layout hadmissible
-            sourceBoundary sourceRoot hnested hzero) args) := by
-  dsimp only
-  have hostProjection :=
-    compiledSpliceNestedSourceOfEmpty_projects_host input layout hadmissible
-      sourceBoundary sourceRoot hnested hzero model  args
-  have hostCanonical :=
-    compiledSpliceNestedHostOpen_denote_iff_coalesced input layout hadmissible
-      sourceBoundary sourceRoot hnested model  args
-  constructor
-  · intro heven hsource
-    exact hostCanonical.mp (hostProjection.1 heven hsource)
-  · intro hodd hcanonical
-    exact hostProjection.2 hodd (hostCanonical.mpr hcanonical)
 
 end VisualProof.Concrete.Splice.Input

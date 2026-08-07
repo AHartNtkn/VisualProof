@@ -1,6 +1,16 @@
 import VisualProof.Rule.Comprehension.Relation
 import VisualProof.Rule.Soundness.Contextual
 
+namespace VisualProof.Diagram
+
+def OpenDiagram.asRelation
+    (model : Model)
+    (pattern : OpenDiagram arity) :
+    Relation model.Carrier arity :=
+  fun args => denoteOpen model pattern args
+
+end VisualProof.Diagram
+
 namespace VisualProof.Rule
 
 open Theory

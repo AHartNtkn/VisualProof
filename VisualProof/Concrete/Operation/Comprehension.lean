@@ -1,4 +1,5 @@
 import VisualProof.Concrete.Operation.Structural
+import VisualProof.Concrete.Subgraph.Splice.Input.Discrete
 
 namespace VisualProof.Concrete
 
@@ -1331,89 +1332,5 @@ theorem applyComprehensionInstantiate_realizes {orientation : Orientation}
   rename_i copied hcopied
   exact ⟨copied, hcopied, finishInstantiation_realizes happly⟩
 
-
-/-- Full second-order existential introduction; the witness is an arbitrary relation. -/
-theorem comprehension_witness
-    (relation : Relation D arity) (body : Relation D arity → Prop) :
-    body relation → ∃ candidate : Relation D arity, body candidate := by
-  intro hbody
-  exact ⟨relation, hbody⟩
-
-/-- The diagonal witness denotes exactly capture-avoiding boundary substitution. -/
-theorem diagonalize_denotation
-    {input : Checked }
-    {comprehension : CheckedOpen }
-    {occurrence : OperationAbstractionOccurrence input}
-    (witness : OperationAbstractionWitness input comprehension occurrence)
-    (model : Model)
-    (env : Fin occurrence.selection.touchingWires.length → model.Carrier) :
-    witness.diagonal.denote model
-        ((env ∘ Fin.cast witness.diagonal_externalClasses) ∘
-          witness.diagonal.elaborate.boundary) ↔
-      comprehension.denote model  (env ∘ witness.assignment.args) := by
-  change denoteOpen model  witness.diagonal.elaborate
-      ((env ∘ Fin.cast witness.diagonal_externalClasses) ∘
-        witness.diagonal.elaborate.boundary) ↔
-    denoteOpen model  comprehension.elaborate
-      (env ∘ witness.assignment.args)
-  let diagonalEnv := env ∘ Fin.cast witness.diagonal_externalClasses
-  have hdiagonal :
-      denoteOpen model  witness.diagonal.elaborate
-          (diagonalEnv ∘ witness.diagonal.elaborate.boundary) ↔
-        denoteRegion (relCtx := []) model  diagonalEnv PUnit.unit
-          witness.diagonal.elaborate.body := by
-    have h := (OpenDiagram.denote_substituteBoundary
-      witness.diagonal.elaborate
-      witness.diagonal.elaborate.identityBoundaryAssignment model
-      diagonalEnv).symm
-    rw [witness.diagonal.elaborate.substituteBoundary_id] at h
-    simpa [OpenDiagram.identityBoundaryAssignment] using h
-  rw [hdiagonal]
-  have hrename := denoteRegion_renameWires
-    (relCtx := []) model  (Fin.cast witness.diagonal_externalClasses)
-    env PUnit.unit witness.diagonal.elaborate.body
-  change denoteRegion (relCtx := []) model  diagonalEnv PUnit.unit
-      witness.diagonal.elaborate.body ↔ _
-  rw [← hrename]
-  rw [← Region.castWiresEq_eq_renameWires]
-  rw [witness.diagonal_body_eq]
-  exact OpenDiagram.denote_substituteBoundary
-    comprehension.elaborate witness.assignment model  env
-
-/-- Positive abstraction is existential generalization. -/
-theorem comprehensionAbstract_sound
-    (relation : Relation D arity) (body : Relation D arity → Prop) :
-    body relation → ∃ candidate : Relation D arity, body candidate :=
-  comprehension_witness relation body
-
-/-- At negative polarity, the same local implication is consumed contravariantly. -/
-theorem comprehensionInstantiate_sound
-    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
-    (specialized quantified : Region  holeWires holeRels)
-    (model : Model)
-    (env : Fin outerWires → model.Carrier)
-    (rels : RelEnv model.Carrier outerRels)
-    (negative : ctx.cutDepth % 2 = 1)
-    (hlocal : ∀ holeEnv holeRelEnv,
-      denoteRegion model  holeEnv holeRelEnv specialized →
-        denoteRegion model  holeEnv holeRelEnv quantified) :
-    denoteRegion model  env rels (ctx.fill quantified) →
-      denoteRegion model  env rels (ctx.fill specialized) :=
-  context_anti model  env rels negative hlocal
-
-/-- At positive polarity, existential generalization is covariant. -/
-theorem comprehensionAbstract_context_sound
-    (ctx : DiagramContext  outerWires holeWires outerRels holeRels)
-    (specialized quantified : Region  holeWires holeRels)
-    (model : Model)
-    (env : Fin outerWires → model.Carrier)
-    (rels : RelEnv model.Carrier outerRels)
-    (positive : ctx.cutDepth % 2 = 0)
-    (hlocal : ∀ holeEnv holeRelEnv,
-      denoteRegion model  holeEnv holeRelEnv specialized →
-        denoteRegion model  holeEnv holeRelEnv quantified) :
-    denoteRegion model  env rels (ctx.fill specialized) →
-      denoteRegion model  env rels (ctx.fill quantified) :=
-  context_mono model  env rels positive hlocal
 
 end VisualProof.Concrete

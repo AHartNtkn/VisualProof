@@ -103,32 +103,6 @@ theorem aliasConsistent_iff {source target : OpenDiagram  arity}
     apply targetConsistent i j
     rw [← iso.boundary i, ← iso.boundary j, sourceEqual]
 
-theorem preservesDenotation {source target : OpenDiagram  arity}
-    (iso : OpenDiagramIso source target)
-    (model : Model)
-    (args : Fin arity -> model.Carrier) :
-    denoteOpen model  source args -> denoteOpen model  target args := by
-  rintro ⟨sourceAssignment, sourceArgs, sourceBody⟩
-  let targetAssignment := iso.transportAssignment sourceAssignment
-  refine ⟨targetAssignment, ?_, ?_⟩
-  · exact sourceArgs
-  · apply (iso.body.denotation model  sourceAssignment.classes
-      targetAssignment.classes PUnit.unit ?_).mp sourceBody
-    intro sourceClass
-    change sourceAssignment.classes
-        (iso.external.invFun (iso.external sourceClass)) =
-      sourceAssignment.classes sourceClass
-    rw [iso.external.left_inv]
-
-theorem denoteOpen_iff {source target : OpenDiagram  arity}
-    (iso : OpenDiagramIso source target)
-    (model : Model)
-    (args : Fin arity -> model.Carrier) :
-    denoteOpen model  source args <-> denoteOpen model  target args := by
-  constructor
-  · exact iso.preservesDenotation model  args
-  · exact iso.symm.preservesDenotation model  args
-
 end OpenDiagramIso
 
 namespace OpenDiagram
@@ -167,6 +141,4 @@ def OpenDiagram.withBody_iso
   external := FiniteEquiv.refl (Fin diagram.externalClasses)
   boundary := fun _ => rfl
   body := h
-
-
 end VisualProof.Diagram

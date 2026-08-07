@@ -1,4 +1,4 @@
-import VisualProof.Diagram.ContextReachability
+import VisualProof.Diagram.Semantics.ContextReachability
 
 namespace VisualProof.Rule
 

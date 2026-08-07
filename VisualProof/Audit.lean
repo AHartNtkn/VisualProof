@@ -13,4 +13,4 @@ the source audit.
 #print axioms VisualProof.Diagram.Region.denote_spliceAt
 #print axioms VisualProof.Diagram.denoteItem_identity
 
-#print axioms VisualProof.Rule.applyComprehensionInstantiate_sound
+#print axioms VisualProof.Rule.Step.sound

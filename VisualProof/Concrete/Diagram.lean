@@ -1,5 +1,3 @@
-import VisualProof.Model
-
 namespace VisualProof.Concrete
 
 inductive CRegion (regions : Nat)

@@ -1,4 +1,4 @@
-import VisualProof.Concrete.Operation.Structural.SpawnOpen
+import VisualProof.Concrete.Operation.Structural.SpawnCore
 
 namespace VisualProof.Concrete
 
@@ -491,6 +491,58 @@ theorem applyWireJoin_success (orientation : Orientation) (input : Checked )
           cases happly
           exact Or.inr ⟨hsecond, hpolarity,
             checkWellFormed_preserves_input hcheck⟩
+        · contradiction
+      · contradiction
+
+theorem applyWireJoin_success_realizes
+    (orientation : Orientation) (input : Checked )
+    (first second : Fin input.val.wireCount)
+    (result : OperationReceipt input)
+    (happly : applyWireJoin orientation input first second = .ok result) :
+    first ≠ second ∧
+      ((input.val.Encloses (input.val.wires first).scope
+          (input.val.wires second).scope ∧
+        spawnPolarity orientation
+          (concreteCutDepth input.val (input.val.wires second).scope) ∧
+        result.Realizes
+          (joinWireRaw input.val first second)
+          (joinWireProvenance input.val first second)
+          (joinWireWireTransport input.val first second)) ∨
+       (input.val.Encloses (input.val.wires second).scope
+          (input.val.wires first).scope ∧
+        spawnPolarity orientation
+          (concreteCutDepth input.val (input.val.wires first).scope) ∧
+        result.Realizes
+          (joinWireRaw input.val second first)
+          (joinWireProvenance input.val second first)
+          (joinWireWireTransport input.val second first))) := by
+  unfold applyWireJoin at happly
+  split at happly
+  · contradiction
+  · rename_i distinct
+    refine ⟨distinct, ?_⟩
+    dsimp only at happly
+    split at happly
+    · rename_i ordered
+      split at happly
+      · rename_i polarity
+        split at happly
+        · contradiction
+        · rename_i checked checkResult
+          cases happly
+          exact Or.inl ⟨ordered, polarity,
+            OperationReceipt.ofChecked_realizes _ _ _ _ checked checkResult⟩
+      · contradiction
+    · split at happly
+      · rename_i reverseOrdered
+        split at happly
+        · rename_i polarity
+          split at happly
+          · contradiction
+          · rename_i checked checkResult
+            cases happly
+            exact Or.inr ⟨reverseOrdered, polarity,
+              OperationReceipt.ofChecked_realizes _ _ _ _ checked checkResult⟩
         · contradiction
       · contradiction
 

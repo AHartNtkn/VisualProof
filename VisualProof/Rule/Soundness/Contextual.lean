@@ -1,4 +1,5 @@
-import VisualProof.Diagram.Algebra
+import VisualProof.Diagram.Semantics.Algebra
+import VisualProof.Diagram.Semantics.OpenIsomorphism
 import VisualProof.Rule.Relation
 
 namespace VisualProof.Rule

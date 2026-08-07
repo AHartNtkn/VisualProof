@@ -1,3 +1,3 @@
-import VisualProof.Concrete.Subgraph.Splice.Input.Soundness
+import VisualProof.Concrete.Subgraph.Splice.Removal
 import VisualProof.Concrete.Subgraph.Splice.AliasMaterialization
 import VisualProof.Concrete.Subgraph.Splice.AttachmentAliasMaterialization

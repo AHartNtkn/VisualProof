@@ -352,7 +352,7 @@ private theorem rootScoped_cast {left right : Concrete.Diagram}
   cases diagramEq
   exact rootScoped
 
-private def severBoundaryImage {arity : Nat} (source : State arity)
+def severBoundaryImage {arity : Nat} (source : State arity)
     (wire : Fin source.checked.val.diagram.wireCount)
     (boundary : WireSeverBoundary source wire) (position : Fin arity) :
     Fin (severWireRaw source.checked.val.diagram wire []).wireCount :=
@@ -363,7 +363,7 @@ private def severBoundaryImage {arity : Nat} (source : State arity)
   else
     sourceWire.castSucc
 
-private theorem severBoundaryImage_rootScoped {arity : Nat}
+theorem severBoundaryImage_rootScoped {arity : Nat}
     (source : State arity)
     (wire : Fin source.checked.val.diagram.wireCount)
     (keep : List (CEndpoint source.checked.val.diagram.nodeCount))
@@ -392,6 +392,51 @@ private theorem severBoundaryImage_rootScoped {arity : Nat}
     rw [if_neg (by simp [hw])]
     simpa [severWireRaw, hw] using sourceRoot
 
+def wireSeverResultOpen {arity : Nat}
+    (orientation : Orientation)
+    (source : State arity)
+    (wire : Fin source.checked.val.diagram.wireCount)
+    (keep : List (CEndpoint source.checked.val.diagram.nodeCount))
+    (boundary : WireSeverBoundary source wire)
+    (result : OperationReceipt source.diagram)
+    (success : applyWireSever orientation source.diagram wire keep =
+      .ok result) : CheckedOpen :=
+  let rawEq : result.result.val =
+      severWireRaw source.checked.val.diagram wire keep :=
+    applyWireSever_preserves_raw success
+  let image : Fin arity → Fin result.result.val.wireCount :=
+    fun position => Fin.cast
+      (congrArg Concrete.Diagram.wireCount rawEq).symm
+      (severBoundaryImage source wire boundary position)
+  let mapped := List.ofFn image
+  {
+    val := { diagram := result.result.val, boundary := mapped }
+    property := {
+      diagram_well_formed := result.result.property
+      boundary_is_root_scoped := by
+        intro targetWire targetMem
+        obtain ⟨position, rfl⟩ := List.mem_ofFn.mp targetMem
+        exact rootScoped_cast rawEq
+          (severBoundaryImage source wire boundary position)
+          (severBoundaryImage_rootScoped source wire keep boundary position)
+    }
+  }
+
+def wireSeverResultState {arity : Nat}
+    (orientation : Orientation)
+    (source : State arity)
+    (wire : Fin source.checked.val.diagram.wireCount)
+    (keep : List (CEndpoint source.checked.val.diagram.nodeCount))
+    (boundary : WireSeverBoundary source wire)
+    (result : OperationReceipt source.diagram)
+    (success : applyWireSever orientation source.diagram wire keep =
+      .ok result) : State arity := {
+  checked := wireSeverResultOpen orientation source wire keep boundary result
+    success
+  boundary_length := by
+    simp [wireSeverResultOpen]
+}
+
 private def finishWireSever (orientation : Orientation) {arity : Nat}
     (source : State arity)
     (wire : Fin source.checked.val.diagram.wireCount)
@@ -401,38 +446,17 @@ private def finishWireSever (orientation : Orientation) {arity : Nat}
   match happly : applyWireSever orientation source.diagram wire keep with
   | .error error => .error error
   | .ok result =>
-      let rawEq : result.result.val =
-          severWireRaw source.checked.val.diagram wire keep :=
-        applyWireSever_preserves_raw happly
-      let image : Fin arity → Fin result.result.val.wireCount :=
-        fun position => Fin.cast
-          (congrArg Concrete.Diagram.wireCount rawEq).symm
-          (severBoundaryImage source wire boundary position)
-      let mapped := List.ofFn image
-      let targetChecked : CheckedOpen := {
-        val := { diagram := result.result.val, boundary := mapped }
-        property := {
-          diagram_well_formed := result.result.property
-          boundary_is_root_scoped := by
-            intro targetWire htarget
-            obtain ⟨position, rfl⟩ := List.mem_ofFn.mp htarget
-            exact rootScoped_cast rawEq
-              (severBoundaryImage source wire boundary position)
-              (severBoundaryImage_rootScoped source wire keep boundary position)
-        }
-      }
-      let target : State arity := {
-        checked := targetChecked
-        boundary_length := by simp [targetChecked, mapped]
-      }
+      let target := wireSeverResultState orientation source wire keep boundary
+        result happly
       .ok {
         target := target
         provenance := result.provenance
         boundary := {
-          image := image
+          image := fun position => target.checked.val.boundary.get
+            (Fin.cast target.boundary_length.symm position)
           target_boundary := by
             intro position
-            simp [target, targetChecked, mapped, image]
+            rfl
         }
       }
 
@@ -519,6 +543,83 @@ def execute (orientation : Orientation) {arity : Nat}
       finish source (applyVacuousIntro source.diagram selection binderArity)
   | .vacuousElim region =>
       finish source (applyVacuousElim source.diagram region)
+
+/-- Structural inversion of a successful wire join. -/
+theorem execute_wireJoin_success
+    {arity : Nat}
+    {source : State arity}
+    {orientation : Orientation}
+    (first second : Fin source.checked.val.diagram.wireCount)
+    {receipt : Receipt source}
+    (success : execute orientation source (.wireJoin first second) =
+      .ok receipt) :
+    ∃ result : OperationReceipt source.diagram,
+      applyWireJoin orientation source.diagram first second = .ok result ∧
+      result.toReceipt source = some receipt ∧
+      first ≠ second ∧
+      ((source.checked.val.diagram.Encloses
+          (source.checked.val.diagram.wires first).scope
+          (source.checked.val.diagram.wires second).scope ∧
+        spawnPolarity orientation
+          (concreteCutDepth source.checked.val.diagram
+            (source.checked.val.diagram.wires second).scope) ∧
+        result.Realizes
+          (joinWireRaw source.checked.val.diagram first second)
+          (joinWireProvenance source.checked.val.diagram first second)
+          (joinWireWireTransport source.checked.val.diagram first second)) ∨
+       (source.checked.val.diagram.Encloses
+          (source.checked.val.diagram.wires second).scope
+          (source.checked.val.diagram.wires first).scope ∧
+        spawnPolarity orientation
+          (concreteCutDepth source.checked.val.diagram
+            (source.checked.val.diagram.wires first).scope) ∧
+        result.Realizes
+          (joinWireRaw source.checked.val.diagram second first)
+          (joinWireProvenance source.checked.val.diagram second first)
+          (joinWireWireTransport source.checked.val.diagram second first))) := by
+  change finish source
+      (applyWireJoin orientation source.diagram first second) = .ok receipt
+    at success
+  obtain ⟨result, operationSuccess, packed⟩ :=
+    (finish_eq_ok_iff source _ receipt).1 success
+  obtain ⟨distinct, ordered⟩ :=
+    applyWireJoin_success_realizes orientation source.diagram first second
+      result operationSuccess
+  exact ⟨result, operationSuccess, packed, distinct, ordered⟩
+
+/-- Structural inversion of a successful wire separation. -/
+theorem execute_wireSever_success
+    {arity : Nat}
+    {source : State arity}
+    {orientation : Orientation}
+    (wire : Fin source.checked.val.diagram.wireCount)
+    (keep : List (CEndpoint source.checked.val.diagram.nodeCount))
+    (boundary : WireSeverBoundary source wire)
+    {receipt : Receipt source}
+    (success : execute orientation source (.wireSever wire keep boundary) =
+      .ok receipt) :
+    ∃ (result : OperationReceipt source.diagram)
+      (operationSuccess : applyWireSever orientation source.diagram wire keep =
+        .ok result),
+      receipt.target = wireSeverResultState orientation source wire keep
+        boundary result operationSuccess ∧
+      result.Realizes
+        (severWireRaw source.checked.val.diagram wire keep)
+        (severWireProvenance source.checked.val.diagram wire keep)
+        (severWireWireTransport source.checked.val.diagram wire keep) ∧
+      erasurePolarity orientation
+        (concreteCutDepth source.checked.val.diagram
+          (source.checked.val.diagram.wires wire).scope) := by
+  change finishWireSever orientation source wire keep boundary =
+    .ok receipt at success
+  unfold finishWireSever at success
+  split at success <;> try contradiction
+  rename_i result operationSuccess
+  cases success
+  exact ⟨result, operationSuccess, rfl,
+    applyWireSever_realizes operationSuccess,
+    (applyWireSever_success orientation source.diagram wire keep result
+      operationSuccess).1⟩
 
 /-- Structural inversion of a successful supplied insertion. -/
 theorem execute_boundRelationSpawn_success

@@ -626,13 +626,13 @@ theorem transportBoundary_compose
           pure (mapped :: mappedRest)) >>= second.transportBoundary)
       rw [ih]
       cases hfirst : first.image? wire with
-      | none => simp [hfirst]
+      | none => simp
       | some middleWire =>
           cases hrest : first.transportBoundary rest with
-          | none => simp [hfirst, hrest]
+          | none => simp
           | some intermediate =>
               cases hsecond : second.image? middleWire <;>
-                simp [hfirst, hrest, hsecond, transportBoundary]
+                simp [hsecond, transportBoundary]
 
 theorem transportBoundary_compose_iff
     (first : WireTransport source middle)
@@ -752,6 +752,24 @@ theorem transportBoundary_get_eq
 
 end WireTransport
 
+theorem castTarget_provenance_image_realizes
+    (expected : WireProvenance source raw)
+    (resultEq : result = raw) (wire : Fin source.wireCount) :
+    Option.map (Fin.cast (congrArg Diagram.wireCount resultEq))
+        ((expected.castTarget resultEq.symm).image? wire) =
+      expected.image? wire := by
+  subst raw
+  simp [WireProvenance.castTarget]
+
+theorem castTarget_interface_image_realizes
+    (expected : WireTransport source raw)
+    (resultEq : result = raw) (wire : Fin source.wireCount) :
+    Option.map (Fin.cast (congrArg Diagram.wireCount resultEq))
+        ((expected.castTarget resultEq.symm).image? wire) =
+      expected.image? wire := by
+  subst raw
+  simp [WireTransport.castTarget]
+
 /-- Raw open-state evidence used internally by the existing proof towers. -/
 structure OperationState where
   diagram : Concrete.Checked
@@ -773,11 +791,6 @@ def OperationState.asCheckedOpen (state : OperationState ) :
   diagram_well_formed := state.diagram.property
   boundary_is_root_scoped := state.boundary_root_scoped
 }⟩
-
-def OperationState.denote (state : OperationState )
-    (model : Model)
-    (args : Fin state.boundary.length → model.Carrier) : Prop :=
-  state.asCheckedOpen.denote model  args
 
 /-- Raw successful-operation evidence used by the existing proof towers.
 Graph provenance is injective; the raw wire transport may record intentional
@@ -1079,64 +1092,6 @@ def operationalIso_to_rawResultOpen
     realizes.targetBoundary mapped
   rw [hmapped]
   simp [Concrete.Iso.refl, FiniteEquiv.refl]
-
-/-- Normalize any checked operational open view of a realized raw result to
-the exact ordered target used by boundary-parametric receipt soundness.  The
-operational isomorphism must preserve the boundary list, so order and repeated
-aliases survive unchanged. -/
-theorem operationalOpen_denote_iff_result
-    {input : Concrete.Checked }
-    {receipt : OperationReceipt input} {raw : Concrete.Diagram}
-    {expectedProvenance : WireProvenance input.val raw}
-    {expectedInterface : WireTransport input.val raw}
-    (realizes : OperationReceipt.Realizes receipt raw expectedProvenance
-      expectedInterface)
-    {boundary : List (Fin input.val.wireCount)}
-    (sourceRoot : ∀ wire, wire ∈ boundary →
-      (input.val.wires wire).scope = input.val.root)
-    {mapped : List (Fin receipt.result.val.wireCount)}
-    (htransport : receipt.interface.transportBoundary boundary = some mapped)
-    (operational : Concrete.CheckedOpen )
-    (operationalIso : Concrete.OpenIso operational.val
-      (realizes.rawResultOpen mapped))
-    (model : Model)
-    (args : Fin boundary.length → model.Carrier) :
-    let target : OperationState  := {
-      diagram := receipt.result
-      boundary := mapped
-      boundary_root_scoped :=
-        receipt.interface.transportBoundary_root_scoped sourceRoot htransport
-    }
-    let totalIso := operationalIso.trans (realizes.rawResultOpenIso mapped)
-    operational.denote model
-        (args ∘ Fin.cast (totalIso.boundary_length_eq.trans
-          (receipt.interface.transportBoundary_length htransport))) ↔
-      target.denote model
-        (args ∘ Fin.cast
-          (receipt.interface.transportBoundary_length htransport)) := by
-  dsimp only
-  let target : OperationState  := {
-    diagram := receipt.result
-    boundary := mapped
-    boundary_root_scoped :=
-      receipt.interface.transportBoundary_root_scoped sourceRoot htransport
-  }
-  let totalIso := operationalIso.trans (realizes.rawResultOpenIso mapped)
-  let sourceArgs := args ∘ Fin.cast (totalIso.boundary_length_eq.trans
-    (receipt.interface.transportBoundary_length htransport))
-  let targetArgs := args ∘ Fin.cast
-    (receipt.interface.transportBoundary_length htransport)
-  have hargs : sourceArgs ∘ Fin.cast totalIso.boundary_length_eq.symm =
-      targetArgs := by
-    funext index
-    apply congrArg args
-    rfl
-  have hdenote := totalIso.denote_iff operational.property
-    target.asCheckedOpen.property model  sourceArgs
-  change operational.denote model  sourceArgs ↔
-    target.asCheckedOpen.denote model  targetArgs
-  rw [← hargs]
-  exact hdenote
 
 end OperationReceipt.Realizes
 

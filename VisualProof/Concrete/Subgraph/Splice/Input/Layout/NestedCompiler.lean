@@ -230,7 +230,7 @@ theorem compileNestedRootSiblings
         cases hsibling : input.coalesceFrameRaw.regions sibling with
         | sheet =>
             change input.frame.val.regions sibling = .sheet at hsibling
-            simp [occurrence, Elaboration.compileOccurrenceWith?,
+            simp [Elaboration.compileOccurrenceWith?,
               hsibling] at hsourceGet
         | cut parent =>
             have hsiblingRaw := hsibling
@@ -260,26 +260,26 @@ theorem compileNestedRootSiblings
                   input.coalesceFrameRaw input.frame.val.regionCount sibling
                   sourceOpen.rootWires
                     Elaboration.BinderContext.empty = none at hsourceChild
-                simp [Elaboration.compileOccurrenceWith?,
-                  hsiblingRaw, hsibling, hsourceChild] at hsourceGet
+                simp [Elaboration.compileOccurrenceWith?, hsibling,
+                  hsourceChild] at hsourceGet
             | some compiledSource =>
                 change Elaboration.compileRegion?
                   input.coalesceFrameRaw input.frame.val.regionCount sibling
                   sourceOpen.rootWires
                     Elaboration.BinderContext.empty =
                       some compiledSource at hsourceChild
-                simp [occurrence, Elaboration.compileOccurrenceWith?,
-                  hsiblingRaw, hsibling, hsourceChild] at hsourceGet
+                simp [Elaboration.compileOccurrenceWith?, hsibling,
+                  hsourceChild] at hsourceGet
                 cases htargetChild : Elaboration.compileRegion?
                      layout.plugRaw layout.plugRaw.regionCount
                     (layout.frameRegion sibling) targetOpen.rootWires
                     Elaboration.BinderContext.empty with
                 | none =>
-                    simp [occurrence, PlugLayout.mapFrameOccurrence,
+                    simp [PlugLayout.mapFrameOccurrence,
                       Elaboration.compileOccurrenceWith?,
                       htargetSibling, htargetChild] at htargetGet
                 | some compiledTarget =>
-                    simp [occurrence, PlugLayout.mapFrameOccurrence,
+                    simp [PlugLayout.mapFrameOccurrence,
                       Elaboration.compileOccurrenceWith?,
                       htargetSibling, htargetChild] at htargetGet
                     have hrecursive := layout.compileFrameRegion_away_from_site
@@ -354,27 +354,27 @@ theorem compileNestedRootSiblings
                   sourceOpen.rootWires
                     (Elaboration.BinderContext.empty.push sibling
                       arity) = none at hsourceChild
-                simp [Elaboration.compileOccurrenceWith?,
-                  hsiblingRaw, hsibling, hsourceChild] at hsourceGet
+                simp [Elaboration.compileOccurrenceWith?, hsibling,
+                  hsourceChild] at hsourceGet
             | some compiledSource =>
                 change Elaboration.compileRegion?
                   input.coalesceFrameRaw input.frame.val.regionCount sibling
                   sourceOpen.rootWires
                     (Elaboration.BinderContext.empty.push sibling
                       arity) = some compiledSource at hsourceChild
-                simp [occurrence, Elaboration.compileOccurrenceWith?,
-                  hsiblingRaw, hsibling, hsourceChild] at hsourceGet
+                simp [Elaboration.compileOccurrenceWith?, hsibling,
+                  hsourceChild] at hsourceGet
                 cases htargetChild : Elaboration.compileRegion?
                      layout.plugRaw layout.plugRaw.regionCount
                     (layout.frameRegion sibling) targetOpen.rootWires
                     (Elaboration.BinderContext.empty.push
                       (layout.frameRegion sibling) arity) with
                 | none =>
-                    simp [occurrence, PlugLayout.mapFrameOccurrence,
+                    simp [PlugLayout.mapFrameOccurrence,
                       Elaboration.compileOccurrenceWith?,
                       htargetSibling, htargetChild] at htargetGet
                 | some compiledTarget =>
-                    simp [occurrence, PlugLayout.mapFrameOccurrence,
+                    simp [PlugLayout.mapFrameOccurrence,
                       Elaboration.compileOccurrenceWith?,
                       htargetSibling, htargetChild] at htargetGet
                     have hrecursive := layout.compileFrameRegion_away_from_site
@@ -962,7 +962,7 @@ theorem compilePatternOccurrence_at_seam_iso
       ((sourceItem.renameWires
         (layout.patternSeamPreparedWireOfNonempty hadmissible host
           patternWitness patternLeaf hnonempty)).renameRelations
-        (fun {arity} relation =>
+        (fun {_arity} relation =>
           layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
             outputWitness outputLeaf
             (layout.coalescedTerminalRelationRenaming hadmissible
@@ -1646,7 +1646,7 @@ theorem compiledSiteItemsIsoOfNonempty
       (patternLeaf.items.renameWires
         (layout.patternSeamPreparedWireOfNonempty hadmissible host
           patternWitness patternLeaf hnonempty)).renameRelations
-        (fun {arity} relation =>
+        (fun {_arity} relation =>
           layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
             outputWitness outputLeaf
             (layout.coalescedTerminalRelationRenaming hadmissible
@@ -2331,8 +2331,7 @@ theorem compiledSiteRegionIsoOfNonempty
     refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) split
     · apply Fin.ext
       simp [patternSeamPreparedWireOfNonempty, Function.comp_apply,
-        extendWireRenaming, Region.adjoinMaterialWire,
-        Region.adjoinHostWire]
+        extendWireRenaming, Region.adjoinMaterialWire]
     · apply Fin.ext
       simp [patternSeamPreparedWireOfNonempty, Function.comp_apply,
         extendWireRenaming, Region.adjoinMaterialWire]
@@ -2402,124 +2401,6 @@ theorem compiledSiteRegionIsoOfNonempty
         outputLeaf.items) := by
     simpa only [Elaboration.finishRegion] using hregion
   exact hsourceEq.symm ▸ hnormalized
-
-/-- The nonempty-site compiler theorem commutes at the complete elaborated
-root, not merely at the focused site.  The statement is parametric in the
-root's ambient wire and relation environments, so it can be reused for open
-proof-state replay as well as closed diagrams. -/
-theorem compiledWholeRootDenotationOfNonempty
-    (input : Input )
-    (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region  patternOuter patternRels}
-    {patternPath : List Nat}
-    (patternWitness : Region.ContextPath patternBody patternPath)
-    (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
-      input.binderSpine.bodyContainer patternWitness)
-    {outputBody : Region  outputOuter outputRels}
-    {outputPath : List Nat}
-    (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
-      (layout.frameRegion input.site) outputWitness)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Model)
-    (env : Fin outputOuter → model.Carrier)
-    (relEnv : RelEnv model.Carrier outputRels) :
-    let source :=
-      ((Region.spliceAt
-          (Elaboration.exactScopeWires input.coalesceFrameRaw
-            input.site).length
-          (host.compilerLeaf.items.castWiresEq
-            (Elaboration.WireContext.length_extend
-              host.compilerLeaf.inheritedWires input.site))
-          (Elaboration.finishRegion input.pattern.val.diagram
-            patternLeaf.inheritedWires input.binderSpine.bodyContainer
-            patternLeaf.items)
-          (fun index => Fin.cast
-            (Elaboration.WireContext.length_extend
-              host.compilerLeaf.inheritedWires input.site)
-            (layout.bodyTerminalWireRenaming hadmissible host patternWitness
-              patternLeaf hnonempty index))
-          (layout.coalescedTerminalRelationRenaming hadmissible
-            host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
-            hnonempty)).renameRelations
-        (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-          outputWitness outputLeaf))
-    let rootWireEquiv :=
-      (layout.inheritedWireEquiv host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf).trans
-        (FiniteEquiv.finCast outputLeaf.inheritedLength)
-    denoteRegion model  env relEnv
-        (outputWitness.toFocus.context.fill
-          (source.renameWires rootWireEquiv)) ↔
-      denoteRegion model  env relEnv outputBody := by
-  dsimp only
-  have hiso := layout.compiledSiteRegionIsoOfNonempty  input
-    hadmissible host patternWitness patternLeaf outputWitness outputLeaf
-    hnonempty
-  have hlift := regionIso_fill_denotation_cast hiso
-    outputLeaf.inheritedLength outputWitness.toFocus.context model  env
-    relEnv
-  rw [← outputLeaf.bodyComputation,
-    outputWitness.toFocus.rebuild] at hlift
-  exact hlift
-
-/-- Ordered-open-interface form of the nonempty whole-root compiler theorem.
-The replacement body shares the output's external carrier and exact boundary
-class map, so repeated boundary positions remain repeated positions. -/
-theorem compiledOpenWholeRootDenotationOfNonempty
-    (input : Input )
-    (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {patternBody : Region  patternOuter patternRels}
-    {patternPath : List Nat}
-    (patternWitness : Region.ContextPath patternBody patternPath)
-    (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
-      input.binderSpine.bodyContainer patternWitness)
-    (output : VisualProof.Diagram.OpenDiagram arity)
-    {outputPath : List Nat}
-    (outputWitness : Region.ContextPath output.body outputPath)
-    (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
-      (layout.frameRegion input.site) outputWitness)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0)
-    (model : Model)
-    (args : Fin arity → model.Carrier) :
-    let source :=
-      ((Region.spliceAt
-          (Elaboration.exactScopeWires input.coalesceFrameRaw
-            input.site).length
-          (host.compilerLeaf.items.castWiresEq
-            (Elaboration.WireContext.length_extend
-              host.compilerLeaf.inheritedWires input.site))
-          (Elaboration.finishRegion input.pattern.val.diagram
-            patternLeaf.inheritedWires input.binderSpine.bodyContainer
-            patternLeaf.items)
-          (fun index => Fin.cast
-            (Elaboration.WireContext.length_extend
-              host.compilerLeaf.inheritedWires input.site)
-            (layout.bodyTerminalWireRenaming hadmissible host patternWitness
-              patternLeaf hnonempty index))
-          (layout.coalescedTerminalRelationRenaming hadmissible
-            host.intrinsicPath host.compilerLeaf patternWitness patternLeaf
-            hnonempty)).renameRelations
-        (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-          outputWitness outputLeaf))
-    let rootWireEquiv :=
-      (layout.inheritedWireEquiv host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf).trans
-        (FiniteEquiv.finCast outputLeaf.inheritedLength)
-    let sourceBody := outputWitness.toFocus.context.fill
-      (source.renameWires rootWireEquiv)
-    denoteOpen model  (replaceOpenBody output sourceBody) args ↔
-      denoteOpen model  output args := by
-  dsimp only
-  apply denote_replaceOpenBody_iff
-  intro env
-  exact layout.compiledWholeRootDenotationOfNonempty  input
-    hadmissible host patternWitness patternLeaf outputWitness outputLeaf
-    hnonempty model  env PUnit.unit
 
 /-- The concrete compiler implements intrinsic capture-avoiding splicing when
 the proxy spine is empty.  Here the material is the open sheet root: exposed
@@ -2682,130 +2563,6 @@ theorem compiledSiteRegionIsoOfEmpty
         outputLeaf.items) := by
     simpa only [Elaboration.finishRegion] using hregion
   exact hsourceEq.symm ▸ hnormalized
-
-/-- Empty-spine counterpart of `compiledWholeRootDenotationOfNonempty`.
-The open sheet root is substituted at the site, then the local compiler
-equivalence is lifted through every enclosing cut or bubble to the complete
-elaborated root. -/
-theorem compiledWholeRootDenotationOfEmpty
-    (input : Input )
-    (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    {outputBody : Region  outputOuter outputRels}
-    {outputPath : List Nat}
-    (outputWitness : Region.ContextPath outputBody outputPath)
-    (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
-      (layout.frameRegion input.site) outputWitness)
-    (hzero : input.binderSpine.proxyCount = 0)
-    (patternItems : ItemSeq
-      (input.pattern.val.exposedWires ++
-        input.pattern.val.hiddenWires).length [])
-    (patternItemsComputation :
-      Elaboration.compileOccurrencesWith?
-        input.pattern.val.diagram
-        (Elaboration.compileRegion?
-          input.pattern.val.diagram input.pattern.val.diagram.regionCount)
-        (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
-        Elaboration.BinderContext.empty
-        (Elaboration.localOccurrences input.pattern.val.diagram
-          input.pattern.val.diagram.root) = some patternItems)
-    (model : Model)
-    (env : Fin outputOuter → model.Carrier)
-    (relEnv : RelEnv model.Carrier outputRels) :
-    let source :=
-      ((Region.spliceAt
-          (Elaboration.exactScopeWires input.coalesceFrameRaw
-            input.site).length
-          (host.compilerLeaf.items.castWiresEq
-            (Elaboration.WireContext.length_extend
-              host.compilerLeaf.inheritedWires input.site))
-          (Elaboration.finishRoot input.pattern.val.exposedWires
-            input.pattern.val.hiddenWires patternItems)
-          (fun index => Fin.cast
-            (Elaboration.WireContext.length_extend
-              host.compilerLeaf.inheritedWires input.site)
-            (layout.exposedWireRenaming hadmissible host index))
-          (emptyRelationRenaming host.intrinsicPath.toFocus.holeRels))
-        |>.renameRelations
-          (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-            outputWitness outputLeaf))
-    let rootWireEquiv :=
-      (layout.inheritedWireEquiv host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf).trans
-        (FiniteEquiv.finCast outputLeaf.inheritedLength)
-    denoteRegion model  env relEnv
-        (outputWitness.toFocus.context.fill
-          (source.renameWires rootWireEquiv)) ↔
-      denoteRegion model  env relEnv outputBody := by
-  dsimp only
-  have hiso := layout.compiledSiteRegionIsoOfEmpty  input
-    hadmissible host outputWitness outputLeaf hzero patternItems
-    patternItemsComputation
-  have hlift := regionIso_fill_denotation_cast hiso
-    outputLeaf.inheritedLength outputWitness.toFocus.context model  env
-    relEnv
-  rw [← outputLeaf.bodyComputation,
-    outputWitness.toFocus.rebuild] at hlift
-  exact hlift
-
-/-- Ordered-open-interface form of the empty-spine whole-root theorem. -/
-theorem compiledOpenWholeRootDenotationOfEmpty
-    (input : Input )
-    (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (host : SiteView (input.coalesceFrame hadmissible) input.site)
-    (output : VisualProof.Diagram.OpenDiagram arity)
-    {outputPath : List Nat}
-    (outputWitness : Region.ContextPath output.body outputPath)
-    (outputLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw
-      (layout.frameRegion input.site) outputWitness)
-    (hzero : input.binderSpine.proxyCount = 0)
-    (patternItems : ItemSeq
-      (input.pattern.val.exposedWires ++
-        input.pattern.val.hiddenWires).length [])
-    (patternItemsComputation :
-      Elaboration.compileOccurrencesWith?
-        input.pattern.val.diagram
-        (Elaboration.compileRegion?
-          input.pattern.val.diagram input.pattern.val.diagram.regionCount)
-        (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
-        Elaboration.BinderContext.empty
-        (Elaboration.localOccurrences input.pattern.val.diagram
-          input.pattern.val.diagram.root) = some patternItems)
-    (model : Model)
-    (args : Fin arity → model.Carrier) :
-    let source :=
-      ((Region.spliceAt
-          (Elaboration.exactScopeWires input.coalesceFrameRaw
-            input.site).length
-          (host.compilerLeaf.items.castWiresEq
-            (Elaboration.WireContext.length_extend
-              host.compilerLeaf.inheritedWires input.site))
-          (Elaboration.finishRoot input.pattern.val.exposedWires
-            input.pattern.val.hiddenWires patternItems)
-          (fun index => Fin.cast
-            (Elaboration.WireContext.length_extend
-              host.compilerLeaf.inheritedWires input.site)
-            (layout.exposedWireRenaming hadmissible host index))
-          (emptyRelationRenaming host.intrinsicPath.toFocus.holeRels))
-        |>.renameRelations
-          (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-            outputWitness outputLeaf))
-    let rootWireEquiv :=
-      (layout.inheritedWireEquiv host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf).trans
-        (FiniteEquiv.finCast outputLeaf.inheritedLength)
-    let sourceBody := outputWitness.toFocus.context.fill
-      (source.renameWires rootWireEquiv)
-    denoteOpen model  (replaceOpenBody output sourceBody) args ↔
-      denoteOpen model  output args := by
-  dsimp only
-  apply denote_replaceOpenBody_iff
-  intro env
-  exact layout.compiledWholeRootDenotationOfEmpty  input
-    hadmissible host outputWitness outputLeaf hzero patternItems
-    patternItemsComputation model  env PUnit.unit
 
 end PlugLayout
 

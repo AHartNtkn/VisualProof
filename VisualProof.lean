@@ -4,6 +4,8 @@ import VisualProof.Diagram.Core
 import VisualProof.Diagram.Boundary
 import VisualProof.Diagram.Rename
 import VisualProof.Diagram.Semantics
+import VisualProof.Diagram.Semantics.ContextPathIsomorphism
+import VisualProof.Diagram.Semantics.OpenIsomorphism
 import VisualProof.Diagram.Context
 import VisualProof.Diagram.Isomorphism
 import VisualProof.Diagram.Algebra
@@ -21,7 +23,6 @@ import VisualProof.Concrete.Step
 import VisualProof.Concrete.Operation.Structural
 import VisualProof.Concrete.Operation.Comprehension
 import VisualProof.Rule.Soundness
-import VisualProof.Rule.Soundness.All
 import VisualProof.Proof.Replay
 import VisualProof.Proof.Schema
 import VisualProof.Proof.Theorem
