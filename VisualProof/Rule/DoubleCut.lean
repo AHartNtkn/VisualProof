@@ -1,3 +1,4 @@
+import VisualProof.Diagram.Algebra
 import VisualProof.Rule.Relation
 
 namespace VisualProof.Rule
@@ -16,8 +17,15 @@ def wrap (body : Region wires rels) :
 
 inductive Local : LocalRule
   | introduce
-      (body : Region wires rels) :
-      Local body (wrap body)
+      (hostLocal : Nat)
+      (hostItems : ItemSeq (wires + hostLocal) rels)
+      (body : Region materialWires materialRels)
+      (wireMap : Fin materialWires → Fin (wires + hostLocal))
+      (relationMap : RelationRenaming materialRels rels) :
+      Local
+        (Region.spliceAt hostLocal hostItems body wireMap relationMap)
+        (Region.spliceAt hostLocal hostItems
+          (wrap body) wireMap relationMap)
 
 end DoubleCut
 
