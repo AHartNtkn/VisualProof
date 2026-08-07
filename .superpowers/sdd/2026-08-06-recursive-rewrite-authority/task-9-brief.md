@@ -112,6 +112,13 @@ aggregate, but must state recursive relation conclusions rather than semantic
 implication.  Use `represents_unique` and `Step.iso` to align alternate
 representatives; do not re-prove rule semantics in refinement.
 
+Structural splice bridges at a concrete site return the recursive relation at
+that site's context polarity: positive context relates spliced material to the
+host, while negative context relates the host to the spliced material.  The
+concrete `erasurePolarity`/`spawnPolarity` success evidence then aligns this
+context-polarity result with the aggregate orientation match.  Do not state an
+unconditional endpoint order for a nested splice.
+
 ## Authority and naming constraints
 
 - Orientation chooses the rule relation or its converse.  Do not add

@@ -1256,6 +1256,12 @@ theorem execute_sound
 
 The family-specific successful-execution theorems produce the existential `targetDiagram`; representation uniqueness and `Step.iso` allow callers to replace it by another recursive representative of the same concrete target.
 
+The structural bridge for a splice is indexed by the recursive occurrence's
+context polarity.  At positive polarity erasure relates the spliced diagram to
+the host; at negative polarity the whole-diagram relation is reversed by
+`Contextual`.  Concrete erasure/spawn polarity evidence aligns that result with
+`orientation`; no unconditional nested-splice endpoint order is valid.
+
 Also prove the canonical commuting corollary with the indexed state translation:
 
 ```lean
