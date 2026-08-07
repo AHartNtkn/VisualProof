@@ -300,8 +300,14 @@ namespace Erasure
 
 inductive Local : LocalRule
   | erase
-      (kept removed : Region wires rels) :
-      Local (kept.conjoin removed) kept
+      (hostLocal : Nat)
+      (hostItems : ItemSeq (wires + hostLocal) rels)
+      (material : Region materialWires materialRels)
+      (wireMap : Fin materialWires → Fin (wires + hostLocal))
+      (relationMap : RelationRenaming materialRels rels) :
+      Local
+        (Region.spliceAt hostLocal hostItems material wireMap relationMap)
+        (.mk hostLocal hostItems)
 
 end Erasure
 
@@ -314,6 +320,12 @@ theorem Erasure.iso
     (targetIso : OpenDiagramIso target target') :
     Erasure source' target'
 ```
+
+`spliceAt` is the recursive gluing operation: erased material may refer to the
+site's retained local witnesses and lexical relations.  No injectivity is
+required of either map.  This is essential for ordinary selected subdiagrams
+that touch a retained anchor-local wire; `conjoin` is only the disjoint special
+case.
 
 #### Wire severing
 
@@ -742,6 +754,9 @@ theorem Erasure.sound
       denoteOpen model source args →
       denoteOpen model target args
 ```
+
+The local proof is `Region.denote_spliceAt_host`; contextual soundness remains
+unchanged.
 
 #### Wire severing
 

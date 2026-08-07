@@ -42,6 +42,15 @@ retained host wires, so `boundRelationSpawn` realizes only the converse of
 constructors, and use the existing discrete-quotient/open-isomorphism bridge.
 Do not weaken `Erasure` or combine insertion with `WireSever`/wire joining.
 
+The recursive erasure relation uses the general gluing form
+`Region.spliceAt hostLocal hostItems material wireMap relationMap` as its source
+and `.mk hostLocal hostItems` as its target.  This permits erased material to
+refer to retained site-local wires and lexical relations.  Update
+`Rule/Erasure.lean` and its local soundness proof to this shape before proving
+the family refinement; `Region.denote_spliceAt_host` supplies the semantic
+proof and the existing contextual closure remains unchanged.  Do not restrict
+concrete selections to the disjoint `conjoin` special case.
+
 ## Public theorems
 
 The aggregate theorem is:

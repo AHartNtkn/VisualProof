@@ -704,6 +704,8 @@ tasks:
       - "VisualProof/Refinement/Implementation/**/*.lean"
       - "VisualProof/Concrete/Step.lean"
       - "VisualProof/Concrete/Subgraph/Splice/Input/Discrete.lean"
+      - "VisualProof/Rule/Erasure.lean"
+      - "VisualProof/Rule/Soundness/Erasure.lean"
       - "VisualProof/Rule/Soundness/**/*.lean"
       - "VisualProof/Rule/Soundness/*.lean"
       - "VisualProof/Proof/**/*.lean"
@@ -717,6 +719,7 @@ tasks:
       - "Rule relations and Step.sound remain independent of Concrete and Refinement."
       - "Orientation selects the relation or its converse; do not add direction-named rule variants."
       - "Concrete.Insertion carries input.AttachmentsRespectBoundary so boundRelationSpawn cannot also merge retained host wires."
+      - "Erasure uses Region.spliceAt gluing so selected material may share retained site-local wires and relations."
       - "Do not define or call a matcher, candidate enumerator, or occurrence search."
       - "Lean only; TypeScript is outside scope."
     verify:
