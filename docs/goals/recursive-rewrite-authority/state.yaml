@@ -4,7 +4,7 @@ goal:
   title: "Recursive Rewrite Authority"
   slug: "recursive-rewrite-authority"
   kind: existing_plan
-  tranche: "Prove successful concrete execution refines the six recursive rule relations."
+  tranche: "Restore the bidirectional semantic boundary, then complete structural execution refinement."
   status: active
   oracle:
     signal: "Kernel-checked Lean theorems prove one recursive relational calculus with structural semantics and a separate concrete refinement layer."
@@ -23,7 +23,7 @@ goal:
       - "Bound-wire equivalence, ordered boundaries, aliases, freshness, and capture avoidance"
       - "Direct relational treatment of global and simultaneous rules"
       - "Representation existence and uniqueness modulo recursive diagram isomorphism"
-      - "Open-state execution, representation completeness, one-step execution completeness, and domain-invalid rejection"
+      - "Open-state execution, representation completeness, one-step execution completeness, and unconditional exact-request rejection correctness"
     existing_plan_facts:
       - "Recursive open diagrams and structural denotation are authoritative."
       - "Occurrence is context decomposition modulo recursive diagram isomorphism."
@@ -694,64 +694,207 @@ tasks:
     assignee: Worker
     status: active
     reasoning_hint: high
-    objective: "Execute plan Task 9: prove all twelve successful concrete executions refine exactly the six recursive rule relations, then prove execute_sound and execute_translates."
+    objective: "Execute corrected Task 9: restore the bidirectional semantic boundary, preserve only structural implementation facts, prove all twelve successful executions refine the six recursive relations, and prove execute_sound and execute_translates."
     inputs:
       - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 9"
+      - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-brief.md"
       - "T115 representation boundary"
+      - "Semantic-boundary remediation audit for completed Tasks 6-9"
     allowed_files:
-      - "VisualProof/Refinement/Step.lean"
-      - "VisualProof/Refinement/Step/*.lean"
-      - "VisualProof/Refinement/Implementation/**/*.lean"
-      - "VisualProof/Concrete/Step.lean"
-      - "VisualProof/Concrete/Subgraph/Splice/Input/Discrete.lean"
-      - "VisualProof/Rule/Erasure.lean"
-      - "VisualProof/Rule/Soundness/Erasure.lean"
-      - "VisualProof/Rule/Iteration.lean"
-      - "VisualProof/Rule/DoubleCut.lean"
-      - "VisualProof/Rule/Comprehension/Relation.lean"
-      - "VisualProof/Rule/Vacuity.lean"
-      - "VisualProof/Rule/Soundness/**/*.lean"
-      - "VisualProof/Rule/Soundness/*.lean"
-      - "VisualProof/Proof/**/*.lean"
-      - "VisualProof/Audit.lean"
+      - "VisualProof/Diagram/**/*.lean"
+      - "VisualProof/Concrete/**/*.lean"
+      - "VisualProof/Concrete.lean"
+      - "VisualProof/Refinement/**/*.lean"
       - "VisualProof/Refinement.lean"
+      - "VisualProof/Rule/Soundness/**/*.lean"
+      - "VisualProof/Rule/Soundness.lean"
+      - "VisualProof/Rule/Soundness/All.lean"
+      - "VisualProof/Rule/**/*.lean"
+      - "VisualProof/Rule.lean"
+      - "VisualProof/Audit.lean"
       - "VisualProof.lean"
+      - "lakefile.toml"
       - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-report.md"
     constraints:
+      - "Concrete and Refinement are syntactic layers: no Model, denotation, semantic implication, semantic simulation, Step.sound, Rule.Soundness, or Proof declarations/imports in their source or dependency closures."
+      - "Extract only compiler equations, carrier equivalences, boundary correspondences, recursive isomorphisms, receipt inversions, and rule witnesses required by refinement."
+      - "Eliminate concrete-dependent semantic machinery and operational soundness aggregates; do not relocate, rename, wrap, re-export, or preserve them as parallel authorities."
+      - "Split mixed diagram modules where necessary so structural Concrete/Refinement dependencies do not pull in semantics."
       - "Map the twelve concrete constructors exhaustively to Erasure, WireSever, Iteration, DoubleCut, Comprehension, and Vacuity."
-      - "Concrete indices, receipts, traces, compiler traversal, and carrier bookkeeping appear only in Concrete or Refinement."
-      - "Rule relations and Step.sound remain independent of Concrete and Refinement."
+      - "Rule relations and all Rule soundness owners remain independent of Concrete and Refinement."
       - "Orientation selects the relation or its converse; do not add direction-named rule variants."
-      - "Concrete.Insertion carries input.AttachmentsRespectBoundary so boundRelationSpawn cannot also merge retained host wires."
-      - "Erasure uses Region.spliceAt gluing so selected material may share retained site-local wires and relations."
-      - "DoubleCut, Comprehension, and Vacuity use constructor-local spliceAt host framing for arbitrary selected sibling blocks."
-      - "Iteration binds shared anchor-local witnesses once around selected and retained factors."
+      - "Preserve compliant structural proofs already established in the active Task 9 work."
       - "Do not define or call a matcher, candidate enumerator, or occurrence search."
+      - "Do not add compatibility paths or Direct, Directed, Abstract, or Recursive prefixes."
       - "Lean only; TypeScript is outside scope."
     verify:
-      - "strict family refinement and aggregate compilation"
+      - "strict structural-owner, family-refinement, and aggregate compilation"
       - "exact twelve-constructor coverage and six-family mapping audit"
-      - "abstract dependency-purity and proof-hole/project-axiom scans"
+      - "recursive Rule-to-Concrete/Refinement dependency exclusion"
+      - "Concrete/Refinement source and recursive dependency exclusion of all semantic authority"
+      - "proof-hole, project-axiom, matcher/search, compatibility-authority, and parallel-authority scans"
       - "lake build"
       - "git diff --check"
     stop_if:
       - "A concrete constructor lacks enough successful-execution evidence to prove its assigned recursive relation."
       - "A required relation witness would change the mathematical meaning fixed by Tasks 3-4."
-      - "The proof would require importing Concrete or Refinement into Rule.Step or Rule.Soundness."
+      - "A structural declaration cannot be separated from semantic ownership without changing its public mathematical type."
     receipt: null
   - id: T118
     type: judge
     assignee: Judge
     status: queued
     reasoning_hint: high
-    objective: "Audit T117 for exhaustive constructor coverage, correct family mapping, orientation/converse handling, representation alignment, and dependency purity."
+    objective: "Audit corrected Task 9 for exhaustive structural refinement and both dependency directions, including remediation of concrete-dependent semantic machinery from completed Tasks 6-9."
     inputs:
       - "T117 receipt"
       - "Task 9 review package"
+      - "Corrected plan and Task 9 brief"
     constraints:
       - "Read-only."
-      - "Reject direct semantic-preservation authority in the concrete layer."
-      - "Reject any matcher/search subsystem or abstract dependency on execution data."
+      - "Reject any semantic declaration, proof, import, or parallel authority in Concrete or Refinement."
+      - "Reject any Concrete/Refinement dependency in recursive Rule relations or soundness."
+      - "Reject relocation, renaming, wrapping, or re-export of an operational semantic tower."
+      - "Reject any matcher/search subsystem or incomplete twelve-constructor coverage."
+    expected_output:
+      - "approved | changes_required"
+    receipt: null
+  - id: T119
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Execute corrected Task 10: prove syntactic family reflection and aggregate execution completeness without search or semantics."
+    inputs:
+      - "Approved T117 receipt"
+      - "Plan Task 10"
+    constraints:
+      - "Construct proof-bearing request data existentially; do not define or call a matcher or executable search."
+      - "Concrete and Refinement source and dependency closures remain free of models, denotation, semantic implication, Rule.Soundness, Step.sound, and Proof."
+      - "Prove all six family completeness theorems and execute_complete with the fixed twelve-constructor executor."
+      - "Lean only; TypeScript is outside scope."
+    verify:
+      - "strict family and aggregate completeness compilation"
+      - "semantic-free source and dependency audit"
+      - "matcher/search and proof-hole scans"
+      - "kernel axiom audit, lake build, and git diff --check"
+    receipt: null
+  - id: T120
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Audit T119 for unconditional syntactic completeness, exact target representation, semantic-free dependencies, and absence of search."
+    inputs:
+      - "T119 receipt"
+    constraints:
+      - "Read-only."
+      - "Reject restricted family coverage, matchers, or any semantic authority in Concrete/Refinement."
+    expected_output:
+      - "approved | changes_required"
+    receipt: null
+  - id: T121
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Execute corrected Task 11: define twelve-branch syntactic Means, prove same-request execution success, and prove unconditional rejection correctness for every executor error."
+    inputs:
+      - "Approved T119 receipt"
+      - "Plan Task 11"
+    constraints:
+      - "Means must not mention execute results, receipts, errors, models, denotation, semantic implication, or soundness."
+      - "Prove success of the exact supplied request from Means before deriving rejection correctness."
+      - "The rejection theorem has no DomainInvalid or error-classification premise and covers every Concrete.Error."
+      - "Repair executor behavior, request legality evidence, or the error contract if a meaningful exact request can reject."
+      - "Do not exclude errors, weaken the theorem, add search, or introduce compatibility paths."
+    verify:
+      - "strict Means, same-request completeness, and unconditional rejection compilation"
+      - "exact twelve-constructor Means audit"
+      - "Means declaration and branch-body exclusion of execute results, receipts, errors, and semantics"
+      - "all-error theorem signature and kernel axiom audit"
+      - "lake build and git diff --check"
+    receipt: null
+  - id: T122
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Audit T121 for non-tautological Means, same-request completeness, and unconditional all-error rejection correctness."
+    inputs:
+      - "T121 receipt"
+    constraints:
+      - "Read-only."
+      - "Reject DomainInvalid premises, omitted errors, alternate requests, or Means definitions coupled to execute/receipt/error."
+    expected_output:
+      - "approved | changes_required"
+    receipt: null
+  - id: T123
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Execute corrected Task 12: make Proof the sole concrete-execution semantic bridge by thin composition of execute_sound, Step.sound, and representation/isomorphism transport."
+    inputs:
+      - "Approved T121 receipt"
+      - "Plan Task 12"
+    constraints:
+      - "No request-constructor split, family-specific soundness import, or rule-specific semantic reasoning."
+      - "Concrete and Refinement remain semantic-free."
+      - "Lean only; TypeScript is outside scope."
+    verify:
+      - "strict Proof module compilation"
+      - "source/dependency audit proving thin compositional ownership"
+      - "kernel axiom audit, lake build, and git diff --check"
+    receipt: null
+  - id: T124
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Audit T123 for exclusive Proof-layer semantic ownership and thin composition without family-specific reasoning."
+    inputs:
+      - "T123 receipt"
+    constraints:
+      - "Read-only."
+      - "Reject any concrete-execution semantics below Proof or request-family semantic case analysis inside Proof."
+    expected_output:
+      - "approved | changes_required"
+    receipt: null
+  - id: T125
+    type: worker
+    assignee: Worker
+    status: queued
+    reasoning_hint: high
+    objective: "Execute corrected Task 13: complete the repository and perform the bidirectional authority audit with kernel evidence."
+    inputs:
+      - "Approved T123 receipt"
+      - "Plan Task 13"
+    constraints:
+      - "Audit Rule-to-implementation and implementation-to-semantics dependency directions."
+      - "Reject semantic declarations, proofs, imports, or parallel authority under Concrete/Refinement."
+      - "Reject any matcher/search, compatibility path, proof hole, or unapproved project axiom."
+      - "Do not touch TypeScript."
+    verify:
+      - "strict owner compilation and full lake build"
+      - "bidirectional recursive dependency audit"
+      - "Concrete/Refinement semantic source scan"
+      - "Means and unconditional rejection signature audit"
+      - "matcher/search, compatibility, proof-hole, and kernel-axiom audits"
+      - "git diff --check"
+    receipt: null
+  - id: T126
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Audit T125 against every corrected Tasks 9-13 acceptance criterion and the full authority oracle."
+    inputs:
+      - "T125 receipt"
+      - "Full branch dependency and kernel evidence"
+    constraints:
+      - "Read-only."
+      - "Reject either dependency-direction violation, weakened rejection, semantic duplication, or incomplete pending work."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -767,7 +910,10 @@ tasks:
       - "Final branch diff and source dependency audit"
     constraints:
       - "Reject completion if any required Worker work remains queued or active."
-      - "Reject semantic theorems that depend on concrete execution artifacts."
+      - "Reject recursive semantic theorems that depend on concrete execution artifacts."
+      - "Reject any semantic declaration, proof, import, or parallel authority under Concrete or Refinement."
+      - "Reject rejection correctness that excludes an executor error or assumes an error classifier."
+      - "Require Proof-layer concrete validity to be a thin composition of refinement, Step.sound, and representation/isomorphism transport."
       - "Reject compatibility authorities or incomplete theorem dependencies."
     expected_output:
       - "complete | not_complete"

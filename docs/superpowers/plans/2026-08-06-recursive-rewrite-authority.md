@@ -21,6 +21,9 @@
 - `Concrete.translate` is the public fallible conversion from unchecked flat open syntax. `Represents` is its graph modulo `OpenDiagramIso`.
 - Representation completeness and one-step execution completeness are required for the whole calculus.
 - `Rule.Step.sound` has no dependency on flat diagrams, translation, execution, errors, receipts, compiler traversal, or carrier numbering.
+- `Concrete/**` and `Refinement/**` are syntactic layers. Their declarations may establish validation, translation, representation, structural isomorphism, execution refinement, completeness, and rejection correctness, but may not mention models, denotation, semantic implication, `Rule.Step.sound`, or rule soundness.
+- Concrete-dependent semantic validity exists only under `Proof/**`. It is a thin composition of `Refinement.execute_sound`, `Rule.Step.sound`, and representation/isomorphism transport; it contains no request-family case split or rule-specific semantic argument.
+- Dependency purity is bidirectional: recursive rule soundness imports no concrete/refinement implementation, and concrete/refinement import closures contain no semantic modules or semantic authority.
 - TypeScript is outside implementation and validation scope.
 - Do not introduce names prefixed with `Direct`, `Directed`, `Abstract`, or `Recursive` merely to distinguish the new authority.
 - No compatibility aliases, transitional public wrappers, or parallel semantic authorities remain after their owning migration task.
@@ -44,11 +47,11 @@ Lean's indexed `Fin` and `RelVar` syntax provides scope and capture safety. Do n
 
 | Layer | Modules | Responsibility |
 |---|---|---|
-| Diagram | `VisualProof/Diagram/{Core,Boundary,Rename,Isomorphism,OpenIsomorphism,Semantics,Context,Occurrence}.lean` | Recursive syntax, open interface, renaming, isomorphism, denotation, contexts, occurrence evidence |
+| Diagram | structural diagram modules plus separately owned semantic modules | Recursive syntax, open interface, renaming, isomorphism, contexts, occurrence evidence, and separately layered denotation |
 | Rules | `VisualProof/Rule/{Relation,Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity,Step,Soundness}.lean` and family soundness modules | Six relations, union, recursive semantic proofs |
-| Concrete | `VisualProof/Concrete/{Diagram,Open,WellFormed,Translate,Occurrence,Step}.lean` plus implementation submodules | Flat syntax, checking, supplied selections, compilation, execution |
-| Refinement | `VisualProof/Refinement/{Represents,Step}.lean` plus family submodules | Translation/encoding laws and execution refinement/completeness |
-| Proof | `VisualProof/Proof/{Replay,Schema,Theorem,Theory}.lean` | Replay and theorem validity inherited from refinement and `Step.sound` |
+| Concrete | `VisualProof/Concrete/{Diagram,Open,WellFormed,Translate,Occurrence,Step}.lean` plus implementation submodules | Flat syntax, checking, supplied selections, compilation, and execution; no semantics |
+| Refinement | `VisualProof/Refinement/{Represents,Step,Complete,Rejection}.lean` plus structural family submodules | Translation/encoding laws, structural execution refinement/completeness, and rejection correctness; no semantics |
+| Proof | `VisualProof/Proof/{Replay,Schema,Theorem,Theory}.lean` | The only concrete-execution semantic validity, inherited compositionally from refinement and `Step.sound` |
 
 ## Theorem-development protocol
 
@@ -1016,8 +1019,7 @@ Then move the twelve-constructor `Concrete.Step (source : State arity)` mechanic
 
 For boundary positions denoting the severed wire, `WireSeverBoundary.side` chooses the old or fresh target wire. The `other` field canonicalizes irrelevant choices; the operation realization theorem proves those positions retain their original wire. This partition is supplied by the request, not discovered by execution.
 
-Define the complete `Concrete.Error` once. Preserve every current domain error, add open-validation errors, and classify errors with a proposition `Concrete.Error.DomainInvalid`. Do not add speculative cancellation, resource, unsupported-operation, or internal-error constructors unless the executor can actually return them.
-Give `DomainInvalid` one constructor for each error that certifies a malformed or illegal fully specified request. It has no constructor for a failed target well-formedness check or any error that does not establish request invalidity. Complete and compile that classification before any rejection theorem refers to it.
+Define the complete `Concrete.Error` once. Preserve the errors that the executor can actually return and add open-validation errors, but do not treat an error tag as proof that a fully specified request is invalid. Rejection correctness is established later from the exact request's structural meaning and execution equation, for every returned error. Do not add speculative cancellation, resource, unsupported-operation, or internal-error constructors unless the executor can actually return them.
 
 Replace source-wire-only interface transport with position-aware boundary transport:
 
@@ -1214,15 +1216,19 @@ theorem representation_complete (diagram : OpenDiagram arity) :
 
 Run RED/GREEN for the round trip and the three representation theorems. Compile, build, kernel-audit, and commit as `Prove concrete representation laws`.
 
-### Task 9: Prove execution soundness family by family
+### Task 9: Prove structural execution refinement family by family
 
 **Files:**
 
 - Create `VisualProof/Refinement/Step/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean`
 - Create `VisualProof/Refinement/Step.lean`
-- Move implementation proof towers from their operational rule locations into the matching refinement subtree
+- Split structural diagram declarations from semantic declarations wherever the concrete/refinement import closure currently mixes them
+- Extract only the compiler equations, carrier equivalences, boundary correspondences, recursive isomorphisms, receipt inversions, and recursive rule witnesses consumed by refinement
+- Remove concrete-dependent semantic declarations and operational semantic proof towers instead of relocating, renaming, wrapping, re-exporting, or retaining them as parallel authorities
 
-For each of the twelve request constructors, prove that successful execution translates to the assigned family relation. Compiler traversal, finite indices, splice traces, attachment partitions, carrier numbering, and receipts may appear only here or below `Concrete`.
+Before continuing family proofs, remediate the existing dependency boundary. `Concrete/**` and `Refinement/**` must have semantic-free source and import closures. In particular, remove concrete denotation APIs and concrete semantic simulation/soundness modules; split any mixed diagram module so structural consumers do not import models or denotation; replace imports of operational `Rule.Soundness` modules with focused structural owners; and remove the operational rule-soundness aggregates once their structural facts have been extracted. Preserve compliant execution inversions and structural proofs already established.
+
+For each of the twelve request constructors, prove that successful execution translates to the assigned family relation. Compiler traversal, finite indices, splice traces, attachment partitions, carrier numbering, receipts, and recursive isomorphisms may appear only in this syntactic proof. Neither family modules nor the aggregate may state or prove a model, denotation, semantic implication, or rule-soundness result.
 
 The family table is exhaustive:
 
@@ -1282,7 +1288,23 @@ theorem execute_translates
 
 It follows from `execute_sound`, translation success for checked states, representation uniqueness, and `Step.iso`; it does not re-prove a rule.
 
-Validate and commit each family separately, then the aggregate.
+Validate and commit each family separately, then the aggregate. For every concrete/refinement entry point used by representation or execution, audit both its source and recursive dependency closure: they must exclude `Model`, diagram semantic modules, concrete semantic modules, `Rule.Soundness`, `Rule.Step.sound`, and `Proof`.
+
+```bash
+lake env lean -DwarningAsError=true VisualProof/Concrete/Step.lean
+lake env lean -DwarningAsError=true VisualProof/Refinement/Represents.lean
+lake env lean -DwarningAsError=true VisualProof/Refinement/Step.lean
+lake env lean --deps VisualProof/Rule/Soundness.lean
+lake env lean --deps VisualProof/Concrete/Step.lean
+lake env lean --deps VisualProof/Refinement/Step.lean
+rg -n '^import VisualProof\.(Model|Diagram\.Semantics|Concrete\.Semantics|Rule\.Soundness|Proof)' VisualProof/Concrete VisualProof/Refinement
+rg -n '\b(Model|denoteOpen|denoteRegion|ConcreteSemanticSimulation|Step\.sound)\b' VisualProof/Concrete VisualProof/Refinement
+rg -n '\bsorry\b|sorryAx' VisualProof
+lake build
+git diff --check
+```
+
+The two semantic-source scans must return no declaration or import; dependency output must be checked recursively for the same forbidden owners.
 
 ### Task 10: Prove request reflection and execution completeness
 
@@ -1336,9 +1358,24 @@ theorem execute_complete
       StateRepresents receipt.target targetDiagram
 ```
 
-No theorem in this task may call or define a matcher. Validate family modules and the aggregate, build, and commit as `Prove concrete execution completeness`.
+This task is syntactic only. No theorem may call or define a matcher or mention a model, denotation, semantic implication, `Rule.Soundness`, `Rule.Step.sound`, or `Proof`. Reflection constructs proof-bearing finite request data; it does not execute search. Audit the source and dependency closures of every completeness owner, validate family modules and the aggregate, build, and commit as `Prove concrete execution completeness`.
 
-### Task 11: Prove rejection correctness for domain-invalid requests
+```bash
+lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/Erasure.lean
+lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/WireSever.lean
+lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/Iteration.lean
+lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/DoubleCut.lean
+lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/Comprehension.lean
+lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/Vacuity.lean
+lake env lean -DwarningAsError=true VisualProof/Refinement/Complete.lean
+lake env lean --deps VisualProof/Refinement/Complete.lean
+rg -n '^import VisualProof\.(Model|Diagram\.Semantics|Concrete\.Semantics|Rule\.Soundness|Proof)' VisualProof/Refinement/Complete VisualProof/Refinement/Complete.lean
+rg -n '(matcher|candidate|search frontier|search status)' VisualProof/Refinement/Complete VisualProof/Refinement/Complete.lean
+lake build
+git diff --check
+```
+
+### Task 11: Prove unconditional rejection correctness
 
 **Files:**
 
@@ -1360,6 +1397,26 @@ def Means
 
 Implement `Means` by pattern matching on all twelve constructors. The branches, in constructor order, produce the Erasure converse, WireSever converse, Erasure base, WireSever base, Iteration base, Iteration converse, DoubleCut introduction, DoubleCut elimination, Comprehension instantiation, Comprehension abstraction, Vacuity introduction, and Vacuity elimination witnesses. Every branch body is a proposition defined from the relevant representation, selection/occurrence correspondence, controlling polarity, and family relation. Complete and compile all twelve bodies before RED.
 
+`Means` is a syntactic request-meaning relation. It may not mention `Concrete.execute`, success or error results, receipts, models, denotation, semantic implication, or soundness. Each branch fixes the supplied request and contains its structural correspondence, controlling polarity and legality evidence, assigned family witness or converse, and exact target representation/isomorphism.
+
+For that same request, first prove exact-request completeness:
+
+```lean
+theorem Means.execute
+    {arity : Nat}
+    {source : Concrete.State arity}
+    {sourceDiagram targetDiagram : OpenDiagram arity}
+    {orientation : Concrete.Orientation}
+    {request : Concrete.Step source}
+    (sourceRep : StateRepresents source sourceDiagram)
+    (means : Means sourceRep request orientation targetDiagram) :
+    ∃ receipt : Concrete.Receipt source,
+      Concrete.execute orientation source request = .ok receipt ∧
+      StateRepresents receipt.target targetDiagram
+```
+
+This is stronger in a different direction from Task 10: Task 10 may construct some request for an abstract step, while this theorem proves success of the already supplied request. If a `Means` branch can reach an executor rejection, repair the executor, add the missing proof-bearing legality evidence to that request, or correct the error contract. Do not exclude an error constructor or add an error-classification premise.
+
 Prove:
 
 ```lean
@@ -1371,12 +1428,24 @@ theorem execute_rejects_only_invalid
     {request : Concrete.Step source}
     {error : Concrete.Error}
     (sourceRep : StateRepresents source sourceDiagram)
-    (failure : Concrete.execute orientation source request = .error error)
-    (invalid : error.DomainInvalid) :
+    (failure : Concrete.execute orientation source request = .error error) :
     ¬ ∃ targetDiagram, Means sourceRep request orientation targetDiagram
 ```
 
-This theorem says nothing about errors outside `DomainInvalid`. Validate, build, and commit as `Prove concrete rejection correctness`.
+Prove the result by contradicting `Means.execute`; it covers every error returned for a fully specified request. Validate the twelve branch definitions, same-request completeness, the unconditional rejection signature, semantic-free source and dependency closures, the full build, and kernel axioms. Commit as `Prove concrete rejection correctness`.
+
+```bash
+lake env lean -DwarningAsError=true VisualProof/Concrete/Step.lean
+lake env lean -DwarningAsError=true VisualProof/Refinement/Rejection.lean
+lake env lean --deps VisualProof/Refinement/Rejection.lean
+rg -n 'DomainInvalid|invalid :.*DomainInvalid' VisualProof/Refinement/Rejection.lean
+rg -n '^import VisualProof\.(Model|Diagram\.Semantics|Concrete\.Semantics|Rule\.Soundness|Proof)' VisualProof/Refinement/Rejection.lean
+lake env lean -DwarningAsError=true VisualProof/Audit.lean
+lake build
+git diff --check
+```
+
+The `DomainInvalid` scan must be empty. `VisualProof/Audit.lean` must expose kernel-checked signature and axiom checks for `Means`, `Means.execute`, and `execute_rejects_only_invalid`, including confirmation that `Means` itself has no execution-result, receipt, error, or semantic dependency.
 
 ### Task 12: Factor replay and theorem validity through refinement
 
@@ -1387,9 +1456,23 @@ This theorem says nothing about errors outside `DomainInvalid`. Validate, build,
 - Modify `VisualProof/Proof/Theorem.lean`
 - Modify `VisualProof/Proof/Theory.lean`
 
-Replay stores concrete checked open states and requests. Its correctness theorem obtains a recursive step from `execute_sound`, aligns adjacent representatives using `represents_unique` and `Step.iso`, and composes `Step.sound`. The theorem schema remains open because it quantifies over ordered boundary arguments.
+Replay stores concrete checked open states and requests. Its correctness theorem obtains a recursive step from `Refinement.execute_sound`, aligns adjacent representatives using representation/isomorphism transport, and applies `Rule.Step.sound`. The theorem schema remains open because it quantifies over ordered boundary arguments.
 
-No proof-layer theorem performs rule-specific semantic reasoning. Compile all four modules, run `lake build`, kernel-audit the checked-theorem result, and commit as `Factor proof replay through refinement`.
+This is the only layer in which concrete execution is connected to models or denotation. The proof must be a thin composition of `Refinement.execute_sound`, `Rule.Step.sound`, and representation/isomorphism transport. It may not split on the twelve request constructors, import a family-specific soundness owner, or perform rule-specific semantic reasoning. Validate those source and dependency constraints, compile all four modules, run `lake build`, kernel-audit the checked-theorem result, and commit as `Factor proof replay through refinement`.
+
+```bash
+lake env lean -DwarningAsError=true VisualProof/Proof/Replay.lean
+lake env lean -DwarningAsError=true VisualProof/Proof/Schema.lean
+lake env lean -DwarningAsError=true VisualProof/Proof/Theorem.lean
+lake env lean -DwarningAsError=true VisualProof/Proof/Theory.lean
+rg -n '^import VisualProof\.Rule\.Soundness\.(Erasure|WireSever|Iteration|DoubleCut|Comprehension|Vacuity)' VisualProof/Proof
+rg -n '\.(boundRelationSpawn|wireJoin|erasure|wireSever|iteration|deiteration|doubleCutIntro|doubleCutElim|comprehensionInstantiate|comprehensionAbstract|vacuousIntro|vacuousElim)\b' VisualProof/Proof
+lake env lean --deps VisualProof/Proof/Theorem.lean
+lake build
+git diff --check
+```
+
+The family-import and constructor-case scans must be empty in semantic proof bodies; the dependency closure must reach semantics through `Rule/Soundness.lean`, not through a family-specific implementation theorem.
 
 ### Task 13: Final authority and repository audit
 
@@ -1402,12 +1485,14 @@ No proof-layer theorem performs rule-specific semantic reasoning. Compile all fo
 
 **Audit:**
 
-1. `VisualProof.lean` imports diagram semantics/occurrence, rule soundness, concrete translation/execution, refinement, then proof modules in that order.
-2. `lake env lean --deps VisualProof/Rule/Soundness.lean` contains no path under `VisualProof/Concrete`, `VisualProof/Refinement`, or the flat-diagram implementation tree.
-3. `rg -n '\bsorry\b|sorryAx' VisualProof` reports no task-owned production proof.
-4. `rg` reports no occurrence-search declaration, import, candidate enumeration, search status, or matcher theorem.
-5. `#print axioms` for `Step.sound`, translation round trip, representation uniqueness/completeness, execution soundness/completeness, rejection correctness, and checked-theorem soundness contains no `sorryAx` or unapproved project axiom.
-6. Run:
+1. `VisualProof.lean` imports diagram syntax/semantics and rule soundness independently from concrete translation/execution and refinement, then imports proof modules that compose the layers.
+2. Audit the recursive direction: the dependency closures of every rule relation, every family soundness owner, and `VisualProof/Rule/Soundness.lean` contain no path under `VisualProof/Concrete`, `VisualProof/Refinement`, or the flat implementation tree.
+3. Audit the implementation direction: direct source scans and recursive dependency closures for `Concrete.Step`, `Concrete.Translate`, `Concrete.Encode`, `Refinement.Represents`, `Refinement.Step`, `Refinement.Complete`, and `Refinement.Rejection` contain no model, denotation, semantic implication, semantic simulation, `Rule.Soundness`, `Rule.Step.sound`, or `Proof` declaration/import. No semantic module or parallel semantic authority remains under `Concrete/**` or `Refinement/**`.
+4. Inspect the elaborated `Means` declaration and its branch bodies: they reference the supplied request type but do not depend on `Concrete.execute`, success/error results, receipts, models, denotation, or soundness, and all twelve request constructors have an exact structural branch.
+5. `rg -n '\bsorry\b|sorryAx' VisualProof` reports no task-owned production proof.
+6. `rg` reports no occurrence-search declaration, import, candidate enumeration, search status, or matcher theorem.
+7. `#print axioms` for `Step.sound`, translation round trip, representation uniqueness/completeness, execution soundness/completeness, unconditional rejection correctness, and checked-theorem soundness contains no `sorryAx` or unapproved project axiom.
+8. Run:
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Rule/Soundness.lean
@@ -1417,6 +1502,11 @@ lake env lean -DwarningAsError=true VisualProof/Refinement/Complete.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Rejection.lean
 lake env lean -DwarningAsError=true VisualProof/Proof/Theorem.lean
 lake env lean -DwarningAsError=true VisualProof/Audit.lean
+lake env lean --deps VisualProof/Rule/Soundness.lean
+lake env lean --deps VisualProof/Concrete/Step.lean
+lake env lean --deps VisualProof/Refinement/Step.lean
+lake env lean --deps VisualProof/Refinement/Complete.lean
+lake env lean --deps VisualProof/Refinement/Rejection.lean
 lake build
 git diff --check
 ```
@@ -1431,6 +1521,7 @@ Stage only task-owned paths explicitly and commit as `Complete recursive rewrite
 - [ ] Positive-context rules, converse under negative polarity, and proved invertibility are the only direction mechanisms in the abstract layer.
 - [ ] `Step` has exactly six constructors and `Step.sound` is ordinary implication.
 - [ ] `Step.sound` has no concrete dependency.
+- [ ] Concrete and Refinement source and import closures contain no semantic declaration, proof, import, or parallel authority.
 - [ ] Concrete execution has exactly twelve operation constructors over checked open state.
 - [ ] Requests supply every selected occurrence and legality witness; execution performs no search.
 - [ ] `Concrete.translate` is validation followed by elaboration.
@@ -1438,6 +1529,6 @@ Stage only task-owned paths explicitly and commit as `Complete recursive rewrite
 - [ ] `Concrete.encode` proves representation completeness.
 - [ ] Every successful concrete operation refines its assigned family relation.
 - [ ] Every abstract step reflects to a concrete request and successful one-step execution.
-- [ ] Rejection correctness is restricted to errors proved `DomainInvalid`.
-- [ ] Replay and theorem validity use refinement followed by `Step.sound`.
+- [ ] Every executor error on a fully specified request unconditionally refutes that exact request's `Means` relation.
+- [ ] Replay and theorem validity are the only concrete-execution semantic bridge and use only refinement, representation/isomorphism transport, and `Step.sound`.
 - [ ] The final Lean tree has one semantic authority, no compatibility path, no matcher, no `sorry`, and a passing build.

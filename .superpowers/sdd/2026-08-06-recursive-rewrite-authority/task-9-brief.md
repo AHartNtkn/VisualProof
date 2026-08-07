@@ -1,13 +1,49 @@
-# Task 9 brief: successful execution refinement
+# Task 9 brief: structural execution refinement
 
 Base commit: `26b57d84`
 
 ## Outcome
 
 Prove that each successful concrete execution realizes exactly one of the six
-recursive rule relations.  Concrete execution evidence may be used only below
-`VisualProof.Refinement`; it must not become part of the recursive rule or
-semantic authority.
+recursive rule relations. Task 9 is entirely syntactic: it may establish
+compiler equations, carrier and boundary correspondences, recursive
+isomorphisms, rule witnesses, representation transport, and execution
+refinement, but it may not state or prove any result about models, denotation,
+semantic implication, or rule soundness.
+
+Before resuming family proofs, repair the dependency boundary introduced or
+retained by earlier work. Preserve compliant structural proofs. Extract only
+the structural declarations actually consumed by refinement, and eliminate
+concrete-dependent semantic machinery instead of moving, renaming, wrapping,
+re-exporting, or retaining it as a parallel authority.
+
+## Required remediation
+
+The following conditions must hold before the Task 9 aggregate is GREEN:
+
+- `Concrete/**` contains no denotation API, model theorem, semantic simulation,
+  operation-soundness theorem, or aggregate importing such material.
+- `Refinement/**` contains no model, denotation, semantic implication,
+  `Rule.Step.sound`, family soundness proof, or operational semantic tower.
+- Mixed diagram modules are split as needed so the import closures used by
+  Concrete and Refinement reach only structural syntax, renaming, contexts,
+  reachability, algebra, and isomorphism declarations—not semantic modules.
+- Structural facts currently owned by operational `Rule.Soundness` modules are
+  moved into focused syntactic owners only when an active refinement proof uses
+  them. Their semantic portions and operational soundness aggregates are not
+  retained elsewhere.
+- The pure six-family rule soundness owners and `Rule.Step.sound` remain in the
+  Rule layer and remain independent of Concrete and Refinement.
+- `Concrete.Error.DomainInvalid` is not an authority for later rejection
+  correctness. Task 11 covers every executor error from exact-request
+  completeness.
+
+The active WireSever and WireJoin work may keep its checked execution inversions,
+raw transformations, compiler naturality equations, finite equivalences,
+boundary maps, recursive isomorphisms, and `Rule.WireSever` witnesses. Replace
+imports from mixed operational soundness modules with focused structural owners.
+Do not commit a wholesale relocation of an operational semantic module or a
+reverse import from `Rule.Soundness` into Refinement.
 
 ## Required family mapping
 
@@ -22,55 +58,22 @@ The mapping is exhaustive and fixed:
 | `Comprehension` | `comprehensionAbstract`, `comprehensionInstantiate` |
 | `Vacuity` | `vacuousIntro`, `vacuousElim` |
 
-Create one owner for each family at
-`VisualProof/Refinement/Step/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean`
-and an aggregate at `VisualProof/Refinement/Step.lean`.
+Each family owns its structural successful-execution theorems at
+`VisualProof/Refinement/Step/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean`.
+The aggregate owner is `VisualProof/Refinement/Step.lean`.
 
-For each concrete constructor, prove from its actual successful
-`Concrete.execute` equation that the translated source and target satisfy the
-assigned recursive relation.  Existing operational proof towers that establish
-the necessary compiler, splice, attachment, carrier, or receipt facts must be
-moved under the matching refinement owner or under
-`Refinement/Implementation`; migrate their consumers rather than retaining a
-parallel owner under `Rule.Soundness`.
+For every constructor, start from its actual successful `Concrete.execute`
+equation. Construct the assigned recursive relation or its converse at the
+controlling context polarity, and construct the represented target. No family
+proof may conclude a semantic implication or invoke a rule soundness theorem.
 
-`Concrete.Insertion` must carry
-`input.AttachmentsRespectBoundary`.  This existing predicate is the exact
-legality condition under which the splice attachment quotient is discrete on
-retained host wires, so `boundRelationSpawn` realizes only the converse of
-`Erasure`.  Add the field in `VisualProof/Concrete/Step.lean`, migrate request
-constructors, and use the existing discrete-quotient/open-isomorphism bridge.
-Do not weaken `Erasure` or combine insertion with `WireSever`/wire joining.
-
-The recursive erasure relation uses the general gluing form
-`Region.spliceAt hostLocal hostItems material wireMap relationMap` as its source
-and `.mk hostLocal hostItems` as its target.  This permits erased material to
-refer to retained site-local wires and lexical relations.  Update
-`Rule/Erasure.lean` and its local soundness proof to this shape before proving
-the family refinement; `Region.denote_spliceAt_host` supplies the semantic
-proof and the existing contextual closure remains unchanged.  Do not restrict
-concrete selections to the disjoint `conjoin` special case.
-
-The same selected-sibling issue requires constructor-local `spliceAt` framing
-for `DoubleCut.Local`, `Vacuity.Local`, and `Comprehension.Local`: both endpoints
-splice their respective before/after material into one unchanged host with the
-same wire and relation maps.  Keep their existing contextual closures.  Prove
-the local semantic laws with `Region.denote_spliceAt_mono` and the existing
-material theorem.  Do not extend `DiagramContext`; its inherited-wire API is
-not the arbitrary material-to-site map required by splicing.
-
-`Iteration.Base` instead remains a direct whole-diagram relation, but must bind
-the anchor-local witness block once around both selected and retained factors.
-Add `anchorLocal`; make `selected` and `descendant` live over
-`ancestorWires + anchorLocal`; and wrap the current source and target factors in
-`Region.adjoinAt anchorLocal .nil`.  This represents shared hidden root wires
-and shared nested-anchor locals without changing the copying maps.  Its
-soundness proof lifts the existing ancestor-copy equivalence through
-`Region.adjoinAt_equiv`.
+`Concrete.Insertion` carries `input.AttachmentsRespectBoundary`, ensuring
+`boundRelationSpawn` is only the converse of `Erasure`. The authorized relation
+shapes already use splice framing for Erasure, DoubleCut, Comprehension, and
+Vacuity, and bind the Iteration anchor-local carrier once. Task 9 consumes those
+relations structurally; it does not prove their semantic laws.
 
 ## Public theorems
-
-The aggregate theorem is:
 
 ```lean
 theorem execute_sound
@@ -89,8 +92,6 @@ theorem execute_sound
       StateRepresents receipt.target targetDiagram
 ```
 
-Also prove the canonical translation square:
-
 ```lean
 theorem execute_translates
     {arity : Nat}
@@ -107,59 +108,55 @@ theorem execute_translates
       | .backward => Rule.Step targetDiagram sourceDiagram
 ```
 
-Family theorems may expose the existential target diagram needed by the
-aggregate, but must state recursive relation conclusions rather than semantic
-implication.  Use `represents_unique` and `Step.iso` to align alternate
-representatives; do not re-prove rule semantics in refinement.
-
-Structural splice bridges at a concrete site return the recursive relation at
-that site's context polarity: positive context relates spliced material to the
-host, while negative context relates the host to the spliced material.  The
-concrete `erasurePolarity`/`spawnPolarity` success evidence then aligns this
-context-polarity result with the aggregate orientation match.  Do not state an
-unconditional endpoint order for a nested splice.
+`execute_translates` is derived only from `execute_sound`, checked-state
+translation, representation uniqueness, and `Step.iso`. It does not invoke
+`Step.sound`.
 
 ## Authority and naming constraints
 
-- Orientation chooses the rule relation or its converse.  Do not add
-  direction-named recursive rules or direction-named copies of relations.
-- The recursive `Rule.Step` and `Rule.Soundness` dependency closures remain free
-  of `Concrete`, `Refinement`, execution, receipt, trace, or compiler imports.
+- Concrete and Refinement are semantic-free in both direct source and recursive
+  dependency closure.
+- Rule relations and Rule soundness are independent of Concrete, Refinement,
+  execution, receipts, compiler traces, and carrier numbering.
+- Orientation chooses a relation or its converse. Do not add direction-named
+  rule variants.
 - Do not define or call a matcher, candidate enumerator, occurrence search, or
   executable inverse to diagram isomorphism.
-- Do not retain operational proof ownership below `Rule.Soundness` once its
-  consumer has moved to refinement.
-- Do not add a direct concrete-to-semantics theorem.  Concrete correctness is
-  refinement to the recursive relation.
-- Use the current twelve constructor names and six relation names exactly.  Do
-  not invent prefixes or replacement terminology.
-- Lean only.  TypeScript is outside scope.
+- Do not add compatibility paths, transitional wrappers, alternate authorities,
+  or names prefixed with `Direct`, `Directed`, `Abstract`, or `Recursive`.
+- Lean only. TypeScript is outside scope.
 
 ## Theorem-driven development
 
-For each family:
-
-1. Complete the family module's definitions and moved helper dependencies.
-2. State the family successful-execution theorem with its proof as the only
-   `sorry` in that dependency closure and compile RED.
-3. Replace the owning `sorry` with a kernel-checked proof and compile GREEN.
-4. Run a focused dependency and authority scan before committing that family.
-
-After all six families are GREEN, run a separate RED/GREEN cycle for
-`execute_sound`, then for `execute_translates`.
+1. First make the semantic-boundary remediation compile with no proof holes.
+2. For each family, complete every structural definition in the theorem's
+   dependency closure.
+3. State the successful-execution theorem with its proof as the only `sorry` in
+   that closure and compile RED.
+4. Replace the owning `sorry` with a kernel-checked proof and compile GREEN.
+5. Run the bidirectional dependency and authority scans before committing the
+   family.
+6. After all families are GREEN, run separate RED/GREEN cycles for
+   `execute_sound` and `execute_translates`.
 
 ## Validation and delivery
 
-- Strict compilation of all six family modules and `Refinement/Step.lean`.
+- Strict compilation of every structural owner, all six family modules, and
+  `Refinement/Step.lean`.
 - Direct signature checks for `execute_sound` and `execute_translates`.
-- Exact audit that all twelve `Concrete.Step` constructors are covered once by
-  the required six-family mapping.
-- `lean --deps` and recursive source scans proving `Rule.Step` and
-  `Rule.Soundness` remain independent of concrete/refinement modules.
-- Repository scans for matchers, search, alternate execution authorities,
-  proof holes, and project axioms.
+- Exact audit that the twelve `Concrete.Step` constructors are covered once by
+  the fixed six-family mapping.
+- Recursive dependency scans proving all Rule relations and soundness owners are
+  independent of Concrete and Refinement.
+- Direct source and recursive dependency scans proving Concrete and Refinement
+  contain no model, denotation, semantic implication, semantic simulation,
+  `Rule.Soundness`, `Rule.Step.sound`, or `Proof` declaration/import.
+- Source checks proving no concrete semantic module, refinement semantic tower,
+  operational soundness aggregate, matcher/search subsystem, compatibility
+  authority, proof hole, or project axiom remains.
 - Full `lake build` and `git diff --check`.
 - Write
   `.superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-report.md`.
-- Commit each completed family separately when practical, then the aggregate;
-  return all commit hashes and exact validation evidence.
+- Commit the remediation before resuming family commits; then commit each
+  completed family separately when practical and return exact validation
+  evidence.
