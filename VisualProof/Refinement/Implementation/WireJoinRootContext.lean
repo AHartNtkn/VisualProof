@@ -353,35 +353,6 @@ private noncomputable def severJoinOpenIso
       simp [wireNe]
     _ = source.val.boundary := List.map_id _
 
-private def castOpenIso
-    {sourceArity targetArity : Nat}
-    (equality : sourceArity = targetArity)
-    {source target : OpenDiagram sourceArity}
-    (iso : OpenDiagramIso source target) :
-    OpenDiagramIso (source.castArity equality)
-      (target.castArity equality) := by
-  subst targetArity
-  simpa using iso
-
-private theorem castArity_castArity
-    (diagram : OpenDiagram firstArity)
-    (first : firstArity = secondArity)
-    (second : secondArity = thirdArity) :
-    (diagram.castArity first).castArity second =
-      diagram.castArity (first.trans second) := by
-  subst secondArity
-  subst thirdArity
-  rfl
-
-private theorem wireSever_castArity
-    (equality : sourceArity = targetArity)
-    {source target : OpenDiagram sourceArity}
-    (step : Rule.WireSever source target) :
-    Rule.WireSever (source.castArity equality)
-      (target.castArity equality) := by
-  subst targetArity
-  simpa using step
-
 private theorem wireSever_castTargetTrans
     {firstArity middleArity finalArity : Nat}
     (first : firstArity = middleArity)
