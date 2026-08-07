@@ -528,7 +528,7 @@ private def ItemSeqIsoSymmMotive {sourceWires targetWires : Nat}
     (_ : ItemSeqIso  wire rels source target) : Prop :=
   ItemSeqIso  wire.symm rels target source
 
-private theorem extendWireEquiv_symm
+theorem extendWireEquiv_symm
     (outer : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
     (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal)) :
     (extendWireEquiv outer localEquiv).symm =
@@ -654,6 +654,19 @@ private theorem itemSeqIsoSymmRec
     regionIsoSymmCase atomIsoSymmCase identityIsoSymmCase
     cutIsoSymmCase bubbleIsoSymmCase permuteIsoSymmCase iso
 
+private theorem itemIsoSymmRec
+    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {source : Item sourceWires rels}
+    {target : Item targetWires rels}
+    (iso : ItemIso wire rels source target) :
+    ItemIsoSymmMotive wire rels source target iso := by
+  apply ItemIso.rec
+    (motive_1 := RegionIsoSymmMotive)
+    (motive_2 := ItemIsoSymmMotive)
+    (motive_3 := ItemSeqIsoSymmMotive)
+    regionIsoSymmCase atomIsoSymmCase identityIsoSymmCase
+    cutIsoSymmCase bubbleIsoSymmCase permuteIsoSymmCase iso
+
 theorem RegionIso.symm
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : Region  sourceWires rels}
@@ -661,6 +674,14 @@ theorem RegionIso.symm
     (iso : RegionIso  wire rels source target) :
     RegionIso  wire.symm rels target source :=
   regionIsoSymmRec iso
+
+theorem ItemIso.symm
+    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {source : Item sourceWires rels}
+    {target : Item targetWires rels}
+    (iso : ItemIso wire rels source target) :
+    ItemIso wire.symm rels target source :=
+  itemIsoSymmRec iso
 
 theorem ItemSeqIso.symm
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}

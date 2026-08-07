@@ -1724,6 +1724,28 @@ inductive DiagramContextIso :
         (.bubble sourceLocal sourceBefore sourceAfter arity sourceChild)
         (.bubble targetLocal targetBefore targetAfter arity targetChild)
 
+theorem DiagramContextIso.symm
+    (iso : DiagramContextIso outerWire holeWire outerRels holeRels
+      source target) :
+    DiagramContextIso outerWire.symm holeWire.symm outerRels holeRels
+      target source := by
+  induction iso with
+  | hole wire => exact .hole wire.symm
+  | cut localWire sourceBefore sourceAfter targetBefore targetAfter
+      sourceChild targetChild child frame induction =>
+      rw [extendWireEquiv_symm] at induction
+      apply DiagramContextIso.cut localWire.symm targetBefore targetAfter
+        sourceBefore sourceAfter targetChild sourceChild induction
+      intro targetBody sourceBody replacement
+      exact (frame replacement.symm).symm
+  | bubble localWire sourceBefore sourceAfter targetBefore targetAfter
+      sourceChild targetChild child frame induction =>
+      rw [extendWireEquiv_symm] at induction
+      apply DiagramContextIso.bubble localWire.symm targetBefore targetAfter
+        sourceBefore sourceAfter targetChild sourceChild induction
+      intro targetBody sourceBody replacement
+      exact (frame replacement.symm).symm
+
 /-- Isomorphic single-hole contexts have the same number of enclosing cuts.
 The occurrence permutations and wire transports carried by the isomorphism
 do not affect polarity. -/
