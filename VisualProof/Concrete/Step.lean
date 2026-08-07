@@ -417,7 +417,7 @@ private def finishWireSever (orientation : Orientation) {arity : Nat}
 
 private def executeInsertionAdmissible {arity : Nat} (source : State arity)
     (insertion : Insertion source) : Except Error (Receipt source) := by
-  rcases insertion with ⟨input, frame_eq, admissible⟩
+  rcases insertion with ⟨input, frame_eq, admissible, _respects⟩
   let diagramEq : input.frame.val = source.checked.val.diagram :=
     congrArg Subtype.val frame_eq
   let wireCountEq : input.frame.val.wireCount =
