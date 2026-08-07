@@ -34,6 +34,14 @@ moved under the matching refinement owner or under
 `Refinement/Implementation`; migrate their consumers rather than retaining a
 parallel owner under `Rule.Soundness`.
 
+`Concrete.Insertion` must carry
+`input.AttachmentsRespectBoundary`.  This existing predicate is the exact
+legality condition under which the splice attachment quotient is discrete on
+retained host wires, so `boundRelationSpawn` realizes only the converse of
+`Erasure`.  Add the field in `VisualProof/Concrete/Step.lean`, migrate request
+constructors, and use the existing discrete-quotient/open-isomorphism bridge.
+Do not weaken `Erasure` or combine insertion with `WireSever`/wire joining.
+
 ## Public theorems
 
 The aggregate theorem is:
@@ -122,4 +130,3 @@ After all six families are GREEN, run a separate RED/GREEN cycle for
   `.superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-report.md`.
 - Commit each completed family separately when practical, then the aggregate;
   return all commit hashes and exact validation evidence.
-

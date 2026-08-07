@@ -702,6 +702,8 @@ tasks:
       - "VisualProof/Refinement/Step.lean"
       - "VisualProof/Refinement/Step/*.lean"
       - "VisualProof/Refinement/Implementation/**/*.lean"
+      - "VisualProof/Concrete/Step.lean"
+      - "VisualProof/Concrete/Subgraph/Splice/Input/Discrete.lean"
       - "VisualProof/Rule/Soundness/**/*.lean"
       - "VisualProof/Rule/Soundness/*.lean"
       - "VisualProof/Proof/**/*.lean"
@@ -714,6 +716,7 @@ tasks:
       - "Concrete indices, receipts, traces, compiler traversal, and carrier bookkeeping appear only in Concrete or Refinement."
       - "Rule relations and Step.sound remain independent of Concrete and Refinement."
       - "Orientation selects the relation or its converse; do not add direction-named rule variants."
+      - "Concrete.Insertion carries input.AttachmentsRespectBoundary so boundRelationSpawn cannot also merge retained host wires."
       - "Do not define or call a matcher, candidate enumerator, or occurrence search."
       - "Lean only; TypeScript is outside scope."
     verify:

@@ -952,9 +952,13 @@ structure Concrete.Insertion
   input : Concrete.Splice.Input
   frame_eq : input.frame = source.diagram
   admissible : input.Admissible
+  respects : input.AttachmentsRespectBoundary
 ```
 
 `Concrete.Splice.Input` already contains the checked open material, target region, ordered attachment map, binder spine, terminal-body contract, and binder targets. `admissible` supplies attachment visibility, binder matching, injectivity, and scope. Consequently `Insertion` realizes arbitrary insertion rather than only one bound atom.
+`respects` ensures equal intrinsic boundary identities use one retained host wire,
+so insertion does not also perform a wire join and is exactly the converse of
+`Erasure`.
 
 Then move the twelve-constructor `Concrete.Step (source : State arity)` mechanically. Ten constructors retain their current dependent fields. The changed constructors are:
 
