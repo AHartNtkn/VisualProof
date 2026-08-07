@@ -11,3 +11,5 @@ import VisualProof.Concrete.Operation.Structural
 import VisualProof.Concrete.Operation.Comprehension
 import VisualProof.Concrete.Step
 import VisualProof.Concrete.StepTags
+import VisualProof.Concrete.Translate
+import VisualProof.Concrete.Encode

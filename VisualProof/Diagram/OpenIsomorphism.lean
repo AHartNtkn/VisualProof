@@ -131,6 +131,32 @@ theorem denoteOpen_iff {source target : OpenDiagram  arity}
 
 end OpenDiagramIso
 
+namespace OpenDiagram
+
+def Isomorphic (source target : OpenDiagram arity) : Prop :=
+  Nonempty (OpenDiagramIso source target)
+
+namespace Isomorphic
+
+theorem refl (diagram : OpenDiagram arity) : Isomorphic diagram diagram :=
+  ⟨OpenDiagramIso.refl diagram⟩
+
+theorem symm {source target : OpenDiagram arity}
+    (isomorphic : Isomorphic source target) : Isomorphic target source := by
+  rcases isomorphic with ⟨iso⟩
+  exact ⟨iso.symm⟩
+
+theorem trans {source middle target : OpenDiagram arity}
+    (first : Isomorphic source middle)
+    (second : Isomorphic middle target) : Isomorphic source target := by
+  rcases first with ⟨firstIso⟩
+  rcases second with ⟨secondIso⟩
+  exact ⟨firstIso.trans secondIso⟩
+
+end Isomorphic
+
+end OpenDiagram
+
 def OpenDiagram.withBody_iso
     {diagram : OpenDiagram arity}
     {before after : Region diagram.externalClasses []}
