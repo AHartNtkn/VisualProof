@@ -13,6 +13,41 @@ open VisualProof.Theory
 def identityRelationRenaming (rels : RelCtx) : RelationRenaming rels rels :=
   fun relation => relation
 
+private theorem allFin_succ_last (n : Nat) :
+    allFin (n + 1) = (allFin n).map (Fin.castAdd 1) ++ [Fin.last n] := by
+  rw [allFin_eq_finRange, allFin_eq_finRange, List.finRange_succ_last]
+  apply congrArg (fun indices : List (Fin (n + 1)) => indices ++ [Fin.last n])
+  apply List.map_congr_left
+  intro index _
+  ext
+  rfl
+
+private theorem allFin_add (n m : Nat) :
+    allFin (n + m) =
+      (allFin n).map (Fin.castAdd m) ++ (allFin m).map (Fin.natAdd n) := by
+  induction m with
+  | zero =>
+      simp only [Nat.add_zero, allFin, List.map_nil, List.append_nil]
+      have equality : (Fin.castAdd 0 : Fin n → Fin (n + 0)) = id := by
+        funext index
+        ext
+        rfl
+      rw [equality, List.map_id]
+  | succ m induction =>
+      change allFin ((n + m) + 1) = _
+      rw [allFin_succ_last (n + m), induction, List.map_append,
+        allFin_succ_last m, List.map_append, List.map_map, List.append_assoc]
+      simp only [List.map_map]
+      have left :
+          (Fin.castAdd 1 ∘ Fin.castAdd m : Fin n → Fin ((n + m) + 1)) =
+            Fin.castAdd (m + 1) := by funext index; ext; rfl
+      have middle :
+          (Fin.castAdd 1 ∘ Fin.natAdd n : Fin m → Fin ((n + m) + 1)) =
+            Fin.natAdd n ∘ Fin.castAdd 1 := by funext index; ext; rfl
+      have last : Fin.last (n + m) = Fin.natAdd n (Fin.last m) := by ext; rfl
+      rw [left, middle, last]
+      rfl
+
 def outer (input : Concrete.Diagram) : Fin (input.regionCount + 2) :=
   Fin.natAdd input.regionCount ⟨0, by decide⟩
 
@@ -334,5 +369,176 @@ theorem unselected_region (input : Concrete.Diagram)
       | .bubble parent arity => .bubble (Fin.castAdd 2 parent) arity := by
   rw [oldRegion, if_neg unselected]
   cases input.regions region <;> rfl
+
+theorem regular_node (input : Concrete.Diagram)
+    (selection : CheckedSelection input) (region : Fin input.regionCount)
+    (regular : region ≠ selection.val.anchor) (index : Fin input.nodeCount)
+    (owner : (input.nodes index).region = region) :
+    (doubleCutIntroRaw input selection).nodes index =
+      match input.nodes index with
+      | .atom nodeOwner binder =>
+          .atom (Fin.castAdd 2 nodeOwner) (Fin.castAdd 2 binder)
+      | .identity nodeOwner arity =>
+          .identity (Fin.castAdd 2 nodeOwner) arity := by
+  apply unselected_node input selection index
+  intro selected
+  exact regular (owner.symm.trans
+    (selection.property.directNodes_at_anchor index selected))
+
+theorem regular_region (input : Concrete.Diagram)
+    (selection : CheckedSelection input) (parent child : Fin input.regionCount)
+    (regular : parent ≠ selection.val.anchor)
+    (childParent : (input.regions child).parent? = some parent) :
+    (doubleCutIntroRaw input selection).regions (Fin.castAdd 2 child) =
+      match input.regions child with
+      | .sheet => .sheet
+      | .cut actualParent => .cut (Fin.castAdd 2 actualParent)
+      | .bubble actualParent arity =>
+          .bubble (Fin.castAdd 2 actualParent) arity := by
+  apply unselected_region input selection child
+  intro selected
+  exact regular (Option.some.inj
+    (childParent.symm.trans
+      (selection.property.childRoots_direct child selected)))
+
+theorem regular_localOccurrences (input : Concrete.Diagram)
+    (selection : CheckedSelection input) (region : Fin input.regionCount)
+    (regular : region ≠ selection.val.anchor) :
+    Concrete.Elaboration.localOccurrences (doubleCutIntroRaw input selection)
+        (Fin.castAdd 2 region) =
+      (Concrete.Elaboration.localOccurrences input region).map
+        (fun occurrence => match occurrence with
+          | .node node => .node node
+          | .child child => .child (Fin.castAdd 2 child)) := by
+  unfold Concrete.Elaboration.localOccurrences filterFin
+  simp only [nodeCount, regionCount, List.map_append, List.map_map]
+  rw [allFin_add input.regionCount 2, List.filter_append,
+    List.filter_map, List.map_append]
+  have liftNode :
+      ((fun occurrence : Concrete.Elaboration.LocalOccurrence
+          input.regionCount input.nodeCount => match occurrence with
+        | .node node => .node node
+        | .child child => .child (Fin.castAdd 2 child)) ∘
+          Concrete.Elaboration.LocalOccurrence.node) =
+        Concrete.Elaboration.LocalOccurrence.node := by funext node; rfl
+  have liftChild :
+      ((fun occurrence : Concrete.Elaboration.LocalOccurrence
+          input.regionCount input.nodeCount => match occurrence with
+        | .node node => .node node
+        | .child child => .child (Fin.castAdd 2 child)) ∘
+          Concrete.Elaboration.LocalOccurrence.child) =
+        Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castAdd 2 := by
+    funext child
+    rfl
+  rw [liftNode, liftChild]
+  congr 1
+  · apply congrArg (List.map Concrete.Elaboration.LocalOccurrence.node)
+    apply congrArg (fun predicate => List.filter predicate (allFin input.nodeCount))
+    funext index
+    apply Bool.eq_iff_iff.mpr
+    simp only [decide_eq_true_eq]
+    have targetOwner := node_region input selection index
+    by_cases selected : index ∈ selection.val.directNodes
+    · have sourceOwner := selection.property.directNodes_at_anchor index selected
+      constructor
+      · intro atRegion
+        rw [if_pos selected] at targetOwner
+        exact False.elim (inner_ne_lift input region
+          (targetOwner.symm.trans atRegion))
+      · intro atRegion
+        exact False.elim (regular (sourceOwner.symm.trans atRegion).symm)
+    · rw [if_neg selected] at targetOwner
+      constructor
+      · intro atRegion
+        apply Fin.ext
+        exact congrArg (fun value : Fin (input.regionCount + 2) => value.val)
+          (targetOwner.symm.trans atRegion)
+      · intro atRegion
+        exact targetOwner.trans (congrArg (Fin.castAdd 2) atRegion)
+  · have addedNil :
+        List.filter
+            (fun child => decide
+              (((doubleCutIntroRaw input selection).regions child).parent? =
+                some (Fin.castAdd 2 region)))
+            (List.map (Fin.natAdd input.regionCount) (allFin 2)) = [] := by
+      apply List.filter_eq_nil_iff.mpr
+      intro child member chosen
+      have parent := decide_eq_true_eq.mp chosen
+      rw [show allFin 2 = [(0 : Fin 2), (1 : Fin 2)] by decide] at member
+      simp only [List.map_cons, List.map_nil, List.mem_cons,
+        List.not_mem_nil, or_false] at member
+      rcases member with isOuter | isInner
+      · have equality : Fin.natAdd input.regionCount (0 : Fin 2) = outer input := by
+          ext
+          rfl
+        rw [isOuter, equality, outer_parent] at parent
+        apply regular
+        apply Fin.ext
+        exact (congrArg
+          (fun value : Fin (input.regionCount + 2) => value.val)
+          (Option.some.inj parent)).symm
+      · have equality : Fin.natAdd input.regionCount (1 : Fin 2) = inner input := by
+          ext
+          rfl
+        rw [isInner, equality, inner_parent] at parent
+        exact outer_ne_lift input region (Option.some.inj parent)
+    have addedOccurrencesNil := congrArg
+      (List.map (Concrete.Elaboration.LocalOccurrence.child
+        (regions := input.regionCount + 2) (nodes := input.nodeCount))) addedNil
+    calc
+      _ = List.map
+            (Concrete.Elaboration.LocalOccurrence.child
+              (regions := input.regionCount + 2) (nodes := input.nodeCount))
+            (List.map (Fin.castAdd 2)
+              (List.filter
+                ((fun child => decide
+                  (((doubleCutIntroRaw input selection).regions child).parent? =
+                    some (Fin.castAdd 2 region))) ∘ Fin.castAdd 2)
+                (allFin input.regionCount))) ++ [] := by
+          exact congrArg (fun tail => List.map
+            (Concrete.Elaboration.LocalOccurrence.child
+              (regions := input.regionCount + 2) (nodes := input.nodeCount))
+            (List.map (Fin.castAdd 2)
+              (List.filter
+                ((fun child => decide
+                  (((doubleCutIntroRaw input selection).regions child).parent? =
+                    some (Fin.castAdd 2 region))) ∘ Fin.castAdd 2)
+                (allFin input.regionCount))) ++ tail) addedOccurrencesNil
+      _ = _ := by
+        rw [List.append_nil, List.map_map]
+        apply congrArg
+          (List.map (Concrete.Elaboration.LocalOccurrence.child ∘ Fin.castAdd 2))
+        apply congrArg (fun predicate => List.filter predicate (allFin input.regionCount))
+        funext child
+        apply Bool.eq_iff_iff.mpr
+        simp only [Function.comp_apply, decide_eq_true_eq]
+        have parentEq := oldRegion_parent input selection child
+        by_cases selected : child ∈ selection.val.childRoots
+        · have sourceParent := selection.property.childRoots_direct child selected
+          constructor
+          · intro targetParent
+            rw [if_pos selected] at parentEq
+            exact False.elim (inner_ne_lift input region
+              (Option.some.inj (parentEq.symm.trans targetParent)))
+          · intro atRegion
+            exact False.elim (regular
+              (Option.some.inj (sourceParent.symm.trans atRegion)).symm)
+        · rw [if_neg selected] at parentEq
+          constructor
+          · intro targetParent
+            cases sourceParent : (input.regions child).parent? with
+            | none =>
+                rw [parentEq, sourceParent] at targetParent
+                cases targetParent
+            | some actual =>
+                rw [sourceParent] at parentEq
+                apply congrArg some
+                apply Fin.ext
+                exact congrArg
+                  (fun value : Fin (input.regionCount + 2) => value.val)
+                  (Option.some.inj (parentEq.symm.trans targetParent))
+          · intro sourceParent
+            rw [sourceParent] at parentEq
+            exact parentEq
 
 end VisualProof.Refinement.Implementation.DoubleCutTransport
