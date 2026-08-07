@@ -4,7 +4,7 @@ goal:
   title: "Recursive Rewrite Authority"
   slug: "recursive-rewrite-authority"
   kind: existing_plan
-  tranche: "Prove concrete translation, encoding, and representation laws modulo recursive diagram isomorphism."
+  tranche: "Prove successful concrete execution refines the six recursive rule relations."
   status: active
   oracle:
     signal: "Kernel-checked Lean theorems prove one recursive relational calculus with structural semantics and a separate concrete refinement layer."
@@ -65,7 +65,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/recursive-rewrite-authority/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/recursive-rewrite-authority"
 
-active_task: T115
+active_task: T117
 
 tasks:
   - id: T001
@@ -616,7 +616,7 @@ tasks:
   - id: T115
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 8: define open validation and translation, a recursive encoder, Represents/StateRepresents, and prove representation existence, uniqueness, and completeness modulo OpenDiagramIso."
     inputs:
@@ -645,6 +645,103 @@ tasks:
       - "The existing recursive/flat syntax lacks information required for a total representation encoder."
       - "An isomorphism theorem needed for round-trip or uniqueness is absent and cannot be proved within allowed files."
       - "A required change to representation semantics falls outside the plan."
+    receipt:
+      result: done
+      changed_files:
+        - "VisualProof/Diagram/OpenIsomorphism.lean"
+        - "VisualProof/Concrete/Translate.lean"
+        - "VisualProof/Concrete/Encode.lean"
+        - "VisualProof/Concrete.lean"
+        - "VisualProof/Refinement/Represents.lean"
+        - "VisualProof.lean"
+        - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-8-report.md"
+      commands:
+        - cmd: "strict Translate, Encode, and Represents compilation"
+          status: pass
+        - cmd: "public signature and kernel-axiom audit"
+          status: pass
+        - cmd: "lake build"
+          status: pass
+        - cmd: "translation/representation ownership, proof-hole, project-axiom, and matcher scans"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "Defined check-then-elaborate translation, a total recursive encoder preserving ordered aliases, representation modulo recursive isomorphism, uniqueness, and unconditional completeness."
+      harness: codex
+  - id: T116
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit T115 for translation authority, encoder adequacy, ordered alias preservation, representation theorem signatures, proof quality, and narrow scope."
+    inputs:
+      - "T115 receipt"
+      - "Task 8 commits and report"
+    constraints:
+      - "Read-only."
+      - "Reject any second translation or representation authority."
+      - "Reject matching, search, executable inversion, proof holes, or restricted completeness."
+    expected_output:
+      - "approved | changes_required"
+    receipt:
+      result: done
+      decision: approved
+      full_outcome_complete: false
+      rationale: "Task 8 is approved after remediation: translation is the sole check-then-elaborate authority, encoding preserves ordered aliases, all representation laws are kernel-checked, completeness is unconditional, and validation is clean."
+      harness: codex
+  - id: T117
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Execute plan Task 9: prove all twelve successful concrete executions refine exactly the six recursive rule relations, then prove execute_sound and execute_translates."
+    inputs:
+      - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 9"
+      - "T115 representation boundary"
+    allowed_files:
+      - "VisualProof/Refinement/Step.lean"
+      - "VisualProof/Refinement/Step/*.lean"
+      - "VisualProof/Refinement/Implementation/**/*.lean"
+      - "VisualProof/Rule/Soundness/**/*.lean"
+      - "VisualProof/Rule/Soundness/*.lean"
+      - "VisualProof/Proof/**/*.lean"
+      - "VisualProof/Audit.lean"
+      - "VisualProof/Refinement.lean"
+      - "VisualProof.lean"
+      - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-report.md"
+    constraints:
+      - "Map the twelve concrete constructors exhaustively to Erasure, WireSever, Iteration, DoubleCut, Comprehension, and Vacuity."
+      - "Concrete indices, receipts, traces, compiler traversal, and carrier bookkeeping appear only in Concrete or Refinement."
+      - "Rule relations and Step.sound remain independent of Concrete and Refinement."
+      - "Orientation selects the relation or its converse; do not add direction-named rule variants."
+      - "Do not define or call a matcher, candidate enumerator, or occurrence search."
+      - "Lean only; TypeScript is outside scope."
+    verify:
+      - "strict family refinement and aggregate compilation"
+      - "exact twelve-constructor coverage and six-family mapping audit"
+      - "abstract dependency-purity and proof-hole/project-axiom scans"
+      - "lake build"
+      - "git diff --check"
+    stop_if:
+      - "A concrete constructor lacks enough successful-execution evidence to prove its assigned recursive relation."
+      - "A required relation witness would change the mathematical meaning fixed by Tasks 3-4."
+      - "The proof would require importing Concrete or Refinement into Rule.Step or Rule.Soundness."
+    receipt: null
+  - id: T118
+    type: judge
+    assignee: Judge
+    status: queued
+    reasoning_hint: high
+    objective: "Audit T117 for exhaustive constructor coverage, correct family mapping, orientation/converse handling, representation alignment, and dependency purity."
+    inputs:
+      - "T117 receipt"
+      - "Task 9 review package"
+    constraints:
+      - "Read-only."
+      - "Reject direct semantic-preservation authority in the concrete layer."
+      - "Reject any matcher/search subsystem or abstract dependency on execution data."
+    expected_output:
+      - "approved | changes_required"
     receipt: null
   - id: T999
     type: judge
