@@ -82,4 +82,11 @@ theorem Iteration.iso
       rcases backward with ⟨backward⟩
       exact Or.inr ⟨Iteration.Base.iso targetIso backward sourceIso⟩
 
+theorem Iteration.symm
+    {arity : Nat}
+    {source target : OpenDiagram arity}
+    (step : Iteration source target) :
+    Iteration target source := by
+  exact step.elim Or.inr Or.inl
+
 end VisualProof.Rule
