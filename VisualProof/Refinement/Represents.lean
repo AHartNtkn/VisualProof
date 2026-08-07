@@ -41,6 +41,13 @@ theorem checked_represents (concrete : Concrete.CheckedOpen) :
   exact ⟨concrete.elaborate, Concrete.translate_checked concrete,
     OpenDiagram.Isomorphic.refl concrete.elaborate⟩
 
+theorem StateRepresents.checked (state : Concrete.State arity) :
+    StateRepresents state
+      (state.checked.elaborate.castArity state.boundary_length) := by
+  rcases state with ⟨checked, boundaryLength⟩
+  cases boundaryLength
+  exact checked_represents checked
+
 theorem represents_unique
     (first : Represents concrete firstDiagram)
     (second : Represents concrete secondDiagram) :
