@@ -91,17 +91,18 @@ theorem occurrence_iso
     (binders : Binders input selection sourceBinders targetBinders)
     (occurrence : Concrete.Elaboration.LocalOccurrence
       input.regionCount input.nodeCount)
+    (regionMap : Fin input.regionCount → Fin (input.regionCount + 2))
     (nodeMap : ∀ node, occurrence = .node node →
       (doubleCutIntroRaw input selection).nodes node =
         match input.nodes node with
-        | .atom owner binder => .atom (Fin.castAdd 2 owner) (Fin.castAdd 2 binder)
-        | .identity owner arity => .identity (Fin.castAdd 2 owner) arity)
+        | .atom owner binder => .atom (regionMap owner) (Fin.castAdd 2 binder)
+        | .identity owner arity => .identity (regionMap owner) arity)
     (childMap : ∀ child, occurrence = .child child →
       (doubleCutIntroRaw input selection).regions (Fin.castAdd 2 child) =
         match input.regions child with
         | .sheet => .sheet
-        | .cut parent => .cut (Fin.castAdd 2 parent)
-        | .bubble parent arity => .bubble (Fin.castAdd 2 parent) arity)
+        | .cut parent => .cut (regionMap parent)
+        | .bubble parent arity => .bubble (regionMap parent) arity)
     (recurse : ∀ {childSourceRels childTargetRels : RelCtx}
       {childSourceBinders : Concrete.Elaboration.BinderContext input childSourceRels}
       {childTargetBinders : Concrete.Elaboration.BinderContext
@@ -137,7 +138,7 @@ theorem occurrence_iso
   cases occurrence with
   | node node =>
       apply node_iso input selection sourceContext targetContext context
-        sourceBinders targetBinders binders node (Fin.castAdd 2)
+        sourceBinders targetBinders binders node regionMap
         (nodeMap node rfl)
       · simpa [Concrete.Elaboration.compileOccurrenceWith?] using sourceCompiled
       · simpa [Concrete.Elaboration.compileOccurrenceWith?, liftOccurrence]
@@ -192,6 +193,118 @@ theorem occurrence_iso
                   exact ItemIso.bubble
                     (recurse (binders.push child arity) child rfl
                       sourceResult targetResult)
+
+theorem occurrences_iso
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
+    {sourceFuel targetFuel : Nat}
+    (sourceContext : Concrete.Elaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext
+      (doubleCutIntroRaw input selection))
+    (context : Context input selection sourceContext targetContext)
+    {sourceRels targetRels : RelCtx}
+    (sourceBinders : Concrete.Elaboration.BinderContext input sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext
+      (doubleCutIntroRaw input selection) targetRels)
+    (binders : Binders input selection sourceBinders targetBinders)
+    (occurrences : List (Concrete.Elaboration.LocalOccurrence
+      input.regionCount input.nodeCount))
+    (regionMap : Fin input.regionCount → Fin (input.regionCount + 2))
+    (nodeMap : ∀ node, .node node ∈ occurrences →
+      (doubleCutIntroRaw input selection).nodes node =
+        match input.nodes node with
+        | .atom owner binder => .atom (regionMap owner) (Fin.castAdd 2 binder)
+        | .identity owner arity => .identity (regionMap owner) arity)
+    (childMap : ∀ child, .child child ∈ occurrences →
+      (doubleCutIntroRaw input selection).regions (Fin.castAdd 2 child) =
+        match input.regions child with
+        | .sheet => .sheet
+        | .cut parent => .cut (regionMap parent)
+        | .bubble parent arity => .bubble (regionMap parent) arity)
+    (recurse : ∀ {childSourceRels childTargetRels : RelCtx}
+      {childSourceBinders : Concrete.Elaboration.BinderContext input childSourceRels}
+      {childTargetBinders : Concrete.Elaboration.BinderContext
+        (doubleCutIntroRaw input selection) childTargetRels}
+      (childBinders : Binders input selection childSourceBinders
+        childTargetBinders)
+      (child : Fin input.regionCount),
+      .child child ∈ occurrences →
+      ∀ {sourceBody : Region sourceContext.length childSourceRels}
+        {targetBody : Region targetContext.length childTargetRels},
+      Concrete.Elaboration.compileRegion? input sourceFuel child sourceContext
+          childSourceBinders = some sourceBody →
+      Concrete.Elaboration.compileRegion? (doubleCutIntroRaw input selection)
+          targetFuel (Fin.castAdd 2 child) targetContext childTargetBinders =
+        some targetBody →
+      RegionIso
+        (FiniteEquiv.finCast (congrArg List.length context.equality))
+        childSourceRels sourceBody (childBinders.rels ▸ targetBody))
+    {sourceItems : ItemSeq sourceContext.length sourceRels}
+    {targetItems : ItemSeq targetContext.length targetRels}
+    (sourceCompiled : Concrete.Elaboration.compileOccurrencesWith? input
+      (Concrete.Elaboration.compileRegion? input sourceFuel) sourceContext
+      sourceBinders occurrences = some sourceItems)
+    (targetCompiled : Concrete.Elaboration.compileOccurrencesWith?
+      (doubleCutIntroRaw input selection)
+      (Concrete.Elaboration.compileRegion?
+        (doubleCutIntroRaw input selection) targetFuel)
+      targetContext targetBinders (occurrences.map (liftOccurrence input)) =
+        some targetItems) :
+    ItemSeqIso (FiniteEquiv.finCast
+        (congrArg List.length context.equality))
+      sourceRels sourceItems (binders.rels ▸ targetItems) := by
+  cases binders.rels
+  let positions : FiniteEquiv (Fin occurrences.length)
+      (Fin (occurrences.map (liftOccurrence input)).length) :=
+    FiniteEquiv.finCast
+      (List.length_map (as := occurrences) (liftOccurrence input)).symm
+  apply Concrete.Elaboration.compileOccurrencesWith?_iso
+    (Concrete.Elaboration.compileRegion? input sourceFuel)
+    (Concrete.Elaboration.compileRegion?
+      (doubleCutIntroRaw input selection) targetFuel)
+    sourceContext targetContext sourceBinders targetBinders
+    occurrences (occurrences.map (liftOccurrence input))
+    sourceCompiled targetCompiled positions
+    (FiniteEquiv.finCast (congrArg List.length context.equality))
+  intro index
+  have sourceGet := Concrete.Elaboration.compileOccurrencesWith?_get
+    (Concrete.Elaboration.compileRegion? input sourceFuel)
+    sourceContext sourceBinders sourceCompiled index
+  have targetGet := Concrete.Elaboration.compileOccurrencesWith?_get
+    (Concrete.Elaboration.compileRegion?
+      (doubleCutIntroRaw input selection) targetFuel)
+    targetContext targetBinders targetCompiled (positions index)
+  have targetGet' :
+      Concrete.Elaboration.compileOccurrenceWith?
+        (doubleCutIntroRaw input selection)
+        (Concrete.Elaboration.compileRegion?
+          (doubleCutIntroRaw input selection) targetFuel)
+        targetContext targetBinders
+        (liftOccurrence input (occurrences.get index)) =
+      some (targetItems.get
+        (Fin.cast
+          (Concrete.Elaboration.compileOccurrencesWith?_length
+            (Concrete.Elaboration.compileRegion?
+              (doubleCutIntroRaw input selection) targetFuel)
+            targetContext targetBinders targetCompiled).symm
+          (positions index))) := by
+    simpa [positions] using targetGet
+  have member : occurrences.get index ∈ occurrences := List.get_mem _ _
+  apply occurrence_iso input selection sourceContext targetContext context
+    sourceBinders targetBinders binders (occurrences.get index) regionMap
+  · intro node equality
+    rw [equality] at member
+    exact nodeMap node member
+  · intro child equality
+    rw [equality] at member
+    exact childMap child member
+  · intro childSourceRels childTargetRels childSourceBinders
+      childTargetBinders childBinders child equality sourceBody targetBody
+      childSourceCompiled childTargetCompiled
+    rw [equality] at member
+    exact recurse childBinders child member childSourceCompiled
+      childTargetCompiled
+  · exact sourceGet
+  · exact targetGet'
 
 theorem away_region_iso
     (input : Concrete.Diagram) (selection : CheckedSelection input)
@@ -333,7 +446,7 @@ theorem away_region_iso
                       (sourceContext.extend region)
                       (targetContext.extend (Fin.castAdd 2 region))
                       extendedContext sourceBinders targetBinders binders
-                      occurrence
+                      occurrence (Fin.castAdd 2)
                     · intro node occurrenceEq
                       rw [occurrenceEq] at member
                       exact regular_node input selection region regular node
@@ -422,5 +535,110 @@ theorem away_region_iso
                     sourceItems targetItems
                   rw [wireEquivEq]
                   exact itemsIso
+
+theorem kept_iso
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
+    (wellFormed : input.WellFormed)
+    {sourceFuel targetFuel : Nat}
+    (sourceContext : Concrete.Elaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext
+      (doubleCutIntroRaw input selection))
+    (context : Context input selection sourceContext targetContext)
+    {sourceRels targetRels : RelCtx}
+    (sourceBinders : Concrete.Elaboration.BinderContext input sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext
+      (doubleCutIntroRaw input selection) targetRels)
+    (binders : Binders input selection sourceBinders targetBinders)
+    {sourceItems : ItemSeq sourceContext.length sourceRels}
+    {targetItems : ItemSeq targetContext.length targetRels}
+    (sourceCompiled : Concrete.Elaboration.compileOccurrencesWith? input
+      (Concrete.Elaboration.compileRegion? input sourceFuel) sourceContext
+      sourceBinders (keptOccurrences input selection) = some sourceItems)
+    (targetCompiled : Concrete.Elaboration.compileOccurrencesWith?
+      (doubleCutIntroRaw input selection)
+      (Concrete.Elaboration.compileRegion?
+        (doubleCutIntroRaw input selection) targetFuel)
+      targetContext targetBinders
+      ((keptOccurrences input selection).map (liftOccurrence input)) =
+        some targetItems) :
+    ItemSeqIso (FiniteEquiv.finCast
+        (congrArg List.length context.equality))
+      sourceRels sourceItems (binders.rels ▸ targetItems) := by
+  apply occurrences_iso input selection sourceContext targetContext context
+    sourceBinders targetBinders binders (keptOccurrences input selection)
+    (Fin.castAdd 2)
+  · intro node member
+    exact unselected_node input selection node
+      (kept_node_iff (input := input) (selection := selection) node |>.1
+        member).2
+  · intro child member
+    exact unselected_region input selection child
+      (kept_child_iff (input := input) (selection := selection) child |>.1
+        member).2
+  · intro childSourceRels childTargetRels childSourceBinders
+      childTargetBinders childBinders child member sourceBody targetBody
+      childSourceCompiled childTargetCompiled
+    have parent := (kept_child_iff (input := input) (selection := selection)
+      child |>.1 member).1
+    have away := Concrete.Elaboration.checked_direct_child_not_encloses_parent
+      wellFormed parent
+    exact away_region_iso input selection wellFormed child away sourceContext
+      targetContext context childSourceBinders childTargetBinders childBinders
+      childSourceCompiled childTargetCompiled
+  · exact sourceCompiled
+  · exact targetCompiled
+
+theorem selected_iso
+    (input : Concrete.Diagram) (selection : CheckedSelection input)
+    (wellFormed : input.WellFormed)
+    {sourceFuel targetFuel : Nat}
+    (sourceContext : Concrete.Elaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext
+      (doubleCutIntroRaw input selection))
+    (context : Context input selection sourceContext targetContext)
+    {sourceRels targetRels : RelCtx}
+    (sourceBinders : Concrete.Elaboration.BinderContext input sourceRels)
+    (targetBinders : Concrete.Elaboration.BinderContext
+      (doubleCutIntroRaw input selection) targetRels)
+    (binders : Binders input selection sourceBinders targetBinders)
+    {sourceItems : ItemSeq sourceContext.length sourceRels}
+    {targetItems : ItemSeq targetContext.length targetRels}
+    (sourceCompiled : Concrete.Elaboration.compileOccurrencesWith? input
+      (Concrete.Elaboration.compileRegion? input sourceFuel) sourceContext
+      sourceBinders (selectedOccurrences input selection) = some sourceItems)
+    (targetCompiled : Concrete.Elaboration.compileOccurrencesWith?
+      (doubleCutIntroRaw input selection)
+      (Concrete.Elaboration.compileRegion?
+        (doubleCutIntroRaw input selection) targetFuel)
+      targetContext targetBinders
+      ((selectedOccurrences input selection).map (liftOccurrence input)) =
+        some targetItems) :
+    ItemSeqIso (FiniteEquiv.finCast
+        (congrArg List.length context.equality))
+      sourceRels sourceItems (binders.rels ▸ targetItems) := by
+  apply occurrences_iso input selection sourceContext targetContext context
+    sourceBinders targetBinders binders (selectedOccurrences input selection)
+    (fun _ => inner input)
+  · intro node member
+    exact selected_node input selection node
+      (selected_node_iff (input := input) (selection := selection) node |>.1
+        member)
+  · intro child member
+    exact selected_region input selection child
+      (selected_child_iff (input := input) (selection := selection) child |>.1
+        member)
+  · intro childSourceRels childTargetRels childSourceBinders
+      childTargetBinders childBinders child member sourceBody targetBody
+      childSourceCompiled childTargetCompiled
+    have parent := selection.property.childRoots_direct child
+      (selected_child_iff (input := input) (selection := selection) child |>.1
+        member)
+    have away := Concrete.Elaboration.checked_direct_child_not_encloses_parent
+      wellFormed parent
+    exact away_region_iso input selection wellFormed child away sourceContext
+      targetContext context childSourceBinders childTargetBinders childBinders
+      childSourceCompiled childTargetCompiled
+  · exact sourceCompiled
+  · exact targetCompiled
 
 end VisualProof.Refinement.Implementation.DoubleCutIntroCompile
