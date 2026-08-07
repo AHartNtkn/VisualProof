@@ -219,7 +219,7 @@ private def AbstractionWitness.operation
   externalBinders_empty := witness.externalBinders_empty
   exactOccurrence := witness.exactOccurrence
 
-private def ComprehensionInstantiatePayload.operation
+def ComprehensionInstantiatePayload.toOperation
     (payload : ComprehensionInstantiatePayload source bubble comprehension
       attachments binders) :
     OperationComprehensionInstantiatePayload source.diagram bubble comprehension
@@ -534,7 +534,7 @@ def execute (orientation : Orientation) {arity : Nat}
       finish source (applyDoubleCutElim source.diagram region)
   | .comprehensionInstantiate bubble comprehension attachments binders payload =>
       finish source (applyComprehensionInstantiate orientation source.diagram
-        bubble comprehension attachments binders payload.operation)
+        bubble comprehension attachments binders payload.toOperation)
   | .comprehensionAbstract wrap comprehension occurrences payload =>
       finish source (applyComprehensionAbstract orientation source.diagram wrap
         comprehension (occurrences.map AbstractionOccurrence.operation)
@@ -812,6 +812,68 @@ theorem execute_comprehensionAbstract_success
   obtain ⟨polarity, raw, rawSuccess, realizes⟩ :=
     applyComprehensionAbstract_realizes operationSuccess
   exact ⟨polarity, result, raw, rawSuccess, packed, realizes⟩
+
+/-- Structural inversion of a successful comprehension-instantiation request. -/
+theorem execute_comprehensionInstantiate_success
+    {arity : Nat}
+    {source : State arity}
+    {orientation : Orientation}
+    (bubble : Fin source.checked.val.diagram.regionCount)
+    (comprehension : CheckedOpen)
+    (attachments : List (Fin source.checked.val.diagram.wireCount))
+    (binders : List
+      (Fin comprehension.val.diagram.regionCount ×
+        Fin source.checked.val.diagram.regionCount))
+    (payload : ComprehensionInstantiatePayload source bubble comprehension
+      attachments binders)
+    {receipt : Receipt source}
+    (success : execute orientation source
+      (.comprehensionInstantiate bubble comprehension attachments binders
+        payload) = .ok receipt) :
+    spawnPolarity orientation
+        (concreteCutDepth source.checked.val.diagram bubble) ∧
+      ∃ result : OperationReceipt source.diagram,
+        result.toReceipt source = some receipt ∧
+        let operation := payload.toOperation
+        let initial := initialInstantiationState operation
+        ∃ copied : InstantiationState source.diagram attachments.length
+            operation.binderSpine.proxyCount,
+          instantiateCopies (input := source.diagram) (bubble := bubble)
+              (origin := source.diagram) comprehension attachments binders
+              operation initial.pendingAtoms.length initial = .ok copied ∧
+            let droppedRaw := dropInstantiationAtomsRaw copied
+            let toDroppedProvenance :
+                WireProvenance source.checked.val.diagram droppedRaw :=
+              copied.provenance.compose
+                (WireProvenance.byWireCount copied.diagram.val droppedRaw rfl)
+            let toDroppedInterface :
+                WireTransport source.checked.val.diagram droppedRaw :=
+              copied.interface.compose
+                (WireTransport.byWireCount copied.diagram.val droppedRaw rfl)
+            ∃ (raw : Concrete.Diagram)
+              (rawSuccess : vacuousElimRaw? droppedRaw copied.bubble = some raw)
+              (checked : Checked)
+              (checkSuccess : checkWellFormed raw = .ok checked),
+              result = OperationReceipt.ofChecked source.diagram raw
+                  (toDroppedProvenance.compose
+                    (vacuousElimWireProvenance rawSuccess))
+                  (toDroppedInterface.compose
+                    (vacuousElimWireTransport rawSuccess))
+                  checked checkSuccess ∧
+                result.Realizes raw
+                  (toDroppedProvenance.compose
+                    (vacuousElimWireProvenance rawSuccess))
+                  (toDroppedInterface.compose
+                    (vacuousElimWireTransport rawSuccess)) := by
+  change finish source
+      (applyComprehensionInstantiate orientation source.diagram bubble
+        comprehension attachments binders payload.toOperation) = .ok receipt
+    at success
+  obtain ⟨result, operationSuccess, packed⟩ :=
+    (finish_eq_ok_iff source _ receipt).1 success
+  obtain ⟨polarity, copied, copySuccess, realizes⟩ :=
+    applyComprehensionInstantiate_realizes operationSuccess
+  exact ⟨polarity, result, packed, copied, copySuccess, realizes⟩
 
 /-- Structural inversion of a successful supplied insertion. -/
 theorem execute_boundRelationSpawn_success
