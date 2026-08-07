@@ -4,7 +4,7 @@ goal:
   title: "Recursive Rewrite Authority"
   slug: "recursive-rewrite-authority"
   kind: existing_plan
-  tranche: "Define and prove the six recursive rewrite families in plan Tasks 4-5."
+  tranche: "Move flat representation and execution behind the Concrete implementation boundary."
   status: active
   oracle:
     signal: "Kernel-checked Lean theorems prove one recursive relational calculus with structural semantics and a separate concrete refinement layer."
@@ -65,7 +65,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/recursive-rewrite-authority/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/recursive-rewrite-authority"
 
-active_task: T109
+active_task: T111
 
 tasks:
   - id: T001
@@ -367,13 +367,14 @@ tasks:
   - id: T109
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Execute plan Task 5: isolate recursive semantic laws and prove soundness for all six rule families."
     inputs:
       - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 5"
     allowed_files:
       - "VisualProof/Rule/Laws.lean"
+      - "VisualProof/Rule/Soundness/Contextual.lean"
       - "VisualProof/Rule/Soundness/Erasure.lean"
       - "VisualProof/Rule/Soundness/WireSever.lean"
       - "VisualProof/Rule/Soundness/Iteration.lean"
@@ -385,6 +386,7 @@ tasks:
       - "VisualProof/Rule/Vacuity.lean"
       - "VisualProof/Rule/Structural/Semantics.lean"
       - "direct importers of VisualProof/Rule/Structural/Semantics.lean"
+      - "VisualProof/Rule/Soundness/Modal/VacuousCompiler.lean"
     verify:
       - "strict compilation of all six soundness modules"
       - "lake build"
@@ -395,6 +397,80 @@ tasks:
       - "Need a non-importer outside allowed_files."
       - "A theorem dependency closure requires an incomplete definition."
       - "A semantic proof would depend on concrete execution data."
+    receipt:
+      result: done
+      changed_files:
+        - "VisualProof/Rule/Laws.lean"
+        - "VisualProof/Rule/Soundness/Contextual.lean"
+        - "VisualProof/Rule/Soundness/Erasure.lean"
+        - "VisualProof/Rule/Soundness/WireSever.lean"
+        - "VisualProof/Rule/Soundness/Iteration.lean"
+        - "VisualProof/Rule/Soundness/DoubleCut.lean"
+        - "VisualProof/Rule/Soundness/Comprehension.lean"
+        - "VisualProof/Rule/Soundness/Vacuity.lean"
+        - "VisualProof/Rule/Iteration.lean"
+        - "VisualProof/Rule/DoubleCut.lean"
+        - "VisualProof/Rule/Vacuity.lean"
+        - "VisualProof/Rule/Structural/Semantics.lean"
+        - "VisualProof/Rule/Soundness/Modal/VacuousCompiler.lean"
+      commands:
+        - cmd: "strict compilation of Contextual and all six soundness modules"
+          status: pass
+        - cmd: "lake build"
+          status: pass
+        - cmd: "recursive dependency, proof-hole, and local-axiom scans"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      summary: "Proved recursive semantic soundness for all six rule families and gave shared laws and contextual transport neutral ownership."
+      harness: codex
+  - id: T110
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Audit T109 for semantic correctness, dependency closure, theorem ownership, and proof quality."
+    inputs:
+      - "T109 receipt"
+      - "Task 5 review and remediation packages"
+    constraints:
+      - "Read-only."
+      - "Reject semantic dependence on concrete execution data."
+      - "Reject family-owned generic infrastructure or transitive authority paths."
+    expected_output:
+      - "approved | changes_required"
+    receipt:
+      result: done
+      decision: approved
+      full_outcome_complete: false
+      rationale: "Task 5 semantic proofs are correct; the two ownership findings were remediated and re-review approved."
+      harness: codex
+  - id: T111
+    type: worker
+    assignee: Worker
+    status: active
+    reasoning_hint: high
+    objective: "Execute plan Task 6 as one atomic migration: move every flat representation and executable rewrite responsibility into VisualProof.Concrete and eliminate old public paths and search modules."
+    inputs:
+      - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 6"
+    allowed_files:
+      - "VisualProof/**/*.lean"
+      - "lakefile.toml"
+    constraints:
+      - "Lean only; TypeScript is outside scope."
+      - "No compatibility wrappers, aliases, or old-path re-exports."
+      - "Preserve exactly the twelve concrete operation constructors."
+      - "Execution consumes supplied occurrence certificates and never searches."
+    verify:
+      - "compile every new Concrete aggregate"
+      - "lake build"
+      - "old import path and search-declaration scans"
+      - "proof-hole and local-axiom scan"
+      - "git diff --check"
+    stop_if:
+      - "A missing semantic or product decision changes the concrete operation contract."
+      - "The atomic migration cannot compile without an obsolete public wrapper."
+      - "A required change falls outside Lean or lakefile.toml."
     receipt: null
   - id: T999
     type: judge
