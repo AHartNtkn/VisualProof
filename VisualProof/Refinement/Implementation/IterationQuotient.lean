@@ -52,6 +52,30 @@ def quotientWireEquiv
       (iterationInput input selection target)
       (attachmentsRespectBoundary input selection target) wire
 
+theorem coalescedScope_eq
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (quotient : (iterationInput input selection target).wireQuotient.Carrier) :
+    (iterationInput input selection target).coalescedScope quotient =
+      (input.val.wires
+        (quotientWireEquiv input selection target quotient)).scope := by
+  exact Concrete.Splice.Input.coalescedScope_eq_of_attachmentsRespectBoundary
+    (iterationInput input selection target)
+    (attachmentsRespectBoundary input selection target) quotient
+
+theorem coalescedEndpoints_eq
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount)
+    (quotient : (iterationInput input selection target).wireQuotient.Carrier) :
+    (iterationInput input selection target).coalescedEndpoints quotient =
+      (input.val.wires
+        (quotientWireEquiv input selection target quotient)).endpoints := by
+  exact Concrete.Splice.Input.coalescedEndpoints_eq_of_attachmentsRespectBoundary
+    (iterationInput input selection target)
+    (attachmentsRespectBoundary input selection target) quotient
+
 noncomputable def coalescedFrameIso
     (input : Concrete.Checked)
     (selection : CheckedSelection input.val)
