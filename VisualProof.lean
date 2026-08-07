@@ -16,6 +16,7 @@ import VisualProof.Diagram.Concrete.OccurrenceExtraction
 import VisualProof.Diagram.Concrete.OccurrenceSelection
 import VisualProof.Diagram.Concrete.Matcher
 import VisualProof.Correspondence.StepTags
+import VisualProof.Rule.Relation
 import VisualProof.Rule.Step
 import VisualProof.Rule.Structural
 import VisualProof.Rule.Comprehension
