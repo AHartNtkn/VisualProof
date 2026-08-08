@@ -65,7 +65,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/recursive-rewrite-authority/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/recursive-rewrite-authority"
 
-active_task: T128
+active_task: T117
 
 tasks:
   - id: T001
@@ -780,7 +780,7 @@ tasks:
   - id: T128
     type: judge
     assignee: Judge
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Independently audit the structural witness and compiler/context authority foundation before Task 9 can resume."
     inputs:
@@ -798,11 +798,23 @@ tasks:
       - "approved | changes_required"
       - "Direct projection/composition evidence"
       - "Authority-retirement and compiler/context-core evidence"
-    receipt: null
+    receipt:
+      result: done
+      decision: approved
+      full_outcome_complete: false
+      rationale: "The foundation supplies one directly composable Type-valued recursive isomorphism and context-alignment hierarchy, preserves exact operation-specific evidence, contains no Prop-to-Type witness recovery or compatibility authority, and passes independent compilation/audit review. Task 9 may resume."
+      evidence:
+        - "RegionIso/ItemIso/ItemSeqIso and DiagramContextIso are Type-valued; OpenDiagramIso.body is direct RegionIso data."
+        - "Region.ContextPath.Alignment is the sole hole relation/wire/context core; family records retain only operation-specific facts."
+        - "RegionIsoPresentation, SourceFactorPresentation, and PairedCompilerContextAlignment are absent."
+        - "Independent 9/9 representative strict compiles and all four authority audits passed."
+        - "Foundation report records 63/63 strict owners and a 142-job serial full build."
+      missing_evidence: []
+      harness: codex
   - id: T117
     type: worker
     assignee: Worker
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Execute corrected Task 9: remove abstraction/instantiation from both actual and concrete Step, preserve standalone Comprehension mathematics, prove all ten successful executions refine the five actual recursive rule families, and prove execute_sound and execute_translates."
     inputs:
