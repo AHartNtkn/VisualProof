@@ -28,9 +28,9 @@ noncomputable def PlugLayout.compiledNestedFrameContextIso
     targetView.result.state rfl rfl sourceView.result.trace
     targetView.result.trace
   exact {
-    holeRelsEq := alignment.holeRelsEq
-    holeWire := alignment.holeWire
-    contexts := alignment.contexts
+    holeRelsEq := alignment.alignment.holeRelsEq
+    holeWire := alignment.alignment.holeWire
+    contexts := alignment.alignment.contexts
     terminalInheritedWireSpec := by
       simpa [compiledSpliceCoalescedNestedLeaf,
         compiledSpliceOutputNestedLeaf] using

@@ -1,4 +1,5 @@
 import VisualProof.Concrete.Subgraph.Splice.Input.Route
+import VisualProof.Diagram.ContextPathIsomorphism
 
 namespace VisualProof.Concrete.Splice.Input
 
@@ -84,25 +85,6 @@ noncomputable def PlugLayout.compiledSpliceOpenRoute_path_eq
     (layout.plugRaw_wellFormed  input hadmissible)
     mappedRoute targetView.route
 
-/-- The algebraic result of following two compiler traces through aligned
-frame occurrences. -/
-structure PairedCompilerContextAlignment
-    {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
-    (outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
-    {sourceBody : Region  sourceOuter rels}
-    {sourcePath : List Nat}
-    (sourceWitness : Region.ContextPath sourceBody sourcePath)
-    {targetBody : Region  targetOuter rels}
-    {targetPath : List Nat}
-    (targetWitness : Region.ContextPath targetBody targetPath) where
-  holeRelsEq : sourceWitness.toFocus.holeRels =
-    targetWitness.toFocus.holeRels
-  holeWire : FiniteEquiv (Fin sourceWitness.toFocus.holeWires)
-    (Fin targetWitness.toFocus.holeWires)
-  contexts : DiagramContextIso  outerWire holeWire rels
-    sourceWitness.toFocus.holeRels sourceWitness.toFocus.context
-    (holeRelsEq.symm ▸ targetWitness.toFocus.context)
-
 /-- Trace-level alignment retains the concrete terminal compiler evidence that
 the intrinsic context algebra intentionally does not own. -/
 structure PlugLayout.PairedCompilerTraceAlignment
@@ -121,24 +103,18 @@ structure PlugLayout.PairedCompilerTraceAlignment
     (targetWitness : Region.ContextPath targetBody targetPath)
     (targetLeaf : Region.ContextPath.CompilerLeaf layout.plugRaw targetEnd
       targetWitness) where
-  holeRelsEq : sourceWitness.toFocus.holeRels =
-    targetWitness.toFocus.holeRels
-  holeWire : FiniteEquiv (Fin sourceWitness.toFocus.holeWires)
-    (Fin targetWitness.toFocus.holeWires)
-  contexts : DiagramContextIso  outerWire holeWire rels
-    sourceWitness.toFocus.holeRels sourceWitness.toFocus.context
-    (holeRelsEq.symm ▸ targetWitness.toFocus.context)
+  alignment : Region.ContextPath.Alignment outerWire sourceWitness targetWitness
   terminalInheritedWireSpec : ∀ index,
     targetLeaf.inheritedWires.get
         (compilerLeafInheritedWireOfHole sourceWitness sourceLeaf targetWitness
-          targetLeaf holeWire index) =
+          targetLeaf alignment.holeWire index) =
       layout.frameWire (sourceLeaf.inheritedWires.get index)
   terminalBinderSpec : ∀ {arity}
       (relation : Theory.RelVar sourceWitness.toFocus.holeRels arity),
     targetLeaf.binders
         (layout.frameRegion
           (sourceLeaf.binderEnumeration.binder relation.index)) =
-      some ⟨arity, relationRenamingOfEq holeRelsEq relation⟩
+      some ⟨arity, relationRenamingOfEq alignment.holeRelsEq relation⟩
 
 /-- Convert an equivalence between retained inherited compiler contexts to
 the outer-wire presentation used by the two intrinsic bodies. -/
@@ -674,10 +650,12 @@ noncomputable def PlugLayout.pairedCompilerTraceContextIso
       | here targetState =>
           intro inheritedWire inheritedWireSpec
           exact {
-            holeRelsEq := rfl
-            holeWire := compilerBodyOuterWire sourceState targetState
-              inheritedWire
-            contexts := .hole _
+            alignment := {
+              holeRelsEq := rfl
+              holeWire := compilerBodyOuterWire sourceState targetState
+                inheritedWire
+              contexts := .hole _
+            }
             terminalInheritedWireSpec := by
               intro index
               have hwire : compilerLeafInheritedWireOfHole
@@ -930,36 +908,39 @@ noncomputable def PlugLayout.pairedCompilerTraceContextIso
               (extendWireEquiv
                 (compilerBodyOuterWire sourceState targetState inheritedWire)
                 frameLocalWire)
-              childAlignment.holeWire sourceRels
+              childAlignment.alignment.holeWire sourceRels
               sourceNested.toFocus.holeRels
               sourceNested.toFocus.context
-              (childAlignment.holeRelsEq.symm ▸
+              (childAlignment.alignment.holeRelsEq.symm ▸
                 targetNested.toFocus.context) := by
             rw [← hchildOuter]
-            exact childAlignment.contexts
+            exact childAlignment.alignment.contexts
           have targetContextTransport :
-              childAlignment.holeRelsEq.symm ▸
+              childAlignment.alignment.holeRelsEq.symm ▸
                   DiagramContext.cut targetLocal targetFocus.before
                     targetFocus.after targetNested.toFocus.context =
                 DiagramContext.cut targetLocal targetFocus.before
                   targetFocus.after
-                  (childAlignment.holeRelsEq.symm ▸
+                  (childAlignment.alignment.holeRelsEq.symm ▸
                     targetNested.toFocus.context) := by
             exact DiagramContext.cut_transport_holeRels
-              childAlignment.holeRelsEq targetFocus.before targetFocus.after
+              childAlignment.alignment.holeRelsEq targetFocus.before
+                targetFocus.after
               targetNested.toFocus.context
           have cutContexts := DiagramContextIso.cutFrame frameLocalWire
             sourceFocus targetFocus hsourceAt htargetAt frame
             sourceNested.toFocus.context
-            (childAlignment.holeRelsEq.symm ▸
+            (childAlignment.alignment.holeRelsEq.symm ▸
               targetNested.toFocus.context)
             childContexts
           exact {
-            holeRelsEq := childAlignment.holeRelsEq
-            holeWire := childAlignment.holeWire
-            contexts := by
-              simpa only [Region.ContextPath.toFocus,
-                targetContextTransport] using cutContexts
+            alignment := {
+              holeRelsEq := childAlignment.alignment.holeRelsEq
+              holeWire := childAlignment.alignment.holeWire
+              contexts := by
+                simpa only [Region.ContextPath.toFocus,
+                  targetContextTransport] using cutContexts
+            }
             terminalInheritedWireSpec :=
               childAlignment.terminalInheritedWireSpec
             terminalBinderSpec := childAlignment.terminalBinderSpec
@@ -1238,37 +1219,40 @@ noncomputable def PlugLayout.pairedCompilerTraceContextIso
               (extendWireEquiv
                 (compilerBodyOuterWire sourceState targetState inheritedWire)
                 frameLocalWire)
-              childAlignment.holeWire (sourceArity :: sourceRels)
+              childAlignment.alignment.holeWire (sourceArity :: sourceRels)
               sourceNested.toFocus.holeRels
               sourceNested.toFocus.context
-              (childAlignment.holeRelsEq.symm ▸
+              (childAlignment.alignment.holeRelsEq.symm ▸
                 targetNested.toFocus.context) := by
             rw [← hchildOuter]
-            exact childAlignment.contexts
+            exact childAlignment.alignment.contexts
           have targetContextTransport :
-              childAlignment.holeRelsEq.symm ▸
+              childAlignment.alignment.holeRelsEq.symm ▸
                   DiagramContext.bubble targetLocal targetFocus.before
                     targetFocus.after sourceArity
                     targetNested.toFocus.context =
                 DiagramContext.bubble targetLocal targetFocus.before
                   targetFocus.after sourceArity
-                  (childAlignment.holeRelsEq.symm ▸
+                  (childAlignment.alignment.holeRelsEq.symm ▸
                     targetNested.toFocus.context) := by
             exact DiagramContext.bubble_transport_holeRels
-              childAlignment.holeRelsEq targetFocus.before targetFocus.after
+              childAlignment.alignment.holeRelsEq targetFocus.before
+                targetFocus.after
               targetNested.toFocus.context
           have bubbleContexts := DiagramContextIso.bubbleFrame frameLocalWire
             sourceFocus targetFocus hsourceAt htargetAt frame
             sourceNested.toFocus.context
-            (childAlignment.holeRelsEq.symm ▸
+            (childAlignment.alignment.holeRelsEq.symm ▸
               targetNested.toFocus.context)
             childContexts
           exact {
-            holeRelsEq := childAlignment.holeRelsEq
-            holeWire := childAlignment.holeWire
-            contexts := by
-              simpa only [Region.ContextPath.toFocus,
-                targetContextTransport] using bubbleContexts
+            alignment := {
+              holeRelsEq := childAlignment.alignment.holeRelsEq
+              holeWire := childAlignment.alignment.holeWire
+              contexts := by
+                simpa only [Region.ContextPath.toFocus,
+                  targetContextTransport] using bubbleContexts
+            }
             terminalInheritedWireSpec :=
               childAlignment.terminalInheritedWireSpec
             terminalBinderSpec := childAlignment.terminalBinderSpec
@@ -1666,14 +1650,15 @@ noncomputable def PlugLayout.pairedOpenCompilerTraceContextIso
               (extendWireEquiv
                 (rootExposedWireEquiv input layout sourceBoundary)
                 frameLocalWire)
-              childAlignment.holeWire [] sourceNested.toFocus.holeRels
+              childAlignment.alignment.holeWire []
+                sourceNested.toFocus.holeRels
               sourceNested.toFocus.context
-              (childAlignment.holeRelsEq.symm ▸
+              (childAlignment.alignment.holeRelsEq.symm ▸
                 targetNested.toFocus.context) := by
             rw [← hchildOuter]
-            exact childAlignment.contexts
+            exact childAlignment.alignment.contexts
           have targetContextTransport :
-              childAlignment.holeRelsEq.symm ▸
+              childAlignment.alignment.holeRelsEq.symm ▸
                   DiagramContext.cut
                     (outputOpenRoot input layout sourceBoundary).hiddenWires.length
                     targetFocus.before
@@ -1682,34 +1667,38 @@ noncomputable def PlugLayout.pairedOpenCompilerTraceContextIso
                   (outputOpenRoot input layout sourceBoundary).hiddenWires.length
                   targetFocus.before
                   targetFocus.after
-                  (childAlignment.holeRelsEq.symm ▸
+                  (childAlignment.alignment.holeRelsEq.symm ▸
                     targetNested.toFocus.context) := by
             exact DiagramContext.cut_transport_holeRels
-              childAlignment.holeRelsEq targetFocus.before targetFocus.after
+              childAlignment.alignment.holeRelsEq targetFocus.before
+                targetFocus.after
               targetNested.toFocus.context
           have cutContexts := DiagramContextIso.cutFrame
-            (holeWire := childAlignment.holeWire) frameLocalWire
+            (holeWire := childAlignment.alignment.holeWire) frameLocalWire
             sourceFocus targetFocus hsourceAt htargetAt frame
             sourceNested.toFocus.context
-            (childAlignment.holeRelsEq.symm ▸
+            (childAlignment.alignment.holeRelsEq.symm ▸
               targetNested.toFocus.context) childContexts
           exact {
-            holeRelsEq := childAlignment.holeRelsEq
-            holeWire := childAlignment.holeWire
-            contexts := by
-              change DiagramContextIso
-                (rootExposedWireEquiv input layout sourceBoundary)
-                childAlignment.holeWire [] sourceNested.toFocus.holeRels
-                (DiagramContext.cut
-                  (coalescedOpenRoot input sourceBoundary).hiddenWires.length
-                  sourceFocus.before sourceFocus.after
-                  sourceNested.toFocus.context)
-                (childAlignment.holeRelsEq.symm ▸
-                  DiagramContext.cut
-                    (outputOpenRoot input layout sourceBoundary).hiddenWires.length
-                    targetFocus.before targetFocus.after
-                    targetNested.toFocus.context)
-              exact targetContextTransport.symm ▸ cutContexts
+            alignment := {
+              holeRelsEq := childAlignment.alignment.holeRelsEq
+              holeWire := childAlignment.alignment.holeWire
+              contexts := by
+                change DiagramContextIso
+                  (rootExposedWireEquiv input layout sourceBoundary)
+                  childAlignment.alignment.holeWire []
+                  sourceNested.toFocus.holeRels
+                  (DiagramContext.cut
+                    (coalescedOpenRoot input sourceBoundary).hiddenWires.length
+                    sourceFocus.before sourceFocus.after
+                    sourceNested.toFocus.context)
+                  (childAlignment.alignment.holeRelsEq.symm ▸
+                    DiagramContext.cut
+                      (outputOpenRoot input layout sourceBoundary).hiddenWires.length
+                      targetFocus.before targetFocus.after
+                      targetNested.toFocus.context)
+                exact targetContextTransport.symm ▸ cutContexts
+            }
             terminalInheritedWireSpec :=
               childAlignment.terminalInheritedWireSpec
             terminalBinderSpec := childAlignment.terminalBinderSpec
@@ -1967,14 +1956,14 @@ noncomputable def PlugLayout.pairedOpenCompilerTraceContextIso
               (extendWireEquiv
                 (rootExposedWireEquiv input layout sourceBoundary)
                 frameLocalWire)
-              childAlignment.holeWire (sourceArity :: [])
+              childAlignment.alignment.holeWire (sourceArity :: [])
               sourceNested.toFocus.holeRels sourceNested.toFocus.context
-              (childAlignment.holeRelsEq.symm ▸
+              (childAlignment.alignment.holeRelsEq.symm ▸
                 targetNested.toFocus.context) := by
             rw [← hchildOuter]
-            exact childAlignment.contexts
+            exact childAlignment.alignment.contexts
           have targetContextTransport :
-              childAlignment.holeRelsEq.symm ▸
+              childAlignment.alignment.holeRelsEq.symm ▸
                   DiagramContext.bubble
                     (outputOpenRoot input layout sourceBoundary).hiddenWires.length
                     targetFocus.before
@@ -1984,34 +1973,38 @@ noncomputable def PlugLayout.pairedOpenCompilerTraceContextIso
                   (outputOpenRoot input layout sourceBoundary).hiddenWires.length
                   targetFocus.before
                   targetFocus.after sourceArity
-                  (childAlignment.holeRelsEq.symm ▸
+                  (childAlignment.alignment.holeRelsEq.symm ▸
                     targetNested.toFocus.context) := by
             exact DiagramContext.bubble_transport_holeRels
-              childAlignment.holeRelsEq targetFocus.before targetFocus.after
+              childAlignment.alignment.holeRelsEq targetFocus.before
+                targetFocus.after
               targetNested.toFocus.context
           have bubbleContexts := DiagramContextIso.bubbleFrame
-            (holeWire := childAlignment.holeWire) frameLocalWire
+            (holeWire := childAlignment.alignment.holeWire) frameLocalWire
             sourceFocus targetFocus hsourceAt htargetAt frame
             sourceNested.toFocus.context
-            (childAlignment.holeRelsEq.symm ▸
+            (childAlignment.alignment.holeRelsEq.symm ▸
               targetNested.toFocus.context) childContexts
           exact {
-            holeRelsEq := childAlignment.holeRelsEq
-            holeWire := childAlignment.holeWire
-            contexts := by
-              change DiagramContextIso
-                (rootExposedWireEquiv input layout sourceBoundary)
-                childAlignment.holeWire [] sourceNested.toFocus.holeRels
-                (DiagramContext.bubble
-                  (coalescedOpenRoot input sourceBoundary).hiddenWires.length
-                  sourceFocus.before sourceFocus.after sourceArity
-                  sourceNested.toFocus.context)
-                (childAlignment.holeRelsEq.symm ▸
-                  DiagramContext.bubble
-                    (outputOpenRoot input layout sourceBoundary).hiddenWires.length
-                    targetFocus.before targetFocus.after sourceArity
-                    targetNested.toFocus.context)
-              exact targetContextTransport.symm ▸ bubbleContexts
+            alignment := {
+              holeRelsEq := childAlignment.alignment.holeRelsEq
+              holeWire := childAlignment.alignment.holeWire
+              contexts := by
+                change DiagramContextIso
+                  (rootExposedWireEquiv input layout sourceBoundary)
+                  childAlignment.alignment.holeWire []
+                  sourceNested.toFocus.holeRels
+                  (DiagramContext.bubble
+                    (coalescedOpenRoot input sourceBoundary).hiddenWires.length
+                    sourceFocus.before sourceFocus.after sourceArity
+                    sourceNested.toFocus.context)
+                  (childAlignment.alignment.holeRelsEq.symm ▸
+                    DiagramContext.bubble
+                      (outputOpenRoot input layout sourceBoundary).hiddenWires.length
+                      targetFocus.before targetFocus.after sourceArity
+                      targetNested.toFocus.context)
+                exact targetContextTransport.symm ▸ bubbleContexts
+            }
             terminalInheritedWireSpec :=
               childAlignment.terminalInheritedWireSpec
             terminalBinderSpec := childAlignment.terminalBinderSpec

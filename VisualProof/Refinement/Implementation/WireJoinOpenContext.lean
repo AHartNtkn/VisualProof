@@ -841,8 +841,7 @@ structure OpenCompilerTraceAlignment
     (outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
     (sourceWitness : Region.ContextPath sourceBody sourcePath)
     (targetWitness : Region.ContextPath targetBody targetPath) where
-  alignment : Concrete.Splice.Input.PairedCompilerContextAlignment outerWire
-    sourceWitness targetWitness
+  alignment : Region.ContextPath.Alignment outerWire sourceWitness targetWitness
   before : Region targetWitness.toFocus.holeWires
     targetWitness.toFocus.holeRels
   after : Region targetWitness.toFocus.holeWires

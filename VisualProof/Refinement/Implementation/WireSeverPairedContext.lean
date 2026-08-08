@@ -786,7 +786,7 @@ structure CompilerTraceAlignment
   inherited : FiniteEquiv (Fin targetState.inheritedWires.length)
     (Fin sourceState.inheritedWires.length)
   inherited_apply : ∀ index, inherited index = collapse.indexMap index
-  alignment : Concrete.Splice.Input.PairedCompilerContextAlignment
+  alignment : Region.ContextPath.Alignment
     (Concrete.Splice.Input.compilerBodyOuterWire targetState sourceState
       inherited)
     targetWitness sourceWitness
@@ -2166,8 +2166,7 @@ structure OpenCompilerTraceAlignment
     (outerWire : FiniteEquiv (Fin targetOuter) (Fin sourceOuter))
     (targetWitness : Region.ContextPath targetBody targetPath)
     (sourceWitness : Region.ContextPath sourceBody sourcePath) where
-  alignment : Concrete.Splice.Input.PairedCompilerContextAlignment outerWire
-    targetWitness sourceWitness
+  alignment : Region.ContextPath.Alignment outerWire targetWitness sourceWitness
   before : Region sourceWitness.toFocus.holeWires
     sourceWitness.toFocus.holeRels
   after : Region sourceWitness.toFocus.holeWires

@@ -308,7 +308,7 @@ noncomputable def compilerLeaf_partition_alignRetainedOccurrence
         (Region.mk 0 leaf.items),
       { alignment : RegionIso.ContextPathAlignment iso extended //
         alignment.targetPath = fullPosition.val :: rest ∧
-          ∀ index, (alignment.holeWire index).val = index.val } := by
+          ∀ index, (alignment.alignment.holeWire index).val = index.val } := by
   dsimp only
   let recurse : ∀ {rels : RelCtx},
       (region : Fin input.val.regionCount) →
@@ -456,10 +456,10 @@ noncomputable def compilerLeaf_partition_alignRetainedOccurrence
       let targetWitness : Region.ContextPath (Region.mk 0 leaf.items)
           (fullPosition.val :: child.targetPath) :=
         .cut targetFocus targetAt targetIsCut child.targetWitness
-      let holeRelsEq : targetWitness.toFocus.holeRels =
-          nested.toFocus.holeRels := by
+      let holeRelsEq : nested.toFocus.holeRels =
+          targetWitness.toFocus.holeRels := by
         simpa [targetWitness, Region.ContextPath.toFocus] using
-          child.holeRelsEq
+          child.alignment.holeRelsEq
       let frame : ItemSeqIso.Frame
           (extendWireEquiv
             (FiniteEquiv.refl
@@ -478,36 +478,40 @@ noncomputable def compilerLeaf_partition_alignRetainedOccurrence
           (Region.ContextPath.cut sourceFocus sourceAt isCut nested) := {
         targetPath := fullPosition.val :: child.targetPath
         targetWitness := targetWitness
-        holeRelsEq := holeRelsEq
-        holeWire := child.holeWire
-        context := by
-          have childContext : DiagramContextIso
-              (extendWireEquiv
-                (FiniteEquiv.refl
-                  (Fin (leaf.inheritedWires.extend anchor).length))
-                (FiniteEquiv.refl (Fin 0))) child.holeWire rels
-              nested.toFocus.holeRels nested.toFocus.context
-              (child.holeRelsEq ▸
-                child.targetWitness.toFocus.context) := by
-            rw [extendedRefl]
-            exact child.context
-          have layer := DiagramContextIso.cutFrame
-            (FiniteEquiv.refl (Fin 0))
-            sourceFocus targetFocus sourceAt targetAt frame
-            nested.toFocus.context
-            (child.holeRelsEq ▸ child.targetWitness.toFocus.context)
-            childContext
-          have proofEq : holeRelsEq = child.holeRelsEq :=
-            Subsingleton.elim _ _
-          rw [proofEq]
-          change DiagramContextIso  _ child.holeWire rels
-            nested.toFocus.holeRels
-            (DiagramContext.cut 0 sourceFocus.before sourceFocus.after
-              nested.toFocus.context)
-            (child.holeRelsEq ▸ DiagramContext.cut 0 targetFocus.before
-              targetFocus.after child.targetWitness.toFocus.context)
-          rw [DiagramContext.castHoleRels_cut]
-          exact layer
+        alignment := {
+          holeRelsEq := holeRelsEq
+          holeWire := child.alignment.holeWire
+          contexts := by
+            have childContext : DiagramContextIso
+                (extendWireEquiv
+                  (FiniteEquiv.refl
+                    (Fin (leaf.inheritedWires.extend anchor).length))
+                  (FiniteEquiv.refl (Fin 0))) child.alignment.holeWire rels
+                nested.toFocus.holeRels nested.toFocus.context
+                (child.alignment.holeRelsEq.symm ▸
+                  child.targetWitness.toFocus.context) := by
+              rw [extendedRefl]
+              exact child.alignment.contexts
+            have layer := DiagramContextIso.cutFrame
+              (FiniteEquiv.refl (Fin 0))
+              sourceFocus targetFocus sourceAt targetAt frame
+              nested.toFocus.context
+              (child.alignment.holeRelsEq.symm ▸
+                child.targetWitness.toFocus.context)
+              childContext
+            have proofEq : holeRelsEq = child.alignment.holeRelsEq :=
+              Subsingleton.elim _ _
+            rw [proofEq]
+            change DiagramContextIso  _ child.alignment.holeWire rels
+              nested.toFocus.holeRels
+              (DiagramContext.cut 0 sourceFocus.before sourceFocus.after
+                nested.toFocus.context)
+              (child.alignment.holeRelsEq.symm ▸
+                DiagramContext.cut 0 targetFocus.before
+                  targetFocus.after child.targetWitness.toFocus.context)
+            rw [DiagramContext.castHoleRels_cut]
+            exact layer
+        }
         body := by
           simpa [targetWitness, Region.ContextPath.toFocus] using child.body
       }
@@ -542,10 +546,10 @@ noncomputable def compilerLeaf_partition_alignRetainedOccurrence
       let targetWitness : Region.ContextPath (Region.mk 0 leaf.items)
           (fullPosition.val :: child.targetPath) :=
         .bubble targetFocus targetAt targetIsBubble child.targetWitness
-      let holeRelsEq : targetWitness.toFocus.holeRels =
-          nested.toFocus.holeRels := by
+      let holeRelsEq : nested.toFocus.holeRels =
+          targetWitness.toFocus.holeRels := by
         simpa [targetWitness, Region.ContextPath.toFocus] using
-          child.holeRelsEq
+          child.alignment.holeRelsEq
       let frame : ItemSeqIso.Frame
           (extendWireEquiv
             (FiniteEquiv.refl
@@ -564,37 +568,41 @@ noncomputable def compilerLeaf_partition_alignRetainedOccurrence
           (Region.ContextPath.bubble sourceFocus sourceAt isBubble nested) := {
         targetPath := fullPosition.val :: child.targetPath
         targetWitness := targetWitness
-        holeRelsEq := holeRelsEq
-        holeWire := child.holeWire
-        context := by
-          have childContext : DiagramContextIso
-              (extendWireEquiv
-                (FiniteEquiv.refl
-                  (Fin (leaf.inheritedWires.extend anchor).length))
-                (FiniteEquiv.refl (Fin 0))) child.holeWire (_ :: rels)
-              nested.toFocus.holeRels nested.toFocus.context
-              (child.holeRelsEq ▸
-                child.targetWitness.toFocus.context) := by
-            rw [extendedRefl]
-            exact child.context
-          have layer := DiagramContextIso.bubbleFrame
-            (FiniteEquiv.refl (Fin 0))
-            sourceFocus targetFocus sourceAt targetAt frame
-            nested.toFocus.context
-            (child.holeRelsEq ▸ child.targetWitness.toFocus.context)
-            childContext
-          have proofEq : holeRelsEq = child.holeRelsEq :=
-            Subsingleton.elim _ _
-          rw [proofEq]
-          change DiagramContextIso  _ child.holeWire rels
-            nested.toFocus.holeRels
-            (DiagramContext.bubble 0 sourceFocus.before sourceFocus.after _
-              nested.toFocus.context)
-            (child.holeRelsEq ▸ DiagramContext.bubble 0
-              targetFocus.before targetFocus.after _
-              child.targetWitness.toFocus.context)
-          rw [DiagramContext.castHoleRels_bubble]
-          exact layer
+        alignment := {
+          holeRelsEq := holeRelsEq
+          holeWire := child.alignment.holeWire
+          contexts := by
+            have childContext : DiagramContextIso
+                (extendWireEquiv
+                  (FiniteEquiv.refl
+                    (Fin (leaf.inheritedWires.extend anchor).length))
+                  (FiniteEquiv.refl (Fin 0))) child.alignment.holeWire
+                (_ :: rels) nested.toFocus.holeRels
+                nested.toFocus.context
+                (child.alignment.holeRelsEq.symm ▸
+                  child.targetWitness.toFocus.context) := by
+              rw [extendedRefl]
+              exact child.alignment.contexts
+            have layer := DiagramContextIso.bubbleFrame
+              (FiniteEquiv.refl (Fin 0))
+              sourceFocus targetFocus sourceAt targetAt frame
+              nested.toFocus.context
+              (child.alignment.holeRelsEq.symm ▸
+                child.targetWitness.toFocus.context)
+              childContext
+            have proofEq : holeRelsEq = child.alignment.holeRelsEq :=
+              Subsingleton.elim _ _
+            rw [proofEq]
+            change DiagramContextIso  _ child.alignment.holeWire rels
+              nested.toFocus.holeRels
+              (DiagramContext.bubble 0 sourceFocus.before sourceFocus.after _
+                nested.toFocus.context)
+              (child.alignment.holeRelsEq.symm ▸ DiagramContext.bubble 0
+                targetFocus.before targetFocus.after _
+                child.targetWitness.toFocus.context)
+            rw [DiagramContext.castHoleRels_bubble]
+            exact layer
+        }
         body := by
           simpa [targetWitness, Region.ContextPath.toFocus] using child.body
       }

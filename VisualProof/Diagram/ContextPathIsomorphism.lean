@@ -5,10 +5,27 @@ namespace VisualProof.Diagram
 open VisualProof
 open Theory
 
+/-- The neutral proof-relevant alignment of two focused context paths. -/
+structure Region.ContextPath.Alignment
+    {sourceWires targetWires : Nat}
+    {rels : RelCtx}
+    {source : Region  sourceWires rels}
+    {target : Region  targetWires rels}
+    {sourcePath targetPath : List Nat}
+    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
+    (sourceWitness : Region.ContextPath source sourcePath)
+    (targetWitness : Region.ContextPath target targetPath) where
+  holeRelsEq : sourceWitness.toFocus.holeRels =
+    targetWitness.toFocus.holeRels
+  holeWire : FiniteEquiv (Fin sourceWitness.toFocus.holeWires)
+    (Fin targetWitness.toFocus.holeWires)
+  contexts : DiagramContextIso  wire holeWire rels
+    sourceWitness.toFocus.holeRels sourceWitness.toFocus.context
+    (holeRelsEq.symm ▸ targetWitness.toFocus.context)
+
 /-- Proof-relevant transport of a focused region path through a region
 isomorphism.  Besides locating the corresponding target focus, the record
-retains the isomorphisms of both the enclosing one-hole context and the
-focused body. -/
+retains the neutral context alignment and the focused-body isomorphism. -/
 structure RegionIso.ContextPathAlignment
     {sourceWires targetWires : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
@@ -20,16 +37,10 @@ structure RegionIso.ContextPathAlignment
     (sourceWitness : Region.ContextPath source sourcePath) where
   targetPath : List Nat
   targetWitness : Region.ContextPath target targetPath
-  holeRelsEq : targetWitness.toFocus.holeRels =
-    sourceWitness.toFocus.holeRels
-  holeWire : FiniteEquiv (Fin sourceWitness.toFocus.holeWires)
-    (Fin targetWitness.toFocus.holeWires)
-  context : DiagramContextIso  wire holeWire rels
-    sourceWitness.toFocus.holeRels sourceWitness.toFocus.context
-    (holeRelsEq ▸ targetWitness.toFocus.context)
-  body : RegionIso  holeWire sourceWitness.toFocus.holeRels
+  alignment : Region.ContextPath.Alignment wire sourceWitness targetWitness
+  body : RegionIso  alignment.holeWire sourceWitness.toFocus.holeRels
     sourceWitness.toFocus.body
-    (holeRelsEq ▸ targetWitness.toFocus.body)
+    (alignment.holeRelsEq.symm ▸ targetWitness.toFocus.body)
 
 /-- Simultaneously transporting a context and its filling body across the
 same relation-context equality does not change the reconstructed region. -/
@@ -71,15 +82,16 @@ noncomputable def RegionIso.ContextPathAlignment.fill
     (targetReplacement : Region
       alignment.targetWitness.toFocus.holeWires
       alignment.targetWitness.toFocus.holeRels)
-    (replacement : RegionIso  alignment.holeWire
+    (replacement : RegionIso  alignment.alignment.holeWire
       sourceWitness.toFocus.holeRels sourceReplacement
-      (alignment.holeRelsEq ▸ targetReplacement)) :
+      (alignment.alignment.holeRelsEq.symm ▸ targetReplacement)) :
     RegionIso  wire rels
       (sourceWitness.toFocus.context.fill sourceReplacement)
       (alignment.targetWitness.toFocus.context.fill targetReplacement) := by
-  have lifted := alignment.context.fill replacement
+  have lifted := alignment.alignment.contexts.fill replacement
   have targetFill := DiagramContext.fill_castHoleRels
-    alignment.holeRelsEq alignment.targetWitness.toFocus.context
+    alignment.alignment.holeRelsEq.symm
+      alignment.targetWitness.toFocus.context
       targetReplacement
   exact targetFill ▸ lifted
 
@@ -288,9 +300,11 @@ noncomputable def RegionIso.alignContextPath
       exact {
         targetPath := []
         targetWitness := .here target
-        holeRelsEq := rfl
-        holeWire := wire
-        context := .hole wire
+        alignment := {
+          holeRelsEq := rfl
+          holeWire := wire
+          contexts := .hole wire
+        }
         body := iso
       }
   | cut sourceFocus sourceAt sourceIsCut sourceNested induction =>
@@ -323,19 +337,22 @@ noncomputable def RegionIso.alignContextPath
               exact {
                 targetPath := targetIndex.val :: child.targetPath
                 targetWitness := targetWitness
-                holeRelsEq := by
-                  simpa [targetWitness, Region.ContextPath.toFocus] using
-                    child.holeRelsEq
-                holeWire := child.holeWire
-                context := by
-                  simp only [targetWitness, Region.ContextPath.toFocus]
-                  rw [DiagramContext.castHoleRels_cut]
-                  exact
-                    DiagramContextIso.cutFrame localWire sourceFocus
-                      targetFocus sourceAt targetAt frame
-                      sourceNested.toFocus.context
-                      (child.holeRelsEq ▸
-                        child.targetWitness.toFocus.context) child.context
+                alignment := {
+                  holeRelsEq := by
+                    simpa [targetWitness, Region.ContextPath.toFocus] using
+                      child.alignment.holeRelsEq
+                  holeWire := child.alignment.holeWire
+                  contexts := by
+                    simp only [targetWitness, Region.ContextPath.toFocus]
+                    rw [DiagramContext.castHoleRels_cut]
+                    exact
+                      DiagramContextIso.cutFrame localWire sourceFocus
+                        targetFocus sourceAt targetAt frame
+                        sourceNested.toFocus.context
+                        (child.alignment.holeRelsEq.symm ▸
+                          child.targetWitness.toFocus.context)
+                        child.alignment.contexts
+                }
                 body := by
                   simpa [targetWitness, Region.ContextPath.toFocus] using
                     child.body
@@ -370,19 +387,22 @@ noncomputable def RegionIso.alignContextPath
               exact {
                 targetPath := targetIndex.val :: child.targetPath
                 targetWitness := targetWitness
-                holeRelsEq := by
-                  simpa [targetWitness, Region.ContextPath.toFocus] using
-                    child.holeRelsEq
-                holeWire := child.holeWire
-                context := by
-                  simp only [targetWitness, Region.ContextPath.toFocus]
-                  rw [DiagramContext.castHoleRels_bubble]
-                  exact
-                    DiagramContextIso.bubbleFrame localWire sourceFocus
-                      targetFocus sourceAt targetAt frame
-                      sourceNested.toFocus.context
-                      (child.holeRelsEq ▸
-                        child.targetWitness.toFocus.context) child.context
+                alignment := {
+                  holeRelsEq := by
+                    simpa [targetWitness, Region.ContextPath.toFocus] using
+                      child.alignment.holeRelsEq
+                  holeWire := child.alignment.holeWire
+                  contexts := by
+                    simp only [targetWitness, Region.ContextPath.toFocus]
+                    rw [DiagramContext.castHoleRels_bubble]
+                    exact
+                      DiagramContextIso.bubbleFrame localWire sourceFocus
+                        targetFocus sourceAt targetAt frame
+                        sourceNested.toFocus.context
+                        (child.alignment.holeRelsEq.symm ▸
+                          child.targetWitness.toFocus.context)
+                        child.alignment.contexts
+                }
                 body := by
                   simpa [targetWitness, Region.ContextPath.toFocus] using
                     child.body
@@ -399,15 +419,17 @@ noncomputable def Region.ContextPath.identityAlignment
     { alignment : RegionIso.ContextPathAlignment
         (RegionIso.refl region) witness //
       alignment.targetPath = path ∧
-        ∀ index, (alignment.holeWire index).val = index.val } := by
+        ∀ index, (alignment.alignment.holeWire index).val = index.val } := by
   induction witness with
   | here region =>
       refine ⟨{
         targetPath := []
         targetWitness := .here region
-        holeRelsEq := rfl
-        holeWire := FiniteEquiv.refl _
-        context := .hole _
+        alignment := {
+          holeRelsEq := rfl
+          holeWire := FiniteEquiv.refl _
+          contexts := .hole _
+        }
         body := RegionIso.refl region
       }, rfl, fun _ => rfl⟩
   | @cut outerWires rels localWires items index rest focus atIndex childBody
@@ -440,26 +462,30 @@ noncomputable def Region.ContextPath.identityAlignment
           (.cut focus atIndex isCut nested) := {
         targetPath := sourceIndex.val :: child.targetPath
         targetWitness := targetWitness
-        holeRelsEq := by
-          simpa [targetWitness, Region.ContextPath.toFocus] using
-            child.holeRelsEq
-        holeWire := child.holeWire
-        context := by
-          simp only [targetWitness, Region.ContextPath.toFocus]
-          rw [DiagramContext.castHoleRels_cut]
-          have childContext : DiagramContextIso
-              (extendWireEquiv (FiniteEquiv.refl (Fin outerWires))
-                (FiniteEquiv.refl (Fin localWires))) child.holeWire rels
-              nested.toFocus.holeRels nested.toFocus.context
-              (child.holeRelsEq ▸
-                child.targetWitness.toFocus.context) := by
-            rw [extendedRefl]
-            exact child.context
-          exact DiagramContextIso.cutFrame
-            (FiniteEquiv.refl (Fin localWires)) focus focus atIndex atIndex
-            frame nested.toFocus.context
-            (child.holeRelsEq ▸ child.targetWitness.toFocus.context)
-            childContext
+        alignment := {
+          holeRelsEq := by
+            simpa [targetWitness, Region.ContextPath.toFocus] using
+              child.alignment.holeRelsEq
+          holeWire := child.alignment.holeWire
+          contexts := by
+            simp only [targetWitness, Region.ContextPath.toFocus]
+            rw [DiagramContext.castHoleRels_cut]
+            have childContext : DiagramContextIso
+                (extendWireEquiv (FiniteEquiv.refl (Fin outerWires))
+                  (FiniteEquiv.refl (Fin localWires)))
+                child.alignment.holeWire rels
+                nested.toFocus.holeRels nested.toFocus.context
+                (child.alignment.holeRelsEq.symm ▸
+                  child.targetWitness.toFocus.context) := by
+              rw [extendedRefl]
+              exact child.alignment.contexts
+            exact DiagramContextIso.cutFrame
+              (FiniteEquiv.refl (Fin localWires)) focus focus atIndex atIndex
+              frame nested.toFocus.context
+              (child.alignment.holeRelsEq.symm ▸
+                child.targetWitness.toFocus.context)
+              childContext
+        }
         body := by
           simpa [targetWitness, Region.ContextPath.toFocus] using child.body
       }
@@ -498,27 +524,31 @@ noncomputable def Region.ContextPath.identityAlignment
           (.bubble focus atIndex isBubble nested) := {
         targetPath := sourceIndex.val :: child.targetPath
         targetWitness := targetWitness
-        holeRelsEq := by
-          simpa [targetWitness, Region.ContextPath.toFocus] using
-            child.holeRelsEq
-        holeWire := child.holeWire
-        context := by
-          simp only [targetWitness, Region.ContextPath.toFocus]
-          rw [DiagramContext.castHoleRels_bubble]
-          have childContext : DiagramContextIso
-              (extendWireEquiv (FiniteEquiv.refl (Fin outerWires))
-                (FiniteEquiv.refl (Fin localWires))) child.holeWire
-              (arity :: rels) nested.toFocus.holeRels
-              nested.toFocus.context
-              (child.holeRelsEq ▸
-                child.targetWitness.toFocus.context) := by
-            rw [extendedRefl]
-            exact child.context
-          exact DiagramContextIso.bubbleFrame
-            (FiniteEquiv.refl (Fin localWires)) focus focus atIndex atIndex
-            frame nested.toFocus.context
-            (child.holeRelsEq ▸ child.targetWitness.toFocus.context)
-            childContext
+        alignment := {
+          holeRelsEq := by
+            simpa [targetWitness, Region.ContextPath.toFocus] using
+              child.alignment.holeRelsEq
+          holeWire := child.alignment.holeWire
+          contexts := by
+            simp only [targetWitness, Region.ContextPath.toFocus]
+            rw [DiagramContext.castHoleRels_bubble]
+            have childContext : DiagramContextIso
+                (extendWireEquiv (FiniteEquiv.refl (Fin outerWires))
+                  (FiniteEquiv.refl (Fin localWires)))
+                child.alignment.holeWire
+                (arity :: rels) nested.toFocus.holeRels
+                nested.toFocus.context
+                (child.alignment.holeRelsEq.symm ▸
+                  child.targetWitness.toFocus.context) := by
+              rw [extendedRefl]
+              exact child.alignment.contexts
+            exact DiagramContextIso.bubbleFrame
+              (FiniteEquiv.refl (Fin localWires)) focus focus atIndex atIndex
+              frame nested.toFocus.context
+              (child.alignment.holeRelsEq.symm ▸
+                child.targetWitness.toFocus.context)
+              childContext
+        }
         body := by
           simpa [targetWitness, Region.ContextPath.toFocus] using child.body
       }

@@ -799,15 +799,9 @@ structure CompilerTraceAlignment
     {sourcePath targetPath : List Nat}
     (outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
     (sourceWitness : Region.ContextPath sourceBody sourcePath)
-    (targetWitness : Region.ContextPath targetBody targetPath) where
-  holeRelsEq : sourceWitness.toFocus.holeRels =
-    targetWitness.toFocus.holeRels
-  holeWire : FiniteEquiv (Fin sourceWitness.toFocus.holeWires)
-    (Fin targetWitness.toFocus.holeWires)
+    (targetWitness : Region.ContextPath targetBody targetPath) extends
+      Region.ContextPath.Alignment outerWire sourceWitness targetWitness where
   holeWire_val : ∀ index, (holeWire index).val = index.val
-  contexts : DiagramContextIso outerWire holeWire rels
-    sourceWitness.toFocus.holeRels sourceWitness.toFocus.context
-    (holeRelsEq.symm ▸ targetWitness.toFocus.context)
 
 private theorem lifted_child_eq
     (input : Concrete.Diagram)

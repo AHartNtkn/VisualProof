@@ -1,4 +1,5 @@
 import VisualProof.Concrete.Subgraph.Splice.Input.Layout.RootFactor
+import VisualProof.Diagram.ContextPathIsomorphism
 
 namespace VisualProof.Concrete.Splice.Input
 
@@ -217,27 +218,13 @@ structure PlugLayout.NestedFrameContextAlignment
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hnested : input.site ≠ input.frame.val.root) where
-  holeRelsEq :
-    (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
-      sourceRoot).focus.holeRels =
-    (compiledSpliceOutputOpenView input layout hadmissible sourceBoundary
-      sourceRoot).focus.holeRels
-  holeWire : FiniteEquiv
-    (Fin (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
-      sourceRoot).focus.holeWires)
-    (Fin (compiledSpliceOutputOpenView input layout hadmissible sourceBoundary
-      sourceRoot).focus.holeWires)
-  contexts : DiagramContextIso
-    (PlugLayout.rootExposedWireEquiv input layout sourceBoundary)
-    holeWire []
-    (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
-      sourceRoot).focus.holeRels
-    (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
-      sourceRoot).focus.context
-    (holeRelsEq.symm ▸
-      (compiledSpliceOutputOpenView input layout hadmissible sourceBoundary
-        sourceRoot).focus.context)
+    (hnested : input.site ≠ input.frame.val.root) extends
+      Region.ContextPath.Alignment
+        (PlugLayout.rootExposedWireEquiv input layout sourceBoundary)
+        (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
+          sourceRoot).intrinsicPath
+        (compiledSpliceOutputOpenView input layout hadmissible sourceBoundary
+          sourceRoot).intrinsicPath where
   terminalInheritedWireSpec : ∀ index,
     (compiledSpliceOutputNestedLeaf input layout hadmissible sourceBoundary
       sourceRoot hnested).inheritedWires.get
