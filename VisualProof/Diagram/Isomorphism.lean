@@ -142,6 +142,59 @@ mutual
         ItemSeqIso  ambient rels source target
 end
 
+def Region.localCount : Region wires rels -> Nat
+  | .mk localWires _ => localWires
+
+def RegionIso.localEquiv
+    {sourceWires targetWires : Nat}
+    {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {rels : RelCtx}
+    {source : Region sourceWires rels}
+    {target : Region targetWires rels}
+    (iso : RegionIso ambient rels source target) :
+    FiniteEquiv (Fin source.localCount) (Fin target.localCount) :=
+  match iso with
+  | .mk localEquiv _ => localEquiv
+
+def RegionIso.localEquivCast
+    {sourceWires targetWires sourceLocal targetLocal : Nat}
+    {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {rels : RelCtx}
+    {source : Region sourceWires rels}
+    {target : Region targetWires rels}
+    (iso : RegionIso ambient rels source target)
+    (sourceLocalEq : source.localCount = sourceLocal)
+    (targetLocalEq : target.localCount = targetLocal) :
+    FiniteEquiv (Fin sourceLocal) (Fin targetLocal) := by
+  subst sourceLocal
+  subst targetLocal
+  exact iso.localEquiv
+
+theorem RegionIso.localEquivCast_castEndpoints
+    {sourceWires targetWires sourceLocal targetLocal : Nat}
+    {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {rels : RelCtx}
+    {source source' : Region sourceWires rels}
+    {target target' : Region targetWires rels}
+    (iso : RegionIso ambient rels source target)
+    (sourceEq : source = source')
+    (targetEq : target = target')
+    (sourceLocalEq : source.localCount = sourceLocal)
+    (targetLocalEq : target.localCount = targetLocal)
+    (sourceLocalEq' : source'.localCount = sourceLocal)
+    (targetLocalEq' : target'.localCount = targetLocal) :
+    let sourceIso := Eq.mp
+      (congrArg (fun value => RegionIso ambient rels value target) sourceEq)
+      iso
+    let resultIso := Eq.mp
+      (congrArg (fun value => RegionIso ambient rels source' value) targetEq)
+      sourceIso
+    resultIso.localEquivCast sourceLocalEq' targetLocalEq' =
+      iso.localEquivCast sourceLocalEq targetLocalEq := by
+  subst source'
+  subst target'
+  rfl
+
 
 def ItemSeq.replaceAt :
     (items : ItemSeq  wires rels) →

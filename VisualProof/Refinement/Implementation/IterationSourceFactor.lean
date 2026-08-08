@@ -1026,6 +1026,82 @@ noncomputable def extractedSelectedRegion
       (Concrete.Elaboration.WireContext.length_extend
         anchorLeaf.inheritedWires selection.val.anchor))
 
+private theorem Region.localCount_castWiresEq
+    (equality : source = target) (region : Region source rels) :
+    (region.castWiresEq equality).localCount = region.localCount := by
+  subst target
+  rfl
+
+theorem anchorBody_localWires
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    {outer : Nat} {rels : RelCtx}
+    {anchorBody : Region outer rels}
+    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
+      selection.val.anchor (.here anchorBody)) :
+    anchorBody.localCount =
+      (Concrete.Elaboration.exactScopeWires input.val
+        selection.val.anchor).length := by
+  have bodyEq := anchorLeaf.bodyComputation
+  change anchorBody = Region.castWiresEq anchorLeaf.inheritedLength
+    (Concrete.Elaboration.finishRegion input.val anchorLeaf.inheritedWires
+      selection.val.anchor anchorLeaf.items) at bodyEq
+  rw [bodyEq]
+  calc
+    _ = (Concrete.Elaboration.finishRegion input.val
+          anchorLeaf.inheritedWires selection.val.anchor
+          anchorLeaf.items).localCount :=
+      Region.localCount_castWiresEq _ _
+    _ = _ := rfl
+
+theorem sourceFactorTargetRegion_localWires
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    {outer : Nat} {rels : RelCtx}
+    {anchorBody : Region outer rels}
+    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
+      selection.val.anchor (.here anchorBody))
+    {target : Fin input.val.regionCount} {path : List Nat}
+    (route : Concrete.Splice.RegionRoute input.val selection.val.anchor
+      target path)
+    (anchorLocal : Nat)
+    (selected : Region
+      (anchorLeaf.inheritedWires.length + anchorLocal) rels)
+    (routeAlignment : SourceRouteAlignment input selection anchorLeaf route
+      anchorLocal)
+    (selectedLocal : ∃ selectedItems : ItemSeq
+        ((anchorLeaf.inheritedWires.length + anchorLocal) +
+          selection.val.explicitWires.length) rels,
+      selected = Region.mk selection.val.explicitWires.length selectedItems) :
+    (sourceFactorTargetRegion input selection anchorLeaf route anchorLocal
+      selected routeAlignment).localCount =
+      (retainedAnchorWires input.val selection).length +
+        selection.val.explicitWires.length := by
+  obtain ⟨selectedItems, selectedEq⟩ := selectedLocal
+  have routedLocal :
+      (routeAlignment.factoredWitness.toFocus.context.fill
+        routeAlignment.factoredWitness.toFocus.body).localCount = 0 := by
+    rw [routeAlignment.factoredWitness.toFocus.rebuild]
+    rw [Region.localCount_castWiresEq]
+    rfl
+  have anchorLocalEq : anchorLocal =
+      (retainedAnchorWires input.val selection).length := by
+    have retainedLength := routeAlignment.retainedLength
+    rw [retainedContext_length] at retainedLength
+    omega
+  rw [selectedEq]
+  generalize descendantEq :
+    routeAlignment.factoredWitness.toFocus.context.fill
+      routeAlignment.factoredWitness.toFocus.body = descendant at routedLocal ⊢
+  cases descendant with
+  | mk descendantLocal descendantItems =>
+      simp only [Region.localCount] at routedLocal
+      subst descendantLocal
+      unfold sourceFactorTargetRegion
+      rw [descendantEq]
+      simp only [Region.conjoin, Region.adjoinAt, Region.localCount]
+      omega
+
 /-- Base-ready source factorization at the compiled selection anchor.  The
 selected explicit wires are local to `selected`; the retained anchor wires and
 the retained descendant context are each bound exactly once outside it. -/
@@ -1061,6 +1137,11 @@ structure SourceFactorResult
     (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm) rels anchorBody
     (sourceFactorTargetRegion (rels := rels) input selection anchorLeaf route
       anchorLocal selected route_alignment)
+  source_local : source_iso.localEquivCast
+      (anchorBody_localWires input selection anchorLeaf)
+      (sourceFactorTargetRegion_localWires input selection anchorLeaf route
+        anchorLocal selected route_alignment selected_local) =
+    (anchorLocalEquiv input.val selection).symm
   material_iso : RegionIso
     (FiniteEquiv.refl (Fin anchorLeaf.inheritedWires.length)) rels
     (extractedSelectedRegion input selection layout anchorLeaf fragmentContext
@@ -1828,7 +1909,7 @@ noncomputable def sourceFactor_complete
       dsimp only [FiniteEquiv.symm, FiniteEquiv.refl, localEquiv]
       rfl
   rw [presentationWireEq] at sourceFactorItems
-  have rawSourceIso : RegionIso
+  let rawSourceIso : RegionIso
       (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm) rels
       (Region.mk
         (Concrete.Elaboration.exactScopeWires input.val
@@ -1837,18 +1918,7 @@ noncomputable def sourceFactor_complete
         ((retainedAnchorWires input.val selection).length +
           selection.val.explicitWires.length) targetItems) :=
     .mk localEquiv.symm sourceFactorItems
-  have sourceIso : RegionIso
-      (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm) rels anchorBody
-      (Region.mk
-        ((retainedAnchorWires input.val selection).length +
-          selection.val.explicitWires.length) targetItems) :=
-    Eq.mp (congrArg (fun source => RegionIso
-      (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm) rels source
-      (Region.mk
-        ((retainedAnchorWires input.val selection).length +
-          selection.val.explicitWires.length) targetItems)) sourceEq.symm)
-      rawSourceIso
-  have sourceIso' : RegionIso
+  let sourceIso' : RegionIso
       (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm) rels anchorBody
       (Region.adjoinAt
         (retainedAnchorWires input.val selection).length .nil
@@ -1857,7 +1927,13 @@ noncomputable def sourceFactor_complete
             factoredWitness.toFocus.body))) :=
     Eq.mp (congrArg (fun target => RegionIso
       (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm) rels anchorBody
-      target) sourceTargetEq.symm) sourceIso
+      target) sourceTargetEq.symm)
+      (Eq.mp (congrArg (fun source => RegionIso
+        (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm) rels source
+        (Region.mk
+          ((retainedAnchorWires input.val selection).length +
+            selection.val.explicitWires.length) targetItems)) sourceEq.symm)
+        rawSourceIso)
   exact {
     anchorLocal := (retainedAnchorWires input.val selection).length
     selected := selected
@@ -1867,6 +1943,17 @@ noncomputable def sourceFactor_complete
       simpa only [sourceFactorTargetRegion,
         SourceRouteAlignment.descendant, SourceRouteAlignment.remainder]
         using sourceIso'
+    source_local := by
+      have transported := RegionIso.localEquivCast_castEndpoints
+        rawSourceIso sourceEq.symm sourceTargetEq.symm rfl rfl
+        (anchorBody_localWires input selection anchorLeaf)
+        (sourceFactorTargetRegion_localWires input selection anchorLeaf route
+          (retainedAnchorWires input.val selection).length selected
+          routeAlignment ⟨factoredItems, rfl⟩)
+      simpa [sourceIso', rawSourceIso, factoredWitness,
+        RegionIso.localEquivCast, RegionIso.localEquiv, localEquiv,
+        sourceFactorTargetRegion]
+        using transported
     material_iso := materialIso
   }
 
