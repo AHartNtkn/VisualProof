@@ -34,7 +34,9 @@ The PM must keep comparing task receipts to this oracle. Planning, discovery, a 
 
 ## Current Tranche
 
-Execute the reviewed implementation plan in successive theorem-driven Worker packages until the recursive authority and concrete refinement boundary is complete.
+Establish the canonical proof-relevant structural witness and compiler/context
+alignment foundation under an independent Worker/Judge gate, then resume the
+reviewed theorem-driven implementation plan.
 
 ## Non-Negotiable Constraints
 
@@ -45,6 +47,18 @@ Execute the reviewed implementation plan in successive theorem-driven Worker pac
 - Rule soundness mentions no concrete carriers, numbering, execution state, trace, receipt, request, or error.
 - Concrete correctness is representation and refinement, including ordered interfaces and repeated aliases; it does not directly define semantic preservation.
 - The Iteration request carries exact boundary-disjointness evidence; reflection, execution refinement, and exact-request meaning use that evidence without changing the recursive rule or adding an executor rejection class.
+- `RegionIso`, `ItemIso`, and `ItemSeqIso` are the one canonical
+  proof-relevant Type hierarchy; theorem-facing propositions use `Nonempty` of
+  that witness and canonical maps are fields or indices.
+- `OpenDiagramIso.body` and `DiagramContextIso` retain recursive/composable
+  Type data. `ContextPathAlignment` provides that data directly, without
+  Prop-to-Type elimination.
+- One neutral compiler/context alignment authority owns the shared core.
+  Operation-specific records extend it only with genuine operation facts and
+  never redeclare shared hole relation, hole wire, or context alignment data.
+- `RegionIsoPresentation` and `SourceFactorPresentation` are strengthened
+  only long enough to migrate all consumers, then retired with no aliases,
+  adapters, compatibility definitions, or parallel witnesses.
 - The Lean formalization has no matcher or occurrence-search subsystem; requests supply occurrence evidence.
 - Representation completeness and one-step execution completeness are required.
 - TypeScript is outside this goal's implementation, planning, and validation scope.

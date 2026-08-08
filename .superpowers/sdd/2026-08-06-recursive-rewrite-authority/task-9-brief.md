@@ -22,6 +22,35 @@ auditor. Its `rules`, `implementation`, and `proof` modes must report complete
 root-to-forbidden-import paths and enforce the three layer boundaries in this
 brief. Direct `lean --deps` output is not transitive evidence.
 
+## Mandatory foundation before Task 9
+
+Task 9 implementation is paused until an independent foundation Worker/Judge
+gate approves the canonical proof-relevant structural witness hierarchy and
+neutral compiler/context alignment authority.
+
+- `RegionIso`, `ItemIso`, and `ItemSeqIso` are the one canonical
+  proof-relevant Type hierarchy, retaining ambient/local wire equivalences,
+  position equivalences, per-item data, and recursive cut/bubble data.
+  Theorem-facing propositions use `Nonempty` of that Type witness, and
+  canonical maps are fields or indices.
+- `OpenDiagramIso.body` is that Type witness. `DiagramContextIso` is Type,
+  and `ContextPathAlignment` provides composable data directly rather than
+  relying on Prop-erased `Nonempty`.
+- Strengthen then retire `RegionIsoPresentation` and the Task-9-local
+  `SourceFactorPresentation` after every consumer migrates. No alias,
+  adapter, compatibility path, or parallel witness may remain.
+- One neutral authority replaces duplicated compiler/context core from
+  `PairedCompilerContextAlignment`, `CompilerTraceAlignment`, and
+  `OpenCompilerTraceAlignment`. Operation-specific extensions retain only
+  genuine carrier, concrete-map, binder, boundary-order, route, or local-rule
+  facts and do not redeclare `holeRelsEq`, `holeWire`, or context alignment.
+
+The foundation gate requires direct projection/composition without
+Prop-to-Type elimination, production-only `LEAN_NUM_THREADS=1`
+warning-as-error compilation, all authority audits, no-hole/axiom scans, and
+a serial full build. It permits no examples, fixtures, synthetic theorems,
+`#check`, or `#eval`.
+
 ## Required remediation
 
 The following conditions must hold before the Task 9 aggregate is GREEN:

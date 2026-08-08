@@ -1228,6 +1228,45 @@ theorem representation_complete (diagram : OpenDiagram arity) :
 
 Run RED/GREEN for the round trip and the three representation theorems. Compile, build, kernel-audit, and commit as `Prove concrete representation laws`.
 
+### Foundational prerequisite: establish canonical structural witness authority
+
+This prerequisite is GREEN before Task 9 resumes. It changes the existing
+structural witness hierarchy itself; it does not introduce a second witness
+authority, a compatibility path, or a Task-9-local substitute.
+
+- Convert `RegionIso`, `ItemIso`, and `ItemSeqIso` into the one canonical
+  proof-relevant `Type` hierarchy. Preserve ambient and local wire
+  equivalences, position equivalences, per-item witnesses, and recursive
+  cut/bubble witnesses as its data.
+- Theorem-facing relations state propositions with `Nonempty` of that
+  canonical Type witness. Canonical maps are fields or indices of the witness,
+  not existentially recovered data.
+- Make `OpenDiagramIso.body` the canonical Type witness.
+- Strengthen `RegionIsoPresentation` until every consumer has migrated, then
+  retire it. Strengthen and then retire the Task-9-local
+  `SourceFactorPresentation` on the same basis. Do not retain aliases,
+  adapters, re-exports, compatibility definitions, or parallel witnesses.
+- Convert `DiagramContextIso` to Type. Strengthen the existing
+  `ContextPathAlignment` so it directly returns or contains composable data;
+  it may not rely on `Nonempty` caused by Prop erasure.
+- Extract one neutral common compiler/context alignment authority from
+  `PairedCompilerContextAlignment` and the repeated family
+  `CompilerTraceAlignment`/`OpenCompilerTraceAlignment` records.
+  Operation-specific records may extend it only with actual carrier changes,
+  exact concrete maps, binders, boundary order, routes, and local-rule
+  witnesses. They must not redeclare `holeRelsEq`, `holeWire`, or context
+  alignment.
+- Migrate every current Task-9 consumer to these owners and eliminate alternate
+  authorities while keeping Concrete and Refinement semantic-free.
+
+The foundation Worker must compile only production declarations with
+`LEAN_NUM_THREADS=1` and `-DwarningAsError=true`; it may add no examples,
+fixtures, synthetic theorems, `#check`, or `#eval`. The independent Judge
+must verify direct projection and composition without Prop-to-Type elimination,
+recursive data in `OpenDiagramIso.body`, one compiler/context core, genuine
+operation facts in extensions, no existential shortcut or compatibility
+authority, all authority audits, no-hole/axiom scans, and a serial full build.
+
 ### Task 9: Prove structural execution refinement family by family
 
 **Files:**
