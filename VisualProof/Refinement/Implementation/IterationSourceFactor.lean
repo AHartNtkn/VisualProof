@@ -863,11 +863,15 @@ structure SourceRouteAlignment
       selection.val.anchor (.here anchorBody))
     {target : Fin input.val.regionCount} {path : List Nat}
     (route : Concrete.Splice.RegionRoute input.val selection.val.anchor
-      target path) where
+      target path)
+    (anchorLocal : Nat) where
   keptItems : ItemSeq
     (anchorLeaf.inheritedWires.extend selection.val.anchor).length rels
   retainedItems : ItemSeq
     (retainedContext input.val selection anchorLeaf.inheritedWires).length rels
+  retainedLength :
+    (retainedContext input.val selection anchorLeaf.inheritedWires).length =
+      anchorLeaf.inheritedWires.length + anchorLocal
   keptRoute : KeptRouteResult input selection anchorLeaf keptItems route
   retainedIso : RegionIso
     (FiniteEquiv.refl
@@ -880,13 +884,15 @@ structure SourceRouteAlignment
           anchorLeaf.inheritedWires)))
 
 noncomputable def SourceRouteAlignment.alignment
-    (result : SourceRouteAlignment input selection anchorLeaf route) :
+    (result : SourceRouteAlignment input selection anchorLeaf route
+      anchorLocal) :
     result.retainedIso.ContextPathAlignment result.keptRoute.witness :=
   Classical.choice
     (result.retainedIso.alignContextPath result.keptRoute.witness)
 
 noncomputable def SourceRouteAlignment.retainedWitness
-    (result : SourceRouteAlignment input selection anchorLeaf route) :
+    (result : SourceRouteAlignment input selection anchorLeaf route
+      anchorLocal) :
     Region.ContextPath (Region.mk 0 result.retainedItems)
       result.alignment.targetPath := by
   have renamed : Region.ContextPath
@@ -904,14 +910,49 @@ noncomputable def SourceRouteAlignment.retainedWitness
 /-- The retained-route witness in the explicit inherited-plus-anchor-local
 carrier used by `SourceFactorResult`. -/
 noncomputable def SourceRouteAlignment.factoredWitness
-    (result : SourceRouteAlignment input selection anchorLeaf route) :
+    (result : SourceRouteAlignment input selection anchorLeaf route
+      anchorLocal) :
     Region.ContextPath
       ((Region.mk 0 result.retainedItems).castWiresEq
-        (retainedContext_length input.val selection
-          anchorLeaf.inheritedWires))
+        result.retainedLength)
       result.alignment.targetPath :=
-  result.retainedWitness.castWiresEq
-    (retainedContext_length input.val selection anchorLeaf.inheritedWires)
+  result.retainedWitness.castWiresEq result.retainedLength
+
+noncomputable def SourceRouteAlignment.descendant
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    {outer : Nat} {rels : RelCtx}
+    {anchorBody : Region outer rels}
+    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
+      selection.val.anchor (.here anchorBody))
+    {target : Fin input.val.regionCount} {path : List Nat}
+    (route : Concrete.Splice.RegionRoute input.val selection.val.anchor
+      target path)
+    (anchorLocal : Nat)
+    (result : SourceRouteAlignment input selection anchorLeaf route
+      anchorLocal) :
+    DiagramContext
+      (anchorLeaf.inheritedWires.length + anchorLocal)
+      result.factoredWitness.toFocus.holeWires rels
+      result.factoredWitness.toFocus.holeRels :=
+  result.factoredWitness.toFocus.context
+
+noncomputable def SourceRouteAlignment.remainder
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    {outer : Nat} {rels : RelCtx}
+    {anchorBody : Region outer rels}
+    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
+      selection.val.anchor (.here anchorBody))
+    {target : Fin input.val.regionCount} {path : List Nat}
+    (route : Concrete.Splice.RegionRoute input.val selection.val.anchor
+      target path)
+    (anchorLocal : Nat)
+    (result : SourceRouteAlignment input selection anchorLeaf route
+      anchorLocal) :
+    Region result.factoredWitness.toFocus.holeWires
+      result.factoredWitness.toFocus.holeRels :=
+  result.factoredWitness.toFocus.body
 
 /-- The selected fragment body compiled in the anchor's authoritative wire and
 relation contexts, before the anchor-local carrier is factored. -/
@@ -975,12 +1016,8 @@ structure SourceFactorResult
       target path) where
   anchorLocal : Nat
   selected : Region (anchorLeaf.inheritedWires.length + anchorLocal) rels
-  descendantWires : Nat
-  descendantRels : RelCtx
-  descendant : DiagramContext
-    (anchorLeaf.inheritedWires.length + anchorLocal) descendantWires
-    rels descendantRels
-  remainder : Region descendantWires descendantRels
+  route_alignment : SourceRouteAlignment input selection anchorLeaf route
+    anchorLocal
   selected_local : ∃ selectedItems : ItemSeq
       ((anchorLeaf.inheritedWires.length + anchorLocal) +
         selection.val.explicitWires.length) rels,
@@ -988,16 +1025,84 @@ structure SourceFactorResult
   source_iso : RegionIso
     (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm) rels anchorBody
     (Region.adjoinAt anchorLocal .nil
-      (selected.conjoin (descendant.fill remainder)))
+      (selected.conjoin
+        (route_alignment.descendant.fill route_alignment.remainder)))
   material_iso : RegionIso
     (FiniteEquiv.refl (Fin anchorLeaf.inheritedWires.length)) rels
     (extractedSelectedRegion input selection layout anchorLeaf fragmentContext
       fragmentBinders fragmentEnumeration fragmentExact fragmentItems)
     (Region.adjoinAt anchorLocal .nil selected)
-  route_alignment : SourceRouteAlignment input selection anchorLeaf route
-  descendant_route : HEq descendant
-    route_alignment.factoredWitness.toFocus.context
-  remainder_route : HEq remainder route_alignment.factoredWitness.toFocus.body
+
+noncomputable def SourceFactorResult.descendant
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    (layout : FragmentLayout input.val selection)
+    {outer : Nat} {rels fragmentRels : RelCtx}
+    {anchorBody : Region outer rels}
+    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
+      selection.val.anchor (.here anchorBody))
+    (fragmentContext : Concrete.Elaboration.WireContext
+      (input.val.extractDiagramRaw selection layout))
+    (fragmentBinders : Concrete.Elaboration.BinderContext
+      (input.val.extractDiagramRaw selection layout) fragmentRels)
+    (fragmentEnumeration : Concrete.Elaboration.BinderContext.Enumeration
+      (input.val.extractDiagramRaw selection layout) fragmentBinders
+      layout.bodyContainer)
+    (fragmentExact : fragmentContext.Exact layout.bodyContainer)
+    (fragmentItems : ItemSeq fragmentContext.length fragmentRels)
+    {target : Fin input.val.regionCount} {path : List Nat}
+    (route : Concrete.Splice.RegionRoute input.val selection.val.anchor
+      target path)
+    (result : SourceFactorResult input selection layout anchorLeaf
+      fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+      fragmentItems route) :
+    DiagramContext
+      (anchorLeaf.inheritedWires.length + result.anchorLocal)
+      result.route_alignment.factoredWitness.toFocus.holeWires rels
+      result.route_alignment.factoredWitness.toFocus.holeRels :=
+  result.route_alignment.descendant
+
+noncomputable def SourceFactorResult.remainder
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    (layout : FragmentLayout input.val selection)
+    {outer : Nat} {rels fragmentRels : RelCtx}
+    {anchorBody : Region outer rels}
+    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
+      selection.val.anchor (.here anchorBody))
+    (fragmentContext : Concrete.Elaboration.WireContext
+      (input.val.extractDiagramRaw selection layout))
+    (fragmentBinders : Concrete.Elaboration.BinderContext
+      (input.val.extractDiagramRaw selection layout) fragmentRels)
+    (fragmentEnumeration : Concrete.Elaboration.BinderContext.Enumeration
+      (input.val.extractDiagramRaw selection layout) fragmentBinders
+      layout.bodyContainer)
+    (fragmentExact : fragmentContext.Exact layout.bodyContainer)
+    (fragmentItems : ItemSeq fragmentContext.length fragmentRels)
+    {target : Fin input.val.regionCount} {path : List Nat}
+    (route : Concrete.Splice.RegionRoute input.val selection.val.anchor
+      target path)
+    (result : SourceFactorResult input selection layout anchorLeaf
+      fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+      fragmentItems route) :
+    Region result.route_alignment.factoredWitness.toFocus.holeWires
+      result.route_alignment.factoredWitness.toFocus.holeRels :=
+  result.route_alignment.remainder
+
+/-- The result's descendant and remainder rebuild the exact routed retained
+focus, with no independently indexed context or body. -/
+theorem SourceFactorResult.routed_focus_eq
+    (result : SourceFactorResult input selection layout anchorLeaf
+      fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+      fragmentItems route) :
+    result.descendant.fill result.remainder =
+      (Region.mk 0 result.route_alignment.retainedItems).castWiresEq
+        result.route_alignment.retainedLength :=
+  by
+    simpa only [SourceFactorResult.descendant,
+      SourceFactorResult.remainder, SourceRouteAlignment.descendant,
+      SourceRouteAlignment.remainder] using
+        result.route_alignment.factoredWitness.toFocus.rebuild
 
 theorem sourceFactor_complete
     (input : Concrete.Checked)
@@ -1065,9 +1170,12 @@ theorem sourceFactor_complete
         · exact Fin.elim0 localIndex
       rw [extendedRefl]
       simpa using keptIso
-  let routeAlignment : SourceRouteAlignment input selection anchorLeaf route := {
+  let routeAlignment : SourceRouteAlignment input selection anchorLeaf route
+      (retainedAnchorWires input.val selection).length := {
     keptItems := keptItems
     retainedItems := restrictedItems
+    retainedLength :=
+      retainedContext_length input.val selection anchorLeaf.inheritedWires
     keptRoute := keptRoute
     retainedIso := keptRegionIso
   }
@@ -1084,12 +1192,7 @@ theorem sourceFactor_complete
   let localEquiv := anchorLocalEquiv input.val selection
   let wireEquiv := anchorWireEquiv input.val selection
     anchorLeaf.inheritedWires
-  let retainedLength :
-      (retainedContext input.val selection
-        anchorLeaf.inheritedWires).length =
-        anchorLeaf.inheritedWires.length +
-          (retainedAnchorWires input.val selection).length :=
-    retainedContext_length input.val selection anchorLeaf.inheritedWires
+  let retainedLength := routeAlignment.retainedLength
   let factoredWitness := routeAlignment.factoredWitness
   let factorRetained : Fin
       (retainedContext input.val selection anchorLeaf.inheritedWires).length →
@@ -1683,16 +1786,12 @@ theorem sourceFactor_complete
   exact ⟨{
     anchorLocal := (retainedAnchorWires input.val selection).length
     selected := selected
-    descendantWires := factoredWitness.toFocus.holeWires
-    descendantRels := factoredWitness.toFocus.holeRels
-    descendant := factoredWitness.toFocus.context
-    remainder := factoredWitness.toFocus.body
-    selected_local := ⟨factoredItems, rfl⟩
-    source_iso := sourceIso
-    material_iso := materialIso
     route_alignment := routeAlignment
-    descendant_route := by rfl
-    remainder_route := by rfl
+    selected_local := ⟨factoredItems, rfl⟩
+    source_iso := by
+      simpa only [SourceRouteAlignment.descendant,
+        SourceRouteAlignment.remainder] using sourceIso
+    material_iso := materialIso
   }⟩
 
 end VisualProof.Refinement.Implementation.IterationSourceFactor

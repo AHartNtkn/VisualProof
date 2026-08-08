@@ -86,3 +86,26 @@ The fix continues to obtain the route evidence only from
 `keptRoute_complete`; it adds no route construction or search. Strict owner
 compilation, the focused module build, all four authority audits, the owner
 scans, and diff checks were rerun after the change.
+
+## Review fix 2/5: route-derived focus authority
+
+`SourceRouteAlignment` is indexed by the result's `anchorLocal` and carries
+the named `retainedLength` transport into that exact carrier. Its
+`descendant` and `remainder` accessors are derived directly from
+`factoredWitness.toFocus.context` and `.body`, including their dependent wire
+and relation indices.
+
+`SourceFactorResult` stores only `anchorLocal`, `selected`, the exact
+`route_alignment`, and the three certificate propositions
+`selected_local`, `source_iso`, and `material_iso`. Its public `descendant`
+and `remainder` accessors delegate to the route alignment, and `source_iso`
+is stated directly over those routed components. No parallel descendant
+carrier, relation context, diagram context, or remainder is authoritative.
+
+The production theorem `SourceFactorResult.routed_focus_eq` proves by
+ordinary equality that the derived context filled by the derived body
+rebuilds the retained routed region. The certificate therefore exposes a
+directly eliminable focus equation without `HEq`.
+
+Strict owner compilation, the focused module build, all four authority
+audits, the owner scans, and diff checks were rerun after this change.
