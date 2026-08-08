@@ -64,3 +64,25 @@ Validation completed serially:
 - owner proof-hole/axiom, semantic-authority, forbidden-prefix, and
   matcher/search/fixture scans
 - `git diff --check`
+
+## Review fix 1/5: supplied-route provenance
+
+`SourceFactorResult` is now indexed by the exact supplied `RegionRoute`, not
+only by the anchor and extracted material. Its `route_alignment` retains the
+`KeptRouteResult` produced by `keptRoute_complete` together with the retained
+block `RegionIso` used to transport that route.
+
+`SourceRouteAlignment.alignment`, `retainedWitness`, and `factoredWitness`
+expose the complete proof-relevant transport: the kept-route witness is
+aligned through the retained item isomorphism, reflected through the
+retained-to-full wire embedding, and cast into the explicit
+inherited-plus-anchor-local carrier. `descendant_route` and
+`remainder_route` tie the certificate's descendant context and remainder body
+to that exact factored witness by dependent equality. A downstream proof can
+therefore recover the supplied route, its terminal evidence, and the precise
+context/body selected by the source factor.
+
+The fix continues to obtain the route evidence only from
+`keptRoute_complete`; it adds no route construction or search. Strict owner
+compilation, the focused module build, all four authority audits, the owner
+scans, and diff checks were rerun after the change.

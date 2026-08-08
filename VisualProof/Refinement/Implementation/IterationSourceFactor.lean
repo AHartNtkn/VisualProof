@@ -29,6 +29,14 @@ def retainedContext
     Concrete.Elaboration.WireContext input :=
   inherited ++ retainedAnchorWires input selection
 
+theorem retainedContext_length
+    (input : Concrete.Diagram)
+    (selection : CheckedSelection input)
+    (inherited : Concrete.Elaboration.WireContext input) :
+    (retainedContext input selection inherited).length =
+      inherited.length + (retainedAnchorWires input selection).length := by
+  simp [retainedContext]
+
 theorem explicitWire_mem_exactScopeWires
     (input : Concrete.Diagram)
     (selection : CheckedSelection input)
@@ -213,6 +221,19 @@ theorem retainedContextIndexMap_spec
   exact indexOf?_sound (Classical.choose_spec (indexOf?_complete
     (retainedContext_member_full input selection inherited
       (List.get_mem _ index))))
+
+theorem retainedContextIndexMap_extend_zero
+    (input : Concrete.Diagram)
+    (selection : CheckedSelection input)
+    (inherited : Concrete.Elaboration.WireContext input) :
+    extendWireRenaming (retainedContextIndexMap input selection inherited) 0 =
+      retainedContextIndexMap input selection inherited := by
+  funext index
+  refine Fin.addCases (fun outerIndex => ?_) (fun localIndex => ?_) index
+  · simp only [extendWireRenaming, Fin.addCases_left]
+    apply Fin.ext
+    rfl
+  · exact Fin.elim0 localIndex
 
 /-- A checked selection never contains its own anchor in a selected child
 subtree. -/
@@ -830,6 +851,68 @@ private noncomputable def Region.ContextPath.unrenameWires
                   cases itemEq
                   exact .bubble sourceFocus sourceAt sourceKind
                     (induction sourceChild extended targetNested)
+
+/-- Exact proof-relevant transport of the supplied retained route into the
+single retained anchor context used by the source factor. -/
+structure SourceRouteAlignment
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    {outer : Nat} {rels : RelCtx}
+    {anchorBody : Region outer rels}
+    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
+      selection.val.anchor (.here anchorBody))
+    {target : Fin input.val.regionCount} {path : List Nat}
+    (route : Concrete.Splice.RegionRoute input.val selection.val.anchor
+      target path) where
+  keptItems : ItemSeq
+    (anchorLeaf.inheritedWires.extend selection.val.anchor).length rels
+  retainedItems : ItemSeq
+    (retainedContext input.val selection anchorLeaf.inheritedWires).length rels
+  keptRoute : KeptRouteResult input selection anchorLeaf keptItems route
+  retainedIso : RegionIso
+    (FiniteEquiv.refl
+      (Fin (anchorLeaf.inheritedWires.extend
+        selection.val.anchor).length)) rels
+    (Region.mk 0 keptItems)
+    (Region.mk 0
+      (retainedItems.renameWires
+        (retainedContextIndexMap input.val selection
+          anchorLeaf.inheritedWires)))
+
+noncomputable def SourceRouteAlignment.alignment
+    (result : SourceRouteAlignment input selection anchorLeaf route) :
+    result.retainedIso.ContextPathAlignment result.keptRoute.witness :=
+  Classical.choice
+    (result.retainedIso.alignContextPath result.keptRoute.witness)
+
+noncomputable def SourceRouteAlignment.retainedWitness
+    (result : SourceRouteAlignment input selection anchorLeaf route) :
+    Region.ContextPath (Region.mk 0 result.retainedItems)
+      result.alignment.targetPath := by
+  have renamed : Region.ContextPath
+      ((Region.mk 0 result.retainedItems).renameWires
+        (retainedContextIndexMap input.val selection
+          anchorLeaf.inheritedWires)) result.alignment.targetPath := by
+    simpa only [Region.renameWires,
+      retainedContextIndexMap_extend_zero] using
+        result.alignment.targetWitness
+  exact Region.ContextPath.unrenameWires
+    (Region.mk 0 result.retainedItems)
+    (retainedContextIndexMap input.val selection anchorLeaf.inheritedWires)
+    renamed
+
+/-- The retained-route witness in the explicit inherited-plus-anchor-local
+carrier used by `SourceFactorResult`. -/
+noncomputable def SourceRouteAlignment.factoredWitness
+    (result : SourceRouteAlignment input selection anchorLeaf route) :
+    Region.ContextPath
+      ((Region.mk 0 result.retainedItems).castWiresEq
+        (retainedContext_length input.val selection
+          anchorLeaf.inheritedWires))
+      result.alignment.targetPath :=
+  result.retainedWitness.castWiresEq
+    (retainedContext_length input.val selection anchorLeaf.inheritedWires)
+
 /-- The selected fragment body compiled in the anchor's authoritative wire and
 relation contexts, before the anchor-local carrier is factored. -/
 noncomputable def extractedSelectedRegion
@@ -886,7 +969,10 @@ structure SourceFactorResult
       (input.val.extractDiagramRaw selection layout) fragmentBinders
       layout.bodyContainer)
     (fragmentExact : fragmentContext.Exact layout.bodyContainer)
-    (fragmentItems : ItemSeq fragmentContext.length fragmentRels) where
+    (fragmentItems : ItemSeq fragmentContext.length fragmentRels)
+    {target : Fin input.val.regionCount} {path : List Nat}
+    (route : Concrete.Splice.RegionRoute input.val selection.val.anchor
+      target path) where
   anchorLocal : Nat
   selected : Region (anchorLeaf.inheritedWires.length + anchorLocal) rels
   descendantWires : Nat
@@ -908,6 +994,10 @@ structure SourceFactorResult
     (extractedSelectedRegion input selection layout anchorLeaf fragmentContext
       fragmentBinders fragmentEnumeration fragmentExact fragmentItems)
     (Region.adjoinAt anchorLocal .nil selected)
+  route_alignment : SourceRouteAlignment input selection anchorLeaf route
+  descendant_route : HEq descendant
+    route_alignment.factoredWitness.toFocus.context
+  remainder_route : HEq remainder route_alignment.factoredWitness.toFocus.body
 
 theorem sourceFactor_complete
     (input : Concrete.Checked)
@@ -941,7 +1031,7 @@ theorem sourceFactor_complete
     (targetNotSelected : ¬ selection.val.SelectsRegion target) :
     Nonempty (SourceFactorResult input selection layout anchorLeaf
       fragmentContext fragmentBinders fragmentEnumeration fragmentExact
-      fragmentItems) := by
+      fragmentItems route) := by
   obtain ⟨selectedItems, keptItems, selectedCompiled, keptCompiled,
       partitionIso⟩ := partition_complete input selection anchorLeaf
   obtain ⟨restrictedItems, restrictedCompiled, keptIso⟩ :=
@@ -975,30 +1065,12 @@ theorem sourceFactor_complete
         · exact Fin.elim0 localIndex
       rw [extendedRefl]
       simpa using keptIso
-  let keptAlignment := Classical.choice
-    (keptRegionIso.alignContextPath keptRoute.witness)
-  have retainedIndexExtendZero :
-      extendWireRenaming
-          (retainedContextIndexMap input.val selection
-            anchorLeaf.inheritedWires) 0 =
-        retainedContextIndexMap input.val selection
-          anchorLeaf.inheritedWires := by
-    funext index
-    refine Fin.addCases (fun outerIndex => ?_) (fun localIndex => ?_) index
-    · simp only [extendWireRenaming, Fin.addCases_left]
-      apply Fin.ext
-      rfl
-    · exact Fin.elim0 localIndex
-  have renamedRestrictedWitness : Region.ContextPath
-      ((Region.mk 0 restrictedItems).renameWires
-        (retainedContextIndexMap input.val selection
-          anchorLeaf.inheritedWires)) keptAlignment.targetPath := by
-    simpa only [Region.renameWires, retainedIndexExtendZero] using
-      keptAlignment.targetWitness
-  let restrictedWitness := Region.ContextPath.unrenameWires
-    (Region.mk 0 restrictedItems)
-    (retainedContextIndexMap input.val selection anchorLeaf.inheritedWires)
-    renamedRestrictedWitness
+  let routeAlignment : SourceRouteAlignment input selection anchorLeaf route := {
+    keptItems := keptItems
+    retainedItems := restrictedItems
+    keptRoute := keptRoute
+    retainedIso := keptRegionIso
+  }
   let binderWitness :=
     IterationExtraction.ExtractionBinderWitness.terminal input selection layout
       fragmentBinders fragmentEnumeration anchorLeaf.binders
@@ -1016,9 +1088,9 @@ theorem sourceFactor_complete
       (retainedContext input.val selection
         anchorLeaf.inheritedWires).length =
         anchorLeaf.inheritedWires.length +
-          (retainedAnchorWires input.val selection).length := by
-    simp [retainedContext]
-  let factoredWitness := restrictedWitness.castWiresEq retainedLength
+          (retainedAnchorWires input.val selection).length :=
+    retainedContext_length input.val selection anchorLeaf.inheritedWires
+  let factoredWitness := routeAlignment.factoredWitness
   let factorRetained : Fin
       (retainedContext input.val selection anchorLeaf.inheritedWires).length →
       Fin (anchorLeaf.inheritedWires.length +
@@ -1618,6 +1690,9 @@ theorem sourceFactor_complete
     selected_local := ⟨factoredItems, rfl⟩
     source_iso := sourceIso
     material_iso := materialIso
+    route_alignment := routeAlignment
+    descendant_route := by rfl
+    remainder_route := by rfl
   }⟩
 
 end VisualProof.Refinement.Implementation.IterationSourceFactor
