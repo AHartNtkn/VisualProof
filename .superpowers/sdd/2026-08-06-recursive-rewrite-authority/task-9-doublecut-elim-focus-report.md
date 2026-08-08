@@ -67,3 +67,15 @@ The focused builds emit non-failing linter warnings only.
 ## Concerns
 
 None.
+
+## Whole-open consumer surface
+
+The whole-open root reconstruction now consumes the same compiler-promotion
+authority through the public structural declarations
+`focusOccurrence_survives`, `promoted_occurrences_partition`,
+`compileOccurrences_of_perm`, `promotion_items_iso`, and
+`direct_child_encloses`.  `ItemSeqIso.changeWire` and
+`wrap_castWiresEq_explicit` provide only endpoint transport across the actual
+root compiler layouts.  The existing `focus` and `root_focus` theorems remain
+kernel-checked unchanged; the root owner performs only the distinct
+`compileRoot?`/`finishRoot` presentation and open-boundary assembly.

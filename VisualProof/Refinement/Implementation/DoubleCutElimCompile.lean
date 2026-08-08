@@ -113,7 +113,7 @@ private def OccurrenceSurvives
   | .child child =>
       (Domain input outer trace.inner).survives child = true
 
-private theorem focusOccurrence_survives
+theorem focusOccurrence_survives
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
@@ -373,7 +373,25 @@ private theorem focus_occurrences_partition
       (promotedTarget input inputWellFormed trace))
   exact focusPromotedOccurrences_mem_iff input inputWellFormed trace
 
-private theorem compileOccurrences_of_perm
+/-- The promoted host and inner blocks are exactly the direct occurrences at
+the eliminated root image.  This is the item-level ordering authority shared
+by nested and whole-open reconstruction. -/
+theorem promoted_occurrences_partition
+    (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
+    {outer : Fin input.regionCount} {raw : Concrete.Diagram}
+    (trace : Concrete.DoubleCutElimTrace input outer raw) :
+    (((hostOccurrences trace).map
+        (promoteOccurrence trace
+          (promotedTarget input inputWellFormed trace))).append
+      ((innerOccurrences trace).map
+        (promoteOccurrence trace
+          (promotedTarget input inputWellFormed trace)))).Perm
+      (Concrete.Elaboration.localOccurrences (Target trace)
+        (promotedTarget input inputWellFormed trace)) := by
+  simpa [focusPromotedOccurrences, focusSourceOccurrences, List.map_append]
+    using focus_occurrences_partition input inputWellFormed trace
+
+theorem compileOccurrences_of_perm
     (diagram : Concrete.Diagram)
     (recurse : ∀ {rels : RelCtx},
       (region : Fin diagram.regionCount) →
@@ -686,7 +704,7 @@ private theorem itemSeqIso_after_rename
   rw [ItemSeq.get_renameWires]
   exact items sourceIndex
 
-private theorem ItemSeqIso.changeWire
+theorem ItemSeqIso.changeWire
     {first second : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     (equality : first = second)
     {source : ItemSeq sourceWires rels}
@@ -706,6 +724,16 @@ private theorem RegionIso.changeWire
   subst second
   exact iso
 
+theorem wrap_castWiresEq_explicit
+    (equality : sourceWires = targetWires)
+    (material : Region sourceWires rels) :
+    Rule.DoubleCut.wrap (material.castWiresEq equality) =
+      .mk 0 ((ItemSeq.cons (.cut (.mk 0
+        (ItemSeq.cons (.cut material) ItemSeq.nil)))
+          ItemSeq.nil).castWiresEq equality) := by
+  subst targetWires
+  rfl
+
 private theorem ItemSeq.renameRelations_identity
     (items : ItemSeq wires rels) :
     items.renameRelations
@@ -713,7 +741,7 @@ private theorem ItemSeq.renameRelations_identity
   simpa [DoubleCutTransport.identityRelationRenaming] using
     ItemSeq.renameRelations_id items
 
-private theorem promotion_items_iso
+theorem promotion_items_iso
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
@@ -851,7 +879,7 @@ private theorem appendIntoMap_natAdd
           (Fin.natAdd sourceAmbient.length index)) = localMap index := by
   simp [appendIntoMap]
 
-private theorem direct_child_encloses
+theorem direct_child_encloses
     {input : Concrete.Diagram} {parent child : Fin input.regionCount}
     (relation : (input.regions child).parent? = some parent) :
     input.Encloses parent child := by
