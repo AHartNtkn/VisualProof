@@ -640,6 +640,85 @@ theorem resolvePort?_map_of_occurrence
       exact WireContext.lookup?_map sourceContext targetContext concreteWireMap
         indexMap targetNodup hget hmem wire
 
+/-- Transport one port lookup through an injective embedding of its lexical
+wire context.  Target-only context entries are permitted, provided no such
+entry owns the requested endpoint. -/
+theorem resolvePort?_map_of_embedding
+    {source target : Diagram}
+    (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (sourceNode : Fin source.nodeCount)
+    (targetNode : Fin target.nodeCount)
+    (concreteWireMap : Fin source.wireCount → Fin target.wireCount)
+    (_concreteInjective : Function.Injective concreteWireMap)
+    (indexMap : Fin sourceContext.length → Fin targetContext.length)
+    (targetNodup : targetContext.Nodup)
+    (hget : ∀ index,
+      targetContext.get (indexMap index) =
+        concreteWireMap (sourceContext.get index))
+    {port : CPort}
+    (hforward : ∀ wire,
+      source.EndpointOccurs wire ⟨sourceNode, port⟩ →
+        target.EndpointOccurs (concreteWireMap wire) ⟨targetNode, port⟩)
+    (hbackward : ∀ targetWire,
+      target.EndpointOccurs targetWire ⟨targetNode, port⟩ →
+        ∃ sourceWire,
+          concreteWireMap sourceWire = targetWire ∧
+            source.EndpointOccurs sourceWire ⟨sourceNode, port⟩)
+    (visibleReflection : ∀ wire,
+      source.EndpointOccurs wire ⟨sourceNode, port⟩ →
+        concreteWireMap wire ∈ targetContext → wire ∈ sourceContext)
+    (targetDisjoint : target.WireEndpointsAreDisjoint) :
+    resolvePort? target targetContext targetNode port =
+      (resolvePort? source sourceContext sourceNode port).map indexMap := by
+  unfold resolvePort?
+  rw [endpointOwner?_map sourceNode targetNode concreteWireMap port
+    hforward hbackward targetDisjoint]
+  cases howner : endpointOwner? source ⟨sourceNode, port⟩ with
+  | none => rfl
+  | some wire =>
+      simp only [Option.map_some]
+      cases hsource : sourceContext.lookup? wire with
+      | none =>
+          have sourceOccurs :
+              source.EndpointOccurs wire ⟨sourceNode, port⟩ :=
+            endpointOwner?_sound howner
+          have targetAbsent : concreteWireMap wire ∉ targetContext := by
+            intro targetMember
+            have sourceMember := visibleReflection wire sourceOccurs targetMember
+            obtain ⟨index, found⟩ := sourceContext.lookup?_complete sourceMember
+            rw [hsource] at found
+            contradiction
+          cases htarget : targetContext.lookup? (concreteWireMap wire) with
+          | none => simp [hsource, htarget]
+          | some index =>
+              have found := WireContext.lookup?_sound htarget
+              have member : concreteWireMap wire ∈ targetContext := by
+                rw [← show targetContext.get index = concreteWireMap wire by
+                  simpa only [List.get_eq_getElem] using found]
+                exact List.get_mem targetContext index
+              exact False.elim (targetAbsent member)
+      | some sourceIndex =>
+          have sourceGet : sourceContext.get sourceIndex = wire := by
+            simpa only [List.get_eq_getElem] using
+              WireContext.lookup?_sound hsource
+          have targetMember : concreteWireMap wire ∈ targetContext := by
+            rw [← sourceGet, ← hget sourceIndex]
+            exact List.get_mem targetContext (indexMap sourceIndex)
+          obtain ⟨targetIndex, htarget⟩ :=
+            targetContext.lookup?_complete targetMember
+          have targetGet :
+              targetContext.get targetIndex = concreteWireMap wire := by
+            simpa only [List.get_eq_getElem] using
+              WireContext.lookup?_sound htarget
+          have indices : targetIndex = indexMap sourceIndex := by
+            apply Fin.ext
+            exact (List.getElem_inj targetNodup).mp (by
+              simpa only [List.get_eq_getElem] using
+                targetGet.trans ((hget sourceIndex).trans
+                  (congrArg concreteWireMap sourceGet)).symm)
+          simp [hsource, htarget, indices]
+
 /-- Compositional node kernel of the sole concrete elaborator.  Public so graph
 surgeries can prove that they commute with elaboration. -/
 def compileNode? (d : Diagram)

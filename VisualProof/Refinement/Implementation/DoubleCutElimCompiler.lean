@@ -1,4 +1,5 @@
 import VisualProof.Refinement.Implementation.DoubleCutElimTransport
+import VisualProof.Diagram.RenamingIsomorphism
 
 namespace VisualProof.Refinement.Implementation.DoubleCutElimCompiler
 
@@ -216,6 +217,75 @@ private theorem append_agreement
         Concrete.Elaboration.get_append_natAdd targetAmbient targetLocal _
       _ = sourceLocal.get localIndex := localAgreement localIndex
 
+private def appendContextMap
+    {sourceAmbient sourceLocal targetAmbient targetLocal : List α}
+    (ambient : Fin sourceAmbient.length → Fin targetAmbient.length)
+    (localMap : Fin sourceLocal.length → Fin targetLocal.length) :
+    Fin (sourceAmbient ++ sourceLocal).length →
+      Fin (targetAmbient ++ targetLocal).length :=
+  fun index =>
+    let sourceIndex : Fin (sourceAmbient.length + sourceLocal.length) :=
+      Fin.cast (by simp) index
+    let targetIndex : Fin (targetAmbient.length + targetLocal.length) :=
+      Fin.addCases
+        (fun outerIndex => Fin.castAdd targetLocal.length (ambient outerIndex))
+        (fun localIndex => Fin.natAdd targetAmbient.length (localMap localIndex))
+        sourceIndex
+    Fin.cast (by simp) targetIndex
+
+private theorem appendContextMap_spec
+    {sourceAmbient sourceLocal targetAmbient targetLocal : List α}
+    (ambient : Fin sourceAmbient.length → Fin targetAmbient.length)
+    (localMap : Fin sourceLocal.length → Fin targetLocal.length)
+    (ambientAgreement : ∀ index,
+      targetAmbient.get (ambient index) = sourceAmbient.get index)
+    (localAgreement : ∀ index,
+      targetLocal.get (localMap index) = sourceLocal.get index) :
+    ∀ index,
+      (targetAmbient ++ targetLocal).get
+          (appendContextMap ambient localMap index) =
+        (sourceAmbient ++ sourceLocal).get index := by
+  intro index
+  let sourceIndex : Fin (sourceAmbient.length + sourceLocal.length) :=
+    Fin.cast (by simp) index
+  have sourceIndexEq : Fin.cast (by simp) sourceIndex = index := by
+    apply Fin.ext
+    rfl
+  rw [← sourceIndexEq]
+  refine Fin.addCases (fun outerIndex => ?_) (fun localIndex => ?_)
+    sourceIndex
+  · simpa [appendContextMap,
+      Concrete.Elaboration.get_append_castAdd] using
+        ambientAgreement outerIndex
+  · simpa [appendContextMap,
+      Concrete.Elaboration.get_append_natAdd] using
+        localAgreement localIndex
+
+private theorem itemSeqIso_after_rename
+    (source : ItemSeq sourceWires rels)
+    (target : ItemSeq targetWires rels)
+    (wireMap : Fin sourceWires → Fin targetWires)
+    (positions : FiniteEquiv (Fin source.length) (Fin target.length))
+    (items : ∀ sourceIndex,
+      ItemIso (FiniteEquiv.refl (Fin targetWires)) rels
+        ((source.get sourceIndex).renameWires wireMap)
+        (target.get (positions sourceIndex))) :
+    ItemSeqIso (FiniteEquiv.refl (Fin targetWires)) rels
+      (source.renameWires wireMap) target := by
+  let sourcePositions := source.renameWiresPositionEquiv wireMap
+  let renamedPositions := sourcePositions.symm.trans positions
+  apply ItemSeqIso.permute renamedPositions
+  intro renamedIndex
+  let sourceIndex := sourcePositions.symm renamedIndex
+  have sourceIndexEq : sourcePositions sourceIndex = renamedIndex :=
+    sourcePositions.right_inv renamedIndex
+  rw [← sourceIndexEq]
+  change ItemIso (FiniteEquiv.refl (Fin targetWires)) rels
+    ((source.renameWires wireMap).get (sourcePositions sourceIndex))
+    (target.get (positions sourceIndex))
+  rw [ItemSeq.get_renameWires]
+  exact items sourceIndex
+
 private noncomputable def extendedWireEquiv
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
@@ -282,58 +352,80 @@ private theorem mem_iff_of_agreement
     refine ⟨equiv sourceIndex, ?_⟩
     exact (agreement sourceIndex).trans sourceValue
 
-private theorem promoted_cut
-    (input : Concrete.Diagram)
+theorem promoted_cut
+    (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     {parent child : Fin input.regionCount}
-    (parentSurvives : (Domain input outer trace.inner).survives parent = true)
+    (parentNeOuter : parent ≠ outer)
     (childSurvives : (Domain input outer trace.inner).survives child = true)
     (shape : input.regions child = .cut parent) :
     (Target trace).regions
         ((Domain input outer trace.inner).index child childSurvives) =
-      .cut ((Domain input outer trace.inner).index parent parentSurvives) := by
+      .cut (promoteRegionIndex input inputWellFormed trace parent
+        parentNeOuter) := by
   change trace.promotion.regions
       ((Domain input outer trace.inner).index child childSurvives) = _
   have result := trace.promotion.region_result
     ((Domain input outer trace.inner).index child childSurvives)
-  have parentNeInner :=
-    (domain_survives_iff input outer trace.inner parent).1 parentSurvives |>.2
   have originEq :=
     (Domain input outer trace.inner).origin_index child childSurvives
   rw [originEq, shape] at result
-  simp only [Concrete.promoteRegion?, if_neg parentNeInner,
-    (Domain input outer trace.inner).index?_index parent parentSurvives,
-    Option.map_some] at result
-  exact (Option.some.inj result).symm
+  unfold promoteRegionIndex
+  by_cases parentEqInner : parent = trace.inner
+  · rw [dif_pos parentEqInner]
+    simp only [Concrete.promoteRegion?, if_pos parentEqInner,
+      (Domain input outer trace.inner).index?_index trace.target
+        (target_survives input inputWellFormed trace.outer_eq
+          trace.inner_eq), Option.map_some] at result
+    exact (Option.some.inj result).symm
+  · rw [dif_neg parentEqInner]
+    have parentSurvives :=
+      (domain_survives_iff input outer trace.inner parent).2
+        ⟨parentNeOuter, parentEqInner⟩
+    simp only [Concrete.promoteRegion?, if_neg parentEqInner,
+      (Domain input outer trace.inner).index?_index parent parentSurvives,
+      Option.map_some] at result
+    exact (Option.some.inj result).symm
 
-private theorem promoted_bubble
-    (input : Concrete.Diagram)
+theorem promoted_bubble
+    (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     {parent child : Fin input.regionCount}
-    (parentSurvives : (Domain input outer trace.inner).survives parent = true)
+    (parentNeOuter : parent ≠ outer)
     (childSurvives : (Domain input outer trace.inner).survives child = true)
     {arity : Nat} (shape : input.regions child = .bubble parent arity) :
     (Target trace).regions
         ((Domain input outer trace.inner).index child childSurvives) =
-      .bubble ((Domain input outer trace.inner).index parent parentSurvives)
+      .bubble (promoteRegionIndex input inputWellFormed trace parent
+        parentNeOuter)
         arity := by
   change trace.promotion.regions
       ((Domain input outer trace.inner).index child childSurvives) = _
   have result := trace.promotion.region_result
     ((Domain input outer trace.inner).index child childSurvives)
-  have parentNeInner :=
-    (domain_survives_iff input outer trace.inner parent).1 parentSurvives |>.2
   have originEq :=
     (Domain input outer trace.inner).origin_index child childSurvives
   rw [originEq, shape] at result
-  simp only [Concrete.promoteRegion?, if_neg parentNeInner,
-    (Domain input outer trace.inner).index?_index parent parentSurvives,
-    Option.map_some] at result
-  exact (Option.some.inj result).symm
+  unfold promoteRegionIndex
+  by_cases parentEqInner : parent = trace.inner
+  · rw [dif_pos parentEqInner]
+    simp only [Concrete.promoteRegion?, if_pos parentEqInner,
+      (Domain input outer trace.inner).index?_index trace.target
+        (target_survives input inputWellFormed trace.outer_eq
+          trace.inner_eq), Option.map_some] at result
+    exact (Option.some.inj result).symm
+  · rw [dif_neg parentEqInner]
+    have parentSurvives :=
+      (domain_survives_iff input outer trace.inner parent).2
+        ⟨parentNeOuter, parentEqInner⟩
+    simp only [Concrete.promoteRegion?, if_neg parentEqInner,
+      (Domain input outer trace.inner).index?_index parent parentSurvives,
+      Option.map_some] at result
+    exact (Option.some.inj result).symm
 
-private def promoteOccurrence
+def promoteOccurrence
     {input : Concrete.Diagram} {outer : Fin input.regionCount}
     {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
@@ -347,7 +439,7 @@ private def promoteOccurrence
         (Domain input outer trace.inner).index child survives
       else fallback)
 
-private def sourceOccurrence
+def sourceOccurrence
     {input : Concrete.Diagram} {outer : Fin input.regionCount}
     {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw) :
@@ -358,7 +450,7 @@ private def sourceOccurrence
   | .child child =>
       .child ((Domain input outer trace.inner).origin child)
 
-private theorem promote_sourceOccurrence
+theorem promote_sourceOccurrence
     {input : Concrete.Diagram} {outer : Fin input.regionCount}
     {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
@@ -375,7 +467,7 @@ private theorem promote_sourceOccurrence
       exact congrArg Concrete.Elaboration.LocalOccurrence.child
         ((Domain input outer trace.inner).index_origin child)
 
-private theorem source_promoteOccurrence
+theorem source_promoteOccurrence
     {input : Concrete.Diagram} {outer : Fin input.regionCount}
     {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
@@ -395,6 +487,24 @@ private theorem source_promoteOccurrence
       rw [dif_pos survival]
       exact congrArg Concrete.Elaboration.LocalOccurrence.child
         ((Domain input outer trace.inner).origin_index child survival)
+
+theorem source_promoteOccurrence_of_children_survive
+    {input : Concrete.Diagram} {outer : Fin input.regionCount}
+    {raw : Concrete.Diagram}
+    (trace : Concrete.DoubleCutElimTrace input outer raw)
+    (fallback : Fin (Domain input outer trace.inner).count)
+    (occurrence : Concrete.Elaboration.LocalOccurrence
+      input.regionCount input.nodeCount)
+    (childrenSurvive : ∀ child,
+      occurrence = .child child →
+        (Domain input outer trace.inner).survives child = true) :
+    sourceOccurrence trace (promoteOccurrence trace fallback occurrence) =
+      occurrence := by
+  cases occurrence with
+  | node node => rfl
+  | child child =>
+      exact source_promoteOccurrence trace fallback (.child child)
+        (childrenSurvive child rfl)
 
 private theorem promoteRegionIndex_eq_iff
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
@@ -682,21 +792,22 @@ private theorem endpointOccurs_iff
   rw [promotion_wire input inputWellFormed trace wire]
   rfl
 
-private theorem compileNode_promotion
+theorem compileNode_promotion
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     (targetWellFormed : (Target trace).WellFormed)
     {rels : RelCtx}
     (region : Fin input.regionCount)
-    (regionSurvives : (Domain input outer trace.inner).survives region = true)
+    (regionNeOuter : region ≠ outer)
     (sourceContext : Concrete.Elaboration.WireContext input)
     (targetContext : Concrete.Elaboration.WireContext (Target trace))
-    (wire : FiniteEquiv (Fin sourceContext.length) (Fin targetContext.length))
+    (wireMap : Fin sourceContext.length → Fin targetContext.length)
     (wireAgreement : ∀ index,
-      targetContext.get (wire index) = sourceContext.get index)
+      targetContext.get (wireMap index) = sourceContext.get index)
+    (sourceExact : sourceContext.Exact region)
     (targetExact : targetContext.Exact
-      ((Domain input outer trace.inner).index region regionSurvives))
+      (promoteRegionIndex input inputWellFormed trace region regionNeOuter))
     (sourceBinders : Concrete.Elaboration.BinderContext input rels)
     (targetBinders : Concrete.Elaboration.BinderContext (Target trace) rels)
     (binderAgreement : ∀ binder,
@@ -710,63 +821,76 @@ private theorem compileNode_promotion
       sourceBinders node = some sourceItem)
     (targetCompiled : Concrete.Elaboration.compileNode? (Target trace)
       targetContext targetBinders node = some targetItem) :
-    ItemIso wire rels sourceItem targetItem := by
+    ItemIso (FiniteEquiv.refl (Fin targetContext.length)) rels
+      (sourceItem.renameWires wireMap) targetItem := by
   have ports : ∀ port,
       Concrete.Elaboration.resolvePort? (Target trace) targetContext node port =
         (Concrete.Elaboration.resolvePort? input sourceContext node port).map
-          wire := by
+          wireMap := by
     intro port
-    exact Concrete.Elaboration.resolvePort?_map_of_occurrence
-      sourceContext targetContext node node id wire targetExact.nodup
+    exact Concrete.Elaboration.resolvePort?_map_of_embedding
+      sourceContext targetContext node node id (fun _ _ equality => equality)
+      wireMap targetExact.nodup
       (by simpa using wireAgreement)
-      (fun candidate => by
-        simpa using mem_iff_of_agreement wire wireAgreement candidate)
-      (fun candidate requested occurs =>
+      (fun candidate occurs =>
         (endpointOccurs_iff input inputWellFormed trace candidate node
-          requested).2 occurs)
-      (fun candidate requested occurs =>
+          port).2 occurs)
+      (fun candidate occurs =>
         ⟨candidate, rfl,
           (endpointOccurs_iff input inputWellFormed trace candidate node
-            requested).1 occurs⟩)
-      targetWellFormed.wire_endpoints_are_disjoint port
+            port).1 occurs⟩)
+      (fun candidate occurs _ =>
+        sourceExact.covers candidate (by
+          have enclosed := inputWellFormed.wire_scopes_enclose candidate
+            ⟨node, port⟩ occurs
+          simpa [nodeRegion] using enclosed))
+      targetWellFormed.wire_endpoints_are_disjoint
   cases nodeEq : input.nodes node with
   | identity owner arity =>
       have ownerEq : owner = region := by
         simpa [nodeEq] using nodeRegion
       subst owner
-      have regionNeInner :=
-        (domain_survives_iff input outer trace.inner region).1
-          regionSurvives |>.2
-      have result := trace.promotion.node_result node
-      rw [nodeEq] at result
-      simp only [Concrete.promoteNode?, if_neg regionNeInner,
-        (Domain input outer trace.inner).index?_index region regionSurvives,
-        Option.map_some] at result
       have targetNode : (Target trace).nodes node =
-          .identity ((Domain input outer trace.inner).index region
-            regionSurvives) arity := by
+          .identity (promoteRegionIndex input inputWellFormed trace region
+            regionNeOuter) arity := by
         change trace.promotion.nodes node = _
-        exact (Option.some.inj result).symm
+        have result := trace.promotion.node_result node
+        rw [nodeEq] at result
+        unfold promoteRegionIndex
+        by_cases innerCase : region = trace.inner
+        · rw [dif_pos innerCase]
+          simp only [Concrete.promoteNode?, if_pos innerCase,
+            (Domain input outer trace.inner).index?_index trace.target
+              (target_survives input inputWellFormed trace.outer_eq
+                trace.inner_eq), Option.map_some] at result
+          exact (Option.some.inj result).symm
+        · rw [dif_neg innerCase]
+          have regionSurvives :=
+            (domain_survives_iff input outer trace.inner region).2
+              ⟨regionNeOuter, innerCase⟩
+          simp only [Concrete.promoteNode?, if_neg innerCase,
+            (Domain input outer trace.inner).index?_index region
+              regionSurvives, Option.map_some] at result
+          exact (Option.some.inj result).symm
       have mapped := Concrete.Elaboration.compileNode?_map
         sourceContext targetContext sourceBinders targetBinders node node
-        (fun _ => (Domain input outer trace.inner).index region regionSurvives)
-        (fun _ => (Domain input outer trace.inner).index region regionSurvives)
-        wire (fun relation => relation)
+        (fun _ => promoteRegionIndex input inputWellFormed trace region
+          regionNeOuter)
+        (fun _ => promoteRegionIndex input inputWellFormed trace region
+          regionNeOuter)
+        wireMap (fun relation => relation)
         (by simp only [nodeEq, targetNode]) ports (by
           intro owner' binder' impossible
           simp [nodeEq] at impossible)
       rw [sourceCompiled, targetCompiled] at mapped
       simp only [Option.map_some, Item.renameRelations_id] at mapped
       rw [Option.some.inj mapped]
-      exact ItemIso.renameWiresEquiv sourceItem wire
+      exact ItemIso.refl _
 
   | atom owner binder =>
       have ownerEq : owner = region := by
         simpa [nodeEq] using nodeRegion
       subst owner
-      have regionNeInner :=
-        (domain_survives_iff input outer trace.inner region).1
-          regionSurvives |>.2
       have binderSurvives :
           (Domain input outer trace.inner).survives binder = true :=
         (domain_survives_iff input outer trace.inner binder).2
@@ -774,22 +898,39 @@ private theorem compileNode_promotion
               nodeEq,
             atom_binder_ne_inner input inputWellFormed trace node region binder
               nodeEq⟩
-      have result := trace.promotion.node_result node
-      rw [nodeEq] at result
-      simp only [Concrete.promoteNode?, if_neg regionNeInner] at result
-      rw [(Domain input outer trace.inner).index?_index region regionSurvives,
-        (Domain input outer trace.inner).index?_index binder binderSurvives]
-        at result
       have targetNode : (Target trace).nodes node =
-          .atom ((Domain input outer trace.inner).index region regionSurvives)
+          .atom (promoteRegionIndex input inputWellFormed trace region
+              regionNeOuter)
             ((Domain input outer trace.inner).index binder binderSurvives) := by
         change trace.promotion.nodes node = _
-        exact (Option.some.inj result).symm
+        have result := trace.promotion.node_result node
+        rw [nodeEq] at result
+        unfold promoteRegionIndex
+        by_cases innerCase : region = trace.inner
+        · rw [dif_pos innerCase]
+          simp only [Concrete.promoteNode?, if_pos innerCase,
+            (Domain input outer trace.inner).index?_index trace.target
+              (target_survives input inputWellFormed trace.outer_eq
+                trace.inner_eq),
+              (Domain input outer trace.inner).index?_index binder
+                binderSurvives, Option.pure_def] at result
+          exact (Option.some.inj result).symm
+        · rw [dif_neg innerCase]
+          have regionSurvives :=
+            (domain_survives_iff input outer trace.inner region).2
+              ⟨regionNeOuter, innerCase⟩
+          simp only [Concrete.promoteNode?, if_neg innerCase,
+            (Domain input outer trace.inner).index?_index region
+              regionSurvives,
+              (Domain input outer trace.inner).index?_index binder
+                binderSurvives, Option.pure_def] at result
+          exact (Option.some.inj result).symm
       have mapped := Concrete.Elaboration.compileNode?_map
         sourceContext targetContext sourceBinders targetBinders node node
-        (fun _ => (Domain input outer trace.inner).index region regionSurvives)
+        (fun _ => promoteRegionIndex input inputWellFormed trace region
+          regionNeOuter)
         (fun _ => (Domain input outer trace.inner).index binder binderSurvives)
-        wire (fun relation => relation)
+        wireMap (fun relation => relation)
         (by simp only [nodeEq, targetNode]) ports (by
           intro owner' binder' equality
           have binderEq : binder' = binder := by
@@ -801,9 +942,9 @@ private theorem compileNode_promotion
       rw [sourceCompiled, targetCompiled] at mapped
       simp only [Option.map_some, Item.renameRelations_id] at mapped
       rw [Option.some.inj mapped]
-      exact ItemIso.renameWiresEquiv sourceItem wire
+      exact ItemIso.refl _
 
-private theorem push_binder_agreement
+theorem push_binder_agreement
     {input : Concrete.Diagram} {outer : Fin input.regionCount}
     {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
@@ -855,10 +996,9 @@ theorem compileRegion_promotion
     (notAboveTarget : ¬ input.Encloses sourceRegion trace.target)
     (sourceContext : Concrete.Elaboration.WireContext input)
     (targetContext : Concrete.Elaboration.WireContext (Target trace))
-    (ambient : FiniteEquiv
-      (Fin sourceContext.length) (Fin targetContext.length))
+    (wireMap : Fin sourceContext.length → Fin targetContext.length)
     (wireAgreement : ∀ index,
-      targetContext.get (ambient index) = sourceContext.get index)
+      targetContext.get (wireMap index) = sourceContext.get index)
     (sourceExact : (sourceContext.extend sourceRegion).Exact sourceRegion)
     (targetExact :
       (targetContext.extend
@@ -880,7 +1020,8 @@ theorem compileRegion_promotion
       ((Domain input outer trace.inner).index
         sourceRegion sourceSurvives)
       targetContext targetBinders = some targetBody) :
-    RegionIso ambient rels sourceBody targetBody := by
+    RegionIso (FiniteEquiv.refl (Fin targetContext.length)) rels
+      (sourceBody.renameWires wireMap) targetBody := by
   induction sourceFuel generalizing targetFuel sourceRegion sourceContext
       targetContext rels sourceBinders targetBinders sourceBody targetBody with
   | zero =>
@@ -894,15 +1035,17 @@ theorem compileRegion_promotion
             sourceRegion sourceSurvives
           let sourceExtended := sourceContext.extend sourceRegion
           let targetExtended := targetContext.extend targetRegion
-          let extended := extendedWireEquiv input inputWellFormed trace
-            sourceRegion sourceSurvives notAboveTarget sourceContext
-            targetContext ambient
+          let extended := appendContextMap wireMap
+            (localWireEquiv input inputWellFormed trace sourceRegion
+              sourceSurvives notAboveTarget)
           have extendedAgreement : ∀ index,
               targetExtended.get (extended index) =
                 sourceExtended.get index := by
-            exact extendedWireEquiv_spec input inputWellFormed trace
-              sourceRegion sourceSurvives notAboveTarget sourceContext
-              targetContext ambient wireAgreement
+            exact appendContextMap_spec wireMap
+              (localWireEquiv input inputWellFormed trace sourceRegion
+                sourceSurvives notAboveTarget) wireAgreement
+              (localWireEquiv_spec input inputWellFormed trace sourceRegion
+                sourceSurvives notAboveTarget)
           have occurrenceIso : ∀
               (occurrence : Concrete.Elaboration.LocalOccurrence
                 input.regionCount input.nodeCount),
@@ -918,15 +1061,25 @@ theorem compileRegion_promotion
                   targetExtended targetBinders
                   (promoteOccurrence trace targetRegion occurrence) =
                     some targetItem →
-              ItemIso extended rels sourceItem targetItem := by
+              ItemIso (FiniteEquiv.refl (Fin targetExtended.length)) rels
+                (sourceItem.renameWires extended) targetItem := by
             intro occurrence occurrenceMember sourceItem targetItem
               sourceItemCompiled targetItemCompiled
             cases occurrence with
             | node node =>
+                have sourceRegionNeOuter :=
+                  (domain_survives_iff input outer trace.inner sourceRegion).1
+                    sourceSurvives |>.1
+                have sourceRegionNeInner :=
+                  (domain_survives_iff input outer trace.inner sourceRegion).1
+                    sourceSurvives |>.2
                 exact compileNode_promotion input inputWellFormed trace
-                  targetWellFormed sourceRegion sourceSurvives
+                  targetWellFormed sourceRegion sourceRegionNeOuter
                   sourceExtended targetExtended extended extendedAgreement
-                  targetExact sourceBinders targetBinders binderAgreement node
+                  sourceExact (by
+                    simpa [promoteRegionIndex, sourceRegionNeInner] using
+                      targetExact) sourceBinders targetBinders
+                  binderAgreement node
                   ((Concrete.Elaboration.mem_localOccurrences_node input
                     sourceRegion node).1 occurrenceMember)
                   (by simpa [Concrete.Elaboration.compileOccurrenceWith?] using
@@ -957,8 +1110,18 @@ theorem compileRegion_promotion
                       simpa [childShape, Concrete.CRegion.parent?] using
                         sourceParent
                     subst parent
-                    have targetShape := promoted_cut input trace
-                      sourceSurvives childSurvives childShape
+                    have sourceRegionNeOuter :=
+                      (domain_survives_iff input outer trace.inner
+                        sourceRegion).1 sourceSurvives |>.1
+                    have sourceRegionNeInner :=
+                      (domain_survives_iff input outer trace.inner
+                        sourceRegion).1 sourceSurvives |>.2
+                    have targetShape : (Target trace).regions targetChild =
+                        .cut targetRegion := by
+                      simpa [targetChild, targetRegion, promoteRegionIndex,
+                        sourceRegionNeInner] using
+                        (promoted_cut input inputWellFormed trace
+                          sourceRegionNeOuter childSurvives childShape)
                     have sourceChildExact := sourceExact.extend_child
                       inputWellFormed (by simpa [childShape])
                     have targetParent :
@@ -1003,8 +1166,18 @@ theorem compileRegion_promotion
                       simpa [childShape, Concrete.CRegion.parent?] using
                         sourceParent
                     subst parent
-                    have targetShape := promoted_bubble input trace
-                      sourceSurvives childSurvives childShape
+                    have sourceRegionNeOuter :=
+                      (domain_survives_iff input outer trace.inner
+                        sourceRegion).1 sourceSurvives |>.1
+                    have sourceRegionNeInner :=
+                      (domain_survives_iff input outer trace.inner
+                        sourceRegion).1 sourceSurvives |>.2
+                    have targetShape : (Target trace).regions targetChild =
+                        .bubble targetRegion arity := by
+                      simpa [targetChild, targetRegion, promoteRegionIndex,
+                        sourceRegionNeInner] using
+                        (promoted_bubble input inputWellFormed trace
+                          sourceRegionNeOuter childSurvives childShape)
                     have sourceChildExact := sourceExact.extend_child
                       inputWellFormed (by simpa [childShape])
                     have targetParent :
@@ -1076,20 +1249,28 @@ theorem compileRegion_promotion
               | some targetItems =>
                   rw [targetItemsCompiled] at targetCompiled
                   cases targetCompiled
-                  have itemsIso : ItemSeqIso extended rels sourceItems
-                      targetItems := by
-                    apply Concrete.Elaboration.compileOccurrencesWith?_iso
-                      (Concrete.Elaboration.compileRegion? input sourceFuel)
-                      (Concrete.Elaboration.compileRegion? (Target trace)
-                        targetFuel)
-                      sourceExtended targetExtended sourceBinders targetBinders
-                      (Concrete.Elaboration.localOccurrences input sourceRegion)
-                      (Concrete.Elaboration.localOccurrences (Target trace)
-                        targetRegion)
-                      sourceItemsCompiled targetItemsCompiled
-                      (localOccurrenceEquiv input inputWellFormed trace
-                        sourceRegion sourceSurvives notAboveTarget) extended
-                    intro occurrenceIndex
+                  have itemsIso : ItemSeqIso
+                      (FiniteEquiv.refl (Fin targetExtended.length)) rels
+                      (sourceItems.renameWires extended) targetItems := by
+                    let occurrencePositions := localOccurrenceEquiv input
+                      inputWellFormed trace sourceRegion sourceSurvives
+                      notAboveTarget
+                    let sourceLength :=
+                      Concrete.Elaboration.compileOccurrencesWith?_length
+                        (Concrete.Elaboration.compileRegion? input sourceFuel)
+                        sourceExtended sourceBinders sourceItemsCompiled
+                    let targetLength :=
+                      Concrete.Elaboration.compileOccurrencesWith?_length
+                        (Concrete.Elaboration.compileRegion? (Target trace)
+                          targetFuel)
+                        targetExtended targetBinders targetItemsCompiled
+                    let positions := (FiniteEquiv.finCast sourceLength).trans
+                      (occurrencePositions.trans
+                        (FiniteEquiv.finCast targetLength.symm))
+                    apply itemSeqIso_after_rename sourceItems targetItems
+                      extended positions
+                    intro sourceIndex
+                    let occurrenceIndex := Fin.cast sourceLength sourceIndex
                     have sourceGet :=
                       Concrete.Elaboration.compileOccurrencesWith?_get
                         (Concrete.Elaboration.compileRegion? input sourceFuel)
@@ -1107,17 +1288,284 @@ theorem compileRegion_promotion
                       sourceRegion sourceSurvives notAboveTarget occurrenceIndex]
                       at targetGet
                     exact occurrenceIso _ (List.get_mem _ _) _ _ sourceGet
-                      targetGet
-                  simpa only [Concrete.Elaboration.finishRegion,
-                    sourceExtended, targetExtended, extended] using
-                    Concrete.Elaboration.regionIso_of_cast
-                      (Concrete.Elaboration.WireContext.length_extend
-                        sourceContext sourceRegion)
-                      (Concrete.Elaboration.WireContext.length_extend
-                        targetContext targetRegion)
-                      ambient
-                      (localWireEquiv input inputWellFormed trace sourceRegion
-                        sourceSurvives notAboveTarget)
-                      sourceItems targetItems itemsIso
+                      (by simpa [positions, occurrencePositions, sourceLength,
+                        targetLength, occurrenceIndex] using targetGet)
+                  unfold Concrete.Elaboration.finishRegion
+                  simp only [Region.renameWires]
+                  apply RegionIso.mk
+                    (localWireEquiv input inputWellFormed trace sourceRegion
+                      sourceSurvives notAboveTarget)
+                  let sourceEq :=
+                    Concrete.Elaboration.WireContext.length_extend
+                      sourceContext sourceRegion
+                  let targetEq :=
+                    Concrete.Elaboration.WireContext.length_extend
+                      targetContext targetRegion
+                  let localEquiv := localWireEquiv input inputWellFormed trace
+                    sourceRegion sourceSurvives notAboveTarget
+                  let combined := extendWireEquiv
+                    (FiniteEquiv.refl (Fin targetContext.length)) localEquiv
+                  let sourcePrepared :=
+                    (sourceItems.castWiresEq sourceEq).renameWires
+                      (extendWireRenaming wireMap
+                        (Concrete.Elaboration.exactScopeWires input
+                          sourceRegion).length)
+                  have first := ItemSeqIso.renameWiresEquiv sourcePrepared
+                    combined
+                  have casted := itemsIso.renameWires_commuting
+                    (Fin.cast targetEq) (Fin.cast targetEq)
+                    (FiniteEquiv.refl
+                      (Fin (targetContext.length +
+                        (Concrete.Elaboration.exactScopeWires (Target trace)
+                          targetRegion).length))) (by
+                      funext index
+                      rfl)
+                  have factor :
+                      (Fin.cast targetEq) ∘ extended =
+                        combined.toFun ∘
+                          (extendWireRenaming wireMap
+                            (Concrete.Elaboration.exactScopeWires input
+                              sourceRegion).length) ∘
+                            Fin.cast sourceEq := by
+                    funext index
+                    let sumIndex : Fin (sourceContext.length +
+                        (Concrete.Elaboration.exactScopeWires input
+                          sourceRegion).length) :=
+                      Fin.cast sourceEq index
+                    have indexEq : index = Fin.cast sourceEq.symm sumIndex := by
+                      apply Fin.ext
+                      rfl
+                    rw [indexEq]
+                    refine Fin.addCases (fun outerIndex => ?_)
+                      (fun localIndex => ?_) sumIndex
+                    · apply Fin.ext
+                      simp [Function.comp_def, extended, appendContextMap,
+                        combined, localEquiv, extendWireRenaming,
+                        extendWireEquiv, FiniteEquiv.refl]
+                      let actual : Fin (sourceContext.length +
+                          (Concrete.Elaboration.exactScopeWires input
+                            sourceRegion).length) :=
+                        Fin.cast sourceEq
+                          (Fin.cast sourceEq.symm
+                            (Fin.castAdd
+                              (Concrete.Elaboration.exactScopeWires input
+                                sourceRegion).length outerIndex))
+                      let onOuter : Fin sourceContext.length → Fin
+                          (targetContext.length +
+                            (Concrete.Elaboration.exactScopeWires
+                              (Target trace) targetRegion).length) :=
+                        fun index => Fin.castAdd
+                        (Concrete.Elaboration.exactScopeWires (Target trace)
+                          targetRegion).length (wireMap index)
+                      let onLocal : Fin
+                          (Concrete.Elaboration.exactScopeWires input
+                            sourceRegion).length → Fin
+                            (targetContext.length +
+                              (Concrete.Elaboration.exactScopeWires
+                                (Target trace) targetRegion).length) :=
+                        fun index => Fin.natAdd targetContext.length
+                          (localEquiv index)
+                      change (Fin.addCases (motive := fun _ => Fin
+                        (targetContext.length +
+                          (Concrete.Elaboration.exactScopeWires
+                            (Target trace) targetRegion).length))
+                        onOuter onLocal actual).val = _
+                      have actualEq : actual = Fin.castAdd
+                          (Concrete.Elaboration.exactScopeWires input
+                            sourceRegion).length outerIndex := by
+                        apply Fin.ext
+                        rfl
+                      rw [actualEq]
+                      simp [onOuter]
+                    · apply Fin.ext
+                      simp [Function.comp_def, extended, appendContextMap,
+                        combined, localEquiv, extendWireRenaming,
+                        extendWireEquiv, FiniteEquiv.refl]
+                      let actual : Fin (sourceContext.length +
+                          (Concrete.Elaboration.exactScopeWires input
+                            sourceRegion).length) :=
+                        Fin.cast sourceEq
+                          (Fin.cast sourceEq.symm
+                            (Fin.natAdd sourceContext.length localIndex))
+                      let onOuter : Fin sourceContext.length → Fin
+                          (targetContext.length +
+                            (Concrete.Elaboration.exactScopeWires
+                              (Target trace) targetRegion).length) :=
+                        fun index => Fin.castAdd
+                        (Concrete.Elaboration.exactScopeWires (Target trace)
+                          targetRegion).length (wireMap index)
+                      let onLocal : Fin
+                          (Concrete.Elaboration.exactScopeWires input
+                            sourceRegion).length → Fin
+                            (targetContext.length +
+                              (Concrete.Elaboration.exactScopeWires
+                                (Target trace) targetRegion).length) :=
+                        fun index => Fin.natAdd targetContext.length
+                          (localEquiv index)
+                      change (Fin.addCases (motive := fun _ => Fin
+                        (targetContext.length +
+                          (Concrete.Elaboration.exactScopeWires
+                            (Target trace) targetRegion).length))
+                        onOuter onLocal actual).val = _
+                      have actualEq : actual =
+                          Fin.natAdd sourceContext.length localIndex := by
+                        apply Fin.ext
+                        rfl
+                      rw [actualEq]
+                      simp [onLocal]
+                      rfl
+                  have middleEq : sourcePrepared.renameWires combined =
+                      (sourceItems.renameWires extended).renameWires
+                        (Fin.cast targetEq) := by
+                    simp only [sourcePrepared,
+                      ItemSeq.castWiresEq_eq_renameWires,
+                      ItemSeq.renameWires_comp]
+                    exact (congrArg (fun map => sourceItems.renameWires map)
+                      factor.symm).trans
+                        (ItemSeq.renameWires_comp sourceItems extended
+                          (Fin.cast targetEq)).symm
+                  rw [middleEq] at first
+                  have result := first.trans casted
+                  simpa only [sourcePrepared,
+                    ItemSeq.castWiresEq_eq_renameWires,
+                    ItemSeq.renameWires_comp, factor,
+                    ← ItemSeq.castWiresEq_eq_renameWires] using result
+
+theorem compileOccurrence_promotion
+    (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
+    {outer : Fin input.regionCount} {raw : Concrete.Diagram}
+    (trace : Concrete.DoubleCutElimTrace input outer raw)
+    (targetWellFormed : (Target trace).WellFormed)
+    {rels : RelCtx} {sourceFuel targetFuel : Nat}
+    (region : Fin input.regionCount) (regionNeOuter : region ≠ outer)
+    (sourceContext : Concrete.Elaboration.WireContext input)
+    (targetContext : Concrete.Elaboration.WireContext (Target trace))
+    (wireMap : Fin sourceContext.length → Fin targetContext.length)
+    (wireAgreement : ∀ index,
+      targetContext.get (wireMap index) = sourceContext.get index)
+    (sourceExact : sourceContext.Exact region)
+    (targetExact : targetContext.Exact
+      (promoteRegionIndex input inputWellFormed trace region regionNeOuter))
+    (sourceBinders : Concrete.Elaboration.BinderContext input rels)
+    (targetBinders : Concrete.Elaboration.BinderContext (Target trace) rels)
+    (binderAgreement : ∀ binder,
+      targetBinders binder = sourceBinders
+        ((Domain input outer trace.inner).origin binder))
+    (occurrence : Concrete.Elaboration.LocalOccurrence
+      input.regionCount input.nodeCount)
+    (occurrenceMember : occurrence ∈
+      Concrete.Elaboration.localOccurrences input region)
+    (childrenSurvive : ∀ child, occurrence = .child child →
+      (Domain input outer trace.inner).survives child = true)
+    (childrenNotAbove : ∀ child, occurrence = .child child →
+      ¬ input.Encloses child trace.target)
+    {sourceItem : Item sourceContext.length rels}
+    {targetItem : Item targetContext.length rels}
+    (sourceCompiled : Concrete.Elaboration.compileOccurrenceWith? input
+      (Concrete.Elaboration.compileRegion? input sourceFuel) sourceContext
+      sourceBinders occurrence = some sourceItem)
+    (targetCompiled : Concrete.Elaboration.compileOccurrenceWith? (Target trace)
+      (Concrete.Elaboration.compileRegion? (Target trace) targetFuel)
+      targetContext targetBinders
+      (promoteOccurrence trace (promotedTarget input inputWellFormed trace)
+        occurrence) = some targetItem) :
+    ItemIso (FiniteEquiv.refl (Fin targetContext.length)) rels
+      (sourceItem.renameWires wireMap) targetItem := by
+  cases occurrence with
+  | node node =>
+      exact compileNode_promotion input inputWellFormed trace targetWellFormed
+        region regionNeOuter sourceContext targetContext wireMap wireAgreement
+        sourceExact targetExact sourceBinders targetBinders binderAgreement node
+        ((Concrete.Elaboration.mem_localOccurrences_node input region node).1
+          occurrenceMember)
+        (by simpa [Concrete.Elaboration.compileOccurrenceWith?] using
+          sourceCompiled)
+        (by simpa [promoteOccurrence,
+          Concrete.Elaboration.compileOccurrenceWith?] using targetCompiled)
+  | child child =>
+      have childSurvives := childrenSurvive child rfl
+      have childNotAbove := childrenNotAbove child rfl
+      let targetChild := (Domain input outer trace.inner).index child
+        childSurvives
+      simp only [promoteOccurrence, dif_pos childSurvives,
+        Concrete.Elaboration.compileOccurrenceWith?] at targetCompiled
+      simp only [Concrete.Elaboration.compileOccurrenceWith?] at sourceCompiled
+      have sourceParent :=
+        (Concrete.Elaboration.mem_localOccurrences_child input region child).1
+          occurrenceMember
+      cases childShape : input.regions child with
+      | sheet => simp [childShape] at sourceCompiled
+      | cut parent =>
+          have parentEq : parent = region := by
+            simpa [childShape, Concrete.CRegion.parent?] using sourceParent
+          subst parent
+          have targetShape := promoted_cut input inputWellFormed trace
+            regionNeOuter childSurvives childShape
+          have sourceChildExact := sourceExact.extend_child inputWellFormed
+            (by simpa [childShape])
+          have targetChildExact := targetExact.extend_child targetWellFormed
+            (by
+              have parentShape := congrArg Concrete.CRegion.parent? targetShape
+              simpa [targetChild] using parentShape)
+          simp only [childShape] at sourceCompiled
+          rw [targetShape] at targetCompiled
+          simp only at targetCompiled
+          cases sourceChildCompiled : Concrete.Elaboration.compileRegion? input
+              sourceFuel child sourceContext sourceBinders with
+          | none => simp [sourceChildCompiled] at sourceCompiled
+          | some compiledSource =>
+              simp [sourceChildCompiled] at sourceCompiled
+              subst sourceItem
+              cases targetChildCompiled : Concrete.Elaboration.compileRegion?
+                  (Target trace) targetFuel targetChild targetContext
+                  targetBinders with
+              | none => rw [targetChildCompiled] at targetCompiled; contradiction
+              | some compiledTarget =>
+                  rw [targetChildCompiled] at targetCompiled
+                  cases targetCompiled
+                  apply ItemIso.cut
+                  exact compileRegion_promotion input inputWellFormed trace
+                    targetWellFormed child childSurvives childNotAbove
+                    sourceContext targetContext wireMap wireAgreement
+                    sourceChildExact targetChildExact sourceBinders targetBinders
+                    binderAgreement sourceChildCompiled targetChildCompiled
+      | bubble parent arity =>
+          have parentEq : parent = region := by
+            simpa [childShape, Concrete.CRegion.parent?] using sourceParent
+          subst parent
+          have targetShape := promoted_bubble input inputWellFormed trace
+            regionNeOuter childSurvives childShape
+          have sourceChildExact := sourceExact.extend_child inputWellFormed
+            (by simpa [childShape])
+          have targetChildExact := targetExact.extend_child targetWellFormed
+            (by
+              have parentShape := congrArg Concrete.CRegion.parent? targetShape
+              simpa [targetChild] using parentShape)
+          have childBinders := push_binder_agreement trace sourceBinders
+            targetBinders binderAgreement child childSurvives arity
+          simp only [childShape] at sourceCompiled
+          rw [targetShape] at targetCompiled
+          simp only at targetCompiled
+          cases sourceChildCompiled : Concrete.Elaboration.compileRegion? input
+              sourceFuel child sourceContext (sourceBinders.push child arity) with
+          | none => simp [sourceChildCompiled] at sourceCompiled
+          | some compiledSource =>
+              simp [sourceChildCompiled] at sourceCompiled
+              subst sourceItem
+              cases targetChildCompiled : Concrete.Elaboration.compileRegion?
+                  (Target trace) targetFuel targetChild targetContext
+                  (targetBinders.push targetChild arity) with
+              | none => rw [targetChildCompiled] at targetCompiled; contradiction
+              | some compiledTarget =>
+                  rw [targetChildCompiled] at targetCompiled
+                  cases targetCompiled
+                  apply ItemIso.bubble
+                  exact compileRegion_promotion input inputWellFormed trace
+                    targetWellFormed child childSurvives childNotAbove
+                    sourceContext targetContext wireMap wireAgreement
+                    sourceChildExact targetChildExact
+                    (sourceBinders.push child arity)
+                    (targetBinders.push targetChild arity) childBinders
+                    sourceChildCompiled targetChildCompiled
 
 end VisualProof.Refinement.Implementation.DoubleCutElimCompiler
