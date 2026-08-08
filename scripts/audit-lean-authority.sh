@@ -96,7 +96,7 @@ constructors_between() {
   ' "$file"
 }
 
-case_labels_between() {
+step_tag_pairs_between() {
   local file=$1
   local start=$2
   local stop=$3
@@ -105,11 +105,46 @@ case_labels_between() {
     $0 ~ start { inside = 1; next }
     inside && $0 ~ stop { exit }
     inside && /^[[:space:]]*\|[[:space:]]*\.[[:alpha:]][[:alnum:]_]*/ {
-      line = $0
-      sub(/^[[:space:]]*\|[[:space:]]*\./, "", line)
-      sub(/[[:space:]].*$/, "", line)
-      print line
+      left = $0
+      sub(/^[[:space:]]*\|[[:space:]]*\./, "", left)
+      sub(/[[:space:]].*$/, "", left)
+      right = $0
+      sub(/^.*=>[[:space:]]*\./, "", right)
+      sub(/[^[:alnum:]_].*$/, "", right)
+      if (right != "") print left " -> " right
     }
+  ' "$file"
+}
+
+serialized_tag_pairs_between() {
+  local file=$1
+  local start=$2
+  local stop=$3
+
+  awk -v start="$start" -v stop="$stop" '
+    $0 ~ start { inside = 1; next }
+    inside && $0 ~ stop { exit }
+    inside && /^[[:space:]]*\|[[:space:]]*\.[[:alpha:]][[:alnum:]_]*/ {
+      left = $0
+      sub(/^[[:space:]]*\|[[:space:]]*\./, "", left)
+      sub(/[[:space:]].*$/, "", left)
+      right = $0
+      sub(/^.*=>[[:space:]]*"/, "", right)
+      sub(/".*$/, "", right)
+      if (right != "") print left " -> " right
+    }
+  ' "$file"
+}
+
+default_cases_between() {
+  local file=$1
+  local start=$2
+  local stop=$3
+
+  awk -v start="$start" -v stop="$stop" '
+    $0 ~ start { inside = 1; next }
+    inside && $0 ~ stop { exit }
+    inside && /^[[:space:]]*\|[[:space:]]*_/ { print }
   ' "$file"
 }
 
@@ -135,19 +170,33 @@ assert_exact_roster() {
   local -a actual=()
   mapfile -t actual
 
-  local expected_sorted actual_sorted duplicate
-  expected_sorted=$(printf '%s\n' "${expected[@]}" | LC_ALL=C sort)
-  actual_sorted=$(printf '%s\n' "${actual[@]}" | LC_ALL=C sort)
+  local expected_ordered actual_ordered duplicate
+  expected_ordered=$(printf '%s\n' "${expected[@]}")
+  actual_ordered=$(printf '%s\n' "${actual[@]}")
   duplicate=$(printf '%s\n' "${actual[@]}" | LC_ALL=C sort | uniq -d)
 
-  if [[ ${#actual[@]} -ne ${#expected[@]} || $actual_sorted != "$expected_sorted" || -n $duplicate ]]; then
+  if [[ ${#actual[@]} -ne ${#expected[@]} || $actual_ordered != "$expected_ordered" || -n $duplicate ]]; then
     printf '%s roster mismatch\nexpected:\n%s\nactual:\n%s\n' \
-      "$label" "$expected_sorted" "$actual_sorted"
+      "$label" "$expected_ordered" "$actual_ordered"
     if [[ -n $duplicate ]]; then
       printf '%s duplicate constructor/tag(s): %s\n' "$label" "$duplicate"
     fi
     violations=$((violations + 1))
   fi
+}
+
+reject_default_cases() {
+  local label=$1
+  local file=$2
+  local start=$3
+  local stop=$4
+  local default_case
+
+  while IFS= read -r default_case; do
+    [[ -n $default_case ]] || continue
+    printf '%s wildcard/default case: %s\n' "$label" "$default_case"
+    violations=$((violations + 1))
+  done < <(default_cases_between "$file" "$start" "$stop")
 }
 
 require_roster_file() {
@@ -194,6 +243,52 @@ require_roster_namespaced_theorem() {
   fi
 }
 
+lean_code_matches() {
+  local pattern=$1
+  shift
+
+  local -a roots=("$@")
+  local -a files=()
+  mapfile -t files < <(rg --files -g '*.lean' "${roots[@]}" 2>/dev/null || true)
+  (( ${#files[@]} > 0 )) || return 0
+
+  awk -v pattern="$pattern" '
+    function without_comments(line,    out, position, pair, char) {
+      out = ""
+      position = 1
+      while (position <= length(line)) {
+        pair = substr(line, position, 2)
+        char = substr(line, position, 1)
+        if (comment_depth > 0) {
+          if (pair == "/-") {
+            comment_depth++
+            position += 2
+          } else if (pair == "-/") {
+            comment_depth--
+            position += 2
+          } else {
+            position++
+          }
+        } else if (pair == "/-") {
+          comment_depth = 1
+          position += 2
+        } else if (pair == "--") {
+          break
+        } else {
+          out = out char
+          position++
+        }
+      }
+      return out
+    }
+    BEGIN { IGNORECASE = 1 }
+    {
+      code = without_comments($0)
+      if (code ~ pattern) printf "%s:%d:%s\n", FILENAME, FNR, code
+    }
+  ' "${files[@]}"
+}
+
 reject_roster_matches() {
   local label=$1
   local pattern=$2
@@ -204,13 +299,75 @@ reject_roster_matches() {
   for root in "$@"; do
     [[ -e $root ]] && existing+=("$root")
   done
-  (( ${#existing[@]} > 0 )) || return
+  (( ${#existing[@]} > 0 )) || return 0
 
   while IFS= read -r match; do
     [[ -n $match ]] || continue
     printf '%s: %s\n' "$label" "$match"
     violations=$((violations + 1))
-  done < <(rg -n -i --glob '*.lean' "$pattern" "${existing[@]}" || true)
+  done < <(lean_code_matches "$pattern" "${existing[@]}")
+}
+
+reject_roster_paths() {
+  local label=$1
+  shift
+
+  local root path
+  for root in "$@"; do
+    [[ -d $root ]] || continue
+    while IFS= read -r path; do
+      [[ -n $path ]] || continue
+      printf '%s: %s\n' "$label" "${path#"$repo_root"/}"
+      violations=$((violations + 1))
+    done < <(find "$root" -type f \
+      \( -iname '*comprehension*.lean' -o -iname '*abstraction*.lean' -o -iname '*instantiat*.lean' \) \
+      -print | LC_ALL=C sort)
+  done
+}
+
+means_request_cases() {
+  local file=$1
+
+  awk '
+    /match[[:space:]]+request[[:space:]]+with/ {
+      in_request_match = 1
+      next
+    }
+    in_request_match && /^[[:space:]]*\|[[:space:]]*\./ {
+      line = $0
+      match(line, /^[[:space:]]*/)
+      indentation = RLENGTH
+      if (!branch_indentation_set) {
+        branch_indentation = indentation
+        branch_indentation_set = 1
+      }
+      if (indentation != branch_indentation) next
+      sub(/^[[:space:]]*\|[[:space:]]*\./, "", line)
+      sub(/[[:space:]].*$/, "", line)
+      print line
+    }
+  ' "$file"
+}
+
+means_request_default_cases() {
+  local file=$1
+
+  awk '
+    /match[[:space:]]+request[[:space:]]+with/ {
+      in_request_match = 1
+      next
+    }
+    in_request_match && /^[[:space:]]*\|/ {
+      line = $0
+      match(line, /^[[:space:]]*/)
+      indentation = RLENGTH
+      if (!branch_indentation_set) {
+        branch_indentation = indentation
+        branch_indentation_set = 1
+      }
+      if (indentation == branch_indentation && line ~ /^[[:space:]]*\|[[:space:]]*_/) print line
+    }
+  ' "$file"
 }
 
 audit_roster() {
@@ -222,6 +379,11 @@ audit_roster() {
   local comprehension_soundness="$repo_root/VisualProof/Rule/Soundness/Comprehension.lean"
   local -a rule_expected=(erasure wireSever iteration doubleCut vacuity)
   local -a concrete_expected=(boundRelationSpawn wireJoin erasure wireSever iteration deiteration doubleCutIntro doubleCutElim vacuousIntro vacuousElim)
+  local -a concrete_tag_expected=()
+  local tag
+  for tag in "${concrete_expected[@]}"; do
+    concrete_tag_expected+=("$tag -> $tag")
+  done
 
   require_roster_file "$rule_step" &&
     assert_exact_roster 'Rule.Step constructors' "${rule_expected[@]}" \
@@ -230,8 +392,11 @@ audit_roster() {
     assert_exact_roster 'Concrete.Step constructors' "${concrete_expected[@]}" \
       < <(constructors_between "$concrete_step" '^inductive Step[[:space:]]' '^def Step[.]tag')
   require_roster_file "$concrete_step" &&
-    assert_exact_roster 'Concrete.Step.tag cases' "${concrete_expected[@]}" \
-      < <(case_labels_between "$concrete_step" '^def Step[.]tag' '^theorem Step[.]tag_mem_all')
+    assert_exact_roster 'Concrete.Step.tag constructor-to-tag cases' "${concrete_tag_expected[@]}" \
+      < <(step_tag_pairs_between "$concrete_step" '^def Step[.]tag' '^theorem Step[.]tag_mem_all')
+  require_roster_file "$concrete_step" &&
+    reject_default_cases 'Concrete.Step.tag' "$concrete_step" \
+      '^def Step[.]tag' '^theorem Step[.]tag_mem_all'
   require_roster_file "$step_core" &&
     assert_exact_roster 'Concrete.StepTag constructors' "${concrete_expected[@]}" \
       < <(constructors_between "$step_core" '^inductive StepTag$' '^def StepTag[.]all')
@@ -239,8 +404,11 @@ audit_roster() {
     assert_exact_roster 'Concrete.StepTag.all tags' "${concrete_expected[@]}" \
       < <(tags_in_all "$step_core")
   require_roster_file "$step_tags" &&
-    assert_exact_roster 'Concrete.StepTag serialized tags' "${concrete_expected[@]}" \
-      < <(case_labels_between "$step_tags" '^def serializedName' '^def serializedAll')
+    assert_exact_roster 'Concrete.StepTag serialized tag-name cases' "${concrete_tag_expected[@]}" \
+      < <(serialized_tag_pairs_between "$step_tags" '^def serializedName' '^def serializedAll')
+  require_roster_file "$step_tags" &&
+    reject_default_cases 'Concrete.StepTag.serializedName' "$step_tags" \
+      '^def serializedName' '^def serializedAll'
 
   require_roster_file "$comprehension_relation" &&
     require_roster_declaration 'Comprehension relation' \
@@ -251,9 +419,12 @@ audit_roster() {
   require_roster_file "$comprehension_soundness" &&
     require_roster_namespaced_theorem Comprehension sound "$comprehension_soundness"
 
-  reject_roster_matches 'Comprehension execution declaration' '\bcomprehension\b' \
+  reject_roster_paths 'Comprehension or abstraction/instantiation execution owner path' \
     "$repo_root/VisualProof/Concrete" "$repo_root/VisualProof/Refinement"
-  reject_roster_matches 'Comprehension branch' '\bcomprehension\b' \
+  reject_roster_matches 'Comprehension or abstraction/instantiation execution declaration/import' \
+    'comprehension|abstraction|instantiat' \
+    "$repo_root/VisualProof/Concrete" "$repo_root/VisualProof/Refinement"
+  reject_roster_matches 'Comprehension execution branch' 'comprehension' \
     "$rule_step" "$repo_root/VisualProof/Refinement/Step" \
     "$repo_root/VisualProof/Refinement/Step.lean" \
     "$repo_root/VisualProof/Refinement/Complete" \
@@ -261,6 +432,18 @@ audit_roster() {
     "$repo_root/VisualProof/Refinement/Means.lean"
   reject_roster_matches 'obsolete Proof request name' \
     'comprehension(Abstract|Instantiate)' "$repo_root/VisualProof/Proof"
+
+  local means="$repo_root/VisualProof/Refinement/Means.lean"
+  if [[ -f $means ]]; then
+    assert_exact_roster 'Refinement.Means request constructor cases' "${concrete_expected[@]}" \
+      < <(means_request_cases "$means")
+    local default_case
+    while IFS= read -r default_case; do
+      [[ -n $default_case ]] || continue
+      printf 'Refinement.Means wildcard/default request case: %s\n' "$default_case"
+      violations=$((violations + 1))
+    done < <(means_request_default_cases "$means")
+  fi
 
   if (( violations > 0 )); then
     printf 'roster: %d execution-roster/absence violation(s)\n' "$violations" >&2

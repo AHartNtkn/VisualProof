@@ -47,3 +47,92 @@ declarations rather than labels or a generated snapshot. It requires:
 No Lean proof source was changed. The active dirty refinement files remain
 untouched. The roster gate is intentionally blocking until the planned Task 9
 source remediation makes the actual execution surface conform.
+
+## Review round 1 fixes
+
+The roster audit now removes line and nested block comments before evaluating
+execution declarations/imports, so comments do not create violations. It
+rejects case-insensitive comprehension, abstraction, and instantiat source
+identifiers under Concrete and Refinement, and separately rejects
+Comprehension/abstraction/instantiation-named Lean owner paths.
+
+The audit preserves the authoritative source order. It now compares exact
+constructor-to-tag pairs in Concrete.Step.tag and exact tag-to-wire-name pairs
+in serializedName; a matching left-hand-side inventory is insufficient. When
+Refinement/Means.lean exists, it requires the ten direct supplied request
+constructor cases in order and rejects a wildcard/default request case.
+Elaborated-value auditing remains outside this source-roster gate.
+
+### Commands and outputs
+
+~~~
+bash -n scripts/audit-lean-authority.sh
+~~~
+
+~~~
+exit 0
+~~~
+
+~~~
+scripts/audit-lean-authority.sh roster
+~~~
+
+~~~
+exit 1
+Concrete.Step.tag constructor-to-tag cases roster mismatch
+Concrete.StepTag serialized tag-name cases roster mismatch
+Comprehension or abstraction/instantiation execution owner path: VisualProof/Concrete/Operation/Comprehension.lean
+Comprehension or abstraction/instantiation execution declaration/import: .../Concrete/Operation/Comprehension.lean:12:def abstractionRegions ...
+Comprehension execution branch: .../VisualProof/Rule/Step.lean:17:  | comprehension : Comprehension source target → Step source target
+~~~
+
+Ephemeral /tmp/task-9-roster-audit.BxWSqp source-only checks:
+
+~~~
+/tmp/task-9-roster-audit.BxWSqp/scripts/audit-lean-authority.sh roster
+~~~
+
+~~~
+roster: exact five-family Rule.Step and ten-constructor Concrete.Step roster; standalone Comprehension only
+exit 0
+~~~
+
+With only a comment naming applyComprehensionAbstract, the same command still
+exited 0. With a real declaration of that name, it exited 1:
+
+~~~
+Comprehension or abstraction/instantiation execution declaration/import: .../Concrete/Step.lean:28:def applyComprehensionAbstract := True
+~~~
+
+With a wildcard in the otherwise complete temporary Means match:
+
+~~~
+Refinement.Means wildcard/default request case:   | _ => True
+exit 1
+~~~
+
+With the vacuousElim Means case omitted:
+
+~~~
+Refinement.Means request constructor cases roster mismatch
+expected: ... vacuousIntro, vacuousElim
+actual: ... vacuousIntro
+exit 1
+~~~
+
+With the wireJoin tag projection and serialized name changed to erasure:
+
+~~~
+Concrete.Step.tag constructor-to-tag cases roster mismatch
+Concrete.StepTag serialized tag-name cases roster mismatch
+wireJoin -> erasure
+exit 1
+~~~
+
+~~~
+git diff --check
+~~~
+
+~~~
+exit 0
+~~~
