@@ -21,7 +21,7 @@ def finishRoot (ambient locals : WireContext d)
     Region  ambient.length [] :=
   .mk locals.length (items.castWiresEq (by simp))
 
-theorem regionIso_of_cast
+noncomputable def regionIso_of_cast
     {sourceOuter targetOuter sourceLocal targetLocal
       sourceExtended targetExtended : Nat}
     (sourceEq : sourceExtended = sourceOuter + sourceLocal)
@@ -76,7 +76,7 @@ theorem compileRoot?_closed_eq_compileRegion?
         BinderContext.empty := by
   rfl
 
-theorem compileRegion?_equivariant {source target : Diagram}
+noncomputable def compileRegion?_equivariant {source target : Diagram}
     (iso : Iso source target)
     (htarget : target.WellFormed )
     {sourceFuel targetFuel : Nat} {region : Fin source.regionCount}
@@ -269,7 +269,7 @@ theorem compileRegion?_equivariant {source target : Diagram}
 
 /-- Equivariance of one compiled direct occurrence, with recursive child
 regions discharged by the public region-kernel theorem. -/
-theorem compileOccurrenceWith?_equivariant
+noncomputable def compileOccurrenceWith?_equivariant
     {source target : Diagram}
     (iso : Iso source target)
     (htarget : target.WellFormed )
@@ -373,7 +373,7 @@ theorem compileOccurrenceWith?_equivariant
 
 /-- Equivariance of any compiled sublist of direct occurrences.  The caller
 supplies membership in one concrete region; occurrence order is retained. -/
-theorem compileOccurrencesWith?_equivariant
+noncomputable def compileOccurrencesWith?_equivariant
     {source target : Diagram}
     (iso : Iso source target)
     (htarget : target.WellFormed )
@@ -427,7 +427,7 @@ theorem compileOccurrencesWith?_equivariant
 /-- Public same-diagram region-kernel equivariance.  The caller supplies only
 the observable wire-list correspondence and equality of lexical binder
 contexts; the private concrete-isomorphism machinery remains encapsulated. -/
-theorem compileRegion?_equivariant_sameDiagram
+noncomputable def compileRegion?_equivariant_sameDiagram
     (hwf : d.WellFormed )
     {sourceFuel targetFuel : Nat} {region : Fin d.regionCount}
     {sourceContext targetContext : WireContext d}
@@ -724,7 +724,54 @@ theorem compileRoot?_complete
     rw [hitems]
     rfl⟩
 
-private theorem compileRoot?_equivariant_with_items
+private structure RootEquivarianceResult
+    {source target : Diagram}
+    (iso : Iso source target)
+    (sourceAmbient : WireContext source) (targetAmbient : WireContext target)
+    (sourceLocal : WireContext source) (targetLocal : WireContext target)
+    (ambient : FiniteEquiv (Fin sourceAmbient.length)
+      (Fin targetAmbient.length))
+    (localEquiv : FiniteEquiv (Fin sourceLocal.length)
+      (Fin targetLocal.length))
+    (sourceBody : Region sourceAmbient.length [])
+    (targetBody : Region targetAmbient.length []) where
+  sourceItems : ItemSeq (sourceAmbient ++ sourceLocal).length []
+  targetItems : ItemSeq (targetAmbient ++ targetLocal).length []
+  source_eq : sourceBody = finishRoot sourceAmbient sourceLocal sourceItems
+  target_eq : targetBody = finishRoot targetAmbient targetLocal targetItems
+  source_compiled : compileOccurrencesWith? source
+      (compileRegion? source source.regionCount)
+      (sourceAmbient ++ sourceLocal) BinderContext.empty
+      (localOccurrences source source.root) = some sourceItems
+  target_compiled : compileOccurrencesWith? target
+      (compileRegion? target source.regionCount)
+      (targetAmbient ++ targetLocal) BinderContext.empty
+      (localOccurrences target target.root) = some targetItems
+  items_iso : ItemSeqIso (appendContextEquiv ambient localEquiv) []
+    sourceItems targetItems
+
+private noncomputable def RootEquivarianceResult.regionIso
+    {source target : Diagram}
+    {iso : Iso source target}
+    {sourceAmbient : WireContext source} {targetAmbient : WireContext target}
+    {sourceLocal : WireContext source} {targetLocal : WireContext target}
+    {ambient : FiniteEquiv (Fin sourceAmbient.length)
+      (Fin targetAmbient.length)}
+    {localEquiv : FiniteEquiv (Fin sourceLocal.length)
+      (Fin targetLocal.length)}
+    {sourceBody : Region sourceAmbient.length []}
+    {targetBody : Region targetAmbient.length []}
+    (result : RootEquivarianceResult iso sourceAmbient targetAmbient
+      sourceLocal targetLocal ambient localEquiv sourceBody targetBody) :
+    RegionIso ambient [] sourceBody targetBody := by
+  cases result with
+  | mk sourceItems targetItems source_eq target_eq _ _ items_iso =>
+      subst sourceBody
+      subst targetBody
+      exact regionIso_of_cast (by simp) (by simp) ambient localEquiv
+        sourceItems targetItems items_iso
+
+private noncomputable def compileRoot?_equivariant_with_items
     {source target : Diagram}
     (iso : Iso source target)
     (htarget : target.WellFormed )
@@ -743,23 +790,8 @@ private theorem compileRoot?_equivariant_with_items
       some sourceBody)
     (htargetResult : compileRoot?  target targetAmbient targetLocal =
       some targetBody) :
-    RegionIso  ambient [] sourceBody targetBody ∧
-      ∃ (sourceItems : ItemSeq
-          (sourceAmbient ++ sourceLocal).length [])
-        (targetItems : ItemSeq
-          (targetAmbient ++ targetLocal).length []),
-        sourceBody = finishRoot sourceAmbient sourceLocal sourceItems ∧
-        targetBody = finishRoot targetAmbient targetLocal targetItems ∧
-        compileOccurrencesWith?  source
-            (compileRegion?  source source.regionCount)
-            (sourceAmbient ++ sourceLocal) BinderContext.empty
-            (localOccurrences source source.root) = some sourceItems ∧
-        compileOccurrencesWith?  target
-            (compileRegion?  target source.regionCount)
-            (targetAmbient ++ targetLocal) BinderContext.empty
-            (localOccurrences target target.root) = some targetItems ∧
-        ItemSeqIso  (appendContextEquiv ambient localEquiv) []
-          sourceItems targetItems := by
+    RootEquivarianceResult iso sourceAmbient targetAmbient sourceLocal
+      targetLocal ambient localEquiv sourceBody targetBody := by
   let sourceRoot := sourceAmbient ++ sourceLocal
   let targetRoot := targetAmbient ++ targetLocal
   let rootEquiv := appendContextEquiv ambient localEquiv
@@ -929,12 +961,6 @@ private theorem compileRoot?_equivariant_with_items
             rw [htargetPosition] at htargetGet
             exact hoccurrence _ (List.get_mem _ _) _ _
               hsourceGet htargetGet
-          have hregion : RegionIso  ambient []
-              (finishRoot sourceAmbient sourceLocal sourceItems)
-              (finishRoot targetAmbient targetLocal targetItems) := by
-            simpa only [finishRoot, sourceRoot, targetRoot, rootEquiv] using
-              regionIso_of_cast (by simp [sourceRoot]) (by simp [targetRoot])
-                ambient localEquiv sourceItems targetItems hitems
           have hsourceItems' : compileOccurrencesWith?  source
               (compileRegion?  source source.regionCount)
               (sourceAmbient ++ sourceLocal) BinderContext.empty
@@ -945,10 +971,17 @@ private theorem compileRoot?_equivariant_with_items
               (targetAmbient ++ targetLocal) BinderContext.empty
               (localOccurrences target target.root) = some targetItems := by
             simpa only [targetRoot, iso.root_eq] using htargetItems
-          exact ⟨hregion, sourceItems, targetItems, rfl, rfl,
-            rfl, htargetItems', hitems⟩
+          exact {
+            sourceItems := sourceItems
+            targetItems := targetItems
+            source_eq := rfl
+            target_eq := rfl
+            source_compiled := hsourceItems'
+            target_compiled := htargetItems'
+            items_iso := hitems
+          }
 
-theorem compileRoot?_equivariant
+noncomputable def compileRoot?_equivariant
     {source target : Diagram}
     (iso : Iso source target)
     (htarget : target.WellFormed )
@@ -969,13 +1002,13 @@ theorem compileRoot?_equivariant
       some targetBody) :
     RegionIso  ambient [] sourceBody targetBody :=
   (compileRoot?_equivariant_with_items iso htarget hwires htargetExact
-    hsource htargetResult).1
+    hsource htargetResult).regionIso
 
 /-- Public root-context equivariance with every supplied root wire treated as
 ambient.  Unlike `compileRoot?_equivariant`, its interface mentions only the
 observable agreement of the two root lists and no private compiler relations.
 It is the canonical bridge for pointwise open-root simulations. -/
-theorem compileRoot?_equivariant_allAmbient
+noncomputable def compileRoot?_equivariant_allAmbient
     {source target : Diagram}
     (iso : Iso source target)
     (htarget : target.WellFormed )
@@ -1005,7 +1038,7 @@ theorem compileRoot?_equivariant_allAmbient
 /-- Public item-sequence form of root-context equivariance.  This exposes the
 compiler's context-sensitive payload independently of how a caller later
 splits the complete root context into ambient and locally bound wires. -/
-theorem compileRootItems?_equivariant
+noncomputable def compileRootItems?_equivariant
     {source target : Diagram}
     (iso : Iso source target)
     (htarget : target.WellFormed )
@@ -1056,7 +1089,7 @@ theorem compileRootItems?_equivariant
     (sourceLocal := sourceRoot) (targetLocal := targetRoot)
     (ambient := FiniteEquiv.refl (Fin 0)) (localEquiv := rootEquiv)
     hall (by simpa using htargetExact) hsourceRoot htargetRoot
-  obtain ⟨_, compiledSource, compiledTarget, _, _,
+  obtain ⟨compiledSource, compiledTarget, _, _,
       hcompiledSource, hcompiledTarget, hitems⟩ := hcore
   have hsourceEq : sourceItems = compiledSource := by
     apply Option.some.inj

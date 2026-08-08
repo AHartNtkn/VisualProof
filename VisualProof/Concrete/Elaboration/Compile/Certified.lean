@@ -304,7 +304,7 @@ private theorem certifiedResolvePorts?_equivariant
     node (port index) (sequenceFin_sound hsource index)
     (sequenceFin_sound htargetResult index)
 
-private theorem compileNode?_certifiedEquivariant
+private noncomputable def compileNode?_certifiedEquivariant
     {source target : Diagram}
     (equiv : OccurrenceEquiv source target)
     (htarget : target.WellFormed )
@@ -376,7 +376,7 @@ private theorem compileNode?_certifiedEquivariant
                 equiv htarget hwires htargetNodup node arity
                 (fun index => .arg index)
                 hsourceArguments htargetArguments)
-theorem regionIso_of_cast
+noncomputable def regionIso_of_cast
     {sourceOuter targetOuter sourceLocal targetLocal
       sourceExtended targetExtended : Nat}
     (sourceEq : sourceExtended = sourceOuter + sourceLocal)
@@ -395,7 +395,7 @@ theorem regionIso_of_cast
   subst targetExtended
   simpa using RegionIso.mk localEquiv hitems
 
-private theorem compileRegion?_certifiedEquivariant
+private noncomputable def compileRegion?_certifiedEquivariant
     {source target : Diagram}
     (equiv : OccurrenceEquiv source target)
     (htarget : target.WellFormed )
@@ -593,7 +593,7 @@ private theorem compileRegion?_certifiedEquivariant
                       ambient (certifiedLocalWireEquiv equiv region)
                       sourceItems targetItems hitems
 
-theorem compileRoot?_certifiedEquivariant
+noncomputable def compileRoot?_certifiedEquivariant
     {source target : Diagram}
     (equiv : OccurrenceEquiv source target)
     (htarget : target.WellFormed )
@@ -823,14 +823,14 @@ theorem elaborate_isomorphic {source target : Diagram}
     Elaboration.compileRoot?_equivariant iso htarget hwires
       htargetExact hsourceKernel htargetKernel'
   rw [hsourceElaborate, htargetElaborate]
-  exact hbody
+  exact ⟨hbody⟩
 
 end Iso
 
 namespace OpenIso
 
 /-- Ordered open concrete isomorphism commutes with checked elaboration. -/
-def elaborate_isomorphic {source target : OpenDiagram}
+noncomputable def elaborate_isomorphic {source target : OpenDiagram}
     (iso : OpenIso source target)
     (hsource : source.WellFormed )
     (htarget : target.WellFormed ) :
@@ -850,15 +850,22 @@ def elaborate_isomorphic {source target : OpenDiagram}
       Elaboration.openRootWires_exact htarget
   have hbody : RegionIso  iso.exposedWiresEquiv []
       (source.elaborate hsource).body (target.elaborate htarget).body := by
-    obtain ⟨sourceBody, hsourceKernel, hsourceElaborate⟩ :=
-      CheckedOpen.elaborate_body_computation
-        (show CheckedOpen  from ⟨source, hsource⟩)
-    obtain ⟨targetBody, htargetKernel, htargetElaborate⟩ :=
-      CheckedOpen.elaborate_body_computation
-        (show CheckedOpen  from ⟨target, htarget⟩)
-    change (source.elaborate hsource).body = sourceBody at hsourceElaborate
-    change (target.elaborate htarget).body = targetBody at htargetElaborate
-    rw [hsourceElaborate, htargetElaborate]
+    have hsourceKernel : compileRoot? source.diagram source.exposedWires
+        source.hiddenWires = some (source.elaborate hsource).body := by
+      obtain ⟨sourceBody, hkernel, helaborate⟩ :=
+        CheckedOpen.elaborate_body_computation
+          (show CheckedOpen from ⟨source, hsource⟩)
+      change (source.elaborate hsource).body = sourceBody at helaborate
+      rw [helaborate]
+      exact hkernel
+    have htargetKernel : compileRoot? target.diagram target.exposedWires
+        target.hiddenWires = some (target.elaborate htarget).body := by
+      obtain ⟨targetBody, hkernel, helaborate⟩ :=
+        CheckedOpen.elaborate_body_computation
+          (show CheckedOpen from ⟨target, htarget⟩)
+      change (target.elaborate htarget).body = targetBody at helaborate
+      rw [helaborate]
+      exact hkernel
     exact Elaboration.compileRoot?_equivariant iso.diagram
       htarget.diagram_well_formed hwires htargetExact
       hsourceKernel htargetKernel

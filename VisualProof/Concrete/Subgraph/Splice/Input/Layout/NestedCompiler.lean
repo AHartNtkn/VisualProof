@@ -438,7 +438,7 @@ theorem compileNestedRootSiblings
   rw [← htargetPosition, ← hsourcePosition]
   exact hitem
 
-theorem compileHostOccurrence_at_seam_iso_of_maps
+noncomputable def compileHostOccurrence_at_seam_iso_of_maps
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -735,7 +735,7 @@ theorem compileHostOccurrence_at_seam_iso_of_maps
                   simpa [Item.renameWires, Item.renameRelations] using
                     ItemIso.bubble htransport
 
-theorem compileHostOccurrence_at_seam_iso
+noncomputable def compileHostOccurrence_at_seam_iso
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -794,7 +794,7 @@ theorem compileHostOccurrence_at_seam_iso
   · exact hsource
   · exact htarget
 
-theorem compileHostOccurrence_at_seam_iso_of_empty
+noncomputable def compileHostOccurrence_at_seam_iso_of_empty
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -913,7 +913,7 @@ theorem terminalRelationLookup_bubbleChild
       childArity hne, relationSpec sourceRelation]
     rfl
 
-theorem compilePatternOccurrence_at_seam_iso
+noncomputable def compilePatternOccurrence_at_seam_iso
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -1220,7 +1220,7 @@ theorem compilePatternOccurrence_at_seam_iso
 context.  This theorem needs no coalesced-host compiler view: root nodes use
 the canonical open-root wire map, while proper children reuse the actual
 compile equations supplied by the output leaf. -/
-theorem compilePatternRootOccurrence_at_site_iso
+noncomputable def compilePatternRootOccurrence_at_site_iso
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -1523,7 +1523,7 @@ theorem compilePatternRootOccurrence_at_site_iso
 /-- Empty-proxy counterpart of `compilePatternOccurrence_at_seam_iso`.
 The pattern sheet root is compiled with its open root wire context and empty
 lexical relation context; every proper direct child is material. -/
-theorem compilePatternRootOccurrence_at_seam_iso
+noncomputable def compilePatternRootOccurrence_at_seam_iso
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -1621,7 +1621,7 @@ theorem compilePatternRootOccurrence_at_seam_iso
   rw [hequiv] at hcombined
   exact hcombined
 
-theorem compiledSiteItemsIsoOfNonempty
+noncomputable def compiledSiteItemsIsoOfNonempty
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -1935,7 +1935,7 @@ theorem compiledSiteItemsIsoOfNonempty
 /-- Empty-proxy item-sequence simulation.  The open pattern root contributes
 its compiled root items after the host items, and `siteOccurrenceEquiv`
 accounts for the concrete output ordering. -/
-theorem compiledSiteItemsIsoOfEmpty
+noncomputable def compiledSiteItemsIsoOfEmpty
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -2235,7 +2235,7 @@ theorem compiledSiteItemsIsoOfEmpty
 /-- The intrinsic capture-avoiding splice at a nonempty terminal body is
 exactly the region compiled at the concrete output site, up to the canonical
 inherited/local wire equivalences and executable occurrence order. -/
-theorem compiledSiteRegionIsoOfNonempty
+noncomputable def compiledSiteRegionIsoOfNonempty
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -2406,7 +2406,7 @@ theorem compiledSiteRegionIsoOfNonempty
 the proxy spine is empty.  Here the material is the open sheet root: exposed
 wires are substituted into the host site and hidden root wires become the
 new local block. -/
-theorem compiledSiteRegionIsoOfEmpty
+noncomputable def compiledSiteRegionIsoOfEmpty
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)

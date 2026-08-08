@@ -465,17 +465,17 @@ theorem sequenceFin_map
   | succ arity ih =>
       simp only [sequenceFin]
       cases hhead : values 0 with
-      | none => simp [hhead]
+      | none => simp
       | some head =>
           cases htail : sequenceFin (fun index => values index.succ) with
           | none =>
               have hmappedTail := ih (fun index => values index.succ)
               rw [htail] at hmappedTail
-              simp [hhead, hmappedTail]
+              simp [hmappedTail]
           | some tail =>
               have hmappedTail := ih (fun index => values index.succ)
               rw [htail] at hmappedTail
-              simp [hhead, hmappedTail]
+              simp [hmappedTail]
               funext index
               refine Fin.cases ?_ (fun tailIndex => ?_) index <;> rfl
 
@@ -532,7 +532,7 @@ theorem WireContext.lookup?_map
       have hnotTarget : concreteWireMap wire ∉ targetContext :=
         fun htarget => hnotSource ((hmem wire).1 htarget)
       cases htarget : targetContext.lookup? (concreteWireMap wire) with
-      | none => simp [hsource, htarget]
+      | none => simp
       | some index =>
           have hfound := WireContext.lookup?_sound htarget
           have hindexMember : targetContext.get index ∈ targetContext :=
@@ -636,7 +636,7 @@ theorem resolvePort?_map_of_occurrence
   cases howner : endpointOwner? source ⟨sourceNode, port⟩ with
   | none => simp
   | some wire =>
-      simp only [Option.map_some, Option.bind_some]
+      simp only [Option.map_some]
       exact WireContext.lookup?_map sourceContext targetContext concreteWireMap
         indexMap targetNodup hget hmem wire
 
@@ -771,7 +771,7 @@ theorem compileNode?_map
       simp only [compileNode?, hsourceNode, hnode]
       rw [hbinders region binder hsourceNode]
       cases hrelation : sourceBinders binder with
-      | none => simp [hrelation]
+      | none => simp
       | some relation =>
           cases relation with
           | mk arity relation =>
@@ -783,7 +783,7 @@ theorem compileNode?_map
               rw [harguments]
               cases hsourceArguments : resolvePorts? source sourceContext
                   sourceNode arity (fun index => .arg index) <;>
-                simp [hrelation, hsourceArguments, Item.renameWires,
+                simp [Item.renameWires,
                   Item.renameRelations, Function.comp_def]
   | identity region arity =>
       simp only [compileNode?, hsourceNode, hnode]
@@ -792,9 +792,9 @@ theorem compileNode?_map
       rw [harguments]
       cases hsourceArguments : resolvePorts? source sourceContext sourceNode
           arity (fun index => .arg index) <;>
-        simp [hsourceArguments, Item.renameWires, Item.renameRelations,
+        simp [Item.renameWires, Item.renameRelations,
           Function.comp_def]
-theorem compileNode?_equivariant {source target : Diagram}
+noncomputable def compileNode?_equivariant {source target : Diagram}
     (iso : Iso source target)
     (htarget : target.WellFormed )
     {sourceContext : WireContext source} {targetContext : WireContext target}
@@ -1103,7 +1103,7 @@ public seam used when two root compilers have different ambient/local
 partitions (notably open roots): it does not assume those partitions have the
 same cardinalities, only that the supplied total wire equivalence and each
 compiled occurrence agree. -/
-theorem compileOccurrencesWith?_iso
+noncomputable def compileOccurrencesWith?_iso
     {sourceDiagram targetDiagram : Diagram}
     {rels : RelCtx}
     (sourceRecurse : forall {rels : RelCtx},

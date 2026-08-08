@@ -11,7 +11,7 @@ open VisualProof.Theory
 namespace OpenOccurrenceEquiv
 
 /-- Certified ordered occurrence equivalence commutes with elaboration. -/
-def elaborate_equivalent {source target : OpenDiagram}
+noncomputable def elaborate_equivalent {source target : OpenDiagram}
     (equiv : OpenOccurrenceEquiv source target)
     (hsource : source.WellFormed )
     (htarget : target.WellFormed ) :
@@ -31,15 +31,22 @@ def elaborate_equivalent {source target : OpenDiagram}
       Elaboration.openRootWires_exact htarget
   have hbody : RegionIso  equiv.exposedWiresEquiv []
       (source.elaborate hsource).body (target.elaborate htarget).body := by
-    obtain ⟨sourceBody, hsourceKernel, hsourceElaborate⟩ :=
-      CheckedOpen.elaborate_body_computation
-        (show CheckedOpen  from ⟨source, hsource⟩)
-    obtain ⟨targetBody, htargetKernel, htargetElaborate⟩ :=
-      CheckedOpen.elaborate_body_computation
-        (show CheckedOpen  from ⟨target, htarget⟩)
-    change (source.elaborate hsource).body = sourceBody at hsourceElaborate
-    change (target.elaborate htarget).body = targetBody at htargetElaborate
-    rw [hsourceElaborate, htargetElaborate]
+    have hsourceKernel : compileRoot? source.diagram source.exposedWires
+        source.hiddenWires = some (source.elaborate hsource).body := by
+      obtain ⟨sourceBody, hkernel, helaborate⟩ :=
+        CheckedOpen.elaborate_body_computation
+          (show CheckedOpen from ⟨source, hsource⟩)
+      change (source.elaborate hsource).body = sourceBody at helaborate
+      rw [helaborate]
+      exact hkernel
+    have htargetKernel : compileRoot? target.diagram target.exposedWires
+        target.hiddenWires = some (target.elaborate htarget).body := by
+      obtain ⟨targetBody, hkernel, helaborate⟩ :=
+        CheckedOpen.elaborate_body_computation
+          (show CheckedOpen from ⟨target, htarget⟩)
+      change (target.elaborate htarget).body = targetBody at helaborate
+      rw [helaborate]
+      exact hkernel
     exact compileRoot?_certifiedEquivariant equiv.diagram
       htarget.diagram_well_formed hwires htargetExact
       hsourceKernel htargetKernel

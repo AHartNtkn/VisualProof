@@ -43,7 +43,7 @@ structure Base
                 (((selected.renameWires descendant.outerWire).renameRelations
                     descendant.outerRelation).conjoin remainder))))))
 
-def Base.iso
+noncomputable def Base.iso
     (sourceIso : OpenDiagramIso source source')
     (step : Base source target)
     (targetIso : OpenDiagramIso target target') :

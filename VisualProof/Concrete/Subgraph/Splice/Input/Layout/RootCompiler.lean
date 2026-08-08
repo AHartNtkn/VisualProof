@@ -138,7 +138,7 @@ theorem frameWire_mem_rootExposed_iff
   · intro hcoalesced
     obtain ⟨wire, hwire, heq⟩ := List.mem_map.mp hcoalesced
     exact List.mem_map.mpr ⟨wire, hwire, by
-      simpa only [Function.comp_apply, heq]⟩
+      simp [Function.comp_apply, heq]⟩
 
 /-- The external wire classes of the coalesced and plugged open roots are in
 canonical bijection, independently of repeated boundary positions. -/
@@ -227,7 +227,7 @@ hidden frame wires; every pattern-internal wire remains below the root. -/
 theorem frameWire_mem_rootHidden_iff_of_nested
     (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (hnested : input.site ≠ input.frame.val.root)
+    (_hnested : input.site ≠ input.frame.val.root)
     (quotient : input.wireQuotient.Carrier) :
     layout.frameWire quotient ∈
         (outputOpenRoot input layout sourceBoundary).hiddenWires ↔
@@ -321,7 +321,7 @@ noncomputable def nestedRootHiddenWireEquiv
         hnested quotient).2 hquotient)
     (outputRootHidden_frame_complete_of_nested input layout sourceBoundary
       hnested)
-    (fun left _ right _ heq => layout.frameWire_injective heq)
+    (fun _ _ _ _ heq => layout.frameWire_injective heq)
 
 theorem nestedRootHiddenWireEquiv_spec
     (input : Input ) (layout : PlugLayout input)
@@ -471,7 +471,7 @@ theorem semanticOpenRootHiddenWires_subset
 theorem semanticOpenRootHiddenWires_complete
     (input : Input ) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (hsite : input.site = input.frame.val.root) :
+    (_hsite : input.site = input.frame.val.root) :
     ∀ wire, wire ∈ (outputOpenRoot input layout sourceBoundary).hiddenWires →
       wire ∈ semanticOpenRootHiddenWires input layout sourceBoundary := by
   intro wire hwire
@@ -812,7 +812,7 @@ theorem outputExactContextToOpenRootWireEquiv_spec
           sourceBoundary sourceRoot context exact index) = context.get index :=
   FiniteEquiv.restrictLists_spec _ _ _ _ _ _ index
 
-theorem compiledOutputRootItemsIsoFromExactContext
+noncomputable def compiledOutputRootItemsIsoFromExactContext
     (input : Input )
     (layout : PlugLayout input) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
@@ -897,7 +897,7 @@ theorem outputClosedToOpenRootWireEquiv_spec
 
 /-- The output compiler's closed-root item sequence and its actual open-root
 item sequence differ only by the canonical root-context reordering above. -/
-theorem compiledOutputRootItemsIso
+noncomputable def compiledOutputRootItemsIso
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
@@ -980,7 +980,7 @@ theorem closedSourceToOpenRootReindex_composes
 region simulation.  The source items are renamed once into the requested
 open ordering; the resulting `RegionIso` is governed exactly by the supplied
 ambient and local equivalences. -/
-theorem openRootRegionIso_of_closedItems
+noncomputable def openRootRegionIso_of_closedItems
     (closedWire : FiniteEquiv (Fin closedSourceWires)
       (Fin closedTargetWires))
     (outputTransport : FiniteEquiv (Fin closedTargetWires)
@@ -1013,7 +1013,7 @@ theorem openRootRegionIso_of_closedItems
 sequence whose carrier is only propositionally the ambient/local sum used by
 `Region.mk`.  This is the canonical bridge between `OpenDiagram`'s
 list-shaped `rootWires` context and an intrinsic region's split context. -/
-theorem openRootRegionIso_of_closedItems_cast
+noncomputable def openRootRegionIso_of_closedItems_cast
     (closedWire : FiniteEquiv (Fin closedSourceWires)
       (Fin closedTargetWires))
     (outputTransport : FiniteEquiv (Fin closedTargetWires)
@@ -1053,7 +1053,7 @@ theorem openRootRegionIso_of_closedItems_cast
 The target is the actual elaborated body of `outputOpenRoot`; callers supply
 only the already-established closed commuting item isomorphism and the
 intrinsic source split they intend to expose. -/
-theorem compiledOpenRootRegionIso_of_closedItems
+noncomputable def compiledOpenRootRegionIso_of_closedItems
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
@@ -1485,7 +1485,7 @@ theorem compileFrameNode_at_region_of_maps
     rw [← howner]
     exact relationSpec relation
 
-theorem compileFrameNode_at_region_iso
+noncomputable def compileFrameNode_at_region_iso
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -1571,7 +1571,7 @@ theorem compileFrameNode_at_region_iso
     Item.renameWires_renameRelations, Item.renameWires_comp,
     hfactor] using hiso
 
-theorem frameRecursiveRegionIso
+noncomputable def frameRecursiveRegionIso
     (input : Input )
     (layout : PlugLayout input)
     (region : Fin input.coalesceFrameRaw.regionCount)

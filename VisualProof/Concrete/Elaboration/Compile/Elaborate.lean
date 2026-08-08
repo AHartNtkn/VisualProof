@@ -57,7 +57,7 @@ theorem exactContextToOpenRootWireEquiv_spec
       context.get index := by
   exact FiniteEquiv.restrictLists_spec _ _ _ _ _ _ index
 
-theorem compiledOpenRootItemsIsoFromExactContext
+noncomputable def compiledOpenRootItemsIsoFromExactContext
     (checked : CheckedOpen )
     (context : WireContext checked.val.diagram)
     (exact : context.Exact checked.val.diagram.root)

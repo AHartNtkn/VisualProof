@@ -119,7 +119,7 @@ noncomputable def compiledSpliceOpenRootItems
   let complete := checkedOpenRootItems_complete checked
   ⟨Classical.choose complete, Classical.choose_spec complete⟩
 
-theorem PlugLayout.compiledCoalescedRootItemsIsoFromExactContext
+noncomputable def PlugLayout.compiledCoalescedRootItemsIsoFromExactContext
     (input : Input ) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →

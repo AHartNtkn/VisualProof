@@ -1035,16 +1035,24 @@ theorem externalEquiv_boundary
   rw [externalEquiv_lookup]
   exact (rawOpen_boundary_get diagram position).symm
 
-theorem rawDiagram_node_atom_lookup
+structure NodeAtomLookup
+    (diagram : VisualProof.Diagram.OpenDiagram arity)
+    (node : Fin (rawDiagram diagram).nodeCount)
+    (region binder nodeArity : Nat) (arguments : Fin nodeArity → Nat) where
+  concreteRegion : Fin (rawDiagram diagram).regionCount
+  concreteBinder : Fin (rawDiagram diagram).regionCount
+  node_eq : (rawDiagram diagram).nodes node =
+    .atom concreteRegion concreteBinder
+  region_val : concreteRegion.val = region
+  binder_val : concreteBinder.val = binder
+
+def rawDiagram_node_atom_lookup
     (diagram : VisualProof.Diagram.OpenDiagram arity)
     (node : Fin (rawDiagram diagram).nodeCount)
     (region binder nodeArity : Nat) (arguments : Fin nodeArity → Nat)
     (draftEq : (flattenOpen diagram).nodes.get node =
       .atom region binder nodeArity arguments) :
-    ∃ concreteRegion concreteBinder,
-      (rawDiagram diagram).nodes node =
-        .atom concreteRegion concreteBinder ∧
-      concreteRegion.val = region ∧ concreteBinder.val = binder := by
+    NodeAtomLookup diagram node region binder nodeArity arguments := by
   have atomBounded :
       (NodeDraft.atom region binder nodeArity arguments).Bounded
         (flattenOpen diagram).regions.length := by
@@ -1057,15 +1065,22 @@ theorem rawDiagram_node_atom_lookup
     ((flattenOpen_bounded diagram).nodes _ (List.get_mem _ node))).trans (by
       rfl)
 
-theorem rawDiagram_node_identity_lookup
+structure NodeIdentityLookup
+    (diagram : VisualProof.Diagram.OpenDiagram arity)
+    (node : Fin (rawDiagram diagram).nodeCount)
+    (region nodeArity : Nat) (arguments : Fin nodeArity → Nat) where
+  concreteRegion : Fin (rawDiagram diagram).regionCount
+  node_eq : (rawDiagram diagram).nodes node =
+    .identity concreteRegion nodeArity
+  region_val : concreteRegion.val = region
+
+def rawDiagram_node_identity_lookup
     (diagram : VisualProof.Diagram.OpenDiagram arity)
     (node : Fin (rawDiagram diagram).nodeCount)
     (region nodeArity : Nat) (arguments : Fin nodeArity → Nat)
     (draftEq : (flattenOpen diagram).nodes.get node =
       .identity region nodeArity arguments) :
-    ∃ concreteRegion,
-      (rawDiagram diagram).nodes node =
-        .identity concreteRegion nodeArity ∧ concreteRegion.val = region := by
+    NodeIdentityLookup diagram node region nodeArity arguments := by
   have identityBounded :
       (NodeDraft.identity region nodeArity arguments).Bounded
         (flattenOpen diagram).regions.length := by
@@ -1078,15 +1093,22 @@ theorem rawDiagram_node_identity_lookup
     ((flattenOpen_bounded diagram).nodes _ (List.get_mem _ node))).trans (by
       rfl)
 
-theorem rawDiagram_region_bubble_lookup
+structure RegionBubbleLookup
+    (diagram : VisualProof.Diagram.OpenDiagram arity)
+    (region : Fin (rawDiagram diagram).regionCount)
+    (parent binderArity : Nat) where
+  concreteParent : Fin (rawDiagram diagram).regionCount
+  region_eq : (rawDiagram diagram).regions region =
+    .bubble concreteParent binderArity
+  parent_val : concreteParent.val = parent
+
+def rawDiagram_region_bubble_lookup
     (diagram : VisualProof.Diagram.OpenDiagram arity)
     (region : Fin (rawDiagram diagram).regionCount)
     (parent binderArity : Nat)
     (draftEq : (flattenOpen diagram).regions.get region =
       .bubble parent binderArity) :
-    ∃ concreteParent,
-      (rawDiagram diagram).regions region =
-        .bubble concreteParent binderArity ∧ concreteParent.val = parent := by
+    RegionBubbleLookup diagram region parent binderArity := by
   have bubbleBounded :
       (RegionDraft.bubble parent binderArity).Bounded
         (flattenOpen diagram).regions.length := by
@@ -1099,14 +1121,20 @@ theorem rawDiagram_region_bubble_lookup
     ((flattenOpen_bounded diagram).regions _ (List.get_mem _ region))).trans
       (by rfl)
 
-theorem rawDiagram_region_cut_lookup
+structure RegionCutLookup
+    (diagram : VisualProof.Diagram.OpenDiagram arity)
+    (region : Fin (rawDiagram diagram).regionCount)
+    (parent : Nat) where
+  concreteParent : Fin (rawDiagram diagram).regionCount
+  region_eq : (rawDiagram diagram).regions region = .cut concreteParent
+  parent_val : concreteParent.val = parent
+
+def rawDiagram_region_cut_lookup
     (diagram : VisualProof.Diagram.OpenDiagram arity)
     (region : Fin (rawDiagram diagram).regionCount)
     (parent : Nat)
     (draftEq : (flattenOpen diagram).regions.get region = .cut parent) :
-    ∃ concreteParent,
-      (rawDiagram diagram).regions region = .cut concreteParent ∧
-      concreteParent.val = parent := by
+    RegionCutLookup diagram region parent := by
   have cutBounded :
       (RegionDraft.cut parent).Bounded
         (flattenOpen diagram).regions.length := by
@@ -2900,19 +2928,19 @@ private theorem regionRecords_coverage (region : Region wires rels) :
         itemRecords_coverage items (regionBase + 1) nodeBase
           (wireBase + localWires)
 
-private def RegionRecord.OwnedIn
+private structure RegionRecord.OwnedIn
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
-    (record : RegionRecord) : Prop :=
-  ∃ (current : Fin (rawDiagram diagram).regionCount)
-    (bounded : ∀ draft, draft ∈ record.occurrences →
-      draft.Bounded (rawDiagram diagram).regionCount
-        (rawDiagram diagram).nodeCount),
-    current.val = record.index ∧
-      ∀ draft (member : draft ∈ record.occurrences),
-        draft.OwnedBy (rawDiagram diagram) current (bounded draft member)
+    (record : RegionRecord) where
+  current : Fin (rawDiagram diagram).regionCount
+  bounded : ∀ draft, draft ∈ record.occurrences →
+    draft.Bounded (rawDiagram diagram).regionCount
+      (rawDiagram diagram).nodeCount
+  index_eq : current.val = record.index
+  owned : ∀ draft (member : draft ∈ record.occurrences),
+    draft.OwnedBy (rawDiagram diagram) current (bounded draft member)
 
 private def RegionRecordsOwnedMotive
-    (wires : Nat) (rels : RelCtx) (region : Region wires rels) : Prop :=
+    (wires : Nat) (rels : RelCtx) (region : Region wires rels) : Type :=
   ∀ {openArity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (regionKind : RegionDraft)
@@ -2925,7 +2953,7 @@ private def RegionRecordsOwnedMotive
       record.OwnedIn diagram
 
 private def ItemRecordsOwnedMotive
-    (wires : Nat) (rels : RelCtx) (item : Item wires rels) : Prop :=
+    (wires : Nat) (rels : RelCtx) (item : Item wires rels) : Type :=
   ∀ {openArity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (current regionBase nodeBase wireBase : Nat)
@@ -2937,7 +2965,7 @@ private def ItemRecordsOwnedMotive
       record.OwnedIn diagram
 
 private def ItemsRecordsOwnedMotive
-    (wires : Nat) (rels : RelCtx) (items : ItemSeq wires rels) : Prop :=
+    (wires : Nat) (rels : RelCtx) (items : ItemSeq wires rels) : Type :=
   ∀ {openArity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (current regionBase nodeBase wireBase : Nat)
@@ -2948,7 +2976,7 @@ private def ItemsRecordsOwnedMotive
     ∀ record, record ∈ itemRecords regionBase nodeBase wireBase items →
       record.OwnedIn diagram
 
-private theorem itemRecords_owned (items : ItemSeq wires rels) :
+private noncomputable def itemRecords_owned (items : ItemSeq wires rels) :
     ItemsRecordsOwnedMotive wires rels items := by
   apply ItemSeq.rec
       (motive_1 := RegionRecordsOwnedMotive)
@@ -2959,37 +2987,42 @@ private theorem itemRecords_owned (items : ItemSeq wires rels) :
       intro openArity diagram regionKind regionBase nodeBase wireBase
         outerWires binders allocated record member
       simp only [regionRecords, List.mem_cons] at member
-      rcases member with rfl | member
-      · have regionAllocation : List.SegmentAt
-            (flattenOpen diagram).regions
-            (regionKind :: (flattenItems regionBase (regionBase + 1)
+      have regionAllocation : List.SegmentAt
+          (flattenOpen diagram).regions
+          (regionKind :: (flattenItems regionBase (regionBase + 1)
+            nodeBase (wireBase + localWires)
+            (outerWires.extend wireBase localWires) binders items).regions)
+          regionBase := by
+        simpa only [flattenRegion] using allocated.regions
+      have wireAllocation : List.SegmentAt
+          (flattenOpen diagram).wireScopes
+          (List.replicate localWires regionBase ++
+            (flattenItems regionBase (regionBase + 1)
               nodeBase (wireBase + localWires)
-              (outerWires.extend wireBase localWires) binders items).regions)
-            regionBase := by
-          simpa only [flattenRegion] using allocated.regions
-        have wireAllocation : List.SegmentAt
-            (flattenOpen diagram).wireScopes
-            (List.replicate localWires regionBase ++
-              (flattenItems regionBase (regionBase + 1)
-                nodeBase (wireBase + localWires)
-                (outerWires.extend wireBase localWires) binders items).wireScopes)
-            wireBase := by
-          simpa only [flattenRegion] using allocated.wireScopes
-        let nestedFlat := flattenItems regionBase (regionBase + 1) nodeBase
-          (wireBase + localWires) (outerWires.extend wireBase localWires)
-          binders items
-        have nestedAllocated : Flat.SegmentAt (flattenOpen diagram) nestedFlat
-            (regionBase + 1) nodeBase (wireBase + localWires) := by
-          exact {
-            regions := by
-              simpa only [nestedFlat] using regionAllocation.tail
-            nodes := by
-              simpa only [flattenRegion, nestedFlat] using allocated.nodes
-            wireScopes := by
-              have right := wireAllocation.right
-                (left := List.replicate localWires regionBase)
-              simpa only [List.length_replicate, nestedFlat] using right
-          }
+              (outerWires.extend wireBase localWires) binders items).wireScopes)
+          wireBase := by
+        simpa only [flattenRegion] using allocated.wireScopes
+      let nestedFlat := flattenItems regionBase (regionBase + 1) nodeBase
+        (wireBase + localWires) (outerWires.extend wireBase localWires)
+        binders items
+      have nestedAllocated : Flat.SegmentAt (flattenOpen diagram) nestedFlat
+          (regionBase + 1) nodeBase (wireBase + localWires) := by
+        exact {
+          regions := by simpa only [nestedFlat] using regionAllocation.tail
+          nodes := by
+            simpa only [flattenRegion, nestedFlat] using allocated.nodes
+          wireScopes := by
+            have right := wireAllocation.right
+              (left := List.replicate localWires regionBase)
+            simpa only [List.length_replicate, nestedFlat] using right
+        }
+      by_cases hroot : record = {
+          index := regionBase
+          wireBase := wireBase
+          localWires := localWires
+          occurrences := occurrenceDrafts (regionBase + 1) nodeBase items
+        }
+      · subst record
         let current : Fin (rawDiagram diagram).regionCount :=
           ⟨regionBase, regionAllocation.index_lt ⟨0, by simp⟩⟩
         let bounded := occurrenceDrafts_bounded diagram regionBase
@@ -3001,35 +3034,11 @@ private theorem itemRecords_owned (items : ItemSeq wires rels) :
           nodeBase (wireBase + localWires)
           (outerWires.extend wireBase localWires) binders items
           nestedAllocated draft draftMember
-      · have regionAllocation : List.SegmentAt
-            (flattenOpen diagram).regions
-            (regionKind :: (flattenItems regionBase (regionBase + 1)
-              nodeBase (wireBase + localWires)
-              (outerWires.extend wireBase localWires) binders items).regions)
-            regionBase := by
-          simpa only [flattenRegion] using allocated.regions
-        have wireAllocation : List.SegmentAt
-            (flattenOpen diagram).wireScopes
-            (List.replicate localWires regionBase ++
-              (flattenItems regionBase (regionBase + 1)
-                nodeBase (wireBase + localWires)
-                (outerWires.extend wireBase localWires) binders items).wireScopes)
-            wireBase := by
-          simpa only [flattenRegion] using allocated.wireScopes
-        let nestedFlat := flattenItems regionBase (regionBase + 1) nodeBase
-          (wireBase + localWires) (outerWires.extend wireBase localWires)
-          binders items
-        have nestedAllocated : Flat.SegmentAt (flattenOpen diagram) nestedFlat
-            (regionBase + 1) nodeBase (wireBase + localWires) := by
-          exact {
-            regions := by simpa only [nestedFlat] using regionAllocation.tail
-            nodes := by
-              simpa only [flattenRegion, nestedFlat] using allocated.nodes
-            wireScopes := by
-              have right := wireAllocation.right
-                (left := List.replicate localWires regionBase)
-              simpa only [List.length_replicate, nestedFlat] using right
-          }
+      · have member : record ∈ itemRecords (regionBase + 1) nodeBase
+            (wireBase + localWires) items := by
+          rcases member with heq | hmember
+          · exact False.elim (hroot heq)
+          · exact hmember
         exact itemsOwned diagram regionBase (regionBase + 1) nodeBase
           (wireBase + localWires) (outerWires.extend wireBase localWires)
           binders nestedAllocated record member
@@ -3091,16 +3100,22 @@ private theorem itemRecords_owned (items : ItemSeq wires rels) :
           (itemCounts head).wires := headLengths.2.2
       rw [headRegionsLength, headNodesLength, headWiresLength] at tailAllocated
       rw [itemRecords_cons] at member
-      rcases List.mem_append.mp member with member | member
+      by_cases hhead : record ∈ itemRecordBlock regionBase nodeBase
+          wireBase head
       · exact headOwned diagram current regionBase nodeBase wireBase wireMap
-          binders headAllocated record member
-      · exact tailOwned diagram current
+          binders headAllocated record hhead
+      · have member : record ∈ itemRecords
+            (regionBase + (itemCounts head).regions)
+            (nodeBase + (itemCounts head).nodes)
+            (wireBase + (itemCounts head).wires) tail := by
+          exact (List.mem_append.mp member).resolve_left hhead
+        exact tailOwned diagram current
           (regionBase + (itemCounts head).regions)
           (nodeBase + (itemCounts head).nodes)
           (wireBase + (itemCounts head).wires) wireMap binders tailAllocated
           record member
 
-private theorem regionRecords_owned (region : Region wires rels) :
+private noncomputable def regionRecords_owned (region : Region wires rels) :
     RegionRecordsOwnedMotive wires rels region := by
   cases region with
   | mk localWires items =>
@@ -3136,8 +3151,14 @@ private theorem regionRecords_owned (region : Region wires rels) :
               (left := List.replicate localWires regionBase)
             simpa only [List.length_replicate, nestedFlat] using right
         }
-      rcases member with rfl | member
-      · let current : Fin (rawDiagram diagram).regionCount :=
+      by_cases hroot : record = {
+          index := regionBase
+          wireBase := wireBase
+          localWires := localWires
+          occurrences := occurrenceDrafts (regionBase + 1) nodeBase items
+        }
+      · subst record
+        let current : Fin (rawDiagram diagram).regionCount :=
           ⟨regionBase, regionAllocation.index_lt ⟨0, by simp⟩⟩
         let bounded := occurrenceDrafts_bounded diagram regionBase
           (regionBase + 1) nodeBase (wireBase + localWires)
@@ -3148,12 +3169,17 @@ private theorem regionRecords_owned (region : Region wires rels) :
           nodeBase (wireBase + localWires)
           (outerWires.extend wireBase localWires) binders items
           nestedAllocated draft draftMember
-      · exact itemRecords_owned items diagram regionBase (regionBase + 1)
+      · have member : record ∈ itemRecords (regionBase + 1) nodeBase
+            (wireBase + localWires) items := by
+          rcases member with heq | hmember
+          · exact False.elim (hroot heq)
+          · exact hmember
+        exact itemRecords_owned items diagram regionBase (regionBase + 1)
           nodeBase (wireBase + localWires)
           (outerWires.extend wireBase localWires) binders nestedAllocated
           record member
 
-private theorem openRegionRecords_owned
+private noncomputable def openRegionRecords_owned
     (diagram : VisualProof.Diagram.OpenDiagram arity) :
     ∀ record, record ∈ openRegionRecords diagram →
       record.OwnedIn diagram := by
@@ -3228,19 +3254,24 @@ private theorem openRegionRecords_unique_index
   subst secondPosition
   exact firstEq.symm.trans secondEq
 
-private theorem record_localOccurrences
+private structure LocalOccurrencesCertificate
+    (diagram : VisualProof.Diagram.OpenDiagram arity)
+    (record : RegionRecord)
+    (current : Fin (rawDiagram diagram).regionCount) where
+  bounded : ∀ draft, draft ∈ record.occurrences →
+    draft.Bounded (rawDiagram diagram).regionCount
+      (rawDiagram diagram).nodeCount
+  mem_iff : ∀ occurrence,
+    occurrence ∈ Elaboration.localOccurrences (rawDiagram diagram) current ↔
+      occurrence ∈ realizeOccurrenceDrafts record.occurrences bounded
+
+private noncomputable def record_localOccurrences
     (diagram : VisualProof.Diagram.OpenDiagram arity)
     (record : RegionRecord)
     (recordMember : record ∈ openRegionRecords diagram)
     (current : Fin (rawDiagram diagram).regionCount)
     (currentIndex : current.val = record.index) :
-    ∃ bounded : ∀ draft, draft ∈ record.occurrences →
-        draft.Bounded (rawDiagram diagram).regionCount
-          (rawDiagram diagram).nodeCount,
-      ∀ occurrence,
-        occurrence ∈ Elaboration.localOccurrences
-            (rawDiagram diagram) current ↔
-          occurrence ∈ realizeOccurrenceDrafts record.occurrences bounded := by
+    LocalOccurrencesCertificate diagram record current := by
   obtain ⟨ownedCurrent, bounded, ownedIndex, owned⟩ :=
     openRegionRecords_owned diagram record recordMember
   have ownedCurrentEq : ownedCurrent = current := by
@@ -3473,21 +3504,21 @@ private theorem openRegionRecords_wire_coverage
   rw [length] at wireLt
   omega
 
-private def RegionRecord.WiresOwnedIn
+private structure RegionRecord.WiresOwnedIn
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
-    (record : RegionRecord) : Prop :=
-  ∃ (current : Fin (rawDiagram diagram).regionCount)
-    (wireEnd : record.wireBase + record.localWires ≤
-      (rawDiagram diagram).wireCount),
-    current.val = record.index ∧
-      ∀ localWire : Fin record.localWires,
-        ((rawDiagram diagram).wires
-          ⟨record.wireBase + localWire.val, by
-            have := localWire.isLt
-            exact Nat.lt_of_lt_of_le (by omega) wireEnd⟩).scope = current
+    (record : RegionRecord) where
+  current : Fin (rawDiagram diagram).regionCount
+  wireEnd : record.wireBase + record.localWires ≤
+    (rawDiagram diagram).wireCount
+  index_eq : current.val = record.index
+  local_scope : ∀ localWire : Fin record.localWires,
+    ((rawDiagram diagram).wires
+      ⟨record.wireBase + localWire.val, by
+        have := localWire.isLt
+        exact Nat.lt_of_lt_of_le (by omega) wireEnd⟩).scope = current
 
 private def RegionRecordsWiresOwnedMotive
-    (wires : Nat) (rels : RelCtx) (region : Region wires rels) : Prop :=
+    (wires : Nat) (rels : RelCtx) (region : Region wires rels) : Type :=
   ∀ {openArity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (regionKind : RegionDraft)
@@ -3500,7 +3531,7 @@ private def RegionRecordsWiresOwnedMotive
       record.WiresOwnedIn diagram
 
 private def ItemRecordsWiresOwnedMotive
-    (wires : Nat) (rels : RelCtx) (item : Item wires rels) : Prop :=
+    (wires : Nat) (rels : RelCtx) (item : Item wires rels) : Type :=
   ∀ {openArity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (current regionBase nodeBase wireBase : Nat)
@@ -3512,7 +3543,7 @@ private def ItemRecordsWiresOwnedMotive
       record.WiresOwnedIn diagram
 
 private def ItemsRecordsWiresOwnedMotive
-    (wires : Nat) (rels : RelCtx) (items : ItemSeq wires rels) : Prop :=
+    (wires : Nat) (rels : RelCtx) (items : ItemSeq wires rels) : Type :=
   ∀ {openArity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (current regionBase nodeBase wireBase : Nat)
@@ -3523,7 +3554,7 @@ private def ItemsRecordsWiresOwnedMotive
     ∀ record, record ∈ itemRecords regionBase nodeBase wireBase items →
       record.WiresOwnedIn diagram
 
-private theorem itemRecords_wires_owned (items : ItemSeq wires rels) :
+private noncomputable def itemRecords_wires_owned (items : ItemSeq wires rels) :
     ItemsRecordsWiresOwnedMotive wires rels items := by
   apply ItemSeq.rec
       (motive_1 := RegionRecordsWiresOwnedMotive)
@@ -3563,8 +3594,14 @@ private theorem itemRecords_wires_owned (items : ItemSeq wires rels) :
               (left := List.replicate localWires regionBase)
             simpa only [List.length_replicate, nestedFlat] using right
         }
-      rcases member with rfl | member
-      · have localAllocation : List.SegmentAt
+      by_cases hroot : record = {
+          index := regionBase
+          wireBase := wireBase
+          localWires := localWires
+          occurrences := occurrenceDrafts (regionBase + 1) nodeBase items
+        }
+      · subst record
+        have localAllocation : List.SegmentAt
             (flattenOpen diagram).wireScopes
             (List.replicate localWires regionBase) wireBase :=
           wireAllocation.left
@@ -3585,13 +3622,26 @@ private theorem itemRecords_wires_owned (items : ItemSeq wires rels) :
           simpa [wire, slot] using lookup
         apply Fin.ext
         exact scopeEq
-      · exact itemsOwned diagram regionBase (regionBase + 1) nodeBase
+      · have member : record ∈ itemRecords (regionBase + 1) nodeBase
+            (wireBase + localWires) items := by
+          rcases member with heq | hmember
+          · exact False.elim (hroot heq)
+          · exact hmember
+        exact itemsOwned diagram regionBase (regionBase + 1) nodeBase
           (wireBase + localWires) (outerWires.extend wireBase localWires)
           binders nestedAllocated record member
   case atom =>
-      simp [ItemRecordsWiresOwnedMotive, itemRecordBlock]
+      intro sourceRels arity sourceWires relation arguments
+      intro openArity diagram current regionBase nodeBase wireBase wireMap
+        binders allocated record member
+      change record ∈ ([] : List RegionRecord) at member
+      exact False.elim (List.not_mem_nil member)
   case identity =>
-      simp [ItemRecordsWiresOwnedMotive, itemRecordBlock]
+      intro sourceWires sourceRels arity arguments
+      intro openArity diagram current regionBase nodeBase wireBase wireMap
+        binders allocated record member
+      change record ∈ ([] : List RegionRecord) at member
+      exact False.elim (List.not_mem_nil member)
   case cut =>
       intro sourceWires sourceRels body bodyOwned
       intro openArity diagram current regionBase nodeBase wireBase wireMap
@@ -3608,7 +3658,10 @@ private theorem itemRecords_wires_owned (items : ItemSeq wires rels) :
         (by simpa [flattenItem] using allocated) record
         (by simpa [itemRecordBlock] using member)
   case nil =>
-      simp [ItemsRecordsWiresOwnedMotive, itemRecords]
+      intro sourceWires sourceRels openArity diagram current regionBase
+        nodeBase wireBase wireMap binders allocated record member
+      change record ∈ ([] : List RegionRecord) at member
+      exact False.elim (List.not_mem_nil member)
   case cons =>
       intro sourceWires sourceRels head tail headOwned tailOwned
       intro openArity diagram current regionBase nodeBase wireBase wireMap
@@ -3632,16 +3685,22 @@ private theorem itemRecords_wires_owned (items : ItemSeq wires rels) :
         wireBase wireMap binders head
       rw [headLengths.1, headLengths.2.1, headLengths.2.2] at tailAllocated
       rw [itemRecords_cons, List.mem_append] at member
-      rcases member with member | member
+      by_cases hhead : record ∈ itemRecordBlock regionBase nodeBase
+          wireBase head
       · exact headOwned diagram current regionBase nodeBase wireBase wireMap
-          binders headAllocated record member
-      · exact tailOwned diagram current
+          binders headAllocated record hhead
+      · have member : record ∈ itemRecords
+            (regionBase + (itemCounts head).regions)
+            (nodeBase + (itemCounts head).nodes)
+            (wireBase + (itemCounts head).wires) tail := by
+          exact member.resolve_left hhead
+        exact tailOwned diagram current
           (regionBase + (itemCounts head).regions)
           (nodeBase + (itemCounts head).nodes)
           (wireBase + (itemCounts head).wires) wireMap binders tailAllocated
           record member
 
-private theorem regionRecords_wires_owned (region : Region wires rels) :
+private noncomputable def regionRecords_wires_owned (region : Region wires rels) :
     RegionRecordsWiresOwnedMotive wires rels region := by
   cases region with
   | mk localWires items =>
@@ -3677,8 +3736,14 @@ private theorem regionRecords_wires_owned (region : Region wires rels) :
               (left := List.replicate localWires regionBase)
             simpa only [List.length_replicate, nestedFlat] using right
         }
-      rcases member with rfl | member
-      · have localAllocation : List.SegmentAt
+      by_cases hroot : record = {
+          index := regionBase
+          wireBase := wireBase
+          localWires := localWires
+          occurrences := occurrenceDrafts (regionBase + 1) nodeBase items
+        }
+      · subst record
+        have localAllocation : List.SegmentAt
             (flattenOpen diagram).wireScopes
             (List.replicate localWires regionBase) wireBase :=
           wireAllocation.left
@@ -3699,12 +3764,17 @@ private theorem regionRecords_wires_owned (region : Region wires rels) :
           simpa [wire, slot] using lookup
         apply Fin.ext
         exact scopeEq
-      · exact itemRecords_wires_owned items diagram regionBase
+      · have member : record ∈ itemRecords (regionBase + 1) nodeBase
+            (wireBase + localWires) items := by
+          rcases member with heq | hmember
+          · exact False.elim (hroot heq)
+          · exact hmember
+        exact itemRecords_wires_owned items diagram regionBase
           (regionBase + 1) nodeBase (wireBase + localWires)
           (outerWires.extend wireBase localWires) binders nestedAllocated
           record member
 
-private theorem openRegionRecords_wires_owned
+private noncomputable def openRegionRecords_wires_owned
     (diagram : VisualProof.Diagram.OpenDiagram arity) :
     ∀ record, record ∈ openRegionRecords diagram →
       record.WiresOwnedIn diagram := by
@@ -3736,19 +3806,25 @@ private theorem rawDiagram_external_index_scope
   rw [List.getElem_append_left (by simpa using external)]
   simp
 
-private theorem record_exactScopeWires
+private structure ExactScopeCertificate
+    (diagram : VisualProof.Diagram.OpenDiagram arity)
+    (record : RegionRecord)
+    (current : Fin (rawDiagram diagram).regionCount) where
+  wireEnd : record.wireBase + record.localWires ≤
+    (rawDiagram diagram).wireCount
+  mem_iff : ∀ wire,
+    wire ∈ Elaboration.exactScopeWires (rawDiagram diagram) current ↔
+      wire ∈ wireSlice (rawDiagram diagram) record.wireBase
+        record.localWires wireEnd
+
+private noncomputable def record_exactScopeWires
     (diagram : VisualProof.Diagram.OpenDiagram arity)
     (record : RegionRecord)
     (recordMember : record ∈ openRegionRecords diagram)
     (current : Fin (rawDiagram diagram).regionCount)
     (currentIndex : current.val = record.index)
     (notRoot : current ≠ (rawDiagram diagram).root) :
-    ∃ wireEnd : record.wireBase + record.localWires ≤
-        (rawDiagram diagram).wireCount,
-      ∀ wire,
-        wire ∈ Elaboration.exactScopeWires (rawDiagram diagram) current ↔
-          wire ∈ wireSlice (rawDiagram diagram) record.wireBase
-            record.localWires wireEnd := by
+    ExactScopeCertificate diagram record current := by
   obtain ⟨ownedCurrent, wireEnd, ownedIndex, localScope⟩ :=
     openRegionRecords_wires_owned diagram record recordMember
   have ownedCurrentEq : ownedCurrent = current := by
@@ -5128,7 +5204,7 @@ private theorem NodeDraft.argument_of_identity
   subst draft
   rfl
 
-private theorem compileEncodedAtom
+private noncomputable def compileEncodedAtom
     {openArity sourceWires arity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (current : Fin (rawDiagram diagram).regionCount)
@@ -5158,8 +5234,19 @@ private theorem compileEncodedAtom
   obtain ⟨concreteRegion, concreteBinder, nodeEq, regionValue, binderValue⟩ :=
     rawDiagram_node_atom_lookup diagram node current.val
       (binderMap arity relation) arity (wireMap ∘ arguments) draftEq
-  obtain ⟨binderBounded, binderLookup⟩ :=
-    binderAgreement arity relation
+  have binderBounded : binderMap arity relation <
+      (rawDiagram diagram).regionCount := by
+    rw [← binderValue]
+    exact concreteBinder.isLt
+  have binderLookup : binderContext
+      ⟨binderMap arity relation, binderBounded⟩ = some ⟨arity, relation⟩ := by
+    obtain ⟨otherBounded, lookup⟩ := binderAgreement arity relation
+    have binderEq :
+        (⟨binderMap arity relation, binderBounded⟩ :
+          Fin (rawDiagram diagram).regionCount) =
+        ⟨binderMap arity relation, otherBounded⟩ := Fin.ext rfl
+    rw [binderEq]
+    exact lookup
   have concreteBinderEq : concreteBinder =
       (⟨binderMap arity relation, binderBounded⟩ :
         Fin (rawDiagram diagram).regionCount) :=
@@ -5189,7 +5276,7 @@ private theorem compileEncodedAtom
         (.arg port.val) occurs (resolved port)
         (sequenceFin_sound resolvedEq port)).symm
 
-private theorem compileEncodedIdentity
+private noncomputable def compileEncodedIdentity
     {openArity sourceWires arity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (current : Fin (rawDiagram diagram).regionCount)
@@ -5241,7 +5328,7 @@ private theorem compileEncodedIdentity
 
 private def RegionCompileMotive
     (sourceWires : Nat) (rels : RelCtx)
-    (source : Region  sourceWires rels) : Prop :=
+    (source : Region  sourceWires rels) : Type :=
   ∀ {openArity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (regionKind : RegionDraft)
@@ -5272,7 +5359,7 @@ private def RegionCompileMotive
 
 private def ItemCompileMotive
     (sourceWires : Nat) (rels : RelCtx)
-    (source : Item  sourceWires rels) : Prop :=
+    (source : Item  sourceWires rels) : Type :=
   ∀ {openArity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (currentRegion regionBase nodeBase wireBase : Nat)
@@ -5307,7 +5394,7 @@ private def ItemCompileMotive
 
 private def ItemsCompileMotive
     (sourceWires : Nat) (rels : RelCtx)
-    (source : ItemSeq  sourceWires rels) : Prop :=
+    (source : ItemSeq  sourceWires rels) : Type :=
   ∀ {openArity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (currentRegion regionBase nodeBase wireBase : Nat)
@@ -5342,7 +5429,7 @@ private def ItemsCompileMotive
     ItemIso  wireEquiv rels
       (source.get (Fin.cast (occurrenceDrafts_length source) index)) target
 
-private theorem compileEncodedAtomMotive
+private noncomputable def compileEncodedAtomMotive
     (relation : RelVar rels arity)
     (arguments : Fin arity → Fin sourceWires) :
     ItemCompileMotive sourceWires rels (.atom relation arguments) := by
@@ -5367,7 +5454,7 @@ private theorem compileEncodedAtomMotive
     (Elaboration.compileRegion? (rawDiagram diagram) fuel) target
   simpa [itemOccurrenceDraft, node] using compiled
 
-private theorem compileEncodedIdentityMotive
+private noncomputable def compileEncodedIdentityMotive
     (arguments : Fin arity → Fin sourceWires) :
     ItemCompileMotive sourceWires rels (.identity arity arguments) := by
   intro openArity diagram currentRegion regionBase nodeBase wireBase wireMap
@@ -5388,7 +5475,7 @@ private theorem compileEncodedIdentityMotive
     (Elaboration.compileRegion? (rawDiagram diagram) fuel) target
   simpa [itemOccurrenceDraft, node] using compiled
 
-private theorem compileEncodedCutMotive
+private noncomputable def compileEncodedCutMotive
     (body : Region  sourceWires rels)
     (bodyCompiled : RegionCompileMotive sourceWires rels body) :
     ItemCompileMotive sourceWires rels (.cut body) := by
@@ -5450,7 +5537,7 @@ private theorem compileEncodedCutMotive
         child rfl childNotRoot context wireEquiv wireAgreement binderContext
         binderAgreement childExact fuel childResult childResultEq
 
-private theorem compileEncodedBubbleMotive
+private noncomputable def compileEncodedBubbleMotive
     (body : Region  sourceWires (arity :: rels))
     (bodyCompiled : RegionCompileMotive sourceWires (arity :: rels) body) :
     ItemCompileMotive sourceWires rels (.bubble arity body) := by
@@ -5521,7 +5608,7 @@ private theorem compileEncodedBubbleMotive
         wireAgreement (binderContext.push child arity) childBinderAgreement
         childExact fuel childResult childResultEq
 
-private theorem compileEncodedNilMotive :
+private noncomputable def compileEncodedNilMotive :
     ItemsCompileMotive sourceWires rels (.nil : ItemSeq  sourceWires rels) := by
   intro openArity diagram currentRegion regionBase nodeBase wireBase wireMap
     binders allocated recordsIncluded bindersBefore current currentValue
@@ -5529,7 +5616,7 @@ private theorem compileEncodedNilMotive :
     binderAgreement fuel index
   exact Fin.elim0 index
 
-private theorem compileEncodedConsMotive
+private noncomputable def compileEncodedConsMotive
     (head : Item  sourceWires rels)
     (tail : ItemSeq  sourceWires rels)
     (headCompiled : ItemCompileMotive sourceWires rels head)
@@ -5680,7 +5767,7 @@ private theorem compileEncodedConsMotive
       compiledTail
     simpa [tailItemIndex] using result
 
-private theorem compileEncodedRegionMotive
+private noncomputable def compileEncodedRegionMotive
     (localWires : Nat) (items : ItemSeq (sourceWires + localWires) rels)
     (itemsCompiled : ItemsCompileMotive (sourceWires + localWires) rels items) :
     RegionCompileMotive sourceWires rels (.mk localWires items) := by
@@ -5811,7 +5898,7 @@ private theorem compileEncodedRegionMotive
             (targetItems.get targetIndex) (by simpa [targetIndex] using compiledAt)
           simpa [positions, draftIndex, targetIndex] using itemResult
 
-private theorem compileEncodedItemsCore
+private noncomputable def compileEncodedItemsCore
     (items : ItemSeq sourceWires rels) :
     ItemsCompileMotive sourceWires rels items := by
   apply ItemSeq.rec

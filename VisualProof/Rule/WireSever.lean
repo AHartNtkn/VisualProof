@@ -45,10 +45,10 @@ structure Open
       collapse (target.boundary position) =
         source.boundary position
   body :
-    Core.Isomorphic source.body
+    RegionIso (FiniteEquiv.refl (Fin source.externalClasses)) [] source.body
       (target.body.renameWires collapse)
 
-def Open.iso
+noncomputable def Open.iso
     (sourceIso : OpenDiagramIso source source')
     (step : Open source target)
     (targetIso : OpenDiagramIso target target') :

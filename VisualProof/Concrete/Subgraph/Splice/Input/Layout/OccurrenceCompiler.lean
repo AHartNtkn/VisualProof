@@ -197,7 +197,7 @@ theorem compilePatternNode_at_site
     exact layout.patternRelationRenaming_lookup hadmissible patternWitness
       patternLeaf outputWitness outputLeaf relation
 
-theorem compileHostNode_at_seam_iso_of_maps
+noncomputable def compileHostNode_at_seam_iso_of_maps
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -280,7 +280,7 @@ theorem compileHostNode_at_seam_iso_of_maps
   simpa only [sourcePrepared, transform, Item.castWiresEq_eq_renameWires,
     Item.renameWires_renameRelations, Item.renameWires_comp, hfactor] using hiso
 
-theorem compileHostNode_at_seam_iso
+noncomputable def compileHostNode_at_seam_iso
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -332,7 +332,7 @@ theorem compileHostNode_at_seam_iso
   simpa [Function.comp_def, hostSeamWireMapOfNonempty] using
     congrArg Fin.val hseam
 
-theorem compilePatternNode_at_seam_iso
+noncomputable def compilePatternNode_at_seam_iso
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -373,7 +373,7 @@ theorem compilePatternNode_at_seam_iso
       ((sourceItem.renameWires
         (layout.patternSeamPreparedWireOfNonempty hadmissible host
           patternWitness patternLeaf hnonempty)).renameRelations
-        (fun {arity} relation =>
+        (fun {_} relation =>
           layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
             outputWitness outputLeaf
             (layout.coalescedTerminalRelationRenaming hadmissible
@@ -442,7 +442,7 @@ theorem compilePatternNode_at_seam_iso
     Item.castWiresEq_eq_renameWires, Item.renameWires_renameRelations,
     Item.renameWires_comp, hfactor, hrelations] using hiso
 
-theorem seamRecursiveRegionIso_of_maps
+noncomputable def seamRecursiveRegionIso_of_maps
     (combined : FiniteEquiv (Fin sourceCombined) (Fin targetCombined))
     (targetEq : targetOuter = targetCombined)
     (preparedWire : Fin sourceOuter → Fin sourceCombined)
@@ -486,7 +486,7 @@ theorem seamRecursiveRegionIso_of_maps
   rw [hequiv] at hcombined
   exact hcombined
 
-theorem hostSeamRecursiveRegionIso
+noncomputable def hostSeamRecursiveRegionIso
     {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -578,7 +578,7 @@ theorem hostSeamRecursiveRegionIso
   rw [hequiv] at hcombined
   exact hcombined
 
-theorem patternSeamRecursiveRegionIso
+noncomputable def patternSeamRecursiveRegionIso
     {input : Input }
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -619,7 +619,7 @@ theorem patternSeamRecursiveRegionIso
       ((sourceBody.renameWires
         (layout.patternSeamPreparedWireOfNonempty hadmissible host
           patternWitness patternLeaf hnonempty)).renameRelations
-        (fun {arity} relation =>
+        (fun {_} relation =>
           layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
             outputWitness outputLeaf
             (layout.coalescedTerminalRelationRenaming hadmissible
@@ -775,7 +775,7 @@ theorem compilePatternRootNode_at_site
 
 /-- Empty-proxy root-node compilation, transported through the same seam
 equivalence used by the host items. -/
-theorem compilePatternRootNode_at_seam_iso
+noncomputable def compilePatternRootNode_at_seam_iso
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -1015,7 +1015,7 @@ theorem compilePatternNode_at_material_of_maps
     hregion sourceContext targetContext sourceExact targetExact sourceBinders
     targetBinders sourceCover targetCover sourceEnumeration node hnodeAtRegion
 
-theorem compilePatternNode_at_material_iso
+noncomputable def compilePatternNode_at_material_iso
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -1105,7 +1105,7 @@ theorem compilePatternNode_at_material_iso
     Item.renameWires_renameRelations, Item.renameWires_comp,
     hfactor] using hiso
 
-theorem materialRecursiveRegionIso
+noncomputable def materialRecursiveRegionIso
     (input : Input )
     (layout : PlugLayout input)
     (region : Fin input.pattern.val.diagram.regionCount)
@@ -1179,7 +1179,7 @@ theorem materialRecursiveRegionIso
   rw [hextended] at hcombined
   exact hcombined
 
-theorem compilePatternRegion_at_material
+noncomputable def compilePatternRegion_at_material
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -1505,7 +1505,7 @@ theorem compilePatternRegion_at_material
 /-- Exact compiler simulation for any retained frame region whose subtree
 cannot cross the splice site.  The two admissible geometries are strict
 descent below the site and a disjoint sibling subtree. -/
-theorem compileFrameRegion_off_site
+noncomputable def compileFrameRegion_off_site
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -1547,10 +1547,9 @@ theorem compileFrameRegion_off_site
     (htarget : Elaboration.compileRegion?  layout.plugRaw
       targetFuel (layout.frameRegion region) targetOuter targetBinders =
         some targetBody) :
-    Nonempty (RegionIsoPresentation
-      (FiniteEquiv.refl (Fin targetOuter.length)) targetRels
+    RegionIso (FiniteEquiv.refl (Fin targetOuter.length)) targetRels
       ((sourceBody.renameWires outerMap).renameRelations relationMap)
-      targetBody) := by
+      targetBody := by
   induction sourceFuel generalizing targetFuel region sourceOuter targetOuter
       sourceRels targetRels sourceBinders targetBinders sourceBody targetBody with
   | zero => simp [Elaboration.compileRegion?] at hsource
@@ -1677,7 +1676,7 @@ theorem compileFrameRegion_off_site
                               Elaboration.compileOccurrenceWith?,
                               htargetChild, htargetChildResult] at htargetItem
                             subst targetItem
-                            obtain ⟨hrecursive⟩ := ih targetFuel child hchildNeSite
+                            have hrecursive := ih targetFuel child hchildNeSite
                               hchildPosition sourceExtended targetExtended
                               hsourceChildExact htargetChildExact sourceBinders
                               targetBinders
@@ -1701,7 +1700,7 @@ theorem compileFrameRegion_off_site
                             have htransport :=
                               layout.frameRecursiveRegionIso  input region
                                 hne sourceOuter targetOuter outerMap relationMap
-                                compiledSource compiledTarget hrecursive.iso
+                                compiledSource compiledTarget hrecursive
                             simpa [Item.renameWires, Item.renameRelations] using
                               ItemIso.cut htransport
                 | bubble parent arity =>
@@ -1744,7 +1743,7 @@ theorem compileFrameRegion_off_site
                               Elaboration.compileOccurrenceWith?,
                               htargetChild, htargetChildResult] at htargetItem
                             subst targetItem
-                            obtain ⟨hrecursive⟩ := ih targetFuel child hchildNeSite
+                            have hrecursive := ih targetFuel child hchildNeSite
                               hchildPosition sourceExtended targetExtended
                               hsourceChildExact htargetChildExact
                               (sourceBinders.push child arity)
@@ -1771,7 +1770,7 @@ theorem compileFrameRegion_off_site
                               layout.frameRecursiveRegionIso  input region
                                 hne sourceOuter targetOuter outerMap
                                 (RelationRenaming.lift relationMap arity)
-                                compiledSource compiledTarget hrecursive.iso
+                                compiledSource compiledTarget hrecursive
                             simpa [Item.renameWires, Item.renameRelations] using
                               ItemIso.bubble htransport
           simp only [Elaboration.compileRegion?] at hsource htarget
@@ -1870,17 +1869,11 @@ theorem compileFrameRegion_off_site
                     sourceOuter targetOuter outerMap relationMap sourceItems]
                   simpa only [Elaboration.finishRegion, sourcePrepared,
                     targetPrepared, localEquiv, extended, targetEq] using
-                    (⟨RegionIsoPresentation.mk
-                      (layout.frameLocalWireEquiv region hne) positions hitemAt⟩ :
-                      Nonempty (RegionIsoPresentation
-                        (FiniteEquiv.refl (Fin targetOuter.length)) targetRels
-                        (.mk (Elaboration.exactScopeWires
-                          input.coalesceFrameRaw region).length sourcePrepared)
-                        (.mk (Elaboration.exactScopeWires layout.plugRaw
-                          (layout.frameRegion region)).length targetPrepared)))
+                    RegionIso.mk (layout.frameLocalWireEquiv region hne)
+                      (ItemSeqIso.permute positions hitemAt)
 
 /-- Strict-descendant specialization of `compileFrameRegion_off_site`. -/
-theorem compileFrameRegion_below_site
+noncomputable def compileFrameRegion_below_site
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -1923,15 +1916,15 @@ theorem compileFrameRegion_below_site
     RegionIso  (FiniteEquiv.refl (Fin targetOuter.length)) targetRels
       ((sourceBody.renameWires outerMap).renameRelations relationMap)
       targetBody := by
-  exact (Classical.choice (layout.compileFrameRegion_off_site  input hadmissible
+  exact layout.compileFrameRegion_off_site input hadmissible
     sourceFuel targetFuel region hne (Or.inl hbelow) sourceOuter targetOuter
     sourceExact targetExact sourceBinders targetBinders sourceCover targetCover
     sourceEnumeration outerMap outerSpec relationMap relationSpec sourceBody
-    targetBody hsource htarget)).iso
+    targetBody hsource htarget
 
 /-- Disjoint-subtree specialization of `compileFrameRegion_off_site`, used
 for siblings of the distinguished root-to-site route. -/
-theorem compileFrameRegion_away_from_site
+noncomputable def compileFrameRegion_away_from_site
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -1978,11 +1971,11 @@ theorem compileFrameRegion_away_from_site
     subst region
     exact haway
       (Diagram.Encloses.refl input.coalesceFrameRaw input.site)
-  exact (Classical.choice (layout.compileFrameRegion_off_site  input hadmissible
+  exact layout.compileFrameRegion_off_site input hadmissible
     sourceFuel targetFuel region hne (Or.inr haway) sourceOuter targetOuter
     sourceExact targetExact sourceBinders targetBinders sourceCover targetCover
     sourceEnumeration outerMap outerSpec relationMap relationSpec sourceBody
-    targetBody hsource htarget)).iso
+    targetBody hsource htarget
 
 /-- Every retained route witnesses concrete enclosure. -/
 theorem RegionRoute.encloses
@@ -2023,7 +2016,7 @@ theorem RegionRoute.distinctSibling_away
 /-- Exact simulation of one nonfocused occurrence in an enclosing frame.  A
 node is transported directly; a child occurrence is compiled by the
 disjoint-subtree theorem using the caller-supplied sibling geometry. -/
-theorem compileFrameOccurrence_away_from_site
+noncomputable def compileFrameOccurrence_away_from_site
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
