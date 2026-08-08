@@ -136,3 +136,40 @@ git diff --check
 ~~~
 exit 0
 ~~~
+
+## Review round 2 fix
+
+The conditional Means audit now strips line and nested block comments before
+parsing, starts only at the owning def Means declaration, stops at the next
+top-level declaration, and requires a match request with inside that body. It
+accepts only the ten ordered dot-constructor alternatives, rejects wildcard and
+every other top-level alternative, and reports both a missing match and the
+empty exact roster when the body is vacuous.
+
+### Commands and outputs
+
+~~~
+/tmp/task-9-roster-audit.BxWSqp/scripts/audit-lean-authority.sh roster
+~~~
+
+The ephemeral source contains the review reproduction: all ten request cases
+inside a block comment followed by def Means := False.
+
+~~~
+commented-means status=1
+Refinement.Means lacks required match request with
+Refinement.Means request constructor cases roster mismatch
+expected:
+boundRelationSpawn
+wireJoin
+erasure
+wireSever
+iteration
+deiteration
+doubleCutIntro
+doubleCutElim
+vacuousIntro
+vacuousElim
+actual:
+roster: 2 execution-roster/absence violation(s)
+~~~

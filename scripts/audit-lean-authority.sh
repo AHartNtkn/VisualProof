@@ -325,49 +325,129 @@ reject_roster_paths() {
   done
 }
 
-means_request_cases() {
+means_request_alternatives() {
   local file=$1
 
   awk '
-    /match[[:space:]]+request[[:space:]]+with/ {
-      in_request_match = 1
-      next
-    }
-    in_request_match && /^[[:space:]]*\|[[:space:]]*\./ {
-      line = $0
-      match(line, /^[[:space:]]*/)
-      indentation = RLENGTH
-      if (!branch_indentation_set) {
-        branch_indentation = indentation
-        branch_indentation_set = 1
+    function without_comments(line,    out, position, pair, char) {
+      out = ""
+      position = 1
+      while (position <= length(line)) {
+        pair = substr(line, position, 2)
+        char = substr(line, position, 1)
+        if (comment_depth > 0) {
+          if (pair == "/-") {
+            comment_depth++
+            position += 2
+          } else if (pair == "-/") {
+            comment_depth--
+            position += 2
+          } else {
+            position++
+          }
+        } else if (pair == "/-") {
+          comment_depth = 1
+          position += 2
+        } else if (pair == "--") {
+          break
+        } else {
+          out = out char
+          position++
+        }
       }
-      if (indentation != branch_indentation) next
-      sub(/^[[:space:]]*\|[[:space:]]*\./, "", line)
-      sub(/[[:space:]].*$/, "", line)
-      print line
+      return out
+    }
+    function indentation(line) {
+      match(line, /^[[:space:]]*/)
+      return RLENGTH
+    }
+    {
+      code = without_comments($0)
+      if (!in_means) {
+        if (code ~ /^def[[:space:]]+Means([[:space:]]|$)/) {
+          in_means = 1
+          means_indent = indentation(code)
+        }
+        next
+      }
+      if (code ~ /^[^[:space:]]/ &&
+          code ~ /^(def|theorem|structure|inductive|class|abbrev|namespace)[[:space:]]/) {
+        exit
+      }
+      if (!in_request_match) {
+        if (code ~ /match[[:space:]]+request[[:space:]]+with/) {
+          in_request_match = 1
+        }
+        next
+      }
+      if (code !~ /^[[:space:]]*\|/) next
+      branch_indent = indentation(code)
+      if (!top_branch_indent_set) {
+        top_branch_indent = branch_indent
+        top_branch_indent_set = 1
+      }
+      if (branch_indent != top_branch_indent) next
+      alternative = code
+      sub(/^[[:space:]]*\|[[:space:]]*/, "", alternative)
+      if (alternative ~ /^\.[[:alpha:]][[:alnum:]_]*/) {
+        constructor = alternative
+        sub(/^\./, "", constructor)
+        sub(/[^[:alnum:]_].*$/, "", constructor)
+        print "case\t" constructor
+      } else if (alternative ~ /^_([^[:alnum:]_]|$)/) {
+        print "default\t" FNR "\t" code
+      } else {
+        print "other\t" FNR "\t" code
+      }
+    }
+    END {
+      if (!in_means) print "missing-def"
+      else if (!in_request_match) print "missing-match"
     }
   ' "$file"
 }
 
-means_request_default_cases() {
+audit_means_request_alternatives() {
   local file=$1
+  shift
+  local -a expected=("$@")
+  local -a alternatives=()
+  local -a cases=()
+  mapfile -t alternatives < <(means_request_alternatives "$file")
 
-  awk '
-    /match[[:space:]]+request[[:space:]]+with/ {
-      in_request_match = 1
-      next
-    }
-    in_request_match && /^[[:space:]]*\|/ {
-      line = $0
-      match(line, /^[[:space:]]*/)
-      indentation = RLENGTH
-      if (!branch_indentation_set) {
-        branch_indentation = indentation
-        branch_indentation_set = 1
-      }
-      if (indentation == branch_indentation && line ~ /^[[:space:]]*\|[[:space:]]*_/) print line
-    }
-  ' "$file"
+  local alternative kind payload
+  for alternative in "${alternatives[@]}"; do
+    kind=${alternative%%$'\t'*}
+    payload=${alternative#*$'\t'}
+    case "$kind" in
+      case)
+        cases+=("$payload")
+        ;;
+      default)
+        printf 'Refinement.Means wildcard/default request case: %s\n' "${payload#*$'\t'}"
+        violations=$((violations + 1))
+        ;;
+      other)
+        printf 'Refinement.Means non-constructor request case: %s\n' "${payload#*$'\t'}"
+        violations=$((violations + 1))
+        ;;
+      missing-def)
+        printf 'missing required Refinement.Means definition\n'
+        violations=$((violations + 1))
+        ;;
+      missing-match)
+        printf 'Refinement.Means lacks required match request with\n'
+        violations=$((violations + 1))
+        ;;
+      *)
+        printf 'unrecognized Refinement.Means audit record: %s\n' "$alternative"
+        violations=$((violations + 1))
+        ;;
+    esac
+  done
+
+  assert_exact_roster 'Refinement.Means request constructor cases' "${expected[@]}" \
+    < <(if (( ${#cases[@]} > 0 )); then printf '%s\n' "${cases[@]}"; fi)
 }
 
 audit_roster() {
@@ -435,14 +515,7 @@ audit_roster() {
 
   local means="$repo_root/VisualProof/Refinement/Means.lean"
   if [[ -f $means ]]; then
-    assert_exact_roster 'Refinement.Means request constructor cases' "${concrete_expected[@]}" \
-      < <(means_request_cases "$means")
-    local default_case
-    while IFS= read -r default_case; do
-      [[ -n $default_case ]] || continue
-      printf 'Refinement.Means wildcard/default request case: %s\n' "$default_case"
-      violations=$((violations + 1))
-    done < <(means_request_default_cases "$means")
+    audit_means_request_alternatives "$means" "${concrete_expected[@]}"
   fi
 
   if (( violations > 0 )); then
