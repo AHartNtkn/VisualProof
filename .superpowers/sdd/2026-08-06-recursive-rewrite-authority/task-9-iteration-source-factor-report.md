@@ -97,9 +97,9 @@ and relation indices.
 
 `SourceFactorResult` stores only `anchorLocal`, `selected`, the exact
 `route_alignment`, and the three certificate propositions
-`selected_local`, `source_iso`, and `material_iso`. Its public `descendant`
-and `remainder` accessors delegate to the route alignment, and `source_iso`
-is stated directly over those routed components. No parallel descendant
+`selected_local`, `source_presentation`, and `material_iso`. Its public
+`descendant` and `remainder` accessors delegate to the route alignment, and
+`source_iso` is derived from `source_presentation`. No parallel descendant
 carrier, relation context, diagram context, or remainder is authoritative.
 
 The production theorem `SourceFactorResult.routed_focus_eq` proves by
@@ -109,3 +109,46 @@ directly eliminable focus equation without `HEq`.
 
 Strict owner compilation, the focused module build, all four authority
 audits, the owner scans, and diff checks were rerun after this change.
+
+## Review fix 3/5: proof-relevant source presentation
+
+`SourceFactorPresentation` is an indexed inductive certificate mirroring the
+shape of `RegionIsoPresentation`. Its constructor retains the exact
+`ItemSeqIso (extendWireEquiv ambient localEquiv)` and fixes both region
+endpoints definitionally to the corresponding item presentations.
+
+`SourceFactorResult.source_presentation` instantiates that certificate with
+exactly:
+
+- ambient wire equivalence
+  `FiniteEquiv.finCast anchorLeaf.inheritedLength.symm`;
+- local wire equivalence `(anchorLocalEquiv input.val selection).symm`;
+- source endpoint `anchorBody`; and
+- target endpoint `sourceFactorTargetRegion`, the selected region conjoined
+  with the route-derived context fill and adjoined at the single
+  `anchorLocal` authority.
+
+`SourceFactorResult.source_iso` is now a derived definition obtained only by
+forgetting the retained item presentation through
+`SourceFactorPresentation.iso`. The result no longer stores an independent
+region-isomorphism witness. The presentation itself stores no compiler leaf,
+route, descendant, remainder, or count; those remain indices or are derived
+from the existing route alignment, whose `retainedLength` is still the count
+authority.
+
+`sourceFactor_complete` constructs the certificate from the existing
+partition item isomorphism. It transports the authoritative compiler source
+items across `anchorLeaf.inheritedLength`, proves that the composite carrier
+map is exactly
+`extendWireEquiv (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm)
+  (anchorLocalEquiv input.val selection).symm`, and transports the indexed
+endpoints along `anchorLeaf.bodyComputation` and the existing factored-target
+equality. The former independent `RegionIso` construction chain was removed.
+
+The modified dependency closure compiled strictly before the sole owning RED
+hole was introduced. RED then elaborated with `sourceFactor_complete` as the
+only `sorry`; GREEN replaced it with the complete indexed construction.
+Serial strict owner compilation and the focused build pass, all four authority
+audits pass, the added-line hole/semantic/search/naming scans are empty, and
+`git diff --check` passes. Existing unrelated comment text containing
+“search” or “Direct” is unchanged by this slice.
