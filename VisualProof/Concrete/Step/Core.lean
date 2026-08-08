@@ -268,8 +268,6 @@ inductive StepTag
   | deiteration
   | doubleCutIntro
   | doubleCutElim
-  | comprehensionInstantiate
-  | comprehensionAbstract
   | vacuousIntro
   | vacuousElim
   deriving DecidableEq, Repr
@@ -278,10 +276,9 @@ def StepTag.all : List StepTag :=
   [.boundRelationSpawn, .wireJoin,
     .erasure, .wireSever, .iteration, .deiteration,
     .doubleCutIntro, .doubleCutElim,
-    .comprehensionInstantiate, .comprehensionAbstract,
     .vacuousIntro, .vacuousElim]
 
-theorem StepTag.all_length : StepTag.all.length = 12 := by
+theorem StepTag.all_length : StepTag.all.length = 10 := by
   native_decide
 
 theorem StepTag.all_nodup : StepTag.all.Nodup := by
@@ -1136,10 +1133,6 @@ theorem OperationReceipt.transportOpen_result {input : Concrete.Checked }
     cases hopen
     exact ⟨mapped, htransport, rfl⟩
 
-structure OperationAbstractionOccurrence (input : Concrete.Checked ) where
-  selection : Concrete.CheckedSelection input.val
-  args : List (Fin input.val.wireCount)
-
 def selectedLayout (input : Concrete.Checked )
     (selection : Concrete.CheckedSelection input.val) :
     Concrete.FragmentLayout input.val selection := {}
@@ -1222,90 +1215,5 @@ structure OperationDeiterationWitness (input : Concrete.Checked )
     node ∈ justifier.selectedNodes → node ∉ selection.selectedNodes
   internalWires_disjoint : ∀ wire,
     wire ∈ justifier.internalWires → wire ∉ selection.internalWires
-
-/--
-One abstraction occurrence together with a concrete diagonalized relation and
-an intrinsic proof that it is exactly capture-avoiding boundary substitution
-of the supplied comprehension.
--/
-structure OperationAbstractionWitness (input : Concrete.Checked )
-    (comprehension : Concrete.CheckedOpen )
-    (occurrenceData : OperationAbstractionOccurrence input) where
-  args_length : occurrenceData.args.length = comprehension.val.boundary.length
-  assignment : Diagram.BoundaryAssignment comprehension.elaborate
-    (Fin occurrenceData.selection.touchingWires.length)
-  argument_alignment : ∀ index,
-    occurrenceData.selection.touchingWires.get (assignment.args index) =
-      occurrenceData.args.get (Fin.cast args_length.symm index)
-  all_touching_used : Function.Surjective assignment.args
-  diagonal : Concrete.CheckedOpen
-  diagonal_boundary_length : diagonal.val.boundary.length =
-    occurrenceData.selection.touchingWires.length
-  diagonal_externalClasses : diagonal.elaborate.externalClasses =
-    occurrenceData.selection.touchingWires.length
-  diagonal_boundary_identity : ∀ index,
-    Fin.cast diagonal_externalClasses
-        (diagonal.elaborate.boundary
-          (Fin.cast diagonal_boundary_length.symm index)) = index
-  diagonal_body_eq :
-    diagonal.elaborate.body.castWiresEq diagonal_externalClasses =
-      comprehension.elaborate.substituteBoundary assignment
-  externalBinders_empty : occurrenceData.selection.externalBinders = []
-  exactOccurrence : Concrete.OpenIso
-    (selectedFragment input occurrenceData.selection) diagonal.val
-
-structure OperationComprehensionAbstractPayload
-    (input : Concrete.Checked )
-    (wrap : Concrete.CheckedSelection input.val)
-    (comprehension : Concrete.CheckedOpen )
-    (occurrences : List (OperationAbstractionOccurrence input)) where
-  witnesses : ∀ index : Fin occurrences.length,
-    OperationAbstractionWitness input comprehension (occurrences.get index)
-  anchors_inside : ∀ index : Fin occurrences.length,
-    let occurrence := occurrences.get index
-    occurrence.selection.val.anchor = wrap.val.anchor ∨
-      occurrence.selection.val.anchor ∈ wrap.selectedRegions
-  nodes_inside : ∀ index : Fin occurrences.length, ∀ node,
-    node ∈ (occurrences.get index).selection.selectedNodes →
-      node ∈ wrap.selectedNodes
-  regions_inside : ∀ index : Fin occurrences.length, ∀ region,
-    region ∈ (occurrences.get index).selection.selectedRegions →
-      region ∈ wrap.selectedRegions
-  nodes_disjoint : ∀ left right : Fin occurrences.length, left ≠ right →
-    ∀ node, node ∈ (occurrences.get left).selection.selectedNodes →
-      node ∉ (occurrences.get right).selection.selectedNodes
-  regions_disjoint : ∀ left right : Fin occurrences.length, left ≠ right →
-    ∀ region, region ∈ (occurrences.get left).selection.selectedRegions →
-      region ∉ (occurrences.get right).selection.selectedRegions
-  wires_disjoint : ∀ left right : Fin occurrences.length, left ≠ right →
-    ∀ wire, wire ∈ (occurrences.get left).selection.internalWires →
-      wire ∉ (occurrences.get right).selection.internalWires
-  anchors_not_nested : ∀ left right : Fin occurrences.length, left ≠ right →
-    (occurrences.get left).selection.val.anchor ∉
-      (occurrences.get right).selection.selectedRegions
-
-structure OperationComprehensionInstantiatePayload
-    (input : Concrete.Checked )
-    (bubble : Fin input.val.regionCount)
-    (comprehension : Concrete.CheckedOpen )
-    (attachments : List (Fin input.val.wireCount))
-    (binders : List
-      (Fin comprehension.val.diagram.regionCount ×
-        Fin input.val.regionCount)) where
-  parent : Fin input.val.regionCount
-  arity : Nat
-  bubble_eq : input.val.regions bubble = .bubble parent arity
-  boundarySplit : comprehension.val.boundary.length = arity + attachments.length
-  parameterScopesProper : ∀ index : Fin attachments.length,
-    input.val.Encloses (input.val.wires (attachments.get index)).scope bubble ∧
-      (input.val.wires (attachments.get index)).scope ≠ bubble
-  binderSpine : Concrete.BinderSpine comprehension.val.diagram
-  terminalBody : binderSpine.TerminalBodyContract comprehension.val
-  binderTargets : Fin binderSpine.proxyCount → Fin input.val.regionCount
-  binderPairsExact : binders = List.ofFn fun index =>
-    (binderSpine.proxy index, binderTargets index)
-  binderTargetsProper : ∀ index,
-    input.val.Encloses (binderTargets index) bubble ∧
-      binderTargets index ≠ bubble
 
 end VisualProof.Concrete

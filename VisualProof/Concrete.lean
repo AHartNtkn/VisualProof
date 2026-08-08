@@ -7,7 +7,6 @@ import VisualProof.Concrete.Subgraph
 import VisualProof.Concrete.State
 import VisualProof.Concrete.Transport
 import VisualProof.Concrete.Operation.Structural
-import VisualProof.Concrete.Operation.Comprehension
 import VisualProof.Concrete.Step
 import VisualProof.Concrete.StepTags
 import VisualProof.Concrete.Translate

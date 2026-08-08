@@ -21,7 +21,6 @@ import VisualProof.Rule.Relation
 import VisualProof.Rule.Step
 import VisualProof.Concrete.Step
 import VisualProof.Concrete.Operation.Structural
-import VisualProof.Concrete.Operation.Comprehension
 import VisualProof.Rule.Soundness
 import VisualProof.Proof.Replay
 import VisualProof.Proof.Schema

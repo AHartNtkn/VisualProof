@@ -26,8 +26,6 @@ theorem Step.sound
       exact Iteration.sound step
   | doubleCut step =>
       exact DoubleCut.sound step
-  | comprehension step =>
-      exact Comprehension.sound step
   | vacuity step =>
       exact Vacuity.sound step
 

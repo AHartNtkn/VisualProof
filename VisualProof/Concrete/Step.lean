@@ -1,5 +1,5 @@
 import VisualProof.Concrete.Transport
-import VisualProof.Concrete.Operation.Comprehension
+import VisualProof.Concrete.Operation.Structural
 import VisualProof.Concrete.Subgraph.Splice.Input.Discrete
 
 namespace VisualProof.Concrete
@@ -20,11 +20,6 @@ structure Insertion {arity : Nat} (source : State arity) where
   frame_eq : input.frame = source.diagram
   admissible : input.Admissible
   respects : input.AttachmentsRespectBoundary
-
-/-- One supplied abstraction occurrence in the current execution state. -/
-structure AbstractionOccurrence {arity : Nat} (source : State arity) where
-  selection : CheckedSelection source.checked.val.diagram
-  args : List (Fin source.checked.val.diagram.wireCount)
 
 /-- A supplied certificate that a disjoint occurrence justifies deiteration. -/
 structure DeiterationWitness {arity : Nat} (source : State arity)
@@ -50,90 +45,7 @@ structure DeiterationWitness {arity : Nat} (source : State arity)
   internalWires_disjoint : ∀ wire,
     wire ∈ justifier.internalWires → wire ∉ selection.internalWires
 
-/-- Intrinsic capture-avoiding evidence for one abstraction occurrence. -/
-structure AbstractionWitness {arity : Nat} (source : State arity)
-    (comprehension : CheckedOpen)
-    (occurrenceData : AbstractionOccurrence source) where
-  args_length : occurrenceData.args.length = comprehension.val.boundary.length
-  assignment : Diagram.BoundaryAssignment comprehension.elaborate
-    (Fin occurrenceData.selection.touchingWires.length)
-  argument_alignment : ∀ index,
-    occurrenceData.selection.touchingWires.get (assignment.args index) =
-      occurrenceData.args.get (Fin.cast args_length.symm index)
-  all_touching_used : Function.Surjective assignment.args
-  diagonal : CheckedOpen
-  diagonal_boundary_length : diagonal.val.boundary.length =
-    occurrenceData.selection.touchingWires.length
-  diagonal_externalClasses : diagonal.elaborate.externalClasses =
-    occurrenceData.selection.touchingWires.length
-  diagonal_boundary_identity : ∀ index,
-    Fin.cast diagonal_externalClasses
-        (diagonal.elaborate.boundary
-          (Fin.cast diagonal_boundary_length.symm index)) = index
-  diagonal_body_eq :
-    diagonal.elaborate.body.castWiresEq diagonal_externalClasses =
-      comprehension.elaborate.substituteBoundary assignment
-  externalBinders_empty : occurrenceData.selection.externalBinders = []
-  exactOccurrence : OpenIso
-    (selectedFragment source.diagram occurrenceData.selection) diagonal.val
-
-/-- Supplied simultaneous abstraction evidence in the current state. -/
-structure ComprehensionAbstractPayload {arity : Nat} (source : State arity)
-    (wrap : CheckedSelection source.checked.val.diagram)
-    (comprehension : CheckedOpen)
-    (occurrences : List (AbstractionOccurrence source)) where
-  witnesses : ∀ index : Fin occurrences.length,
-    AbstractionWitness source comprehension (occurrences.get index)
-  anchors_inside : ∀ index : Fin occurrences.length,
-    let occurrence := occurrences.get index
-    occurrence.selection.val.anchor = wrap.val.anchor ∨
-      occurrence.selection.val.anchor ∈ wrap.selectedRegions
-  nodes_inside : ∀ index : Fin occurrences.length, ∀ node,
-    node ∈ (occurrences.get index).selection.selectedNodes →
-      node ∈ wrap.selectedNodes
-  regions_inside : ∀ index : Fin occurrences.length, ∀ region,
-    region ∈ (occurrences.get index).selection.selectedRegions →
-      region ∈ wrap.selectedRegions
-  nodes_disjoint : ∀ left right : Fin occurrences.length, left ≠ right →
-    ∀ node, node ∈ (occurrences.get left).selection.selectedNodes →
-      node ∉ (occurrences.get right).selection.selectedNodes
-  regions_disjoint : ∀ left right : Fin occurrences.length, left ≠ right →
-    ∀ region, region ∈ (occurrences.get left).selection.selectedRegions →
-      region ∉ (occurrences.get right).selection.selectedRegions
-  wires_disjoint : ∀ left right : Fin occurrences.length, left ≠ right →
-    ∀ wire, wire ∈ (occurrences.get left).selection.internalWires →
-      wire ∉ (occurrences.get right).selection.internalWires
-  anchors_not_nested : ∀ left right : Fin occurrences.length, left ≠ right →
-    (occurrences.get left).selection.val.anchor ∉
-      (occurrences.get right).selection.selectedRegions
-
-/-- Supplied comprehension-instantiation evidence in the current state. -/
-structure ComprehensionInstantiatePayload {arity : Nat} (source : State arity)
-    (bubble : Fin source.checked.val.diagram.regionCount)
-    (comprehension : CheckedOpen)
-    (attachments : List (Fin source.checked.val.diagram.wireCount))
-    (binders : List
-      (Fin comprehension.val.diagram.regionCount ×
-        Fin source.checked.val.diagram.regionCount)) where
-  parent : Fin source.checked.val.diagram.regionCount
-  arity : Nat
-  bubble_eq : source.checked.val.diagram.regions bubble = .bubble parent arity
-  boundarySplit : comprehension.val.boundary.length = arity + attachments.length
-  parameterScopesProper : ∀ index : Fin attachments.length,
-    source.checked.val.diagram.Encloses
-        (source.checked.val.diagram.wires (attachments.get index)).scope bubble ∧
-      (source.checked.val.diagram.wires (attachments.get index)).scope ≠ bubble
-  binderSpine : BinderSpine comprehension.val.diagram
-  terminalBody : binderSpine.TerminalBodyContract comprehension.val
-  binderTargets : Fin binderSpine.proxyCount →
-    Fin source.checked.val.diagram.regionCount
-  binderPairsExact : binders = List.ofFn fun index =>
-    (binderSpine.proxy index, binderTargets index)
-  binderTargetsProper : ∀ index,
-    source.checked.val.diagram.Encloses (binderTargets index) bubble ∧
-      binderTargets index ≠ bubble
-
-/-- The twelve concrete, proof-bearing execution requests. -/
+/-- The ten concrete, proof-bearing execution requests. -/
 inductive Step {arity : Nat} (source : State arity)
   | boundRelationSpawn (insertion : Insertion source)
   | wireJoin (first second : Fin source.checked.val.diagram.wireCount)
@@ -148,21 +60,6 @@ inductive Step {arity : Nat} (source : State arity)
       (witness : DeiterationWitness source selection)
   | doubleCutIntro (selection : CheckedSelection source.checked.val.diagram)
   | doubleCutElim (region : Fin source.checked.val.diagram.regionCount)
-  | comprehensionInstantiate
-      (bubble : Fin source.checked.val.diagram.regionCount)
-      (comprehension : CheckedOpen)
-      (attachments : List (Fin source.checked.val.diagram.wireCount))
-      (binders : List
-        (Fin comprehension.val.diagram.regionCount ×
-          Fin source.checked.val.diagram.regionCount))
-      (payload : ComprehensionInstantiatePayload source bubble comprehension
-        attachments binders)
-  | comprehensionAbstract
-      (wrap : CheckedSelection source.checked.val.diagram)
-      (comprehension : CheckedOpen)
-      (occurrences : List (AbstractionOccurrence source))
-      (payload : ComprehensionAbstractPayload source wrap comprehension
-        occurrences)
   | vacuousIntro (selection : CheckedSelection source.checked.val.diagram)
       (binderArity : Nat)
   | vacuousElim (region : Fin source.checked.val.diagram.regionCount)
@@ -176,19 +73,11 @@ def Step.tag : Step source → StepTag
   | .deiteration .. => .deiteration
   | .doubleCutIntro .. => .doubleCutIntro
   | .doubleCutElim .. => .doubleCutElim
-  | .comprehensionInstantiate .. => .comprehensionInstantiate
-  | .comprehensionAbstract .. => .comprehensionAbstract
   | .vacuousIntro .. => .vacuousIntro
   | .vacuousElim .. => .vacuousElim
 
 theorem Step.tag_mem_all (step : Step source) :
     step.tag ∈ StepTag.all := StepTag.mem_all step.tag
-
-private def AbstractionOccurrence.operation
-    (occurrence : AbstractionOccurrence source) :
-    OperationAbstractionOccurrence source.diagram where
-  selection := occurrence.selection
-  args := occurrence.args
 
 private def DeiterationWitness.operation
     (witness : DeiterationWitness source selection) :
@@ -202,108 +91,6 @@ private def DeiterationWitness.operation
   regions_disjoint := witness.regions_disjoint
   nodes_disjoint := witness.nodes_disjoint
   internalWires_disjoint := witness.internalWires_disjoint
-
-private def AbstractionWitness.operation
-    (witness : AbstractionWitness source comprehension occurrence) :
-    OperationAbstractionWitness source.diagram comprehension
-      occurrence.operation where
-  args_length := witness.args_length
-  assignment := witness.assignment
-  argument_alignment := witness.argument_alignment
-  all_touching_used := witness.all_touching_used
-  diagonal := witness.diagonal
-  diagonal_boundary_length := witness.diagonal_boundary_length
-  diagonal_externalClasses := witness.diagonal_externalClasses
-  diagonal_boundary_identity := witness.diagonal_boundary_identity
-  diagonal_body_eq := witness.diagonal_body_eq
-  externalBinders_empty := witness.externalBinders_empty
-  exactOccurrence := witness.exactOccurrence
-
-def ComprehensionInstantiatePayload.toOperation
-    (payload : ComprehensionInstantiatePayload source bubble comprehension
-      attachments binders) :
-    OperationComprehensionInstantiatePayload source.diagram bubble comprehension
-      attachments binders where
-  parent := payload.parent
-  arity := payload.arity
-  bubble_eq := payload.bubble_eq
-  boundarySplit := payload.boundarySplit
-  parameterScopesProper := payload.parameterScopesProper
-  binderSpine := payload.binderSpine
-  terminalBody := payload.terminalBody
-  binderTargets := payload.binderTargets
-  binderPairsExact := payload.binderPairsExact
-  binderTargetsProper := payload.binderTargetsProper
-
-private def ComprehensionAbstractPayload.operation
-    (payload : ComprehensionAbstractPayload source wrap comprehension
-      occurrences) :
-    OperationComprehensionAbstractPayload source.diagram wrap comprehension
-      (occurrences.map AbstractionOccurrence.operation) where
-  witnesses := by
-    intro index
-    simpa [AbstractionOccurrence.operation] using
-      (payload.witnesses (Fin.cast (by simp) index)).operation
-  anchors_inside := by
-    intro index
-    simpa [AbstractionOccurrence.operation] using
-      payload.anchors_inside (Fin.cast (by simp) index)
-  nodes_inside := by
-    intro index node member
-    exact payload.nodes_inside (Fin.cast (by simp) index) node (by simpa using member)
-  regions_inside := by
-    intro index region member
-    exact payload.regions_inside (Fin.cast (by simp) index) region (by simpa using member)
-  nodes_disjoint := by
-    intro left right unequal node member
-    let left' : Fin occurrences.length := Fin.cast (by simp) left
-    let right' : Fin occurrences.length := Fin.cast (by simp) right
-    have different : left' ≠ right' := by
-      intro equality
-      apply unequal
-      apply Fin.ext
-      simpa [left', right'] using congrArg Fin.val equality
-    intro rightMember
-    exact payload.nodes_disjoint left' right' different node
-      (by simpa [left', AbstractionOccurrence.operation] using member)
-      (by simpa [right', AbstractionOccurrence.operation] using rightMember)
-  regions_disjoint := by
-    intro left right unequal region member
-    let left' : Fin occurrences.length := Fin.cast (by simp) left
-    let right' : Fin occurrences.length := Fin.cast (by simp) right
-    have different : left' ≠ right' := by
-      intro equality
-      apply unequal
-      apply Fin.ext
-      simpa [left', right'] using congrArg Fin.val equality
-    intro rightMember
-    exact payload.regions_disjoint left' right' different region
-      (by simpa [left', AbstractionOccurrence.operation] using member)
-      (by simpa [right', AbstractionOccurrence.operation] using rightMember)
-  wires_disjoint := by
-    intro left right unequal wire member
-    let left' : Fin occurrences.length := Fin.cast (by simp) left
-    let right' : Fin occurrences.length := Fin.cast (by simp) right
-    have different : left' ≠ right' := by
-      intro equality
-      apply unequal
-      apply Fin.ext
-      simpa [left', right'] using congrArg Fin.val equality
-    intro rightMember
-    exact payload.wires_disjoint left' right' different wire
-      (by simpa [left', AbstractionOccurrence.operation] using member)
-      (by simpa [right', AbstractionOccurrence.operation] using rightMember)
-  anchors_not_nested := by
-    intro left right unequal member
-    let left' : Fin occurrences.length := Fin.cast (by simp) left
-    let right' : Fin occurrences.length := Fin.cast (by simp) right
-    have different : left' ≠ right' := by
-      intro equality
-      apply unequal
-      apply Fin.ext
-      simpa [left', right'] using congrArg Fin.val equality
-    exact payload.anchors_not_nested left' right' different
-      (by simpa [left', right', AbstractionOccurrence.operation] using member)
 
 def finish {arity : Nat} (source : State arity)
     (result : Except Error (OperationReceipt source.diagram)) :
@@ -532,13 +319,6 @@ def execute (orientation : Orientation) {arity : Nat}
       finish source (applyDoubleCutIntro source.diagram selection)
   | .doubleCutElim region =>
       finish source (applyDoubleCutElim source.diagram region)
-  | .comprehensionInstantiate bubble comprehension attachments binders payload =>
-      finish source (applyComprehensionInstantiate orientation source.diagram
-        bubble comprehension attachments binders payload.toOperation)
-  | .comprehensionAbstract wrap comprehension occurrences payload =>
-      finish source (applyComprehensionAbstract orientation source.diagram wrap
-        comprehension (occurrences.map AbstractionOccurrence.operation)
-        payload.operation)
   | .vacuousIntro selection binderArity =>
       finish source (applyVacuousIntro source.diagram selection binderArity)
   | .vacuousElim region =>
@@ -772,108 +552,6 @@ theorem execute_vacuousElim_success
   obtain ⟨raw, rawSuccess, realizes⟩ :=
     applyVacuousElim_realizes operationSuccess
   exact ⟨result, raw, rawSuccess, packed, realizes⟩
-
-/-- Structural inversion of a successful comprehension-abstraction request. -/
-theorem execute_comprehensionAbstract_success
-    {arity : Nat}
-    {source : State arity}
-    {orientation : Orientation}
-    (wrap : CheckedSelection source.checked.val.diagram)
-    (comprehension : CheckedOpen)
-    (occurrences : List (AbstractionOccurrence source))
-    (payload : ComprehensionAbstractPayload source wrap comprehension
-      occurrences)
-    {receipt : Receipt source}
-    (success : execute orientation source
-      (.comprehensionAbstract wrap comprehension occurrences payload) =
-        .ok receipt) :
-    erasurePolarity orientation
-        (concreteCutDepth source.checked.val.diagram wrap.val.anchor) ∧
-      ∃ (result : OperationReceipt source.diagram)
-        (raw : Concrete.Diagram)
-        (rawSuccess :
-          (comprehensionAbstractRaw? source.diagram wrap comprehension
-            (occurrences.map AbstractionOccurrence.operation)).map
-              Subtype.val = some raw),
-        result.toReceipt source = some receipt ∧
-        result.Realizes raw
-          (comprehensionAbstractWireProvenance source.diagram wrap
-            comprehension (occurrences.map AbstractionOccurrence.operation)
-            raw rawSuccess)
-          (comprehensionAbstractWireTransport source.diagram wrap
-            comprehension (occurrences.map AbstractionOccurrence.operation)
-            raw rawSuccess) := by
-  change finish source
-      (applyComprehensionAbstract orientation source.diagram wrap
-        comprehension (occurrences.map AbstractionOccurrence.operation)
-        payload.operation) = .ok receipt at success
-  obtain ⟨result, operationSuccess, packed⟩ :=
-    (finish_eq_ok_iff source _ receipt).1 success
-  obtain ⟨polarity, raw, rawSuccess, realizes⟩ :=
-    applyComprehensionAbstract_realizes operationSuccess
-  exact ⟨polarity, result, raw, rawSuccess, packed, realizes⟩
-
-/-- Structural inversion of a successful comprehension-instantiation request. -/
-theorem execute_comprehensionInstantiate_success
-    {arity : Nat}
-    {source : State arity}
-    {orientation : Orientation}
-    (bubble : Fin source.checked.val.diagram.regionCount)
-    (comprehension : CheckedOpen)
-    (attachments : List (Fin source.checked.val.diagram.wireCount))
-    (binders : List
-      (Fin comprehension.val.diagram.regionCount ×
-        Fin source.checked.val.diagram.regionCount))
-    (payload : ComprehensionInstantiatePayload source bubble comprehension
-      attachments binders)
-    {receipt : Receipt source}
-    (success : execute orientation source
-      (.comprehensionInstantiate bubble comprehension attachments binders
-        payload) = .ok receipt) :
-    spawnPolarity orientation
-        (concreteCutDepth source.checked.val.diagram bubble) ∧
-      ∃ result : OperationReceipt source.diagram,
-        result.toReceipt source = some receipt ∧
-        let operation := payload.toOperation
-        let initial := initialInstantiationState operation
-        ∃ copied : InstantiationState source.diagram attachments.length
-            operation.binderSpine.proxyCount,
-          instantiateCopies (input := source.diagram) (bubble := bubble)
-              (origin := source.diagram) comprehension attachments binders
-              operation initial.pendingAtoms.length initial = .ok copied ∧
-            let droppedRaw := dropInstantiationAtomsRaw copied
-            let toDroppedProvenance :
-                WireProvenance source.checked.val.diagram droppedRaw :=
-              copied.provenance.compose
-                (WireProvenance.byWireCount copied.diagram.val droppedRaw rfl)
-            let toDroppedInterface :
-                WireTransport source.checked.val.diagram droppedRaw :=
-              copied.interface.compose
-                (WireTransport.byWireCount copied.diagram.val droppedRaw rfl)
-            ∃ (raw : Concrete.Diagram)
-              (rawSuccess : vacuousElimRaw? droppedRaw copied.bubble = some raw)
-              (checked : Checked)
-              (checkSuccess : checkWellFormed raw = .ok checked),
-              result = OperationReceipt.ofChecked source.diagram raw
-                  (toDroppedProvenance.compose
-                    (vacuousElimWireProvenance rawSuccess))
-                  (toDroppedInterface.compose
-                    (vacuousElimWireTransport rawSuccess))
-                  checked checkSuccess ∧
-                result.Realizes raw
-                  (toDroppedProvenance.compose
-                    (vacuousElimWireProvenance rawSuccess))
-                  (toDroppedInterface.compose
-                    (vacuousElimWireTransport rawSuccess)) := by
-  change finish source
-      (applyComprehensionInstantiate orientation source.diagram bubble
-        comprehension attachments binders payload.toOperation) = .ok receipt
-    at success
-  obtain ⟨result, operationSuccess, packed⟩ :=
-    (finish_eq_ok_iff source _ receipt).1 success
-  obtain ⟨polarity, copied, copySuccess, realizes⟩ :=
-    applyComprehensionInstantiate_realizes operationSuccess
-  exact ⟨polarity, result, packed, copied, copySuccess, realizes⟩
 
 /-- Structural inversion of a successful supplied insertion. -/
 theorem execute_boundRelationSpawn_success

@@ -42,9 +42,9 @@ noncomputable def compiledSpliceHostView
   Classical.choice
     (siteView_complete (input.coalesceFrame hadmissible) input.site)
 
-/-- The compiler evidence at a terminal pattern body.  Its type depends only
-on the pattern and designated spine, so every executor copy of the same
-comprehension shares one canonical semantic presentation. -/
+/-- The compiler evidence at a terminal pattern body. Its type depends only
+    on the pattern and designated spine, so every executor copy shares one
+    canonical presentation. -/
 structure PatternTerminalCompilerView
     (pattern : CheckedOpen )
     (binderSpine : BinderSpine pattern.val.diagram) where
