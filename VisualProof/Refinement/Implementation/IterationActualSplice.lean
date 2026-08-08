@@ -90,7 +90,7 @@ noncomputable def iterationActualSpliceOfEmpty
     Concrete.Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels
   Region.spliceAt targetLocal targetItems material actualWire actualRelation
 
-theorem coalescedRouteTerminal_hostLexical
+noncomputable def coalescedRouteTerminal_hostLexical
     (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
@@ -131,8 +131,8 @@ theorem coalescedRouteTerminal_hostLexical
       keptItems route compiledPath witness) :
     let spliceInput := iterationInput input selection target
     let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
-    ∃ _hrels : witness.toFocus.holeRels = host.focus.holeRels,
-      HEq terminal.leaf.binders host.compilerLeaf.binders := by
+    Concrete.Splice.Input.TerminalLexical terminal.leaf.binders
+      host.compilerLeaf.binders := by
   dsimp only
   let spliceInput := iterationInput input selection target
   let anchorView := IterationAnchor.coalescedAnchorView input selection target
@@ -279,9 +279,9 @@ noncomputable def properRoute_actualSpliceIso
         witness.toFocus.holeRels),
       PSigma fun _sourceBody :
           witness.toFocus.body = Region.mk sourceLocal sourceItems =>
-      let hrels := Classical.choose
+      let hrels :=
         (coalescedRouteTerminal_hostLexical input selection target hadmissible
-          hencloses route terminal)
+          hencloses route terminal).rels_eq
       let relationWire :=
         Concrete.Splice.Input.compilerLeafOuterWire witness terminal.leaf
           host.intrinsicPath host.compilerLeaf
@@ -358,9 +358,9 @@ noncomputable def properRoute_actualSpliceIso
     spliceInput.binderSpine.bodyContainer pattern.leaf.items
   let lexical := coalescedRouteTerminal_hostLexical input selection target
     hadmissible hencloses route terminal
-  let hrels := Classical.choose lexical
+  let hrels := lexical.rels_eq
   have hbinders : HEq terminal.leaf.binders host.compilerLeaf.binders :=
-    Classical.choose_spec lexical
+    lexical.binders_eq
   let inherited :=
     Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
       witness terminal.leaf host.intrinsicPath host.compilerLeaf
@@ -489,9 +489,9 @@ noncomputable def properRoute_rootActualSpliceIso
         witness.toFocus.holeRels),
       PSigma fun _sourceBody :
           witness.toFocus.body = Region.mk sourceLocal sourceItems =>
-      let hrels := Classical.choose
+      let hrels :=
         (coalescedRouteTerminal_hostLexical input selection target hadmissible
-          hencloses route terminal)
+          hencloses route terminal).rels_eq
       let relationWire :=
         Concrete.Splice.Input.compilerLeafOuterWire witness terminal.leaf
           host.intrinsicPath host.compilerLeaf
@@ -548,9 +548,9 @@ noncomputable def properRoute_rootActualSpliceIso
     pattern.items
   let lexical := coalescedRouteTerminal_hostLexical input selection target
     hadmissible hencloses route terminal
-  let hrels := Classical.choose lexical
+  let hrels := lexical.rels_eq
   have hbinders : HEq terminal.leaf.binders host.compilerLeaf.binders :=
-    Classical.choose_spec lexical
+    lexical.binders_eq
   let inherited :=
     Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
       witness terminal.leaf host.intrinsicPath host.compilerLeaf

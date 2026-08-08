@@ -84,9 +84,8 @@ structure CompiledRouteTerminal
       (targetTrace : Concrete.Splice.CompilerTrace  input.val targetRoute
         targetWitness targetState),
     targetState.binders = startLeaf.binders →
-      ∃ _hrels : witness.toFocus.holeRels =
-          targetWitness.toFocus.holeRels,
-        HEq leaf.binders targetTrace.leaf.binders
+      Concrete.Splice.Input.TerminalLexical leaf.binders
+        targetTrace.leaf.binders
   terminalInherited : ∀ {targetPath : List Nat} {targetOuter : Nat}
       {targetBody : Region  targetOuter rels}
       {targetRoute : Concrete.Splice.RegionRoute input.val start target targetPath}
