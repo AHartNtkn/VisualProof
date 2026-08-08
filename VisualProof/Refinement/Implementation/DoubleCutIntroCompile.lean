@@ -109,6 +109,16 @@ private theorem ItemSeqIso.changeWire
   subst second
   exact iso
 
+private theorem RegionIso.changeWire
+    {first second : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    (equality : first = second)
+    {source : Region sourceWires rels}
+    {target : Region targetWires rels}
+    (iso : RegionIso first rels source target) :
+    RegionIso second rels source target := by
+  subst second
+  exact iso
+
 theorem splice_partition_eq
     (input : Concrete.Diagram)
     (context : Concrete.Elaboration.WireContext input)
@@ -342,6 +352,89 @@ theorem finishRoot_iso
       rfl
   rw [expected]
   exact items
+
+private theorem castWiresEq_self
+    (equality : wires = wires) (items : ItemSeq wires rels) :
+    items.castWiresEq equality = items := by
+  rw [ItemSeq.castWiresEq_eq_renameWires]
+  have castMap : Fin.cast equality = (id : Fin wires → Fin wires) := by
+    funext index
+    apply Fin.ext
+    rfl
+  rw [castMap, ItemSeq.renameWires_id]
+
+private theorem compileOccurrences_context_eq
+    (diagram : Concrete.Diagram)
+    (recurse : ∀ {rels : RelCtx},
+      (region : Fin diagram.regionCount) →
+      (context : Concrete.Elaboration.WireContext diagram) →
+      Concrete.Elaboration.BinderContext diagram rels →
+      Option (Region context.length rels))
+    {first second : Concrete.Elaboration.WireContext diagram}
+    (contextEq : first = second)
+    (binders : Concrete.Elaboration.BinderContext diagram rels)
+    (occurrences : List (Concrete.Elaboration.LocalOccurrence
+      diagram.regionCount diagram.nodeCount))
+    {items : ItemSeq first.length rels}
+    (compiled : Concrete.Elaboration.compileOccurrencesWith? diagram recurse
+      first binders occurrences = some items) :
+    Concrete.Elaboration.compileOccurrencesWith? diagram recurse second binders
+      occurrences = some (items.castWiresEq (congrArg List.length contextEq)) := by
+  cases contextEq
+  rw [castWiresEq_self]
+  exact compiled
+
+theorem finishRoot_context_iso
+    (firstAmbient firstLocals secondAmbient secondLocals :
+      Concrete.Elaboration.WireContext input)
+    (ambientEq : firstAmbient = secondAmbient)
+    (localsEq : firstLocals = secondLocals)
+    {items : ItemSeq (firstAmbient ++ firstLocals).length []} :
+    let rootEq : firstAmbient ++ firstLocals =
+        secondAmbient ++ secondLocals :=
+      by cases ambientEq; cases localsEq; rfl
+    RegionIso
+      (FiniteEquiv.finCast (congrArg List.length ambientEq)) []
+      (Concrete.Elaboration.finishRoot firstAmbient firstLocals items)
+      (Concrete.Elaboration.finishRoot secondAmbient secondLocals
+        (items.castWiresEq (congrArg List.length rootEq))) := by
+  dsimp only
+  let rootEq : firstAmbient ++ firstLocals =
+      secondAmbient ++ secondLocals :=
+    by cases ambientEq; cases localsEq; rfl
+  have firstLayout : (firstAmbient ++ firstLocals).length =
+      firstAmbient.length + firstLocals.length := by simp
+  have secondLayout : (secondAmbient ++ secondLocals).length =
+      secondAmbient.length + secondLocals.length := by simp
+  let ambientWire := FiniteEquiv.finCast (congrArg List.length ambientEq)
+  let localWire := FiniteEquiv.finCast (congrArg List.length localsEq)
+  apply Concrete.Elaboration.regionIso_of_cast firstLayout secondLayout
+    ambientWire localWire items
+    (items.castWiresEq (congrArg List.length rootEq))
+  rw [ItemSeq.castWiresEq_eq_renameWires]
+  have renamed := ItemSeqIso.renameWiresEquiv items
+    (FiniteEquiv.finCast (congrArg List.length rootEq))
+  have wireEq : Concrete.Elaboration.castFinEquiv firstLayout secondLayout
+      (extendWireEquiv ambientWire localWire) =
+    FiniteEquiv.finCast (congrArg List.length rootEq) := by
+    apply FiniteEquiv.ext
+    intro index
+    apply Fin.ext
+    change (extendWireEquiv ambientWire localWire
+      (Fin.cast firstLayout index)).val = index.val
+    have castVal : (Fin.cast firstLayout index).val = index.val := rfl
+    rw [← castVal]
+    refine Fin.addCases (fun outerIndex => ?_) (fun localIndex => ?_)
+      (Fin.cast firstLayout index)
+    · rw [extendWireEquiv_outer]
+      rfl
+    · rw [extendWireEquiv_local]
+      change secondAmbient.length + localIndex.val =
+        firstAmbient.length + localIndex.val
+      exact congrArg (fun length => length + localIndex.val)
+        (congrArg List.length ambientEq).symm
+  rw [wireEq]
+  exact renamed
 
 def partitionBody
     (input : Concrete.Diagram)
@@ -1723,5 +1816,102 @@ theorem root_focus
       rw [afterEq, targetItemsEq]
       exact canonical
     exact canonical'.symm
+
+theorem root_rule
+    (source : Concrete.CheckedOpen)
+    (selection : CheckedSelection source.val.diagram)
+    (anchorRoot : selection.val.anchor = source.val.diagram.root)
+    (rawWellFormed :
+      (doubleCutIntroRaw source.val.diagram selection).WellFormed) :
+    let target : Concrete.CheckedOpen :=
+      ⟨targetOpen source.val selection,
+        targetOpen_wellFormed source selection rawWellFormed⟩
+    Rule.DoubleCut source.elaborate target.elaborate := by
+  dsimp only
+  let target : Concrete.CheckedOpen :=
+    ⟨targetOpen source.val selection,
+      targetOpen_wellFormed source selection rawWellFormed⟩
+  let sourceView := Classical.choice
+    (Concrete.Splice.openSiteView_complete source source.val.diagram.root)
+  let targetView := Classical.choice
+    (Concrete.Splice.openSiteView_complete target target.val.diagram.root)
+  have exposedEq : target.val.exposedWires = source.val.exposedWires := by
+    simp [target]
+  have hiddenEq : target.val.hiddenWires = source.val.hiddenWires := by
+    simp [target]
+  have targetRootWiresEq : target.val.rootWires = source.val.rootWires := by
+    change (targetOpen source.val selection).rootWires = source.val.rootWires
+    exact targetOpen_rootWires source.val selection
+  let targetItems : ItemSeq source.val.rootWires.length [] :=
+    targetView.result.state.items.castWiresEq
+      (congrArg List.length targetRootWiresEq)
+  have targetCompiled : Concrete.Elaboration.compileOccurrencesWith?
+      (doubleCutIntroRaw source.val.diagram selection)
+      (Concrete.Elaboration.compileRegion?
+        (doubleCutIntroRaw source.val.diagram selection)
+        (doubleCutIntroRaw source.val.diagram selection).regionCount)
+      source.val.rootWires Concrete.Elaboration.BinderContext.empty
+      (Concrete.Elaboration.localOccurrences
+        (doubleCutIntroRaw source.val.diagram selection)
+        (Fin.castAdd 2 selection.val.anchor)) =
+      some targetItems := by
+    have computation := targetView.result.state.itemsComputation
+    have transported := compileOccurrences_context_eq target.val.diagram
+      (Concrete.Elaboration.compileRegion? target.val.diagram
+        target.val.diagram.regionCount)
+      targetRootWiresEq Concrete.Elaboration.BinderContext.empty
+      (Concrete.Elaboration.localOccurrences target.val.diagram
+        target.val.diagram.root) computation
+    simpa [target, targetItems, targetOpen, anchorRoot] using transported
+  obtain ⟨kept, selected, localEvidence, sourceFocusIso, targetFocusIso⟩ :=
+    root_focus source selection anchorRoot sourceView.result.state
+      targetCompiled
+  let before := rootPartitionBefore source.val.diagram source.val.exposedWires
+    source.val.hiddenWires kept selected
+  let after := rootPartitionAfter source.val.diagram source.val.exposedWires
+    source.val.hiddenWires kept selected
+  have targetPresentation : RegionIso
+      (FiniteEquiv.refl (Fin target.val.exposedWires.length)) []
+      target.elaborate.body
+      (Concrete.Elaboration.finishRoot target.val.exposedWires
+        target.val.hiddenWires targetView.result.state.items) := by
+    rw [← targetView.result.state.bodyComputation]
+    exact RegionIso.refl target.elaborate.body
+  have targetContexts := finishRoot_context_iso target.val.exposedWires
+    target.val.hiddenWires source.val.exposedWires source.val.hiddenWires
+    exposedEq hiddenEq (items := targetView.result.state.items)
+  have targetBodyIso : RegionIso
+      (FiniteEquiv.finCast (congrArg List.length exposedEq)) []
+      target.elaborate.body after := by
+    have composed := (targetPresentation.trans targetContexts).trans
+      targetFocusIso
+    apply RegionIso.changeWire _ composed
+    apply FiniteEquiv.ext
+    intro index
+    apply Fin.ext
+    rfl
+  let sourceHostIso : OpenDiagramIso source.elaborate
+      (source.elaborate.withBody before) := {
+    external := FiniteEquiv.refl (Fin source.elaborate.externalClasses)
+    boundary := by intro position; rfl
+    body := sourceFocusIso
+  }
+  let targetHostIso : OpenDiagramIso target.elaborate
+      (source.elaborate.withBody after) := {
+    external := FiniteEquiv.finCast (congrArg List.length exposedEq)
+    boundary := by
+      intro position
+      apply Fin.ext
+      rfl
+    body := targetBodyIso
+  }
+  let occurrence : Occurrence before source.elaborate := {
+    interface := source.elaborate
+    context := .hole
+    host_iso := sourceHostIso
+  }
+  refine ⟨_, _, before, after, occurrence, ?_, ?_⟩
+  · exact targetHostIso
+  · exact Or.inl localEvidence
 
 end VisualProof.Refinement.Implementation.DoubleCutIntroCompile
