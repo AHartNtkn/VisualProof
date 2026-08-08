@@ -1015,9 +1015,20 @@ Then move the ten-constructor `Concrete.Step (source : State arity)` mechanicall
     (wire : Fin source.checked.val.diagram.wireCount)
     (keep : List (Concrete.CEndpoint source.checked.val.diagram.nodeCount))
     (boundary : Concrete.WireSeverBoundary source wire)
+| iteration
+    (selection : Concrete.CheckedSelection source.checked.val.diagram)
+    (target : Fin source.checked.val.diagram.regionCount)
+    (boundaryDisjoint :
+      selection.val.explicitWires.Disjoint source.checked.val.boundary)
 ```
 
 For boundary positions denoting the severed wire, `WireSeverBoundary.side` chooses the old or fresh target wire. The `other` field canonicalizes irrelevant choices; the operation realization theorem proves those positions retain their original wire. This partition is supplied by the request, not discovered by execution.
+
+`iteration` is proof-bearing. `boundaryDisjoint` is the exact legality
+evidence in its public signature; disjointness from `exposedWires` may be
+used only as a proved equivalent internal presentation. A request without this
+evidence is not constructible, so execution gains no overlap error or
+rejection branch.
 
 Define the complete `Concrete.Error` once. Preserve the errors that the executor can actually return and add open-validation errors, but do not treat an error tag as proof that a fully specified request is invalid. Rejection correctness is established later from the exact request's structural meaning and execution equation, for every returned error. Do not add speculative cancellation, resource, unsupported-operation, or internal-error constructors unless the executor can actually return them.
 
@@ -1243,6 +1254,14 @@ As part of the Task 9 remediation, remove abstraction and instantiation from `Co
 
 For each of the ten request constructors, prove that successful execution translates to the assigned actual-rule family relation. Compiler traversal, finite indices, splice traces, attachment partitions, carrier numbering, receipts, and recursive isomorphisms may appear only in this syntactic proof. Neither family modules nor the aggregate may state or prove a model, denotation, semantic implication, or rule-soundness result.
 
+For `Concrete.Step.iteration selection target boundaryDisjoint`, the
+successful-execution inversion must receive and retain `boundaryDisjoint`.
+The Iteration structural base theorem must take that same evidence explicitly
+and use it to keep selected explicit wires out of the ordered boundary while
+building the `Rule.Iteration.Base` witness. This repairs the root boundary
+case in the concrete request layer only: do not change `Rule.Iteration`, add
+no executor error, and add no rejection branch.
+
 The family table is exhaustive:
 
 | Relation | Concrete constructors |
@@ -1318,7 +1337,7 @@ lake build
 git diff --check
 ```
 
-The semantic-source scans must return no declaration or import. The roster audit is the exact executable-family/absence gate and must pass before any Task 9 family proof is accepted. Dependency output must be checked recursively for the same forbidden owners.
+The semantic-source scans must return no declaration or import. The roster audit is the exact executable-family/absence gate and must pass before any Task 9 family proof is accepted. Dependency output must be checked recursively for the same forbidden owners. Kernel-check the final `Concrete.Step.iteration` constructor, its successful-execution inversion, and the Iteration structural base theorem to verify that the exact `boundaryDisjoint` evidence is carried and consumed; a source-substring check is not acceptance evidence.
 
 ### Task 10: Prove request reflection and execution completeness
 
@@ -1352,7 +1371,7 @@ theorem DoubleCut.complete : Implemented DoubleCut
 theorem Vacuity.complete : Implemented Vacuity
 ```
 
-The erasure converse case uses the generalized `boundRelationSpawn` payload from Task 6. The open wire-sever case reflects the explicit boundary class split. Completeness ranges over the five-constructor actual `Rule.Step`; standalone Comprehension has no execution-completeness claim.
+The erasure converse case uses the generalized `boundRelationSpawn` payload from Task 6. The open wire-sever case reflects the explicit boundary class split. The Iteration reflection case constructs `selection`, `target`, and `selection.val.explicitWires.Disjoint source.checked.val.boundary` from each reflected `Rule.Iteration.Base` witness before it constructs the concrete request. Completeness ranges over the five-constructor actual `Rule.Step`; standalone Comprehension has no execution-completeness claim.
 
 After each request constructor theorem compiles, prove:
 
@@ -1371,7 +1390,7 @@ theorem execute_complete
       StateRepresents receipt.target targetDiagram
 ```
 
-This task is syntactic only. No theorem may call or define a matcher or mention a model, denotation, semantic implication, `Rule.Soundness`, `Rule.Step.sound`, or `Proof`. Reflection constructs proof-bearing finite request data; it does not execute search. Audit the source and dependency closures of every completeness owner, validate family modules and the aggregate, build, and commit as `Prove concrete execution completeness`.
+This task is syntactic only. No theorem may call or define a matcher or mention a model, denotation, semantic implication, `Rule.Soundness`, `Rule.Step.sound`, or `Proof`. Reflection constructs proof-bearing finite request data; it does not execute search. Kernel-check the Iteration completeness theorem through the proof-bearing constructor rather than scanning source text for the legality field. Audit the source and dependency closures of every completeness owner, validate family modules and the aggregate, build, and commit as `Prove concrete execution completeness`.
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/Erasure.lean
@@ -1410,7 +1429,7 @@ def Means
     (targetDiagram : OpenDiagram arity) : Prop
 ```
 
-Implement `Means` by pattern matching on all ten constructors. The branches, in constructor order, produce the Erasure converse, WireSever converse, Erasure base, WireSever base, Iteration base, Iteration converse, DoubleCut introduction, DoubleCut elimination, Vacuity introduction, and Vacuity elimination witnesses. Every branch body is a proposition defined from the relevant representation, selection/occurrence correspondence, controlling polarity, and family relation. Complete and compile all ten bodies before RED.
+Implement `Means` by pattern matching on all ten constructors. The branches, in constructor order, produce the Erasure converse, WireSever converse, Erasure base, WireSever base, Iteration base, Iteration converse, DoubleCut introduction, DoubleCut elimination, Vacuity introduction, and Vacuity elimination witnesses. The Iteration request branch receives the proof-bearing `boundaryDisjoint` field and uses it in its structural correspondence. Every branch body is a proposition defined from the relevant representation, selection/occurrence correspondence, controlling polarity, legality evidence, and family relation. Complete and compile all ten bodies before RED.
 
 `Means` is a syntactic request-meaning relation. It may not mention `Concrete.execute`, success or error results, receipts, models, denotation, semantic implication, or soundness. Each branch fixes the supplied request and contains its structural correspondence, controlling polarity and legality evidence, assigned family witness or converse, and exact target representation/isomorphism.
 
@@ -1447,7 +1466,7 @@ theorem execute_rejects_only_invalid
     ¬ ∃ targetDiagram, Means sourceRep request orientation targetDiagram
 ```
 
-Prove the result by contradicting `Means.execute`; it covers every error returned for a fully specified request. Validate the ten branch definitions, same-request completeness, the unconditional rejection signature, semantic-free source and dependency closures, the full build, and kernel axioms. Commit as `Prove concrete rejection correctness`.
+Prove the result by contradicting `Means.execute`; it covers every error returned for a fully specified request. Boundary overlap is excluded by request construction, not by a new error or an error-classification premise. Validate the ten branch definitions, including the proof-bearing Iteration branch, same-request completeness, the unconditional rejection signature, semantic-free source and dependency closures, the full build, and kernel axioms. Commit as `Prove concrete rejection correctness`.
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Concrete/Step.lean
@@ -1546,6 +1565,7 @@ Stage only task-owned paths explicitly and commit as `Complete recursive rewrite
 - [ ] `Step.sound` has no concrete dependency.
 - [ ] Concrete and Refinement source and import closures contain no semantic declaration, proof, import, or parallel authority.
 - [ ] Concrete execution has exactly ten operation constructors over checked open state and contains no abstraction/instantiation payload, tag, branch, or theorem.
+- [ ] `Concrete.Step.iteration` carries exactly `selection.val.explicitWires.Disjoint source.checked.val.boundary`; kernel-checked inversion, Iteration refinement, reflection, and Means carry that proof without a new executor error, rejection branch, or `Rule.Iteration` change.
 - [ ] Requests supply every selected occurrence and legality witness; execution performs no search.
 - [ ] `Concrete.translate` is validation followed by elaboration.
 - [ ] `Represents` is successful translation modulo propositional open-diagram isomorphism.

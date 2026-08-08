@@ -731,6 +731,8 @@ tasks:
       - "Remove comprehensionAbstract/comprehensionInstantiate payloads, tags, operation functions, executor branches, inversions, refinement code, and execution aggregates."
       - "Remove Comprehension from Rule.Step, Step.iso, and Step.sound while preserving the standalone recursive Comprehension relation, iso theorem, and soundness theorem."
       - "Map the ten concrete constructors exhaustively to Erasure, WireSever, Iteration, DoubleCut, and Vacuity."
+      - "Concrete.Step.iteration is proof-bearing with exactly selection.val.explicitWires.Disjoint source.checked.val.boundary; its successful inversion and Iteration structural base theorem receive and use that evidence."
+      - "Keep Rule.Iteration unchanged and add no iteration-overlap executor error or rejection branch."
       - "Use scripts/audit-lean-authority.sh roster as the exact executable-roster and absence gate before accepting any Tasks 9-13 work."
       - "Rule relations and all Rule soundness owners remain independent of Concrete and Refinement."
       - "Orientation selects the relation or its converse; do not add direction-named rule variants."
@@ -740,6 +742,7 @@ tasks:
       - "Lean only; TypeScript is outside scope."
     verify:
       - "strict structural-owner, family-refinement, and aggregate compilation"
+      - "kernel checks for the proof-bearing iteration constructor, successful-execution inversion, and structural base theorem"
       - "scripts/audit-lean-authority.sh roster exact five-family, ten-constructor/tag, standalone-Comprehension, and absence audit"
       - "scripts/audit-lean-authority.sh rules recursive dependency exclusion"
       - "scripts/audit-lean-authority.sh implementation semantic dependency exclusion"
@@ -769,6 +772,7 @@ tasks:
       - "Reject relocation, renaming, wrapping, or re-export of an operational semantic tower."
       - "Reject any matcher/search subsystem, incomplete ten-constructor coverage, or abstraction/instantiation execution surface."
       - "Require scripts/audit-lean-authority.sh roster to pass with the exact five-family/ten-constructor roster, standalone Comprehension declarations, and all execution-facing absences."
+      - "Require kernel evidence that iteration boundary-disjointness is carried by the request, inversion, and base refinement; reject a Rule.Iteration change or overlap error/rejection branch."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -785,9 +789,11 @@ tasks:
       - "Construct proof-bearing request data existentially; do not define or call a matcher or executable search."
       - "Concrete and Refinement source and dependency closures remain free of models, denotation, semantic implication, Rule.Soundness, Step.sound, and Proof."
       - "Prove five family completeness theorems and execute_complete with the fixed ten-constructor executor; no Comprehension completeness theorem exists."
+      - "Reflect every Rule.Iteration.Base witness to the proof-bearing iteration request, constructing selection.val.explicitWires.Disjoint source.checked.val.boundary."
       - "Lean only; TypeScript is outside scope."
     verify:
       - "strict family and aggregate completeness compilation"
+      - "kernel check that Iteration completeness constructs the required boundary-disjointness evidence"
       - "scripts/audit-lean-authority.sh roster"
       - "semantic-free source and dependency audit"
       - "matcher/search and proof-hole scans"
@@ -805,6 +811,7 @@ tasks:
       - "Read-only."
       - "Reject restricted family coverage, matchers, or any semantic authority in Concrete/Refinement."
       - "Require the shared roster audit to pass; reject a Comprehension completeness branch or any roster/absence mismatch."
+      - "Require kernel evidence that every reflected Rule.Iteration.Base witness produces the proof-bearing boundary-disjointness field."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -832,10 +839,12 @@ tasks:
       - "Means must not mention execute results, receipts, errors, models, denotation, semantic implication, or soundness."
       - "Prove success of the exact supplied request from Means before deriving rejection correctness."
       - "The rejection theorem has no DomainInvalid or error-classification premise and covers every Concrete.Error."
+      - "The Iteration Means branch consumes the proof-bearing boundary-disjointness field; no overlap error constructor or rejection branch is introduced."
       - "Repair executor behavior, request legality evidence, or the error contract if a meaningful exact request can reject."
       - "Do not exclude errors, weaken the theorem, add search, or introduce compatibility paths."
     verify:
       - "strict Means, same-request completeness, and unconditional rejection compilation"
+      - "kernel check that the Iteration Means branch and same-request theorem retain the supplied boundary-disjointness evidence"
       - "scripts/audit-lean-authority.sh roster"
       - "separate Means owner source scan and elaborated-value dependency exclusion of execute results, receipts, errors, and semantics"
       - "all-error theorem signature and kernel axiom audit"
@@ -853,6 +862,7 @@ tasks:
       - "Read-only."
       - "Reject DomainInvalid premises, omitted errors, alternate requests, or Means definitions coupled to execute/receipt/error."
       - "Require the shared roster audit to pass; reject a Comprehension Means branch or roster/absence mismatch."
+      - "Reject an overlap error/rejection premise; require the proof-bearing Iteration request field in Means and unconditional every-error rejection."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -911,6 +921,7 @@ tasks:
       - "direct Concrete/Refinement semantic declaration and import scans"
       - "recursive dependency roots include Concrete Translate/Encode/Step and Refinement Represents/Step/Complete/Rejection"
       - "Means and unconditional rejection signature audit"
+      - "kernel audit of iteration boundary-disjointness through constructor, inversion, refinement, completeness, and Means"
       - "matcher/search, compatibility, proof-hole, and kernel-axiom audits"
       - "git diff --check"
     receipt: null
@@ -927,6 +938,7 @@ tasks:
       - "Read-only."
       - "Reject either dependency-direction violation, weakened rejection, semantic duplication, or incomplete pending work."
       - "Require the shared roster audit to pass and reject any mismatch in its exact roster or absence boundary."
+      - "Require the exact proof-bearing iteration boundary-disjointness field to flow through constructor, inversion, refinement, reflection, and Means with no Rule.Iteration change or overlap error/rejection branch."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -948,6 +960,7 @@ tasks:
       - "Reject any abstraction/instantiation executable, Concrete.Step constructor, refinement/completeness/rejection branch, or Rule.Step Comprehension constructor."
       - "Require standalone recursive Comprehension relation, isomorphism transport, and soundness to remain."
       - "Require scripts/audit-lean-authority.sh roster to pass as the final exact executable-roster and absence evidence."
+      - "Require kernel evidence that the exact iteration boundary-disjointness field flows through execution inversion, structural refinement, reflection, and Means without a Rule.Iteration change or overlap error/rejection branch."
       - "Require Proof-layer concrete validity to be a thin composition of refinement, Step.sound, and representation/isomorphism transport."
       - "Reject compatibility authorities or incomplete theorem dependencies."
     expected_output:

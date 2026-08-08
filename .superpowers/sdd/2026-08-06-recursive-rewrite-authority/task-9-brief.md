@@ -90,6 +90,22 @@ equation. Construct the assigned recursive relation or its converse at the
 controlling context polarity, and construct the represented target. No family
 proof may conclude a semantic implication or invoke a rule soundness theorem.
 
+`Concrete.Step.iteration` is a proof-bearing request:
+
+```lean
+| iteration
+    (selection : Concrete.CheckedSelection source.checked.val.diagram)
+    (target : Fin source.checked.val.diagram.regionCount)
+    (boundaryDisjoint :
+      selection.val.explicitWires.Disjoint source.checked.val.boundary)
+```
+
+The successful-execution inversion and the Iteration structural base theorem
+must receive and use `boundaryDisjoint` to build the `Rule.Iteration.Base`
+witness. `exposedWires` disjointness may be an internally proved equivalent,
+but this boundary form is the signature authority. Do not change
+`Rule.Iteration` or add an overlap error/rejection branch.
+
 `Concrete.Insertion` carries `input.AttachmentsRespectBoundary`, ensuring
 `boundRelationSpawn` is only the converse of `Erasure`. The authorized relation
 shapes already use splice framing for Erasure, DoubleCut, and Vacuity, and bind
@@ -167,6 +183,10 @@ translation, representation uniqueness, and `Step.iso`. It does not invoke
 - Strict compilation of every structural owner, all five executable-family modules, and
   `Refinement/Step.lean`.
 - Direct signature checks for `execute_sound` and `execute_translates`.
+- Kernel checks for the proof-bearing `Concrete.Step.iteration` constructor,
+  its successful-execution inversion, and the Iteration structural base theorem
+  verify that `boundaryDisjoint` is consumed; source-substring presence is
+  not sufficient.
 - `scripts/audit-lean-authority.sh roster` passes as the exact five-family,
   ten-constructor/tag, standalone-Comprehension, and execution-absence audit.
 - Recursive dependency scans proving all Rule relations and soundness owners are

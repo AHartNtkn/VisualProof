@@ -17,7 +17,7 @@ Refactor the complete calculus to ordinary relational recursive-diagram rewritin
 - Completion proof: the Lean development builds without incomplete definitions, the five executable recursive rule families factor through `Step.sound`, standalone Comprehension remains recursive mathematics outside the actual ruleset, and every successful concrete transition has a Lean refinement proof into `Step`
 - Goal oracle: kernel-checked Lean theorems demonstrate the requested authority boundary and the final audit records `full_outcome_complete: true`
 - Likely misfire: adding abstract wrappers while leaving concrete execution data as the real rule or semantic authority
-- Blind spots considered: bound-wire equivalence, repeated boundary aliases, inherently simultaneous rules, capture avoidance, ordered interfaces, representation uniqueness, and the distinction between executor soundness and executor completeness
+- Blind spots considered: bound-wire equivalence, repeated boundary aliases, iteration selections that overlap the ordered boundary, inherently simultaneous rules, capture avoidance, ordered interfaces, representation uniqueness, and the distinction between executor soundness and executor completeness
 - Existing plan facts: recursive diagrams own mathematical syntax and structural semantics; occurrence is context-decomposition evidence; local rules use contextual closure modulo isomorphism; whole-diagram rules use direct relations; `Step.sound` contains no execution artifacts; concrete diagrams represent recursive diagrams; execution correctness is refinement; all rule families and dependents migrate without compatibility authorities
 
 ## Goal Oracle
@@ -44,6 +44,7 @@ Execute the reviewed implementation plan in successive theorem-driven Worker pac
 - Local rules use contextual closure modulo recursive isomorphism; global and simultaneous rules retain direct relational statements.
 - Rule soundness mentions no concrete carriers, numbering, execution state, trace, receipt, request, or error.
 - Concrete correctness is representation and refinement, including ordered interfaces and repeated aliases; it does not directly define semantic preservation.
+- The Iteration request carries exact boundary-disjointness evidence; reflection, execution refinement, and exact-request meaning use that evidence without changing the recursive rule or adding an executor rejection class.
 - The Lean formalization has no matcher or occurrence-search subsystem; requests supply occurrence evidence.
 - Representation completeness and one-step execution completeness are required.
 - TypeScript is outside this goal's implementation, planning, and validation scope.
