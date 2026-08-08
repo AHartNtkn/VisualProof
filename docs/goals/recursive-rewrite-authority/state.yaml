@@ -65,7 +65,7 @@ visual_board:
     url: "http://goalbuddy.localhost:41737/recursive-rewrite-authority/"
     command: "node /home/ahart/.codex/plugins/cache/goalbuddy/goalbuddy/0.4.3/skills/goal-prep/surfaces/local-goal-board/scripts/local-goal-board.mjs --goal docs/goals/recursive-rewrite-authority"
 
-active_task: T127
+active_task: T128
 
 tasks:
   - id: T001
@@ -717,7 +717,7 @@ tasks:
   - id: T127
     type: worker
     assignee: Worker
-    status: active
+    status: done
     reasoning_hint: high
     objective: "Establish the canonical proof-relevant structural witness hierarchy and neutral compiler/context alignment authority required before Task 9."
     inputs:
@@ -725,6 +725,7 @@ tasks:
       - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-brief.md Mandatory foundation before Task 9"
       - "Current RegionIso/ItemIso/ItemSeqIso, OpenDiagramIso, DiagramContextIso, ContextPathAlignment, PairedCompilerContextAlignment, CompilerTraceAlignment, and OpenCompilerTraceAlignment consumers"
     allowed_files:
+      - "VisualProof/Diagram/*.lean"
       - "VisualProof/Diagram/**/*.lean"
       - "VisualProof/Concrete/**/*.lean"
       - "VisualProof/Refinement/**/*.lean"
@@ -751,11 +752,35 @@ tasks:
       - "A required consumer cannot project or compose the canonical Type witness directly."
       - "The migration requires a Prop-to-Type elimination, compatibility authority, or semantic dependency in Concrete/Refinement."
       - "A claimed shared compiler/context fact differs semantically between operations."
-    receipt: null
+    receipt:
+      result: done
+      summary: "The canonical Type-valued recursive isomorphism, route, and context-alignment foundation is migrated across all tracked consumers; presentation and paired authorities are absent, and the serial full build passes."
+      changed_files:
+        - "VisualProof/Diagram/Isomorphism.lean"
+        - "VisualProof/Diagram/ContextPathIsomorphism.lean"
+        - "VisualProof/Concrete/Subgraph/Splice/Trace.lean"
+        - "VisualProof/Concrete/Subgraph/Splice/Input/Alignment/Nested.lean"
+        - "VisualProof/Refinement/Implementation/IterationSourceFactor.lean"
+        - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-foundation-report.md"
+      commands:
+        - cmd: "63/63 foundation production owners strict warning-as-error compilation"
+          status: pass
+        - cmd: "scripts/audit-lean-authority.sh rules/implementation/proof/roster"
+          status: pass
+        - cmd: "tracked-production hole/axiom and sole-authority scans"
+          status: pass
+        - cmd: "LEAN_NUM_THREADS=1 lake build"
+          status: pass
+        - cmd: "git diff --check"
+          status: pass
+      evidence:
+        - "Commits 432d5708, 4eeeb99d, 2e6383f5, 5a16b1d0, aeb44099"
+        - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-foundation-report.md"
+      harness: codex
   - id: T128
     type: judge
     assignee: Judge
-    status: queued
+    status: active
     reasoning_hint: high
     objective: "Independently audit the structural witness and compiler/context authority foundation before Task 9 can resume."
     inputs:
