@@ -93,7 +93,7 @@ theorem sound
   have renamedBody :
       denoteRegion (relCtx := []) model sourceAssignment.classes PUnit.unit
         (target.body.renameWires step.collapse) :=
-    (iso_denotation (rels := []) step.body model sourceAssignment.classes
+    (iso_denotation (rels := []) ⟨step.body⟩ model sourceAssignment.classes
       PUnit.unit).mp sourceBody
   exact (denoteRegion_renameWires (relCtx := []) model step.collapse
     sourceAssignment.classes PUnit.unit target.body).mp renamedBody
