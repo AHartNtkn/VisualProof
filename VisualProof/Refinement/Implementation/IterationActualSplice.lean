@@ -145,12 +145,10 @@ noncomputable def coalescedRouteTerminal_hostLexical
   have rootBinders : anchorView.result.state.binders =
       host.result.state.binders :=
     anchorView.result.binders_eq.trans host.result.binders_eq.symm
-  obtain ⟨tailPath, tailOuter, tailBody, tailRoute, tailWitness, tailState,
-      tailTrace, tailStartBinders, tailRels, tailTerminalBinders⟩ :=
-    Concrete.Splice.Input.CompilerTrace.tailAtEnclosed
+  let tail := Concrete.Splice.Input.CompilerTrace.tailAtEnclosed
       (spliceInput.coalesceFrameRaw_wellFormed hadmissible)
       anchorView.result.trace host.result.trace rootBinders coalescedEncloses
-  have tailStartsAtAnchor : tailState.binders =
+  have tailStartsAtAnchor : tail.tailState.binders =
       (Concrete.Splice.Region.ContextPath.CompilerLeaf.hereOfItemsComputation
         spliceInput.coalesceFrameRaw selection.val.anchor
         anchorView.compilerLeaf.inheritedWires anchorView.compilerLeaf.binders
@@ -158,11 +156,12 @@ noncomputable def coalescedRouteTerminal_hostLexical
         anchorView.compilerLeaf.itemsComputation anchorView.compilerLeaf.wiresExact
         anchorView.compilerLeaf.bindersCover
         anchorView.compilerLeaf.binderEnumeration).binders := by
-    simpa [anchorView, Concrete.Splice.SiteView.compilerLeaf] using tailStartBinders
+    simpa [anchorView, Concrete.Splice.SiteView.compilerLeaf] using
+      tail.startBinders
   obtain ⟨routeRels, routeTerminalBinders⟩ :=
-    terminal.terminalLexical tailTrace tailStartsAtAnchor
-  refine ⟨routeRels.trans tailRels, ?_⟩
-  exact (routeTerminalBinders.trans tailTerminalBinders)
+    terminal.terminalLexical tail.tailTrace tailStartsAtAnchor
+  refine ⟨routeRels.trans tail.terminalLexical.rels_eq, ?_⟩
+  exact (routeTerminalBinders.trans tail.terminalLexical.binders_eq)
 
 noncomputable def Region.ContextPath.appendRootItemsRight_actualIso
     {items suffix : ItemSeq  wires rels}

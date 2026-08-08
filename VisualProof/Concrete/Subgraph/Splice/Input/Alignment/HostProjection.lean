@@ -715,7 +715,37 @@ theorem CompilerTrace.sameDiagramTerminalInheritedOfSplit
 /-- A canonical trace to an enclosing ancestor exposes the suffix of any
 second canonical trace below that ancestor, with the exact lexical binder
 state reached by the ancestor trace. -/
-theorem CompilerTrace.tailAtEnclosed
+structure CompilerTrace.TailAtEnclosed
+    {diagram : Diagram}
+    {start anchor target : Fin diagram.regionCount}
+    {anchorPath targetPath : List Nat} {rels : Theory.RelCtx}
+    {anchorOuter targetOuter : Nat}
+    {anchorBody : Region  anchorOuter rels}
+    {targetBody : Region  targetOuter rels}
+    {anchorRoute : RegionRoute diagram start anchor anchorPath}
+    {targetRoute : RegionRoute diagram start target targetPath}
+    {anchorWitness : Region.ContextPath anchorBody anchorPath}
+    {targetWitness : Region.ContextPath targetBody targetPath}
+    {anchorState : Region.ContextPath.CompilerLeaf diagram start
+      (.here anchorBody)}
+    {targetState : Region.ContextPath.CompilerLeaf diagram start
+      (.here targetBody)}
+    (anchorTrace : CompilerTrace  diagram anchorRoute anchorWitness
+      anchorState)
+    (targetTrace : CompilerTrace  diagram targetRoute targetWitness
+      targetState) where
+  tailPath : List Nat
+  tailOuter : Nat
+  tailBody : Region  tailOuter anchorWitness.toFocus.holeRels
+  tailRoute : RegionRoute diagram anchor target tailPath
+  tailWitness : Region.ContextPath tailBody tailPath
+  tailState : Region.ContextPath.CompilerLeaf diagram anchor (.here tailBody)
+  tailTrace : CompilerTrace  diagram tailRoute tailWitness tailState
+  startBinders : tailState.binders = anchorTrace.leaf.binders
+  terminalLexical : TerminalLexical tailTrace.leaf.binders
+    targetTrace.leaf.binders
+
+noncomputable def CompilerTrace.tailAtEnclosed
     {diagram : Diagram} (hwf : diagram.WellFormed )
     {start anchor target : Fin diagram.regionCount}
     {anchorPath targetPath : List Nat} {rels : Theory.RelCtx}
@@ -736,23 +766,11 @@ theorem CompilerTrace.tailAtEnclosed
       targetState)
     (hbinders : anchorState.binders = targetState.binders)
     (hencloses : diagram.Encloses anchor target) :
-    ∃ (tailPath : List Nat) (tailOuter : Nat)
-      (tailBody : Region  tailOuter
-        anchorWitness.toFocus.holeRels)
-      (tailRoute : RegionRoute diagram anchor target tailPath)
-      (tailWitness : Region.ContextPath tailBody tailPath)
-      (tailState : Region.ContextPath.CompilerLeaf diagram anchor
-        (.here tailBody))
-      (tailTrace : CompilerTrace  diagram tailRoute tailWitness
-        tailState),
-      tailState.binders = anchorTrace.leaf.binders ∧
-        ∃ _hrels : tailWitness.toFocus.holeRels =
-            targetWitness.toFocus.holeRels,
-          HEq tailTrace.leaf.binders targetTrace.leaf.binders := by
+    CompilerTrace.TailAtEnclosed anchorTrace targetTrace := by
   induction anchorTrace generalizing targetPath targetOuter with
   | here anchorState =>
       exact ⟨targetPath, targetOuter, targetBody, targetRoute, targetWitness,
-        targetState, targetTrace, hbinders.symm, rfl, HEq.rfl⟩
+        targetState, targetTrace, hbinders.symm, ⟨rfl, HEq.rfl⟩⟩
   | @cut traceStart traceChild _ traceRest traceParent _ _ traceTail _ _ _ _ _
       _ _ _ _ anchorState _ _ anchorChildState anchorChildKind _
       anchorBinders _ anchorTailTrace ih =>
@@ -791,11 +809,11 @@ theorem CompilerTrace.tailAtEnclosed
               targetChildState.binders :=
             anchorBinders.trans (hbinders.trans targetBinders.symm)
           obtain ⟨tailPath, tailOuter, tailBody, tailRoute, tailWitness,
-              tailState, tailTrace, tailBinders, hrels, terminalBinders⟩ :=
+              tailState, tailTrace, tailBinders, terminal⟩ :=
             ih targetTailTrace childBinders hencloses
           exact ⟨tailPath, tailOuter, tailBody, tailRoute, tailWitness,
-            tailState, tailTrace, by simpa using tailBinders, hrels, by
-              simpa using terminalBinders⟩
+            tailState, tailTrace, by simpa using tailBinders,
+              ⟨terminal.rels_eq, by simpa using terminal.binders_eq⟩⟩
   | @bubble traceStart traceChild _ traceRest traceParent _ _ traceTail _ _
       traceArity _ _ _ _ _ _ _ anchorState _ _ anchorChildState
       anchorChildKind _ anchorBinders _ anchorTailTrace ih =>
@@ -840,11 +858,11 @@ theorem CompilerTrace.tailAtEnclosed
               ((congrArg (fun binders => binders.push traceChild traceArity)
                 hbinders).trans targetBinders.symm)
           obtain ⟨tailPath, tailOuter, tailBody, tailRoute, tailWitness,
-              tailState, tailTrace, tailBinders, hrels, terminalBinders⟩ :=
+              tailState, tailTrace, tailBinders, terminal⟩ :=
             ih targetTailTrace childBinders hencloses
           exact ⟨tailPath, tailOuter, tailBody, tailRoute, tailWitness,
-            tailState, tailTrace, by simpa using tailBinders, hrels, by
-              simpa using terminalBinders⟩
+            tailState, tailTrace, by simpa using tailBinders,
+              ⟨terminal.rels_eq, by simpa using terminal.binders_eq⟩⟩
 /-- Peel the open sheet frame and compare its retained ordinary tail with a
 closed-root trace through the same concrete diagram. -/
 noncomputable def OpenCompilerTrace.sameDiagramClosedTerminalLexical
