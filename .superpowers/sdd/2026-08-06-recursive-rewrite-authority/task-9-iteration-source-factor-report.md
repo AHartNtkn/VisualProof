@@ -1,96 +1,57 @@
-# Task 9 Iteration source-factor report
+# Task 9 Iteration restricted-context compiler report
 
 ## Status
 
-A hole-free source-factorization kernel is complete in
+`compileKeptOccurrences_restrict` is complete and kernel checked in
 `VisualProof/Refinement/Implementation/IterationSourceFactor.lean`.
 
-The complete existential source-factor certificate is not yet stated.  Its
-dependency closure still needs the recursive restricted-context compiler
-transport described below, so no owning RED declaration was introduced.
+The theorem consumes the authoritative full-context
+`compileOccurrencesWith?` result at the compiler leaf's existing fuel and
+binders.  It produces the corresponding result over `retainedContext` and
+proves that renaming it through `retainedContextIndexMap` yields the full kept
+sequence up to `ItemSeqIso` with the identity full-wire equivalence.
 
-## Completed kernel
+## Compiler transport
 
-The new owner proves the load-bearing wire split directly from a checked
-selection:
+The proof uses one retained-to-full lexical embedding.  Its index preserves
+wire lookup and classifies every target-only entry as a selection-owned
+explicit anchor wire.  Child extension uses `extendWireRenaming` over the
+authoritative exact-local suffix.
 
-- `retainedAnchorWires` is the exact anchor-local wire block with explicit
-  selection-owned wires filtered out.
-- `retainedContext` is the inherited compiler context followed by that retained
-  anchor-local block.
-- `retainedAnchorWires_append_explicit_perm` proves that retained locals plus
-  explicit locals are exactly the authoritative full anchor-local context.
-- `retainedContext_append_explicit_perm` lifts the split through the inherited
-  compiler context.
-- `anchorLocalEquiv` and `anchorWireEquiv` provide the finite local and
-  inherited/local equivalences required by `RegionIso`; the explicit block has
-  exactly `selection.val.explicitWires.length` elements.
-- `retainedContextIndexMap` is the canonical retained-to-full compiler-context
-  inclusion, with its wire lookup specification.
+The recursive kernel is a fuel induction over `compileRegion?` itself:
 
-The owner also proves the actual no-kept-use facts required for restricted
-compilation:
+- direct nodes use `resolvePort?_map_of_embedding` and `compileNode?_map`;
+- port visibility reflection follows from the embedding's target-only
+  classification and the established no-explicit-endpoint facts;
+- cut and bubble children invoke the induction hypothesis, with bubble binders
+  pushed by the authoritative compiler operation;
+- the target exact context is extended through each direct child;
+- `compileOccurrencesWith?_map` transports the ordered child sequence; and
+- `finishRegion_renameWires` closes the exact-local cast and ambient renaming
+  equation.
 
-- a kept direct node cannot own an endpoint of an explicit wire;
-- every node below a kept direct child is outside the selection, using checked
-  direct-child uniqueness;
-- consequently no recursively compiled node below a kept child can own an
-  endpoint of an explicit wire.
+At the anchor, kept direct nodes use `keptNode_noExplicitEndpoint`; recursively
+compiled kept children use `keptChild_descendant_noExplicitEndpoint`.  The
+resulting compiler equation supplies the existential restricted sequence and
+the final `ItemSeqIso`.
 
-These results use the existing `keptOccurrences` partition and checked
-selection invariants.  They do not define a route, matcher, occurrence search,
-compiler, extraction authority, semantic statement, or rule witness.
+This unit defines no route, source-factor result, matcher, occurrence search,
+alternate compiler, semantic theorem, or rule witness.
 
-## Exact next theorem
+## Theorem-driven validation
 
-The next theorem is a specialized transport of the authoritative compiler,
-not a new compiler:
+RED compiled with `compileKeptOccurrences_restrict` as the sole owning proof
+hole after every helper in its dependency closure compiled completely.  GREEN
+then compiled after replacing that proof hole with the kernel-checked
+transport.
 
-```lean
-theorem compileKeptOccurrences_restrict
-    (input : Concrete.Checked)
-    (selection : CheckedSelection input.val)
-    {outer : Nat} {rels : RelCtx}
-    {anchorBody : Region outer rels}
-    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
-      selection.val.anchor (.here anchorBody))
-    {keptItems : ItemSeq
-      (anchorLeaf.inheritedWires.extend selection.val.anchor).length rels}
-    (keptCompiled :
-      Concrete.Elaboration.compileOccurrencesWith? input.val
-        (Concrete.Elaboration.compileRegion? input.val anchorLeaf.fuel)
-        (anchorLeaf.inheritedWires.extend selection.val.anchor)
-        anchorLeaf.binders (keptOccurrences input.val selection) =
-          some keptItems) :
-    ∃ restrictedItems : ItemSeq
-        (retainedContext input.val selection
-          anchorLeaf.inheritedWires).length rels,
-      Concrete.Elaboration.compileOccurrencesWith? input.val
-        (Concrete.Elaboration.compileRegion? input.val anchorLeaf.fuel)
-        (retainedContext input.val selection anchorLeaf.inheritedWires)
-        anchorLeaf.binders (keptOccurrences input.val selection) =
-          some restrictedItems ∧
-      ItemSeqIso (FiniteEquiv.refl _ ) rels keptItems
-        (restrictedItems.renameWires
-          (retainedContextIndexMap input.val selection
-            anchorLeaf.inheritedWires))
-```
+Validation completed serially:
 
-Its proof needs one simultaneous induction over the existing `compileRegion?`
-result.  At each recursive child, the retained-to-full index map is extended by
-the existing `extendWireRenaming`; `resolvePort?_map_of_embedding`,
-`compileNode?_map`, and `compileOccurrencesWith?_map` then apply using the
-no-kept-use facts proved here.  The induction must also prove the
-`finishRegion` renaming equation.  This is the only missing compiler seam.
-
-After that theorem, `keptRoute_complete` supplies `descendant` and `remainder`.
-The remaining selected-side theorem factors
-`extractionCompileSelectedItems_iso` through `anchorWireEquiv`, placing the
-explicit block in `selected.localWires`.  Those two results compose with
-`partition_complete` to produce the requested anchor source `RegionIso` and
-the final existential certificate.
-
-## Validation
-
-The focused owner build succeeds and the owner contains no proof hole, axiom,
-semantic declaration, rule-soundness dependency, matcher, or search subsystem.
+- `lake env lean VisualProof/Refinement/Implementation/IterationSourceFactor.lean`
+- `lake build VisualProof.Refinement.Implementation.IterationSourceFactor`
+- `scripts/audit-lean-authority.sh rules`
+- `scripts/audit-lean-authority.sh implementation`
+- `scripts/audit-lean-authority.sh proof`
+- `scripts/audit-lean-authority.sh roster`
+- owner no-hole, axiom, semantic, forbidden-prefix, matcher, and search scans
+- `git diff --check` on the owned theorem and report
