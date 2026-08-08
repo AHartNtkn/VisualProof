@@ -2,59 +2,102 @@
 
 ## Status
 
-BLOCKED before the owning `baseOfSplice` RED declaration because its structural dependency closure is incomplete.
+BLOCKED before the owning `baseOfSplice` RED declaration pending an
+architecture decision about root-scoped selected boundary wires. The current
+concrete operation admits a case that the current `Rule.Iteration.Base`
+relation cannot represent.
 
-Two focused structural slices are complete and kernel checked:
+The structural dependency requested by the previous report is complete and
+kernel checked in `IterationSourceFactor.lean` at `804769a2`.
+`SourceFactorResult` now supplies the route-indexed descendant and remainder,
+the ordinary source factor isomorphism, and the extracted-material
+isomorphism with selected explicit wires represented as locals.
 
-- `1f04f6a3` adds `IterationMaterialIndex.lean`, proving the canonical terminal/root anchor indices and their extraction-context correspondence.
-- `b254e672` adds `IterationActualSplice.lean`, proving retained-route lexical alignment and the nonempty/empty route-native splice isomorphisms to the executable compiler focus.
+## Exact root counterexample shape
 
-## Exact obstruction
+Consider a checked ordered-open source with:
 
-`Rule.Iteration.Base` requires the selection anchor to be represented as
+- a wire `w` scoped at the concrete root and occurring in the ordered
+  boundary;
+- one or more root-owned nodes incident to `w`;
+- a selection anchored at the root, containing those nodes directly and
+  listing `w` in `explicitWires`;
+- no selected child region containing the root; and
+- iteration targeted at the root.
+
+This is permitted by the current predicates:
+
+- `SelectionRequest.Valid.explicitWires_at_anchor` requires only that `w` is
+  scoped at the selection anchor;
+- `explicitWireEndpoints_selected` requires its endpoints to be selected;
+- `SelectsRegion root` is false when the selected child roots are proper
+  children, so the executor's target-nonselection check accepts the root;
+- `CheckedSelection.touchingWires` excludes `w` because `SelectsWire w` holds
+  through explicit selection;
+- `iterationInput` attaches only `touchingWires`, so `w` is internal to the
+  extracted pattern rather than an attachment; and
+- `Splice.Input.Admissible` imposes attachment visibility and binder-target
+  conditions but no disjointness between `explicitWires` and the ordered
+  boundary. With no touching wires or binder proxies, those obligations are
+  vacuous, and `spliceChecked_complete` supplies a successful splice.
+
+The successful root splice retains the frame wire `w` as the source boundary
+wire and creates a fresh hidden copy for the pattern-internal `w`.
+
+`Rule.Iteration.Base` cannot express that transition. Its one `selected`
+region is used at both endpoints. A selected local wire is rebound by the
+copied region and therefore becomes fresh, while a selected outer wire is
+transported through `descendant.outerWire` and therefore remains attached.
+For `w`:
+
+- classifying it as local gives the required fresh target copy, but makes the
+  source presentation non-isomorphic to the ordered-open source, where `w` is
+  an external boundary class; and
+- classifying it as outer makes the source presentation possible, but the
+  abstract target shares `w` instead of creating the executable splice's
+  fresh hidden wire.
+
+This is not a missing compiler transport lemma. The two endpoints have
+different binder/interface structure, so the required `OpenDiagramIso` does
+not exist.
+
+## Candidate repairs
+
+### 1. Reject the unsupported concrete request
+
+Add an iteration legality condition for a root anchor requiring
 
 ```lean
-Region.adjoinAt anchorLocal .nil
-  (selected.conjoin (descendant.fill remainder))
+Disjoint selection.val.explicitWires source.val.exposedWires
 ```
 
-where selection-owned anchor wires are local to `selected`, while retained or shared anchor wires are counted by `anchorLocal`. This distinction is necessary: `selected` is copied at the descendant, so its local wires become fresh there; `anchorLocal` wires remain bound once around the selected and retained factors.
+equivalently disjointness from `source.val.boundary`. Enforce it in concrete
+execution before splice and expose it in successful-operation inversion.
+Then every selected explicit root wire can soundly be represented as a local
+of `Rule.Iteration.Base`, and the existing `SourceFactorResult` is the correct
+factorization authority.
 
-The available iteration partition proves only an occurrence/item partition in the compiler's full anchor wire context:
+This is the smaller repair, but it narrows the set of accepted concrete
+iteration requests.
 
-```lean
-RegionIso ...
-  (Region.mk 0 (selectedItems.append keptItems))
-  (Region.mk 0 leaf.items)
-```
+### 2. Attach selected root boundary wires instead of freshening them
 
-Both `selectedItems` and `keptItems` are indexed by the complete context
-`leaf.inheritedWires.extend selection.val.anchor`. The available extraction theorem likewise identifies the selected items with the extracted material only after renaming the extracted material into that same complete context. Neither theorem supplies:
+Retain the request but change root iteration extraction/splice so a selected
+explicit wire that is also an ordered boundary class is part of the pattern
+interface and is attached back to the frame wire. The root source factor must
+then split selected explicit wires into:
 
-1. a partition of the anchor wire context into retained/shared wires and selection-owned explicit wires;
-2. a factorization of the extraction wire equivalence as the corresponding outer/local `extendWireEquiv`;
-3. a restriction of `keptItems` to the retained/shared context, proving that no kept occurrence uses a selection-owned explicit wire; or
-4. the resulting source `RegionIso` with the selection-owned block represented as `selected` locals.
+- exposed selected wires, represented as outer wires of `selected`; and
+- nonexposed selected wires, represented as locals of `selected`.
 
-This is load bearing, not cosmetic. If all exact anchor wires are assigned to `anchorLocal`, the candidate `selected` has no local representatives for selected explicit anchor wires. The abstract target then does not create fresh copies of those wires, while the successful concrete splice does. Their local carrier counts differ, so the required target `OpenDiagramIso` cannot exist. Checked selections permit nonempty `explicitWires`, so proving only the empty-explicit-wire case would not refine the executor.
+The existing `Rule.Iteration.Base` copy then shares the exposed wires through
+`descendant.outerWire` and freshens only the nonexposed locals. This preserves
+the ordered interface and accepts the current request shape, but it changes
+the concrete root splice result and requires a root-specific source-factor
+certificate.
 
-## Required unblock
+## Safe boundary
 
-Add one structural source-factorization owner that, for a checked selection and the authoritative anchor compiler leaf, constructs:
-
-- the retained/shared anchor wire context;
-- a selected `Region` whose locals are exactly the selection-owned anchor wires and whose inherited interface is the retained/shared context;
-- a remainder region over the retained/shared context;
-- the retained route/context through that remainder to every legal unselected target; and
-- a `RegionIso` from the compiler anchor body to the corrected `Region.adjoinAt` source form.
-
-Its validation must include a theorem that the retained occurrence compiler never refers to a selected explicit anchor wire and an outer/local factorization of `IterationExtraction.extractionCompileSelectedItems_iso`. Once this certificate exists, the committed route-to-executable-splice isomorphisms provide the target focus, and the existing ordered-open anchor/compiler isomorphisms can lift both focus isomorphisms to `Rule.Iteration.Base`.
-
-## Validation performed
-
-```text
-lake build VisualProof.Refinement.Implementation.IterationMaterialIndex
-lake build VisualProof.Refinement.Implementation.IterationActualSplice
-```
-
-Both focused builds completed successfully. Both new owners have no `sorry`, axiom, model, denotation, `Rule.Soundness`, or `Step.sound` dependency/declaration.
+No `baseOfSplice` theorem or helper was stated with `sorry`. No rule,
+concrete-legality, execution, or compiler definition was changed. The only
+task-owned change for this checkpoint is this report.
