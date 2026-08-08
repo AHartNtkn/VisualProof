@@ -4,7 +4,7 @@ goal:
   title: "Recursive Rewrite Authority"
   slug: "recursive-rewrite-authority"
   kind: existing_plan
-  tranche: "Restore the bidirectional semantic boundary, then complete structural execution refinement."
+  tranche: "Remove non-executable Comprehension operations, then complete five-family structural execution refinement."
   status: active
   oracle:
     signal: "Kernel-checked Lean theorems prove one recursive relational calculus with structural semantics and a separate concrete refinement layer."
@@ -29,7 +29,7 @@ goal:
       - "Occurrence is context decomposition modulo recursive diagram isomorphism."
       - "Local rules use contextual closure; global and simultaneous rules use direct relations."
       - "Step.sound is exhaustive and independent of concrete execution artifacts."
-      - "Concrete representation, execution, and rejection claims refine recursive relations."
+      - "Concrete representation, execution, and rejection claims refine the five-family actual Rule.Step; standalone Comprehension remains recursive mathematics only."
       - "The Lean formalization contains no matcher or occurrence-search subsystem."
 
 rules:
@@ -461,7 +461,7 @@ tasks:
     constraints:
       - "Lean only; TypeScript is outside scope."
       - "No compatibility wrappers, aliases, or old-path re-exports."
-      - "Preserve exactly the twelve concrete operation constructors."
+      - "The final concrete executor has exactly ten constructors and no abstraction/instantiation operation."
       - "Execution consumes supplied occurrence certificates and never searches."
     verify:
       - "compile every new Concrete aggregate"
@@ -529,7 +529,7 @@ tasks:
     assignee: Worker
     status: done
     reasoning_hint: high
-    objective: "Execute plan Task 7: define the exhaustive six-family relational Rule.Step and prove isomorphism transport and semantic soundness with no concrete dependency."
+    objective: "Establish relational Rule.Step and soundness; the final roster is corrected in T117 to exclude standalone Comprehension from the five-family actual ruleset."
     inputs:
       - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 7"
     allowed_files:
@@ -543,8 +543,8 @@ tasks:
       - "VisualProof.lean"
       - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-7-report.md"
     constraints:
-      - "Step has exactly Erasure, WireSever, Iteration, DoubleCut, Comprehension, and Vacuity constructors."
-      - "Step.sound is ordinary implication and delegates exhaustively to the six family soundness theorems."
+      - "Final Step has exactly Erasure, WireSever, Iteration, DoubleCut, and Vacuity constructors."
+      - "Step.sound is ordinary implication and delegates exhaustively to those five family soundness theorems; Comprehension.sound remains standalone."
       - "The dependency closure of Rule.Step and Rule.Soundness contains no Concrete or Refinement module."
       - "Relocate remaining implementation proof material as required; do not preserve parallel authorities or compatibility paths."
       - "Lean only; TypeScript is outside scope."
@@ -694,7 +694,7 @@ tasks:
     assignee: Worker
     status: active
     reasoning_hint: high
-    objective: "Execute corrected Task 9: restore the bidirectional semantic boundary, preserve only structural implementation facts, prove all twelve successful executions refine the six recursive relations, and prove execute_sound and execute_translates."
+    objective: "Execute corrected Task 9: remove abstraction/instantiation from both actual and concrete Step, preserve standalone Comprehension mathematics, prove all ten successful executions refine the five actual recursive rule families, and prove execute_sound and execute_translates."
     inputs:
       - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md Task 9"
       - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-brief.md"
@@ -723,7 +723,9 @@ tasks:
       - "Eliminate concrete-dependent semantic machinery and operational soundness aggregates; do not relocate, rename, wrap, re-export, or preserve them as parallel authorities."
       - "Split mixed diagram modules where necessary so structural Concrete/Refinement dependencies do not pull in semantics."
       - "Migrate existing Proof consumers directly to Diagram semantics and aggregate Rule soundness only as needed to remove concrete semantic owners; do not add adapters or family-specific semantic reasoning."
-      - "Map the twelve concrete constructors exhaustively to Erasure, WireSever, Iteration, DoubleCut, Comprehension, and Vacuity."
+      - "Remove comprehensionAbstract/comprehensionInstantiate payloads, tags, operation functions, executor branches, inversions, refinement code, and execution aggregates."
+      - "Remove Comprehension from Rule.Step, Step.iso, and Step.sound while preserving the standalone recursive Comprehension relation, iso theorem, and soundness theorem."
+      - "Map the ten concrete constructors exhaustively to Erasure, WireSever, Iteration, DoubleCut, and Vacuity."
       - "Rule relations and all Rule soundness owners remain independent of Concrete and Refinement."
       - "Orientation selects the relation or its converse; do not add direction-named rule variants."
       - "Preserve compliant structural proofs already established in the active Task 9 work."
@@ -732,7 +734,8 @@ tasks:
       - "Lean only; TypeScript is outside scope."
     verify:
       - "strict structural-owner, family-refinement, and aggregate compilation"
-      - "exact twelve-constructor coverage and six-family mapping audit"
+      - "exact ten-constructor coverage and five-family mapping audit"
+      - "absence of abstraction/instantiation execution declarations and Comprehension Step/refinement/completeness branches"
       - "scripts/audit-lean-authority.sh rules recursive dependency exclusion"
       - "scripts/audit-lean-authority.sh implementation semantic dependency exclusion"
       - "scripts/audit-lean-authority.sh proof aggregate-boundary audit"
@@ -759,7 +762,7 @@ tasks:
       - "Reject any semantic declaration, proof, import, or parallel authority in Concrete or Refinement."
       - "Reject any Concrete/Refinement dependency in recursive Rule relations or soundness."
       - "Reject relocation, renaming, wrapping, or re-export of an operational semantic tower."
-      - "Reject any matcher/search subsystem or incomplete twelve-constructor coverage."
+      - "Reject any matcher/search subsystem, incomplete ten-constructor coverage, or abstraction/instantiation execution surface."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -768,14 +771,14 @@ tasks:
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute corrected Task 10: prove syntactic family reflection and aggregate execution completeness without search or semantics."
+    objective: "Execute corrected Task 10: prove syntactic reflection and aggregate execution completeness for the five-family actual Rule.Step without search or semantics."
     inputs:
       - "Approved T117 receipt"
       - "Plan Task 10"
     constraints:
       - "Construct proof-bearing request data existentially; do not define or call a matcher or executable search."
       - "Concrete and Refinement source and dependency closures remain free of models, denotation, semantic implication, Rule.Soundness, Step.sound, and Proof."
-      - "Prove all six family completeness theorems and execute_complete with the fixed twelve-constructor executor."
+      - "Prove five family completeness theorems and execute_complete with the fixed ten-constructor executor; no Comprehension completeness theorem exists."
       - "Lean only; TypeScript is outside scope."
     verify:
       - "strict family and aggregate completeness compilation"
@@ -802,7 +805,7 @@ tasks:
     assignee: Worker
     status: queued
     reasoning_hint: high
-    objective: "Execute corrected Task 11: define twelve-branch syntactic Means, prove same-request execution success, and prove unconditional rejection correctness for every executor error."
+    objective: "Execute corrected Task 11: define ten-branch syntactic Means, prove same-request execution success, and prove unconditional rejection correctness for every executor error."
     inputs:
       - "Approved T119 receipt"
       - "Plan Task 11"
@@ -825,7 +828,7 @@ tasks:
       - "Do not exclude errors, weaken the theorem, add search, or introduce compatibility paths."
     verify:
       - "strict Means, same-request completeness, and unconditional rejection compilation"
-      - "exact twelve-constructor Means audit"
+      - "exact ten-constructor Means audit and absence of Comprehension execution branches"
       - "separate Means owner source scan and elaborated-value dependency exclusion of execute results, receipts, errors, and semantics"
       - "all-error theorem signature and kernel axiom audit"
       - "lake build and git diff --check"
@@ -929,6 +932,8 @@ tasks:
       - "Reject recursive semantic theorems that depend on concrete execution artifacts."
       - "Reject any semantic declaration, proof, import, or parallel authority under Concrete or Refinement."
       - "Reject rejection correctness that excludes an executor error or assumes an error classifier."
+      - "Reject any abstraction/instantiation executable, Concrete.Step constructor, refinement/completeness/rejection branch, or Rule.Step Comprehension constructor."
+      - "Require standalone recursive Comprehension relation, isomorphism transport, and soundness to remain."
       - "Require Proof-layer concrete validity to be a thin composition of refinement, Step.sound, and representation/isomorphism transport."
       - "Reject compatibility authorities or incomplete theorem dependencies."
     expected_output:

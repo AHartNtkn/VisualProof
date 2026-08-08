@@ -12,10 +12,10 @@
 - `OpenDiagram arity` is a nonrecursive mathematical interface: one `Region externalClasses []`, an ordered map from `Fin arity` boundary positions to external wire classes, and surjectivity. Repeated positions may alias; order and multiplicity are preserved.
 - Rule-specific mathematics is stated over `Region` whenever no ordered boundary fact is involved. Rules that can change the boundary quotient are stated directly over `OpenDiagram`.
 - A local occurrence is evidence that a recursive host body is isomorphic to a typed `DiagramContext` filled with a `Region`. It is not a search result.
-- Every rule is a proposition-valued relation. The abstract inventory is exactly `Erasure`, `WireSever`, `Iteration`, `DoubleCut`, `Comprehension`, and `Vacuity`.
+- Every rule is a proposition-valued relation. The recursive mathematical inventory is exactly `Erasure`, `WireSever`, `Iteration`, `DoubleCut`, `Comprehension`, and `Vacuity`. `Comprehension` and its standalone soundness theorem remain available as recursive mathematics but are not members of the actual `Rule.Step` ruleset.
 - Each pair has one positive-context relation. A negative controlling context uses its converse. `Iteration`, `DoubleCut`, and `Vacuity` may admit both directions at either polarity only after their base transformation is proved semantically invertible.
 - Abstract relations and `Rule.Step` have no execution orientation. `Step source target` means the ordinary implication from `source` to `target`.
-- Concrete execution retains exactly the twelve operation constructors: `boundRelationSpawn`, `wireJoin`, `erasure`, `wireSever`, `iteration`, `deiteration`, `doubleCutIntro`, `doubleCutElim`, `comprehensionInstantiate`, `comprehensionAbstract`, `vacuousIntro`, and `vacuousElim`.
+- Concrete execution has exactly ten operation constructors: `boundRelationSpawn`, `wireJoin`, `erasure`, `wireSever`, `iteration`, `deiteration`, `doubleCutIntro`, `doubleCutElim`, `vacuousIntro`, and `vacuousElim`. Abstraction and instantiation have no concrete request, payload, tag, executor branch, receipt theorem, refinement theorem, completeness theorem, or rejection branch.
 - The concrete operation split does not define the abstract rule split. Refinement maps each operation to the base relation or its converse at the one controlling region polarity.
 - Lean contains no occurrence matcher, search status, candidate enumeration, search frontier, or matcher theorem. Requests contain the selected finite data and proofs that execution consumes.
 - `Concrete.translate` is the public fallible conversion from unchecked flat open syntax. `Represents` is its graph modulo `OpenDiagramIso`.
@@ -33,7 +33,7 @@
 Two implementation changes follow logically from the required theorems.
 
 1. Execution operates on checked open states, not only closed checked diagrams. Otherwise `execute_complete` can cover only arity zero.
-2. The constructor named `boundRelationSpawn` must accept a supplied checked open diagram and insertion occurrence sufficient to realize the full converse of `Erasure`. Its present atom-only payload cannot realize arbitrary negative-context insertion, so keeping that payload would make one-step execution completeness false. The twelve-constructor roster and constructor name stay fixed; this constructor's payload becomes general enough for its assigned relation.
+2. The constructor named `boundRelationSpawn` must accept a supplied checked open diagram and insertion occurrence sufficient to realize the full converse of `Erasure`. Its present atom-only payload cannot realize arbitrary negative-context insertion, so keeping that payload would make one-step execution completeness false. The ten-constructor roster and constructor name stay fixed; this constructor's payload becomes general enough for its assigned relation.
 
 Iteration remains a one-selected-occurrence/one-target transformation, matching the existing operation. The abstract relation does not invent a simultaneous list operation.
 
@@ -48,7 +48,7 @@ Lean's indexed `Fin` and `RelVar` syntax provides scope and capture safety. Do n
 | Layer | Modules | Responsibility |
 |---|---|---|
 | Diagram | structural diagram modules plus separately owned semantic modules | Recursive syntax, open interface, renaming, isomorphism, contexts, occurrence evidence, and separately layered denotation |
-| Rules | `VisualProof/Rule/{Relation,Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity,Step,Soundness}.lean` and family soundness modules | Six relations, union, recursive semantic proofs |
+| Rules | `VisualProof/Rule/{Relation,Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity,Step,Soundness}.lean` and family soundness modules | Six recursive relations and their soundness; the actual `Step` union contains the five executable rule families and excludes standalone `Comprehension` |
 | Concrete | `VisualProof/Concrete/{Diagram,Open,WellFormed,Translate,Occurrence,Step}.lean` plus implementation submodules | Flat syntax, checking, supplied selections, compilation, and execution; no semantics |
 | Refinement | `VisualProof/Refinement/{Represents,Step,Complete,Rejection}.lean` plus structural family submodules | Translation/encoding laws, structural execution refinement/completeness, and rejection correctness; no semantics |
 | Proof | `VisualProof/Proof/{Replay,Schema,Theorem,Theory}.lean` | The only concrete-execution semantic validity, inherited compositionally from refinement and `Step.sound` |
@@ -963,7 +963,7 @@ This is one atomic import migration: intermediate public wrappers are not permit
 | finite selection, extraction, removal, splice, reassembly | `VisualProof/Concrete/Subgraph/**` |
 | concrete isomorphism and occurrence equivalence | `VisualProof/Concrete/{Isomorphism,Occurrence}.lean` |
 | provenance and interface transport | `VisualProof/Concrete/Transport.lean` |
-| operational structural and comprehension functions | `VisualProof/Concrete/Operation/**` |
+| operational structural functions | `VisualProof/Concrete/Operation/**` |
 | requests, orientation, errors, receipts, executor | `VisualProof/Concrete/Step.lean` |
 | proof-state execution support | `VisualProof/Concrete/State.lean` |
 
@@ -1007,7 +1007,7 @@ structure Concrete.Insertion
 so insertion does not also perform a wire join and is exactly the converse of
 `Erasure`.
 
-Then move the twelve-constructor `Concrete.Step (source : State arity)` mechanically. Ten constructors retain their current dependent fields. The changed constructors are:
+Then move the ten-constructor `Concrete.Step (source : State arity)` mechanically. Abstraction and instantiation are not concrete requests and their payloads, tags, operation functions, and executor branches do not move into the final execution API. The changed retained constructors are:
 
 ```lean
 | boundRelationSpawn (insertion : Concrete.Insertion source)
@@ -1062,7 +1062,7 @@ The final Lean tree contains no occurrence-search modules or aggregate imports. 
 
 **Validation:** compile every new aggregate, run `lake build`, run `rg` checks for old import paths and search declarations, run `git diff --check`, then commit the explicit migrated paths and `lakefile.toml` as `Separate concrete rewrite execution`.
 
-### Task 7: Define the exhaustive abstract `Step`
+### Task 7: Define the exhaustive actual `Step`
 
 **Files:**
 
@@ -1078,9 +1078,10 @@ inductive Step : OpenDiagram arity → OpenDiagram arity → Prop
   | wireSever : WireSever source target → Step source target
   | iteration : Iteration source target → Step source target
   | doubleCut : DoubleCut source target → Step source target
-  | comprehension : Comprehension source target → Step source target
   | vacuity : Vacuity source target → Step source target
 ```
+
+`Comprehension`, `Comprehension.iso`, and `Comprehension.sound` remain standalone recursive declarations. They are not constructors of the actual ruleset and have no concrete implementation.
 
 Prove `Step.iso` by family transport. RED/GREEN:
 
@@ -1091,7 +1092,7 @@ theorem Step.sound
       denoteOpen model source args → denoteOpen model target args
 ```
 
-The proof is six constructor cases delegating to family soundness. Use `lake env lean --deps VisualProof/Rule/Soundness.lean` as a direct-import diagnostic and a recursive source-import traversal to verify the full closure stops at recursive diagram and rule modules. Commit as `Prove relational step soundness`.
+The proof is five constructor cases delegating to the corresponding family soundness theorems. Use `lake env lean --deps VisualProof/Rule/Soundness.lean` as a direct-import diagnostic and a recursive source-import traversal to verify the full closure stops at recursive diagram and rule modules. The standalone Comprehension soundness owner remains compiled and audited independently. Commit as `Prove relational step soundness`.
 
 ### Task 8: Define translation, encoding, and representation
 
@@ -1220,7 +1221,7 @@ Run RED/GREEN for the round trip and the three representation theorems. Compile,
 
 **Files:**
 
-- Create `VisualProof/Refinement/Step/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean`
+- Create `VisualProof/Refinement/Step/{Erasure,WireSever,Iteration,DoubleCut,Vacuity}.lean`
 - Create `VisualProof/Refinement/Step.lean`
 - Create `scripts/audit-lean-authority.sh`, a Bash audit that recursively follows Lean source imports from fixed root sets and rejects forbidden layer dependencies
 - Split structural diagram declarations from semantic declarations wherever the concrete/refinement import closure currently mixes them
@@ -1237,7 +1238,9 @@ Before continuing family proofs, remediate the existing dependency boundary. `Co
 
 The script reports the full root-to-forbidden-import path. `lake env lean --deps` remains a useful direct-import diagnostic but is not accepted as proof of recursive closure purity.
 
-For each of the twelve request constructors, prove that successful execution translates to the assigned family relation. Compiler traversal, finite indices, splice traces, attachment partitions, carrier numbering, receipts, and recursive isomorphisms may appear only in this syntactic proof. Neither family modules nor the aggregate may state or prove a model, denotation, semantic implication, or rule-soundness result.
+As part of the Task 9 remediation, remove abstraction and instantiation from `Concrete.Step`, tags, executor dispatch, concrete operation owners, execution inversions, refinement owners, and execution-facing aggregates. Remove the `Comprehension` constructor from `Rule.Step` and its case from `Step.iso`/`Step.sound`, while preserving the standalone recursive Comprehension relation, isomorphism theorem, and soundness theorem.
+
+For each of the ten request constructors, prove that successful execution translates to the assigned actual-rule family relation. Compiler traversal, finite indices, splice traces, attachment partitions, carrier numbering, receipts, and recursive isomorphisms may appear only in this syntactic proof. Neither family modules nor the aggregate may state or prove a model, denotation, semantic implication, or rule-soundness result.
 
 The family table is exhaustive:
 
@@ -1247,7 +1250,6 @@ The family table is exhaustive:
 | `WireSever` | `wireSever`, `wireJoin` |
 | `Iteration` | `iteration`, `deiteration` |
 | `DoubleCut` | `doubleCutIntro`, `doubleCutElim` |
-| `Comprehension` | `comprehensionAbstract`, `comprehensionInstantiate` |
 | `Vacuity` | `vacuousIntro`, `vacuousElim` |
 
 The public aggregate theorem is stated over a checked open state and any represented source:
@@ -1307,18 +1309,20 @@ scripts/audit-lean-authority.sh rules
 scripts/audit-lean-authority.sh implementation
 rg -n '^import VisualProof\.(Model|Diagram\.Semantics|Concrete\.Semantics|Rule\.Soundness|Proof)' VisualProof/Concrete VisualProof/Refinement
 rg -n '\b(Model|denoteOpen|denoteRegion|ConcreteSemanticSimulation|Step\.sound)\b' VisualProof/Concrete VisualProof/Refinement
+rg -n 'comprehension(Abstract|Instantiate)|OperationComprehension|Comprehension.*Payload' VisualProof/Concrete VisualProof/Refinement VisualProof/Proof
+lake exe visualproof_step_tags
 rg -n '\bsorry\b|sorryAx' VisualProof
 lake build
 git diff --check
 ```
 
-The two semantic-source scans must return no declaration or import; dependency output must be checked recursively for the same forbidden owners.
+The semantic-source scans and the abstraction/instantiation execution scan must return no declaration or import. `visualproof_step_tags` must emit exactly the ten retained constructor tags. Dependency output must be checked recursively for the same forbidden owners.
 
 ### Task 10: Prove request reflection and execution completeness
 
 **Files:**
 
-- Create `VisualProof/Refinement/Complete/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean`
+- Create `VisualProof/Refinement/Complete/{Erasure,WireSever,Iteration,DoubleCut,Vacuity}.lean`
 - Create `VisualProof/Refinement/Complete.lean`
 
 For each family, prove an occurrence-reflection theorem: given `StateRepresents source sourceDiagram` and a family witness on `sourceDiagram`, construct the dependent checked finite selection, embedding, boundary assignment, scope proof, and operation payload needed by the corresponding `Concrete.Step` constructor. This is an existence proof over finite data, not a matcher or executable search function.
@@ -1343,11 +1347,10 @@ theorem Erasure.complete : Implemented Erasure
 theorem WireSever.complete : Implemented WireSever
 theorem Iteration.complete : Implemented Iteration
 theorem DoubleCut.complete : Implemented DoubleCut
-theorem Comprehension.complete : Implemented Comprehension
 theorem Vacuity.complete : Implemented Vacuity
 ```
 
-The erasure converse case uses the generalized `boundRelationSpawn` payload from Task 6. The open wire-sever case reflects the explicit boundary class split. The comprehension case reflects its simultaneous `Instantiates` derivation into the supplied list of checked occurrences.
+The erasure converse case uses the generalized `boundRelationSpawn` payload from Task 6. The open wire-sever case reflects the explicit boundary class split. Completeness ranges over the five-constructor actual `Rule.Step`; standalone Comprehension has no execution-completeness claim.
 
 After each request constructor theorem compiles, prove:
 
@@ -1373,7 +1376,6 @@ lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/Erasure.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/WireSever.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/Iteration.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/DoubleCut.lean
-lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/Comprehension.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/Vacuity.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Complete.lean
 scripts/audit-lean-authority.sh implementation
@@ -1392,7 +1394,7 @@ git diff --check
 - Create `VisualProof/Refinement/Rejection.lean`
 - Modify `VisualProof/Audit.lean` and its Lean audit support
 
-Define request meaning in its own owner `VisualProof.Refinement.Means`, not in `Concrete`: it depends on both concrete requests and abstract family relations. Its definition is exhaustive recursion over the twelve concrete constructors, relating the supplied data to the corresponding family witness. `Refinement/Rejection.lean` imports this owner and contains same-request completeness and rejection correctness.
+Define request meaning in its own owner `VisualProof.Refinement.Means`, not in `Concrete`: it depends on both concrete requests and actual-rule family relations. Its definition is exhaustive recursion over the ten concrete constructors, relating the supplied data to the corresponding family witness. `Refinement/Rejection.lean` imports this owner and contains same-request completeness and rejection correctness.
 
 ```lean
 def Means
@@ -1405,7 +1407,7 @@ def Means
     (targetDiagram : OpenDiagram arity) : Prop
 ```
 
-Implement `Means` by pattern matching on all twelve constructors. The branches, in constructor order, produce the Erasure converse, WireSever converse, Erasure base, WireSever base, Iteration base, Iteration converse, DoubleCut introduction, DoubleCut elimination, Comprehension instantiation, Comprehension abstraction, Vacuity introduction, and Vacuity elimination witnesses. Every branch body is a proposition defined from the relevant representation, selection/occurrence correspondence, controlling polarity, and family relation. Complete and compile all twelve bodies before RED.
+Implement `Means` by pattern matching on all ten constructors. The branches, in constructor order, produce the Erasure converse, WireSever converse, Erasure base, WireSever base, Iteration base, Iteration converse, DoubleCut introduction, DoubleCut elimination, Vacuity introduction, and Vacuity elimination witnesses. Every branch body is a proposition defined from the relevant representation, selection/occurrence correspondence, controlling polarity, and family relation. Complete and compile all ten bodies before RED.
 
 `Means` is a syntactic request-meaning relation. It may not mention `Concrete.execute`, success or error results, receipts, models, denotation, semantic implication, or soundness. Each branch fixes the supplied request and contains its structural correspondence, controlling polarity and legality evidence, assigned family witness or converse, and exact target representation/isomorphism.
 
@@ -1442,7 +1444,7 @@ theorem execute_rejects_only_invalid
     ¬ ∃ targetDiagram, Means sourceRep request orientation targetDiagram
 ```
 
-Prove the result by contradicting `Means.execute`; it covers every error returned for a fully specified request. Validate the twelve branch definitions, same-request completeness, the unconditional rejection signature, semantic-free source and dependency closures, the full build, and kernel axioms. Commit as `Prove concrete rejection correctness`.
+Prove the result by contradicting `Means.execute`; it covers every error returned for a fully specified request. Validate the ten branch definitions, same-request completeness, the unconditional rejection signature, semantic-free source and dependency closures, the full build, and kernel axioms. Commit as `Prove concrete rejection correctness`.
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Concrete/Step.lean
@@ -1469,14 +1471,14 @@ Both source scans must be empty. Lean audit support must recursively inspect the
 
 Replay stores concrete checked open states and requests. Its correctness theorem obtains a recursive step from `Refinement.execute_sound`, aligns adjacent representatives using representation/isomorphism transport, and applies `Rule.Step.sound`. The theorem schema remains open because it quantifies over ordered boundary arguments.
 
-This is the only layer in which concrete execution is connected to models or denotation. The proof must be a thin composition of `Refinement.execute_sound`, `Rule.Step.sound`, and representation/isomorphism transport. It may not split on the twelve request constructors, import a family-specific soundness owner, or perform rule-specific semantic reasoning. Validate those source and dependency constraints, compile all four modules, run `lake build`, kernel-audit the checked-theorem result, and commit as `Factor proof replay through refinement`.
+This is the only layer in which concrete execution is connected to models or denotation. The proof must be a thin composition of `Refinement.execute_sound`, `Rule.Step.sound`, and representation/isomorphism transport. It may not split on the ten request constructors, import a family-specific soundness owner, or perform rule-specific semantic reasoning. Validate those source and dependency constraints, compile all four modules, run `lake build`, kernel-audit the checked-theorem result, and commit as `Factor proof replay through refinement`.
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Proof/Replay.lean
 lake env lean -DwarningAsError=true VisualProof/Proof/Schema.lean
 lake env lean -DwarningAsError=true VisualProof/Proof/Theorem.lean
 lake env lean -DwarningAsError=true VisualProof/Proof/Theory.lean
-rg -n '\.(boundRelationSpawn|wireJoin|erasure|wireSever|iteration|deiteration|doubleCutIntro|doubleCutElim|comprehensionInstantiate|comprehensionAbstract|vacuousIntro|vacuousElim)\b' VisualProof/Proof
+rg -n '\.(boundRelationSpawn|wireJoin|erasure|wireSever|iteration|deiteration|doubleCutIntro|doubleCutElim|vacuousIntro|vacuousElim)\b' VisualProof/Proof
 scripts/audit-lean-authority.sh proof
 lake env lean -DwarningAsError=true VisualProof/Audit.lean
 lake build
@@ -1499,11 +1501,12 @@ The constructor-case scan must be empty in semantic proof bodies. The proof-mode
 1. `VisualProof.lean` imports diagram syntax/semantics and rule soundness independently from concrete translation/execution and refinement, then imports proof modules that compose the layers.
 2. Audit the recursive direction: the dependency closures of every rule relation, every family soundness owner, and `VisualProof/Rule/Soundness.lean` contain no path under `VisualProof/Concrete`, `VisualProof/Refinement`, or the flat implementation tree.
 3. Audit the implementation direction: direct source scans and recursive dependency closures for `Concrete.Step`, `Concrete.Translate`, `Concrete.Encode`, `Refinement.Represents`, `Refinement.Step`, `Refinement.Complete`, and `Refinement.Rejection` contain no model, denotation, semantic implication, semantic simulation, `Rule.Soundness`, `Rule.Step.sound`, or `Proof` declaration/import. No semantic module or parallel semantic authority remains under `Concrete/**` or `Refinement/**`.
-4. Inspect the elaborated `Means` declaration and its branch bodies: they reference the supplied request type but do not depend on `Concrete.execute`, success/error results, receipts, models, denotation, or soundness, and all twelve request constructors have an exact structural branch.
-5. `rg -n '\bsorry\b|sorryAx' VisualProof` reports no task-owned production proof.
-6. `rg` reports no occurrence-search declaration, import, candidate enumeration, search status, or matcher theorem.
-7. `#print axioms` for `Step.sound`, translation round trip, representation uniqueness/completeness, execution soundness/completeness, unconditional rejection correctness, and checked-theorem soundness contains no `sorryAx` or unapproved project axiom.
-8. Run:
+4. Inspect the elaborated `Means` declaration and its branch bodies: they reference the supplied request type but do not depend on `Concrete.execute`, success/error results, receipts, models, denotation, or soundness, and all ten request constructors have an exact structural branch.
+5. `Rule.Step` has exactly five constructors and `Concrete.Step` exactly ten; no abstraction/instantiation execution declaration exists under Concrete, Refinement, or Proof. The standalone Comprehension relation/isomorphism/soundness declarations still compile under Rule.
+6. `rg -n '\bsorry\b|sorryAx' VisualProof` reports no task-owned production proof.
+7. `rg` reports no occurrence-search declaration, import, candidate enumeration, search status, or matcher theorem.
+8. `#print axioms` for `Step.sound`, standalone `Comprehension.sound`, translation round trip, representation uniqueness/completeness, execution soundness/completeness, unconditional rejection correctness, and checked-theorem soundness contains no `sorryAx` or unapproved project axiom.
+9. Run:
 
 ```bash
 lake env lean -DwarningAsError=true VisualProof/Rule/Soundness.lean
@@ -1515,6 +1518,8 @@ lake env lean -DwarningAsError=true VisualProof/Proof/Theorem.lean
 lake env lean -DwarningAsError=true VisualProof/Audit.lean
 rg -n '^import VisualProof\.(Model|Diagram\.Semantics|Concrete\.Semantics|Rule\.Soundness|Proof)' VisualProof/Concrete VisualProof/Refinement
 rg -n '\b(Model|denoteOpen|denoteRegion|ConcreteSemanticSimulation|Step\.sound)\b' VisualProof/Concrete VisualProof/Refinement
+rg -n 'comprehension(Abstract|Instantiate)|OperationComprehension|Comprehension.*Payload' VisualProof/Concrete VisualProof/Refinement VisualProof/Proof
+lake exe visualproof_step_tags
 scripts/audit-lean-authority.sh rules
 scripts/audit-lean-authority.sh implementation
 scripts/audit-lean-authority.sh proof
@@ -1528,12 +1533,12 @@ Stage only task-owned paths explicitly and commit as `Complete recursive rewrite
 
 - [ ] `Region` is the only recursive syntax; `OpenDiagram` is only the ordered open interface.
 - [ ] Occurrence is relational context decomposition, never search output.
-- [ ] The six family relations are complete and contain only mathematical witnesses.
+- [ ] The six recursive family relations are complete and contain only mathematical witnesses; standalone Comprehension and its soundness remain outside the actual ruleset.
 - [ ] Positive-context rules, converse under negative polarity, and proved invertibility are the only direction mechanisms in the abstract layer.
-- [ ] `Step` has exactly six constructors and `Step.sound` is ordinary implication.
+- [ ] `Step` has exactly five constructors—Erasure, WireSever, Iteration, DoubleCut, and Vacuity—and `Step.sound` is ordinary implication; Comprehension is not a Step constructor.
 - [ ] `Step.sound` has no concrete dependency.
 - [ ] Concrete and Refinement source and import closures contain no semantic declaration, proof, import, or parallel authority.
-- [ ] Concrete execution has exactly twelve operation constructors over checked open state.
+- [ ] Concrete execution has exactly ten operation constructors over checked open state and contains no abstraction/instantiation payload, tag, branch, or theorem.
 - [ ] Requests supply every selected occurrence and legality witness; execution performs no search.
 - [ ] `Concrete.translate` is validation followed by elaboration.
 - [ ] `Represents` is successful translation modulo propositional open-diagram isomorphism.

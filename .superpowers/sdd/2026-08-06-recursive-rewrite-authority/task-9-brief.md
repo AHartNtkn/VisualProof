@@ -4,8 +4,8 @@ Base commit: `26b57d84`
 
 ## Outcome
 
-Prove that each successful concrete execution realizes exactly one of the six
-recursive rule relations. Task 9 is entirely syntactic: it may establish
+Prove that each successful concrete execution realizes exactly one of the five
+actual recursive rule families. Task 9 is entirely syntactic: it may establish
 compiler equations, carrier and boundary correspondences, recursive
 isomorphisms, rule witnesses, representation transport, and execution
 refinement, but it may not state or prove any result about models, denotation,
@@ -39,6 +39,9 @@ The following conditions must hold before the Task 9 aggregate is GREEN:
   retained elsewhere.
 - The pure six-family rule soundness owners and `Rule.Step.sound` remain in the
   Rule layer and remain independent of Concrete and Refinement.
+- The standalone recursive `Comprehension` relation, its isomorphism transport,
+  and its soundness theorem remain in Rule, but Comprehension is removed from
+  `Rule.Step` and has no Concrete/Refinement execution surface.
 - Existing `Proof/**` consumers of concrete semantic APIs migrate directly to
   Diagram semantics and aggregate Rule soundness during remediation, without an
   adapter or family-specific concrete soundness theorem.
@@ -63,12 +66,19 @@ The mapping is exhaustive and fixed:
 | `WireSever` | `wireSever`, `wireJoin` |
 | `Iteration` | `iteration`, `deiteration` |
 | `DoubleCut` | `doubleCutIntro`, `doubleCutElim` |
-| `Comprehension` | `comprehensionAbstract`, `comprehensionInstantiate` |
 | `Vacuity` | `vacuousIntro`, `vacuousElim` |
 
 Each family owns its structural successful-execution theorems at
-`VisualProof/Refinement/Step/{Erasure,WireSever,Iteration,DoubleCut,Comprehension,Vacuity}.lean`.
+`VisualProof/Refinement/Step/{Erasure,WireSever,Iteration,DoubleCut,Vacuity}.lean`.
 The aggregate owner is `VisualProof/Refinement/Step.lean`.
+
+Before any further family proof work, remove `comprehensionAbstract` and
+`comprehensionInstantiate` from `Concrete.Step`, operation tags, payloads,
+executor dispatch, concrete operation owners, success inversions, and all
+execution-facing aggregates. Remove the Comprehension constructor and case from
+`Rule.Step`, `Step.iso`, and `Step.sound`. Do not create a Comprehension
+refinement or completeness owner. Preserve only the recursive relation and its
+standalone soundness declarations.
 
 For every constructor, start from its actual successful `Concrete.execute`
 equation. Construct the assigned recursive relation or its converse at the
@@ -77,8 +87,8 @@ proof may conclude a semantic implication or invoke a rule soundness theorem.
 
 `Concrete.Insertion` carries `input.AttachmentsRespectBoundary`, ensuring
 `boundRelationSpawn` is only the converse of `Erasure`. The authorized relation
-shapes already use splice framing for Erasure, DoubleCut, Comprehension, and
-Vacuity, and bind the Iteration anchor-local carrier once. Task 9 consumes those
+shapes already use splice framing for Erasure, DoubleCut, and Vacuity, and bind
+the Iteration anchor-local carrier once. Task 9 consumes those
 relations structurally; it does not prove their semantic laws.
 
 ## Public theorems
@@ -149,11 +159,12 @@ translation, representation uniqueness, and `Step.iso`. It does not invoke
 
 ## Validation and delivery
 
-- Strict compilation of every structural owner, all six family modules, and
+- Strict compilation of every structural owner, all five executable-family modules, and
   `Refinement/Step.lean`.
 - Direct signature checks for `execute_sound` and `execute_translates`.
-- Exact audit that the twelve `Concrete.Step` constructors are covered once by
-  the fixed six-family mapping.
+- Exact audit that the ten `Concrete.Step` constructors are covered once by
+  the fixed five-family mapping, with no abstraction/instantiation execution
+  declaration remaining.
 - Recursive dependency scans proving all Rule relations and soundness owners are
   independent of Concrete and Refinement.
 - Direct source and recursive dependency scans proving Concrete and Refinement
