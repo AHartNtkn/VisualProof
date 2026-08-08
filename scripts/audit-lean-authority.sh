@@ -79,6 +79,197 @@ report_source_matches() {
   done < <(rg -n --glob '*.lean' "$pattern" "$@" || true)
 }
 
+constructors_between() {
+  local file=$1
+  local start=$2
+  local stop=$3
+
+  awk -v start="$start" -v stop="$stop" '
+    $0 ~ start { inside = 1; next }
+    inside && $0 ~ stop { exit }
+    inside && /^[[:space:]]*\|[[:space:]]*[[:alpha:]][[:alnum:]_]*/ {
+      line = $0
+      sub(/^[[:space:]]*\|[[:space:]]*/, "", line)
+      sub(/[[:space:]].*$/, "", line)
+      print line
+    }
+  ' "$file"
+}
+
+case_labels_between() {
+  local file=$1
+  local start=$2
+  local stop=$3
+
+  awk -v start="$start" -v stop="$stop" '
+    $0 ~ start { inside = 1; next }
+    inside && $0 ~ stop { exit }
+    inside && /^[[:space:]]*\|[[:space:]]*\.[[:alpha:]][[:alnum:]_]*/ {
+      line = $0
+      sub(/^[[:space:]]*\|[[:space:]]*\./, "", line)
+      sub(/[[:space:]].*$/, "", line)
+      print line
+    }
+  ' "$file"
+}
+
+tags_in_all() {
+  local file=$1
+  awk '
+    /^def StepTag[.]all[[:space:]]*:/ { inside = 1; next }
+    inside && /^theorem StepTag\.all_length/ { exit }
+    inside {
+      line = $0
+      while (match(line, /\.[[:alpha:]][[:alnum:]_]*/)) {
+        print substr(line, RSTART + 1, RLENGTH - 1)
+        line = substr(line, RSTART + RLENGTH)
+      }
+    }
+  ' "$file"
+}
+
+assert_exact_roster() {
+  local label=$1
+  shift
+  local -a expected=("$@")
+  local -a actual=()
+  mapfile -t actual
+
+  local expected_sorted actual_sorted duplicate
+  expected_sorted=$(printf '%s\n' "${expected[@]}" | LC_ALL=C sort)
+  actual_sorted=$(printf '%s\n' "${actual[@]}" | LC_ALL=C sort)
+  duplicate=$(printf '%s\n' "${actual[@]}" | LC_ALL=C sort | uniq -d)
+
+  if [[ ${#actual[@]} -ne ${#expected[@]} || $actual_sorted != "$expected_sorted" || -n $duplicate ]]; then
+    printf '%s roster mismatch\nexpected:\n%s\nactual:\n%s\n' \
+      "$label" "$expected_sorted" "$actual_sorted"
+    if [[ -n $duplicate ]]; then
+      printf '%s duplicate constructor/tag(s): %s\n' "$label" "$duplicate"
+    fi
+    violations=$((violations + 1))
+  fi
+}
+
+require_roster_file() {
+  local file=$1
+  if [[ ! -f $file ]]; then
+    printf 'missing roster source: %s\n' "${file#"$repo_root"/}"
+    violations=$((violations + 1))
+    return 1
+  fi
+}
+
+require_roster_declaration() {
+  local label=$1
+  local pattern=$2
+  local file=$3
+  if ! rg -q --pcre2 "$pattern" "$file"; then
+    printf 'missing required standalone declaration: %s\n' "$label"
+    violations=$((violations + 1))
+  fi
+}
+
+require_roster_namespaced_theorem() {
+  local target_namespace=$1
+  local theorem=$2
+  local file=$3
+
+  if ! awk -v target_namespace="$target_namespace" -v theorem="$theorem" '
+    /^namespace [[:alnum:]_.]+$/ {
+      namespaces[++depth] = $2
+      next
+    }
+    /^end [[:alnum:]_.]+$/ {
+      if (depth > 0 && namespaces[depth] == $2) depth--
+      next
+    }
+    $1 == "theorem" && $2 == theorem && depth > 0 &&
+        namespaces[depth] == target_namespace {
+      found = 1
+    }
+    END { exit !found }
+  ' "$file"; then
+    printf 'missing required standalone declaration: %s.%s\n' "$target_namespace" "$theorem"
+    violations=$((violations + 1))
+  fi
+}
+
+reject_roster_matches() {
+  local label=$1
+  local pattern=$2
+  shift 2
+
+  local -a existing=()
+  local root match
+  for root in "$@"; do
+    [[ -e $root ]] && existing+=("$root")
+  done
+  (( ${#existing[@]} > 0 )) || return
+
+  while IFS= read -r match; do
+    [[ -n $match ]] || continue
+    printf '%s: %s\n' "$label" "$match"
+    violations=$((violations + 1))
+  done < <(rg -n -i --glob '*.lean' "$pattern" "${existing[@]}" || true)
+}
+
+audit_roster() {
+  local rule_step="$repo_root/VisualProof/Rule/Step.lean"
+  local concrete_step="$repo_root/VisualProof/Concrete/Step.lean"
+  local step_core="$repo_root/VisualProof/Concrete/Step/Core.lean"
+  local step_tags="$repo_root/VisualProof/Concrete/StepTags.lean"
+  local comprehension_relation="$repo_root/VisualProof/Rule/Comprehension/Relation.lean"
+  local comprehension_soundness="$repo_root/VisualProof/Rule/Soundness/Comprehension.lean"
+  local -a rule_expected=(erasure wireSever iteration doubleCut vacuity)
+  local -a concrete_expected=(boundRelationSpawn wireJoin erasure wireSever iteration deiteration doubleCutIntro doubleCutElim vacuousIntro vacuousElim)
+
+  require_roster_file "$rule_step" &&
+    assert_exact_roster 'Rule.Step constructors' "${rule_expected[@]}" \
+      < <(constructors_between "$rule_step" '^inductive Step[[:space:]]' '^theorem Step[.]iso')
+  require_roster_file "$concrete_step" &&
+    assert_exact_roster 'Concrete.Step constructors' "${concrete_expected[@]}" \
+      < <(constructors_between "$concrete_step" '^inductive Step[[:space:]]' '^def Step[.]tag')
+  require_roster_file "$concrete_step" &&
+    assert_exact_roster 'Concrete.Step.tag cases' "${concrete_expected[@]}" \
+      < <(case_labels_between "$concrete_step" '^def Step[.]tag' '^theorem Step[.]tag_mem_all')
+  require_roster_file "$step_core" &&
+    assert_exact_roster 'Concrete.StepTag constructors' "${concrete_expected[@]}" \
+      < <(constructors_between "$step_core" '^inductive StepTag$' '^def StepTag[.]all')
+  require_roster_file "$step_core" &&
+    assert_exact_roster 'Concrete.StepTag.all tags' "${concrete_expected[@]}" \
+      < <(tags_in_all "$step_core")
+  require_roster_file "$step_tags" &&
+    assert_exact_roster 'Concrete.StepTag serialized tags' "${concrete_expected[@]}" \
+      < <(case_labels_between "$step_tags" '^def serializedName' '^def serializedAll')
+
+  require_roster_file "$comprehension_relation" &&
+    require_roster_declaration 'Comprehension relation' \
+      '(?m)^def Comprehension[[:space:]]*:[[:space:]]*Rule' "$comprehension_relation"
+  require_roster_file "$comprehension_relation" &&
+    require_roster_declaration 'Comprehension isomorphism transport' \
+      '(?m)^theorem Comprehension\.iso\b' "$comprehension_relation"
+  require_roster_file "$comprehension_soundness" &&
+    require_roster_namespaced_theorem Comprehension sound "$comprehension_soundness"
+
+  reject_roster_matches 'Comprehension execution declaration' '\bcomprehension\b' \
+    "$repo_root/VisualProof/Concrete" "$repo_root/VisualProof/Refinement"
+  reject_roster_matches 'Comprehension branch' '\bcomprehension\b' \
+    "$rule_step" "$repo_root/VisualProof/Refinement/Step" \
+    "$repo_root/VisualProof/Refinement/Step.lean" \
+    "$repo_root/VisualProof/Refinement/Complete" \
+    "$repo_root/VisualProof/Refinement/Complete.lean" \
+    "$repo_root/VisualProof/Refinement/Means.lean"
+  reject_roster_matches 'obsolete Proof request name' \
+    'comprehension(Abstract|Instantiate)' "$repo_root/VisualProof/Proof"
+
+  if (( violations > 0 )); then
+    printf 'roster: %d execution-roster/absence violation(s)\n' "$violations" >&2
+    return 1
+  fi
+
+  printf 'roster: exact five-family Rule.Step and ten-constructor Concrete.Step roster; standalone Comprehension only\n'
+}
+
 walk() {
   local root=$1
   local module=$2
@@ -106,6 +297,11 @@ walk() {
     fi
   done < <(imports_of "$module")
 }
+
+if [[ $mode == roster ]]; then
+  audit_roster
+  exit $?
+fi
 
 case "$mode" in
   rules)
@@ -154,7 +350,7 @@ case "$mode" in
     required_roots=("${roots[@]}")
     ;;
   *)
-    printf 'usage: %s {rules|implementation|proof}\n' "$0" >&2
+    printf 'usage: %s {rules|implementation|proof|roster}\n' "$0" >&2
     exit 2
     ;;
 esac

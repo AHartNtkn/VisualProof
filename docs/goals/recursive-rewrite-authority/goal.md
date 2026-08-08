@@ -14,7 +14,7 @@ Refactor the complete calculus to ordinary relational recursive-diagram rewritin
 - Audience: maintainers and users relying on kernel-checked rule soundness
 - Authority: `requested`
 - Proof type: `test`
-- Completion proof: the Lean development builds without incomplete definitions, every abstract rule factors through recursive `Step.sound`, and every successful concrete transition has a Lean refinement proof into `Step`
+- Completion proof: the Lean development builds without incomplete definitions, the five executable recursive rule families factor through `Step.sound`, standalone Comprehension remains recursive mathematics outside the actual ruleset, and every successful concrete transition has a Lean refinement proof into `Step`
 - Goal oracle: kernel-checked Lean theorems demonstrate the requested authority boundary and the final audit records `full_outcome_complete: true`
 - Likely misfire: adding abstract wrappers while leaving concrete execution data as the real rule or semantic authority
 - Blind spots considered: bound-wire equivalence, repeated boundary aliases, inherently simultaneous rules, capture avoidance, ordered interfaces, representation uniqueness, and the distinction between executor soundness and executor completeness
@@ -39,7 +39,7 @@ Execute the reviewed implementation plan in successive theorem-driven Worker pac
 ## Non-Negotiable Constraints
 
 - Recursive open diagrams and their structural denotation are the sole mathematical syntax and semantic authority.
-- Every abstract rule is a proposition over recursive diagrams; `Step` is their exhaustive inductive union.
+- The five executable recursive rule families are propositions over recursive diagrams; `Step` is their exhaustive inductive union, while standalone Comprehension remains recursive mathematics outside the actual ruleset.
 - Occurrence is context decomposition evidence, never a search algorithm or execution result.
 - Local rules use contextual closure modulo recursive isomorphism; global and simultaneous rules retain direct relational statements.
 - Rule soundness mentions no concrete carriers, numbering, execution state, trace, receipt, request, or error.

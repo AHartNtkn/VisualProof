@@ -42,6 +42,11 @@ The following conditions must hold before the Task 9 aggregate is GREEN:
 - The standalone recursive `Comprehension` relation, its isomorphism transport,
   and its soundness theorem remain in Rule, but Comprehension is removed from
   `Rule.Step` and has no Concrete/Refinement execution surface.
+- `scripts/audit-lean-authority.sh roster` is the exact execution-roster and
+  absence gate: it proves the five named `Rule.Step` constructors, ten named
+  Concrete constructors/tags, required standalone Rule Comprehension
+  declarations, no Comprehension execution owner or branch, and no former
+  abstraction/instantiation request name in Proof.
 - Existing `Proof/**` consumers of concrete semantic APIs migrate directly to
   Diagram semantics and aggregate Rule soundness during remediation, without an
   adapter or family-specific concrete soundness theorem.
@@ -162,9 +167,8 @@ translation, representation uniqueness, and `Step.iso`. It does not invoke
 - Strict compilation of every structural owner, all five executable-family modules, and
   `Refinement/Step.lean`.
 - Direct signature checks for `execute_sound` and `execute_translates`.
-- Exact audit that the ten `Concrete.Step` constructors are covered once by
-  the fixed five-family mapping, with no abstraction/instantiation execution
-  declaration remaining.
+- `scripts/audit-lean-authority.sh roster` passes as the exact five-family,
+  ten-constructor/tag, standalone-Comprehension, and execution-absence audit.
 - Recursive dependency scans proving all Rule relations and soundness owners are
   independent of Concrete and Refinement.
 - Direct source and recursive dependency scans proving Concrete and Refinement
@@ -173,8 +177,9 @@ translation, representation uniqueness, and `Step.iso`. It does not invoke
 - Source checks proving no concrete semantic module, refinement semantic tower,
   operational soundness aggregate, matcher/search subsystem, compatibility
   authority, proof hole, or project axiom remains.
-- `scripts/audit-lean-authority.sh rules`, `implementation`, and `proof` all
-  pass and provide the recursive import evidence; Task 9 does not treat
+- `scripts/audit-lean-authority.sh rules`, `implementation`, `proof`, and
+  `roster` all pass and provide the recursive import and executable-roster
+  evidence; Task 9 does not treat
   `lean --deps` as a transitive audit.
 - Full `lake build` and `git diff --check`.
 - Write

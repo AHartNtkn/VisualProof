@@ -292,7 +292,7 @@ Add relation and contextual isomorphism transport. Do not define `Step` yet.
 - Create `VisualProof/Rule/DoubleCut.lean`
 - Create `VisualProof/Rule/Comprehension/Relation.lean`
 - Create `VisualProof/Rule/Vacuity.lean`
-- Modify `VisualProof/Rule/Comprehension.lean` only after its operational declarations have a concrete destination in Task 6
+- Keep `VisualProof/Rule/Comprehension.lean` as standalone recursive mathematics: its relation, isomorphism transport, and soundness remain in Rule and have no Concrete or Refinement execution destination
 
 This task defines the noninvertible family relations and the bases of the three invertible families. It contains no semantic theorem and imports no concrete module.
 
@@ -1230,13 +1230,14 @@ Run RED/GREEN for the round trip and the three representation theorems. Compile,
 
 Before continuing family proofs, remediate the existing dependency boundary. `Concrete/**` and `Refinement/**` must have semantic-free source and import closures. In particular, remove concrete denotation APIs and concrete semantic simulation/soundness modules; split any mixed diagram module so structural consumers do not import models or denotation; replace imports of operational `Rule.Soundness` modules with focused structural owners; and remove the operational rule-soundness aggregates once their structural facts have been extracted. Preserve compliant execution inversions and structural proofs already established. Migrate existing `Proof/**` consumers of concrete semantic APIs directly to the authoritative Diagram semantics and Rule soundness interfaces during this remediation; do not create an intermediate semantic adapter. Task 12 later narrows concrete-execution validity to the final thin composition.
 
-`scripts/audit-lean-authority.sh` has three modes and fails on a forbidden edge anywhere in the recursive source-import closure:
+`scripts/audit-lean-authority.sh` has four modes. Its import modes fail on a forbidden edge anywhere in the recursive source-import closure:
 
 - `rules`: start from all six relations, all six family soundness owners, `Rule.Step`, and `Rule.Soundness`; reject every `Concrete`, `Refinement`, and `Proof` import.
 - `implementation`: start from `Concrete.Step`, `Concrete.Translate`, `Concrete.Encode`, `Refinement.Represents`, `Refinement.Step`, and later completeness/rejection roots when present; reject `Model`, semantic Diagram modules, concrete semantic modules, `Rule.Soundness`, `Rule.Step.sound` owners, and `Proof`.
 - `proof`: require concrete-execution semantic owners to import the aggregate refinement and aggregate `Rule.Soundness` interfaces plus structural representation/isomorphism transport; reject direct family soundness, operational soundness, or concrete semantic imports.
+- `roster`: inspect the actual `Rule.Step`, `Concrete.Step`, `Step.tag`, `StepTag`, tag inventory, and serialized-tag declarations. It requires exactly the fixed five actual rule constructors and ten concrete constructors/tags, requires the standalone Rule Comprehension relation/isomorphism/soundness declarations, and rejects every Comprehension execution declaration or branch under Concrete, Refinement, `Rule.Step`, Means, or completeness, as well as the former request names in Proof.
 
-The script reports the full root-to-forbidden-import path. `lake env lean --deps` remains a useful direct-import diagnostic but is not accepted as proof of recursive closure purity.
+The script reports the full root-to-forbidden-import path for import modes and the exact source declaration mismatch for roster mode. `lake env lean --deps` remains a useful direct-import diagnostic but is not accepted as proof of recursive closure purity.
 
 As part of the Task 9 remediation, remove abstraction and instantiation from `Concrete.Step`, tags, executor dispatch, concrete operation owners, execution inversions, refinement owners, and execution-facing aggregates. Remove the `Comprehension` constructor from `Rule.Step` and its case from `Step.iso`/`Step.sound`, while preserving the standalone recursive Comprehension relation, isomorphism theorem, and soundness theorem.
 
@@ -1307,6 +1308,7 @@ lake env lean -DwarningAsError=true VisualProof/Refinement/Represents.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Step.lean
 scripts/audit-lean-authority.sh rules
 scripts/audit-lean-authority.sh implementation
+scripts/audit-lean-authority.sh roster
 rg -n '^import VisualProof\.(Model|Diagram\.Semantics|Concrete\.Semantics|Rule\.Soundness|Proof)' VisualProof/Concrete VisualProof/Refinement
 rg -n '\b(Model|denoteOpen|denoteRegion|ConcreteSemanticSimulation|Step\.sound)\b' VisualProof/Concrete VisualProof/Refinement
 rg -n 'comprehension(Abstract|Instantiate)|OperationComprehension|Comprehension.*Payload' VisualProof/Concrete VisualProof/Refinement VisualProof/Proof
@@ -1316,7 +1318,7 @@ lake build
 git diff --check
 ```
 
-The semantic-source scans and the abstraction/instantiation execution scan must return no declaration or import. `visualproof_step_tags` must emit exactly the ten retained constructor tags. Dependency output must be checked recursively for the same forbidden owners.
+The semantic-source scans must return no declaration or import. The roster audit is the exact executable-family/absence gate and must pass before any Task 9 family proof is accepted. Dependency output must be checked recursively for the same forbidden owners.
 
 ### Task 10: Prove request reflection and execution completeness
 
@@ -1379,6 +1381,7 @@ lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/DoubleCut.le
 lake env lean -DwarningAsError=true VisualProof/Refinement/Complete/Vacuity.lean
 lake env lean -DwarningAsError=true VisualProof/Refinement/Complete.lean
 scripts/audit-lean-authority.sh implementation
+scripts/audit-lean-authority.sh roster
 rg -n '^import VisualProof\.(Model|Diagram\.Semantics|Concrete\.Semantics|Rule\.Soundness|Proof)' VisualProof/Refinement/Complete VisualProof/Refinement/Complete.lean
 rg -n '(matcher|candidate|search frontier|search status)' VisualProof/Refinement/Complete VisualProof/Refinement/Complete.lean
 lake build
@@ -1453,6 +1456,7 @@ lake env lean -DwarningAsError=true VisualProof/Refinement/Rejection.lean
 rg -n 'DomainInvalid|invalid :.*DomainInvalid' VisualProof/Refinement/Rejection.lean
 rg -n '\b(execute|Receipt|Error|Model|denoteOpen|denoteRegion|sound)\b' VisualProof/Refinement/Means.lean
 scripts/audit-lean-authority.sh implementation
+scripts/audit-lean-authority.sh roster
 lake env lean -DwarningAsError=true VisualProof/Audit.lean
 lake build
 git diff --check
@@ -1480,6 +1484,7 @@ lake env lean -DwarningAsError=true VisualProof/Proof/Theorem.lean
 lake env lean -DwarningAsError=true VisualProof/Proof/Theory.lean
 rg -n '\.(boundRelationSpawn|wireJoin|erasure|wireSever|iteration|deiteration|doubleCutIntro|doubleCutElim|vacuousIntro|vacuousElim)\b' VisualProof/Proof
 scripts/audit-lean-authority.sh proof
+scripts/audit-lean-authority.sh roster
 lake env lean -DwarningAsError=true VisualProof/Audit.lean
 lake build
 git diff --check
@@ -1502,7 +1507,7 @@ The constructor-case scan must be empty in semantic proof bodies. The proof-mode
 2. Audit the recursive direction: the dependency closures of every rule relation, every family soundness owner, and `VisualProof/Rule/Soundness.lean` contain no path under `VisualProof/Concrete`, `VisualProof/Refinement`, or the flat implementation tree.
 3. Audit the implementation direction: direct source scans and recursive dependency closures for `Concrete.Step`, `Concrete.Translate`, `Concrete.Encode`, `Refinement.Represents`, `Refinement.Step`, `Refinement.Complete`, and `Refinement.Rejection` contain no model, denotation, semantic implication, semantic simulation, `Rule.Soundness`, `Rule.Step.sound`, or `Proof` declaration/import. No semantic module or parallel semantic authority remains under `Concrete/**` or `Refinement/**`.
 4. Inspect the elaborated `Means` declaration and its branch bodies: they reference the supplied request type but do not depend on `Concrete.execute`, success/error results, receipts, models, denotation, or soundness, and all ten request constructors have an exact structural branch.
-5. `Rule.Step` has exactly five constructors and `Concrete.Step` exactly ten; no abstraction/instantiation execution declaration exists under Concrete, Refinement, or Proof. The standalone Comprehension relation/isomorphism/soundness declarations still compile under Rule.
+5. `scripts/audit-lean-authority.sh roster` proves the exact five-constructor `Rule.Step` and ten-constructor/tag `Concrete.Step` roster, the standalone Rule Comprehension relation/isomorphism/soundness declarations, and the absence of Comprehension execution declarations or branches and former request names.
 6. `rg -n '\bsorry\b|sorryAx' VisualProof` reports no task-owned production proof.
 7. `rg` reports no occurrence-search declaration, import, candidate enumeration, search status, or matcher theorem.
 8. `#print axioms` for `Step.sound`, standalone `Comprehension.sound`, translation round trip, representation uniqueness/completeness, execution soundness/completeness, unconditional rejection correctness, and checked-theorem soundness contains no `sorryAx` or unapproved project axiom.
@@ -1523,6 +1528,7 @@ lake exe visualproof_step_tags
 scripts/audit-lean-authority.sh rules
 scripts/audit-lean-authority.sh implementation
 scripts/audit-lean-authority.sh proof
+scripts/audit-lean-authority.sh roster
 lake build
 git diff --check
 ```
@@ -1536,6 +1542,7 @@ Stage only task-owned paths explicitly and commit as `Complete recursive rewrite
 - [ ] The six recursive family relations are complete and contain only mathematical witnesses; standalone Comprehension and its soundness remain outside the actual ruleset.
 - [ ] Positive-context rules, converse under negative polarity, and proved invertibility are the only direction mechanisms in the abstract layer.
 - [ ] `Step` has exactly five constructors—Erasure, WireSever, Iteration, DoubleCut, and Vacuity—and `Step.sound` is ordinary implication; Comprehension is not a Step constructor.
+- [ ] `scripts/audit-lean-authority.sh roster` passes, proving the exact executable roster and absence boundary while retaining standalone Rule Comprehension mathematics.
 - [ ] `Step.sound` has no concrete dependency.
 - [ ] Concrete and Refinement source and import closures contain no semantic declaration, proof, import, or parallel authority.
 - [ ] Concrete execution has exactly ten operation constructors over checked open state and contains no abstraction/instantiation payload, tag, branch, or theorem.

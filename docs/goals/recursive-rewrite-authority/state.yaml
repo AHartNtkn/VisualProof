@@ -716,7 +716,12 @@ tasks:
       - "VisualProof.lean"
       - "lakefile.toml"
       - "scripts/audit-lean-authority.sh"
+      - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md"
+      - "docs/goals/recursive-rewrite-authority/goal.md"
+      - "docs/goals/recursive-rewrite-authority/state.yaml"
+      - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-brief.md"
       - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-report.md"
+      - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-roster-plan-fix-report.md"
     constraints:
       - "Concrete and Refinement are syntactic layers: no Model, denotation, semantic implication, semantic simulation, Step.sound, Rule.Soundness, or Proof declarations/imports in their source or dependency closures."
       - "Extract only compiler equations, carrier equivalences, boundary correspondences, recursive isomorphisms, receipt inversions, and rule witnesses required by refinement."
@@ -726,6 +731,7 @@ tasks:
       - "Remove comprehensionAbstract/comprehensionInstantiate payloads, tags, operation functions, executor branches, inversions, refinement code, and execution aggregates."
       - "Remove Comprehension from Rule.Step, Step.iso, and Step.sound while preserving the standalone recursive Comprehension relation, iso theorem, and soundness theorem."
       - "Map the ten concrete constructors exhaustively to Erasure, WireSever, Iteration, DoubleCut, and Vacuity."
+      - "Use scripts/audit-lean-authority.sh roster as the exact executable-roster and absence gate before accepting any Tasks 9-13 work."
       - "Rule relations and all Rule soundness owners remain independent of Concrete and Refinement."
       - "Orientation selects the relation or its converse; do not add direction-named rule variants."
       - "Preserve compliant structural proofs already established in the active Task 9 work."
@@ -734,8 +740,7 @@ tasks:
       - "Lean only; TypeScript is outside scope."
     verify:
       - "strict structural-owner, family-refinement, and aggregate compilation"
-      - "exact ten-constructor coverage and five-family mapping audit"
-      - "absence of abstraction/instantiation execution declarations and Comprehension Step/refinement/completeness branches"
+      - "scripts/audit-lean-authority.sh roster exact five-family, ten-constructor/tag, standalone-Comprehension, and absence audit"
       - "scripts/audit-lean-authority.sh rules recursive dependency exclusion"
       - "scripts/audit-lean-authority.sh implementation semantic dependency exclusion"
       - "scripts/audit-lean-authority.sh proof aggregate-boundary audit"
@@ -763,6 +768,7 @@ tasks:
       - "Reject any Concrete/Refinement dependency in recursive Rule relations or soundness."
       - "Reject relocation, renaming, wrapping, or re-export of an operational semantic tower."
       - "Reject any matcher/search subsystem, incomplete ten-constructor coverage, or abstraction/instantiation execution surface."
+      - "Require scripts/audit-lean-authority.sh roster to pass with the exact five-family/ten-constructor roster, standalone Comprehension declarations, and all execution-facing absences."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -782,6 +788,7 @@ tasks:
       - "Lean only; TypeScript is outside scope."
     verify:
       - "strict family and aggregate completeness compilation"
+      - "scripts/audit-lean-authority.sh roster"
       - "semantic-free source and dependency audit"
       - "matcher/search and proof-hole scans"
       - "kernel axiom audit, lake build, and git diff --check"
@@ -797,6 +804,7 @@ tasks:
     constraints:
       - "Read-only."
       - "Reject restricted family coverage, matchers, or any semantic authority in Concrete/Refinement."
+      - "Require the shared roster audit to pass; reject a Comprehension completeness branch or any roster/absence mismatch."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -828,7 +836,7 @@ tasks:
       - "Do not exclude errors, weaken the theorem, add search, or introduce compatibility paths."
     verify:
       - "strict Means, same-request completeness, and unconditional rejection compilation"
-      - "exact ten-constructor Means audit and absence of Comprehension execution branches"
+      - "scripts/audit-lean-authority.sh roster"
       - "separate Means owner source scan and elaborated-value dependency exclusion of execute results, receipts, errors, and semantics"
       - "all-error theorem signature and kernel axiom audit"
       - "lake build and git diff --check"
@@ -844,6 +852,7 @@ tasks:
     constraints:
       - "Read-only."
       - "Reject DomainInvalid premises, omitted errors, alternate requests, or Means definitions coupled to execute/receipt/error."
+      - "Require the shared roster audit to pass; reject a Comprehension Means branch or roster/absence mismatch."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -862,6 +871,7 @@ tasks:
       - "Lean only; TypeScript is outside scope."
     verify:
       - "strict Proof module compilation"
+      - "scripts/audit-lean-authority.sh roster"
       - "recursive proof-mode import audit and elaborated-value audit proving thin compositional ownership"
       - "kernel axiom audit, lake build, and git diff --check"
     receipt: null
@@ -876,6 +886,7 @@ tasks:
     constraints:
       - "Read-only."
       - "Reject any concrete-execution semantics below Proof or request-family semantic case analysis inside Proof."
+      - "Require the shared roster audit to pass, including absence of the former request names in Proof."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -896,6 +907,7 @@ tasks:
     verify:
       - "strict owner compilation and full lake build"
       - "scripts/audit-lean-authority.sh rules, implementation, and proof"
+      - "scripts/audit-lean-authority.sh roster"
       - "direct Concrete/Refinement semantic declaration and import scans"
       - "recursive dependency roots include Concrete Translate/Encode/Step and Refinement Represents/Step/Complete/Rejection"
       - "Means and unconditional rejection signature audit"
@@ -914,6 +926,7 @@ tasks:
     constraints:
       - "Read-only."
       - "Reject either dependency-direction violation, weakened rejection, semantic duplication, or incomplete pending work."
+      - "Require the shared roster audit to pass and reject any mismatch in its exact roster or absence boundary."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -934,6 +947,7 @@ tasks:
       - "Reject rejection correctness that excludes an executor error or assumes an error classifier."
       - "Reject any abstraction/instantiation executable, Concrete.Step constructor, refinement/completeness/rejection branch, or Rule.Step Comprehension constructor."
       - "Require standalone recursive Comprehension relation, isomorphism transport, and soundness to remain."
+      - "Require scripts/audit-lean-authority.sh roster to pass as the final exact executable-roster and absence evidence."
       - "Require Proof-layer concrete validity to be a thin composition of refinement, Step.sound, and representation/isomorphism transport."
       - "Reject compatibility authorities or incomplete theorem dependencies."
     expected_output:
