@@ -88,7 +88,7 @@ noncomputable def nestedRootSeverEquiv
       source.property wire).1 member
     exact nested rootScope.symm
 
-theorem severCompilerLeafFrame
+noncomputable def severCompilerLeafFrame
     (input : Concrete.Diagram)
     (wire : Fin input.wireCount)
     (keep : List (Concrete.CEndpoint input.nodeCount))
@@ -167,8 +167,8 @@ theorem severCompilerLeafFrame
           (VisualProof.Refinement.Implementation.WireSever.severWireRaw_exactScopeWires_length_of_ne input wire keep
             region (by exact fun equality => regionNe (equality.trans wireScope))))
           |>.trans (FiniteEquiv.finCast sourceLocalCanonical.symm))
-    Nonempty (ItemSeqIso.Frame (extendWireEquiv outerWire localWire)
-      targetIndex sourceIndex) := by
+    ItemSeqIso.Frame (extendWireEquiv outerWire localWire)
+      targetIndex sourceIndex := by
   dsimp only
   subst sourceLocal
   subst targetLocal
@@ -687,7 +687,7 @@ theorem severCompilerLeafFrame
             congrArg Fin.val mapped
     simpa [targetCast, sourceCast, extendedEq, finalWire, outerWire,
       localWire, targetExtended, sourceExtended] using algebra
-  obtain ⟨targetIndex', sourceIndex', targetVal, sourceVal, ⟨frame⟩⟩ :=
+  obtain ⟨targetIndex', sourceIndex', targetVal, sourceVal, frame⟩ :=
     ItemSeqIso.Frame.pullPush targetCast.symm extendedEquiv sourceCast
       finalWire targetUndo sourcePush wireFactor rawFrame
   have targetIndexEq : targetIndex' = targetIndex := by
@@ -704,7 +704,7 @@ theorem severCompilerLeafFrame
         ItemSeq.renameWiresPositionEquiv])
   subst targetIndex'
   subst sourceIndex'
-  simpa only [finalWire] using ⟨frame⟩
+  simpa only [finalWire] using frame
 
 def severContextCollapseCast
     {input : Concrete.Diagram}
@@ -795,11 +795,13 @@ structure CompilerTraceAlignment
   after : Region sourceWitness.toFocus.holeWires
     sourceWitness.toFocus.holeRels
   rewrite : Rule.WireSever.Local before after
-  source_iso : Core.Isomorphic sourceWitness.toFocus.body before
+  source_iso : RegionIso
+    (FiniteEquiv.refl (Fin sourceWitness.toFocus.holeWires))
+    sourceWitness.toFocus.holeRels sourceWitness.toFocus.body before
   target_iso : RegionIso alignment.holeWire targetWitness.toFocus.holeRels
     targetWitness.toFocus.body (alignment.holeRelsEq.symm ▸ after)
 
-theorem severCompilerTraceContextIso
+noncomputable def severCompilerTraceContextIso
     {input : Concrete.Diagram}
     (wire : Fin input.wireCount)
     (keep : List (Concrete.CEndpoint input.nodeCount))
@@ -832,9 +834,9 @@ theorem severCompilerTraceContextIso
       targetState.inheritedWires sourceState.inheritedWires)
     (bindersEq : targetState.binders = sourceState.binders)
     (fuelEq : targetState.fuel = sourceState.fuel) :
-    Nonempty (CompilerTraceAlignment (input := input) (wire := wire)
+    CompilerTraceAlignment (input := input) (wire := wire)
       (keep := keep) (targetWitness := targetWitness)
-      (sourceWitness := sourceWitness) targetState sourceState collapse) := by
+      (sourceWitness := sourceWitness) targetState sourceState collapse := by
   revert sourceTrace collapse
   induction targetTrace using @Concrete.Splice.CompilerTrace.rec
       (Concrete.severWireRaw input wire keep) generalizing sourcePath
@@ -862,7 +864,7 @@ theorem severCompilerTraceContextIso
             WireSeverSiteLocal.terminalLocal wire keep inputWellFormed
               targetWellFormed _ wireScope targetState sourceState collapse
               bindersEq fuelEq
-          refine ⟨{
+          refine {
             inherited := inherited
             inherited_apply := fun _ => rfl
             alignment := {
@@ -877,7 +879,7 @@ theorem severCompilerTraceContextIso
             source_iso := sourceIso
             target_iso := by
               simpa only [inherited] using targetIso
-          }⟩
+          }
 
 /-
 noncomputable def nestedRootOuterEquiv
@@ -1081,7 +1083,7 @@ theorem nestedRootSeverEquiv_factor
             targetBinders.trans (bindersEq.trans sourceBinders.symm)
           have childFuelEq : targetChildState.fuel = sourceChildState.fuel := by
             omega
-          obtain ⟨childResult⟩ := ih wireScope sourceChildState childBindersEq
+          let childResult := ih wireScope sourceChildState childBindersEq
             childFuelEq sourceTailTrace childCollapse
           let currentSourceRoute := Concrete.Splice.RegionRoute.step
             sourceParent sourcePosition sourcePositionEq sourceTail
@@ -1120,7 +1122,7 @@ theorem nestedRootSeverEquiv_factor
           have regionNeSite : targetStart ≠ targetEnd := by
             intro equality
             exact regionNe (equality.trans wireScope.symm)
-          obtain ⟨frame⟩ := severCompilerLeafFrame input wire keep
+          let frame := severCompilerLeafFrame input wire keep
             inputWellFormed targetWellFormed targetEnd wireScope regionNeSite
             sourceParent sourcePosition sourcePositionEq sourceTail sourceState
             targetState sourceLocalCanonical targetLocalCanonical
@@ -1235,7 +1237,7 @@ theorem nestedRootSeverEquiv_factor
             targetNested.toFocus.context
             (childResult.alignment.holeRelsEq.symm ▸
               sourceNested.toFocus.context) childContexts
-          refine ⟨{
+          refine {
             inherited := inherited
             inherited_apply := fun _ => rfl
             alignment := {
@@ -1250,7 +1252,7 @@ theorem nestedRootSeverEquiv_factor
             rewrite := childResult.rewrite
             source_iso := childResult.source_iso
             target_iso := childResult.target_iso
-          }⟩
+          }
       | @bubble _ sourceChild _ sourceRest sourceParent sourcePosition
           sourcePositionEq sourceTail sourceOuter sourceLocal sourceArity
           sourceRels sourceSeq sourceFocus sourceChildBody sourceAt
@@ -1435,7 +1437,7 @@ theorem nestedRootSeverEquiv_factor
                 bindersEq).trans sourceBinders.symm)
           have childFuelEq : targetChildState.fuel = sourceChildState.fuel := by
             omega
-          obtain ⟨childResult⟩ := ih wireScope sourceChildState childBindersEq
+          let childResult := ih wireScope sourceChildState childBindersEq
             childFuelEq sourceTailTrace childCollapse
           let currentSourceRoute := Concrete.Splice.RegionRoute.step
             sourceParent sourcePosition sourcePositionEq sourceTail
@@ -1474,7 +1476,7 @@ theorem nestedRootSeverEquiv_factor
           have regionNeSite : targetStart ≠ targetEnd := by
             intro equality
             exact regionNe (equality.trans wireScope.symm)
-          obtain ⟨frame⟩ := severCompilerLeafFrame input wire keep
+          let frame := severCompilerLeafFrame input wire keep
             inputWellFormed targetWellFormed targetEnd wireScope regionNeSite
             sourceParent sourcePosition sourcePositionEq sourceTail sourceState
             targetState sourceLocalCanonical targetLocalCanonical
@@ -1589,7 +1591,7 @@ theorem nestedRootSeverEquiv_factor
             targetNested.toFocus.context
             (childResult.alignment.holeRelsEq.symm ▸
               sourceNested.toFocus.context) childContexts
-          refine ⟨{
+          refine {
             inherited := inherited
             inherited_apply := fun _ => rfl
             alignment := {
@@ -1604,7 +1606,7 @@ theorem nestedRootSeverEquiv_factor
             rewrite := childResult.rewrite
             source_iso := childResult.source_iso
             target_iso := childResult.target_iso
-          }⟩
+          }
 
 noncomputable def nestedRootOuterEquiv
     (source : Concrete.CheckedOpen)
@@ -1670,7 +1672,7 @@ theorem nestedRootSeverEquiv_factor
       Concrete.OpenDiagram.rootWires, VisualProof.Refinement.Implementation.WireSever.severHiddenIndex] using
         congrArg Fin.val mapped
 
-theorem severOpenRootItemsFrame
+noncomputable def severOpenRootItemsFrame
     (source : Concrete.CheckedOpen)
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (Concrete.CEndpoint source.val.diagram.nodeCount))
@@ -1700,9 +1702,9 @@ theorem severOpenRootItemsFrame
     (sourceIndex : Fin sourceState.items.length)
     (targetIndexVal : targetIndex.val = position.val)
     (sourceIndexVal : sourceIndex.val = position.val) :
-    Nonempty (ItemSeqIso.Frame
+    ItemSeqIso.Frame
       (nestedRootSeverEquiv source wire keep targetWellFormed nested)
-      targetIndex sourceIndex) := by
+      targetIndex sourceIndex := by
   let target := VisualProof.Refinement.Implementation.WireSever.canonicalOpen
     source wire keep targetWellFormed
   let collapse := VisualProof.Refinement.Implementation.WireSever.severWireRawOpen_rootCollapse source wire keep
@@ -1745,11 +1747,11 @@ theorem severOpenRootItemsFrame
   have mapped : positions targetIndex = sourceIndex := by
     apply Fin.ext
     exact targetIndexVal.trans sourceIndexVal.symm
-  refine ⟨{
+  refine {
     positions := positions
     mapped := mapped
     siblings := ?_
-  }⟩
+  }
   intro index indexNe
   let occurrenceIndex : Fin occurrences.length := Fin.cast targetLength index
   have occurrenceNe : occurrenceIndex ≠ position := by
@@ -1954,82 +1956,120 @@ theorem severOpenRootItemsFrame
                   (nestedRootSeverEquiv source wire keep targetWellFormed
                     nested))
       | bubble parent arity =>
-          simp only [Concrete.Elaboration.compileOccurrenceWith?,
-            VisualProof.Refinement.Implementation.WireSever.severWireRaw_regions, siblingKind] at targetGet
-          obtain ⟨targetBody, targetResultEq, targetValueEq⟩ :=
-            Option.bind_eq_some_iff.mp targetGet
-          have targetItemEq : targetState.items.get index =
-              .bubble arity targetBody :=
-            (Option.some.inj targetValueEq).symm
           let childBinders : Concrete.Elaboration.BinderContext
               source.val.diagram [arity] :=
             Concrete.Elaboration.BinderContext.empty.push sibling arity
-          have targetResultEq' : Concrete.Elaboration.compileRegion?
+          cases targetResultEq : Concrete.Elaboration.compileRegion?
               (Concrete.severWireRaw source.val.diagram wire keep)
-              source.val.diagram.regionCount sibling
-              (VisualProof.Refinement.Implementation.WireSever.severWireRawOpen source.val wire keep).rootWires
-              childBinders = some targetBody := by
-            simpa [childBinders] using targetResultEq
-          have recursive :=
-            VisualProof.Refinement.Implementation.WireSever.compileRegion_collapse_of_not_encloses
-              source.val.diagram wire keep
-              source.property.diagram_well_formed targetWellFormed
-              source.val.diagram.regionCount sibling
-              (VisualProof.Refinement.Implementation.WireSever.severWireRawOpen source.val wire keep).rootWires
-              source.val.rootWires collapse childBinders away targetExact
-              sourceExact
-          have recursive' : Concrete.Elaboration.compileRegion?
-              source.val.diagram source.val.diagram.regionCount sibling
-              source.val.rootWires childBinders =
-                some (targetBody.renameWires
-                  (nestedRootSeverEquiv source wire keep targetWellFormed
-                    nested)) := by
-            calc
-              _ = (Concrete.Elaboration.compileRegion?
-                  (Concrete.severWireRaw source.val.diagram wire keep)
-                  source.val.diagram.regionCount sibling
-                  (VisualProof.Refinement.Implementation.WireSever.severWireRawOpen source.val wire keep).rootWires
-                  childBinders).map
-                    (Region.renameWires collapse.indexMap) := recursive
-              _ = some (targetBody.renameWires collapse.indexMap) := by
-                rw [targetResultEq']
-                rfl
-              _ = some (targetBody.renameWires
-                  (nestedRootSeverEquiv source wire keep targetWellFormed
-                    nested)) := by
-                congr 2
-          have sourceItemEq : sourceState.items.get (positions index) =
-              .bubble arity (targetBody.renameWires
-                (nestedRootSeverEquiv source wire keep targetWellFormed
-                  nested)) := by
-            have sourceCompiled :
-                Concrete.Elaboration.compileOccurrenceWith?
-                  source.val.diagram
-                  (Concrete.Elaboration.compileRegion? source.val.diagram
-                    source.val.diagram.regionCount)
-                  source.val.rootWires
-                  Concrete.Elaboration.BinderContext.empty
-                  (.child sibling) = some (.bubble arity
-                    (targetBody.renameWires
-                      (nestedRootSeverEquiv source wire keep targetWellFormed
-                        nested))) := by
-              calc
-                _ = (Concrete.Elaboration.compileRegion?
-                    source.val.diagram source.val.diagram.regionCount sibling
-                    source.val.rootWires childBinders).bind
-                      (fun body => some (Item.bubble arity body)) := by
-                    simp [Concrete.Elaboration.compileOccurrenceWith?,
-                      siblingKind, childBinders]
-                _ = _ := by
-                  rw [recursive']
+                source.val.diagram.regionCount sibling
+                (VisualProof.Refinement.Implementation.WireSever.severWireRawOpen
+                  source.val wire keep).rootWires childBinders with
+          | none =>
+              simp only [Concrete.Elaboration.compileOccurrenceWith?,
+                VisualProof.Refinement.Implementation.WireSever.severWireRaw_regions,
+                siblingKind] at targetGet
+              change (Concrete.Elaboration.compileRegion?
+                (Concrete.severWireRaw source.val.diagram wire keep)
+                source.val.diagram.regionCount sibling
+                (VisualProof.Refinement.Implementation.WireSever.severWireRawOpen
+                  source.val wire keep).rootWires
+                (Concrete.Elaboration.BinderContext.empty.push sibling arity)).bind
+                  (fun body => pure (Item.bubble arity body)) = _ at targetGet
+              have targetResultEq' := targetResultEq
+              dsimp only [childBinders] at targetResultEq'
+              rw [targetResultEq'] at targetGet
+              simp at targetGet
+          | some targetBody =>
+              have targetItemEq : targetState.items.get index =
+                  .bubble arity targetBody := by
+                have targetCompiled :
+                    Concrete.Elaboration.compileOccurrenceWith?
+                      (Concrete.severWireRaw source.val.diagram wire keep)
+                      (Concrete.Elaboration.compileRegion?
+                        (Concrete.severWireRaw source.val.diagram wire keep)
+                        source.val.diagram.regionCount)
+                      (VisualProof.Refinement.Implementation.WireSever.severWireRawOpen
+                        source.val wire keep).rootWires
+                      Concrete.Elaboration.BinderContext.empty
+                      (.child sibling) = some (.bubble arity targetBody) := by
+                  simp only [Concrete.Elaboration.compileOccurrenceWith?,
+                    VisualProof.Refinement.Implementation.WireSever.severWireRaw_regions,
+                    siblingKind]
+                  change (Concrete.Elaboration.compileRegion?
+                    (Concrete.severWireRaw source.val.diagram wire keep)
+                    source.val.diagram.regionCount sibling
+                    (VisualProof.Refinement.Implementation.WireSever.severWireRawOpen
+                      source.val wire keep).rootWires
+                    (Concrete.Elaboration.BinderContext.empty.push sibling arity)).bind
+                      (fun body => pure (Item.bubble arity body)) = _
+                  have targetResultEq' := targetResultEq
+                  dsimp only [childBinders] at targetResultEq'
+                  rw [targetResultEq']
                   rfl
-            apply Option.some.inj
-            exact sourceGet.symm.trans sourceCompiled
-          exact targetItemEq.symm ▸ sourceItemEq.symm ▸
-            ItemIso.bubble (RegionIso.renameWiresEquiv targetBody
-              (nestedRootSeverEquiv source wire keep targetWellFormed nested))
+                apply Option.some.inj
+                exact targetGet.symm.trans targetCompiled
+              have recursive :=
+                VisualProof.Refinement.Implementation.WireSever.compileRegion_collapse_of_not_encloses
+                  source.val.diagram wire keep
+                  source.property.diagram_well_formed targetWellFormed
+                  source.val.diagram.regionCount sibling
+                  (VisualProof.Refinement.Implementation.WireSever.severWireRawOpen
+                    source.val wire keep).rootWires
+                  source.val.rootWires collapse childBinders away targetExact
+                  sourceExact
+              have recursive' : Concrete.Elaboration.compileRegion?
+                  source.val.diagram source.val.diagram.regionCount sibling
+                  source.val.rootWires childBinders =
+                    some (targetBody.renameWires
+                      (nestedRootSeverEquiv source wire keep targetWellFormed
+                        nested)) := by
+                calc
+                  _ = (Concrete.Elaboration.compileRegion?
+                      (Concrete.severWireRaw source.val.diagram wire keep)
+                      source.val.diagram.regionCount sibling
+                      (VisualProof.Refinement.Implementation.WireSever.severWireRawOpen
+                        source.val wire keep).rootWires
+                      childBinders).map
+                        (Region.renameWires collapse.indexMap) := recursive
+                  _ = some (targetBody.renameWires collapse.indexMap) := by
+                    rw [targetResultEq]
+                    rfl
+                  _ = some (targetBody.renameWires
+                      (nestedRootSeverEquiv source wire keep targetWellFormed
+                        nested)) := by
+                    congr 2
+              have sourceItemEq : sourceState.items.get (positions index) =
+                  .bubble arity (targetBody.renameWires
+                    (nestedRootSeverEquiv source wire keep targetWellFormed
+                      nested)) := by
+                have sourceCompiled :
+                    Concrete.Elaboration.compileOccurrenceWith?
+                      source.val.diagram
+                      (Concrete.Elaboration.compileRegion? source.val.diagram
+                        source.val.diagram.regionCount)
+                      source.val.rootWires
+                      Concrete.Elaboration.BinderContext.empty
+                      (.child sibling) = some (.bubble arity
+                        (targetBody.renameWires
+                          (nestedRootSeverEquiv source wire keep targetWellFormed
+                            nested))) := by
+                  calc
+                    _ = (Concrete.Elaboration.compileRegion?
+                        source.val.diagram source.val.diagram.regionCount sibling
+                        source.val.rootWires childBinders).bind
+                          (fun body => some (Item.bubble arity body)) := by
+                      simp [Concrete.Elaboration.compileOccurrenceWith?,
+                        siblingKind, childBinders]
+                    _ = _ := by
+                      rw [recursive']
+                      rfl
+                apply Option.some.inj
+                exact sourceGet.symm.trans sourceCompiled
+              exact targetItemEq.symm ▸ sourceItemEq.symm ▸
+                ItemIso.bubble (RegionIso.renameWiresEquiv targetBody
+                  (nestedRootSeverEquiv source wire keep targetWellFormed nested))
 
-theorem severOpenRootFrameAssembly
+noncomputable def severOpenRootFrameAssembly
     (source : Concrete.CheckedOpen)
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (Concrete.CEndpoint source.val.diagram.nodeCount))
@@ -2058,16 +2098,12 @@ theorem severOpenRootFrameAssembly
     (rawFrame : ItemSeqIso.Frame
       (nestedRootSeverEquiv source wire keep targetWellFormed nested)
       targetIndex sourceIndex) :
-    ∃ targetIndex' : Fin targetSeq.length,
-      ∃ sourceIndex' : Fin sourceSeq.length,
-        targetIndex'.val = targetIndex.val ∧
-        sourceIndex'.val = sourceIndex.val ∧
-        Nonempty (ItemSeqIso.Frame (source := targetSeq) (target := sourceSeq)
-          (extendWireEquiv (nestedRootOuterEquiv source wire keep)
-            ((FiniteEquiv.finCast targetLocalCanonical).trans
-              ((nestedRootLocalEquiv source wire keep nested).trans
-                (FiniteEquiv.finCast sourceLocalCanonical.symm))))
-          targetIndex' sourceIndex') := by
+    ItemSeqIso.Frame.Indexed targetSeq sourceSeq
+      (extendWireEquiv (nestedRootOuterEquiv source wire keep)
+        ((FiniteEquiv.finCast targetLocalCanonical).trans
+          ((nestedRootLocalEquiv source wire keep nested).trans
+            (FiniteEquiv.finCast sourceLocalCanonical.symm))))
+      targetIndex.val sourceIndex.val := by
   subst targetLocal
   subst sourceLocal
   let targetEq :
@@ -2137,11 +2173,13 @@ structure OpenCompilerTraceAlignment
   after : Region sourceWitness.toFocus.holeWires
     sourceWitness.toFocus.holeRels
   rewrite : Rule.WireSever.Local before after
-  source_iso : Core.Isomorphic sourceWitness.toFocus.body before
+  source_iso : RegionIso
+    (FiniteEquiv.refl (Fin sourceWitness.toFocus.holeWires))
+    sourceWitness.toFocus.holeRels sourceWitness.toFocus.body before
   target_iso : RegionIso alignment.holeWire targetWitness.toFocus.holeRels
     targetWitness.toFocus.body (alignment.holeRelsEq.symm ▸ after)
 
-theorem severOpenCompilerTraceContextIso
+noncomputable def severOpenCompilerTraceContextIso
     (source : Concrete.CheckedOpen)
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (Concrete.CEndpoint source.val.diagram.nodeCount))
@@ -2172,17 +2210,17 @@ theorem severOpenCompilerTraceContextIso
     (sourceTrace : Concrete.Splice.OpenCompilerTrace source sourceRoute
       sourceWitness sourceState)
     (sourceEndEq : sourceEnd = (source.val.diagram.wires wire).scope) :
-    Nonempty (OpenCompilerTraceAlignment
-      (nestedRootOuterEquiv source wire keep) targetWitness sourceWitness) := by
+    OpenCompilerTraceAlignment
+      (nestedRootOuterEquiv source wire keep) targetWitness sourceWitness := by
   refine @Concrete.Splice.OpenCompilerTrace.rec
     (checked := VisualProof.Refinement.Implementation.WireSever.canonicalOpen
       source wire keep targetWellFormed)
     (motive := fun {targetEnd} {targetPath} {targetBody} targetRoute
       targetWitness targetState targetTrace =>
         (targetEndEq : targetEnd = (source.val.diagram.wires wire).scope) →
-          Nonempty (OpenCompilerTraceAlignment
+          OpenCompilerTraceAlignment
             (nestedRootOuterEquiv source wire keep) targetWitness
-            sourceWitness)) ?_ ?_ ?_ _ _ _ _ _ _ targetTrace rfl
+            sourceWitness) ?_ ?_ ?_ _ _ _ _ _ _ targetTrace rfl
   case refine_1 =>
       intro targetBody targetState targetEndEq
       exact False.elim (nested targetEndEq)
@@ -2290,7 +2328,7 @@ theorem severOpenCompilerTraceContextIso
               simpa [VisualProof.Refinement.Implementation.WireSever.canonicalOpen]
                 using targetFuel
             omega
-          obtain ⟨childResult⟩ := severCompilerTraceContextIso wire keep
+          let childResult := severCompilerTraceContextIso wire keep
             source.property.diagram_well_formed targetWellFormed
             (source.val.diagram.wires wire).scope rfl targetChildState
             sourceChildState targetTailTrace sourceTailTrace childCollapse
@@ -2333,13 +2371,13 @@ theorem severOpenCompilerTraceContextIso
             Fin.cast targetItemsLength.symm targetPosition
           let sourceIndex : Fin sourceState.items.length :=
             Fin.cast sourceItemsLength.symm sourcePosition
-          obtain ⟨rawFrame⟩ := severOpenRootItemsFrame source wire keep
+          let rawFrame := severOpenRootItemsFrame source wire keep
             targetWellFormed nested sourceParent sourcePosition sourcePositionEq
             sourceTail targetState sourceState targetIndex sourceIndex
             (by simpa [targetIndex] using positionVals)
             (by simp [sourceIndex])
           obtain ⟨targetIndex', sourceIndex', targetIndexVal,
-              sourceIndexVal, ⟨frame⟩⟩ :=
+              sourceIndexVal, frame⟩ :=
             severOpenRootFrameAssembly source wire keep targetWellFormed nested
               targetState sourceState targetLocalCanonical sourceLocalCanonical
               targetItemsCanonical sourceItemsCanonical rawFrame
@@ -2413,7 +2451,7 @@ theorem severOpenCompilerTraceContextIso
             (targetChild := childResult.alignment.holeRelsEq.symm ▸
               sourceNested.toFocus.context) localWire
             targetFocus sourceFocus targetAt' sourceAt' frame childContexts
-          exact ⟨{
+          exact {
             alignment := {
               holeRelsEq := childResult.alignment.holeRelsEq
               holeWire := childResult.alignment.holeWire
@@ -2437,7 +2475,7 @@ theorem severOpenCompilerTraceContextIso
             rewrite := childResult.rewrite
             source_iso := childResult.source_iso
             target_iso := childResult.target_iso
-          }⟩
+          }
   case refine_3 =>
       intro targetChild targetEnd targetRest targetParent targetPosition
         targetPositionEq targetTail targetLocal targetArity targetSeq
@@ -2549,7 +2587,7 @@ theorem severOpenCompilerTraceContextIso
               simpa [VisualProof.Refinement.Implementation.WireSever.canonicalOpen]
                 using targetFuel
             omega
-          obtain ⟨childResult⟩ := severCompilerTraceContextIso wire keep
+          let childResult := severCompilerTraceContextIso wire keep
             source.property.diagram_well_formed targetWellFormed
             (source.val.diagram.wires wire).scope rfl targetChildState
             sourceChildState targetTailTrace sourceTailTrace childCollapse
@@ -2592,13 +2630,13 @@ theorem severOpenCompilerTraceContextIso
             Fin.cast targetItemsLength.symm targetPosition
           let sourceIndex : Fin sourceState.items.length :=
             Fin.cast sourceItemsLength.symm sourcePosition
-          obtain ⟨rawFrame⟩ := severOpenRootItemsFrame source wire keep
+          let rawFrame := severOpenRootItemsFrame source wire keep
             targetWellFormed nested sourceParent sourcePosition sourcePositionEq
             sourceTail targetState sourceState targetIndex sourceIndex
             (by simpa [targetIndex] using positionVals)
             (by simp [sourceIndex])
           obtain ⟨targetIndex', sourceIndex', targetIndexVal,
-              sourceIndexVal, ⟨frame⟩⟩ :=
+              sourceIndexVal, frame⟩ :=
             severOpenRootFrameAssembly source wire keep targetWellFormed nested
               targetState sourceState targetLocalCanonical sourceLocalCanonical
               targetItemsCanonical sourceItemsCanonical rawFrame
@@ -2672,7 +2710,7 @@ theorem severOpenCompilerTraceContextIso
             (targetChild := childResult.alignment.holeRelsEq.symm ▸
               sourceNested.toFocus.context) localWire
             targetFocus sourceFocus targetAt' sourceAt' frame childContexts
-          exact ⟨{
+          exact {
             alignment := {
               holeRelsEq := childResult.alignment.holeRelsEq
               holeWire := childResult.alignment.holeWire
@@ -2696,9 +2734,9 @@ theorem severOpenCompilerTraceContextIso
             rewrite := childResult.rewrite
             source_iso := childResult.source_iso
             target_iso := childResult.target_iso
-          }⟩
+          }
 
-theorem severOpenSiteContextIso
+noncomputable def severOpenSiteContextIso
     (source : Concrete.CheckedOpen)
     (wire : Fin source.val.diagram.wireCount)
     (keep : List (Concrete.CEndpoint source.val.diagram.nodeCount))
@@ -2712,9 +2750,9 @@ theorem severOpenSiteContextIso
       (source.val.diagram.wires wire).scope)
     (sourceView : Concrete.Splice.OpenSiteView source
       (source.val.diagram.wires wire).scope) :
-    Nonempty (OpenCompilerTraceAlignment
+    OpenCompilerTraceAlignment
       (nestedRootOuterEquiv source wire keep) targetView.intrinsicPath
-      sourceView.intrinsicPath) :=
+      sourceView.intrinsicPath :=
   severOpenCompilerTraceContextIso source wire keep targetWellFormed nested
     targetView.result.state sourceView.result.state targetView.result.trace
     sourceView.result.trace rfl

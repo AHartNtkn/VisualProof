@@ -294,6 +294,71 @@ private theorem proxy_not_direct_child_of_bodyContainer
       have bound := index.isLt
       omega
 
+/-- The exact copied-material index of a fragment region. -/
+structure MaterialRegionIndex
+    {d : Concrete.Diagram} {selection : CheckedSelection d}
+    (layout : FragmentLayout d selection) (region : Fin layout.regionCount) where
+  index : Fin layout.materialRegionCount
+  region_eq : region = layout.materialRegion index
+
+/-- Recover the copied-material index from the canonical arithmetic layout once
+the administrative root and proxy positions have been excluded. -/
+def materialRegionIndexOfNotAdministrative
+    {d : Concrete.Diagram} {selection : CheckedSelection d}
+    (layout : FragmentLayout d selection) (region : Fin layout.regionCount)
+    (rootNe : region ≠ layout.root)
+    (proxyNe : ∀ proxy, region ≠ layout.proxy proxy) :
+    MaterialRegionIndex layout region := by
+  have regionLower : 1 + layout.proxyCount ≤ region.val := by
+    by_cases lower : 1 + layout.proxyCount ≤ region.val
+    · exact lower
+    · have regionPositive : 0 < region.val := by
+        by_cases zero : region.val = 0
+        · apply False.elim
+          apply rootNe
+          apply Fin.ext
+          simp only [FragmentLayout.root]
+          omega
+        · omega
+      let proxy : Fin layout.proxyCount :=
+        ⟨region.val - 1, by omega⟩
+      apply False.elim
+      apply proxyNe proxy
+      apply Fin.ext
+      simp only [FragmentLayout.proxy, proxy]
+      omega
+  let index : Fin layout.materialRegionCount :=
+    ⟨region.val - (1 + layout.proxyCount), by
+      have regionBound := region.isLt
+      change region.val < 1 +
+        (layout.proxyCount + layout.materialRegionCount) at regionBound
+      omega⟩
+  refine ⟨index, ?_⟩
+  apply Fin.ext
+  simp only [FragmentLayout.materialRegion, index]
+  omega
+
+/-- A terminal-body child carries its copied-material index as data. -/
+def terminalChild
+    (input : Concrete.Checked )
+    (selection : CheckedSelection input.val)
+    (layout : FragmentLayout input.val selection)
+    (child : Fin layout.regionCount)
+    (parentEq : ((input.val.extractDiagramRaw selection layout).regions
+      child).parent? = some layout.bodyContainer) :
+    MaterialRegionIndex layout child := by
+  apply materialRegionIndexOfNotAdministrative layout child
+  · intro rootEq
+    subst child
+    rw [input.val.extractDiagramRaw_root_region selection layout] at parentEq
+    contradiction
+  · intro index childEq
+    subst child
+    exact False.elim
+      (proxy_not_direct_child_of_bodyContainer input selection layout index
+        parentEq)
+
+/-- Logical projection of `terminalChild`. -/
 theorem terminalChild_is_material
     (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
@@ -303,16 +368,8 @@ theorem terminalChild_is_material
       child).parent? = some layout.bodyContainer) :
     ∃ index : Fin layout.materialRegionCount,
       child = layout.materialRegion index := by
-  rcases input.val.extractDiagramRaw_region_cases selection layout child with
-    rootEq | proxy | material
-  · subst child
-    rw [input.val.extractDiagramRaw_root_region selection layout] at parentEq
-    contradiction
-  · obtain ⟨index, rfl⟩ := proxy
-    exact False.elim
-      (proxy_not_direct_child_of_bodyContainer input selection layout index
-        parentEq)
-  · exact material
+  let indexed := terminalChild input selection layout child parentEq
+  exact ⟨indexed.index, indexed.region_eq⟩
 
 private theorem terminalMaterial_origin_direct
     (input : Concrete.Checked )

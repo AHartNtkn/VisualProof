@@ -21,10 +21,10 @@ noncomputable def openAnchorView
         (iterationInput input selection target) admissible boundary
         boundaryRoot)
       selection.val.anchor :=
-  Classical.choice (Concrete.Splice.openSiteView_complete
+  Concrete.Splice.openSiteView_complete
     (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
       (iterationInput input selection target) admissible boundary boundaryRoot)
-    selection.val.anchor)
+    selection.val.anchor
 
 theorem targetPath
     (input : Concrete.Checked)
@@ -55,7 +55,7 @@ theorem targetPath
     ((iterationInput input selection target).coalesceFrameRaw_wellFormed
       admissible) composed targetView.route
 
-theorem terminalLexical
+noncomputable def terminalLexical
     (input : Concrete.Checked)
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
@@ -72,8 +72,8 @@ theorem terminalLexical
         Concrete.Splice.Input.coalesceFrameRaw] using anchorNested)
     let closed := IterationAnchor.coalescedAnchorView input selection target
       admissible
-    ∃ relsEq : source.focus.holeRels = closed.focus.holeRels,
-      HEq sourceLeaf.binders closed.compilerLeaf.binders := by
+    Concrete.Splice.Input.TerminalLexical sourceLeaf.binders
+      closed.compilerLeaf.binders := by
   dsimp only
   let source := openAnchorView input selection target admissible boundary
     boundaryRoot
@@ -95,7 +95,7 @@ theorem terminalLexical
     Concrete.Splice.SiteView.focus, Concrete.Splice.OpenSiteView.compilerLeaf,
     Concrete.Splice.SiteView.compilerLeaf] using lexical
 
-theorem region_iso
+noncomputable def region_iso
     (input : Concrete.Checked)
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
@@ -106,23 +106,15 @@ theorem region_iso
     (anchorNested : selection.val.anchor ≠ input.val.root) :
     let source := openAnchorView input selection target admissible boundary
       boundaryRoot
-    let nested : selection.val.anchor ≠
-        (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-          (iterationInput input selection target) admissible boundary
-          boundaryRoot).val.diagram.root := by
-      simpa [Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot,
-        Concrete.Splice.Input.PlugLayout.coalescedOpenRoot,
-        Concrete.Splice.Input.coalesceFrameRaw] using anchorNested
-    let sourceLeaf := source.compilerLeaf.nestedOfNe nested
     let closed := IterationAnchor.coalescedAnchorView input selection target
       admissible
-    ∃ (relsEq : source.focus.holeRels = closed.focus.holeRels)
-      (wire : FiniteEquiv (Fin source.focus.holeWires)
-        (Fin closed.focus.holeWires)),
-      RegionIso wire closed.focus.holeRels
-        (source.focus.body.renameRelations
-          (Concrete.Splice.Input.relationRenamingOfEq relsEq))
-        closed.focus.body := by
+    PSigma fun relsEq : source.focus.holeRels = closed.focus.holeRels =>
+      Σ wire : FiniteEquiv (Fin source.focus.holeWires)
+          (Fin closed.focus.holeWires),
+        RegionIso wire closed.focus.holeRels
+          (source.focus.body.renameRelations
+            (Concrete.Splice.Input.relationRenamingOfEq relsEq))
+          closed.focus.body := by
   dsimp only
   let source := openAnchorView input selection target admissible boundary
     boundaryRoot

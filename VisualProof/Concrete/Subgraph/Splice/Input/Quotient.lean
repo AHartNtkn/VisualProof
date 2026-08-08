@@ -23,7 +23,7 @@ namespace Input
 /-- The designated terminal body of every splice pattern has an intrinsic view. -/
 theorem patternBodyView_complete (input : Input ) :
     Nonempty (OpenSiteView input.pattern input.binderSpine.bodyContainer) :=
-  openSiteView_complete input.pattern input.binderSpine.bodyContainer
+  ⟨openSiteView_complete input.pattern input.binderSpine.bodyContainer⟩
 
 def terminalProxy (input : Input )
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
@@ -820,7 +820,7 @@ def coalesceFrame (input : Input ) (hadmissible : input.Admissible) :
 theorem coalescedSiteView_complete (input : Input )
     (hadmissible : input.Admissible) :
     Nonempty (SiteView (input.coalesceFrame hadmissible) input.site) :=
-  siteView_complete (input.coalesceFrame hadmissible) input.site
+  ⟨siteView_complete (input.coalesceFrame hadmissible) input.site⟩
 
 /-- Every attached boundary class is visible at the splice site after host
 wire coalescing.  The quotient wire is scoped at an outermost member scope,

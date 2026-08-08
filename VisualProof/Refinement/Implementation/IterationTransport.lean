@@ -365,7 +365,6 @@ theorem iterationTerminalWire_sameWire
           (IterationQuotient.coalescedFrameIso input selection target).wires)
       ) patternIndex hostIndex) :
     let spliceInput := iterationInput input selection target
-    let layout : FragmentLayout input.val selection := {}
     let anchorView := IterationAnchor.coalescedAnchorView input selection target
       hadmissible
     let sourceContext :=

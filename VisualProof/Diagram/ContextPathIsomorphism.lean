@@ -392,14 +392,14 @@ noncomputable def RegionIso.alignContextPath
 region up to an arbitrary automorphism.  This proof-relevant form is needed
 when a compiler permutation changes only an enclosing occurrence block while
 the distinguished child route itself is retained verbatim. -/
-theorem Region.ContextPath.identityAlignment
+noncomputable def Region.ContextPath.identityAlignment
     {region : Region  wires rels}
     {path : List Nat}
     (witness : Region.ContextPath region path) :
-    ∃ alignment : RegionIso.ContextPathAlignment
-        (RegionIso.refl region) witness,
+    { alignment : RegionIso.ContextPathAlignment
+        (RegionIso.refl region) witness //
       alignment.targetPath = path ∧
-        ∀ index, (alignment.holeWire index).val = index.val := by
+        ∀ index, (alignment.holeWire index).val = index.val } := by
   induction witness with
   | here region =>
       refine ⟨{

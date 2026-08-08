@@ -57,34 +57,32 @@ theorem RegionRoute.path_unique
 
 /-- The compiler-selected source and output paths are the exact route
 transport induced by the frame occurrence equivalences. -/
-theorem PlugLayout.compiledSpliceOpenRoute_path_eq
+noncomputable def PlugLayout.compiledSpliceOpenRoute_path_eq
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root) :
-    let sourceView := compiledSpliceCoalescedOpenView input hadmissible
-      sourceBoundary sourceRoot
     let targetView := compiledSpliceOutputOpenView input layout hadmissible
       sourceBoundary sourceRoot
-    ∃ mappedPath,
-      RegionRoute layout.plugRaw layout.plugRaw.root
-        (layout.frameRegion input.site) mappedPath ∧
-      mappedPath = targetView.path := by
+    Σ mappedPath,
+      Σ mappedRoute : RegionRoute layout.plugRaw layout.plugRaw.root
+          (layout.frameRegion input.site) mappedPath,
+        PSigma fun _alignment : FrameRouteAlignment layout
+            (compiledSpliceCoalescedOpenView input hadmissible sourceBoundary
+              sourceRoot).route mappedRoute =>
+          mappedPath = targetView.path := by
   dsimp only
   let sourceView := compiledSpliceCoalescedOpenView input hadmissible
     sourceBoundary sourceRoot
   let targetView := compiledSpliceOutputOpenView input layout hadmissible
     sourceBoundary sourceRoot
-  obtain ⟨mappedPath, mappedRoute, ⟨_alignment⟩⟩ :=
+  obtain ⟨mappedPath, mappedRoute, alignment⟩ :=
     layout.mapFrameRoute hadmissible sourceView.route rfl
-  have mappedRoute' :
-      RegionRoute layout.plugRaw layout.plugRaw.root
-        (layout.frameRegion input.site) mappedPath := mappedRoute
-  refine ⟨mappedPath, mappedRoute', ?_⟩
+  refine ⟨mappedPath, mappedRoute, alignment, ?_⟩
   exact RegionRoute.path_unique
     (layout.plugRaw_wellFormed  input hadmissible)
-    mappedRoute' targetView.route
+    mappedRoute targetView.route
 
 /-- The algebraic result of following two compiler traces through aligned
 frame occurrences. -/
@@ -392,7 +390,7 @@ theorem PlugLayout.canonicalBodyItems_rename_eq_frameSourcePrepared
 
 /-- Lift the sibling kernel's compiler presentations into the intrinsic
 source and target body presentations retained by paired compiler traces. -/
-theorem PlugLayout.retainedFrameAssembly
+noncomputable def PlugLayout.retainedFrameAssembly
     (layout : PlugLayout input)
     (region : Fin input.coalesceFrameRaw.regionCount)
     (hne : region ≠ input.site)
@@ -427,17 +425,13 @@ theorem PlugLayout.retainedFrameAssembly
       (extendWireEquiv
         (FiniteEquiv.refl (Fin targetState.inheritedWires.length))
         (layout.frameLocalWireEquiv region hne)) sourceIndex targetIndex) :
-    ∃ sourceIndex' : Fin sourceSeq.length,
-      ∃ targetIndex' : Fin targetSeq.length,
-        sourceIndex'.val = sourceIndex.val ∧
-        targetIndex'.val = targetIndex.val ∧
-        Nonempty (ItemSeqIso.Frame
-          (extendWireEquiv
-            (compilerBodyOuterWire sourceState targetState inheritedWire)
-            ((FiniteEquiv.finCast sourceLocalCanonical).trans
-              ((layout.frameLocalWireEquiv region hne).trans
-                (FiniteEquiv.finCast targetLocalCanonical.symm))))
-          sourceIndex' targetIndex') := by
+    ItemSeqIso.Frame.Indexed sourceSeq targetSeq
+      (extendWireEquiv
+        (compilerBodyOuterWire sourceState targetState inheritedWire)
+        ((FiniteEquiv.finCast sourceLocalCanonical).trans
+          ((layout.frameLocalWireEquiv region hne).trans
+            (FiniteEquiv.finCast targetLocalCanonical.symm))))
+      sourceIndex.val targetIndex.val := by
   subst sourceLocal
   subst targetLocal
   let canonicalLocal := layout.frameLocalWireEquiv region hne
@@ -532,10 +526,8 @@ theorem PlugLayout.retainedFrameAssembly
       simp [lastWire, extendWireEquiv, FiniteEquiv.finCast,
         FiniteEquiv.refl]
     · apply Fin.ext
-      simpa [lastWire, extendWireEquiv, FiniteEquiv.finCast,
-        FiniteEquiv.refl] using
-        congrArg (fun inherited => inherited + localIndex.val)
-          targetState.inheritedLength
+      simp [lastWire, extendWireEquiv, FiniteEquiv.finCast,
+        FiniteEquiv.refl]
   let finalWire := extendWireEquiv
     (compilerBodyOuterWire sourceState targetState inheritedWire) localWire
   have hwire : (firstWire.trans middleWire).trans lastWire = finalWire := by
@@ -562,7 +554,7 @@ theorem PlugLayout.retainedFrameAssembly
             (compilerBodyOuterWire sourceState targetState inheritedWire
               outer) := by
           apply Fin.ext
-          simp [firstWire, middleWire, localWire, canonicalLocal,
+          simp [firstWire, middleWire, canonicalLocal,
             compilerBodyOuterWire, extendWireEquiv, FiniteEquiv.finCast,
             FiniteEquiv.refl]
         _ = finalWire (Fin.castAdd
@@ -578,7 +570,7 @@ theorem PlugLayout.retainedFrameAssembly
         _ = Fin.natAdd targetOuter (localWire localIndex) := by
           apply Fin.ext
           simp [firstWire, middleWire, localWire, canonicalLocal,
-            compilerBodyOuterWire, extendWireEquiv, FiniteEquiv.finCast,
+            extendWireEquiv, FiniteEquiv.finCast,
             FiniteEquiv.refl]
           rfl
         _ = finalWire (Fin.natAdd sourceOuter localIndex) := hright.symm
@@ -634,7 +626,7 @@ theorem PlugLayout.pairedRouteChild_eq
           hcycle)
 
 /-- Ordinary `finishRegion` trace induction below the open sheet root. -/
-theorem PlugLayout.pairedCompilerTraceContextIso
+noncomputable def PlugLayout.pairedCompilerTraceContextIso
     (input : Input )
     (layout : PlugLayout input) (hadmissible : input.Admissible)
     {start : Fin input.coalesceFrameRaw.regionCount}
@@ -671,9 +663,9 @@ theorem PlugLayout.pairedCompilerTraceContextIso
           (layout.frameRegion
             (sourceState.binderEnumeration.binder relation.index)) =
         some ⟨arity, relation⟩) :
-    Nonempty (layout.PairedCompilerTraceAlignment input
+    layout.PairedCompilerTraceAlignment input
       (compilerBodyOuterWire sourceState targetState inheritedWire)
-      sourceWitness sourceTrace.leaf targetWitness targetTrace.leaf) := by
+      sourceWitness sourceTrace.leaf targetWitness targetTrace.leaf := by
   revert inheritedWire
   induction sourceTrace generalizing targetStart targetEnd targetPath
       targetOuter with
@@ -681,7 +673,7 @@ theorem PlugLayout.pairedCompilerTraceContextIso
       cases targetTrace with
       | here targetState =>
           intro inheritedWire inheritedWireSpec
-          exact ⟨{
+          exact {
             holeRelsEq := rfl
             holeWire := compilerBodyOuterWire sourceState targetState
               inheritedWire
@@ -706,7 +698,7 @@ theorem PlugLayout.pairedCompilerTraceContextIso
               rw [hwire]
               exact inheritedWireSpec index
             terminalBinderSpec := binderSpec
-          }⟩
+          }
       | @cut _ targetChild _ _ targetParent _ _ targetTail _ _ _ _ _ _ _ _ _
           targetState targetLocal targetItems targetChildState targetChildKind
           targetInherited targetBinders targetFuel targetTailTrace =>
@@ -847,14 +839,14 @@ theorem PlugLayout.pairedCompilerTraceContextIso
                 sourceChild sourceState.binders targetState.binders
                 sourceState.binderEnumeration sourceChildKind
                 (fun {_} relation => relation) binderSpec relation)
-          obtain ⟨childAlignment⟩ := ih sourceEndEq rfl targetEndEq
+          let childAlignment := ih sourceEndEq rfl targetEndEq
             targetChildState
             targetTailTrace childBinderSpec childInheritedWire
             childInheritedWireSpec
           let sourceTailAtSite : RegionRoute input.coalesceFrameRaw sourceChild
               input.site sourceRest := sourceEndEq ▸ sourceTail
           obtain ⟨sourceIndex, targetIndex, hsourceIndex, htargetIndex,
-              ⟨rawFrame⟩⟩ :=
+              rawFrame⟩ :=
             compileFrameSiblings_targetCoordinates input layout
               hadmissible sourceState.fuel targetState.fuel sourceStart
               sourceChild hne sourceParent sourcePosition sourcePositionEq
@@ -867,7 +859,7 @@ theorem PlugLayout.pairedCompilerTraceContextIso
               targetState.items sourceState.itemsComputation
               targetState.itemsComputation
           obtain ⟨sourceIndex', targetIndex', hsourceIndex', htargetIndex',
-              ⟨frame⟩⟩ :=
+              frame⟩ :=
             layout.retainedFrameAssembly sourceStart hne sourceState
               targetState sourceLocalCanonical targetLocalCanonical
               sourceItemsCanonical targetItemsCanonical inheritedWire rawFrame
@@ -962,7 +954,7 @@ theorem PlugLayout.pairedCompilerTraceContextIso
             (childAlignment.holeRelsEq.symm ▸
               targetNested.toFocus.context)
             childContexts
-          exact ⟨{
+          exact {
             holeRelsEq := childAlignment.holeRelsEq
             holeWire := childAlignment.holeWire
             contexts := by
@@ -971,7 +963,7 @@ theorem PlugLayout.pairedCompilerTraceContextIso
             terminalInheritedWireSpec :=
               childAlignment.terminalInheritedWireSpec
             terminalBinderSpec := childAlignment.terminalBinderSpec
-          }⟩
+          }
       | @bubble _ targetChild _ targetRest targetParent targetPosition
           targetPositionEq targetTail targetOuter targetLocal targetArity
           targetRels targetSeq targetFocus targetChildBody targetAt
@@ -1156,13 +1148,13 @@ theorem PlugLayout.pairedCompilerTraceContextIso
                       Theory.RelVar (sourceArity :: sourceRels) arity)))
                   (RelationRenaming.lift_id relation)
             rfl
-          obtain ⟨childAlignment⟩ := ih sourceEndEq rfl targetEndEq
+          let childAlignment := ih sourceEndEq rfl targetEndEq
             targetChildState targetTailTrace childBinderSpec childInheritedWire
             childInheritedWireSpec
           let sourceTailAtSite : RegionRoute input.coalesceFrameRaw sourceChild
               input.site sourceRest := sourceEndEq ▸ sourceTail
           obtain ⟨sourceIndex, targetIndex, hsourceIndex, htargetIndex,
-              ⟨rawFrame⟩⟩ :=
+              rawFrame⟩ :=
             compileFrameSiblings_targetCoordinates input layout
               hadmissible sourceState.fuel targetState.fuel sourceStart
               sourceChild hne sourceParent sourcePosition sourcePositionEq
@@ -1175,7 +1167,7 @@ theorem PlugLayout.pairedCompilerTraceContextIso
               targetState.items sourceState.itemsComputation
               targetState.itemsComputation
           obtain ⟨sourceIndex', targetIndex', hsourceIndex', htargetIndex',
-              ⟨frame⟩⟩ :=
+              frame⟩ :=
             layout.retainedFrameAssembly sourceStart hne sourceState
               targetState sourceLocalCanonical targetLocalCanonical
               sourceItemsCanonical targetItemsCanonical inheritedWire rawFrame
@@ -1271,7 +1263,7 @@ theorem PlugLayout.pairedCompilerTraceContextIso
             (childAlignment.holeRelsEq.symm ▸
               targetNested.toFocus.context)
             childContexts
-          exact ⟨{
+          exact {
             holeRelsEq := childAlignment.holeRelsEq
             holeWire := childAlignment.holeWire
             contexts := by
@@ -1280,11 +1272,11 @@ theorem PlugLayout.pairedCompilerTraceContextIso
             terminalInheritedWireSpec :=
               childAlignment.terminalInheritedWireSpec
             terminalBinderSpec := childAlignment.terminalBinderSpec
-          }⟩
+          }
 
 /-- Lift the open-root sibling kernel from concatenated root-wire coordinates
 to the intrinsic `finishRoot` body coordinates. -/
-theorem PlugLayout.retainedRootFrameAssembly
+noncomputable def PlugLayout.retainedRootFrameAssembly
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
@@ -1315,17 +1307,13 @@ theorem PlugLayout.retainedRootFrameAssembly
     (rawFrame : ItemSeqIso.Frame
       (nestedRootWireEquiv input layout sourceBoundary hnested)
       sourceIndex targetIndex) :
-    ∃ sourceIndex' : Fin sourceSeq.length,
-      ∃ targetIndex' : Fin targetSeq.length,
-        sourceIndex'.val = sourceIndex.val ∧
-        targetIndex'.val = targetIndex.val ∧
-        Nonempty (ItemSeqIso.Frame (source := sourceSeq) (target := targetSeq)
-          (extendWireEquiv
-            (rootExposedWireEquiv input layout sourceBoundary)
-            ((FiniteEquiv.finCast sourceLocalCanonical).trans
-              ((nestedRootHiddenWireEquiv input layout sourceBoundary hnested).trans
-                (FiniteEquiv.finCast targetLocalCanonical.symm))))
-          sourceIndex' targetIndex') := by
+    ItemSeqIso.Frame.Indexed sourceSeq targetSeq
+      (extendWireEquiv
+        (rootExposedWireEquiv input layout sourceBoundary)
+        ((FiniteEquiv.finCast sourceLocalCanonical).trans
+          ((nestedRootHiddenWireEquiv input layout sourceBoundary hnested).trans
+            (FiniteEquiv.finCast targetLocalCanonical.symm))))
+      sourceIndex.val targetIndex.val := by
   subst sourceLocal
   subst targetLocal
   let sourceEq :
@@ -1384,7 +1372,7 @@ theorem PlugLayout.retainedRootFrameAssembly
 
 /-- Paired open-root compiler-trace induction aligns the root frame and then
 delegates every proper descendant to `pairedCompilerTraceContextIso`. -/
-theorem PlugLayout.pairedOpenCompilerTraceContextIso
+noncomputable def PlugLayout.pairedOpenCompilerTraceContextIso
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
@@ -1418,7 +1406,7 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
     (targetTrace : OpenCompilerTrace
       (checkedOutputOpenRoot input layout hadmissible sourceBoundary sourceRoot)
       targetRoute targetWitness targetState) :
-    Nonempty (layout.PairedCompilerTraceAlignment input
+    layout.PairedCompilerTraceAlignment input
       (rootExposedWireEquiv input layout sourceBoundary)
       sourceWitness
       (sourceTrace.leaf.nestedOfNe (fun hroot =>
@@ -1426,7 +1414,7 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
       targetWitness
       (targetTrace.leaf.nestedOfNe (fun hroot =>
         hnested (layout.frameRegion_injective
-          (targetEndEq.symm.trans hroot))))) := by
+          (targetEndEq.symm.trans hroot)))) := by
   have sourceNeRoot : ∀ {endpoint : Fin input.coalesceFrameRaw.regionCount},
       endpoint = input.site →
         endpoint ≠ (checkedCoalescedOpenRoot input hadmissible sourceBoundary
@@ -1449,12 +1437,12 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
     (motive := fun {sourceEnd} {sourcePath} {sourceBody} sourceRoute
       sourceWitness sourceState sourceTrace =>
         (sourceEndEq : sourceEnd = input.site) →
-          Nonempty (layout.PairedCompilerTraceAlignment input
+          layout.PairedCompilerTraceAlignment input
             (rootExposedWireEquiv input layout sourceBoundary)
             sourceWitness
             (sourceTrace.leaf.nestedOfNe (sourceNeRoot sourceEndEq))
             targetWitness
-            (targetTrace.leaf.nestedOfNe (targetNeRoot targetEndEq))))
+            (targetTrace.leaf.nestedOfNe (targetNeRoot targetEndEq)))
               ?_ ?_ ?_ sourceTrace
                   sourceEndEq
   case refine_1 =>
@@ -1473,12 +1461,12 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
         (motive := fun {targetEnd} {targetPath} {targetBody} targetRoute
           targetWitness targetState targetTrace =>
             (targetEndEq : targetEnd = layout.frameRegion input.site) →
-              Nonempty (layout.PairedCompilerTraceAlignment input
+              layout.PairedCompilerTraceAlignment input
                 (rootExposedWireEquiv input layout sourceBoundary)
                 currentSourceWitness
                 sourceTailTrace.leaf.underCut
                 targetWitness
-                (targetTrace.leaf.nestedOfNe (targetNeRoot targetEndEq))))
+                (targetTrace.leaf.nestedOfNe (targetNeRoot targetEndEq)))
                   ?_ ?_ ?_
                       targetTrace targetEndEq
       case refine_1 =>
@@ -1590,8 +1578,8 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
                       relation.index)) = some ⟨arity, relation⟩ := by
             intro arity relation
             exact Fin.elim0 relation.index
-          obtain ⟨childAlignment⟩ :=
-            layout.pairedCompilerTraceContextIso  input hadmissible
+          let childAlignment :=
+            layout.pairedCompilerTraceContextIso input hadmissible
               sourceEndEq rfl targetEndEq sourceChildState targetChildState
               sourceTailTrace
               targetTailTrace childInheritedWire childInheritedWireSpec
@@ -1599,14 +1587,14 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
           let sourceTailAtSite : RegionRoute input.coalesceFrameRaw sourceChild
               input.site sourceRest := sourceEndEq ▸ sourceTail
           obtain ⟨sourceIndex, targetIndex, hsourceIndex, htargetIndex,
-              ⟨rawFrame⟩⟩ :=
+              rawFrame⟩ :=
             layout.compileNestedRootSiblings  input hadmissible
               sourceBoundary sourceRoot hnested sourceChild sourceParent
               sourcePosition sourcePositionEq sourceTailAtSite sourceState.items
               targetState.items sourceState.itemsComputation
               targetState.itemsComputation
           obtain ⟨sourceIndex', targetIndex', hsourceIndex', htargetIndex',
-              ⟨frame⟩⟩ :=
+              frame⟩ :=
             layout.retainedRootFrameAssembly input hadmissible sourceBoundary
               sourceRoot hnested sourceState targetState sourceLocalCanonical
               targetLocalCanonical sourceItemsCanonical targetItemsCanonical
@@ -1705,7 +1693,7 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
             sourceNested.toFocus.context
             (childAlignment.holeRelsEq.symm ▸
               targetNested.toFocus.context) childContexts
-          exact ⟨{
+          exact {
             holeRelsEq := childAlignment.holeRelsEq
             holeWire := childAlignment.holeWire
             contexts := by
@@ -1725,7 +1713,7 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
             terminalInheritedWireSpec :=
               childAlignment.terminalInheritedWireSpec
             terminalBinderSpec := childAlignment.terminalBinderSpec
-          }⟩
+          }
   case refine_3 =>
       intro sourceChild sourceEnd sourceRest sourceParent sourcePosition
         sourcePositionEq sourceTail sourceLocal sourceArity sourceSeq
@@ -1739,12 +1727,12 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
         (motive := fun {targetEnd} {targetPath} {targetBody} targetRoute
           targetWitness targetState targetTrace =>
             (targetEndEq : targetEnd = layout.frameRegion input.site) →
-              Nonempty (layout.PairedCompilerTraceAlignment input
+              layout.PairedCompilerTraceAlignment input
                 (rootExposedWireEquiv input layout sourceBoundary)
                 currentSourceWitness
                 sourceTailTrace.leaf.underBubble
                 targetWitness
-                (targetTrace.leaf.nestedOfNe (targetNeRoot targetEndEq))))
+                (targetTrace.leaf.nestedOfNe (targetNeRoot targetEndEq)))
                   ?_ ?_ ?_
                       targetTrace targetEndEq
       case refine_1 =>
@@ -1891,8 +1879,8 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
                       Theory.RelVar (sourceArity :: []) arity)))
                   (RelationRenaming.lift_id relation)
             rfl
-          obtain ⟨childAlignment⟩ :=
-            layout.pairedCompilerTraceContextIso  input hadmissible
+          let childAlignment :=
+            layout.pairedCompilerTraceContextIso input hadmissible
               sourceEndEq rfl targetEndEq sourceChildState targetChildState
               sourceTailTrace
               targetTailTrace childInheritedWire childInheritedWireSpec
@@ -1900,14 +1888,14 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
           let sourceTailAtSite : RegionRoute input.coalesceFrameRaw sourceChild
               input.site sourceRest := sourceEndEq ▸ sourceTail
           obtain ⟨sourceIndex, targetIndex, hsourceIndex, htargetIndex,
-              ⟨rawFrame⟩⟩ :=
+              rawFrame⟩ :=
             layout.compileNestedRootSiblings  input hadmissible
               sourceBoundary sourceRoot hnested sourceChild sourceParent
               sourcePosition sourcePositionEq sourceTailAtSite sourceState.items
               targetState.items sourceState.itemsComputation
               targetState.itemsComputation
           obtain ⟨sourceIndex', targetIndex', hsourceIndex', htargetIndex',
-              ⟨frame⟩⟩ :=
+              frame⟩ :=
             layout.retainedRootFrameAssembly input hadmissible sourceBoundary
               sourceRoot hnested sourceState targetState sourceLocalCanonical
               targetLocalCanonical sourceItemsCanonical targetItemsCanonical
@@ -2007,7 +1995,7 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
             sourceNested.toFocus.context
             (childAlignment.holeRelsEq.symm ▸
               targetNested.toFocus.context) childContexts
-          exact ⟨{
+          exact {
             holeRelsEq := childAlignment.holeRelsEq
             holeWire := childAlignment.holeWire
             contexts := by
@@ -2027,6 +2015,6 @@ theorem PlugLayout.pairedOpenCompilerTraceContextIso
             terminalInheritedWireSpec :=
               childAlignment.terminalInheritedWireSpec
             terminalBinderSpec := childAlignment.terminalBinderSpec
-          }⟩
+          }
 
 end VisualProof.Concrete.Splice.Input

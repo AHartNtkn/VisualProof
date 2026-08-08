@@ -1347,7 +1347,7 @@ theorem extend_index_eq_extendedMap
       (extendedMap_get input outer inner distinct region notInnerScope
         sourceContext targetContext witness index).symm)
 
-theorem itemSeqIso_after_rename
+noncomputable def itemSeqIso_after_rename
     (source : ItemSeq sourceWires rels)
     (target : ItemSeq targetWires rels)
     (wireMap : Fin sourceWires → Fin targetWires)
@@ -1372,7 +1372,7 @@ theorem itemSeqIso_after_rename
   rw [ItemSeq.get_renameWires]
   exact items sourceIndex
 
-theorem compiledItemSeqIso_after_rename
+noncomputable def compiledItemSeqIso_after_rename
     (input : Concrete.Diagram)
     (outer inner : Fin input.wireCount)
     (sourceRecurse : ∀ {rels : RelCtx},

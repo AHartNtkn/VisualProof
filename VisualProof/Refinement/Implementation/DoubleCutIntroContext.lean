@@ -36,7 +36,7 @@ private theorem list_get_cast
 
 /-- The enclosing concrete route is unchanged by double-cut introduction;
 only its region indices are lifted past the two fresh regions. -/
-private def route_lift_aux
+private noncomputable def route_lift_aux
     (input : Concrete.Diagram)
     (selection : CheckedSelection input)
     (wellFormed : input.WellFormed)
@@ -91,7 +91,7 @@ private def route_lift_aux
       simpa [positionVal] using Concrete.Splice.RegionRoute.step targetParent
         targetPosition targetPositionEq (induction targetEq)
 
-theorem route_lift
+noncomputable def route_lift
     (input : Concrete.Diagram)
     (selection : CheckedSelection input)
     (wellFormed : input.WellFormed)
@@ -111,7 +111,7 @@ def checkedTarget (source : Concrete.CheckedOpen)
 /-- The lifted route is accepted by the target's actual open-root compiler.
 The result retains the target context path and every compiler frame needed
 for structural context alignment. -/
-theorem targetTrace_complete
+noncomputable def targetTrace_complete
     (source : Concrete.CheckedOpen)
     (selection : CheckedSelection source.val.diagram)
     (targetWellFormed :
@@ -123,8 +123,8 @@ theorem targetTrace_complete
         sourceView.path :=
       route_lift source.val.diagram selection
         source.property.diagram_well_formed sourceView.route
-    Nonempty (Concrete.Splice.OpenCompilerTraceResult target targetRoute
-      target.elaborate.body) := by
+    Concrete.Splice.OpenCompilerTraceResult target targetRoute
+      target.elaborate.body := by
   dsimp only
   let target := checkedTarget source selection targetWellFormed
   let lifted := route_lift source.val.diagram selection
@@ -132,17 +132,19 @@ theorem targetTrace_complete
   let targetRoute : Concrete.Splice.RegionRoute target.val.diagram
       target.val.diagram.root (Fin.castAdd 2 selection.val.anchor)
       sourceView.path := lifted
-  obtain ⟨body, compiled, elaborates⟩ :=
-    Concrete.CheckedOpen.elaborate_body_computation target
-  obtain ⟨result⟩ :=
-    Concrete.Splice.compileOpenRoot_route_context_complete target targetRoute
-      compiled
-  subst body
-  exact ⟨result⟩
+  have compiled : Concrete.Elaboration.compileRoot? target.val.diagram
+      target.val.exposedWires target.val.hiddenWires =
+        some target.elaborate.body := by
+    obtain ⟨body, bodyComputation, elaborates⟩ :=
+      Concrete.CheckedOpen.elaborate_body_computation target
+    subst body
+    exact bodyComputation
+  exact Concrete.Splice.compileOpenRoot_route_context_complete target
+    targetRoute compiled
 
 /-- Every nonfocused compiler item in an enclosing frame is transported
 structurally; the distinguished route child is left for recursive alignment. -/
-theorem compilerRawFrame
+noncomputable def compilerRawFrame
     (input : Concrete.Diagram)
     (selection : CheckedSelection input)
     (wellFormed : input.WellFormed)
@@ -170,9 +172,9 @@ theorem compilerRawFrame
     (targetIndex : Fin targetState.items.length)
     (sourceIndexVal : sourceIndex.val = position.val)
     (targetIndexVal : targetIndex.val = position.val) :
-    Nonempty (ItemSeqIso.Frame
+    ItemSeqIso.Frame
       (FiniteEquiv.finCast (congrArg List.length
-        (context.extend region).equality)) sourceIndex targetIndex) := by
+        (context.extend region).equality)) sourceIndex targetIndex := by
   let sourceExtended := sourceState.inheritedWires.extend region
   let targetExtended := targetState.inheritedWires.extend (Fin.castAdd 2 region)
   let occurrences := Concrete.Elaboration.localOccurrences input region
@@ -208,11 +210,11 @@ theorem compilerRawFrame
   have mapped : positions sourceIndex = targetIndex := by
     apply Fin.ext
     simp [positions, sourceIndexVal, targetIndexVal, FiniteEquiv.finCast]
-  refine ⟨{
+  refine {
     positions := positions
     mapped := mapped
     siblings := ?_
-  }⟩
+  }
   intro index indexNe
   let occurrenceIndex : Fin occurrences.length := Fin.cast sourceLength index
   have occurrenceNe : occurrenceIndex ≠ position := by
@@ -297,7 +299,7 @@ theorem compilerRawFrame
 
 /-- Canonical-body form of `compilerRawFrame`, transported through the casts
 performed by `finishRegion`. -/
-theorem compilerLeafFrame
+noncomputable def compilerLeafFrame
     (input : Concrete.Diagram)
     (selection : CheckedSelection input)
     (wellFormed : input.WellFormed)
@@ -339,8 +341,8 @@ theorem compilerLeafFrame
       ((FiniteEquiv.finCast (congrArg List.length
         (exactScopeWires input selection region).symm)).trans
         (FiniteEquiv.finCast targetLocalCanonical.symm))
-    Nonempty (ItemSeqIso.Frame (extendWireEquiv outerWire localWire)
-      sourceIndex targetIndex) := by
+    ItemSeqIso.Frame (extendWireEquiv outerWire localWire)
+      sourceIndex targetIndex := by
   dsimp only
   subst sourceLocal
   subst targetLocal
@@ -412,7 +414,7 @@ theorem compilerLeafFrame
   have rawTargetVal : rawTargetIndex.val = position.val := by
     simpa [rawTargetIndex, targetRenamedIndex,
       ItemSeq.renameWiresPositionEquiv, FiniteEquiv.finCast] using targetIndexVal
-  obtain ⟨rawFrame⟩ := compilerRawFrame input selection wellFormed regionNe
+  let rawFrame := compilerRawFrame input selection wellFormed regionNe
     childParent position positionEq tail sourceState targetState context binders
     rawSourceIndex rawTargetIndex rawSourceVal rawTargetVal
   have sourceUndo : sourceItems.renameWires sourceCast.symm =
@@ -508,7 +510,7 @@ theorem compilerLeafFrame
         inherited localWire
     simpa [sourceCast, targetCast, extendedEq, finalWire, outerWire,
       sourceExtended, targetExtended] using algebra
-  obtain ⟨sourceIndex', targetIndex', sourceVal, targetVal, ⟨frame⟩⟩ :=
+  obtain ⟨sourceIndex', targetIndex', sourceVal, targetVal, frame⟩ :=
     ItemSeqIso.Frame.pullPush sourceCast.symm extendedEquiv targetCast
       finalWire sourceUndo targetPush wireFactor rawFrame
   have sourceIndexEq : sourceIndex' = sourceIndex := by
@@ -525,9 +527,9 @@ theorem compilerLeafFrame
         ItemSeq.renameWiresPositionEquiv])
   subst sourceIndex'
   subst targetIndex'
-  simpa only [finalWire] using ⟨frame⟩
+  simpa only [finalWire] using frame
 
-theorem openRootRawFrame
+noncomputable def openRootRawFrame
     (source : Concrete.CheckedOpen)
     (selection : CheckedSelection source.val.diagram)
     (rootNe : source.val.diagram.root ≠ selection.val.anchor)
@@ -551,10 +553,10 @@ theorem openRootRawFrame
     (targetIndex : Fin targetState.items.length)
     (sourceIndexVal : sourceIndex.val = position.val)
     (targetIndexVal : targetIndex.val = position.val) :
-    Nonempty (ItemSeqIso.Frame
+    ItemSeqIso.Frame
       (FiniteEquiv.finCast (congrArg List.length
         (DoubleCutTransport.targetOpen_rootWires source.val selection).symm))
-      sourceIndex targetIndex) := by
+      sourceIndex targetIndex := by
   let input := source.val.diagram
   let target := checkedTarget source selection targetWellFormed
   let sourceWires := source.val.rootWires
@@ -593,7 +595,7 @@ theorem openRootRawFrame
   have mapped : positions sourceIndex = targetIndex := by
     apply Fin.ext
     simp [positions, sourceIndexVal, targetIndexVal, FiniteEquiv.finCast]
-  refine ⟨{ positions := positions, mapped := mapped, siblings := ?_ }⟩
+  refine { positions := positions, mapped := mapped, siblings := ?_ }
   intro index indexNe
   let occurrenceIndex : Fin occurrences.length := Fin.cast sourceLength index
   have occurrenceNe : occurrenceIndex ≠ position := by
@@ -690,7 +692,7 @@ theorem openRootRawFrame
   · exact sourceGet
   · exact targetGet'
 
-theorem openRootFrame
+noncomputable def openRootFrame
     (source : Concrete.CheckedOpen)
     (selection : CheckedSelection source.val.diagram)
     (targetWellFormed :
@@ -717,21 +719,17 @@ theorem openRootFrame
       (FiniteEquiv.finCast (congrArg List.length
         (DoubleCutTransport.targetOpen_rootWires source.val selection).symm))
       sourceIndex targetIndex) :
-    ∃ sourceIndex' : Fin sourceSeq.length,
-      ∃ targetIndex' : Fin targetSeq.length,
-        sourceIndex'.val = sourceIndex.val ∧
-        targetIndex'.val = targetIndex.val ∧
-        Nonempty (ItemSeqIso.Frame
-          (extendWireEquiv
-            (FiniteEquiv.finCast (congrArg List.length
-              (DoubleCutTransport.targetOpen_exposedWires source.val
-                selection).symm))
-            ((FiniteEquiv.finCast sourceLocalCanonical).trans
-              ((FiniteEquiv.finCast (congrArg List.length
-                (DoubleCutTransport.targetOpen_hiddenWires source.val
-                  selection).symm)).trans
-                (FiniteEquiv.finCast targetLocalCanonical.symm))))
-          sourceIndex' targetIndex') := by
+    ItemSeqIso.Frame.Indexed sourceSeq targetSeq
+      (extendWireEquiv
+        (FiniteEquiv.finCast (congrArg List.length
+          (DoubleCutTransport.targetOpen_exposedWires source.val
+            selection).symm))
+        ((FiniteEquiv.finCast sourceLocalCanonical).trans
+          ((FiniteEquiv.finCast (congrArg List.length
+            (DoubleCutTransport.targetOpen_hiddenWires source.val
+              selection).symm)).trans
+            (FiniteEquiv.finCast targetLocalCanonical.symm))))
+      sourceIndex.val targetIndex.val := by
   subst sourceLocal
   subst targetLocal
   let target := checkedTarget source selection targetWellFormed
@@ -868,7 +866,7 @@ private theorem lifted_child_eq
   rw [sourceGet'] at targetGet'
   exact Concrete.Elaboration.LocalOccurrence.child.inj targetGet'.symm
 
-theorem compilerTraceContextIso
+noncomputable def compilerTraceContextIso
     (input : Concrete.Diagram)
     (selection : CheckedSelection input)
     (wellFormed : input.WellFormed)
@@ -902,13 +900,13 @@ theorem compilerTraceContextIso
       targetState.binders) :
     let inherited := FiniteEquiv.finCast
       (congrArg List.length context.equality)
-    Nonempty (CompilerTraceAlignment
+    CompilerTraceAlignment
         (compilerBodyOuterWire sourceState targetState inherited)
         sourceWitness targetWitness ×
       Context input selection sourceTrace.leaf.inheritedWires
           targetTrace.leaf.inheritedWires ×
         Binders input selection sourceTrace.leaf.binders
-          targetTrace.leaf.binders) := by
+          targetTrace.leaf.binders := by
   dsimp only
   revert targetTrace context binders
   induction sourceTrace using @Concrete.Splice.CompilerTrace.rec input
@@ -921,14 +919,14 @@ theorem compilerTraceContextIso
           intro context binders
           let inherited := FiniteEquiv.finCast
             (congrArg List.length context.equality)
-          exact ⟨⟨{
+          exact ⟨{
             holeRelsEq := rfl
             holeWire := compilerBodyOuterWire sourceState targetState inherited
             holeWire_val := by
               intro index
               simp [compilerBodyOuterWire, inherited, FiniteEquiv.finCast]
             contexts := .hole _
-          }, context, binders⟩⟩
+          }, context, binders⟩
       | cut =>
           simp at pathEq
       | bubble =>
@@ -985,7 +983,7 @@ theorem compilerTraceContextIso
               targetChildState.binders := by
             rw [sourceBinders, targetBinders]
             exact binders
-          obtain ⟨⟨childResult, terminalContext, terminalBinders⟩⟩ :=
+          obtain ⟨childResult, terminalContext, terminalBinders⟩ :=
             induction siteEq rfl restEq
             targetChildState targetTailTrace childContext childBinders
           let inherited := FiniteEquiv.finCast
@@ -1004,7 +1002,7 @@ theorem compilerTraceContextIso
               targetPosition.val targetFocus targetAt⟩
           have sourceTailAnchor : Concrete.Splice.RegionRoute input sourceChild
               selection.val.anchor sourceRest := siteEq ▸ sourceTail
-          obtain ⟨frame⟩ := compilerLeafFrame input selection wellFormed
+          let frame := compilerLeafFrame input selection wellFormed
             sourceStartNe sourceParent sourcePosition sourcePositionEq
             sourceTailAnchor
             sourceState targetState sourceLocalCanonical targetLocalCanonical
@@ -1057,14 +1055,14 @@ theorem compilerTraceContextIso
             targetFocus sourceAt targetAt frame sourceNested.toFocus.context
             (childResult.holeRelsEq.symm ▸
               targetNested.toFocus.context) childContexts
-          exact ⟨⟨{
+          exact ⟨{
             holeRelsEq := childResult.holeRelsEq
             holeWire := childResult.holeWire
             holeWire_val := childResult.holeWire_val
             contexts := by
               simpa only [Region.ContextPath.toFocus,
                 targetContextTransport] using contexts
-          }, terminalContext, terminalBinders⟩⟩
+          }, terminalContext, terminalBinders⟩
       | @bubble targetStart targetChild targetEnd targetRest targetParent
           targetPosition targetPositionEq targetTail targetOuter targetLocal
           targetArity targetRels targetSeq targetFocus targetChildBody targetAt
@@ -1177,7 +1175,7 @@ theorem compilerTraceContextIso
               targetChildState.binders := by
             rw [sourceBinders, targetBinders]
             exact binders.push sourceChild sourceArity
-          obtain ⟨⟨childResult, terminalContext, terminalBinders⟩⟩ :=
+          obtain ⟨childResult, terminalContext, terminalBinders⟩ :=
             induction siteEq rfl restEq
             targetChildState targetTailTrace childContext childBinders
           let inherited := FiniteEquiv.finCast
@@ -1196,7 +1194,7 @@ theorem compilerTraceContextIso
               targetPosition.val targetFocus targetAt⟩
           have sourceTailAnchor : Concrete.Splice.RegionRoute input sourceChild
               selection.val.anchor sourceRest := siteEq ▸ sourceTail
-          obtain ⟨frame⟩ := compilerLeafFrame input selection wellFormed
+          let frame := compilerLeafFrame input selection wellFormed
             sourceStartNe sourceParent sourcePosition sourcePositionEq
             sourceTailAnchor sourceState targetState sourceLocalCanonical
             targetLocalCanonical sourceItemsCanonical targetItemsCanonical
@@ -1250,14 +1248,14 @@ theorem compilerTraceContextIso
             targetFocus sourceAt targetAt frame sourceNested.toFocus.context
             (childResult.holeRelsEq.symm ▸
               targetNested.toFocus.context) childContexts
-          exact ⟨⟨{
+          exact ⟨{
             holeRelsEq := childResult.holeRelsEq
             holeWire := childResult.holeWire
             holeWire_val := childResult.holeWire_val
             contexts := by
               simpa only [Region.ContextPath.toFocus,
                 targetContextTransport] using contexts
-          }, terminalContext, terminalBinders⟩⟩
+          }, terminalContext, terminalBinders⟩
 
 structure RuleAlignment
     {sourceOuter targetOuter : Nat} {rels : RelCtx}
@@ -1273,7 +1271,9 @@ structure RuleAlignment
   replacement : Region sourceWitness.toFocus.holeWires
     sourceWitness.toFocus.holeRels
   step : Rule.DoubleCut.Local before replacement
-  source_iso : Core.Isomorphic sourceWitness.toFocus.body before
+  source_iso : RegionIso
+    (FiniteEquiv.refl (Fin sourceWitness.toFocus.holeWires))
+    sourceWitness.toFocus.holeRels sourceWitness.toFocus.body before
   target_iso : RegionIso holeWire.symm sourceWitness.toFocus.holeRels
     (holeRelsEq.symm ▸ targetWitness.toFocus.body) replacement
 
@@ -1287,13 +1287,14 @@ private theorem local_castWiresEq
   cases equality
   simpa only [Region.castWiresEq] using step
 
-private theorem sourceIso_castWiresEq
+private noncomputable def sourceIso_castWiresEq
     {sourceWires targetWires : Nat} {rels : RelCtx}
     (equality : sourceWires = targetWires)
     {source : Region targetWires rels}
     {before : Region sourceWires rels}
     (iso : RegionIso (FiniteEquiv.finCast equality.symm) rels source before) :
-    Core.Isomorphic source (before.castWiresEq equality) := by
+    RegionIso (FiniteEquiv.refl (Fin targetWires)) rels source
+      (before.castWiresEq equality) := by
   cases equality
   have wireEq : FiniteEquiv.finCast rfl =
       FiniteEquiv.refl (Fin sourceWires) := by
@@ -1312,7 +1313,7 @@ private theorem region_transport_eq_mp
   cases equality
   rfl
 
-private theorem changeRegionIsoWire
+private noncomputable def changeRegionIsoWire
     {first second : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     (equality : first = second)
     {source : Region sourceWires rels}
@@ -1322,7 +1323,7 @@ private theorem changeRegionIsoWire
   subst second
   exact iso
 
-private theorem compilerLeafPresentation
+private noncomputable def compilerLeafPresentation
     {input : Concrete.Diagram} {site : Fin input.regionCount}
     {outerWires : Nat} {rels : RelCtx} {body : Region outerWires rels}
     (leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input site
@@ -1350,7 +1351,7 @@ private theorem compilerLeafPresentation
   rw [bodyEq]
   simpa only [Region.castWiresEq_eq_renameWires] using renamed
 
-private theorem compilerLeafPresentation_castRels
+private noncomputable def compilerLeafPresentation_castRels
     {input : Concrete.Diagram} {site : Fin input.regionCount}
     {outerWires : Nat} {sourceRels targetRels : RelCtx}
     {body : Region outerWires targetRels}
@@ -1425,6 +1426,8 @@ private theorem focusRuleAlignment
     (targetBinders := targetFocusLeaf.binders)
     (binders := focusBinders)
     (targetCompiled := targetCompiled)
+  rcases sourceFocusIso with ⟨sourceFocusIso⟩
+  rcases targetFocusIso with ⟨targetFocusIso⟩
   let before := DoubleCutIntroCompile.partitionBefore
     source.val.diagram sourceLeaf.inheritedWires selection.val.anchor kept
       selected
@@ -1435,8 +1438,9 @@ private theorem focusRuleAlignment
   let after' := after.castWiresEq sourceLeaf.inheritedLength
   have localEvidence' : Rule.DoubleCut.Local before' after' :=
     local_castWiresEq sourceLeaf.inheritedLength localEvidence
-  have sourceFocusIso' : Core.Isomorphic sourceWitness.toFocus.body
-      before' :=
+  have sourceFocusIso' : RegionIso
+      (FiniteEquiv.refl (Fin sourceWitness.toFocus.holeWires))
+      sourceWitness.toFocus.holeRels sourceWitness.toFocus.body before' :=
     sourceIso_castWiresEq sourceLeaf.inheritedLength sourceFocusIso
   have targetFocusIso' : RegionIso alignment.holeWire.symm
       sourceWitness.toFocus.holeRels
@@ -1507,9 +1511,9 @@ theorem nested_rule
     ⟨DoubleCutTransport.targetOpen source.val selection,
       DoubleCutTransport.targetOpen_wellFormed source selection
         rawWellFormed⟩
-  let sourceView := Classical.choice
-    (Concrete.Splice.openSiteView_complete source selection.val.anchor)
-  obtain ⟨targetResult⟩ := targetTrace_complete source selection
+  let sourceView := Concrete.Splice.openSiteView_complete source
+    selection.val.anchor
+  let targetResult := targetTrace_complete source selection
     target.property sourceView
   have targetEndEq : Fin.castAdd 2 selection.val.anchor =
       Fin.castAdd 2 selection.val.anchor := rfl
@@ -1632,7 +1636,7 @@ theorem nested_rule
                 sourceChildState.binders targetChildState.binders := by
               rw [sourceBinders, targetBinders]
               exact rootBinders
-            obtain ⟨⟨childResult, terminalContext, terminalBinders⟩⟩ :=
+            obtain ⟨childResult, terminalContext, terminalBinders⟩ :=
               compilerTraceContextIso
               source.val.diagram selection source.property.diagram_well_formed
               sourceSiteEq rfl restEq sourceChildState targetChildState
@@ -1658,13 +1662,13 @@ theorem nested_rule
               Fin.cast sourceItemsLength.symm sourcePosition
             let targetIndex : Fin targetState.items.length :=
               Fin.cast targetItemsLength.symm targetPosition
-            obtain ⟨rawFrame⟩ := openRootRawFrame source selection rootNe
+            let rawFrame := openRootRawFrame source selection rootNe
               target.property sourceParent sourcePosition sourcePositionEq
               (sourceSiteEq ▸ sourceTail) sourceState targetState sourceIndex
               targetIndex
               (by simp [sourceIndex]) (by simp [targetIndex, positionVal])
             obtain ⟨sourceIndex', targetIndex', sourceIndexVal,
-                targetIndexVal, ⟨frame⟩⟩ := openRootFrame source selection
+              targetIndexVal, frame⟩ := openRootFrame source selection
               target.property sourceState targetState sourceLocalCanonical
               targetLocalCanonical sourceItemsCanonical targetItemsCanonical
               rawFrame
@@ -1833,7 +1837,7 @@ theorem nested_rule
                 sourceChildState.binders targetChildState.binders := by
               rw [sourceBinders, targetBinders]
               exact rootBinders.push sourceChild sourceArity
-            obtain ⟨⟨childResult, terminalContext, terminalBinders⟩⟩ :=
+            obtain ⟨childResult, terminalContext, terminalBinders⟩ :=
               compilerTraceContextIso
               source.val.diagram selection source.property.diagram_well_formed
               sourceSiteEq rfl restEq sourceChildState targetChildState
@@ -1859,13 +1863,13 @@ theorem nested_rule
               Fin.cast sourceItemsLength.symm sourcePosition
             let targetIndex : Fin targetState.items.length :=
               Fin.cast targetItemsLength.symm targetPosition
-            obtain ⟨rawFrame⟩ := openRootRawFrame source selection rootNe
+            let rawFrame := openRootRawFrame source selection rootNe
               target.property sourceParent sourcePosition sourcePositionEq
               (sourceSiteEq ▸ sourceTail) sourceState targetState sourceIndex
               targetIndex
               (by simp [sourceIndex]) (by simp [targetIndex, positionVal])
             obtain ⟨sourceIndex', targetIndex', sourceIndexVal,
-                targetIndexVal, ⟨frame⟩⟩ := openRootFrame source selection
+              targetIndexVal, frame⟩ := openRootFrame source selection
               target.property sourceState targetState sourceLocalCanonical
               targetLocalCanonical sourceItemsCanonical targetItemsCanonical
               rawFrame
@@ -1957,13 +1961,18 @@ theorem nested_rule
             }⟩
   obtain ⟨alignment⟩ := aligned
   subst sourceBody
-  let sourceBodyIso : Core.Isomorphic source.elaborate.body
+  let sourceBodyIso : RegionIso
+      (FiniteEquiv.refl (Fin source.elaborate.externalClasses)) []
+      source.elaborate.body
       (sourceWitness.toFocus.context.fill alignment.before) := by
-    have rebuildIso : Core.Isomorphic source.elaborate.body
+    have rebuildIso : RegionIso
+        (FiniteEquiv.refl (Fin source.elaborate.externalClasses)) []
+        source.elaborate.body
         (sourceWitness.toFocus.context.fill
           sourceWitness.toFocus.body) := by
       exact cast (congrArg
-        (fun body => Core.Isomorphic body
+        (fun body => RegionIso
+          (FiniteEquiv.refl (Fin source.elaborate.externalClasses)) [] body
           (sourceWitness.toFocus.context.fill
             sourceWitness.toFocus.body))
         sourceWitness.toFocus.rebuild)
@@ -1971,7 +1980,7 @@ theorem nested_rule
           (sourceWitness.toFocus.context.fill
             sourceWitness.toFocus.body))
     exact rebuildIso.trans
-      (sourceWitness.toFocus.context.fill_iso alignment.source_iso)
+      (sourceWitness.toFocus.context.fillIso alignment.source_iso)
   let sourceHostIso : OpenDiagramIso source.elaborate
       (source.elaborate.withBody
         (sourceWitness.toFocus.context.fill alignment.before)) := {

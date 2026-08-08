@@ -13,7 +13,7 @@ namespace PlugLayout
 /-- Root counterpart of `compileFrameSiblings_targetCoordinates`.  At a
 proper nested site the caller's open-root split itself is an exact context,
 so siblings are compiled directly in open coordinates. -/
-theorem compileNestedRootSiblings
+noncomputable def compileNestedRootSiblings
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -50,16 +50,11 @@ theorem compileNestedRootSiblings
       Elaboration.BinderContext.empty
       (Elaboration.localOccurrences layout.plugRaw
         layout.plugRaw.root) = some targetItems) :
-    ∃ sourceIndex : Fin sourceItems.length,
-      ∃ targetIndex : Fin targetItems.length,
-        sourceIndex.val = sourcePosition.val ∧
-        targetIndex.val =
-          (layout.frameOccurrenceEquiv input.coalesceFrameRaw.root
-            (by intro heq; exact hnested heq.symm)
-            sourcePosition).val ∧
-        Nonempty (ItemSeqIso.Frame
-          (nestedRootWireEquiv input layout sourceBoundary hnested)
-          sourceIndex targetIndex) := by
+    ItemSeqIso.Frame.Indexed sourceItems targetItems
+      (nestedRootWireEquiv input layout sourceBoundary hnested)
+      sourcePosition.val
+      (layout.frameOccurrenceEquiv input.coalesceFrameRaw.root
+        (by intro heq; exact hnested heq.symm) sourcePosition).val := by
   have hrootNe : input.coalesceFrameRaw.root ≠ input.site := by
     intro heq
     exact hnested heq.symm
@@ -97,11 +92,11 @@ theorem compileNestedRootSiblings
   have hmapped : positions sourceIndex = targetIndex := by
     apply Fin.ext
     rfl
-  refine ⟨sourceIndex, targetIndex, rfl, rfl, ⟨{
+  refine ⟨sourceIndex, targetIndex, rfl, rfl, {
     positions := positions
     mapped := hmapped
     siblings := ?_
-  }⟩⟩
+  }⟩
   intro index hindex
   let occurrenceIndex := Fin.cast sourceLength index
   let targetOccurrenceIndex :=

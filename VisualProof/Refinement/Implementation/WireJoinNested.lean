@@ -50,21 +50,21 @@ theorem nested
   let target := targetOpen source outer inner distinct ordered
     targetWellFormed
   let boundaryLength := boundaryLengthEq source.val outer inner distinct
-  obtain ⟨result⟩ := openSiteContextIso source outer inner distinct ordered
+  let result := openSiteContextIso source outer inner distinct ordered
     targetWellFormed nested sourceView targetView
   let targetInterface := target.elaborate
-  have targetBodyIso : Core.Isomorphic target.elaborate.body
+  have targetBodyIso : RegionIso
+      (FiniteEquiv.refl (Fin target.elaborate.externalClasses)) []
+      target.elaborate.body
       (targetView.focus.context.fill result.before) := by
-    have rebuildIso : Core.Isomorphic target.elaborate.body
+    have rebuildIso : RegionIso
+        (FiniteEquiv.refl (Fin target.elaborate.externalClasses)) []
+        target.elaborate.body
         (targetView.focus.context.fill targetView.focus.body) := by
-      exact cast (congrArg
-        (fun body => Core.Isomorphic body
-          (targetView.focus.context.fill targetView.focus.body))
-        targetView.rebuild)
-        (RegionIso.refl
-          (targetView.focus.context.fill targetView.focus.body))
+      rw [targetView.rebuild]
+      exact RegionIso.refl _
     exact rebuildIso.trans
-      (targetView.focus.context.fill_iso result.target_iso)
+      (targetView.focus.context.fillIso result.target_iso)
   let targetHostIso : OpenDiagramIso target.elaborate
       (targetInterface.withBody
         (targetView.focus.context.fill result.before)) := {

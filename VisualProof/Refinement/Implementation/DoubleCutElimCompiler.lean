@@ -260,7 +260,7 @@ private theorem appendContextMap_spec
       Concrete.Elaboration.get_append_natAdd] using
         localAgreement localIndex
 
-private theorem itemSeqIso_after_rename
+private noncomputable def itemSeqIso_after_rename
     (source : ItemSeq sourceWires rels)
     (target : ItemSeq targetWires rels)
     (wireMap : Fin sourceWires → Fin targetWires)
@@ -790,7 +790,7 @@ private theorem endpointOccurs_iff
   rw [promotion_wire input inputWellFormed trace wire]
   rfl
 
-theorem compileNode_promotion
+noncomputable def compileNode_promotion
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
@@ -980,7 +980,7 @@ theorem push_binder_agreement
         originNe,
       binderAgreement]
 
-theorem compileRegion_promotion
+noncomputable def compileRegion_promotion
     (input : Concrete.Diagram)
     (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
@@ -1439,7 +1439,7 @@ theorem compileRegion_promotion
                     ItemSeq.renameWires_comp, factor,
                     ← ItemSeq.castWiresEq_eq_renameWires] using result
 
-theorem compileOccurrence_promotion
+noncomputable def compileOccurrence_promotion
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)

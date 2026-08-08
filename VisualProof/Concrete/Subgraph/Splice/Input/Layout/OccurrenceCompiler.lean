@@ -2227,7 +2227,7 @@ noncomputable def compileFrameOccurrence_away_from_site
 /-- The exact permutation and sibling isomorphisms for one enclosing compiler
 frame, expressed in the target outer-wire coordinates.  The distinguished
 route child is deliberately omitted. -/
-theorem compileFrameSiblings_targetCoordinates
+noncomputable def compileFrameSiblings_targetCoordinates
     (input : Input )
     (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -2287,15 +2287,11 @@ theorem compileFrameSiblings_targetCoordinates
     let targetPrepared := targetItems.castWiresEq
       (Elaboration.WireContext.length_extend targetOuter
         (layout.frameRegion region))
-    ∃ sourceIndex : Fin sourcePrepared.length,
-      ∃ targetIndex : Fin targetPrepared.length,
-        sourceIndex.val = sourcePosition.val ∧
-        targetIndex.val =
-          (layout.frameOccurrenceEquiv region hne sourcePosition).val ∧
-        Nonempty (ItemSeqIso.Frame
-          (extendWireEquiv (FiniteEquiv.refl (Fin targetOuter.length))
-            (layout.frameLocalWireEquiv region hne))
-          sourceIndex targetIndex) := by
+    ItemSeqIso.Frame.Indexed sourcePrepared targetPrepared
+      (extendWireEquiv (FiniteEquiv.refl (Fin targetOuter.length))
+        (layout.frameLocalWireEquiv region hne))
+      sourcePosition.val
+      (layout.frameOccurrenceEquiv region hne sourcePosition).val := by
   dsimp only
   let sourcePrepared :=
     (sourceItems.renameWires
@@ -2330,11 +2326,11 @@ theorem compileFrameSiblings_targetCoordinates
   have hmapped : positions sourceIndex = targetIndex := by
     apply Fin.ext
     rfl
-  refine ⟨sourceIndex, targetIndex, rfl, rfl, ⟨{
+  refine ⟨sourceIndex, targetIndex, rfl, rfl, {
     positions := positions
     mapped := hmapped
     siblings := ?_
-  }⟩⟩
+  }⟩
   intro index hindex
   let occurrenceIndex := Fin.cast hsourcePreparedLength index
   let targetOccurrenceIndex :=

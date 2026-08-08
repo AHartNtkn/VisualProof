@@ -225,22 +225,22 @@ noncomputable def joinWireSwapIso
               (input.wires outer).endpoints))
       · simp [isOuter, isInner]
 
-theorem joinWireSwapOpenIso
+noncomputable def joinWireSwapOpenIso
     (source : Concrete.OpenDiagram)
     (outer inner : Fin source.diagram.wireCount)
     (distinct : outer ≠ inner)
     (sameScope : (source.diagram.wires outer).scope =
       (source.diagram.wires inner).scope) :
-    Nonempty (Concrete.OpenIso
+    Concrete.OpenIso
       (VisualProof.Refinement.Implementation.WireJoin.targetOpenRaw source outer inner distinct)
-      (VisualProof.Refinement.Implementation.WireJoin.targetOpenRaw source inner outer distinct.symm)) := by
+      (VisualProof.Refinement.Implementation.WireJoin.targetOpenRaw source inner outer distinct.symm) := by
   classical
   let diagramIso := joinWireSwapIso source.diagram outer inner distinct
     sameScope
-  refine ⟨{
+  refine {
     diagram := diagramIso
     boundary := ?_
-  }⟩
+  }
   unfold VisualProof.Refinement.Implementation.WireJoin.targetOpenRaw
   change (source.boundary.map
     (VisualProof.Refinement.Implementation.WireJoin.wireMap source.diagram outer inner distinct)).map

@@ -663,10 +663,18 @@ theorem rootOpen
     boundary := boundary
     body := ?_
   }⟩
-  obtain ⟨sourceBody, sourceRootCompiled, sourceBodyEq⟩ :=
-    source.elaborate_body_computation
-  obtain ⟨targetBody, targetRootCompiled, targetBodyEq⟩ :=
-    target.elaborate_body_computation
+  let sourceState := Concrete.Splice.openRootCompilerState_complete source
+  let targetState := Concrete.Splice.openRootCompilerState_complete target
+  let sourceBody := source.elaborate.body
+  let targetBody := target.elaborate.body
+  have sourceRootCompiled : Concrete.Elaboration.compileRoot?
+      source.val.diagram source.val.exposedWires source.val.hiddenWires =
+        some sourceBody := sourceState.rootComputation
+  have targetRootCompiled : Concrete.Elaboration.compileRoot?
+      target.val.diagram target.val.exposedWires target.val.hiddenWires =
+        some targetBody := targetState.rootComputation
+  have sourceBodyEq : source.elaborate.body = sourceBody := rfl
+  have targetBodyEq : target.elaborate.body = targetBody := rfl
   let sourceRoot := source.val.exposedWires ++ source.val.hiddenWires
   let targetRoot := target.val.exposedWires ++ target.val.hiddenWires
   let occurrences := Concrete.Elaboration.localOccurrences source.val.diagram
@@ -1105,7 +1113,10 @@ theorem rootOpen
               exact mapFactor index
             rw [ItemSeq.renameWires_comp, targetMapEq] at transported
             exact transported
-          have rawBodyIso : Core.Isomorphic targetBody
+          have rawBodyIso : RegionIso
+              (FiniteEquiv.refl
+                (Fin (targetOpenRaw source.val outer inner distinct
+                  ).exposedWires.length)) [] targetBody
               (sourceBody.renameWires rawCollapse) := by
             rw [sourceBodyShape, targetBodyShape]
             unfold Concrete.Elaboration.finishRoot Region.renameWires

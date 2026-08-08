@@ -12,7 +12,7 @@ open VisualProof.Theory
 open VisualProof.Refinement.Implementation.DoubleCutTransport
 open VisualProof.Refinement.Implementation.DoubleCutIntroPartition
 
-theorem region_zero_iso
+noncomputable def region_zero_iso
     {sourceWires targetWires : Nat}
     (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
     {rels : RelCtx}
@@ -33,7 +33,7 @@ theorem region_zero_iso
   rw [extended]
   exact items
 
-theorem empty_finish_iso
+noncomputable def empty_finish_iso
     (target : Concrete.Diagram)
     (context : Concrete.Elaboration.WireContext target)
     (region : Fin target.regionCount)
@@ -82,7 +82,7 @@ theorem empty_finish_iso
   rw [combined] at transported
   exact transported
 
-theorem singleton_iso
+noncomputable def singleton_iso
     {sourceWires targetWires : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx} {sourceItem : Item sourceWires rels}
@@ -99,7 +99,7 @@ theorem singleton_iso
   subst index
   simpa [ItemSeq.get] using item
 
-private theorem ItemSeqIso.changeWire
+private noncomputable def ItemSeqIso.changeWire
     {first second : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     (equality : first = second)
     {source : ItemSeq sourceWires rels}
@@ -109,7 +109,7 @@ private theorem ItemSeqIso.changeWire
   subst second
   exact iso
 
-private theorem RegionIso.changeWire
+private noncomputable def RegionIso.changeWire
     {first second : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     (equality : first = second)
     {source : Region sourceWires rels}
@@ -315,7 +315,7 @@ theorem root_partitionAfter_eq
   rw [wrappedItems_cast]
   exact root_splice_eq ambient locals kept (wrappedItems selected)
 
-theorem finishRoot_iso
+noncomputable def finishRoot_iso
     (ambient locals : Concrete.Elaboration.WireContext input)
     {sourceItems targetItems : ItemSeq (ambient ++ locals).length []}
     (items : ItemSeqIso
@@ -384,7 +384,7 @@ private theorem compileOccurrences_context_eq
   rw [castWiresEq_self]
   exact compiled
 
-theorem finishRoot_context_iso
+noncomputable def finishRoot_context_iso
     (firstAmbient firstLocals secondAmbient secondLocals :
       Concrete.Elaboration.WireContext input)
     (ambientEq : firstAmbient = secondAmbient)
@@ -539,7 +539,7 @@ theorem partitionAfter_eq_finish
   rw [← ItemSeq.castWiresEq_append]
   apply cast_cancel_items
 
-theorem finishRegion_iso
+noncomputable def finishRegion_iso
     (input : Concrete.Diagram) (selection : CheckedSelection input)
     (sourceContext : Concrete.Elaboration.WireContext input)
     (targetContext : Concrete.Elaboration.WireContext
@@ -619,7 +619,7 @@ private theorem direct_child_encloses
   rw [relation]
   rfl
 
-theorem node_iso
+noncomputable def node_iso
     (input : Concrete.Diagram) (selection : CheckedSelection input)
     (sourceContext : Concrete.Elaboration.WireContext input)
     (targetContext : Concrete.Elaboration.WireContext
@@ -674,7 +674,7 @@ theorem node_iso
     ItemIso.renameWiresEquiv sourceItem
       (FiniteEquiv.finCast (congrArg List.length context.equality))
 
-theorem occurrence_iso
+noncomputable def occurrence_iso
     (input : Concrete.Diagram) (selection : CheckedSelection input)
     {sourceFuel targetFuel : Nat}
     (sourceContext : Concrete.Elaboration.WireContext input)
@@ -791,7 +791,7 @@ theorem occurrence_iso
                     (recurse (binders.push child arity) child rfl
                       sourceResult targetResult)
 
-theorem occurrences_iso
+noncomputable def occurrences_iso
     (input : Concrete.Diagram) (selection : CheckedSelection input)
     {sourceFuel targetFuel : Nat}
     (sourceContext : Concrete.Elaboration.WireContext input)
@@ -903,7 +903,7 @@ theorem occurrences_iso
   · exact sourceGet
   · exact targetGet'
 
-theorem away_region_iso
+noncomputable def away_region_iso
     (input : Concrete.Diagram) (selection : CheckedSelection input)
     (wellFormed : input.WellFormed)
     {sourceFuel targetFuel : Nat}
@@ -1133,7 +1133,7 @@ theorem away_region_iso
                   rw [wireEquivEq]
                   exact itemsIso
 
-theorem kept_iso
+noncomputable def kept_iso
     (input : Concrete.Diagram) (selection : CheckedSelection input)
     (wellFormed : input.WellFormed)
     {sourceFuel targetFuel : Nat}
@@ -1185,7 +1185,7 @@ theorem kept_iso
   · exact sourceCompiled
   · exact targetCompiled
 
-theorem selected_iso
+noncomputable def selected_iso
     (input : Concrete.Diagram) (selection : CheckedSelection input)
     (wellFormed : input.WellFormed)
     {sourceFuel targetFuel : Nat}
@@ -1470,13 +1470,13 @@ theorem focus
       let after := partitionAfter input.val leaf.inheritedWires
         selection.val.anchor kept selected
       Rule.DoubleCut.Local before after ∧
-      RegionIso (FiniteEquiv.finCast leaf.inheritedLength.symm) sourceRels
-        sourceBody before ∧
-      RegionIso
+      Nonempty (RegionIso (FiniteEquiv.finCast leaf.inheritedLength.symm)
+        sourceRels sourceBody before) ∧
+      Nonempty (RegionIso
         (FiniteEquiv.finCast (congrArg List.length context.equality)).symm
         sourceRels
         (Eq.mp (congrArg (Region targetContext.length) binders.rels.symm)
-          targetBody) after := by
+          targetBody) after) := by
   cases binders.rels
   obtain ⟨kept, selected, keptCompiled, selectedCompiled, partition⟩ :=
     source_partition input selection leaf
@@ -1512,7 +1512,8 @@ theorem focus
     selection.val.anchor kept selected
   refine ⟨kept, selected, partition_local input.val leaf.inheritedWires
     selection.val.anchor kept selected, ?_, ?_⟩
-  · rw [partitionBefore_eq_finish]
+  · refine ⟨?_⟩
+    rw [partitionBefore_eq_finish]
     have sourceComputed : sourceBody =
         Region.castWiresEq leaf.inheritedLength
           (Concrete.Elaboration.finishRegion input.val leaf.inheritedWires
@@ -1632,7 +1633,8 @@ theorem focus
       rw [expectedEq]
       exact partitionItems
     simpa using sourcePresentation.trans canonical.symm
-  · have innerBodyIso := empty_finish_iso
+  · refine ⟨?_⟩
+    have innerBodyIso := empty_finish_iso
       (doubleCutIntroRaw input.val selection)
       (targetExtended.extend (outer input.val)) (inner input.val)
       (inner_exactScopeWires input.val selection) _ selectedItemsIso
@@ -1699,11 +1701,13 @@ theorem root_focus
       let after := rootPartitionAfter source.val.diagram
         source.val.exposedWires source.val.hiddenWires kept selected
       Rule.DoubleCut.Local before after ∧
-      RegionIso (FiniteEquiv.refl (Fin source.val.exposedWires.length)) []
-        source.elaborate.body before ∧
-      RegionIso (FiniteEquiv.refl (Fin source.val.exposedWires.length)) []
+      Nonempty (RegionIso
+        (FiniteEquiv.refl (Fin source.val.exposedWires.length)) []
+        source.elaborate.body before) ∧
+      Nonempty (RegionIso
+        (FiniteEquiv.refl (Fin source.val.exposedWires.length)) []
         (Concrete.Elaboration.finishRoot source.val.exposedWires
-          source.val.hiddenWires targetItems) after := by
+          source.val.hiddenWires targetItems) after) := by
   let sourceRecurse : ∀ {rels : RelCtx},
       (region : Fin source.val.diagram.regionCount) →
       (context : Concrete.Elaboration.WireContext source.val.diagram) →
@@ -1764,7 +1768,8 @@ theorem root_focus
     source.val.hiddenWires kept selected
   refine ⟨kept, selected, root_partition_local source.val.diagram
     source.val.exposedWires source.val.hiddenWires kept selected, ?_, ?_⟩
-  · have canonical := finishRoot_iso source.val.exposedWires
+  · refine ⟨?_⟩
+    have canonical := finishRoot_iso source.val.exposedWires
       source.val.hiddenWires partition
     have beforeEq := root_partitionBefore_eq source.val.diagram
       source.val.exposedWires source.val.hiddenWires kept selected
@@ -1775,7 +1780,8 @@ theorem root_focus
       rw [beforeEq, sourceState.bodyComputation]
       exact canonical
     exact canonical'.symm
-  · have innerBodyIso := empty_finish_iso
+  · refine ⟨?_⟩
+    have innerBodyIso := empty_finish_iso
       (doubleCutIntroRaw source.val.diagram selection)
       (targetRoot.extend (outer source.val.diagram))
       (inner source.val.diagram)
@@ -1831,10 +1837,10 @@ theorem root_rule
   let target : Concrete.CheckedOpen :=
     ⟨targetOpen source.val selection,
       targetOpen_wellFormed source selection rawWellFormed⟩
-  let sourceView := Classical.choice
-    (Concrete.Splice.openSiteView_complete source source.val.diagram.root)
-  let targetView := Classical.choice
-    (Concrete.Splice.openSiteView_complete target target.val.diagram.root)
+  let sourceView := Concrete.Splice.openSiteView_complete source
+    source.val.diagram.root
+  let targetView := Concrete.Splice.openSiteView_complete target
+    target.val.diagram.root
   have exposedEq : target.val.exposedWires = source.val.exposedWires := by
     simp [target]
   have hiddenEq : target.val.hiddenWires = source.val.hiddenWires := by
@@ -1866,6 +1872,8 @@ theorem root_rule
   obtain ⟨kept, selected, localEvidence, sourceFocusIso, targetFocusIso⟩ :=
     root_focus source selection anchorRoot sourceView.result.state
       targetCompiled
+  rcases sourceFocusIso with ⟨sourceFocusIso⟩
+  rcases targetFocusIso with ⟨targetFocusIso⟩
   let before := rootPartitionBefore source.val.diagram source.val.exposedWires
     source.val.hiddenWires kept selected
   let after := rootPartitionAfter source.val.diagram source.val.exposedWires

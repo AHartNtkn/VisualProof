@@ -412,8 +412,8 @@ theorem compileOccurrences_of_perm
     ∃ targetItems,
       Concrete.Elaboration.compileOccurrencesWith? diagram recurse context
         binders targetOccurrences = some targetItems ∧
-      ItemSeqIso (FiniteEquiv.refl (Fin context.length)) rels
-        sourceItems targetItems := by
+      Nonempty (ItemSeqIso (FiniteEquiv.refl (Fin context.length)) rels
+        sourceItems targetItems) := by
   have eachTarget : ∀ occurrence, occurrence ∈ targetOccurrences →
       ∃ item, Concrete.Elaboration.compileOccurrenceWith? diagram recurse
         context binders occurrence = some item := by
@@ -429,10 +429,10 @@ theorem compileOccurrences_of_perm
   obtain ⟨targetItems, targetCompiled⟩ :=
     Concrete.Elaboration.compileOccurrencesWith?_complete recurse context
       binders targetOccurrences eachTarget
-  exact ⟨targetItems, targetCompiled,
+  exact ⟨targetItems, targetCompiled, ⟨
     VisualProof.Refinement.Implementation.IterationPartition.compileOccurrences_perm_iso
       diagram recurse context binders permutation sourceNodup targetNodup
-      sourceCompiled targetCompiled⟩
+      sourceCompiled targetCompiled⟩⟩
 
 private theorem source_partition
     (input : Concrete.Diagram)
@@ -455,12 +455,12 @@ private theorem source_partition
       Concrete.Elaboration.compileRegion? input innerFuel trace.inner
           ((sourceContext.extend trace.target).extend outer) sourceBinders =
             some innerBody ∧
-      RegionIso (FiniteEquiv.refl (Fin sourceContext.length)) rels sourceBody
+      Nonempty (RegionIso (FiniteEquiv.refl (Fin sourceContext.length)) rels sourceBody
         (Concrete.Elaboration.finishRegion input sourceContext trace.target
           (hostItems.append (.cons (.cut
             (Concrete.Elaboration.finishRegion input
               (sourceContext.extend trace.target) outer
-              (.cons (.cut innerBody) .nil))) .nil))) := by
+              (.cons (.cut innerBody) .nil))) .nil)))) := by
   cases sourceFuel with
   | zero => simp [Concrete.Elaboration.compileRegion?] at sourceCompiled
   | succ hostFuel =>
@@ -478,6 +478,7 @@ private theorem source_partition
           ((Concrete.Elaboration.localOccurrences_nodup input trace.target).perm
             (target_occurrences_partition trace).symm)
           sourceItemsCompiled
+      rcases orderedIso with ⟨orderedIso⟩
       obtain ⟨hostItems, outerItems, hostCompiled, outerCompiled,
           orderedEq⟩ :=
         Concrete.Elaboration.compileOccurrencesWith?_append_split
@@ -515,7 +516,7 @@ private theorem source_partition
                   simp [innerResult] at outerItemsCompiled
                   subst outerItems
                   refine ⟨hostItems, _, innerFuel + 1, innerFuel,
-                    hostCompiled, innerResult, ?_⟩
+                    hostCompiled, innerResult, ⟨?_⟩⟩
                   apply Concrete.Elaboration.regionIso_of_cast
                     (Concrete.Elaboration.WireContext.length_extend
                       sourceContext trace.target)
@@ -593,10 +594,10 @@ private theorem target_partition
           ((innerOccurrences trace).map
             (promoteOccurrence trace
               (promotedTarget input inputWellFormed trace))) = some innerItems ∧
-      RegionIso (FiniteEquiv.refl (Fin targetContext.length)) rels targetBody
+      Nonempty (RegionIso (FiniteEquiv.refl (Fin targetContext.length)) rels targetBody
         (Concrete.Elaboration.finishRegion (Target trace) targetContext
           (promotedTarget input inputWellFormed trace)
-          (hostItems.append innerItems)) := by
+          (hostItems.append innerItems))) := by
   cases targetFuel with
   | zero => simp [Concrete.Elaboration.compileRegion?] at targetCompiled
   | succ itemFuel =>
@@ -615,6 +616,7 @@ private theorem target_partition
             (promotedTarget input inputWellFormed trace))
           (focusPromotedOccurrences_nodup input inputWellFormed trace)
           targetItemsCompiled
+      rcases orderedIso with ⟨orderedIso⟩
       unfold focusPromotedOccurrences focusSourceOccurrences at orderedCompiled
       rw [List.map_append] at orderedCompiled
       obtain ⟨hostItems, innerItems, hostCompiled, innerCompiled, orderedEq⟩ :=
@@ -630,7 +632,7 @@ private theorem target_partition
               (promotedTarget input inputWellFormed trace)))
           orderedItems orderedCompiled
       rw [orderedEq] at orderedIso
-      refine ⟨hostItems, innerItems, itemFuel, hostCompiled, innerCompiled, ?_⟩
+      refine ⟨hostItems, innerItems, itemFuel, hostCompiled, innerCompiled, ⟨?_⟩⟩
       apply Concrete.Elaboration.regionIso_of_cast
         (Concrete.Elaboration.WireContext.length_extend targetContext
           (promotedTarget input inputWellFormed trace))
@@ -679,7 +681,7 @@ private theorem target_partition
       rw [wireEq]
       exact orderedIso
 
-private theorem itemSeqIso_after_rename
+private noncomputable def itemSeqIso_after_rename
     (source : ItemSeq sourceWires rels)
     (target : ItemSeq targetWires rels)
     (wireMap : Fin sourceWires → Fin targetWires)
@@ -704,7 +706,7 @@ private theorem itemSeqIso_after_rename
   rw [ItemSeq.get_renameWires]
   exact items sourceIndex
 
-theorem ItemSeqIso.changeWire
+noncomputable def ItemSeqIso.changeWire
     {first second : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     (equality : first = second)
     {source : ItemSeq sourceWires rels}
@@ -714,7 +716,7 @@ theorem ItemSeqIso.changeWire
   subst second
   exact iso
 
-private theorem RegionIso.changeWire
+private noncomputable def RegionIso.changeWire
     {first second : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     (equality : first = second)
     {source : Region sourceWires rels}
@@ -741,7 +743,7 @@ private theorem ItemSeq.renameRelations_identity
   simpa [DoubleCutTransport.identityRelationRenaming] using
     ItemSeq.renameRelations_id items
 
-theorem promotion_items_iso
+noncomputable def promotion_items_iso
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
@@ -811,9 +813,7 @@ theorem promotion_items_iso
         (promotedTarget input inputWellFormed trace))).get mappedIndex =
         promoteOccurrence trace (promotedTarget input inputWellFormed trace)
           (occurrences.get occurrenceIndex) := by
-    simpa [mappedIndex] using List.get_map occurrences
-      (promoteOccurrence trace (promotedTarget input inputWellFormed trace))
-      occurrenceIndex
+    simp [mappedIndex]
   rw [mappedOccurrence] at targetGet
   exact compileOccurrence_promotion input inputWellFormed trace
     targetWellFormed region regionNeOuter sourceContext targetContext wireMap
@@ -924,17 +924,19 @@ theorem focus
       targetContext targetBinders = some targetBody) :
     ∃ before after : Region sourceContext.length rels,
       Rule.DoubleCut.Local before after ∧
-      RegionIso (FiniteEquiv.refl (Fin sourceContext.length)) rels
-        sourceBody after ∧
-      RegionIso ambient rels before targetBody := by
+      Nonempty (RegionIso (FiniteEquiv.refl (Fin sourceContext.length)) rels
+        sourceBody after) ∧
+      Nonempty (RegionIso ambient rels before targetBody) := by
   obtain ⟨sourceHostItems, innerBody, sourceHostFuel, innerFuel,
       sourceHostCompiled, innerCompiled, sourceCanonical⟩ :=
     source_partition input trace sourceContext sourceBinders
       sourceCompiled
+  rcases sourceCanonical with ⟨sourceCanonical⟩
   obtain ⟨targetHostItems, targetInnerItems, targetItemFuel,
       targetHostCompiled, targetInnerCompiled, targetCanonical⟩ :=
     target_partition input inputWellFormed trace targetContext targetBinders
       targetCompiled
+  rcases targetCanonical with ⟨targetCanonical⟩
   cases innerFuel with
   | zero => simp [Concrete.Elaboration.compileRegion?] at innerCompiled
   | succ innerItemFuel =>
@@ -1048,10 +1050,10 @@ theorem focus
               sourceInnerWires] using localSpec
       have sourceOuterExact : sourceOuter.Exact outer := by
         exact sourceExact.extend_child inputWellFormed (by
-          simpa [trace.outer_eq, Concrete.CRegion.parent?])
+          simp [trace.outer_eq, Concrete.CRegion.parent?])
       have sourceFullExact : sourceFull.Exact trace.inner := by
         exact sourceOuterExact.extend_child inputWellFormed (by
-          simpa [trace.inner_eq, Concrete.CRegion.parent?])
+          simp [trace.inner_eq, Concrete.CRegion.parent?])
       have hostItemsIso := promotion_items_iso input inputWellFormed trace
         targetWellFormed trace.target
         (target_ne_outer input inputWellFormed trace.outer_eq)
@@ -1098,10 +1100,10 @@ theorem focus
           intro childEnclosesTarget
           have targetEnclosesOuter : input.Encloses trace.target outer :=
             direct_child_encloses (input := input) (by
-            simpa [trace.outer_eq, Concrete.CRegion.parent?])
+            simp [trace.outer_eq, Concrete.CRegion.parent?])
           have outerEnclosesInner : input.Encloses outer trace.inner :=
             direct_child_encloses (input := input) (by
-            simpa [trace.inner_eq, Concrete.CRegion.parent?])
+            simp [trace.inner_eq, Concrete.CRegion.parent?])
           have childEnclosesInner :=
             Concrete.Elaboration.checked_encloses_trans inputWellFormed
               childEnclosesTarget
@@ -1123,9 +1125,8 @@ theorem focus
       let hostItems : ItemSeq
           (sourceContext.length + (sourceHostWires trace).length) rels :=
         sourceHostItems.castWiresEq (by
-          simpa [sourceHost, sourceHostWires] using
-            Concrete.Elaboration.WireContext.length_extend sourceContext
-              trace.target)
+          simp [sourceHostWires,
+            Concrete.Elaboration.WireContext.extend])
       let before : Region sourceContext.length rels :=
         Region.spliceAt (sourceHostWires trace).length hostItems material
           id
@@ -1150,9 +1151,12 @@ theorem focus
         let completeWire : FiniteEquiv (Fin sourceHost.length)
             (Fin (sourceContext.length + (sourceHostWires trace).length)) :=
           FiniteEquiv.finCast (by
-            simpa [sourceHost, sourceHostWires] using
-              Concrete.Elaboration.WireContext.length_extend sourceContext
-                trace.target)
+            change (sourceContext.extend trace.target).length =
+              sourceContext.length +
+                (Concrete.Elaboration.exactScopeWires input
+                  trace.target).length
+            exact Concrete.Elaboration.WireContext.length_extend
+              sourceContext trace.target)
         have wrappedIso' : ItemSeqIso completeWire rels
             (.cons (.cut
               (Concrete.Elaboration.finishRegion input sourceHost outer
@@ -1205,7 +1209,7 @@ theorem focus
           rw [ItemSeq.castWiresEq_eq_renameWires]
           congr 1
         rw [afterEq, castEq]
-        exact sourceCanonical.trans
+        exact ⟨sourceCanonical.trans
           (Concrete.Elaboration.regionIso_of_cast
             (Concrete.Elaboration.WireContext.length_extend sourceContext
               trace.target)
@@ -1235,7 +1239,7 @@ theorem focus
                   (Concrete.Elaboration.WireContext.length_extend
                     sourceContext trace.target) index)
               · simp [sourceHostWires, extendWireEquiv]
-              · simp [sourceHostWires, extendWireEquiv]))
+              · simp [sourceHostWires, extendWireEquiv]))⟩
       · let localWireSum : FiniteEquiv
             (Fin ((sourceHostWires trace).length +
               (sourceInnerWires trace).length))
@@ -1250,38 +1254,38 @@ theorem focus
             (Fin targetCombined) := extendWireEquiv ambient localWireSum
         let targetCast : Fin targetFull.length → Fin targetCombined :=
           Fin.cast (by
-            simpa [targetFull, targetExactWires] using
-              Concrete.Elaboration.WireContext.length_extend targetContext
-                (promotedTarget input inputWellFormed trace))
+            change (targetContext.extend
+                (promotedTarget input inputWellFormed trace)).length =
+              targetContext.length +
+                (Concrete.Elaboration.exactScopeWires (Target trace)
+                  (promotedTarget input inputWellFormed trace)).length
+            exact Concrete.Elaboration.WireContext.length_extend targetContext
+              (promotedTarget input inputWellFormed trace))
         let hostPlacement : Fin sourceHost.length → Fin sourceCombined :=
           fun index => Region.adjoinHostWire sourceContext.length
             (sourceHostWires trace).length (sourceInnerWires trace).length
             (Fin.cast (by
-              simpa [sourceHost, sourceHostWires] using
-                Concrete.Elaboration.WireContext.length_extend sourceContext
-                  trace.target) index)
+              simp [sourceHost, sourceHostWires,
+                Concrete.Elaboration.WireContext.extend]) index)
         let innerPlacement : Fin sourceFull.length → Fin sourceCombined :=
           fun index => Region.adjoinMaterialWire sourceContext.length
             (sourceHostWires trace).length (sourceInnerWires trace).length
             (extendWireRenaming outerWire
               (sourceInnerWires trace).length
               (Fin.cast (by
-                simpa [sourceFull, sourceInnerWires] using
-                  Concrete.Elaboration.WireContext.length_extend sourceOuter
-                    trace.inner) index))
+                simp [sourceFull, sourceInnerWires,
+                  Concrete.Elaboration.WireContext.extend]) index))
         have hostFactor : totalWire.toFun ∘ hostPlacement =
             targetCast ∘ hostMap := by
           funext index
           apply Fin.ext
           let split : Fin (sourceContext.length +
               (sourceHostWires trace).length) := Fin.cast (by
-            simpa [sourceHost, sourceHostWires] using
-              Concrete.Elaboration.WireContext.length_extend sourceContext
-                trace.target) index
+            simp [sourceHost, sourceHostWires,
+              Concrete.Elaboration.WireContext.extend]) index
           have indexEq : Fin.cast (by
-              simpa [sourceHost, sourceHostWires] using
-                (Concrete.Elaboration.WireContext.length_extend sourceContext
-                  trace.target).symm) split = index := by
+              simp [sourceHost, sourceHostWires,
+                Concrete.Elaboration.WireContext.extend]) split = index := by
             rfl
           rw [← indexEq]
           refine Fin.addCases (fun ambientIndex => ?_)
@@ -1366,13 +1370,11 @@ theorem focus
           funext index
           let split : Fin (sourceOuter.length +
               (sourceInnerWires trace).length) := Fin.cast (by
-            simpa [sourceFull, sourceInnerWires] using
-              Concrete.Elaboration.WireContext.length_extend sourceOuter
-                trace.inner) index
+            simp [sourceFull, sourceInnerWires,
+              Concrete.Elaboration.WireContext.extend]) index
           have indexEq : Fin.cast (by
-              simpa [sourceFull, sourceInnerWires] using
-                (Concrete.Elaboration.WireContext.length_extend sourceOuter
-                  trace.inner).symm) split = index := by
+              simp [sourceFull, sourceInnerWires,
+                Concrete.Elaboration.WireContext.extend]) split = index := by
             apply Fin.ext
             rfl
           rw [← indexEq]
@@ -1535,7 +1537,7 @@ theorem focus
             ItemSeq.castWiresEq_eq_renameWires, ItemSeq.renameWires_append]
           exact adjusted
         have composed := beforeCanonical.trans targetCanonical.symm
-        apply RegionIso.changeWire _ composed
+        refine ⟨RegionIso.changeWire ?_ composed⟩
         apply FiniteEquiv.ext
         intro index
         apply Fin.ext
@@ -1573,8 +1575,8 @@ theorem root_focus
       [] targetBinders = some targetBody) :
     ∃ before after : Region 0 rels,
       Rule.DoubleCut.Local before after ∧
-      RegionIso (FiniteEquiv.refl (Fin 0)) rels sourceBody after ∧
-      RegionIso (FiniteEquiv.refl (Fin 0)) rels before targetBody := by
+      Nonempty (RegionIso (FiniteEquiv.refl (Fin 0)) rels sourceBody after) ∧
+      Nonempty (RegionIso (FiniteEquiv.refl (Fin 0)) rels before targetBody) := by
   apply focus input inputWellFormed trace targetWellFormed
     ([] : Concrete.Elaboration.WireContext input)
     ([] : Concrete.Elaboration.WireContext (Target trace))

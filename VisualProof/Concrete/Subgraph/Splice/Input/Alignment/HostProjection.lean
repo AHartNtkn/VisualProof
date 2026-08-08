@@ -9,25 +9,25 @@ open VisualProof.Diagram
 open VisualProof.Concrete.Elaboration
 
 /-- Paired compiler-trace induction aligns every enclosing frame of a proper
-nested splice site. -/
-theorem PlugLayout.compiledNestedFrameContextIso_complete
+nested splice site and retains the exact alignment data. -/
+noncomputable def PlugLayout.compiledNestedFrameContextIso
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hnested : input.site ≠ input.frame.val.root) :
-    Nonempty (layout.NestedFrameContextAlignment input hadmissible
-      sourceBoundary sourceRoot hnested) := by
+    layout.NestedFrameContextAlignment input hadmissible sourceBoundary
+      sourceRoot hnested := by
   let sourceView := compiledSpliceCoalescedOpenView input hadmissible
     sourceBoundary sourceRoot
   let targetView := compiledSpliceOutputOpenView input layout hadmissible
     sourceBoundary sourceRoot
-  obtain ⟨alignment⟩ := layout.pairedOpenCompilerTraceContextIso
-    input hadmissible sourceBoundary sourceRoot hnested
-    sourceView.result.state targetView.result.state rfl rfl
-    sourceView.result.trace targetView.result.trace
-  exact ⟨{
+  let alignment := layout.pairedOpenCompilerTraceContextIso input hadmissible
+    sourceBoundary sourceRoot hnested sourceView.result.state
+    targetView.result.state rfl rfl sourceView.result.trace
+    targetView.result.trace
+  exact {
     holeRelsEq := alignment.holeRelsEq
     holeWire := alignment.holeWire
     contexts := alignment.contexts
@@ -40,20 +40,7 @@ theorem PlugLayout.compiledNestedFrameContextIso_complete
       simpa [compiledSpliceCoalescedNestedLeaf,
         compiledSpliceOutputNestedLeaf] using
         alignment.terminalBinderSpec relation
-  }⟩
-
-/-- Canonical projection of the complete paired compiler-context alignment. -/
-noncomputable def PlugLayout.compiledNestedFrameContextIso
-    (input : Input ) (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hnested : input.site ≠ input.frame.val.root) :
-    layout.NestedFrameContextAlignment input hadmissible sourceBoundary
-      sourceRoot hnested :=
-  Classical.choice (layout.compiledNestedFrameContextIso_complete input
-    hadmissible sourceBoundary sourceRoot hnested)
+  }
 
 /-- At a root splice site the canonical compiler view is the root view, so its
 relation-hole context is closed.  This proof-independent fact erases the
@@ -346,7 +333,14 @@ theorem RegionRoute.directChild_eq_of_encloses
 
 /-- Two retained compiler traces through the same concrete diagram and from
 the same lexical state end with the same relation context and binder state. -/
-theorem CompilerTrace.sameDiagramTerminalLexical
+structure TerminalLexical
+    {diagram : Diagram} {sourceRels targetRels : Theory.RelCtx}
+    (sourceBinders : Elaboration.BinderContext diagram sourceRels)
+    (targetBinders : Elaboration.BinderContext diagram targetRels) where
+  rels_eq : sourceRels = targetRels
+  binders_eq : HEq sourceBinders targetBinders
+
+noncomputable def CompilerTrace.sameDiagramTerminalLexical
     {diagram : Diagram} (hwf : diagram.WellFormed )
     {start target : Fin diagram.regionCount}
     {sourcePath targetPath : List Nat} {rels : Theory.RelCtx}
@@ -366,9 +360,7 @@ theorem CompilerTrace.sameDiagramTerminalLexical
     (targetTrace : CompilerTrace  diagram targetRoute targetWitness
       targetState)
     (hbinders : sourceState.binders = targetState.binders) :
-    ∃ _hrels : sourceWitness.toFocus.holeRels =
-        targetWitness.toFocus.holeRels,
-      HEq sourceTrace.leaf.binders targetTrace.leaf.binders := by
+    TerminalLexical sourceTrace.leaf.binders targetTrace.leaf.binders := by
   induction sourceTrace generalizing targetPath targetOuter with
   | here sourceState =>
       cases targetTrace with
@@ -855,7 +847,7 @@ theorem CompilerTrace.tailAtEnclosed
               simpa using terminalBinders⟩
 /-- Peel the open sheet frame and compare its retained ordinary tail with a
 closed-root trace through the same concrete diagram. -/
-theorem OpenCompilerTrace.sameDiagramClosedTerminalLexical
+noncomputable def OpenCompilerTrace.sameDiagramClosedTerminalLexical
     {checked : CheckedOpen }
     (hwf : checked.val.diagram.WellFormed )
     {target : Fin checked.val.diagram.regionCount}
@@ -878,10 +870,8 @@ theorem OpenCompilerTrace.sameDiagramClosedTerminalLexical
       targetWitness targetState)
     (targetBinders : targetState.binders =
       Elaboration.BinderContext.empty) :
-    ∃ _hrels : sourceWitness.toFocus.holeRels =
-        targetWitness.toFocus.holeRels,
-      HEq (sourceTrace.leaf.nestedOfNe hnested).binders
-        targetTrace.leaf.binders := by
+    TerminalLexical (sourceTrace.leaf.nestedOfNe hnested).binders
+      targetTrace.leaf.binders := by
   cases sourceTrace with
   | here sourceState => exact False.elim (hnested rfl)
   | @cut sourceChild _ _ sourceParent sourcePosition sourcePositionEq
@@ -1166,7 +1156,7 @@ theorem Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv_spec
     (FiniteEquiv.refl (Fin diagram.wireCount))
     sourceLeaf.inheritedWires targetLeaf.inheritedWires _ _ _ index
 
-private theorem finishRegionIso_sameDiagram_of_relEq
+private noncomputable def finishRegionIso_sameDiagram_of_relEq
     {diagram : Diagram} (hwf : diagram.WellFormed )
     {site : Fin diagram.regionCount} {sourceRels targetRels : Theory.RelCtx}
     (hrels : sourceRels = targetRels)
@@ -1216,7 +1206,7 @@ private theorem finishRegionIso_sameDiagram_of_relEq
 
 /-- Exact compiler equivariance turns lexical alignment at one concrete site
 into an intrinsic region isomorphism between the two retained leaves. -/
-theorem compilerLeaf_regionIso_sameDiagram
+noncomputable def compilerLeaf_regionIso_sameDiagram
     {diagram : Diagram} (hwf : diagram.WellFormed )
     {site : Fin diagram.regionCount}
     {sourceBody : Region  sourceOuter sourceRels}
@@ -1266,19 +1256,16 @@ theorem compilerLeaf_regionIso_sameDiagram
     targetLeaf.bodyComputation, Region.renameWires_renameRelations] using
       hcombined
 
-theorem compiledSpliceCoalescedHost_terminalLexical
+noncomputable def compiledSpliceCoalescedHost_terminalLexical
     (input : Input ) (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hnested : input.site ≠ input.frame.val.root) :
-    let sourceView := compiledSpliceCoalescedOpenView input hadmissible
-      sourceBoundary sourceRoot
     let sourceLeaf := compiledSpliceCoalescedNestedLeaf input hadmissible
       sourceBoundary sourceRoot hnested
     let host := compiledSpliceHostView input hadmissible
-    ∃ _hrels : sourceView.focus.holeRels = host.focus.holeRels,
-      HEq sourceLeaf.binders host.compilerLeaf.binders := by
+    TerminalLexical sourceLeaf.binders host.compilerLeaf.binders := by
   dsimp only
   let sourceView := compiledSpliceCoalescedOpenView input hadmissible
     sourceBoundary sourceRoot
@@ -1471,7 +1458,7 @@ theorem compiledNestedHostWire_factor
   simpa [compilerLeafOuterWire, compilerLeafInheritedWireOfHole,
     sourceIndex, FiniteEquiv.trans_apply] using hcast
 
-theorem regionIso_of_renamed_relEq
+noncomputable def regionIso_of_renamed_relEq
     {sourceRels targetRels : Theory.RelCtx}
     (hrels : sourceRels = targetRels)
     {sourceWires targetWires : Nat}
@@ -1504,7 +1491,7 @@ theorem relationRenamingOfEq_apply_symm
 
 /-- The frame-only projected host at a proper nested site is intrinsically
 the canonical coalesced source focus. -/
-private theorem compiledNestedProjectedHostFocusIso
+private noncomputable def compiledNestedProjectedHostFocusIso
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
@@ -1682,7 +1669,7 @@ lexical coordinates, is intrinsically isomorphic to the splice region placed
 in the executable output leaf.  Unlike host projection, this theorem retains
 the copied material and therefore identifies the operational source rather
 than merely one of its logical projections. -/
-theorem compiledNestedActualFocusIsoOfNonempty
+noncomputable def compiledNestedActualFocusIsoOfNonempty
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
@@ -1972,7 +1959,7 @@ noncomputable def compiledSpliceOutputActualOfNonempty
 /-- The exact nested nonempty source commutes through every paired compiler
 frame.  This is the whole-root structural bridge consumed by iteration's
 semantic contraction; no projection or polarity argument is involved. -/
-theorem compiledNestedActualRootIsoOfNonempty
+noncomputable def compiledNestedActualRootIsoOfNonempty
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
@@ -2101,7 +2088,7 @@ noncomputable def compiledSpliceNestedActualIsoOfNonempty
 
 /-- Lifting the projected focus isomorphism through every paired enclosing
 frame produces the canonical open-root body isomorphism. -/
-private theorem compiledNestedProjectedHostRootIso
+private noncomputable def compiledNestedProjectedHostRootIso
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))

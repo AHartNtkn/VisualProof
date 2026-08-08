@@ -27,7 +27,7 @@ inductive FrameRouteAlignment {input : Input }
     {sourcePath targetPath : List Nat} →
     (source : RegionRoute input.coalesceFrameRaw start target sourcePath) →
     (output : RegionRoute layout.plugRaw (layout.frameRegion start)
-      (layout.frameRegion target) targetPath) → Prop
+      (layout.frameRegion target) targetPath) → Type
   | here (region) :
       FrameRouteAlignment layout (sourcePath := []) (targetPath := [])
         (RegionRoute.here (d := input.coalesceFrameRaw) region)
@@ -57,16 +57,16 @@ inductive FrameRouteAlignment {input : Input }
         (.step targetParent (layout.frameOccurrenceEquiv start hne sourcePosition)
           targetPositionEq targetTail)
 
-theorem PlugLayout.mapFrameRoute
+noncomputable def PlugLayout.mapFrameRoute
     (layout : PlugLayout input) (hadmissible : input.Admissible)
     (route : RegionRoute input.coalesceFrameRaw start target path)
     (htarget : target = input.site) :
-    ∃ targetPath,
-      ∃ targetRoute : RegionRoute layout.plugRaw (layout.frameRegion start)
+    Σ targetPath,
+      Σ targetRoute : RegionRoute layout.plugRaw (layout.frameRegion start)
           (layout.frameRegion target) targetPath,
-        Nonempty (FrameRouteAlignment layout route targetRoute) := by
+        FrameRouteAlignment layout route targetRoute := by
   induction route with
-  | here => exact ⟨[], .here _, ⟨.here _⟩⟩
+  | here => exact ⟨[], .here _, .here _⟩
   | @step start child target rest hparent position hposition tail ih =>
       have hne : start ≠ input.site := by
         intro heq
@@ -110,12 +110,12 @@ theorem PlugLayout.mapFrameRoute
             subst parent
             simpa [CRegion.parent?] using congrArg CRegion.parent?
               (layout.plugRaw_frameRegion_bubble child start arity hchild)
-      obtain ⟨targetRest, htargetTail, ⟨htailAlignment⟩⟩ := ih htarget
+      obtain ⟨targetRest, htargetTail, htailAlignment⟩ := ih htarget
       exact ⟨targetPosition.val :: targetRest,
         .step htargetParent targetPosition htargetPosition htargetTail,
-        ⟨.step (sourceParent := hparent)
+        .step (sourceParent := hparent)
           (sourcePositionEq := hposition) (targetParent := htargetParent)
-          (targetPositionEq := htargetPosition) hne htailAlignment⟩⟩
+          (targetPositionEq := htargetPosition) hne htailAlignment⟩
 
 end VisualProof.Concrete.Splice.Input
 
@@ -135,10 +135,10 @@ noncomputable def compiledSpliceCoalescedOpenView
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot)
       input.site :=
-  Classical.choice (openSiteView_complete
+  openSiteView_complete
     (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
       sourceRoot)
-    input.site)
+    input.site
 
 /-- Below the sheet root, the source-open compiler also terminates at an
 ordinary `finishRegion` leaf. -/

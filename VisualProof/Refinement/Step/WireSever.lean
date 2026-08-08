@@ -120,9 +120,9 @@ theorem wireSever
         Implementation.WireSever.separatedOpen_eq_canonical_of_nested source
           wire keep boundary targetWellFormed
             (fun equality => scopeRoot equality.symm)
-      obtain ⟨targetView⟩ := Concrete.Splice.openSiteView_complete canonical
+      let targetView := Concrete.Splice.openSiteView_complete canonical
         (source.checked.val.diagram.wires wire).scope
-      obtain ⟨sourceView⟩ := Concrete.Splice.openSiteView_complete source.checked
+      let sourceView := Concrete.Splice.openSiteView_complete source.checked
         (source.checked.val.diagram.wires wire).scope
       have nestedStep := Implementation.WireSeverNested.nested source.checked
         wire keep targetWellFormed (fun equality => scopeRoot equality.symm)
@@ -487,9 +487,9 @@ theorem wireJoin
       · have nested : source.checked.val.diagram.root ≠
             (source.checked.val.diagram.wires inner).scope :=
           fun equality => scopeRoot equality.symm
-        obtain ⟨sourceView⟩ := Concrete.Splice.openSiteView_complete
+        let sourceView := Concrete.Splice.openSiteView_complete
           source.checked (source.checked.val.diagram.wires inner).scope
-        obtain ⟨targetView⟩ := Concrete.Splice.openSiteView_complete
+        let targetView := Concrete.Splice.openSiteView_complete
           target (source.checked.val.diagram.wires inner).scope
         have nestedStep := Implementation.WireJoinNested.nested source.checked
           outer inner orderedDistinct ordered targetWellFormed nested

@@ -176,7 +176,7 @@ theorem relationMap_push
 
 end MappedBinderWitness
 
-theorem node_iso
+noncomputable def node_iso
     (input : Concrete.Diagram) (selection : CheckedSelection input)
     (arity : Nat)
     (sourceContext : Concrete.Elaboration.WireContext input)

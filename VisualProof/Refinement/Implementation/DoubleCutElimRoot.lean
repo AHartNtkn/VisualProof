@@ -330,8 +330,7 @@ private theorem rootWireEquiv_eq_cast
             (Fin.cast (by simp)
               (Fin.natAdd source.val.exposedWires.length localIndex)) =
           (sourceRootLocal source trace).get localIndex by
-        simpa using (Concrete.Elaboration.get_append_natAdd
-          source.val.exposedWires (sourceRootLocal source trace) localIndex)]
+        simp]
       calc
         _ = (targetOpen source trace).hiddenWires.get
             (rootLocalEquiv source trace root localIndex) := localSpec.symm
@@ -413,6 +412,7 @@ theorem root_rule
       (hostOccurrences trace) [.child outer]
       sourceOrdered sourceOrderedCompiled
   rw [sourceOrderedEq] at sourceOrderedIso
+  rcases sourceOrderedIso with ⟨sourceOrderedIso⟩
   simp only [Concrete.Elaboration.compileOccurrencesWith?,
     Concrete.Elaboration.compileOccurrenceWith?, trace.outer_eq]
     at sourceOuterCompiled
@@ -498,6 +498,7 @@ theorem root_rule
                         source.property.diagram_well_formed trace)))
                   targetOrdered targetOrderedCompiled
               rw [targetOrderedEq] at targetOrderedIso
+              rcases targetOrderedIso with ⟨targetOrderedIso⟩
               let sourceOuter := sourceRoot.extend outer
               let sourceFull := sourceOuter.extend trace.inner
               let totalWire := rootWireEquiv source trace root targetWellFormed
@@ -550,11 +551,11 @@ theorem root_rule
               have sourceOuterExact : sourceOuter.Exact outer := by
                 exact sourceRootExact.extend_child
                   source.property.diagram_well_formed (by
-                    simpa [trace.outer_eq, Concrete.CRegion.parent?])
+                    simp [trace.outer_eq, Concrete.CRegion.parent?])
               have sourceFullExact : sourceFull.Exact trace.inner := by
                 exact sourceOuterExact.extend_child
                   source.property.diagram_well_formed (by
-                    simpa [trace.inner_eq, Concrete.CRegion.parent?])
+                    simp [trace.inner_eq, Concrete.CRegion.parent?])
               have targetRootExact : targetRoot.Exact
                   (promotedTarget source.val.diagram
                     source.property.diagram_well_formed trace) := by
@@ -629,11 +630,11 @@ theorem root_rule
                   have targetEnclosesOuter :
                       source.val.diagram.Encloses trace.target outer :=
                     direct_child_encloses (input := source.val.diagram) (by
-                      simpa [trace.outer_eq, Concrete.CRegion.parent?])
+                      simp [trace.outer_eq, Concrete.CRegion.parent?])
                   have outerEnclosesInner :
                       source.val.diagram.Encloses outer trace.inner :=
                     direct_child_encloses (input := source.val.diagram) (by
-                      simpa [trace.inner_eq, Concrete.CRegion.parent?])
+                      simp [trace.inner_eq, Concrete.CRegion.parent?])
                   have childEnclosesInner :=
                     Concrete.Elaboration.checked_encloses_trans
                       source.property.diagram_well_formed childEnclosesTarget
@@ -812,23 +813,29 @@ theorem root_rule
                 simp only [Region.castWiresEq_eq_renameWires,
                   Concrete.Elaboration.finishRegion,
                   Region.renameWires, Region.renameRelations,
-                  ItemSeq.renameRelations_id, Nat.add_zero,
+                  ItemSeq.renameRelations_id,
                   ItemSeq.renameWires_comp,
                   ItemSeq.castWiresEq_eq_renameWires,
-                  ItemSeq.renameWires_append, Function.id_comp]
+                  ItemSeq.renameWires_append]
                 congr 1
                 congr 2
                 · funext index
                   apply Fin.ext
                   let split : Fin (sourceOuter.length +
                       (sourceInnerWires trace).length) := Fin.cast (by
-                    simpa [sourceFull, sourceInnerWires] using
-                      Concrete.Elaboration.WireContext.length_extend
-                        sourceOuter trace.inner) index
+                    change (sourceOuter.extend trace.inner).length =
+                      sourceOuter.length +
+                        (Concrete.Elaboration.exactScopeWires
+                          source.val.diagram trace.inner).length
+                    exact Concrete.Elaboration.WireContext.length_extend
+                      sourceOuter trace.inner) index
                   have indexEq : Fin.cast (by
-                      simpa [sourceFull, sourceInnerWires] using
-                        (Concrete.Elaboration.WireContext.length_extend
-                          sourceOuter trace.inner).symm) split = index := by
+                      change sourceOuter.length +
+                          (Concrete.Elaboration.exactScopeWires
+                            source.val.diagram trace.inner).length =
+                        (sourceOuter.extend trace.inner).length
+                      exact (Concrete.Elaboration.WireContext.length_extend
+                        sourceOuter trace.inner).symm) split = index := by
                     apply Fin.ext
                     rfl
                   rw [← indexEq]
@@ -838,8 +845,7 @@ theorem root_rule
                       outerWire, Region.adjoinMaterialWire,
                       extendWireRenaming, Concrete.OpenDiagram.rootWires,
                       Concrete.Elaboration.WireContext.extend,
-                      outer_exactScopeWires trace, sourceRootLocal,
-                      sourceInnerWires]
+                      sourceRootLocal, sourceInnerWires]
                     rfl
                   · simp [innerPlacement, sourceFull, sourceOuter, sourceRoot,
                       outerWire, Region.adjoinMaterialWire,

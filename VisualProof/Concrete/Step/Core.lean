@@ -160,7 +160,7 @@ theorem concreteCutDepth_removeRaw_index
     concreteCutDepth (host.val.removeRaw selection domains)
         (domains.regions.index region hsurvives) =
       concreteCutDepth host.val region := by
-  let view := Classical.choice (Concrete.Splice.siteView_complete host region)
+  let view := Concrete.Splice.siteView_complete host region
   have pathBound : view.path.length ≤ domains.regions.count := by
     have hlt := Concrete.Diagram.removeRaw_climb_to_root_steps_lt_regionCount
       host selection domains hsurvives view.route.climb_length

@@ -10,6 +10,12 @@ open VisualProof.Data.Finite
 open VisualProof.Diagram
 open VisualProof.Refinement.Implementation.IterationPartition
 
+/-- A proof-relevant route branch: either the route is already at its start,
+or it retains the structural data for a proper descendant. -/
+inductive RouteCase (atStart : Prop) (proper : Type) : Type where
+  | atStart (proof : atStart)
+  | proper (data : proper)
+
 /-- A route from the selection anchor to an unselected target begins through
 an occurrence retained by the selection partition. -/
 theorem routeHead_mem_keptOccurrences
@@ -89,8 +95,30 @@ structure CompiledRouteTerminal
         (.here targetBody)}
       (targetTrace : Concrete.Splice.CompilerTrace  input.val targetRoute
         targetWitness targetState),
-    targetState.inheritedWires = startLeaf.inheritedWires →
+        targetState.inheritedWires = startLeaf.inheritedWires →
       leaf.inheritedWires = targetTrace.leaf.inheritedWires
+
+/-- The exact first compiled and concrete positions retained by a proper
+route.  This data is part of the route result rather than a subsequently
+recovered existential witness. -/
+structure CompiledRouteHead
+    (input : Concrete.Checked )
+    (start : Fin input.val.regionCount)
+    (occurrences : List (Concrete.Elaboration.LocalOccurrence
+      input.val.regionCount input.val.nodeCount))
+    (compiledPath path : List Nat) where
+  child : Fin input.val.regionCount
+  compiledPosition : Fin occurrences.length
+  fullPosition : Fin
+    (Concrete.Elaboration.localOccurrences input.val start).length
+  rest : List Nat
+  compiledPath_eq : compiledPath = compiledPosition.val :: rest
+  path_eq : path = fullPosition.val :: rest
+  compiledPosition_eq :
+    indexOf? occurrences (.child child) = some compiledPosition
+  fullPosition_eq :
+    indexOf? (Concrete.Elaboration.localOccurrences input.val start)
+      (.child child) = some fullPosition
 
 /-- Transport a terminal compiler certificate together with its intrinsic
 path witness.  Keeping the path and witness in one dependent transport avoids
@@ -134,27 +162,18 @@ structure CompiledRouteResult
   compiledPath : List Nat
   witness : Region.ContextPath
     (Region.mk 0 compiledItems) compiledPath
-  terminal : target = start ∨
-    Nonempty (CompiledRouteTerminal input startLeaf compiledItems route
+  terminal : RouteCase (target = start)
+    (CompiledRouteTerminal input startLeaf compiledItems route
       compiledPath witness)
-  headPositions : target = start ∨
-    ∃ (child : Fin input.val.regionCount)
-      (compiledPosition : Fin occurrences.length)
-      (fullPosition : Fin
-        (Concrete.Elaboration.localOccurrences input.val start).length)
-      (rest : List Nat),
-      compiledPath = compiledPosition.val :: rest ∧
-        path = fullPosition.val :: rest ∧
-        indexOf? occurrences (.child child) = some compiledPosition ∧
-      indexOf? (Concrete.Elaboration.localOccurrences input.val start)
-          (.child child) = some fullPosition
+  headPositions : RouteCase (target = start)
+    (CompiledRouteHead input start occurrences compiledPath path)
 
 /-- Route completeness retaining the entire authoritative compiler trace,
 before the final outer-wire cast into the leaf's intrinsic body presentation.
 This proof-relevant result is what path-preserving cross-presentation
 alignment consumes; callers that need only a terminal leaf use the projection
 below. -/
-theorem compilerLeaf_routeTrace_complete
+noncomputable def compilerLeaf_routeTrace_complete
     (input : Concrete.Checked )
     {start target : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
@@ -162,10 +181,10 @@ theorem compilerLeaf_routeTrace_complete
     (leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start (.here body))
     {path : List Nat}
     (route : Concrete.Splice.RegionRoute input.val start target path) :
-    Nonempty (Concrete.Splice.CompilerTraceResult input route leaf.inheritedWires
+    Concrete.Splice.CompilerTraceResult input route leaf.inheritedWires
       leaf.binders (leaf.fuel + 1)
       (Concrete.Elaboration.finishRegion input.val leaf.inheritedWires start
-        leaf.items)) := by
+        leaf.items) := by
   have compiled : Concrete.Elaboration.compileRegion?  input.val
       (leaf.fuel + 1) start leaf.inheritedWires leaf.binders =
         some (Concrete.Elaboration.finishRegion input.val leaf.inheritedWires
@@ -178,7 +197,7 @@ theorem compilerLeaf_routeTrace_complete
 that route's exact position list.  This is the canonical full-leaf path used
 to identify an anchor-relative route with the executor's root-relative site
 view. -/
-theorem compilerLeaf_routePath_complete
+noncomputable def compilerLeaf_routePath_complete
     (input : Concrete.Checked )
     {start target : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
@@ -186,10 +205,10 @@ theorem compilerLeaf_routePath_complete
     (leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val start (.here body))
     {path : List Nat}
     (route : Concrete.Splice.RegionRoute input.val start target path) :
-    ∃ witness : Region.ContextPath body path,
-      Nonempty (Concrete.Splice.Region.ContextPath.CompilerLeaf input.val target
-        witness) := by
-  obtain ⟨result⟩ := compilerLeaf_routeTrace_complete input leaf route
+    Σ witness : Region.ContextPath body path,
+      Concrete.Splice.Region.ContextPath.CompilerLeaf input.val target
+        witness := by
+  let result := compilerLeaf_routeTrace_complete input leaf route
   let transported := result.trace.castWiresEq route result.witness result.state
     leaf.inheritedLength
   have hbody : body = Region.castWiresEq leaf.inheritedLength
@@ -197,11 +216,11 @@ theorem compilerLeaf_routePath_complete
         leaf.items) := leaf.bodyComputation
   rw [hbody]
   exact ⟨result.witness.castWiresEq leaf.inheritedLength,
-    ⟨transported.leaf⟩⟩
+    transported.leaf⟩
 
 /-- Compiler-route completeness for an arbitrary occurrence sublist.  This is
 the proof-critical core behind iteration's retained selection route. -/
-theorem compiledOccurrences_route_complete
+noncomputable def compiledOccurrences_route_complete
     (input : Concrete.Checked )
     {start : Fin input.val.regionCount}
     {outer : Nat} {rels : Theory.RelCtx}
@@ -223,25 +242,39 @@ theorem compiledOccurrences_route_complete
       (input.val.regions child).parent? = some start →
       input.val.Encloses child target →
       Concrete.Elaboration.LocalOccurrence.child child ∈ occurrences) :
-    Nonempty (CompiledRouteResult input startLeaf occurrences compiledItems
-      route) := by
+    CompiledRouteResult input startLeaf occurrences compiledItems route := by
   cases route with
   | here =>
       let witness : Region.ContextPath
           (Region.mk 0 compiledItems) [] := .here _
-      exact ⟨{
+      exact {
         compiledPath := []
         witness := witness
-        terminal := Or.inl rfl
-        headPositions := Or.inl rfl
-      }⟩
+        terminal := .atStart rfl
+        headPositions := .atStart rfl
+      }
   | @step start child target rest parent position positionEq tail =>
       have headMember : Concrete.Elaboration.LocalOccurrence.child child ∈
           occurrences :=
         firstChildOccurs child parent
           (Concrete.Splice.Input.RegionRoute.encloses tail input.property)
-      obtain ⟨compiledPosition, compiledPositionEq⟩ :=
-        indexOf?_complete headMember
+      let compiledPositionPresent :
+          (indexOf? occurrences (.child child)).isSome = true := by
+        rw [indexOf?_isSome_iff]
+        exact headMember
+      let compiledPosition :=
+        (indexOf? occurrences (.child child)).get compiledPositionPresent
+      have compiledPositionEq : indexOf? occurrences (.child child) =
+          some compiledPosition := by
+        obtain ⟨found, foundEq⟩ :=
+          Option.isSome_iff_exists.mp compiledPositionPresent
+        calc
+          indexOf? occurrences (.child child) = some found := foundEq
+          _ = some ((indexOf? occurrences (.child child)).get
+              compiledPositionPresent) :=
+            congrArg some
+              (Option.get_of_eq_some compiledPositionPresent foundEq).symm
+          _ = some compiledPosition := by rfl
       obtain ⟨focus, focusEq, childCompiled⟩ :=
         Concrete.Splice.compiledOccurrence_focus input.val
           (Concrete.Elaboration.compileRegion?  input.val startLeaf.fuel)
@@ -256,11 +289,40 @@ theorem compiledOccurrences_route_complete
           subst childParent
           simp only [Concrete.Elaboration.compileOccurrenceWith?, childKind]
             at childCompiled
-          obtain ⟨childBody, childBodyEq, childItemEq⟩ :=
-            Option.bind_eq_some_iff.mp childCompiled
-          have childItem : Item.cut childBody = focus.item :=
-            Option.some.inj childItemEq
-          obtain ⟨childResult⟩ := Concrete.Splice.compileRegion_route_context_complete
+          change (Concrete.Elaboration.compileRegion?
+              input.val startLeaf.fuel child
+              (startLeaf.inheritedWires.extend start)
+              startLeaf.binders).bind
+                (fun body => pure (Item.cut body)) = _ at childCompiled
+          have childBodyPresent : (Concrete.Elaboration.compileRegion?
+              input.val startLeaf.fuel child
+              (startLeaf.inheritedWires.extend start)
+              startLeaf.binders).isSome = true := by
+            cases childBodyEq : Concrete.Elaboration.compileRegion?
+                input.val startLeaf.fuel child
+                (startLeaf.inheritedWires.extend start) startLeaf.binders with
+            | none =>
+                rw [childBodyEq] at childCompiled
+                simp at childCompiled
+            | some childBody => rfl
+          let childBody := (Concrete.Elaboration.compileRegion?
+            input.val startLeaf.fuel child
+            (startLeaf.inheritedWires.extend start) startLeaf.binders).get
+              childBodyPresent
+          have childBodyEq : Concrete.Elaboration.compileRegion?
+              input.val startLeaf.fuel child
+              (startLeaf.inheritedWires.extend start) startLeaf.binders =
+                some childBody := by
+            obtain ⟨found, foundEq⟩ :=
+              Option.isSome_iff_exists.mp childBodyPresent
+            calc
+              _ = some found := foundEq
+              _ = some childBody := congrArg some
+                (Option.get_of_eq_some childBodyPresent foundEq).symm
+          have childItem : Item.cut childBody = focus.item := by
+            rw [childBodyEq] at childCompiled
+            exact Option.some.inj childCompiled
+          let childResult := Concrete.Splice.compileRegion_route_context_complete
             input tail childBodyEq
             (startLeaf.wiresExact.extend_child input.property parent)
             (Concrete.Elaboration.BinderContext.covers_cut_child
@@ -278,10 +340,10 @@ theorem compiledOccurrences_route_complete
             fun index => childResult.trace.inheritedIndex
               (Fin.cast (congrArg List.length childResult.inherited_eq).symm
                 index)
-          exact ⟨{
+          exact {
             compiledPath := compiledPosition.val :: rest
             witness := witness
-            terminal := Or.inr ⟨{
+            terminal := .proper {
               leaf := terminalLeaf
               inheritedIndex := inheritedIndex
               inheritedIndex_get := by
@@ -401,21 +463,59 @@ theorem compiledOccurrences_route_complete
                         input.property childResult.trace targetTailTrace
                         childInherited
                     simpa only [terminalLeaf, witness] using terminalEq
-            }⟩
-            headPositions := Or.inr ⟨child, compiledPosition, position,
-              rest, rfl, rfl, compiledPositionEq, positionEq⟩
-          }⟩
+            }
+            headPositions := .proper {
+              child := child
+              compiledPosition := compiledPosition
+              fullPosition := position
+              rest := rest
+              compiledPath_eq := rfl
+              path_eq := rfl
+              compiledPosition_eq := compiledPositionEq
+              fullPosition_eq := positionEq
+            }
+          }
       | bubble childParent arity =>
           have childParentEq : childParent = start := by
             simpa [childKind, CRegion.parent?] using parent
           subst childParent
           simp only [Concrete.Elaboration.compileOccurrenceWith?, childKind]
             at childCompiled
-          obtain ⟨childBody, childBodyEq, childItemEq⟩ :=
-            Option.bind_eq_some_iff.mp childCompiled
-          have childItem : Item.bubble arity childBody = focus.item :=
-            Option.some.inj childItemEq
-          obtain ⟨childResult⟩ := Concrete.Splice.compileRegion_route_context_complete
+          change (Concrete.Elaboration.compileRegion?
+              input.val startLeaf.fuel child
+              (startLeaf.inheritedWires.extend start)
+              (startLeaf.binders.push child arity)).bind
+                (fun body => pure (Item.bubble arity body)) = _ at childCompiled
+          have childBodyPresent : (Concrete.Elaboration.compileRegion?
+              input.val startLeaf.fuel child
+              (startLeaf.inheritedWires.extend start)
+              (startLeaf.binders.push child arity)).isSome = true := by
+            cases childBodyEq : Concrete.Elaboration.compileRegion?
+                input.val startLeaf.fuel child
+                (startLeaf.inheritedWires.extend start)
+                (startLeaf.binders.push child arity) with
+            | none =>
+                rw [childBodyEq] at childCompiled
+                simp at childCompiled
+            | some childBody => rfl
+          let childBody := (Concrete.Elaboration.compileRegion?
+            input.val startLeaf.fuel child
+            (startLeaf.inheritedWires.extend start)
+            (startLeaf.binders.push child arity)).get childBodyPresent
+          have childBodyEq : Concrete.Elaboration.compileRegion?
+              input.val startLeaf.fuel child
+              (startLeaf.inheritedWires.extend start)
+              (startLeaf.binders.push child arity) = some childBody := by
+            obtain ⟨found, foundEq⟩ :=
+              Option.isSome_iff_exists.mp childBodyPresent
+            calc
+              _ = some found := foundEq
+              _ = some childBody := congrArg some
+                (Option.get_of_eq_some childBodyPresent foundEq).symm
+          have childItem : Item.bubble arity childBody = focus.item := by
+            rw [childBodyEq] at childCompiled
+            exact Option.some.inj childCompiled
+          let childResult := Concrete.Splice.compileRegion_route_context_complete
             input tail childBodyEq
             (startLeaf.wiresExact.extend_child input.property parent)
             (Concrete.Elaboration.BinderContext.push_covers_bubble_child
@@ -433,10 +533,10 @@ theorem compiledOccurrences_route_complete
             fun index => childResult.trace.inheritedIndex
               (Fin.cast (congrArg List.length childResult.inherited_eq).symm
                 index)
-          exact ⟨{
+          exact {
             compiledPath := compiledPosition.val :: rest
             witness := witness
-            terminal := Or.inr ⟨{
+            terminal := .proper {
               leaf := terminalLeaf
               inheritedIndex := inheritedIndex
               inheritedIndex_get := by
@@ -583,10 +683,18 @@ theorem compiledOccurrences_route_complete
                         input.property childResult.trace targetTailTrace
                         childInherited
                     simpa only [terminalLeaf, witness] using terminalEq
-            }⟩
-            headPositions := Or.inr ⟨child, compiledPosition, position,
-              rest, rfl, rfl, compiledPositionEq, positionEq⟩
-          }⟩
+            }
+            headPositions := .proper {
+              child := child
+              compiledPosition := compiledPosition
+              fullPosition := position
+              rest := rest
+              compiledPath_eq := rfl
+              path_eq := rfl
+              compiledPosition_eq := compiledPositionEq
+              fullPosition_eq := positionEq
+            }
+          }
 
 /-- Intrinsic descendant path obtained by compiling only the retained block at
 the selection anchor.  The selected block is therefore available as a
@@ -605,13 +713,13 @@ structure KeptRouteResult
   keptPath : List Nat
   witness : Region.ContextPath
     (Region.mk 0 keptItems) keptPath
-  terminal : target = selection.val.anchor ∨
-    Nonempty (Concrete.Splice.Region.ContextPath.CompilerLeaf input.val target witness)
+  terminal : RouteCase (target = selection.val.anchor)
+    (Concrete.Splice.Region.ContextPath.CompilerLeaf input.val target witness)
 
 /-- Completeness of the retained-block path.  No second compilation authority
 is introduced: the top item block is the partition compiler result and every
 recursive child is the result already returned by `compileRegion?`. -/
-theorem keptRoute_complete
+noncomputable def keptRoute_complete
     (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     {outer : Nat} {rels : Theory.RelCtx}
@@ -629,7 +737,7 @@ theorem keptRoute_complete
     {target : Fin input.val.regionCount} {path : List Nat}
     (route : Concrete.Splice.RegionRoute input.val selection.val.anchor target path)
     (targetNotSelected : ¬ selection.val.SelectsRegion target) :
-    Nonempty (KeptRouteResult input selection anchorLeaf keptItems route) := by
+    KeptRouteResult input selection anchorLeaf keptItems route := by
   have firstChildOccurs : ∀ child,
       (input.val.regions child).parent? = some selection.val.anchor →
       input.val.Encloses child target →
@@ -648,17 +756,16 @@ theorem keptRoute_complete
     intro childSelected
     apply targetNotSelected
     exact ⟨child, childSelected, childEncloses⟩
-  obtain ⟨result⟩ := compiledOccurrences_route_complete input anchorLeaf
+  let result := compiledOccurrences_route_complete input anchorLeaf
     (keptOccurrences input.val selection) keptItems keptCompiled route
     firstChildOccurs
-  exact ⟨{
+  exact {
     keptPath := result.compiledPath
     witness := result.witness
     terminal := by
-      rcases result.terminal with equal | terminal
-      · exact Or.inl equal
-      · obtain ⟨terminalData⟩ := terminal
-        exact Or.inr ⟨terminalData.leaf⟩
-  }⟩
+      cases result.terminal with
+      | atStart equal => exact .atStart equal
+      | proper terminalData => exact .proper terminalData.leaf
+  }
 
 end VisualProof.Refinement.Implementation.IterationRoute

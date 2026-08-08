@@ -91,7 +91,7 @@ noncomputable def compiledSpliceOutputActualOfEmpty
       (layout.exposedWireRenaming hadmissible host index))
     (PlugLayout.emptyRelationRenaming host.focus.holeRels)
   let hostRelation : RelationRenaming host.focus.holeRels
-      outputView.focus.holeRels := fun {arity} relation =>
+      outputView.focus.holeRels := fun {_arity} relation =>
     layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
       outputView.intrinsicPath outputLeaf relation
   let rootWire :=
@@ -102,7 +102,7 @@ noncomputable def compiledSpliceOutputActualOfEmpty
 
 /-- Exact empty-spine splice regions agree across the paired nested compiler
 frames. -/
-theorem compiledNestedActualFocusIsoOfEmpty
+noncomputable def compiledNestedActualFocusIsoOfEmpty
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
@@ -119,13 +119,6 @@ theorem compiledNestedActualFocusIsoOfEmpty
       (compiledSpliceHostView input hadmissible).compilerLeaf.binders) :
     let sourceView := compiledSpliceCoalescedOpenView input hadmissible
       sourceBoundary sourceRoot
-    let sourceLeaf := compiledSpliceCoalescedNestedLeaf input hadmissible
-      sourceBoundary sourceRoot hnested
-    let host := compiledSpliceHostView input hadmissible
-    let outputView := compiledSpliceOutputOpenView input layout hadmissible
-      sourceBoundary sourceRoot
-    let outputLeaf := compiledSpliceOutputNestedLeaf input layout hadmissible
-      sourceBoundary sourceRoot hnested
     let alignment := layout.compiledNestedFrameContextIso input hadmissible
       sourceBoundary sourceRoot hnested
     RegionIso  alignment.holeWire sourceView.focus.holeRels
@@ -251,7 +244,7 @@ private theorem DiagramContext.fill_transport_holeRels_empty
   subst targetRels
   rfl
 
-theorem compiledNestedActualRootIsoOfEmpty
+noncomputable def compiledNestedActualRootIsoOfEmpty
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))

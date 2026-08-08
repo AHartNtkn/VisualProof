@@ -47,7 +47,7 @@ noncomputable def iterationActualSpliceOfNonempty
       (spliceInput.plugLayout.bodyTerminalWireRenaming hadmissible host
         pattern.witness pattern.leaf hnonempty index)
   let actualRelation : RelationRenaming pattern.witness.toFocus.holeRels
-      host.focus.holeRels := fun {arity} relation =>
+      host.focus.holeRels := fun {_arity} relation =>
     spliceInput.plugLayout.coalescedTerminalRelationRenaming hadmissible
       host.intrinsicPath host.compilerLeaf pattern.witness pattern.leaf
       hnonempty relation
@@ -131,7 +131,7 @@ theorem coalescedRouteTerminal_hostLexical
       keptItems route compiledPath witness) :
     let spliceInput := iterationInput input selection target
     let host := Concrete.Splice.Input.compiledSpliceHostView spliceInput hadmissible
-    ∃ hrels : witness.toFocus.holeRels = host.focus.holeRels,
+    ∃ _hrels : witness.toFocus.holeRels = host.focus.holeRels,
       HEq terminal.leaf.binders host.compilerLeaf.binders := by
   dsimp only
   let spliceInput := iterationInput input selection target
@@ -164,7 +164,7 @@ theorem coalescedRouteTerminal_hostLexical
   refine ⟨routeRels.trans tailRels, ?_⟩
   exact (routeTerminalBinders.trans tailTerminalBinders)
 
-theorem Region.ContextPath.appendRootItemsRight_actualIso
+noncomputable def Region.ContextPath.appendRootItemsRight_actualIso
     {items suffix : ItemSeq  wires rels}
     {index : Nat} {rest : List Nat}
     (witness : Region.ContextPath (Region.mk 0 items) (index :: rest))
@@ -198,7 +198,7 @@ theorem Region.ContextPath.appendRootItemsRight_actualIso
 the executable compiler's splice at the canonical host focus.  This theorem
 combines the terminal lexical isomorphism with the previously proved exact
 wire and relation factors. -/
-theorem properRoute_actualSpliceIso
+noncomputable def properRoute_actualSpliceIso
     (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
@@ -270,37 +270,15 @@ theorem properRoute_actualSpliceIso
         witness.toFocus.holeRels := fun {arity} relation =>
       witness.toFocus.context.outerRelation
         (binderWitness.relationMap relation)
-    let targetLocal :=
-      (Concrete.Elaboration.exactScopeWires spliceInput.coalesceFrameRaw
-        spliceInput.site).length
-    let targetLength :
-        (host.compilerLeaf.inheritedWires.extend spliceInput.site).length =
-          host.focus.holeWires + targetLocal :=
-      (Concrete.Elaboration.WireContext.length_extend
-        host.compilerLeaf.inheritedWires spliceInput.site).trans
-        (congrArg (fun outer => outer + targetLocal)
-          host.compilerLeaf.inheritedLength)
-    let targetItems : ItemSeq
-        (host.focus.holeWires + targetLocal) host.focus.holeRels :=
-      host.compilerLeaf.items.castWiresEq targetLength
-    let actualWire : Fin pattern.leaf.inheritedWires.length →
-        Fin (host.focus.holeWires + targetLocal) := fun index =>
-      Fin.cast targetLength
-        (spliceInput.plugLayout.bodyTerminalWireRenaming hadmissible host
-          pattern.witness pattern.leaf hnonempty index)
-    let actualRelation : RelationRenaming pattern.witness.toFocus.holeRels
-        host.focus.holeRels := fun {arity} relation =>
-      spliceInput.plugLayout.coalescedTerminalRelationRenaming hadmissible
-        host.intrinsicPath host.compilerLeaf pattern.witness pattern.leaf
-        hnonempty relation
     let material := Concrete.Elaboration.finishRegion
       spliceInput.pattern.val.diagram pattern.leaf.inheritedWires
       spliceInput.binderSpine.bodyContainer pattern.leaf.items
-    ∃ (sourceLocal : Nat)
+    Σ (sourceLocal : Nat)
       (sourceItems : ItemSeq
         (witness.toFocus.holeWires + sourceLocal)
-        witness.toFocus.holeRels)
-      (sourceBody : witness.toFocus.body = Region.mk sourceLocal sourceItems),
+        witness.toFocus.holeRels),
+      PSigma fun _sourceBody :
+          witness.toFocus.body = Region.mk sourceLocal sourceItems =>
       let hrels := Classical.choose
         (coalescedRouteTerminal_hostLexical input selection target hadmissible
           hencloses route terminal)
@@ -441,7 +419,7 @@ theorem properRoute_actualSpliceIso
 
 /-- Empty-spine route-native splice identified with the executor's exact
 canonical-host splice. -/
-theorem properRoute_rootActualSpliceIso
+noncomputable def properRoute_rootActualSpliceIso
     (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
@@ -502,33 +480,15 @@ theorem properRoute_rootActualSpliceIso
         (terminal.inheritedIndex (sourceContextWire.symm (hostIndex index)))
     let routeRelation : RelationRenaming [] witness.toFocus.holeRels :=
       Concrete.Splice.Input.PlugLayout.emptyRelationRenaming witness.toFocus.holeRels
-    let targetLocal :=
-      (Concrete.Elaboration.exactScopeWires spliceInput.coalesceFrameRaw
-        spliceInput.site).length
-    let targetLength :
-        (host.compilerLeaf.inheritedWires.extend spliceInput.site).length =
-          host.focus.holeWires + targetLocal :=
-      (Concrete.Elaboration.WireContext.length_extend
-        host.compilerLeaf.inheritedWires spliceInput.site).trans
-        (congrArg (fun outer => outer + targetLocal)
-          host.compilerLeaf.inheritedLength)
-    let targetItems : ItemSeq
-        (host.focus.holeWires + targetLocal) host.focus.holeRels :=
-      host.compilerLeaf.items.castWiresEq targetLength
-    let actualWire : Fin spliceInput.pattern.val.exposedWires.length →
-        Fin (host.focus.holeWires + targetLocal) := fun index =>
-      Fin.cast targetLength
-        (spliceInput.plugLayout.exposedWireRenaming hadmissible host index)
-    let actualRelation : RelationRenaming [] host.focus.holeRels :=
-      Concrete.Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels
     let material := Concrete.Elaboration.finishRoot
       spliceInput.pattern.val.exposedWires spliceInput.pattern.val.hiddenWires
       pattern.items
-    ∃ (sourceLocal : Nat)
+    Σ (sourceLocal : Nat)
       (sourceItems : ItemSeq
         (witness.toFocus.holeWires + sourceLocal)
-        witness.toFocus.holeRels)
-      (sourceBody : witness.toFocus.body = Region.mk sourceLocal sourceItems),
+        witness.toFocus.holeRels),
+      PSigma fun _sourceBody :
+          witness.toFocus.body = Region.mk sourceLocal sourceItems =>
       let hrels := Classical.choose
         (coalescedRouteTerminal_hostLexical input selection target hadmissible
           hencloses route terminal)

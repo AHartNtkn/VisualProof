@@ -61,7 +61,7 @@ theorem permIndexEquiv_spec [DecidableEq α]
 /-- A compiler occurrence permutation is an intrinsic item-sequence
 isomorphism, retaining its exact position equivalence for later focused
 replacement. -/
-theorem compileOccurrencesWith?_perm_iso
+noncomputable def compileOccurrencesWith?_perm_iso
     (diagram : Concrete.Diagram)
     (recurse : ∀ {rels : RelCtx},
       (region : Fin diagram.regionCount) →
@@ -156,7 +156,7 @@ theorem compileOccurrencesWith?_append
 
 /-- The semantic selection partition also retains the exact intrinsic
 occurrence permutation used by the compiler. -/
-theorem compilerLeaf_partition_iso
+noncomputable def compilerLeaf_partition_iso
     (input : Concrete.Checked )
     (anchor : Fin input.val.regionCount)
     {outer : Nat} {rels : RelCtx}
@@ -203,7 +203,7 @@ theorem compilerLeaf_partition_iso
 /-- A retained non-root path survives insertion of selected root siblings and
 then follows the compiler's authoritative occurrence permutation to the
 corresponding focus in the complete leaf. -/
-theorem compilerLeaf_partition_alignRetainedPath
+noncomputable def compilerLeaf_partition_alignRetainedPath
     (input : Concrete.Checked )
     (anchor : Fin input.val.regionCount)
     {outer : Nat} {rels : RelCtx}
@@ -229,12 +229,12 @@ theorem compilerLeaf_partition_alignRetainedPath
     {index : Nat} {rest : List Nat}
     (retained : Region.ContextPath (Region.mk 0 keptItems) (index :: rest)) :
     let extended := retained.appendRootItemsRight selectedItems
-    ∃ iso : RegionIso
+    Σ iso : RegionIso
         (FiniteEquiv.refl
           (Fin (leaf.inheritedWires.extend anchor).length)) rels
         (Region.mk 0 (keptItems.append selectedItems))
         (Region.mk 0 leaf.items),
-      Nonempty (RegionIso.ContextPathAlignment iso extended) := by
+      RegionIso.ContextPathAlignment iso extended := by
   dsimp only
   have itemIso := compilerLeaf_partition_iso input anchor leaf kept selected
     partition keptCompiled selectedCompiled
@@ -265,7 +265,7 @@ theorem compilerLeaf_partition_alignRetainedPath
 the compiler permutation to the concrete authoritative position, so the
 resulting target path is the route path rather than merely some isomorphic
 focus. -/
-theorem compilerLeaf_partition_alignRetainedOccurrence
+noncomputable def compilerLeaf_partition_alignRetainedOccurrence
     (input : Concrete.Checked )
     (anchor : Fin input.val.regionCount)
     {outer : Nat} {rels : RelCtx}
@@ -301,14 +301,14 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
     (retained : Region.ContextPath (Region.mk 0 keptItems)
       (keptPosition.val :: rest)) :
     let extended := retained.appendRootItemsRight selectedItems
-    ∃ (iso : RegionIso
+    Σ iso : RegionIso
         (FiniteEquiv.refl
           (Fin (leaf.inheritedWires.extend anchor).length)) rels
         (Region.mk 0 (keptItems.append selectedItems))
-        (Region.mk 0 leaf.items))
-      (alignment : RegionIso.ContextPathAlignment iso extended),
-      alignment.targetPath = fullPosition.val :: rest ∧
-        ∀ index, (alignment.holeWire index).val = index.val := by
+        (Region.mk 0 leaf.items),
+      { alignment : RegionIso.ContextPathAlignment iso extended //
+        alignment.targetPath = fullPosition.val :: rest ∧
+          ∀ index, (alignment.holeWire index).val = index.val } := by
   dsimp only
   let recurse : ∀ {rels : RelCtx},
       (region : Fin input.val.regionCount) →
@@ -439,8 +439,10 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
             ItemSeq.focusAt?_index_lt _ _ sourceFocus sourceAt⟩ := by
         apply Fin.ext
         rfl
-      obtain ⟨targetFocus, targetAt, targetGet⟩ :=
-        ItemSeq.focusAt?_complete leaf.items targetItemIndex
+      let targetFocused := leaf.items.focusAt targetItemIndex
+      let targetFocus := targetFocused.focus
+      have targetAt := targetFocused.atIndex
+      have targetGet := targetFocused.item_eq
       have targetItemEq : targetFocus.item = sourceFocus.item := by
         have sourceGet := ItemSeq.focusAt?_item _ _ sourceFocus sourceAt
         have mapped := itemEq sourceItemIndex
@@ -509,7 +511,7 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
         body := by
           simpa [targetWitness, Region.ContextPath.toFocus] using child.body
       }
-      refine ⟨iso, alignment, ?_, ?_⟩
+      refine ⟨iso, ⟨alignment, ?_, ?_⟩⟩
       · simp only [alignment]
         rw [childPath]
       · intro index
@@ -523,8 +525,10 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
             ItemSeq.focusAt?_index_lt _ _ sourceFocus sourceAt⟩ := by
         apply Fin.ext
         rfl
-      obtain ⟨targetFocus, targetAt, targetGet⟩ :=
-        ItemSeq.focusAt?_complete leaf.items targetItemIndex
+      let targetFocused := leaf.items.focusAt targetItemIndex
+      let targetFocus := targetFocused.focus
+      have targetAt := targetFocused.atIndex
+      have targetGet := targetFocused.item_eq
       have targetItemEq : targetFocus.item = sourceFocus.item := by
         have sourceGet := ItemSeq.focusAt?_item _ _ sourceFocus sourceAt
         have mapped := itemEq sourceItemIndex
@@ -594,7 +598,7 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
         body := by
           simpa [targetWitness, Region.ContextPath.toFocus] using child.body
       }
-      refine ⟨iso, alignment, ?_, ?_⟩
+      refine ⟨iso, ⟨alignment, ?_, ?_⟩⟩
       · simp only [alignment]
         rw [childPath]
       · intro index
@@ -603,4 +607,3 @@ theorem compilerLeaf_partition_alignRetainedOccurrence
 
 
 end VisualProof.Refinement.Implementation.IterationPathAlignment
-

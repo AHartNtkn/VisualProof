@@ -187,7 +187,7 @@ def regionPath? (checked : Checked )
   regionPathAux checked.val checked.val.regionCount region
 
 inductive RegionPath (d : Diagram) :
-    Fin d.regionCount → Fin d.regionCount → List Nat → Prop
+    Fin d.regionCount → Fin d.regionCount → List Nat → Type
   | here (region) : RegionPath d region region []
   | child {start parent child prior}
       (path : RegionPath d start parent prior)
@@ -198,7 +198,7 @@ inductive RegionPath (d : Diagram) :
       RegionPath d start child (prior ++ [position.val])
 
 inductive RegionRoute (d : Diagram) :
-    Fin d.regionCount → Fin d.regionCount → List Nat → Prop
+    Fin d.regionCount → Fin d.regionCount → List Nat → Type
   | here (region) : RegionRoute d region region []
   | step {start child target rest}
       (hparent : (d.regions child).parent? = some start)
@@ -208,7 +208,7 @@ inductive RegionRoute (d : Diagram) :
       (tail : RegionRoute d child target rest) :
       RegionRoute d start target (position.val :: rest)
 
-theorem RegionRoute.extend
+noncomputable def RegionRoute.extend
     (route : RegionRoute d start parent prior)
     (hparent : (d.regions child).parent? = some parent)
     (position : Fin (Elaboration.localOccurrences d parent).length)
@@ -223,7 +223,7 @@ theorem RegionRoute.extend
       simpa using RegionRoute.step firstParent firstPosition firstPositionEq
         (ih hparent position hposition)
 
-theorem RegionRoute.trans
+noncomputable def RegionRoute.trans
     (first : RegionRoute d start middle firstPath)
     (second : RegionRoute d middle target secondPath) :
     RegionRoute d start target (firstPath ++ secondPath) := by
@@ -364,7 +364,7 @@ theorem RegionRoute.climb_length
         simp [Diagram.climb, hparent]
       simpa using Elaboration.climb_add ih childStep
 
-theorem RegionPath.toRoute
+noncomputable def RegionPath.toRoute
     (path : RegionPath d start target positions) :
     RegionRoute d start target positions := by
   induction path with
@@ -377,19 +377,18 @@ theorem regionPathAux_complete
     {steps fuel : Nat} {region : Fin d.regionCount}
     (hle : steps ≤ fuel)
     (hclimb : d.climb steps region = some d.root) :
-    ∃ path, regionPathAux d fuel region = some path ∧
-      RegionPath d d.root region path := by
+    ∃ path, regionPathAux d fuel region = some path := by
   induction steps generalizing fuel region with
   | zero =>
       have hregion : region = d.root := Option.some.inj hclimb
       subst region
-      cases fuel <;> exact ⟨[], by simp [regionPathAux], .here d.root⟩
+      cases fuel <;> exact ⟨[], by simp [regionPathAux]⟩
   | succ steps ih =>
       by_cases hregion : region = d.root
       · subst region
         cases fuel with
         | zero => omega
-        | succ fuel => exact ⟨[], by simp [regionPathAux], .here d.root⟩
+        | succ fuel => exact ⟨[], by simp [regionPathAux]⟩
       · cases fuel with
         | zero => omega
         | succ fuel =>
@@ -398,44 +397,117 @@ theorem regionPathAux_complete
             | some parent =>
                 have htail : d.climb steps parent = some d.root := by
                   simpa [Diagram.climb, hparent] using hclimb
-                obtain ⟨prior, hprior, priorPath⟩ :=
+                obtain ⟨prior, hprior⟩ :=
                   ih (fuel := fuel) (region := parent) (by omega) htail
                 have hmember : Elaboration.LocalOccurrence.child region ∈
                     Elaboration.localOccurrences d parent :=
                   (Elaboration.mem_localOccurrences_child d parent region).2
                     hparent
                 obtain ⟨position, hposition⟩ := indexOf?_complete hmember
-                refine ⟨prior ++ [position.val], ?_,
-                  .child priorPath hparent position hposition⟩
+                refine ⟨prior ++ [position.val], ?_⟩
                 simp [regionPathAux, hregion, hparent, hprior, hposition]
 
 theorem regionPath?_complete (checked : Checked )
     (region : Fin checked.val.regionCount) :
     ∃ path, regionPath? checked region = some path := by
   obtain ⟨steps, hsteps⟩ := checked.property.all_regions_reach_root region
-  obtain ⟨path, hpath, _⟩ := regionPathAux_complete checked.val
+  obtain ⟨path, hpath⟩ := regionPathAux_complete checked.val
     (Nat.le_of_lt_succ steps.isLt) hsteps
   exact ⟨path, hpath⟩
 
-theorem regionPath?_sound (checked : Checked )
+private theorem regionPath?_isSome (checked : Checked)
+    (region : Fin checked.val.regionCount) :
+    (regionPath? checked region).isSome = true :=
+  Option.isSome_iff_exists.mpr (regionPath?_complete checked region)
+
+/-- The path returned by the canonical concrete path computation. -/
+noncomputable def regionPath (checked : Checked)
+    (region : Fin checked.val.regionCount) : List Nat :=
+  (regionPath? checked region).get (regionPath?_isSome checked region)
+
+theorem regionPath_computation (checked : Checked)
+    (region : Fin checked.val.regionCount) :
+    regionPath? checked region = some (regionPath checked region) := by
+  obtain ⟨path, pathEq⟩ := regionPath?_complete checked region
+  calc
+    regionPath? checked region = some path := pathEq
+    _ = some ((regionPath? checked region).get
+        (regionPath?_isSome checked region)) :=
+      congrArg some
+        (Option.get_of_eq_some (regionPath?_isSome checked region) pathEq).symm
+    _ = some (regionPath checked region) := by rfl
+
+noncomputable def regionPath?_sound (checked : Checked )
     (region : Fin checked.val.regionCount)
     (hpath : regionPath? checked region = some path) :
     RegionPath checked.val checked.val.root region path := by
   unfold regionPath? at hpath
-  obtain ⟨steps, hsteps⟩ := checked.property.all_regions_reach_root region
-  obtain ⟨found, hfound, hwitness⟩ := regionPathAux_complete checked.val
-    (Nat.le_of_lt_succ steps.isLt) hsteps
-  rw [hpath] at hfound
-  cases hfound
-  exact hwitness
+  generalize fuelEq : checked.val.regionCount = fuel at hpath
+  clear fuelEq
+  induction fuel generalizing region path with
+  | zero =>
+      simp only [regionPathAux] at hpath
+      split at hpath
+      · rename_i regionRoot
+        subst region
+        simp at hpath
+        subst path
+        exact .here checked.val.root
+      · simp at hpath
+  | succ fuel induction =>
+      simp only [regionPathAux] at hpath
+      split at hpath
+      · rename_i regionRoot
+        subst region
+        simp at hpath
+        subst path
+        exact .here checked.val.root
+      · rename_i regionNeRoot
+        cases parentEq : (checked.val.regions region).parent? with
+        | none => simp [parentEq] at hpath
+        | some parent =>
+            simp only [parentEq, Option.bind_eq_bind] at hpath
+            cases priorEq : regionPathAux checked.val fuel parent with
+            | none => simp [priorEq] at hpath
+            | some prior =>
+                simp only [priorEq] at hpath
+                cases positionEq : indexOf?
+                    (Elaboration.localOccurrences checked.val parent)
+                    (.child region) with
+                | none => simp [positionEq] at hpath
+                | some position =>
+                    simp only [positionEq, Option.bind_some] at hpath
+                    simp at hpath
+                    subst path
+                    exact .child (induction parent priorEq) parentEq
+                      position positionEq
 
-theorem regionPath?_route (checked : Checked )
+noncomputable def regionPath?_route (checked : Checked )
     (region : Fin checked.val.regionCount)
     (hpath : regionPath? checked region = some path) :
     RegionRoute checked.val checked.val.root region path :=
   (regionPath?_sound checked region hpath).toRoute
 
-theorem compiledOccurrence_focus
+/-- Direct compiled item focus retained at a concrete occurrence position. -/
+structure CompiledOccurrenceFocus
+    (d : Diagram)
+    (recurse : ∀ {rels : Theory.RelCtx},
+      (region : Fin d.regionCount) →
+      (context : Elaboration.WireContext d) →
+      Elaboration.BinderContext d rels →
+      Option (Region context.length rels))
+    (context : Elaboration.WireContext d)
+    (rels : Theory.RelCtx)
+    (binders : Elaboration.BinderContext d rels)
+    (items : ItemSeq context.length rels)
+    (occurrence : Elaboration.LocalOccurrence d.regionCount d.nodeCount)
+    (position : Nat) where
+  focus : ItemSeq.Focus items
+  atIndex : items.focusAt? position = some focus
+  compiled : Elaboration.compileOccurrenceWith? d recurse context binders
+    occurrence = some focus.item
+
+noncomputable def compiledOccurrence_focus
     (d : Diagram)
     (recurse : ∀ {rels : Theory.RelCtx},
       (region : Fin d.regionCount) →
@@ -453,23 +525,23 @@ theorem compiledOccurrence_focus
     (hitems : Elaboration.compileOccurrencesWith?  d recurse
       context binders occurrences = some items)
     (hposition : indexOf? occurrences occurrence = some position) :
-    ∃ focus, items.focusAt? position.val = some focus ∧
-      Elaboration.compileOccurrenceWith?  d recurse
-        context binders occurrence = some focus.item := by
+    CompiledOccurrenceFocus d recurse context rels binders items occurrence
+      position.val := by
   let itemPosition : Fin items.length := Fin.cast
     (Elaboration.compileOccurrencesWith?_length recurse context binders
       hitems).symm position
-  obtain ⟨focus, hfocus, hfocusItem⟩ :=
-    ItemSeq.focusAt?_complete items itemPosition
+  let indexedFocus := items.focusAt itemPosition
   have hcompiled := Elaboration.compileOccurrencesWith?_get
     recurse context binders hitems position
   have hoccurrence := indexOf?_sound hposition
   have hoccurrence' : occurrences.get position = occurrence := by
     simpa only [List.get_eq_getElem] using hoccurrence
   rw [hoccurrence'] at hcompiled
-  refine ⟨focus, ?_, ?_⟩
-  · simpa [itemPosition] using hfocus
-  · simpa [itemPosition, hfocusItem] using hcompiled
+  exact {
+    focus := indexedFocus.focus
+    atIndex := by simpa [itemPosition] using indexedFocus.atIndex
+    compiled := by simpa [itemPosition, indexedFocus.item_eq] using hcompiled
+  }
 
 /-- Lexical compiler data at the terminal region selected by an intrinsic
 context path.  The existing context witness supplies location; this record
@@ -595,9 +667,14 @@ noncomputable def Region.ContextPath.CompilerLeaf.siteWireIndex
     (wire : Fin diagram.wireCount)
     (visible : diagram.Encloses (diagram.wires wire).scope site) :
     Fin (leaf.inheritedWires.extend site).length :=
-  Classical.choose
-    (Elaboration.WireContext.lookup?_complete
-      ((leaf.wiresExact.mem_iff wire).2 visible))
+  let result := (leaf.inheritedWires.extend site).lookup? wire
+  let present : result.isSome = true := by
+    obtain ⟨index, computation⟩ :=
+      Elaboration.WireContext.lookup?_complete
+        ((leaf.wiresExact.mem_iff wire).2 visible)
+    rw [show result = some index by exact computation]
+    rfl
+  result.get present
 
 theorem Region.ContextPath.CompilerLeaf.siteWireIndex_spec
     {body : Region  outer rels} {path : List Nat}
@@ -607,10 +684,16 @@ theorem Region.ContextPath.CompilerLeaf.siteWireIndex_spec
     (visible : diagram.Encloses (diagram.wires wire).scope site) :
     (leaf.inheritedWires.extend site).get
         (leaf.siteWireIndex witness wire visible) = wire := by
+  unfold Region.ContextPath.CompilerLeaf.siteWireIndex
+  let result := (leaf.inheritedWires.extend site).lookup? wire
+  let present : result.isSome = true := by
+    obtain ⟨index, computation⟩ :=
+      Elaboration.WireContext.lookup?_complete
+        ((leaf.wiresExact.mem_iff wire).2 visible)
+    rw [show result = some index by exact computation]
+    rfl
   apply Elaboration.WireContext.lookup?_sound
-  exact Classical.choose_spec
-    (Elaboration.WireContext.lookup?_complete
-      ((leaf.wiresExact.mem_iff wire).2 visible))
+  exact Option.eq_some_of_isSome present
 
 /-- The inherited portion of a compiler leaf is exactly the visible wires
 whose binders lie strictly outside the focused region.  The local portion is
@@ -1277,6 +1360,63 @@ structure OpenRootCompilerState (checked : CheckedOpen )
     Elaboration.finishRoot checked.val.exposedWires
       checked.val.hiddenWires items
 
+/-- Canonical compiler data underlying the checked open elaboration.  The
+item sequence is selected by the compiler computation itself; logical
+completeness is used only to certify that this `Option.get` is defined. -/
+noncomputable def openRootCompilerState_complete
+    (checked : CheckedOpen ) :
+    OpenRootCompilerState checked checked.elaborate.body := by
+  let computation := Elaboration.compileOccurrencesWith?
+    checked.val.diagram
+    (Elaboration.compileRegion? checked.val.diagram
+      checked.val.diagram.regionCount)
+    checked.val.rootWires Elaboration.BinderContext.empty
+    (Elaboration.localOccurrences checked.val.diagram
+      checked.val.diagram.root)
+  have present : computation.isSome := by
+    obtain ⟨body, rootComputation⟩ := Elaboration.compileRoot?_complete
+      checked.property.diagram_well_formed checked.val.exposedWires
+      checked.val.hiddenWires (by
+        simpa [OpenDiagram.rootWires] using
+          Elaboration.openRootWires_exact checked.property)
+    unfold Elaboration.compileRoot? at rootComputation
+    change computation.bind (fun items => some
+      (Elaboration.finishRoot checked.val.exposedWires
+        checked.val.hiddenWires items)) = some body at rootComputation
+    cases computationEq : computation with
+    | none => simp [computationEq] at rootComputation
+    | some items => rfl
+  let items := computation.get present
+  have itemsComputation : computation = some items := by
+    obtain ⟨found, foundComputation⟩ := Option.isSome_iff_exists.mp present
+    exact foundComputation.trans
+      (congrArg some (Option.get_of_eq_some present foundComputation).symm)
+  have actualItemsComputation :
+      Elaboration.compileOccurrencesWith? checked.val.diagram
+        (Elaboration.compileRegion? checked.val.diagram
+          checked.val.diagram.regionCount)
+        checked.val.rootWires Elaboration.BinderContext.empty
+        (Elaboration.localOccurrences checked.val.diagram
+          checked.val.diagram.root) = some items := by
+    simpa [computation] using itemsComputation
+  refine {
+    items := items
+    itemsComputation := actualItemsComputation
+    bodyComputation := ?_
+  }
+  have rootComputation : Elaboration.compileRoot? checked.val.diagram
+      checked.val.exposedWires checked.val.hiddenWires =
+        some (Elaboration.finishRoot checked.val.exposedWires
+          checked.val.hiddenWires items) := by
+    unfold Elaboration.compileRoot?
+    change computation.bind (fun compiledItems => some
+      (Elaboration.finishRoot checked.val.exposedWires
+        checked.val.hiddenWires compiledItems)) = _
+    rw [itemsComputation]
+    rfl
+  unfold CheckedOpen.elaborate
+  exact Option.get_of_eq_some _ rootComputation
+
 /-- The item sequence in the intrinsic body presentation of an open-root
 compiler state. -/
 def OpenRootCompilerState.canonicalBodyItems
@@ -1287,6 +1427,21 @@ def OpenRootCompilerState.canonicalBodyItems
     ItemSeq
       (checked.val.exposedWires.length + checked.val.hiddenWires.length) [] :=
   state.items.castWiresEq (by simp [OpenDiagram.rootWires])
+
+theorem OpenRootCompilerState.rootComputation
+    (state : OpenRootCompilerState checked body) :
+    Elaboration.compileRoot? checked.val.diagram checked.val.exposedWires
+      checked.val.hiddenWires = some body := by
+  unfold Elaboration.compileRoot?
+  change (Elaboration.compileOccurrencesWith? checked.val.diagram
+    (Elaboration.compileRegion? checked.val.diagram
+      checked.val.diagram.regionCount)
+    checked.val.rootWires Elaboration.BinderContext.empty
+    (Elaboration.localOccurrences checked.val.diagram
+      checked.val.diagram.root)).bind _ = _
+  rw [state.itemsComputation]
+  simp only [Option.bind_some]
+  exact congrArg some state.bodyComputation.symm
 
 /-- The retained open-root state followed by the ordinary route trace. -/
 inductive OpenCompilerTrace (checked : CheckedOpen ) :
@@ -1440,7 +1595,7 @@ structure OpenCompilerTraceResult
   state : OpenRootCompilerState checked body
   trace : OpenCompilerTrace checked route witness state
 
-theorem compileRegion_route_context_complete
+noncomputable def compileRegion_route_context_complete
     (checked : Checked )
     {start target : Fin checked.val.regionCount} {path : List Nat}
     (route : RegionRoute checked.val start target path)
@@ -1454,7 +1609,7 @@ theorem compileRegion_route_context_complete
     (bindersCover : binders.Covers start)
     (binderEnumeration : Elaboration.BinderContext.Enumeration
       checked.val binders start) :
-    Nonempty (CompilerTraceResult checked route context binders fuel body) := by
+    CompilerTraceResult checked route context binders fuel body := by
   induction route generalizing fuel rels context binders body with
   | here region =>
       cases fuel with
@@ -1484,14 +1639,14 @@ theorem compileRegion_route_context_complete
                 binderEnumeration := binderEnumeration
                 bodyComputation := rfl
               }
-              exact ⟨{
+              exact {
                 witness := .here _
                 state := state
                 inherited_eq := rfl
                 binders_eq := rfl
                 fuel_eq := rfl
                 trace := .here state
-              }⟩
+              }
   | @step start child target rest hparent position hposition tail ih =>
       cases fuel with
       | zero => simp [Elaboration.compileRegion?] at hcompile
@@ -1557,7 +1712,7 @@ theorem compileRegion_route_context_complete
                           bindersCover hchild
                       have childBinderEnumeration :=
                         binderEnumeration.cutChild checked.property hchild
-                      obtain ⟨childResult⟩ :=
+                      let childResult :=
                         ih hchildBody childWiresExact childBindersCover
                           childBinderEnumeration
                       let nested := childResult.witness
@@ -1587,7 +1742,7 @@ theorem compileRegion_route_context_complete
                       have castFuel : castState.fuel + 1 = state.fuel := by
                         simpa [castState, state]
                           using childResult.fuel_eq
-                      exact ⟨{
+                      exact {
                         witness := witness
                         state := state
                         inherited_eq := rfl
@@ -1597,7 +1752,7 @@ theorem compileRegion_route_context_complete
                           (hposition := hposition) state rfl (by rfl)
                           castState hchild
                           castInherited castBinders castFuel castTrace
-                      }⟩
+                      }
               | bubble parent arity =>
                   have hparentEq : parent = start := by
                     simpa [hchild, CRegion.parent?] using hparent
@@ -1617,7 +1772,7 @@ theorem compileRegion_route_context_complete
                           bindersCover hchild
                       have childBinderEnumeration :=
                         binderEnumeration.bubbleChild checked.property hchild
-                      obtain ⟨childResult⟩ :=
+                      let childResult :=
                         ih hchildBody childWiresExact childBindersCover
                           childBinderEnumeration
                       let nested := childResult.witness
@@ -1649,7 +1804,7 @@ theorem compileRegion_route_context_complete
                       have castFuel : castState.fuel + 1 = state.fuel := by
                         simpa [castState, state]
                           using childResult.fuel_eq
-                      exact ⟨{
+                      exact {
                         witness := witness
                         state := state
                         inherited_eq := rfl
@@ -1659,7 +1814,7 @@ theorem compileRegion_route_context_complete
                           (hposition := hposition) state rfl (by rfl)
                           castState hchild
                           castInherited castBinders castFuel castTrace
-                      }⟩
+                      }
 
 theorem openRootWires_exact
     (checked : CheckedOpen ) :
@@ -1684,14 +1839,14 @@ theorem openRootWires_exact
       exact (OpenDiagram.mem_rootWires_iff
         checked.val checked.property wire).mpr hscope
 
-theorem compileOpenRoot_route_context_complete
+noncomputable def compileOpenRoot_route_context_complete
     (checked : CheckedOpen )
     {target : Fin checked.val.diagram.regionCount} {path : List Nat}
     (route : RegionRoute checked.val.diagram checked.val.diagram.root target path)
     {body : Region  checked.val.exposedWires.length []}
     (hcompile : Elaboration.compileRoot?  checked.val.diagram
       checked.val.exposedWires checked.val.hiddenWires = some body) :
-    Nonempty (OpenCompilerTraceResult checked route body) := by
+    OpenCompilerTraceResult checked route body := by
   cases route with
   | here =>
       simp only [Elaboration.compileRoot?] at hcompile
@@ -1714,11 +1869,11 @@ theorem compileOpenRoot_route_context_complete
             itemsComputation := hitems
             bodyComputation := rfl
           }
-          exact ⟨{
+          exact {
             witness := .here _
             state := state
             trace := .here state
-          }⟩
+          }
   | @step start child target rest hparent position hposition tail =>
       simp only [Elaboration.compileRoot?] at hcompile
       cases hitems : Elaboration.compileOccurrencesWith?
@@ -1792,7 +1947,7 @@ theorem compileOpenRoot_route_context_complete
                     (Elaboration.BinderContext.Enumeration.empty
                       checked.val.diagram).cutChild
                         checked.property.diagram_well_formed hchild
-                  obtain ⟨childResult⟩ :=
+                  let childResult :=
                     compileRegion_route_context_complete closed tail hchildBody
                       childWiresExact childBindersCover childBinderEnumeration
                   let nested := childResult.witness
@@ -1824,14 +1979,14 @@ theorem compileOpenRoot_route_context_complete
                       checked.val.diagram.regionCount := by
                     simpa [castState]
                       using childResult.fuel_eq
-                  exact ⟨{
+                  exact {
                     witness := witness
                     state := state
                     trace := .cut (hparent := hparent)
                       (hposition := hposition) state rfl (by rfl)
                       castState hchild
                       castInherited castBinders castFuel castTrace
-                  }⟩
+                  }
           | bubble parent arity =>
               have hparentEq : parent = checked.val.diagram.root := by
                 simpa [hchild, CRegion.parent?] using hparent
@@ -1858,7 +2013,7 @@ theorem compileOpenRoot_route_context_complete
                     (Elaboration.BinderContext.Enumeration.empty
                       checked.val.diagram).bubbleChild
                         checked.property.diagram_well_formed hchild
-                  obtain ⟨childResult⟩ :=
+                  let childResult :=
                     compileRegion_route_context_complete closed tail hchildBody
                       childWiresExact childBindersCover childBinderEnumeration
                   let nested := childResult.witness
@@ -1890,14 +2045,14 @@ theorem compileOpenRoot_route_context_complete
                       checked.val.diagram.regionCount := by
                     simpa [castState]
                       using childResult.fuel_eq
-                  exact ⟨{
+                  exact {
                     witness := witness
                     state := state
                     trace := .bubble (hparent := hparent)
                       (hposition := hposition) state rfl (by rfl)
                       castState hchild
                       castInherited castBinders castFuel castTrace
-                  }⟩
+                  }
 
 theorem contextPathAtRegion_complete (checked : Checked )
     (region : Fin checked.val.regionCount) :
@@ -1913,7 +2068,7 @@ theorem contextPathAtRegion_complete (checked : Checked )
           Elaboration.BinderContext.empty = some body := by
     rw [← Elaboration.compileRoot?_closed_eq_compileRegion?]
     exact hroot
-  obtain ⟨result⟩ :=
+  let result :=
     compileRegion_route_context_complete checked route hcompile
       (Elaboration.WireContext.root_exact checked.property)
       (Elaboration.BinderContext.empty_covers_root checked.property)
@@ -1957,30 +2112,31 @@ theorem SiteView.rebuild (view : SiteView checked site) :
     view.focus.context.fill view.focus.body = checked.elaborate :=
   view.focus.rebuild
 
-theorem siteView_complete (checked : Checked )
-    (site : Fin checked.val.regionCount) : Nonempty (SiteView checked site) := by
-  obtain ⟨path, concretePath⟩ := regionPath?_complete checked site
+noncomputable def siteView_complete (checked : Checked )
+    (site : Fin checked.val.regionCount) : SiteView checked site := by
+  let path := regionPath checked site
+  let concretePath := regionPath_computation checked site
   let route := regionPath?_route checked site concretePath
-  obtain ⟨body, rootComputation, elaborates⟩ :=
-    Checked.elaborate_computation checked
   have regionComputation :
       Elaboration.compileRegion?  checked.val
           (checked.val.regionCount + 1) checked.val.root []
-          Elaboration.BinderContext.empty = some body := by
+          Elaboration.BinderContext.empty = some checked.elaborate := by
     rw [← Elaboration.compileRoot?_closed_eq_compileRegion?]
+    obtain ⟨body, rootComputation, elaborates⟩ :=
+      Checked.elaborate_computation checked
+    subst body
     exact rootComputation
-  obtain ⟨result⟩ :=
+  let result :=
     compileRegion_route_context_complete checked route regionComputation
       (Elaboration.WireContext.root_exact checked.property)
       (Elaboration.BinderContext.empty_covers_root checked.property)
       (Elaboration.BinderContext.Enumeration.empty checked.val)
-  subst body
-  exact ⟨{
+  exact {
     path
     concretePath
     route
     result
-  }⟩
+  }
 
 private def checkedBodyDiagram (checked : CheckedOpen ) :
     Checked  :=
@@ -2015,23 +2171,22 @@ theorem OpenSiteView.rebuild (view : OpenSiteView checked site) :
     view.focus.context.fill view.focus.body = checked.elaborate.body :=
   view.focus.rebuild
 
-theorem openSiteView_complete (checked : CheckedOpen )
+noncomputable def openSiteView_complete (checked : CheckedOpen )
     (site : Fin checked.val.diagram.regionCount) :
-    Nonempty (OpenSiteView checked site) := by
-  obtain ⟨path, concretePath⟩ :=
-    regionPath?_complete (checkedBodyDiagram checked) site
+    OpenSiteView checked site := by
+  let path := regionPath (checkedBodyDiagram checked) site
+  let concretePath := regionPath_computation (checkedBodyDiagram checked) site
   let route := regionPath?_route (checkedBodyDiagram checked) site concretePath
-  obtain ⟨body, rootComputation, elaborates⟩ :=
-    CheckedOpen.elaborate_body_computation checked
-  obtain ⟨result⟩ :=
-    compileOpenRoot_route_context_complete checked route rootComputation
-  subst body
-  exact ⟨{
+  let state := openRootCompilerState_complete checked
+  let result :=
+    compileOpenRoot_route_context_complete checked route
+      state.rootComputation
+  exact {
     path
     concretePath
     route
     result
-  }⟩
+  }
 
 /-- The checked closed-root compiler exposes its item sequence directly.
 This is the witness-elimination entry point used by checked-success wrappers. -/

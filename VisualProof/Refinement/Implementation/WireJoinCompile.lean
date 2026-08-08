@@ -7,7 +7,7 @@ open VisualProof
 open VisualProof.Theory
 open VisualProof.Diagram
 
-theorem compileRegion_quotient
+noncomputable def compileRegion_quotient
     (input : Concrete.Diagram)
     (inputWellFormed : input.WellFormed)
     (outer inner : Fin input.wireCount)

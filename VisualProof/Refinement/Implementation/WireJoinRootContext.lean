@@ -522,7 +522,7 @@ theorem rootContext
     let swappedTarget :=
       VisualProof.Refinement.Implementation.WireJoin.targetOpen source inner outer distinct.symm
         swappedOrdered swappedWellFormed
-    obtain ⟨swapOpenIso⟩ := joinWireSwapOpenIso source.val outer inner
+    let swapOpenIso := joinWireSwapOpenIso source.val outer inner
       distinct sameScope
     let elaboratedSwap := swapOpenIso.elaborate_isomorphic
       originalTarget.property swappedTarget.property

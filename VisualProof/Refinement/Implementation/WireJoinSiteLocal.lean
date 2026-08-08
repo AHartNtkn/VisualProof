@@ -236,7 +236,7 @@ noncomputable def siteLocalEquiv
     exact Classical.choose_spec
       (siteLocalMap_surjective input outer inner distinct target)
 
-theorem siteLocal
+noncomputable def siteLocal
     (input : Concrete.Diagram)
     (inputWellFormed : input.WellFormed)
     (outer inner : Fin input.wireCount)
@@ -271,10 +271,12 @@ theorem siteLocal
       rw [Concrete.Elaboration.WireContext.extend, List.nodup_append] at extended
       exact extended.1
     let inherited := contextEquiv witness sourceNodup innerAbsent
-    ∃ before after : Region targetContext.length rels,
-      VisualProof.Rule.WireSever.Local before after ∧
-      Core.Isomorphic targetBody before ∧
-      RegionIso inherited rels sourceBody after := by
+    Σ before after : Region targetContext.length rels,
+      PSigma fun _rewrite : VisualProof.Rule.WireSever.Local before after =>
+        PSigma fun _targetIso : RegionIso
+            (FiniteEquiv.refl (Fin targetContext.length)) rels
+            targetBody before =>
+          RegionIso inherited rels sourceBody after := by
   dsimp only
   cases fuel with
   | zero => simp [Concrete.Elaboration.compileRegion?] at sourceCompiled
@@ -712,7 +714,9 @@ theorem siteLocal
                       targetContext.length targetLocal joined)) := by
                 rw [separateCollapsedEq]
                 simpa [FiniteEquiv.symm, FiniteEquiv.refl] using rawCasted.symm
-              have targetIso : Core.Isomorphic targetBody before := by
+              have targetIso : RegionIso
+                  (FiniteEquiv.refl (Fin targetContext.length)) rels
+                  targetBody before := by
                 rw [targetBodyEq]
                 unfold Concrete.Elaboration.finishRegion before
                 change RegionIso (FiniteEquiv.refl (Fin targetContext.length))

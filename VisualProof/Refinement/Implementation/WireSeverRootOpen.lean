@@ -363,43 +363,23 @@ theorem rootOpen
   have itemsEq : sourceItems =
       targetItems.renameWires rawCollapse.indexMap :=
     Option.some.inj sourceSome
-  obtain ⟨sourceBody, sourceRootCompiled, sourceElaborates⟩ :=
-    Concrete.CheckedOpen.elaborate_body_computation source.checked
-  have sourceItemsCompiled' :
-      Concrete.Elaboration.compileOccurrencesWith?
-          source.checked.val.diagram
-          (Concrete.Elaboration.compileRegion? source.checked.val.diagram
-            source.checked.val.diagram.regionCount)
-          (source.checked.val.exposedWires ++ source.checked.val.hiddenWires)
-          Concrete.Elaboration.BinderContext.empty
-          (Concrete.Elaboration.localOccurrences source.checked.val.diagram
-            source.checked.val.diagram.root) = some sourceItems := by
-    simpa only [Concrete.OpenDiagram.rootWires] using sourceItemsCompiled
+  let sourceState := Concrete.Splice.openRootCompilerState_complete
+    source.checked
+  have sourceStateItemsEq : sourceState.items = sourceItems :=
+    Option.some.inj
+      (sourceState.itemsComputation.symm.trans sourceItemsCompiled)
   have sourceBodyEq : source.checked.elaborate.body =
       Concrete.Elaboration.finishRoot source.checked.val.exposedWires
         source.checked.val.hiddenWires sourceItems := by
-    rw [sourceElaborates]
-    simp only [Concrete.Elaboration.compileRoot?] at sourceRootCompiled
-    rw [sourceItemsCompiled'] at sourceRootCompiled
-    exact Option.some.inj sourceRootCompiled.symm
-  obtain ⟨targetBody, targetRootCompiled, targetElaborates⟩ :=
-    Concrete.CheckedOpen.elaborate_body_computation target
-  have targetItemsCompiled'' :
-      Concrete.Elaboration.compileOccurrencesWith? target.val.diagram
-          (Concrete.Elaboration.compileRegion? target.val.diagram
-            target.val.diagram.regionCount)
-          (target.val.exposedWires ++ target.val.hiddenWires)
-          Concrete.Elaboration.BinderContext.empty
-          (Concrete.Elaboration.localOccurrences target.val.diagram
-            target.val.diagram.root) = some targetItems := by
-    simpa only [Concrete.OpenDiagram.rootWires] using targetItemsCompiled
+    rw [sourceState.bodyComputation, sourceStateItemsEq]
+  let targetState := Concrete.Splice.openRootCompilerState_complete target
+  have targetStateItemsEq : targetState.items = targetItems :=
+    Option.some.inj
+      (targetState.itemsComputation.symm.trans targetItemsCompiled)
   have targetBodyEq : target.elaborate.body =
       Concrete.Elaboration.finishRoot target.val.exposedWires
         target.val.hiddenWires targetItems := by
-    rw [targetElaborates]
-    simp only [Concrete.Elaboration.compileRoot?] at targetRootCompiled
-    rw [targetItemsCompiled''] at targetRootCompiled
-    exact Option.some.inj targetRootCompiled.symm
+    rw [targetState.bodyComputation, targetStateItemsEq]
   let targetExternalEq : targetDiagram.externalClasses =
       target.val.exposedWires.length := by
     simp [targetDiagram]
@@ -611,7 +591,9 @@ theorem rootOpen
     have reversed := renamed.symm
     rw [totalSymm] at reversed
     exact reversed
-  have concreteBody : Core.Isomorphic source.checked.elaborate.body
+  have concreteBody : RegionIso
+      (FiniteEquiv.refl (Fin source.checked.val.exposedWires.length)) []
+      source.checked.elaborate.body
       (target.elaborate.body.renameWires concreteCollapse) := by
     rw [sourceBodyEq, targetBodyEq]
     unfold Concrete.Elaboration.finishRoot

@@ -90,7 +90,7 @@ theorem extractionTerminalDirectChild_bubble
       rw [extractionRegionOrigin_materialRegion, hostKind, parentAnchor,
         equal.2]
 
-theorem extractionCompileSelectedItems_iso
+noncomputable def extractionCompileSelectedItems_iso
     (input : Concrete.Checked)
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
@@ -139,20 +139,45 @@ theorem extractionCompileSelectedItems_iso
         wire ∈ fragmentContext :=
     fragmentWireOrigin_mem_context_iff input selection layout fragmentContext
       hostContext fragmentExact hostExact
-  obtain ⟨mappedHostItems, mappedHostCompiled⟩ :=
-    Concrete.Elaboration.compileOccurrencesWith?_complete
+  let mappedOccurrences :=
+    (Concrete.Elaboration.localOccurrences
+      (input.val.extractDiagramRaw selection layout)
+      layout.bodyContainer).map occurrenceMap
+  have mappedEach : ∀ hostOccurrence, hostOccurrence ∈ mappedOccurrences →
+      ∃ item, Concrete.Elaboration.compileOccurrenceWith? input.val
+        (Concrete.Elaboration.compileRegion? input.val hostFuel)
+        hostContext hostBinders hostOccurrence = some item := by
+    intro hostOccurrence hostMember
+    apply IterationPartition.compileOccurrence_success_of_mem input.val
       (Concrete.Elaboration.compileRegion? input.val hostFuel)
-      hostContext hostBinders
-      ((Concrete.Elaboration.localOccurrences
-        (input.val.extractDiagramRaw selection layout)
-        layout.bodyContainer).map occurrenceMap)
-      (by
-        intro hostOccurrence hostMember
-        apply IterationPartition.compileOccurrence_success_of_mem input.val
-          (Concrete.Elaboration.compileRegion? input.val hostFuel)
-          hostContext hostBinders hostCompiled
-        exact (extractionHostOccurrenceMap_terminal_perm_selected input
-          selection layout).mem_iff.mp hostMember)
+      hostContext hostBinders hostCompiled
+    exact (extractionHostOccurrenceMap_terminal_perm_selected input
+      selection layout).mem_iff.mp (by
+        simpa only [mappedOccurrences] using hostMember)
+  let mappedResult := Concrete.Elaboration.compileOccurrencesWith? input.val
+    (Concrete.Elaboration.compileRegion? input.val hostFuel)
+    hostContext hostBinders mappedOccurrences
+  have mappedPresent : mappedResult.isSome := by
+    cases mappedResultEq : mappedResult with
+    | none =>
+        exfalso
+        obtain ⟨items, compiled⟩ :=
+          Concrete.Elaboration.compileOccurrencesWith?_complete
+            (Concrete.Elaboration.compileRegion? input.val hostFuel)
+            hostContext hostBinders mappedOccurrences mappedEach
+        have resultEq : Concrete.Elaboration.compileOccurrencesWith? input.val
+            (Concrete.Elaboration.compileRegion? input.val hostFuel)
+            hostContext hostBinders mappedOccurrences = none := by
+          simpa only [mappedResult] using mappedResultEq
+        rw [resultEq] at compiled
+        contradiction
+    | some items => trivial
+  let mappedHostItems := mappedResult.get mappedPresent
+  have mappedHostCompiled : Concrete.Elaboration.compileOccurrencesWith?
+      input.val (Concrete.Elaboration.compileRegion? input.val hostFuel)
+      hostContext hostBinders mappedOccurrences = some mappedHostItems := by
+    change mappedResult = some mappedHostItems
+    exact Option.eq_some_of_isSome mappedPresent
   let preparedItems :=
     (fragmentItems.renameRelations binderWitness.relationMap).renameWires
       (extractionContextIndexMap input selection layout fragmentContext
@@ -248,8 +273,8 @@ theorem extractionCompileSelectedItems_iso
           exact List.get_mem _ fragmentOccurrenceIndex
         have childParent :=
           (Concrete.Elaboration.mem_localOccurrences_child _ _ _).1 childMember
-        obtain ⟨childMaterial, childEq⟩ := terminalChild_is_material input
-          selection layout child childParent
+        obtain ⟨childMaterial, childEq⟩ := terminalChild input selection
+          layout child childParent
         subst child
         have mappedChild := extractionHostOccurrenceMap_materialChild input
           selection layout childMaterial

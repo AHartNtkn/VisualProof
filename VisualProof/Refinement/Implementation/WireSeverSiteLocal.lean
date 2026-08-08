@@ -8,7 +8,19 @@ open VisualProof.Diagram
 open VisualProof.Data.Finite
 open VisualProof.Refinement.Implementation.WireSeverTerminal
 
-theorem terminalLocal
+structure LocalResult
+    {sourceOuter targetOuter : Nat} {rels : Theory.RelCtx}
+    (sourceBody : Region sourceOuter rels)
+    (targetBody : Region targetOuter rels)
+    (wire : FiniteEquiv (Fin targetOuter) (Fin sourceOuter)) where
+  before : Region sourceOuter rels
+  after : Region sourceOuter rels
+  rewrite : Rule.WireSever.Local before after
+  source_iso : RegionIso (FiniteEquiv.refl (Fin sourceOuter)) rels
+    sourceBody before
+  target_iso : RegionIso wire rels targetBody after
+
+noncomputable def terminalLocal
     {input : Concrete.Diagram}
     (wire : Fin input.wireCount)
     (keep : List (Concrete.CEndpoint input.nodeCount))
@@ -45,13 +57,9 @@ theorem terminalLocal
         have inherited :=
           (sourceState.inherited_mem_iff (.here sourceBody) wire).1 member
         exact inherited.2 wireScope)
-    ∃ before after,
-      Rule.WireSever.Local before after ∧
-      Core.Isomorphic sourceBody before ∧
-      RegionIso
-        (Concrete.Splice.Input.compilerBodyOuterWire targetState sourceState
-          inherited)
-        rels targetBody after := by
+    LocalResult sourceBody targetBody
+      (Concrete.Splice.Input.compilerBodyOuterWire targetState sourceState
+        inherited) := by
   dsimp only
   cases targetBody with
   | mk targetBodyLocal targetBodyItems =>
@@ -487,7 +495,7 @@ theorem terminalLocal
     rw [maps]
     exact (ItemSeq.renameWires_comp targetState.items targetMap
       (Rule.WireSever.collapseLocal sourceOuter sourceLocal joined)).symm
-  have sourceIso : Core.Isomorphic
+  have sourceIso : RegionIso (FiniteEquiv.refl (Fin sourceOuter)) rels
       (Region.mk sourceBodyLocal sourceBodyItems) before := by
     rw [sourceBodyEq]
     unfold before

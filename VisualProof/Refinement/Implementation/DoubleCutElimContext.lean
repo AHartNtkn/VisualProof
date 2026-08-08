@@ -249,7 +249,7 @@ inductive RouteAlignment
       trace.target sourcePath) →
     (targetRoute : Concrete.Splice.RegionRoute (Target trace) targetStart
       (promotedTarget source.val.diagram
-        source.property.diagram_well_formed trace) targetPath) → Prop
+        source.property.diagram_well_formed trace) targetPath) → Type
   | here : @RouteAlignment source outer raw trace trace.target
       (promotedTarget source.val.diagram
         source.property.diagram_well_formed trace) [] []
@@ -302,26 +302,23 @@ inductive RouteAlignment
         (.step sourceParent sourcePosition sourcePositionEq sourceTail)
         (.step targetParent targetPosition targetPositionEq targetTail)
 
-private theorem route_complete_aux
+private noncomputable def route_complete_aux
     (source : Concrete.CheckedOpen)
     {outer : Fin source.val.diagram.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace source.val.diagram outer raw)
-    {start target : Fin source.val.diagram.regionCount} {path : List Nat}
+    {start : Fin source.val.diagram.regionCount} {path : List Nat}
     (route : Concrete.Splice.RegionRoute source.val.diagram start
-      target path)
-    (targetEq : target = trace.target) :
-    ∃ targetStart targetPath,
-      ∃ targetRoute : Concrete.Splice.RegionRoute (Target trace) targetStart
+      trace.target path) :
+    Σ targetStart, Σ targetPath,
+      Σ targetRoute : Concrete.Splice.RegionRoute (Target trace) targetStart
         (promotedTarget source.val.diagram
           source.property.diagram_well_formed trace) targetPath,
-        Nonempty (RouteAlignment source trace (targetEq ▸ route) targetRoute) := by
-  induction route with
+        RouteAlignment source trace route targetRoute := by
+  cases route with
   | here region =>
-      subst region
       exact ⟨promotedTarget source.val.diagram
-        source.property.diagram_well_formed trace, [], .here _, ⟨.here⟩⟩
-  | @step start child target rest parent position positionEq tail induction =>
-      subst target
+        source.property.diagram_well_formed trace, [], .here _, .here⟩
+  | @step start child target rest parent position positionEq tail =>
       let startSurvives := route_start_survives source trace parent tail
       let childSurvives := route_child_survives source trace parent tail
       let targetStart :=
@@ -352,42 +349,36 @@ private theorem route_complete_aux
       have targetParent : ((Target trace).regions targetChild).parent? =
           some targetStart := promoted_parent source trace startSurvives
             childSurvives parent
-      obtain ⟨targetEnd, targetRest, targetTail, ⟨tailAlignment⟩⟩ :=
-        induction rfl
+      obtain ⟨targetEnd, targetRest, targetTail, tailAlignment⟩ :=
+        route_complete_aux source trace tail
       have endEq : targetEnd = targetChild := by
         cases tailAlignment <;> rfl
       subst targetEnd
-      have targetTail' : Concrete.Splice.RegionRoute (Target trace)
-          ((Domain source.val.diagram outer trace.inner).index child
-            childSurvives)
-          (promotedTarget source.val.diagram
-            source.property.diagram_well_formed trace) targetRest := by
-        simpa [targetChild] using targetTail
       refine ⟨targetStart, targetPosition.val :: targetRest,
-        .step targetParent targetPosition targetPositionEq targetTail, ⟨?_⟩⟩
+        .step targetParent targetPosition targetPositionEq targetTail, ?_⟩
       refine .step (sourceParent := parent)
         (sourcePositionEq := positionEq)
         (sourceTail := tail)
         (targetParent := by simpa [targetStart, targetChild] using targetParent)
         (targetPositionEq := by
           simpa [targetStart, targetChild] using targetPositionEq)
-        (targetTail := targetTail')
+        (targetTail := targetTail)
         startSurvives childSurvives rfl ?_
-      simpa [targetChild] using tailAlignment
+      exact tailAlignment
 
-theorem route_complete
+noncomputable def route_complete
     (source : Concrete.CheckedOpen)
     {outer : Fin source.val.diagram.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace source.val.diagram outer raw)
     {start : Fin source.val.diagram.regionCount} {path : List Nat}
     (route : Concrete.Splice.RegionRoute source.val.diagram start
       trace.target path) :
-    ∃ targetStart targetPath,
-      ∃ targetRoute : Concrete.Splice.RegionRoute (Target trace) targetStart
+    Σ targetStart, Σ targetPath,
+      Σ targetRoute : Concrete.Splice.RegionRoute (Target trace) targetStart
         (promotedTarget source.val.diagram
           source.property.diagram_well_formed trace) targetPath,
-        Nonempty (RouteAlignment source trace route targetRoute) :=
-  route_complete_aux source trace route rfl
+        RouteAlignment source trace route targetRoute :=
+  route_complete_aux source trace route
 
 private theorem direct_child_survives
     (source : Concrete.CheckedOpen)
@@ -415,7 +406,7 @@ private theorem direct_child_survives
         some outer := by rw [trace.inner_eq]; rfl
     exact regionCases.1 (Option.some.inj (parent.symm.trans innerParent))
 
-private theorem compilerRawFrame
+private noncomputable def compilerRawFrame
     (source : Concrete.CheckedOpen)
     {outer : Fin source.val.diagram.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace source.val.diagram outer raw)
@@ -469,7 +460,7 @@ private theorem compilerRawFrame
       (localOccurrenceEquiv source.val.diagram
         source.property.diagram_well_formed trace region regionSurvives
         regionNeTarget sourcePosition).val) :
-    Nonempty (ItemSeqIso.Frame ambient sourceIndex targetIndex) := by
+    ItemSeqIso.Frame ambient sourceIndex targetIndex := by
   let occurrencePositions := localOccurrenceEquiv source.val.diagram
     source.property.diagram_well_formed trace region regionSurvives
       regionNeTarget
@@ -491,7 +482,7 @@ private theorem compilerRawFrame
         targetIndex.val
     rw [sourceEq]
     simpa using targetIndexVal.symm
-  refine ⟨{ positions := positions, mapped := mapped, siblings := ?_ }⟩
+  refine { positions := positions, mapped := mapped, siblings := ?_ }
   intro index indexNe
   let occurrenceIndex : Fin
       (Concrete.Elaboration.localOccurrences source.val.diagram region).length :=
@@ -647,7 +638,7 @@ private theorem append_agreement
         Concrete.Elaboration.get_append_natAdd targetAmbient targetLocal _
       _ = sourceLocal.get localIndex := localAgreement localIndex
 
-private theorem compilerLeafFrame
+private noncomputable def compilerLeafFrame
     (source : Concrete.CheckedOpen)
     {outer : Fin source.val.diagram.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace source.val.diagram outer raw)
@@ -702,9 +693,9 @@ private theorem compilerLeafFrame
         source.property.diagram_well_formed trace region regionSurvives
           regionNeTarget).trans
         (FiniteEquiv.finCast targetLocalCanonical.symm))
-    Nonempty (ItemSeqIso.Frame (source := sourceItems)
+    ItemSeqIso.Frame (source := sourceItems)
       (target := targetItems) (extendWireEquiv outerWire localWire)
-      sourceIndex targetIndex) := by
+      sourceIndex targetIndex := by
   dsimp only
   subst sourceLocal
   subst targetLocal
@@ -787,7 +778,7 @@ private theorem compilerLeafFrame
         regionNeTarget sourcePosition).val := by
     simpa [rawTargetIndex, targetRenamedIndex,
       ItemSeq.renameWiresPositionEquiv, FiniteEquiv.finCast] using targetIndexVal
-  obtain ⟨rawFrame⟩ := compilerRawFrame source trace targetWellFormed
+  let rawFrame := compilerRawFrame source trace targetWellFormed
     regionSurvives regionNeTarget childParent sourcePosition sourcePositionEq
     tail sourceExtended targetExtended extendedEquiv extendedAgreement
     sourceState.wiresExact targetState.wiresExact sourceState.binders
@@ -857,7 +848,7 @@ private theorem compilerLeafFrame
         inherited localWire
     simpa [sourceCast, targetCast, extendedEquiv, finalWire, outerWire,
       sourceExtended, targetExtended] using algebra
-  obtain ⟨sourceIndex', targetIndex', sourceVal, targetVal, ⟨frame⟩⟩ :=
+  obtain ⟨sourceIndex', targetIndex', sourceVal, targetVal, frame⟩ :=
     ItemSeqIso.Frame.pullPush sourceCast.symm extendedEquiv targetCast
       finalWire sourceUndo targetPush wireFactor rawFrame
   have sourceIndexEq : sourceIndex' = sourceIndex := by
@@ -874,7 +865,7 @@ private theorem compilerLeafFrame
         ItemSeq.renameWiresPositionEquiv])
   subst sourceIndex'
   subst targetIndex'
-  simpa only [finalWire] using ⟨frame⟩
+  simpa only [finalWire] using frame
 
 private theorem target_root_scope_iff
     (source : Concrete.CheckedOpen)
@@ -959,7 +950,7 @@ private theorem list_get_cast
   subst target
   rfl
 
-private theorem openRootRawFrame
+private noncomputable def openRootRawFrame
     (source : Concrete.CheckedOpen)
     {outer : Fin source.val.diagram.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace source.val.diagram outer raw)
@@ -986,10 +977,10 @@ private theorem openRootRawFrame
       (localOccurrenceEquiv source.val.diagram
         source.property.diagram_well_formed trace source.val.diagram.root
         (root_survives source trace) rootNe.symm sourcePosition).val) :
-    Nonempty (ItemSeqIso.Frame
+    ItemSeqIso.Frame
       (FiniteEquiv.finCast (congrArg List.length
         (targetOpen_rootWires source trace rootNe).symm))
-      sourceIndex targetIndex) := by
+      sourceIndex targetIndex := by
   let target := checkedTarget source trace targetWellFormed
   let equality := targetOpen_rootWires source trace rootNe
   let ambient := FiniteEquiv.finCast
@@ -1014,7 +1005,7 @@ private theorem openRootRawFrame
       target_root_eq source trace] using targetState.itemsComputation)
     sourceIndex targetIndex sourceIndexVal targetIndexVal
 
-private theorem openRootFrame
+private noncomputable def openRootFrame
     (source : Concrete.CheckedOpen)
     {outer : Fin source.val.diagram.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace source.val.diagram outer raw)
@@ -1040,19 +1031,15 @@ private theorem openRootFrame
       (FiniteEquiv.finCast (congrArg List.length
         (targetOpen_rootWires source trace rootNe).symm))
       sourceIndex targetIndex) :
-    ∃ sourceIndex' : Fin sourceSeq.length,
-      ∃ targetIndex' : Fin targetSeq.length,
-        sourceIndex'.val = sourceIndex.val ∧
-        targetIndex'.val = targetIndex.val ∧
-        Nonempty (ItemSeqIso.Frame
-          (extendWireEquiv
-            (FiniteEquiv.finCast (congrArg List.length
-              (targetOpen_exposedWires source trace).symm))
-            ((FiniteEquiv.finCast sourceLocalCanonical).trans
-              ((FiniteEquiv.finCast (congrArg List.length
-                (targetOpen_hiddenWires source trace rootNe).symm)).trans
-                (FiniteEquiv.finCast targetLocalCanonical.symm))))
-          sourceIndex' targetIndex') := by
+    ItemSeqIso.Frame.Indexed sourceSeq targetSeq
+      (extendWireEquiv
+        (FiniteEquiv.finCast (congrArg List.length
+          (targetOpen_exposedWires source trace).symm))
+        ((FiniteEquiv.finCast sourceLocalCanonical).trans
+          ((FiniteEquiv.finCast (congrArg List.length
+            (targetOpen_hiddenWires source trace rootNe).symm)).trans
+            (FiniteEquiv.finCast targetLocalCanonical.symm))))
+      sourceIndex.val targetIndex.val := by
   subst sourceLocal
   subst targetLocal
   let target := checkedTarget source trace targetWellFormed
@@ -1106,7 +1093,7 @@ private theorem openRootFrame
         localWire, extendWireEquiv, FiniteEquiv.finCast]
     · simp [firstWire, middleWire, lastWire, finalWire, outerWire,
         localWire, extendWireEquiv, FiniteEquiv.finCast,
-        targetOpen_exposedWires, targetOpen_hiddenWires]
+        targetOpen_exposedWires]
   simpa only [finalWire] using
     ItemSeqIso.Frame.pullPush firstWire middleWire lastWire finalWire
       sourcePull targetPush wireFactor rawFrame
@@ -1224,7 +1211,7 @@ private theorem childInheritedAgreement
   subst targetChild
   simpa using append_agreement ambient localWire ambientAgreement localAgreement
 
-private theorem compilerTraceContextIso_aux
+private noncomputable def compilerTraceContextIso_aux
     (source : Concrete.CheckedOpen)
     {outer : Fin source.val.diagram.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace source.val.diagram outer raw)
@@ -1243,13 +1230,13 @@ private theorem compilerTraceContextIso_aux
       {actualSourceSite : Fin source.val.diagram.regionCount}
       {actualTargetSite : Fin (Target trace).regionCount}
       {actualSourcePath actualTargetPath : List Nat}
-      (sourceStartEq : actualSourceStart = sourceStart)
-      (targetStartEq : actualTargetStart = targetStart)
-      (sourceSiteEq : actualSourceSite = trace.target)
-      (targetSiteEq : actualTargetSite = promotedTarget source.val.diagram
+      (_sourceStartEq : actualSourceStart = sourceStart)
+      (_targetStartEq : actualTargetStart = targetStart)
+      (_sourceSiteEq : actualSourceSite = trace.target)
+      (_targetSiteEq : actualTargetSite = promotedTarget source.val.diagram
         source.property.diagram_well_formed trace)
-      (sourcePathEq : actualSourcePath = sourcePath)
-      (targetPathEq : actualTargetPath = targetPath)
+      (_sourcePathEq : actualSourcePath = sourcePath)
+      (_targetPathEq : actualTargetPath = targetPath)
       {actualSourceRoute : Concrete.Splice.RegionRoute source.val.diagram
         actualSourceStart actualSourceSite actualSourcePath}
       {actualTargetRoute : Concrete.Splice.RegionRoute (Target trace)
@@ -1269,15 +1256,15 @@ private theorem compilerTraceContextIso_aux
         actualTargetRoute targetWitness targetState)
       (inherited : FiniteEquiv (Fin sourceState.inheritedWires.length)
         (Fin targetState.inheritedWires.length))
-      (wireAgreement : ∀ index,
+      (_wireAgreement : ∀ index,
         targetState.inheritedWires.get (inherited index) =
           sourceState.inheritedWires.get index)
-      (binderAgreement : ∀ binder, targetState.binders binder =
+      (_binderAgreement : ∀ binder, targetState.binders binder =
         sourceState.binders
           ((Domain source.val.diagram outer trace.inner).origin binder)),
       let outerWire := compilerBodyOuterWire sourceState targetState inherited
-      Nonempty (TraceAlignmentResult source trace sourceWitness targetWitness
-        sourceState targetState sourceTrace targetTrace outerWire) := by
+      TraceAlignmentResult source trace sourceWitness targetWitness
+        sourceState targetState sourceTrace targetTrace outerWire := by
   induction routeAlignment with
   | here =>
       intro actualSourceStart actualTargetStart actualSourceSite actualTargetSite
@@ -1296,7 +1283,7 @@ private theorem compilerTraceContextIso_aux
           cases targetTrace using @Concrete.Splice.CompilerTrace.casesOn
               (Target trace) with
           | here targetState =>
-              exact ⟨{
+              exact {
                 alignment := {
                   holeRelsEq := rfl
                   holeWire := compilerBodyOuterWire sourceState targetState
@@ -1307,7 +1294,7 @@ private theorem compilerTraceContextIso_aux
                 holeWire_leaf := rfl
                 leafWireAgreement := wireAgreement
                 leafBinderAgreement := binderAgreement
-              }⟩
+              }
   | @step start child alignedSourceRest alignedTargetRest sourceParent
       alignedSourcePosition alignedSourcePositionEq sourceTail startSurvives
       childSurvives targetParent alignedTargetPosition alignedTargetPositionEq
@@ -1409,7 +1396,7 @@ private theorem compilerTraceContextIso_aux
                 (List.cons.inj sourcePathEq).2
               have targetRestEq : targetRest = alignedTargetRest :=
                 (List.cons.inj targetPathEq).2
-              obtain ⟨childResult⟩ := induction rfl rfl sourceSiteEq
+              let childResult := induction rfl rfl sourceSiteEq
                 targetSiteEq sourceRestEq targetRestEq sourceChildState
                 targetChildState sourceTailTrace targetTailTrace childWire
                 childWireAgreement childBinderAgreement
@@ -1427,7 +1414,7 @@ private theorem compilerTraceContextIso_aux
                 ⟨alignedTargetPosition.val,
                   ItemSeq.focusAt?_index_lt targetSeq
                     alignedTargetPosition.val targetFocus targetAt⟩
-              obtain ⟨frame⟩ := compilerLeafFrame source trace
+              let frame := compilerLeafFrame source trace
                 targetWellFormed startSurvives
                 (route_start_ne_target source trace sourceParent
                   sourceTailCanonical)
@@ -1487,7 +1474,7 @@ private theorem compilerTraceContextIso_aux
                 sourceNested.toFocus.context
                 (childResult.alignment.holeRelsEq.symm ▸
                   targetNested.toFocus.context) childContexts
-              exact ⟨{
+              exact {
                 alignment := {
                   holeRelsEq := childResult.alignment.holeRelsEq
                   holeWire := childResult.alignment.holeWire
@@ -1499,7 +1486,7 @@ private theorem compilerTraceContextIso_aux
                 holeWire_leaf := childResult.holeWire_leaf
                 leafWireAgreement := childResult.leafWireAgreement
                 leafBinderAgreement := childResult.leafBinderAgreement
-              }⟩
+              }
           | @bubble targetStart targetChild targetEnd targetRest targetParent
               targetPosition targetPositionEq targetTail targetOuter targetLocal
               targetArity targetRels targetSeq targetFocus targetChildBody
@@ -1674,7 +1661,7 @@ private theorem compilerTraceContextIso_aux
                 (List.cons.inj sourcePathEq).2
               have targetRestEq : targetRest = alignedTargetRest :=
                 (List.cons.inj targetPathEq).2
-              obtain ⟨childResult⟩ := induction rfl rfl sourceSiteEq
+              let childResult := induction rfl rfl sourceSiteEq
                 targetSiteEq sourceRestEq targetRestEq sourceChildState
                 targetChildState sourceTailTrace targetTailTrace childWire
                 childWireAgreement childBinderAgreement
@@ -1692,7 +1679,7 @@ private theorem compilerTraceContextIso_aux
                 ⟨alignedTargetPosition.val,
                   ItemSeq.focusAt?_index_lt targetSeq
                     alignedTargetPosition.val targetFocus targetAt⟩
-              obtain ⟨frame⟩ := compilerLeafFrame source trace
+              let frame := compilerLeafFrame source trace
                 targetWellFormed startSurvives
                 (route_start_ne_target source trace sourceParent
                   sourceTailCanonical)
@@ -1753,7 +1740,7 @@ private theorem compilerTraceContextIso_aux
                 sourceNested.toFocus.context
                 (childResult.alignment.holeRelsEq.symm ▸
                   targetNested.toFocus.context) childContexts
-              exact ⟨{
+              exact {
                 alignment := {
                   holeRelsEq := childResult.alignment.holeRelsEq
                   holeWire := childResult.alignment.holeWire
@@ -1765,9 +1752,9 @@ private theorem compilerTraceContextIso_aux
                 holeWire_leaf := childResult.holeWire_leaf
                 leafWireAgreement := childResult.leafWireAgreement
                 leafBinderAgreement := childResult.leafBinderAgreement
-              }⟩
+              }
 
-theorem compilerTraceContextIso
+noncomputable def compilerTraceContextIso
     (source : Concrete.CheckedOpen)
     {outer : Fin source.val.diagram.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace source.val.diagram outer raw)
@@ -1803,8 +1790,8 @@ theorem compilerTraceContextIso
       sourceState.binders
         ((Domain source.val.diagram outer trace.inner).origin binder)) :
     let outerWire := compilerBodyOuterWire sourceState targetState inherited
-    Nonempty (TraceAlignmentResult source trace sourceWitness targetWitness
-      sourceState targetState sourceTrace targetTrace outerWire) :=
+    TraceAlignmentResult source trace sourceWitness targetWitness
+      sourceState targetState sourceTrace targetTrace outerWire :=
   compilerTraceContextIso_aux source trace targetWellFormed routeAlignment
     rfl rfl rfl rfl rfl rfl sourceState targetState sourceTrace targetTrace
       inherited wireAgreement binderAgreement
@@ -1823,7 +1810,9 @@ structure RuleAlignment
   replacement : Region sourceWitness.toFocus.holeWires
     sourceWitness.toFocus.holeRels
   step : Rule.DoubleCut.Local replacement material
-  source_iso : Core.Isomorphic sourceWitness.toFocus.body material
+  source_iso : RegionIso
+    (FiniteEquiv.refl (Fin sourceWitness.toFocus.holeWires))
+    sourceWitness.toFocus.holeRels sourceWitness.toFocus.body material
   target_iso : RegionIso holeWire.symm sourceWitness.toFocus.holeRels
     (holeRelsEq.symm ▸ targetWitness.toFocus.body) replacement
 
@@ -1837,13 +1826,14 @@ private theorem local_castWiresEq
   cases equality
   simpa only [Region.castWiresEq] using step
 
-private theorem sourceIso_castWiresEq
+private noncomputable def sourceIso_castWiresEq
     {sourceWires targetWires : Nat} {rels : RelCtx}
     (equality : sourceWires = targetWires)
     {source : Region targetWires rels}
     {before : Region sourceWires rels}
     (iso : RegionIso (FiniteEquiv.finCast equality.symm) rels source before) :
-    Core.Isomorphic source (before.castWiresEq equality) := by
+    RegionIso (FiniteEquiv.refl (Fin targetWires)) rels source
+      (before.castWiresEq equality) := by
   cases equality
   have wireEq : FiniteEquiv.finCast rfl =
       FiniteEquiv.refl (Fin sourceWires) := by
@@ -1853,7 +1843,7 @@ private theorem sourceIso_castWiresEq
   rw [wireEq] at iso
   simpa only [Region.castWiresEq] using iso
 
-private theorem compilerLeafPresentation
+private noncomputable def compilerLeafPresentation
     {input : Concrete.Diagram} {site : Fin input.regionCount}
     {outerWires : Nat} {rels : RelCtx} {body : Region outerWires rels}
     (leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input site
@@ -1881,7 +1871,7 @@ private theorem compilerLeafPresentation
   rw [bodyEq]
   simpa only [Region.castWiresEq_eq_renameWires] using renamed
 
-private theorem compilerLeafPresentation_castRels
+private noncomputable def compilerLeafPresentation_castRels
     {input : Concrete.Diagram} {site : Fin input.regionCount}
     {outerWires : Nat} {sourceRels targetRels : RelCtx}
     {body : Region outerWires targetRels}
@@ -1905,7 +1895,7 @@ private theorem region_transport_eq_mp
   cases equality
   rfl
 
-private theorem changeRegionIsoWire
+private noncomputable def changeRegionIsoWire
     {first second : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     (equality : first = second)
     {source : Region sourceWires rels}
@@ -1949,26 +1939,26 @@ private theorem focusLeaves
           source.property.diagram_well_formed trace) (.here targetBody))
       (ambient : FiniteEquiv (Fin sourceLeaf.inheritedWires.length)
         (Fin targetLeaf.inheritedWires.length))
-      (wireAgreement : ∀ index,
+      (_wireAgreement : ∀ index,
         targetLeaf.inheritedWires.get (ambient index) =
           sourceLeaf.inheritedWires.get index)
-      (binderAgreement : ∀ binder, targetLeaf.binders binder =
+      (_binderAgreement : ∀ binder, targetLeaf.binders binder =
         castBinderResult relsEq (sourceLeaf.binders
           ((Domain source.val.diagram outer trace.inner).origin binder))),
       ∃ before after : Region sourceLeaf.inheritedWires.length sourceRels,
         Rule.DoubleCut.Local before after ∧
-        RegionIso (FiniteEquiv.refl
+        Nonempty (RegionIso (FiniteEquiv.refl
           (Fin sourceLeaf.inheritedWires.length)) sourceRels
           (Concrete.Elaboration.finishRegion source.val.diagram
-            sourceLeaf.inheritedWires trace.target sourceLeaf.items) after ∧
-        RegionIso ambient sourceRels before
+            sourceLeaf.inheritedWires trace.target sourceLeaf.items) after) ∧
+        Nonempty (RegionIso ambient sourceRels before
           (Eq.mp (congrArg (Region targetLeaf.inheritedWires.length)
             relsEq.symm)
             (Concrete.Elaboration.finishRegion (Target trace)
               targetLeaf.inheritedWires
               (promotedTarget source.val.diagram
                 source.property.diagram_well_formed trace)
-              targetLeaf.items)) := by
+              targetLeaf.items))) := by
   cases relsEq
   intro sourceWires targetWires sourceBody targetBody sourceLeaf targetLeaf
     ambient wireAgreement binderAgreement
@@ -2042,13 +2032,17 @@ private theorem focusRuleAlignment
       targetFocusIso⟩ := focusLeaves source trace targetWellFormed relsEq
     sourceLeaf targetLeaf traceResult.leafWire
     traceResult.leafWireAgreement focusBinderAgreement
+  rcases sourceFocusIso with ⟨sourceFocusIso⟩
+  rcases targetFocusIso with ⟨targetFocusIso⟩
   let before' := before.castWiresEq sourceLeaf.inheritedLength
   let after' := after.castWiresEq sourceLeaf.inheritedLength
   have localEvidence' : Rule.DoubleCut.Local before' after' :=
     local_castWiresEq sourceLeaf.inheritedLength localEvidence
   have sourcePresentation := compilerLeafPresentation sourceLeaf
   have sourceCombined := sourcePresentation.trans sourceFocusIso
-  have sourceFocusIso' : Core.Isomorphic sourceWitness.toFocus.body after' :=
+  have sourceFocusIso' : RegionIso
+      (FiniteEquiv.refl (Fin sourceWitness.toFocus.holeWires))
+      sourceWitness.toFocus.holeRels sourceWitness.toFocus.body after' :=
     sourceIso_castWiresEq sourceLeaf.inheritedLength sourceCombined
   have targetPresentation := compilerLeafPresentation_castRels targetLeaf relsEq
   have targetCombined := targetPresentation.trans targetFocusIso.symm
@@ -2111,7 +2105,7 @@ private theorem routeAlignment_root_start
     (source : Concrete.CheckedOpen)
     {outer : Fin source.val.diagram.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace source.val.diagram outer raw)
-    (rootNe : trace.target ≠ source.val.diagram.root)
+    (_rootNe : trace.target ≠ source.val.diagram.root)
     {targetStart : Fin (Target trace).regionCount}
     {sourcePath targetPath : List Nat}
     {sourceRoute : Concrete.Splice.RegionRoute source.val.diagram
@@ -2125,7 +2119,7 @@ private theorem routeAlignment_root_start
   rw [routeAlignment_start_origin source trace alignment]
   exact trace.promotion.root_origin.symm
 
-theorem targetTrace_complete
+noncomputable def targetTrace_complete
     (source : Concrete.CheckedOpen)
     {outer : Fin source.val.diagram.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace source.val.diagram outer raw)
@@ -2133,27 +2127,31 @@ theorem targetTrace_complete
     (targetWellFormed : (Target trace).WellFormed)
     (sourceView : Concrete.Splice.OpenSiteView source trace.target) :
     let target := checkedTarget source trace targetWellFormed
-    ∃ targetPath,
-      ∃ targetRoute : Concrete.Splice.RegionRoute target.val.diagram
+    Σ targetPath,
+      Σ targetRoute : Concrete.Splice.RegionRoute target.val.diagram
         target.val.diagram.root
         (promotedTarget source.val.diagram
           source.property.diagram_well_formed trace) targetPath,
-        Nonempty (RouteAlignment source trace sourceView.route targetRoute) ∧
-          Nonempty (Concrete.Splice.OpenCompilerTraceResult target targetRoute
-            target.elaborate.body) := by
+        RouteAlignment source trace sourceView.route targetRoute ×
+          Concrete.Splice.OpenCompilerTraceResult target targetRoute
+            target.elaborate.body := by
   dsimp only
   let target := checkedTarget source trace targetWellFormed
-  obtain ⟨targetStart, targetPath, targetRoute, ⟨alignment⟩⟩ :=
+  obtain ⟨targetStart, targetPath, targetRoute, alignment⟩ :=
     route_complete source trace sourceView.route
   have startEq := routeAlignment_root_start source trace rootNe alignment
   subst targetStart
-  obtain ⟨body, compiled, elaborates⟩ :=
-    Concrete.CheckedOpen.elaborate_body_computation target
-  obtain ⟨result⟩ :=
+  have compiled : Concrete.Elaboration.compileRoot? target.val.diagram
+      target.val.exposedWires target.val.hiddenWires =
+        some target.elaborate.body := by
+    obtain ⟨body, bodyComputation, elaborates⟩ :=
+      Concrete.CheckedOpen.elaborate_body_computation target
+    subst body
+    exact bodyComputation
+  let result :=
     Concrete.Splice.compileOpenRoot_route_context_complete target targetRoute
       compiled
-  subst body
-  exact ⟨targetPath, targetRoute, ⟨alignment⟩, ⟨result⟩⟩
+  exact ⟨targetPath, targetRoute, alignment, result⟩
 
 private theorem localOccurrence_indexOf_cast
     (diagram : Concrete.Diagram)
@@ -2208,13 +2206,13 @@ private theorem openTraceRuleAlignment_aux
     ∀ {actualSourceSite : Fin source.val.diagram.regionCount}
       {actualTargetSite : Fin (Target trace).regionCount}
       {actualSourcePath actualTargetPath : List Nat}
-      (sourceStartEq : source.val.diagram.root = alignedSourceStart)
-      (targetStartEq : (Target trace).root = alignedTargetStart)
-      (sourceSiteEq : actualSourceSite = trace.target)
-      (targetSiteEq : actualTargetSite = promotedTarget source.val.diagram
+      (_sourceStartEq : source.val.diagram.root = alignedSourceStart)
+      (_targetStartEq : (Target trace).root = alignedTargetStart)
+      (_sourceSiteEq : actualSourceSite = trace.target)
+      (_targetSiteEq : actualTargetSite = promotedTarget source.val.diagram
         source.property.diagram_well_formed trace)
-      (sourcePathEq : actualSourcePath = alignedSourcePath)
-      (targetPathEq : actualTargetPath = alignedTargetPath)
+      (_sourcePathEq : actualSourcePath = alignedSourcePath)
+      (_targetPathEq : actualTargetPath = alignedTargetPath)
       {sourceRoute : Concrete.Splice.RegionRoute source.val.diagram
         source.val.diagram.root actualSourceSite actualSourcePath}
       {targetRoute : Concrete.Splice.RegionRoute (Target trace)
@@ -2226,9 +2224,9 @@ private theorem openTraceRuleAlignment_aux
       (sourceState : Concrete.Splice.OpenRootCompilerState source sourceBody)
       (targetState : Concrete.Splice.OpenRootCompilerState
         (checkedTarget source trace targetWellFormed) targetBody)
-      (sourceTrace : Concrete.Splice.OpenCompilerTrace source sourceRoute
+      (_sourceTrace : Concrete.Splice.OpenCompilerTrace source sourceRoute
         sourceWitness sourceState)
-      (targetTrace : Concrete.Splice.OpenCompilerTrace
+      (_targetTrace : Concrete.Splice.OpenCompilerTrace
         (checkedTarget source trace targetWellFormed) targetRoute
         targetWitness targetState),
       let outerWire := FiniteEquiv.finCast (congrArg List.length
@@ -2359,7 +2357,7 @@ private theorem openTraceRuleAlignment_aux
                 (List.cons.inj sourcePathEq).2
               have targetRestEq : targetRest = alignedTargetRest :=
                 (List.cons.inj targetPathEq).2
-              obtain ⟨childResult⟩ := compilerTraceContextIso_aux source
+              let childResult := compilerTraceContextIso_aux source
                 trace targetWellFormed tail rfl rfl sourceSiteEq targetSiteEq
                 sourceRestEq targetRestEq sourceChildState targetChildState
                 sourceTailTrace targetTailTrace childWire childWireAgreement
@@ -2392,7 +2390,7 @@ private theorem openTraceRuleAlignment_aux
               have sourceTailCanonical : Concrete.Splice.RegionRoute
                   source.val.diagram child trace.target sourceRest :=
                 sourceSiteEq ▸ sourceTail
-              obtain ⟨rawFrame⟩ := openRootRawFrame source trace rootNe
+              let rawFrame := openRootRawFrame source trace rootNe
                 targetWellFormed sourceParent alignedSourcePosition
                 alignedSourcePositionEq sourceTailCanonical sourceState
                 targetState sourceIndex targetIndex (by simp [sourceIndex])
@@ -2400,7 +2398,7 @@ private theorem openTraceRuleAlignment_aux
                   simp [targetIndex, alignedTargetPositionAtRoot,
                     positionEq])
               obtain ⟨sourceIndex', targetIndex', sourceIndexVal,
-                  targetIndexVal, ⟨frame⟩⟩ := openRootFrame source trace
+                  targetIndexVal, frame⟩ := openRootFrame source trace
                 rootNe targetWellFormed sourceState targetState
                 sourceLocalCanonical targetLocalCanonical sourceItemsCanonical
                 targetItemsCanonical rawFrame
@@ -2700,7 +2698,7 @@ private theorem openTraceRuleAlignment_aux
                 (List.cons.inj sourcePathEq).2
               have targetRestEq : targetRest = alignedTargetRest :=
                 (List.cons.inj targetPathEq).2
-              obtain ⟨childResult⟩ := compilerTraceContextIso_aux source
+              let childResult := compilerTraceContextIso_aux source
                 trace targetWellFormed tail rfl rfl sourceSiteEq targetSiteEq
                 sourceRestEq targetRestEq sourceChildState targetChildState
                 sourceTailTrace targetTailTrace childWire childWireAgreement
@@ -2733,7 +2731,7 @@ private theorem openTraceRuleAlignment_aux
               have sourceTailCanonical : Concrete.Splice.RegionRoute
                   source.val.diagram child trace.target sourceRest :=
                 sourceSiteEq ▸ sourceTail
-              obtain ⟨rawFrame⟩ := openRootRawFrame source trace rootNe
+              let rawFrame := openRootRawFrame source trace rootNe
                 targetWellFormed sourceParent alignedSourcePosition
                 alignedSourcePositionEq sourceTailCanonical sourceState
                 targetState sourceIndex targetIndex (by simp [sourceIndex])
@@ -2741,7 +2739,7 @@ private theorem openTraceRuleAlignment_aux
                   simp [targetIndex, alignedTargetPositionAtRoot,
                     positionEq])
               obtain ⟨sourceIndex', targetIndex', sourceIndexVal,
-                  targetIndexVal, ⟨frame⟩⟩ := openRootFrame source trace
+                  targetIndexVal, frame⟩ := openRootFrame source trace
                 rootNe targetWellFormed sourceState targetState
                 sourceLocalCanonical targetLocalCanonical sourceItemsCanonical
                 targetItemsCanonical rawFrame
@@ -2830,10 +2828,9 @@ theorem nested_rule
     Rule.DoubleCut source.elaborate
       (checkedTarget source trace targetWellFormed).elaborate := by
   let target := checkedTarget source trace targetWellFormed
-  let sourceView := Classical.choice
-    (Concrete.Splice.openSiteView_complete source trace.target)
-  obtain ⟨targetPath, targetRoute, ⟨routeAlignment⟩,
-      ⟨targetResult⟩⟩ := targetTrace_complete source trace rootNe
+  let sourceView := Concrete.Splice.openSiteView_complete source trace.target
+  obtain ⟨targetPath, targetRoute, routeAlignment,
+      targetResult⟩ := targetTrace_complete source trace rootNe
         targetWellFormed sourceView
   let outerWire := FiniteEquiv.finCast (congrArg List.length
     (targetOpen_exposedWires source trace).symm)
@@ -2841,13 +2838,18 @@ theorem nested_rule
     targetWellFormed routeAlignment rfl rfl rfl rfl rfl rfl
     sourceView.result.state targetResult.state sourceView.result.trace
       targetResult.trace
-  let sourceBodyIso : Core.Isomorphic source.elaborate.body
+  let sourceBodyIso : RegionIso
+      (FiniteEquiv.refl (Fin source.elaborate.externalClasses)) []
+      source.elaborate.body
       (sourceView.intrinsicPath.toFocus.context.fill alignment.material) := by
-    have rebuildIso : Core.Isomorphic source.elaborate.body
+    have rebuildIso : RegionIso
+        (FiniteEquiv.refl (Fin source.elaborate.externalClasses)) []
+        source.elaborate.body
         (sourceView.intrinsicPath.toFocus.context.fill
           sourceView.intrinsicPath.toFocus.body) := by
       exact cast (congrArg
-        (fun body => Core.Isomorphic body
+        (fun body => RegionIso
+          (FiniteEquiv.refl (Fin source.elaborate.externalClasses)) [] body
           (sourceView.intrinsicPath.toFocus.context.fill
             sourceView.intrinsicPath.toFocus.body))
         sourceView.intrinsicPath.toFocus.rebuild)
@@ -2855,7 +2857,7 @@ theorem nested_rule
           (sourceView.intrinsicPath.toFocus.context.fill
             sourceView.intrinsicPath.toFocus.body))
     exact rebuildIso.trans
-      (sourceView.intrinsicPath.toFocus.context.fill_iso
+      (sourceView.intrinsicPath.toFocus.context.fillIso
         alignment.source_iso)
   let sourceHostIso : OpenDiagramIso source.elaborate
       (source.elaborate.withBody

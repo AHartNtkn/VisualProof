@@ -16,9 +16,9 @@ private theorem directParent_encloses
   refine ⟨⟨1, by have := child.isLt; omega⟩, ?_⟩
   simp [Concrete.Diagram.climb, hparent]
 
-/-- A direct child of copied material is itself copied material.  Administrative
-root and proxy regions cannot occur below material. -/
-theorem materialDirectChild_is_material
+/-- A direct child of copied material is itself copied material.  The returned
+index is data, so structural consumers do not recover it from an existential. -/
+def materialDirectChild
     (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
@@ -26,14 +26,14 @@ theorem materialDirectChild_is_material
     (child : Fin layout.regionCount)
     (hparent : ((input.val.extractDiagramRaw selection layout).regions child).parent? =
       some (layout.materialRegion parent)) :
-    ∃ index : Fin layout.materialRegionCount,
-      child = layout.materialRegion index := by
-  rcases input.val.extractDiagramRaw_region_cases selection layout child with
-    hroot | hproxy | hmaterial
-  · subst child
+    MaterialRegionIndex layout child := by
+  apply materialRegionIndexOfNotAdministrative layout child
+  · intro childEq
+    subst child
     rw [input.val.extractDiagramRaw_root_region] at hparent
     contradiction
-  · obtain ⟨proxy, rfl⟩ := hproxy
+  · intro proxy childEq
+    subst child
     have materialEnclosesProxy :
         (input.val.extractDiagramRaw selection layout).Encloses
           (layout.materialRegion parent) (layout.proxy proxy) :=
@@ -45,7 +45,20 @@ theorem materialDirectChild_is_material
       (Concrete.Diagram.extractDiagramRaw_wellFormed input selection layout)
       materialEnclosesProxy proxyEnclosesMaterial
     exact False.elim (layout.proxy_ne_materialRegion proxy parent equal.symm)
-  · exact hmaterial
+
+/-- Logical projection of `materialDirectChild`. -/
+theorem materialDirectChild_is_material
+    (input : Concrete.Checked )
+    (selection : CheckedSelection input.val)
+    (layout : FragmentLayout input.val selection)
+    (parent : Fin layout.materialRegionCount)
+    (child : Fin layout.regionCount)
+    (hparent : ((input.val.extractDiagramRaw selection layout).regions child).parent? =
+      some (layout.materialRegion parent)) :
+    ∃ index : Fin layout.materialRegionCount,
+      child = layout.materialRegion index := by
+  let indexed := materialDirectChild input selection layout parent child hparent
+  exact ⟨indexed.index, indexed.region_eq⟩
 
 /-- Parenthood of copied material reflects exact host parenthood. -/
 theorem materialDirectChild_origin_parent

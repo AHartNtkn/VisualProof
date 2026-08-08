@@ -1628,7 +1628,18 @@ noncomputable def ItemSeqIso.Frame.appendRenameWires
 
 /-- Transport a focused-frame presentation through canonical source and
 target wire presentations, preserving the distinguished position values. -/
-theorem ItemSeqIso.Frame.pullPush
+structure ItemSeqIso.Frame.Indexed
+    {sourceWires targetWires : Nat} {rels : Theory.RelCtx}
+    (source : ItemSeq sourceWires rels) (target : ItemSeq targetWires rels)
+    (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
+    (sourcePosition targetPosition : Nat) where
+  sourceIndex : Fin source.length
+  targetIndex : Fin target.length
+  sourceIndex_eq : sourceIndex.val = sourcePosition
+  targetIndex_eq : targetIndex.val = targetPosition
+  frame : ItemSeqIso.Frame wire sourceIndex targetIndex
+
+noncomputable def ItemSeqIso.Frame.pullPush
     {sourceWires middleSourceWires middleTargetWires targetWires : Nat}
     {rels : Theory.RelCtx}
     {source : ItemSeq  sourceWires rels}
@@ -1647,11 +1658,8 @@ theorem ItemSeqIso.Frame.pullPush
     {middleTargetIndex : Fin middleTarget.length}
     (frame : ItemSeqIso.Frame middleWire middleSourceIndex
       middleTargetIndex) :
-    ∃ sourceIndex : Fin source.length,
-      ∃ targetIndex : Fin target.length,
-        sourceIndex.val = middleSourceIndex.val ∧
-        targetIndex.val = middleTargetIndex.val ∧
-        Nonempty (ItemSeqIso.Frame finalWire sourceIndex targetIndex) := by
+    ItemSeqIso.Frame.Indexed source target finalWire
+      middleSourceIndex.val middleTargetIndex.val := by
   subst middleSource
   let sourceIndex :=
     (source.renameWiresPositionEquiv firstWire).symm middleSourceIndex
@@ -1667,7 +1675,7 @@ theorem ItemSeqIso.Frame.pullPush
   subst target
   have finalFrame : ItemSeqIso.Frame finalWire sourceIndex targetIndex :=
     pushed.castWire hwire
-  exact ⟨sourceIndex, targetIndex, rfl, rfl, ⟨finalFrame⟩⟩
+  exact ⟨sourceIndex, targetIndex, rfl, rfl, finalFrame⟩
 
 /-- An alignment between two single-hole contexts. Each enclosing frame owns
 its complete occurrence permutation; the recursively aligned child supplies

@@ -331,7 +331,7 @@ noncomputable def nestedLocalEquiv
       distinct ordered targetWellFormed nested targetIndex)
 }
 
-theorem openRootRawFrame
+noncomputable def openRootRawFrame
     (source : Concrete.CheckedOpen)
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
@@ -364,9 +364,9 @@ theorem openRootRawFrame
     (targetIndex : Fin targetState.items.length)
     (sourceIndexVal : sourceIndex.val = position.val)
     (targetIndexVal : targetIndex.val = position.val) :
-    Nonempty (ItemSeqIso.Frame
+    ItemSeqIso.Frame
       (nestedRootEquiv source outer inner distinct ordered targetWellFormed
-        nested) sourceIndex targetIndex) := by
+        nested) sourceIndex targetIndex := by
   let input := source.val.diagram
   let inputWellFormed := source.property.diagram_well_formed
   let region := input.root
@@ -428,11 +428,11 @@ theorem openRootRawFrame
   have mapped : positions sourceIndex = targetIndex := by
     apply Fin.ext
     simp [positions, sourceIndexVal, targetIndexVal, FiniteEquiv.finCast]
-  refine ⟨{
+  refine {
     positions := positions
     mapped := mapped
     siblings := ?_
-  }⟩
+  }
   intro index indexNe
   let occurrenceIndex : Fin occurrences.length := Fin.cast sourceLength index
   have occurrenceNe : occurrenceIndex ≠ position := by
@@ -737,7 +737,7 @@ theorem nestedRootEquiv_factor
       nestedLocalEquiv, Concrete.OpenDiagram.rootWires] using
         congrArg Fin.val mapped
 
-theorem openRootFrameAssembly
+noncomputable def openRootFrameAssembly
     (source : Concrete.CheckedOpen)
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
@@ -768,18 +768,14 @@ theorem openRootFrameAssembly
     (rawFrame : ItemSeqIso.Frame
       (nestedRootEquiv source outer inner distinct ordered targetWellFormed
         nested) sourceIndex targetIndex) :
-    ∃ sourceIndex' : Fin sourceSeq.length,
-      ∃ targetIndex' : Fin targetSeq.length,
-        sourceIndex'.val = sourceIndex.val ∧
-        targetIndex'.val = targetIndex.val ∧
-        Nonempty (ItemSeqIso.Frame
-          (extendWireEquiv
-            (nestedOuterEquiv source outer inner distinct nested)
-            ((FiniteEquiv.finCast sourceLocalCanonical).trans
-              ((nestedLocalEquiv source outer inner distinct ordered
-                targetWellFormed nested).trans
-                (FiniteEquiv.finCast targetLocalCanonical.symm))))
-          sourceIndex' targetIndex') := by
+    ItemSeqIso.Frame.Indexed sourceSeq targetSeq
+      (extendWireEquiv
+        (nestedOuterEquiv source outer inner distinct nested)
+        ((FiniteEquiv.finCast sourceLocalCanonical).trans
+          ((nestedLocalEquiv source outer inner distinct ordered
+            targetWellFormed nested).trans
+            (FiniteEquiv.finCast targetLocalCanonical.symm))))
+      sourceIndex.val targetIndex.val := by
   subst sourceLocal
   subst targetLocal
   let sourceEq : source.val.rootWires.length =
@@ -852,7 +848,9 @@ structure OpenCompilerTraceAlignment
   after : Region targetWitness.toFocus.holeWires
     targetWitness.toFocus.holeRels
   rewrite : Rule.WireSever.Local before after
-  target_iso : Core.Isomorphic targetWitness.toFocus.body before
+  target_iso : RegionIso
+    (FiniteEquiv.refl (Fin targetWitness.toFocus.holeWires))
+    targetWitness.toFocus.holeRels targetWitness.toFocus.body before
   source_iso : RegionIso alignment.holeWire sourceWitness.toFocus.holeRels
     sourceWitness.toFocus.body (alignment.holeRelsEq.symm ▸ after)
 
@@ -896,7 +894,7 @@ theorem rootRouteChildrenEq
         (Concrete.Elaboration.checked_direct_child_not_encloses_parent
           inputWellFormed targetParent' cycle)
 
-theorem openCompilerTraceContextIso
+noncomputable def openCompilerTraceContextIso
     (source : Concrete.CheckedOpen)
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
@@ -930,18 +928,18 @@ theorem openCompilerTraceContextIso
       targetRoute targetWitness targetState)
     (sourceEndEq : sourceEnd = (source.val.diagram.wires inner).scope)
     (targetEndEq : targetEnd = (source.val.diagram.wires inner).scope) :
-    Nonempty (OpenCompilerTraceAlignment
+    OpenCompilerTraceAlignment
       (nestedOuterEquiv source outer inner distinct nested)
-      sourceWitness targetWitness) := by
+      sourceWitness targetWitness := by
   refine @Concrete.Splice.OpenCompilerTrace.rec
     (checked := targetOpen source outer inner distinct ordered targetWellFormed)
     (motive := fun {currentEnd} {currentPath} {currentBody} currentRoute
       currentWitness currentState currentTrace =>
         (currentEndEq : currentEnd =
           (source.val.diagram.wires inner).scope) →
-        Nonempty (OpenCompilerTraceAlignment
+        OpenCompilerTraceAlignment
           (nestedOuterEquiv source outer inner distinct nested)
-          sourceWitness currentWitness)) ?_ ?_ ?_ _ _ _ _ _ _ targetTrace
+          sourceWitness currentWitness) ?_ ?_ ?_ _ _ _ _ _ _ targetTrace
             targetEndEq
   case refine_1 =>
       intro currentBody currentState currentEndEq
@@ -997,7 +995,7 @@ theorem openCompilerTraceContextIso
                 source.val.diagram.regionCount := by
               simpa [targetOpen, targetOpenRaw] using targetFuel
             omega
-          obtain ⟨childResult⟩ := compilerTraceContextIso source.val.diagram
+          let childResult := compilerTraceContextIso source.val.diagram
             source.property.diagram_well_formed outer inner distinct ordered
             targetWellFormed rfl sourceChildState targetChildState
             sourceTailTrace targetTailTrace childWitness childBindersEq
@@ -1029,13 +1027,13 @@ theorem openCompilerTraceContextIso
             Fin.cast sourceItemsLength.symm sourcePosition
           let targetIndex : Fin targetState.items.length :=
             Fin.cast targetItemsLength.symm targetPosition
-          obtain ⟨rawFrame⟩ := openRootRawFrame source outer inner distinct
+          let rawFrame := openRootRawFrame source outer inner distinct
             ordered targetWellFormed nested sourceParent sourcePosition
             sourcePositionEq sourceTail sourceState targetState sourceIndex
             targetIndex (by simp [sourceIndex])
             (by simpa [targetIndex] using positionVals)
           obtain ⟨sourceIndex', targetIndex', sourceIndexVal,
-              targetIndexVal, ⟨frame⟩⟩ :=
+              targetIndexVal, frame⟩ :=
             openRootFrameAssembly source outer inner distinct ordered
               targetWellFormed nested sourceState targetState
               sourceLocalCanonical targetLocalCanonical sourceItemsCanonical
@@ -1133,7 +1131,7 @@ theorem openCompilerTraceContextIso
             (targetChild := childResult.holeRelsEq.symm ▸
               targetNested.toFocus.context) localWire sourceFocus targetFocus
             sourceAt' targetAt' frame childContexts
-          exact ⟨{
+          exact {
             alignment := {
               holeRelsEq := childResult.holeRelsEq
               holeWire := childResult.holeWire
@@ -1146,7 +1144,7 @@ theorem openCompilerTraceContextIso
             rewrite := childResult.rewrite
             target_iso := childResult.target_iso
             source_iso := childResult.source_iso
-          }⟩
+          }
   case refine_3 =>
       intro targetChild currentEnd targetRest targetParent targetPosition
         targetPositionEq targetTail targetLocal targetArity targetSeq
@@ -1205,7 +1203,7 @@ theorem openCompilerTraceContextIso
                 source.val.diagram.regionCount := by
               simpa [targetOpen, targetOpenRaw] using targetFuel
             omega
-          obtain ⟨childResult⟩ := compilerTraceContextIso source.val.diagram
+          let childResult := compilerTraceContextIso source.val.diagram
             source.property.diagram_well_formed outer inner distinct ordered
             targetWellFormed rfl sourceChildState targetChildState
             sourceTailTrace targetTailTrace childWitness childBindersEq
@@ -1237,13 +1235,13 @@ theorem openCompilerTraceContextIso
             Fin.cast sourceItemsLength.symm sourcePosition
           let targetIndex : Fin targetState.items.length :=
             Fin.cast targetItemsLength.symm targetPosition
-          obtain ⟨rawFrame⟩ := openRootRawFrame source outer inner distinct
+          let rawFrame := openRootRawFrame source outer inner distinct
             ordered targetWellFormed nested sourceParent sourcePosition
             sourcePositionEq sourceTail sourceState targetState sourceIndex
             targetIndex (by simp [sourceIndex])
             (by simpa [targetIndex] using positionVals)
           obtain ⟨sourceIndex', targetIndex', sourceIndexVal,
-              targetIndexVal, ⟨frame⟩⟩ :=
+              targetIndexVal, frame⟩ :=
             openRootFrameAssembly source outer inner distinct ordered
               targetWellFormed nested sourceState targetState
               sourceLocalCanonical targetLocalCanonical sourceItemsCanonical
@@ -1341,7 +1339,7 @@ theorem openCompilerTraceContextIso
             (targetChild := childResult.holeRelsEq.symm ▸
               targetNested.toFocus.context) localWire sourceFocus targetFocus
             sourceAt' targetAt' frame childContexts
-          exact ⟨{
+          exact {
             alignment := {
               holeRelsEq := childResult.holeRelsEq
               holeWire := childResult.holeWire
@@ -1354,9 +1352,9 @@ theorem openCompilerTraceContextIso
             rewrite := childResult.rewrite
             target_iso := childResult.target_iso
             source_iso := childResult.source_iso
-          }⟩
+          }
 
-theorem openSiteContextIso
+noncomputable def openSiteContextIso
     (source : Concrete.CheckedOpen)
     (outer inner : Fin source.val.diagram.wireCount)
     (distinct : outer ≠ inner)
@@ -1372,9 +1370,9 @@ theorem openSiteContextIso
     (targetView : Concrete.Splice.OpenSiteView
       (targetOpen source outer inner distinct ordered targetWellFormed)
       (source.val.diagram.wires inner).scope) :
-    Nonempty (OpenCompilerTraceAlignment
+    OpenCompilerTraceAlignment
       (nestedOuterEquiv source outer inner distinct nested)
-      sourceView.intrinsicPath targetView.intrinsicPath) := by
+      sourceView.intrinsicPath targetView.intrinsicPath := by
   exact openCompilerTraceContextIso source outer inner distinct ordered
     targetWellFormed nested sourceView.result.state targetView.result.state
       sourceView.result.trace targetView.result.trace rfl rfl

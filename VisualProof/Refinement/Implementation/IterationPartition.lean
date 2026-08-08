@@ -165,7 +165,7 @@ theorem permIndexEquiv_spec [DecidableEq α]
     (indexOf?_complete ((permutation.mem_iff).1
       (List.get_mem source index))))
 
-theorem compileOccurrences_perm_iso
+noncomputable def compileOccurrences_perm_iso
     (diagram : Concrete.Diagram)
     (recurse : ∀ {rels : RelCtx},
       (region : Fin diagram.regionCount) →
@@ -216,7 +216,32 @@ theorem compileOccurrences_perm_iso
   rw [← itemEq]
   exact ItemIso.refl _
 
-theorem partition_complete_of_perm
+structure PartitionResult
+    (input : Concrete.Checked)
+    (anchor : Fin input.val.regionCount)
+    {outer : Nat} {rels : RelCtx}
+    {body : Region outer rels}
+    (leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
+      anchor (.here body))
+    (selected kept : List (Concrete.Elaboration.LocalOccurrence
+      input.val.regionCount input.val.nodeCount)) where
+  selectedItems : ItemSeq (leaf.inheritedWires.extend anchor).length rels
+  keptItems : ItemSeq (leaf.inheritedWires.extend anchor).length rels
+  selectedCompiled :
+    Concrete.Elaboration.compileOccurrencesWith? input.val
+        (Concrete.Elaboration.compileRegion? input.val leaf.fuel)
+        (leaf.inheritedWires.extend anchor) leaf.binders selected =
+      some selectedItems
+  keptCompiled :
+    Concrete.Elaboration.compileOccurrencesWith? input.val
+        (Concrete.Elaboration.compileRegion? input.val leaf.fuel)
+        (leaf.inheritedWires.extend anchor) leaf.binders kept =
+      some keptItems
+  iso : RegionIso
+    (FiniteEquiv.refl (Fin (leaf.inheritedWires.extend anchor).length))
+    rels (Region.mk 0 (selectedItems.append keptItems)) (Region.mk 0 leaf.items)
+
+noncomputable def partition_complete_of_perm
     (input : Concrete.Checked)
     (anchor : Fin input.val.regionCount)
     {outer : Nat} {rels : RelCtx}
@@ -227,20 +252,7 @@ theorem partition_complete_of_perm
       input.val.regionCount input.val.nodeCount))
     (partition : (selected ++ kept).Perm
       (Concrete.Elaboration.localOccurrences input.val anchor)) :
-    ∃ (selectedItems keptItems : ItemSeq
-        (leaf.inheritedWires.extend anchor).length rels),
-      Concrete.Elaboration.compileOccurrencesWith? input.val
-          (Concrete.Elaboration.compileRegion? input.val leaf.fuel)
-          (leaf.inheritedWires.extend anchor) leaf.binders selected =
-          some selectedItems ∧
-      Concrete.Elaboration.compileOccurrencesWith? input.val
-          (Concrete.Elaboration.compileRegion? input.val leaf.fuel)
-          (leaf.inheritedWires.extend anchor) leaf.binders kept =
-          some keptItems ∧
-      RegionIso
-        (FiniteEquiv.refl (Fin (leaf.inheritedWires.extend anchor).length))
-        rels (Region.mk 0 (selectedItems.append keptItems))
-          (Region.mk 0 leaf.items) := by
+    PartitionResult input anchor leaf selected kept := by
   let recurse : ∀ {rels : RelCtx},
       (region : Fin input.val.regionCount) →
       (context : Concrete.Elaboration.WireContext input.val) →
@@ -262,128 +274,82 @@ theorem partition_complete_of_perm
     exact compileOccurrence_success_of_mem input.val recurse
       (leaf.inheritedWires.extend anchor) leaf.binders allCompiled
       (partition.mem_iff.mp member)
-  obtain ⟨partitionedItems, partitionedCompiled⟩ :=
-    Concrete.Elaboration.compileOccurrencesWith?_complete recurse
-      (leaf.inheritedWires.extend anchor) leaf.binders partitioned eachCompiled
-  obtain ⟨selectedItems, keptItems, selectedCompiled, keptCompiled,
-      partitionedEq⟩ :=
-    Concrete.Elaboration.compileOccurrencesWith?_append_split recurse
-      (leaf.inheritedWires.extend anchor) leaf.binders selected kept
-      partitionedItems partitionedCompiled
-  have combinedCompiled :
-      Concrete.Elaboration.compileOccurrencesWith? input.val recurse
-          (leaf.inheritedWires.extend anchor) leaf.binders partitioned =
-        some (selectedItems.append keptItems) := by
-    simpa [partitioned, partitionedEq] using partitionedCompiled
-  have partitionNodup : partitioned.Nodup :=
-    (partition.nodup_iff).2
-      (Concrete.Elaboration.localOccurrences_nodup input.val anchor)
-  have itemIso := compileOccurrences_perm_iso input.val recurse
-    (leaf.inheritedWires.extend anchor) leaf.binders partition partitionNodup
-    (Concrete.Elaboration.localOccurrences_nodup input.val anchor)
-    combinedCompiled allCompiled
-  refine ⟨selectedItems, keptItems, by simpa [recurse] using selectedCompiled,
-    by simpa [recurse] using keptCompiled, ?_⟩
-  apply RegionIso.mk (FiniteEquiv.refl (Fin 0))
-  have extendedRefl :
-      extendWireEquiv
-          (FiniteEquiv.refl (Fin (leaf.inheritedWires.extend anchor).length))
-          (FiniteEquiv.refl (Fin 0)) =
-        FiniteEquiv.refl
-          (Fin ((leaf.inheritedWires.extend anchor).length + 0)) := by
-    apply FiniteEquiv.ext
-    intro wire
-    refine Fin.addCases (fun index => ?_) (fun index => ?_) wire
-    · simp only [extendWireEquiv_outer, FiniteEquiv.refl_apply]
-    · exact Fin.elim0 index
-  rw [extendedRefl]
-  simpa using itemIso
+  have selectedEach : ∀ occurrence, occurrence ∈ selected →
+      ∃ item, Concrete.Elaboration.compileOccurrenceWith? input.val recurse
+        (leaf.inheritedWires.extend anchor) leaf.binders occurrence = some item :=
+    fun occurrence member => eachCompiled occurrence
+      (List.mem_append_left kept member)
+  have keptEach : ∀ occurrence, occurrence ∈ kept →
+      ∃ item, Concrete.Elaboration.compileOccurrenceWith? input.val recurse
+        (leaf.inheritedWires.extend anchor) leaf.binders occurrence = some item :=
+    fun occurrence member => eachCompiled occurrence
+      (List.mem_append_right selected member)
+  cases selectedResult : Concrete.Elaboration.compileOccurrencesWith? input.val
+      recurse (leaf.inheritedWires.extend anchor) leaf.binders selected with
+  | none =>
+      have impossible : False := by
+        obtain ⟨items, compiled⟩ :=
+          Concrete.Elaboration.compileOccurrencesWith?_complete recurse
+            (leaf.inheritedWires.extend anchor) leaf.binders selected selectedEach
+        rw [selectedResult] at compiled
+        contradiction
+      exact impossible.elim
+  | some selectedItems =>
+    cases keptResult : Concrete.Elaboration.compileOccurrencesWith? input.val
+        recurse (leaf.inheritedWires.extend anchor) leaf.binders kept with
+    | none =>
+      have impossible : False := by
+        obtain ⟨items, compiled⟩ :=
+          Concrete.Elaboration.compileOccurrencesWith?_complete recurse
+            (leaf.inheritedWires.extend anchor) leaf.binders kept keptEach
+        rw [keptResult] at compiled
+        contradiction
+      exact impossible.elim
+    | some keptItems =>
+      have combinedCompiled :
+          Concrete.Elaboration.compileOccurrencesWith? input.val recurse
+              (leaf.inheritedWires.extend anchor) leaf.binders partitioned =
+            some (selectedItems.append keptItems) := by
+        simpa [partitioned] using compileOccurrences_append input.val recurse
+          (leaf.inheritedWires.extend anchor) leaf.binders selected kept
+          selectedResult keptResult
+      have partitionNodup : partitioned.Nodup :=
+        (partition.nodup_iff).2
+          (Concrete.Elaboration.localOccurrences_nodup input.val anchor)
+      have itemIso := compileOccurrences_perm_iso input.val recurse
+        (leaf.inheritedWires.extend anchor) leaf.binders partition partitionNodup
+        (Concrete.Elaboration.localOccurrences_nodup input.val anchor)
+        combinedCompiled allCompiled
+      refine ⟨selectedItems, keptItems,
+        by simpa [recurse] using selectedResult,
+        by simpa [recurse] using keptResult, ?_⟩
+      apply RegionIso.mk (FiniteEquiv.refl (Fin 0))
+      have extendedRefl :
+          extendWireEquiv
+              (FiniteEquiv.refl (Fin (leaf.inheritedWires.extend anchor).length))
+              (FiniteEquiv.refl (Fin 0)) =
+            FiniteEquiv.refl
+              (Fin ((leaf.inheritedWires.extend anchor).length + 0)) := by
+        apply FiniteEquiv.ext
+        intro wire
+        refine Fin.addCases (fun index => ?_) (fun index => ?_) wire
+        · simp only [extendWireEquiv_outer, FiniteEquiv.refl_apply]
+        · exact Fin.elim0 index
+      rw [extendedRefl]
+      simpa using itemIso
 
-theorem partition_complete
+noncomputable def partition_complete
     (input : Concrete.Checked)
     (selection : CheckedSelection input.val)
     {outer : Nat} {rels : RelCtx}
     {body : Region outer rels}
     (leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
       selection.val.anchor (.here body)) :
-    ∃ (selectedItems keptItems : ItemSeq
-        (leaf.inheritedWires.extend selection.val.anchor).length rels),
-      Concrete.Elaboration.compileOccurrencesWith? input.val
-          (Concrete.Elaboration.compileRegion? input.val leaf.fuel)
-          (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
-          (selectedOccurrences input.val selection) = some selectedItems ∧
-      Concrete.Elaboration.compileOccurrencesWith? input.val
-          (Concrete.Elaboration.compileRegion? input.val leaf.fuel)
-          (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
-          (keptOccurrences input.val selection) = some keptItems ∧
-      RegionIso
-        (FiniteEquiv.refl
-          (Fin (leaf.inheritedWires.extend selection.val.anchor).length))
-        rels (Region.mk 0 (selectedItems.append keptItems))
-          (Region.mk 0 leaf.items) := by
-  let recurse : ∀ {rels : RelCtx},
-      (region : Fin input.val.regionCount) →
-      (context : Concrete.Elaboration.WireContext input.val) →
-      Concrete.Elaboration.BinderContext input.val rels →
-      Option (Region context.length rels) :=
-    fun {rels} => Concrete.Elaboration.compileRegion? input.val leaf.fuel
-  have allCompiled :
-      Concrete.Elaboration.compileOccurrencesWith? input.val recurse
-          (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
-          (Concrete.Elaboration.localOccurrences input.val
-            selection.val.anchor) = some leaf.items := by
-    simpa [recurse] using leaf.itemsComputation
-  let partitioned := selectedOccurrences input.val selection ++
-    keptOccurrences input.val selection
-  have eachCompiled : ∀ occurrence, occurrence ∈ partitioned →
-      ∃ item, Concrete.Elaboration.compileOccurrenceWith? input.val recurse
-        (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
-        occurrence = some item := by
-    intro occurrence member
-    exact compileOccurrence_success_of_mem input.val recurse
-      (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
-      allCompiled ((occurrences_perm input.val selection).mem_iff.mp member)
-  obtain ⟨partitionedItems, partitionedCompiled⟩ :=
-    Concrete.Elaboration.compileOccurrencesWith?_complete recurse
-      (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
-      partitioned eachCompiled
-  obtain ⟨selectedItems, keptItems, selectedCompiled, keptCompiled,
-      partitionedEq⟩ :=
-    Concrete.Elaboration.compileOccurrencesWith?_append_split recurse
-      (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
+    PartitionResult input selection.val.anchor leaf
       (selectedOccurrences input.val selection)
-      (keptOccurrences input.val selection) partitionedItems
-      partitionedCompiled
-  have combinedCompiled :
-      Concrete.Elaboration.compileOccurrencesWith? input.val recurse
-          (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
-          partitioned = some (selectedItems.append keptItems) := by
-    simpa [partitioned, partitionedEq] using partitionedCompiled
-  have partitionNodup : partitioned.Nodup :=
-    ((occurrences_perm input.val selection).nodup_iff).2
-      (Concrete.Elaboration.localOccurrences_nodup input.val
-        selection.val.anchor)
-  have itemIso := compileOccurrences_perm_iso input.val recurse
-    (leaf.inheritedWires.extend selection.val.anchor) leaf.binders
-    (occurrences_perm input.val selection) partitionNodup
-    (Concrete.Elaboration.localOccurrences_nodup input.val
-      selection.val.anchor) combinedCompiled allCompiled
-  refine ⟨selectedItems, keptItems, by simpa [recurse] using selectedCompiled,
-    by simpa [recurse] using keptCompiled, ?_⟩
-  apply RegionIso.mk (FiniteEquiv.refl (Fin 0))
-  have extendedRefl :
-      extendWireEquiv
-          (FiniteEquiv.refl
-            (Fin (leaf.inheritedWires.extend selection.val.anchor).length))
-          (FiniteEquiv.refl (Fin 0)) =
-        FiniteEquiv.refl
-          (Fin ((leaf.inheritedWires.extend selection.val.anchor).length + 0)) := by
-    apply FiniteEquiv.ext
-    intro wire
-    refine Fin.addCases (fun index => ?_) (fun index => ?_) wire
-    · simp only [extendWireEquiv_outer, FiniteEquiv.refl_apply]
-    · exact Fin.elim0 index
-  rw [extendedRefl]
-  simpa using itemIso
+      (keptOccurrences input.val selection) := by
+  exact partition_complete_of_perm input selection.val.anchor leaf
+    (selectedOccurrences input.val selection)
+    (keptOccurrences input.val selection) (occurrences_perm input.val selection)
 
 end VisualProof.Refinement.Implementation.IterationPartition

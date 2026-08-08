@@ -208,7 +208,7 @@ open VisualProof.Rule
 open VisualProof.Theory
 open VisualProof.Diagram
 
-theorem compileRegion_away
+noncomputable def compileRegion_away
     (input : Concrete.Diagram)
     (inputWellFormed : input.WellFormed)
     (outer inner : Fin input.wireCount)

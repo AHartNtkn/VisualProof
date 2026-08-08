@@ -39,8 +39,7 @@ theorem spliceChecked_sound
 noncomputable def compiledSpliceHostView
     (input : Input ) (hadmissible : input.Admissible) :
     SiteView (input.coalesceFrame hadmissible) input.site :=
-  Classical.choice
-    (siteView_complete (input.coalesceFrame hadmissible) input.site)
+  siteView_complete (input.coalesceFrame hadmissible) input.site
 
 /-- The compiler evidence at a terminal pattern body. Its type depends only
     on the pattern and designated spine, so every executor copy shares one
@@ -67,12 +66,12 @@ abbrev TerminalCompilerView (input : Input ) :=
 
 /-- A nonempty pattern-owned spine reaches its body through the ordinary
 nested compiler kernel, independently of any host splice. -/
-theorem patternTerminalCompilerView_complete
+noncomputable def patternTerminalCompilerView_complete
     (pattern : CheckedOpen )
     (binderSpine : BinderSpine pattern.val.diagram)
     (hnonempty : binderSpine.proxyCount ≠ 0) :
-    Nonempty (PatternTerminalCompilerView pattern binderSpine) := by
-  obtain ⟨view⟩ := openSiteView_complete pattern binderSpine.bodyContainer
+    PatternTerminalCompilerView pattern binderSpine := by
+  let view := openSiteView_complete pattern binderSpine.bodyContainer
   let terminal : Fin binderSpine.proxyCount :=
     ⟨binderSpine.proxyCount - 1, by omega⟩
   have bodyEq := binderSpine.body_eq_terminal_of_nonempty hnonempty
@@ -91,8 +90,7 @@ noncomputable def compiledPatternTerminalView
     (_terminalBody : binderSpine.TerminalBodyContract pattern.val)
     (hnonempty : binderSpine.proxyCount ≠ 0) :
     PatternTerminalCompilerView pattern binderSpine :=
-  Classical.choice
-    (patternTerminalCompilerView_complete pattern binderSpine hnonempty)
+  patternTerminalCompilerView_complete pattern binderSpine hnonempty
 
 noncomputable def compiledSpliceTerminalView
     (input : Input )
@@ -116,8 +114,21 @@ structure OpenRootCompilerItems (checked : CheckedOpen ) where
 noncomputable def compiledSpliceOpenRootItems
     (checked : CheckedOpen ) :
     OpenRootCompilerItems checked :=
-  let complete := checkedOpenRootItems_complete checked
-  ⟨Classical.choose complete, Classical.choose_spec complete⟩
+  let result := Elaboration.compileOccurrencesWith?
+    checked.val.diagram
+    (Elaboration.compileRegion? checked.val.diagram
+      checked.val.diagram.regionCount)
+    checked.val.rootWires Elaboration.BinderContext.empty
+    (Elaboration.localOccurrences checked.val.diagram
+      checked.val.diagram.root)
+  let present : result.isSome = true := by
+    obtain ⟨items, computation⟩ := checkedOpenRootItems_complete checked
+    rw [show result = some items by exact computation]
+    rfl
+  {
+    items := result.get present
+    computation := Option.eq_some_of_isSome present
+  }
 
 noncomputable def PlugLayout.compiledCoalescedRootItemsIsoFromExactContext
     (input : Input ) (hadmissible : input.Admissible)
@@ -189,10 +200,10 @@ noncomputable def compiledSpliceOutputOpenView
       (PlugLayout.checkedOutputOpenRoot input layout hadmissible sourceBoundary
         sourceRoot)
       (layout.frameRegion input.site) :=
-  Classical.choice (openSiteView_complete
+  openSiteView_complete
     (PlugLayout.checkedOutputOpenRoot input layout hadmissible sourceBoundary
       sourceRoot)
-    (layout.frameRegion input.site))
+    (layout.frameRegion input.site)
 
 structure ClosedRootCompilerItems (checked : Checked ) where
   items : ItemSeq
@@ -209,8 +220,19 @@ structure ClosedRootCompilerItems (checked : Checked ) where
 noncomputable def compiledSpliceClosedRootItems
     (checked : Checked ) :
     ClosedRootCompilerItems checked :=
-  let complete := checkedRootItems_complete checked
-  ⟨Classical.choose complete, Classical.choose_spec complete⟩
+  let result := Elaboration.compileOccurrencesWith? checked.val
+    (Elaboration.compileRegion? checked.val checked.val.regionCount)
+    (Elaboration.exactScopeWires checked.val checked.val.root)
+    Elaboration.BinderContext.empty
+    (Elaboration.localOccurrences checked.val checked.val.root)
+  let present : result.isSome = true := by
+    obtain ⟨items, computation⟩ := checkedRootItems_complete checked
+    rw [show result = some items by exact computation]
+    rfl
+  {
+    items := result.get present
+    computation := Option.eq_some_of_isSome present
+  }
 
 def checkedSpliceOutput
     (input : Input ) (layout : PlugLayout input)
@@ -1145,7 +1167,7 @@ theorem spliceChecked_outputCompilerLeaf_complete
   rcases result with ⟨diagram, wellFormed⟩
   dsimp at hvalue ⊢
   subst diagram
-  obtain ⟨view⟩ := siteView_complete
+  let view := siteView_complete
     (⟨input.plugLayout.plugRaw, wellFormed⟩ : Checked )
     (input.plugLayout.frameRegion input.site)
   exact ⟨view.path, view.intrinsicPath, ⟨view.compilerLeaf⟩⟩

@@ -50,21 +50,21 @@ theorem nested
   let target := VisualProof.Refinement.Implementation.WireSever.canonicalOpen
     source wire keep targetWellFormed
   let boundaryLength := VisualProof.Refinement.Implementation.WireSever.severBoundaryLengthEq source.val wire keep
-  obtain ⟨result⟩ := severOpenSiteContextIso source wire keep
+  let result := severOpenSiteContextIso source wire keep
     targetWellFormed nested targetView sourceView
   let sourceInterface := source.elaborate
-  have sourceBodyIso : Core.Isomorphic source.elaborate.body
+  have sourceBodyIso : RegionIso
+      (FiniteEquiv.refl (Fin source.elaborate.externalClasses)) []
+      source.elaborate.body
       (sourceView.focus.context.fill result.before) := by
-    have rebuildIso : Core.Isomorphic source.elaborate.body
+    have rebuildIso : RegionIso
+        (FiniteEquiv.refl (Fin source.elaborate.externalClasses)) []
+        source.elaborate.body
         (sourceView.focus.context.fill sourceView.focus.body) := by
-      exact cast (congrArg
-        (fun body => Core.Isomorphic body
-          (sourceView.focus.context.fill sourceView.focus.body))
-        sourceView.rebuild)
-        (RegionIso.refl
-          (sourceView.focus.context.fill sourceView.focus.body))
+      rw [sourceView.rebuild]
+      exact RegionIso.refl _
     exact rebuildIso.trans
-      (sourceView.focus.context.fill_iso result.source_iso)
+      (sourceView.focus.context.fillIso result.source_iso)
   let sourceHostIso : OpenDiagramIso source.elaborate
       (sourceInterface.withBody
         (sourceView.focus.context.fill result.before)) := {

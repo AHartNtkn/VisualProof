@@ -117,8 +117,8 @@ noncomputable def targetOpen_result_iso
           (Concrete.doubleCutElimRaw?_wireCount rawSuccess).symm wire =
           diagramIso.wires wire := by
         apply Fin.ext
-        simpa [diagramIso] using
-          (concreteIsoOfEq_wires_val rawEq.symm wire).symm
+        change wire.val = ((concreteIsoOfEq rawEq.symm).wires wire).val
+        exact (concreteIsoOfEq_wires_val rawEq.symm wire).symm
       simpa [Concrete.doubleCutElimWireTransport,
         Concrete.WireTransport.byWireCount,
         Concrete.WireTransport.rootFiltered, diagramIso,

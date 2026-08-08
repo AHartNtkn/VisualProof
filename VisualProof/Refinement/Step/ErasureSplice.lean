@@ -135,7 +135,7 @@ private theorem rootFromParts
   exact ⟨_, _, before, target.body, occurrence, OpenDiagramIso.refl _, by
     simpa [Rule.atPolarity, DiagramContext.polarity] using localProof⟩
 
-private theorem rootHostItemsIso
+private noncomputable def rootHostItemsIso
     (input : Concrete.Splice.Input)
     (admissible : input.Admissible)
     (boundary : List (Fin input.frame.val.wireCount))
@@ -987,8 +987,10 @@ private theorem contextualAtPolarity
     (interface : OpenDiagram arity)
     (context : DiagramContext interface.externalClasses hole [] holeRels)
     (actualBefore actualAfter before after : Region hole holeRels)
-    (beforeIso : Core.Isomorphic actualBefore before)
-    (afterIso : Core.Isomorphic actualAfter after)
+    (beforeIso : RegionIso (FiniteEquiv.refl (Fin hole)) holeRels
+      actualBefore before)
+    (afterIso : RegionIso (FiniteEquiv.refl (Fin hole)) holeRels
+      actualAfter after)
     (localProof : Rule.Erasure.Local before after) :
     Rule.atPolarity context.polarity Rule.Erasure
       (interface.withBody (context.fill actualBefore))
@@ -1006,7 +1008,7 @@ private theorem contextualAtPolarity
       let targetIso : OpenDiagramIso
           (interface.withBody (context.fill actualAfter))
           (interface.withBody (context.fill after)) :=
-        OpenDiagram.withBody_iso (context.fill_iso afterIso)
+        OpenDiagram.withBody_iso (context.fillIso afterIso)
       exact ⟨_, _, before, after, occurrence, targetIso, by
         change Rule.atPolarity context.polarity Rule.Erasure.Local before after
         rw [polarityEq]
@@ -1023,7 +1025,7 @@ private theorem contextualAtPolarity
       let targetIso : OpenDiagramIso
           (interface.withBody (context.fill actualBefore))
           (interface.withBody (context.fill before)) :=
-        OpenDiagram.withBody_iso (context.fill_iso beforeIso)
+        OpenDiagram.withBody_iso (context.fillIso beforeIso)
       exact ⟨_, _, after, before, occurrence, targetIso, by
         change Rule.atPolarity context.polarity Rule.Erasure.Local after before
         rw [polarityEq]
@@ -1074,7 +1076,8 @@ private theorem nestedFromSplice
   have sourceBeforeIso : RegionIso rootWire targetRels sourceBefore before := by
     exact RegionIso.spliceAt_renameRelations hostItemsIso material
       wireMap targetWireMap rfl relationMap targetRelationMap (fun _ => rfl)
-  have actualBeforeIso : Core.Isomorphic actualBefore before := by
+  have actualBeforeIso : RegionIso (FiniteEquiv.refl (Fin targetOuter))
+      targetRels actualBefore before := by
     have renamed := RegionIso.renameWiresEquiv sourceBefore rootWire
     have combined := renamed.symm.trans sourceBeforeIso
     have wireEq : rootWire.symm.trans rootWire =
@@ -1087,7 +1090,8 @@ private theorem nestedFromSplice
     unfold sourceAfter after
     simp only [Region.renameRelations]
     exact RegionIso.mk localWire hostItemsIso
-  have actualAfterIso : Core.Isomorphic actualAfter after := by
+  have actualAfterIso : RegionIso (FiniteEquiv.refl (Fin targetOuter))
+      targetRels actualAfter after := by
     have renamed := RegionIso.renameWiresEquiv sourceAfter rootWire
     have combined := renamed.symm.trans sourceAfterIso
     have wireEq : rootWire.symm.trans rootWire =
@@ -1286,7 +1290,8 @@ private noncomputable def nestedNonemptySourceIso
     (FiniteEquiv.finCast outputLeaf.inheritedLength)
   have siteIso := layout.compiledSiteRegionIsoOfNonempty input admissible host
     pattern.witness pattern.leaf view.intrinsicPath outputLeaf nonempty
-  have focusIso : Core.Isomorphic
+  have focusIso : RegionIso (FiniteEquiv.refl (Fin view.focus.holeWires))
+      view.intrinsicPath.toFocus.holeRels
       (source.renameWires rootWire) view.focus.body := by
     have lifted := siteIso.renameWires_commuting rootWire
       (Fin.cast outputLeaf.inheritedLength)
@@ -1302,7 +1307,7 @@ private noncomputable def nestedNonemptySourceIso
         Region.castWiresEq_eq_renameWires] using outputLeaf.bodyComputation
     rw [focusBodyEq]
     simpa [source, inherited, rootWire] using lifted
-  have bodyIso := view.focus.context.fill_iso focusIso
+  have bodyIso := view.focus.context.fillIso focusIso
   have outputEta : output.withBody output.body = output := by
     cases output
     rfl
@@ -1385,7 +1390,8 @@ private noncomputable def nestedEmptySourceIso
     (FiniteEquiv.finCast outputLeaf.inheritedLength)
   have siteIso := layout.compiledSiteRegionIsoOfEmpty input admissible host
     view.intrinsicPath outputLeaf empty pattern.items pattern.computation
-  have focusIso : Core.Isomorphic
+  have focusIso : RegionIso (FiniteEquiv.refl (Fin view.focus.holeWires))
+      view.intrinsicPath.toFocus.holeRels
       (source.renameWires rootWire) view.focus.body := by
     have lifted := siteIso.renameWires_commuting rootWire
       (Fin.cast outputLeaf.inheritedLength)
@@ -1401,7 +1407,7 @@ private noncomputable def nestedEmptySourceIso
         Region.castWiresEq_eq_renameWires] using outputLeaf.bodyComputation
     rw [focusBodyEq]
     simpa [source, inherited, rootWire] using lifted
-  have bodyIso := view.focus.context.fill_iso focusIso
+  have bodyIso := view.focus.context.fillIso focusIso
   have outputEta : output.withBody output.body = output := by
     cases output
     rfl
