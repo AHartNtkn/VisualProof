@@ -30,13 +30,13 @@ def ofArityEq {sourceArity targetArity : Nat}
     body := body
   }
 
-def refl (diagram : OpenDiagram  arity) :
+noncomputable def refl (diagram : OpenDiagram  arity) :
     OpenDiagramIso diagram diagram where
   external := FiniteEquiv.refl (Fin diagram.externalClasses)
   boundary := fun _ => rfl
   body := RegionIso.refl diagram.body
 
-def symm {source target : OpenDiagram  arity}
+noncomputable def symm {source target : OpenDiagram  arity}
     (iso : OpenDiagramIso source target) : OpenDiagramIso target source where
   external := iso.external.symm
   boundary := by
@@ -48,7 +48,7 @@ def symm {source target : OpenDiagram  arity}
       _ = source.boundary i := iso.external.left_inv _
   body := iso.body.symm
 
-def trans {source middle target : OpenDiagram  arity}
+noncomputable def trans {source middle target : OpenDiagram  arity}
     (first : OpenDiagramIso source middle)
     (second : OpenDiagramIso middle target) : OpenDiagramIso source target where
   external := first.external.trans second.external
@@ -131,14 +131,15 @@ end Isomorphic
 
 end OpenDiagram
 
-def OpenDiagram.withBody_iso
+noncomputable def OpenDiagram.withBody_iso
     {diagram : OpenDiagram arity}
     {before after : Region diagram.externalClasses []}
-    (h : Core.Isomorphic before after) :
+    (body : RegionIso (FiniteEquiv.refl (Fin diagram.externalClasses)) []
+      before after) :
     OpenDiagramIso
       (diagram.withBody before)
       (diagram.withBody after) where
   external := FiniteEquiv.refl (Fin diagram.externalClasses)
   boundary := fun _ => rfl
-  body := h
+  body := body
 end VisualProof.Diagram

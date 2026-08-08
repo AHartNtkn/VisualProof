@@ -299,7 +299,8 @@ theorem iso_denotation
     (model : Model) (env : Fin wires -> model.Carrier)
     (relEnv : RelEnv model.Carrier rels) :
     denoteRegion model  env relEnv left <->
-      denoteRegion model  env relEnv right :=
-  hiso.denotation model  env env relEnv (fun _ => rfl)
+      denoteRegion model  env relEnv right := by
+  rcases hiso with ⟨iso⟩
+  exact iso.denotation model env env relEnv (fun _ => rfl)
 
 end VisualProof.Diagram

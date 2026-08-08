@@ -11,7 +11,7 @@ structure Occurrence
   host_iso : OpenDiagramIso host
     (interface.withBody (context.fill pattern))
 
-def Occurrence.transportHost
+noncomputable def Occurrence.transportHost
     (occurrence : Occurrence pattern host)
     (iso : OpenDiagramIso host host') :
     Occurrence pattern host' where
@@ -19,17 +19,20 @@ def Occurrence.transportHost
   context := occurrence.context
   host_iso := iso.symm.trans occurrence.host_iso
 
-def Occurrence.transportPattern
+noncomputable def Occurrence.transportPattern
+    {holeWires : Nat} {holeRels : Theory.RelCtx}
+    {pattern pattern' : Region holeWires holeRels}
     (occurrence : Occurrence pattern host)
-    (iso : Core.Isomorphic pattern pattern') :
+    (iso : RegionIso (FiniteEquiv.refl (Fin holeWires)) holeRels
+      pattern pattern') :
     Occurrence pattern' host where
   interface := occurrence.interface
   context := occurrence.context
   host_iso := occurrence.host_iso.trans
     (OpenDiagram.withBody_iso
-      (DiagramContext.fill_iso occurrence.context iso))
+      (occurrence.context.fillIso iso))
 
-def OpenDiagramIso.replaceContext
+noncomputable def OpenDiagramIso.replaceContext
     {source target : OpenDiagram arity}
     {sourcePath targetPath : List Nat}
     (sourceWitness : Region.ContextPath source.body sourcePath)

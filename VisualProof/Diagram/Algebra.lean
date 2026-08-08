@@ -256,34 +256,52 @@ def ItemSeq.focusAt? :
           exact congrArg (ItemSeq.cons item) focus.rebuild
       }
 
-theorem ItemSeq.focusAt?_complete
-    (items : ItemSeq  wires rels) (index : Fin items.length) :
-    ∃ focus, items.focusAt? index.val = some focus ∧
-      focus.item = items.get index := by
-  cases items with
-  | nil => exact Fin.elim0 index
-  | cons item tail =>
-      refine Fin.cases ?_ (fun tailIndex => ?_) index
-      · exact ⟨{
+/-- The canonical proof-relevant result of focusing a valid finite item
+position.  It is computed directly from the sequence and retains both the
+lookup equation and the indexed item equation. -/
+structure ItemSeq.IndexedFocus
+    (items : ItemSeq wires rels) (index : Fin items.length) where
+  focus : ItemSeq.Focus items
+  atIndex : items.focusAt? index.val = some focus
+  item_eq : focus.item = items.get index
+
+def ItemSeq.focusAt :
+    (items : ItemSeq wires rels) →
+    (index : Fin items.length) → ItemSeq.IndexedFocus items index
+  | .nil, index => Fin.elim0 index
+  | .cons item tail, index =>
+      Fin.cases {
+        focus := {
           before := .nil
           item := item
           after := tail
           rebuild := rfl
-        }, rfl, rfl⟩
-      · obtain ⟨focus, hfocus, hitem⟩ :=
-          ItemSeq.focusAt?_complete tail tailIndex
-        refine ⟨{
-          before := .cons item focus.before
-          item := focus.item
-          after := focus.after
-          rebuild := by
-            simp only [ItemSeq.append]
-            exact congrArg (ItemSeq.cons item) focus.rebuild
-        }, ?_, ?_⟩
-        · simp [ItemSeq.focusAt?, hfocus]
-        · simpa only [ItemSeq.get] using hitem
-termination_by items.length
-decreasing_by simp_all [ItemSeq.length]
+        }
+        atIndex := rfl
+        item_eq := rfl
+      } (fun tailIndex =>
+        let nested := ItemSeq.focusAt tail tailIndex
+        {
+          focus := {
+            before := .cons item nested.focus.before
+            item := nested.focus.item
+            after := nested.focus.after
+            rebuild := by
+              simp only [ItemSeq.append]
+              exact congrArg (ItemSeq.cons item) nested.focus.rebuild
+          }
+          atIndex := by
+            simp [ItemSeq.focusAt?, nested.atIndex]
+          item_eq := by
+            simpa only [ItemSeq.get] using nested.item_eq
+        }) index
+
+theorem ItemSeq.focusAt?_complete
+    (items : ItemSeq  wires rels) (index : Fin items.length) :
+    ∃ focus, items.focusAt? index.val = some focus ∧
+      focus.item = items.get index := by
+  let result := items.focusAt index
+  exact ⟨result.focus, result.atIndex, result.item_eq⟩
 
 /-- A successful natural-number focus lookup determines a valid finite
 position.  This is the converse bound needed to transport a context path
@@ -1101,7 +1119,7 @@ theorem Region.conjoin_renameRelations
           rw [ItemSeq.renameWires_renameRelations,
             ItemSeq.renameWires_renameRelations]
 
-theorem RegionIso.renameWiresEquiv
+noncomputable def RegionIso.renameWiresEquiv
     (region : Region  source rels)
     (wire : FiniteEquiv (Fin source) (Fin target)) :
     RegionIso  wire rels region (region.renameWires wire) := by
@@ -1153,7 +1171,7 @@ theorem RegionIso.renameWiresEquiv
 
 /-- Renaming the relation context uniformly on both sides preserves an
 intrinsic region isomorphism. -/
-theorem RegionIso.renameRelations
+noncomputable def RegionIso.renameRelations
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : Region  sourceWires sourceRels}
     {target : Region  targetWires sourceRels}
@@ -1213,7 +1231,7 @@ theorem RegionIso.renameRelations
       exact itemsIH originalIndex rho)
     iso rho
 
-theorem ItemSeqIso.renameWiresEquiv
+noncomputable def ItemSeqIso.renameWiresEquiv
     (items : ItemSeq  source rels)
     (wire : FiniteEquiv (Fin source) (Fin target)) :
     ItemSeqIso  wire rels items (items.renameWires wire) := by
@@ -1264,7 +1282,7 @@ theorem ItemSeqIso.renameWiresEquiv
     · simpa [ItemSeq.get, ItemSeq.renameWiresPositionEquiv,
         ItemSeq.renameWires_length] using tailIH wire rest
 
-theorem ItemIso.renameWiresEquiv
+noncomputable def ItemIso.renameWiresEquiv
     (item : Item  source rels)
     (wire : FiniteEquiv (Fin source) (Fin target)) :
     ItemIso  wire rels item (item.renameWires wire) := by
@@ -1312,7 +1330,7 @@ theorem ItemIso.renameWiresEquiv
     · simpa [ItemSeq.get, ItemSeq.renameWiresPositionEquiv,
         ItemSeq.renameWires_length] using tailIH wire rest
 
-theorem ItemSeqIso.appendCommRename
+noncomputable def ItemSeqIso.appendCommRename
     (first second : ItemSeq  source rels)
     (wire : FiniteEquiv (Fin source) (Fin target)) :
     ItemSeqIso  wire rels (first.append second)
@@ -1370,7 +1388,7 @@ theorem ItemSeqIso.appendCommRename
       exact ItemIso.renameWiresEquiv (second.get secondIndex) wire)
     sumIndex rfl
 
-theorem RegionIso.conjoin_blank_left
+noncomputable def RegionIso.conjoin_blank_left
     (region : Region  wires rels) :
     RegionIso  (FiniteEquiv.refl (Fin wires)) rels
       region (Region.blank.conjoin region) := by
@@ -1393,7 +1411,7 @@ theorem RegionIso.conjoin_blank_left
         ItemSeqIso.renameWiresEquiv items
           (extendWireEquiv (FiniteEquiv.refl (Fin wires)) localEquiv)
 
-theorem RegionIso.conjoin_blank_right
+noncomputable def RegionIso.conjoin_blank_right
     (region : Region  wires rels) :
     RegionIso  (FiniteEquiv.refl (Fin wires)) rels
       region (region.conjoin Region.blank) := by
@@ -1416,7 +1434,7 @@ theorem RegionIso.conjoin_blank_right
         ItemSeqIso.renameWiresEquiv items
           (extendWireEquiv (FiniteEquiv.refl (Fin wires)) localEquiv)
 
-theorem RegionIso.conjoin_assoc
+noncomputable def RegionIso.conjoin_assoc
     (first second third : Region  wires rels) :
     RegionIso  (FiniteEquiv.refl (Fin wires)) rels
       ((first.conjoin second).conjoin third)
@@ -1504,7 +1522,7 @@ theorem RegionIso.conjoin_assoc
         rw [hitems] at hiso
         simpa only [Region.conjoin, sourceItems, extended] using hiso
 
-theorem RegionIso.conjoin_comm
+noncomputable def RegionIso.conjoin_comm
     (first second : Region  wires rels) :
     RegionIso  (FiniteEquiv.refl (Fin wires)) rels
       (first.conjoin second) (second.conjoin first) := by
@@ -1552,7 +1570,7 @@ theorem RegionIso.conjoin_comm
 
 /-- Pull a focused-frame presentation back across an ambient wire renaming of
 its source sequence. -/
-def ItemSeqIso.Frame.prependRenameWires
+noncomputable def ItemSeqIso.Frame.prependRenameWires
     {source : ItemSeq  sourceWires rels}
     {target : ItemSeq  targetWires rels}
     (firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires))
@@ -1582,7 +1600,7 @@ def ItemSeqIso.Frame.prependRenameWires
 
 /-- Push a focused-frame presentation forward across an ambient wire
 renaming of its target sequence. -/
-def ItemSeqIso.Frame.appendRenameWires
+noncomputable def ItemSeqIso.Frame.appendRenameWires
     {source : ItemSeq  sourceWires rels}
     {target : ItemSeq  targetWires rels}
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
@@ -1661,7 +1679,7 @@ inductive DiagramContextIso :
     (holeWire : FiniteEquiv (Fin sourceHole) (Fin targetHole)) →
     (outerRels holeRels : Theory.RelCtx) →
     DiagramContext  sourceOuter sourceHole outerRels holeRels →
-    DiagramContext  targetOuter targetHole outerRels holeRels → Prop
+    DiagramContext  targetOuter targetHole outerRels holeRels → Type
   | hole
       (wire : FiniteEquiv (Fin wires) (Fin targetWires)) :
       DiagramContextIso  wire wire rels rels
@@ -1724,7 +1742,7 @@ inductive DiagramContextIso :
         (.bubble sourceLocal sourceBefore sourceAfter arity sourceChild)
         (.bubble targetLocal targetBefore targetAfter arity targetChild)
 
-theorem DiagramContextIso.symm
+noncomputable def DiagramContextIso.symm
     (iso : DiagramContextIso outerWire holeWire outerRels holeRels
       source target) :
     DiagramContextIso outerWire.symm holeWire.symm outerRels holeRels
@@ -1769,7 +1787,7 @@ theorem DiagramContext.cutDepth_castRels
 
 /-- Build one aligned cut-context layer from the recursively aligned child
 and the compiler's permutation of every nonfocused sibling. -/
-theorem DiagramContextIso.cutFrame
+def DiagramContextIso.cutFrame
     {outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
     {holeWire : FiniteEquiv (Fin sourceHole) (Fin targetHole)}
     (localWire : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
@@ -1803,7 +1821,7 @@ theorem DiagramContextIso.cutFrame
   exact replaced
 
 /-- Bubble counterpart of `DiagramContextIso.cutFrame`. -/
-theorem DiagramContextIso.bubbleFrame
+def DiagramContextIso.bubbleFrame
     {outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
     {holeWire : FiniteEquiv (Fin sourceHole) (Fin targetHole)}
     (localWire : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
@@ -1839,7 +1857,7 @@ theorem DiagramContextIso.bubbleFrame
 
 /-- A site isomorphism lifts through every aligned compiler frame to the
 complete root. -/
-theorem DiagramContextIso.fill
+noncomputable def DiagramContextIso.fill
     (alignment : DiagramContextIso  outerWire holeWire
       outerRels holeRels sourceContext targetContext)
     (site : RegionIso  holeWire holeRels sourceSite targetSite) :
@@ -1856,7 +1874,7 @@ theorem DiagramContextIso.fill
 
 /-- Root form of `DiagramContextIso.fill`, with reconstruction equations for
 the source and target focuses. -/
-theorem DiagramContextIso.root
+noncomputable def DiagramContextIso.root
     {sourceRoot : Region  sourceOuter outerRels}
     {targetRoot : Region  targetOuter outerRels}
     {sourceContext : DiagramContext  sourceOuter sourceHole

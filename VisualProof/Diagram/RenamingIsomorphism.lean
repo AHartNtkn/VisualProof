@@ -9,7 +9,7 @@ private def RegionIsoRenamingMotive {sourceWires targetWires : Nat}
     (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
     (rels : RelCtx) (source : Region  sourceWires rels)
     (target : Region  targetWires rels)
-    (_ : RegionIso  wire rels source target) : Prop :=
+    (_ : RegionIso  wire rels source target) : Type :=
   ∀ {renamedSourceWires renamedTargetWires : Nat}
     (sourceMap : Fin sourceWires → Fin renamedSourceWires)
     (targetMap : Fin targetWires → Fin renamedTargetWires)
@@ -23,7 +23,7 @@ private def ItemIsoRenamingMotive {sourceWires targetWires : Nat}
     (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
     (rels : RelCtx) (source : Item  sourceWires rels)
     (target : Item  targetWires rels)
-    (_ : ItemIso  wire rels source target) : Prop :=
+    (_ : ItemIso  wire rels source target) : Type :=
   ∀ {renamedSourceWires renamedTargetWires : Nat}
     (sourceMap : Fin sourceWires → Fin renamedSourceWires)
     (targetMap : Fin targetWires → Fin renamedTargetWires)
@@ -37,7 +37,7 @@ private def ItemSeqIsoRenamingMotive {sourceWires targetWires : Nat}
     (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
     (rels : RelCtx) (source : ItemSeq  sourceWires rels)
     (target : ItemSeq  targetWires rels)
-    (_ : ItemSeqIso  wire rels source target) : Prop :=
+    (_ : ItemSeqIso  wire rels source target) : Type :=
   ∀ {renamedSourceWires renamedTargetWires : Nat}
     (sourceMap : Fin sourceWires → Fin renamedSourceWires)
     (targetMap : Fin targetWires → Fin renamedTargetWires)
@@ -67,7 +67,7 @@ private theorem extendWireRenaming_commutes
       congrArg (Fin.castAdd targetLocal) outer
   · simp [extendWireRenaming]
 
-private theorem regionIsoRenamingCase
+private def regionIsoRenamingCase
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {sourceItems : ItemSeq  (sourceWires + sourceLocal) rels}
     {targetItems : ItemSeq  (targetWires + targetLocal) rels}
@@ -86,7 +86,7 @@ private theorem regionIsoRenamingCase
     (extendWireRenaming_commutes wire localWire sourceMap targetMap renamedWire
       commutes)
 
-private theorem atomIsoRenamingCase
+private def atomIsoRenamingCase
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     (relation : RelVar rels arity)
     {sourceArguments : Fin arity → Fin sourceWires}
@@ -101,7 +101,7 @@ private theorem atomIsoRenamingCase
   have mapped := congrFun commutes (sourceArguments index)
   simpa [Function.comp_apply, ← argumentsEq] using mapped
 
-private theorem identityIsoRenamingCase
+private def identityIsoRenamingCase
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {sourceArguments : Fin arity → Fin sourceWires}
     {targetArguments : Fin arity → Fin targetWires}
@@ -116,7 +116,7 @@ private theorem identityIsoRenamingCase
   simpa [Function.comp_apply, ← argumentsEq] using mapped
 
 
-private theorem cutIsoRenamingCase
+private def cutIsoRenamingCase
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {sourceBody : Region  sourceWires rels}
     {targetBody : Region  targetWires rels}
@@ -127,7 +127,7 @@ private theorem cutIsoRenamingCase
   intro renamedSource renamedTarget sourceMap targetMap renamedWire commutes
   exact ItemIso.cut (bodyIH sourceMap targetMap renamedWire commutes)
 
-private theorem bubbleIsoRenamingCase
+private def bubbleIsoRenamingCase
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {sourceBody : Region  sourceWires (arity :: rels)}
     {targetBody : Region  targetWires (arity :: rels)}
@@ -139,7 +139,7 @@ private theorem bubbleIsoRenamingCase
   intro renamedSource renamedTarget sourceMap targetMap renamedWire commutes
   exact ItemIso.bubble (bodyIH sourceMap targetMap renamedWire commutes)
 
-private theorem itemSeqIsoRenamingCase
+private def itemSeqIsoRenamingCase
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : ItemSeq  sourceWires rels}
     {target : ItemSeq  targetWires rels}
@@ -170,7 +170,7 @@ private theorem itemSeqIsoRenamingCase
     ItemSeq.get_renameWires target targetMap (positions sourceIndex)]
   exact transported
 
-private theorem regionIsoRenamingRec
+private noncomputable def regionIsoRenamingRec
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : Region  sourceWires rels}
     {target : Region  targetWires rels}
@@ -184,7 +184,7 @@ private theorem regionIsoRenamingRec
     cutIsoRenamingCase bubbleIsoRenamingCase
     itemSeqIsoRenamingCase iso
 
-private theorem itemIsoRenamingRec
+private noncomputable def itemIsoRenamingRec
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : Item  sourceWires rels}
     {target : Item  targetWires rels}
@@ -198,7 +198,7 @@ private theorem itemIsoRenamingRec
     cutIsoRenamingCase bubbleIsoRenamingCase
     itemSeqIsoRenamingCase iso
 
-private theorem itemSeqIsoRenamingRec
+private noncomputable def itemSeqIsoRenamingRec
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : ItemSeq  sourceWires rels}
     {target : ItemSeq  targetWires rels}
@@ -214,7 +214,7 @@ private theorem itemSeqIsoRenamingRec
 
 /-- Transport a region isomorphism through arbitrary wire renamings whose
 square commutes. -/
-theorem RegionIso.renameWires_commuting
+noncomputable def RegionIso.renameWires_commuting
     {sourceWires targetWires renamedSourceWires renamedTargetWires : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
@@ -231,7 +231,7 @@ theorem RegionIso.renameWires_commuting
       (source.renameWires sourceMap) (target.renameWires targetMap) :=
   regionIsoRenamingRec iso sourceMap targetMap renamedWire commutes
 
-theorem ItemIso.renameWires_commuting
+noncomputable def ItemIso.renameWires_commuting
     {sourceWires targetWires renamedSourceWires renamedTargetWires : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
@@ -248,7 +248,7 @@ theorem ItemIso.renameWires_commuting
       (source.renameWires sourceMap) (target.renameWires targetMap) :=
   itemIsoRenamingRec iso sourceMap targetMap renamedWire commutes
 
-theorem ItemSeqIso.renameWires_commuting
+noncomputable def ItemSeqIso.renameWires_commuting
     {sourceWires targetWires renamedSourceWires renamedTargetWires : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
@@ -267,7 +267,7 @@ theorem ItemSeqIso.renameWires_commuting
 
 /-- Concatenate two item-sequence isomorphisms that use the same ambient wire
 transport, preserving the order of the two blocks. -/
-theorem ItemSeqIso.append
+noncomputable def ItemSeqIso.append
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {sourceFirst sourceSecond : ItemSeq  sourceWires rels}
     {targetFirst targetSecond : ItemSeq  targetWires rels}
@@ -368,7 +368,7 @@ private theorem adjoinMaterialWire_commutes
 /-- The intrinsic splice kernel preserves a host item isomorphism when the
 material wire substitutions commute with its complete host-wire transport.
 The relation substitution is shared on both sides. -/
-theorem RegionIso.spliceAt
+noncomputable def RegionIso.spliceAt
     {outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
     {hostLocalWire : FiniteEquiv
       (Fin sourceHostLocal) (Fin targetHostLocal)}
@@ -463,7 +463,7 @@ theorem Region.spliceAt_renameRelations
       rw [itemEq]
 
 /-- Relation-changing counterpart of `RegionIso.spliceAt`. -/
-theorem RegionIso.spliceAt_renameRelations
+noncomputable def RegionIso.spliceAt_renameRelations
     {outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
     {hostLocalWire : FiniteEquiv
       (Fin sourceHostLocal) (Fin targetHostLocal)}

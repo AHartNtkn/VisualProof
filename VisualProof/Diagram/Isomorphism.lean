@@ -73,7 +73,7 @@ mutual
       FiniteEquiv (Fin sourceWires) (Fin targetWires) ->
       (rels : RelCtx) ->
       Region  sourceWires rels ->
-      Region  targetWires rels -> Prop
+      Region  targetWires rels -> Type
     | mk {sourceWires targetWires sourceLocal targetLocal : Nat}
         {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
         {rels : RelCtx}
@@ -90,7 +90,7 @@ mutual
       FiniteEquiv (Fin sourceWires) (Fin targetWires) ->
       (rels : RelCtx) ->
       Item  sourceWires rels ->
-      Item  targetWires rels -> Prop
+      Item  targetWires rels -> Type
     | atom {sourceWires targetWires arity : Nat}
         {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
         {rels : RelCtx}
@@ -130,7 +130,7 @@ mutual
       FiniteEquiv (Fin sourceWires) (Fin targetWires) ->
       (rels : RelCtx) ->
       ItemSeq  sourceWires rels ->
-      ItemSeq  targetWires rels -> Prop
+      ItemSeq  targetWires rels -> Type
     | permute {sourceWires targetWires : Nat}
         {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
         {rels : RelCtx}
@@ -141,34 +141,6 @@ mutual
           (source.get i) (target.get (positions i))) :
         ItemSeqIso  ambient rels source target
 end
-
-/-- Proof-relevant presentation of a region isomorphism retaining the exact
-item-position equivalence. This is used when a client must replace one mapped
-item instead of merely consuming the propositional isomorphism. -/
-inductive RegionIsoPresentation :
-    {sourceWires targetWires : Nat} →
-    (ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)) →
-    (rels : RelCtx) → Region  sourceWires rels →
-    Region  targetWires rels → Type
-  | mk {sourceLocal targetLocal : Nat}
-      {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
-      {sourceItems : ItemSeq  (sourceWires + sourceLocal) rels}
-      {targetItems : ItemSeq  (targetWires + targetLocal) rels}
-      (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
-      (positions : FiniteEquiv (Fin sourceItems.length)
-        (Fin targetItems.length))
-      (items : ∀ index, ItemIso
-        (extendWireEquiv ambient localEquiv) rels
-        (sourceItems.get index) (targetItems.get (positions index))) :
-      RegionIsoPresentation  ambient rels
-        (.mk sourceLocal sourceItems) (.mk targetLocal targetItems)
-
-def RegionIsoPresentation.iso
-    (presentation : RegionIsoPresentation  ambient rels source target) :
-    RegionIso  ambient rels source target := by
-  cases presentation with
-  | mk localEquiv positions items =>
-      exact .mk localEquiv (.permute positions items)
 
 
 def ItemSeq.replaceAt :
@@ -236,7 +208,7 @@ theorem ItemSeq.get_replaceAt_of_ne
 termination_by items.length
 decreasing_by simp_all [ItemSeq.length]
 
-theorem ItemSeqIso.replaceAt
+def ItemSeqIso.replaceAt
     {source : ItemSeq  sourceWires rels}
     {target : ItemSeq  targetWires rels}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
@@ -359,7 +331,7 @@ structure ItemSeqIso.Frame
     ItemIso  wire rels
       (source.get index) (target.get (positions index))
 
-theorem ItemSeqIso.Frame.replaceAt
+def ItemSeqIso.Frame.replaceAt
     {source : ItemSeq  sourceWires rels}
     {target : ItemSeq  targetWires rels}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
@@ -387,17 +359,17 @@ def ItemSeqIso.Frame.castWire
   subst second
   exact frame
 
-private def RegionIsoReflMotive {wires : Nat} (rels : RelCtx) (region : Region  wires rels) : Prop :=
+private def RegionIsoReflMotive {wires : Nat} (rels : RelCtx) (region : Region  wires rels) : Type :=
   RegionIso  (FiniteEquiv.refl (Fin wires)) rels region region
 
-private def ItemIsoReflMotive {wires : Nat} (rels : RelCtx) (item : Item  wires rels) : Prop :=
+private def ItemIsoReflMotive {wires : Nat} (rels : RelCtx) (item : Item  wires rels) : Type :=
   ItemIso  (FiniteEquiv.refl (Fin wires)) rels item item
 
-private def ItemSeqIsoReflMotive {wires : Nat} (rels : RelCtx) (items : ItemSeq  wires rels) : Prop :=
+private def ItemSeqIsoReflMotive {wires : Nat} (rels : RelCtx) (items : ItemSeq  wires rels) : Type :=
   forall i, ItemIso  (FiniteEquiv.refl (Fin wires)) rels
     (items.get i) (items.get i)
 
-private theorem regionIsoReflCase
+private def regionIsoReflCase
     {wires : Nat} {rels : RelCtx}
     (localWires : Nat)
     (items : ItemSeq  (wires + localWires) rels)
@@ -417,7 +389,7 @@ private theorem regionIsoReflCase
   intro i
   simpa only [FiniteEquiv.refl_apply] using itemsIH i
 
-private theorem atomIsoReflCase
+private def atomIsoReflCase
     {wires arity : Nat} {rels : RelCtx}
     (relation : RelVar rels arity) (arguments : Fin arity -> Fin wires) :
     ItemIsoReflMotive  rels (.atom relation arguments) := by
@@ -426,7 +398,7 @@ private theorem atomIsoReflCase
   rfl
 
 
-private theorem identityIsoReflCase
+private def identityIsoReflCase
     {wires : Nat} {rels : RelCtx}
     (arity : Nat) (arguments : Fin arity -> Fin wires) :
     ItemIsoReflMotive  rels
@@ -435,13 +407,13 @@ private theorem identityIsoReflCase
   funext i
   rfl
 
-private theorem cutIsoReflCase
+private def cutIsoReflCase
     {wires : Nat} {rels : RelCtx}
     (body : Region  wires rels) (bodyIH : RegionIsoReflMotive rels body) :
     ItemIsoReflMotive  rels (.cut body) :=
   ItemIso.cut bodyIH
 
-private theorem bubbleIsoReflCase
+private def bubbleIsoReflCase
     {wires : Nat} {rels : RelCtx}
     (arity : Nat)
     (body : Region  wires (arity :: rels))
@@ -449,14 +421,14 @@ private theorem bubbleIsoReflCase
     ItemIsoReflMotive  rels (.bubble arity body) :=
   ItemIso.bubble bodyIH
 
-private theorem nilIsoReflCase
+private def nilIsoReflCase
     {wires : Nat} {rels : RelCtx} :
     ItemSeqIsoReflMotive  rels
       (ItemSeq.nil : ItemSeq  wires rels) := by
   intro i
   exact Fin.elim0 i
 
-private theorem consIsoReflCase
+private def consIsoReflCase
     {wires : Nat} {rels : RelCtx}
     (item : Item  wires rels) (tail : ItemSeq  wires rels)
     (itemIH : ItemIsoReflMotive rels item)
@@ -466,7 +438,7 @@ private theorem consIsoReflCase
   refine Fin.cases itemIH (fun j => ?_) i
   exact tailIH j
 
-private theorem regionIsoReflRec
+private noncomputable def regionIsoReflRec
     (region : Region  wires rels) : RegionIsoReflMotive rels region := by
   apply Region.rec
     (motive_1 := fun _ rels region => RegionIsoReflMotive rels region)
@@ -475,7 +447,7 @@ private theorem regionIsoReflRec
     regionIsoReflCase atomIsoReflCase identityIsoReflCase
     cutIsoReflCase bubbleIsoReflCase nilIsoReflCase consIsoReflCase region
 
-private theorem itemIsoReflRec
+private noncomputable def itemIsoReflRec
     (item : Item  wires rels) : ItemIsoReflMotive rels item := by
   apply Item.rec
     (motive_1 := fun _ rels region => RegionIsoReflMotive rels region)
@@ -484,7 +456,7 @@ private theorem itemIsoReflRec
     regionIsoReflCase atomIsoReflCase identityIsoReflCase
     cutIsoReflCase bubbleIsoReflCase nilIsoReflCase consIsoReflCase item
 
-private theorem itemSeqIsoReflRec
+private noncomputable def itemSeqIsoReflRec
     (items : ItemSeq  wires rels) :
     ItemSeqIsoReflMotive rels items := by
   apply ItemSeq.rec
@@ -494,15 +466,15 @@ private theorem itemSeqIsoReflRec
     regionIsoReflCase atomIsoReflCase identityIsoReflCase
     cutIsoReflCase bubbleIsoReflCase nilIsoReflCase consIsoReflCase items
 
-theorem RegionIso.refl (region : Region  wires rels) :
+noncomputable def RegionIso.refl (region : Region  wires rels) :
     RegionIso  (FiniteEquiv.refl (Fin wires)) rels region region :=
   regionIsoReflRec region
 
-theorem ItemIso.refl (item : Item  wires rels) :
+noncomputable def ItemIso.refl (item : Item  wires rels) :
     ItemIso  (FiniteEquiv.refl (Fin wires)) rels item item :=
   itemIsoReflRec item
 
-theorem ItemSeqIso.refl (items : ItemSeq  wires rels) :
+noncomputable def ItemSeqIso.refl (items : ItemSeq  wires rels) :
     ItemSeqIso  (FiniteEquiv.refl (Fin wires)) rels items items :=
   ItemSeqIso.permute (FiniteEquiv.refl (Fin items.length))
     (itemSeqIsoReflRec items)
@@ -511,21 +483,21 @@ private def RegionIsoSymmMotive {sourceWires targetWires : Nat}
     (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
     (rels : RelCtx) (source : Region  sourceWires rels)
     (target : Region  targetWires rels)
-    (_ : RegionIso  wire rels source target) : Prop :=
+    (_ : RegionIso  wire rels source target) : Type :=
   RegionIso  wire.symm rels target source
 
 private def ItemIsoSymmMotive {sourceWires targetWires : Nat}
     (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
     (rels : RelCtx) (source : Item  sourceWires rels)
     (target : Item  targetWires rels)
-    (_ : ItemIso  wire rels source target) : Prop :=
+    (_ : ItemIso  wire rels source target) : Type :=
   ItemIso  wire.symm rels target source
 
 private def ItemSeqIsoSymmMotive {sourceWires targetWires : Nat}
     (wire : FiniteEquiv (Fin sourceWires) (Fin targetWires))
     (rels : RelCtx) (source : ItemSeq  sourceWires rels)
     (target : ItemSeq  targetWires rels)
-    (_ : ItemSeqIso  wire rels source target) : Prop :=
+    (_ : ItemSeqIso  wire rels source target) : Type :=
   ItemSeqIso  wire.symm rels target source
 
 theorem extendWireEquiv_symm
@@ -537,7 +509,7 @@ theorem extendWireEquiv_symm
   intro i
   refine Fin.addCases (fun j => ?_) (fun j => ?_) i <;> rfl
 
-private theorem regionIsoSymmCase
+private def regionIsoSymmCase
     {sourceWires targetWires sourceLocal targetLocal : Nat}
     {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
@@ -555,7 +527,7 @@ private theorem regionIsoSymmCase
   rw [← extendWireEquiv_symm]
   exact itemsIH
 
-private theorem atomIsoSymmCase
+private def atomIsoSymmCase
     {sourceWires targetWires arity : Nat}
     {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx} (relation : RelVar rels arity)
@@ -572,7 +544,7 @@ private theorem atomIsoSymmCase
   exact ambient.left_inv (sourceArguments i)
 
 
-private theorem identityIsoSymmCase
+private def identityIsoSymmCase
     {sourceWires targetWires arity : Nat}
     {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
@@ -587,7 +559,7 @@ private theorem identityIsoSymmCase
   rw [← arguments_eq]
   exact ambient.left_inv (sourceArguments i)
 
-private theorem cutIsoSymmCase
+private def cutIsoSymmCase
     {sourceWires targetWires : Nat}
     {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
@@ -599,7 +571,7 @@ private theorem cutIsoSymmCase
       (.cut body) :=
   ItemIso.cut bodyIH
 
-private theorem bubbleIsoSymmCase
+private def bubbleIsoSymmCase
     {sourceWires targetWires arity : Nat}
     {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
@@ -612,7 +584,7 @@ private theorem bubbleIsoSymmCase
       (.bubble arity targetBody) (.bubble body) :=
   ItemIso.bubble bodyIH
 
-private theorem permuteIsoSymmCase
+private def permuteIsoSymmCase
     {sourceWires targetWires : Nat}
     {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
@@ -626,9 +598,14 @@ private theorem permuteIsoSymmCase
     ItemSeqIsoSymmMotive ambient rels source target (.permute positions items) := by
   refine ItemSeqIso.permute positions.symm ?_
   intro i
-  simpa only [positions.right_inv] using itemsIH (positions.invFun i)
+  rw [← positions.right_inv i]
+  change ItemIso ambient.symm rels
+    (target.get (positions (positions.invFun i)))
+    (source.get (positions.invFun (positions (positions.invFun i))))
+  rw [positions.left_inv]
+  exact itemsIH (positions.invFun i)
 
-private theorem regionIsoSymmRec
+private noncomputable def regionIsoSymmRec
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : Region  sourceWires rels}
     {target : Region  targetWires rels}
@@ -641,7 +618,7 @@ private theorem regionIsoSymmRec
     regionIsoSymmCase atomIsoSymmCase identityIsoSymmCase
     cutIsoSymmCase bubbleIsoSymmCase permuteIsoSymmCase iso
 
-private theorem itemSeqIsoSymmRec
+private noncomputable def itemSeqIsoSymmRec
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : ItemSeq  sourceWires rels}
     {target : ItemSeq  targetWires rels}
@@ -654,7 +631,7 @@ private theorem itemSeqIsoSymmRec
     regionIsoSymmCase atomIsoSymmCase identityIsoSymmCase
     cutIsoSymmCase bubbleIsoSymmCase permuteIsoSymmCase iso
 
-private theorem itemIsoSymmRec
+private noncomputable def itemIsoSymmRec
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : Item sourceWires rels}
     {target : Item targetWires rels}
@@ -667,7 +644,7 @@ private theorem itemIsoSymmRec
     regionIsoSymmCase atomIsoSymmCase identityIsoSymmCase
     cutIsoSymmCase bubbleIsoSymmCase permuteIsoSymmCase iso
 
-theorem RegionIso.symm
+noncomputable def RegionIso.symm
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : Region  sourceWires rels}
     {target : Region  targetWires rels}
@@ -675,7 +652,7 @@ theorem RegionIso.symm
     RegionIso  wire.symm rels target source :=
   regionIsoSymmRec iso
 
-theorem ItemIso.symm
+noncomputable def ItemIso.symm
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : Item sourceWires rels}
     {target : Item targetWires rels}
@@ -683,7 +660,7 @@ theorem ItemIso.symm
     ItemIso wire.symm rels target source :=
   itemIsoSymmRec iso
 
-theorem ItemSeqIso.symm
+noncomputable def ItemSeqIso.symm
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {source : ItemSeq  sourceWires rels}
     {target : ItemSeq  targetWires rels}
@@ -695,7 +672,7 @@ private def RegionIsoTransMotive {sourceWires middleWires : Nat}
     (firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires))
     (rels : RelCtx) (source : Region  sourceWires rels)
     (middle : Region  middleWires rels)
-    (_ : RegionIso  firstWire rels source middle) : Prop :=
+    (_ : RegionIso  firstWire rels source middle) : Type :=
   forall {targetWires : Nat}
     {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
     {target : Region  targetWires rels},
@@ -706,7 +683,7 @@ private def ItemIsoTransMotive {sourceWires middleWires : Nat}
     (firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires))
     (rels : RelCtx) (source : Item  sourceWires rels)
     (middle : Item  middleWires rels)
-    (_ : ItemIso  firstWire rels source middle) : Prop :=
+    (_ : ItemIso  firstWire rels source middle) : Type :=
   forall {targetWires : Nat}
     {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
     {target : Item  targetWires rels},
@@ -717,7 +694,7 @@ private def ItemSeqIsoTransMotive {sourceWires middleWires : Nat}
     (firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires))
     (rels : RelCtx) (source : ItemSeq  sourceWires rels)
     (middle : ItemSeq  middleWires rels)
-    (_ : ItemSeqIso  firstWire rels source middle) : Prop :=
+    (_ : ItemSeqIso  firstWire rels source middle) : Type :=
   forall {targetWires : Nat}
     {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
     {target : ItemSeq  targetWires rels},
@@ -738,7 +715,7 @@ private theorem extendWireEquiv_trans
   refine Fin.addCases (fun j => ?_) (fun j => ?_) i <;>
     simp [FiniteEquiv.trans, extendWireEquiv]
 
-private theorem regionIsoTransCase
+private def regionIsoTransCase
     {sourceWires middleWires sourceLocal middleLocal : Nat}
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {rels : RelCtx}
@@ -760,7 +737,7 @@ private theorem regionIsoTransCase
       rw [← extendWireEquiv_trans]
       exact itemsIH secondItems
 
-private theorem atomIsoTransCase
+private def atomIsoTransCase
     {sourceWires middleWires arity : Nat}
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {rels : RelCtx} (relation : RelVar rels arity)
@@ -783,7 +760,7 @@ private theorem atomIsoTransCase
         _ = _ := secondArguments
 
 
-private theorem identityIsoTransCase
+private def identityIsoTransCase
     {sourceWires middleWires arity : Nat}
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {rels : RelCtx}
@@ -804,7 +781,7 @@ private theorem identityIsoTransCase
           congrArg (Function.comp secondWire.toFun) firstArguments
         _ = _ := secondArguments
 
-private theorem cutIsoTransCase
+private def cutIsoTransCase
     {sourceWires middleWires : Nat}
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {rels : RelCtx}
@@ -819,7 +796,7 @@ private theorem cutIsoTransCase
   cases second with
   | cut secondBody => exact ItemIso.cut (bodyIH secondBody)
 
-private theorem bubbleIsoTransCase
+private def bubbleIsoTransCase
     {sourceWires middleWires arity : Nat}
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {rels : RelCtx}
@@ -835,7 +812,7 @@ private theorem bubbleIsoTransCase
   cases second with
   | bubble secondBody => exact ItemIso.bubble (bodyIH secondBody)
 
-private theorem permuteIsoTransCase
+private def permuteIsoTransCase
     {sourceWires middleWires : Nat}
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {rels : RelCtx}
@@ -855,7 +832,7 @@ private theorem permuteIsoTransCase
       intro i
       exact itemsIH i (secondItems (firstPositions i))
 
-private theorem regionIsoTransRec
+private noncomputable def regionIsoTransRec
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {source : Region  sourceWires rels}
     {middle : Region  middleWires rels}
@@ -870,7 +847,7 @@ private theorem regionIsoTransRec
     regionIsoTransCase atomIsoTransCase identityIsoTransCase
     cutIsoTransCase bubbleIsoTransCase permuteIsoTransCase first second
 
-private theorem itemSeqIsoTransRec
+private noncomputable def itemSeqIsoTransRec
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {source : ItemSeq  sourceWires rels}
     {middle : ItemSeq  middleWires rels}
@@ -885,7 +862,7 @@ private theorem itemSeqIsoTransRec
     regionIsoTransCase atomIsoTransCase identityIsoTransCase
     cutIsoTransCase bubbleIsoTransCase permuteIsoTransCase first second
 
-private theorem itemIsoTransRec
+private noncomputable def itemIsoTransRec
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {source : Item  sourceWires rels}
     {middle : Item  middleWires rels}
@@ -900,7 +877,7 @@ private theorem itemIsoTransRec
     regionIsoTransCase atomIsoTransCase identityIsoTransCase
     cutIsoTransCase bubbleIsoTransCase permuteIsoTransCase first second
 
-theorem RegionIso.trans
+noncomputable def RegionIso.trans
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
     {source : Region  sourceWires rels}
@@ -911,7 +888,7 @@ theorem RegionIso.trans
     RegionIso  (firstWire.trans secondWire) rels source target :=
   regionIsoTransRec first second
 
-theorem ItemIso.trans
+noncomputable def ItemIso.trans
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
     {source : Item  sourceWires rels}
@@ -922,7 +899,7 @@ theorem ItemIso.trans
     ItemIso  (firstWire.trans secondWire) rels source target :=
   itemIsoTransRec first second
 
-theorem ItemSeqIso.trans
+noncomputable def ItemSeqIso.trans
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
     {source : ItemSeq  sourceWires rels}
@@ -936,7 +913,7 @@ theorem ItemSeqIso.trans
 namespace Core
 
 def Isomorphic (left right : Region  wires rels) : Prop :=
-  RegionIso  (FiniteEquiv.refl (Fin wires)) rels left right
+  Nonempty (RegionIso  (FiniteEquiv.refl (Fin wires)) rels left right)
 
 end Core
 private theorem ItemSeq.frame_length
@@ -948,7 +925,7 @@ private theorem ItemSeq.frame_length
   | .cons _ tail => congrArg Nat.succ
       (ItemSeq.frame_length frameAfter before after tail)
 
-private theorem ItemSeq.frame_get_iso
+private noncomputable def ItemSeq.frame_get_iso
     (frameAfter : ItemSeq wires rels)
     {before after : Item wires rels}
     (replacement : ItemIso (FiniteEquiv.refl (Fin wires)) rels before after) :
@@ -967,7 +944,7 @@ private theorem ItemSeq.frame_get_iso
       simpa [ItemSeq.frame_length, ItemSeq.append, ItemSeq.length, ItemSeq.get]
         using ItemSeq.frame_get_iso frameAfter replacement tail rest
 
-private theorem ItemSeqIso.frame_refl
+private noncomputable def ItemSeqIso.frame_refl
     (frameBefore frameAfter : ItemSeq wires rels)
     {before after : Item wires rels}
     (replacement : ItemIso (FiniteEquiv.refl (Fin wires)) rels before after) :
@@ -1003,21 +980,33 @@ private theorem extendWireEquiv_refl (outer localWires : Nat) :
   refine Fin.addCases (fun _ => ?_) (fun _ => ?_) index <;>
     simp [extendWireEquiv, FiniteEquiv.refl]
 
-theorem DiagramContext.fill_iso
+/-- Lift a canonical region-isomorphism witness through a fixed one-hole
+context without erasing its recursive data. -/
+noncomputable def DiagramContext.fillIso
     (context : DiagramContext outerWires holeWires outerRels holeRels)
     {before after : Region holeWires holeRels}
-    (h : Core.Isomorphic before after) :
-    Core.Isomorphic (context.fill before) (context.fill after) := by
+    (iso : RegionIso (FiniteEquiv.refl (Fin holeWires)) holeRels
+      before after) :
+    RegionIso (FiniteEquiv.refl (Fin outerWires)) outerRels
+      (context.fill before) (context.fill after) := by
   induction context with
-  | hole => exact h
+  | hole => exact iso
   | cut localWires frameBefore frameAfter child induction =>
       refine RegionIso.mk (FiniteEquiv.refl (Fin localWires)) ?_
       rw [extendWireEquiv_refl]
       exact ItemSeqIso.frame_refl frameBefore frameAfter
-        (ItemIso.cut (induction h))
+        (ItemIso.cut (induction iso))
   | bubble localWires frameBefore frameAfter arity child induction =>
       refine RegionIso.mk (FiniteEquiv.refl (Fin localWires)) ?_
       rw [extendWireEquiv_refl]
       exact ItemSeqIso.frame_refl frameBefore frameAfter
-        (ItemIso.bubble (induction h))
+        (ItemIso.bubble (induction iso))
+
+theorem DiagramContext.fill_iso
+    (context : DiagramContext outerWires holeWires outerRels holeRels)
+    {before after : Region holeWires holeRels}
+    (h : Core.Isomorphic before after) :
+    Core.Isomorphic (context.fill before) (context.fill after) :=
+  match h with
+  | ⟨iso⟩ => ⟨context.fillIso iso⟩
 end VisualProof.Diagram

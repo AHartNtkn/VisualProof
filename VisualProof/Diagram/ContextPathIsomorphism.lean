@@ -56,7 +56,7 @@ theorem Region.castRels_symm_cast
 
 /-- Replace the aligned holes by isomorphic bodies and rebuild the complete
 source and target regions. -/
-theorem RegionIso.ContextPathAlignment.fill
+noncomputable def RegionIso.ContextPathAlignment.fill
     {sourceWires targetWires : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
@@ -97,26 +97,26 @@ theorem ItemSeq.focusAt?_item
   subst other
   exact hitem
 
-private theorem ItemIso.target_of_cut
+private def ItemIso.target_of_cut
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {sourceBody : Region  sourceWires rels}
     {targetItem : Item  targetWires rels}
     (iso : ItemIso  wire rels (.cut sourceBody) targetItem) :
-    ∃ targetBody, targetItem = .cut targetBody ∧
+    Σ targetBody, PLift (targetItem = .cut targetBody) ×
       RegionIso  wire rels sourceBody targetBody := by
   cases iso with
-  | cut body => exact ⟨_, rfl, body⟩
+  | cut body => exact ⟨_, ⟨rfl⟩, body⟩
 
-private theorem ItemIso.target_of_bubble
+private def ItemIso.target_of_bubble
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {sourceBody : Region  sourceWires (arity :: rels)}
     {targetItem : Item  targetWires rels}
     (iso : ItemIso  wire rels
       (.bubble arity sourceBody) targetItem) :
-    ∃ targetBody, targetItem = .bubble arity targetBody ∧
+    Σ targetBody, PLift (targetItem = .bubble arity targetBody) ×
       RegionIso  wire (arity :: rels) sourceBody targetBody := by
   cases iso with
-  | bubble body => exact ⟨_, rfl, body⟩
+  | bubble body => exact ⟨_, ⟨rfl⟩, body⟩
 
 theorem DiagramContext.castHoleRels_cut
     (equality : targetHoleRels = sourceHoleRels)
@@ -273,7 +273,7 @@ theorem Region.ContextPath.fill_eq_mk_filledRootItems
 isomorphic presentation.  Occurrence permutations are followed exactly;
 the distinguished child is transported recursively while all siblings are
 carried by the surrounding permutation frame. -/
-theorem RegionIso.alignContextPath
+noncomputable def RegionIso.alignContextPath
     {sourceWires targetWires : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
     {rels : RelCtx}
@@ -282,17 +282,17 @@ theorem RegionIso.alignContextPath
     (iso : RegionIso  wire rels source target)
     {sourcePath : List Nat}
     (sourceWitness : Region.ContextPath source sourcePath) :
-    Nonempty (RegionIso.ContextPathAlignment iso sourceWitness) := by
+    RegionIso.ContextPathAlignment iso sourceWitness := by
   induction sourceWitness generalizing targetWires with
   | here source =>
-      exact ⟨{
+      exact {
         targetPath := []
         targetWitness := .here target
         holeRelsEq := rfl
         holeWire := wire
         context := .hole wire
         body := iso
-      }⟩
+      }
   | cut sourceFocus sourceAt sourceIsCut sourceNested induction =>
       cases iso with
       | mk localWire itemSeqIso =>
@@ -301,12 +301,14 @@ theorem RegionIso.alignContextPath
               let sourceIndex : Fin _ := ⟨_,
                 ItemSeq.focusAt?_index_lt _ _ sourceFocus sourceAt⟩
               let targetIndex := positions sourceIndex
-              obtain ⟨targetFocus, targetAt, targetItem⟩ :=
-                ItemSeq.focusAt?_complete _ targetIndex
+              let targetFocused := ItemSeq.focusAt _ targetIndex
+              let targetFocus := targetFocused.focus
+              have targetAt := targetFocused.atIndex
+              have targetItem := targetFocused.item_eq
               have sourceItem := ItemSeq.focusAt?_item _ _ sourceFocus sourceAt
               have distinguished := itemIsos sourceIndex
               rw [← sourceItem, sourceIsCut, ← targetItem] at distinguished
-              obtain ⟨targetBody, targetIsCut, childIso⟩ :=
+              obtain ⟨targetBody, ⟨targetIsCut⟩, childIso⟩ :=
                 ItemIso.target_of_cut distinguished
               let frame : ItemSeqIso.Frame
                   (extendWireEquiv wire localWire) sourceIndex targetIndex := {
@@ -314,11 +316,11 @@ theorem RegionIso.alignContextPath
                 mapped := rfl
                 siblings := fun index _ => itemIsos index
               }
-              obtain ⟨child⟩ := induction childIso
+              let child := induction childIso
               let targetWitness : Region.ContextPath _
                   (targetIndex.val :: child.targetPath) :=
                 .cut targetFocus targetAt targetIsCut child.targetWitness
-              exact ⟨{
+              exact {
                 targetPath := targetIndex.val :: child.targetPath
                 targetWitness := targetWitness
                 holeRelsEq := by
@@ -337,7 +339,7 @@ theorem RegionIso.alignContextPath
                 body := by
                   simpa [targetWitness, Region.ContextPath.toFocus] using
                     child.body
-              }⟩
+              }
   | bubble sourceFocus sourceAt sourceIsBubble sourceNested induction =>
       cases iso with
       | mk localWire itemSeqIso =>
@@ -346,12 +348,14 @@ theorem RegionIso.alignContextPath
               let sourceIndex : Fin _ := ⟨_,
                 ItemSeq.focusAt?_index_lt _ _ sourceFocus sourceAt⟩
               let targetIndex := positions sourceIndex
-              obtain ⟨targetFocus, targetAt, targetItem⟩ :=
-                ItemSeq.focusAt?_complete _ targetIndex
+              let targetFocused := ItemSeq.focusAt _ targetIndex
+              let targetFocus := targetFocused.focus
+              have targetAt := targetFocused.atIndex
+              have targetItem := targetFocused.item_eq
               have sourceItem := ItemSeq.focusAt?_item _ _ sourceFocus sourceAt
               have distinguished := itemIsos sourceIndex
               rw [← sourceItem, sourceIsBubble, ← targetItem] at distinguished
-              obtain ⟨targetBody, targetIsBubble, childIso⟩ :=
+              obtain ⟨targetBody, ⟨targetIsBubble⟩, childIso⟩ :=
                 ItemIso.target_of_bubble distinguished
               let frame : ItemSeqIso.Frame
                   (extendWireEquiv wire localWire) sourceIndex targetIndex := {
@@ -359,11 +363,11 @@ theorem RegionIso.alignContextPath
                 mapped := rfl
                 siblings := fun index _ => itemIsos index
               }
-              obtain ⟨child⟩ := induction childIso
+              let child := induction childIso
               let targetWitness : Region.ContextPath _
                   (targetIndex.val :: child.targetPath) :=
                 .bubble targetFocus targetAt targetIsBubble child.targetWitness
-              exact ⟨{
+              exact {
                 targetPath := targetIndex.val :: child.targetPath
                 targetWitness := targetWitness
                 holeRelsEq := by
@@ -382,7 +386,7 @@ theorem RegionIso.alignContextPath
                 body := by
                   simpa [targetWitness, Region.ContextPath.toFocus] using
                     child.body
-              }⟩
+              }
 
 /-- Identity transport preserves the concrete path, not merely the focused
 region up to an arbitrary automorphism.  This proof-relevant form is needed
