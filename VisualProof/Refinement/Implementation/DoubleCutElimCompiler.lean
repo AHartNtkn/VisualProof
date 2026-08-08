@@ -47,7 +47,7 @@ private theorem child_survives
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     {region child : Fin input.regionCount}
     (regionSurvives : (Domain input outer trace.inner).survives region = true)
-    (notAboveTarget : ¬ input.Encloses region trace.target)
+    (regionNeTarget : region ≠ trace.target)
     (parent : (input.regions child).parent? = some region) :
     (Domain input outer trace.inner).survives child = true := by
   rw [domain_survives_iff]
@@ -60,7 +60,7 @@ private theorem child_survives
       rw [trace.outer_eq]
       rfl
     have : region = trace.target := Option.some.inj (parent.symm.trans outerParent)
-    exact region_ne_target trace region notAboveTarget this
+    exact regionNeTarget this
   · intro equality
     subst child
     have innerParent : (input.regions trace.inner).parent? = some outer := by
@@ -89,13 +89,12 @@ private theorem exact_scope_mem_iff
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     (region : Fin input.regionCount)
     (regionSurvives : (Domain input outer trace.inner).survives region = true)
-    (notAboveTarget : ¬ input.Encloses region trace.target)
+    (regionNeTarget : region ≠ trace.target)
     (wire : Fin input.wireCount) :
     wire ∈ Concrete.Elaboration.exactScopeWires (Target trace)
         ((Domain input outer trace.inner).index region regionSurvives) ↔
       wire ∈ Concrete.Elaboration.exactScopeWires input region := by
   let domain := Domain input outer trace.inner
-  have regionNeTarget := region_ne_target trace region notAboveTarget
   have regionNeInner :=
     (domain_survives_iff input outer trace.inner region).1 regionSurvives |>.2
   constructor
@@ -124,13 +123,13 @@ private theorem exact_scope_mem_iff
       (Target trace) (domain.index region regionSurvives)
       (show Fin (Target trace).wireCount from wire)).2 targetEquality
 
-private noncomputable def localWireEquiv
+noncomputable def localWireEquiv
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     (region : Fin input.regionCount)
     (regionSurvives : (Domain input outer trace.inner).survives region = true)
-    (notAboveTarget : ¬ input.Encloses region trace.target) :
+    (regionNeTarget : region ≠ trace.target) :
     FiniteEquiv
       (Fin (Concrete.Elaboration.exactScopeWires input region).length)
       (Fin (Concrete.Elaboration.exactScopeWires (Target trace)
@@ -144,20 +143,20 @@ private noncomputable def localWireEquiv
       ((Domain input outer trace.inner).index region regionSurvives))
     (fun wire => by
       simpa using (exact_scope_mem_iff input inputWellFormed trace region
-        regionSurvives notAboveTarget wire))
+        regionSurvives regionNeTarget wire))
 
-@[simp] private theorem localWireEquiv_spec
+@[simp] theorem localWireEquiv_spec
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     (region : Fin input.regionCount)
     (regionSurvives : (Domain input outer trace.inner).survives region = true)
-    (notAboveTarget : ¬ input.Encloses region trace.target)
+    (regionNeTarget : region ≠ trace.target)
     (index : Fin (Concrete.Elaboration.exactScopeWires input region).length) :
     (Concrete.Elaboration.exactScopeWires (Target trace)
       ((Domain input outer trace.inner).index region regionSurvives)).get
         (localWireEquiv input inputWellFormed trace region regionSurvives
-          notAboveTarget index) =
+          regionNeTarget index) =
       (Concrete.Elaboration.exactScopeWires input region).get index := by
   exact FiniteEquiv.restrictLists_spec
     (FiniteEquiv.refl (Fin input.wireCount))
@@ -169,7 +168,7 @@ private noncomputable def localWireEquiv
       ((Domain input outer trace.inner).index region regionSurvives))
     (fun wire => by
       simpa using (exact_scope_mem_iff input inputWellFormed trace region
-        regionSurvives notAboveTarget wire)) index
+        regionSurvives regionNeTarget wire)) index
 
 private theorem append_agreement
     {sourceAmbient sourceLocal targetAmbient targetLocal : List α}
@@ -302,7 +301,7 @@ private noncomputable def extendedWireEquiv
         ((Domain input outer trace.inner).index region regionSurvives)).length) :=
   Concrete.Elaboration.appendContextEquiv ambient
     (localWireEquiv input inputWellFormed trace region regionSurvives
-      notAboveTarget)
+      (region_ne_target trace region notAboveTarget))
 
 private theorem extendedWireEquiv_spec
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
@@ -325,9 +324,9 @@ private theorem extendedWireEquiv_spec
         (sourceContext.extend region).get index := by
   exact append_agreement ambient
     (localWireEquiv input inputWellFormed trace region regionSurvives
-      notAboveTarget) agreement
+      (region_ne_target trace region notAboveTarget)) agreement
     (localWireEquiv_spec input inputWellFormed trace region regionSurvives
-      notAboveTarget)
+      (region_ne_target trace region notAboveTarget))
 
 private theorem mem_iff_of_agreement
     {source target : List α}
@@ -512,12 +511,11 @@ private theorem promoteRegionIndex_eq_iff
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     (region : Fin input.regionCount)
     (regionSurvives : (Domain input outer trace.inner).survives region = true)
-    (notAboveTarget : ¬ input.Encloses region trace.target)
+    (regionNeTarget : region ≠ trace.target)
     (candidate : Fin input.regionCount) (candidateNeOuter : candidate ≠ outer) :
     promoteRegionIndex input inputWellFormed trace candidate candidateNeOuter =
         (Domain input outer trace.inner).index region regionSurvives ↔
       candidate = region := by
-  have regionNeTarget := region_ne_target trace region notAboveTarget
   have regionNeInner :=
     (domain_survives_iff input outer trace.inner region).1 regionSurvives |>.2
   constructor
@@ -543,7 +541,7 @@ private theorem target_node_region_iff
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     (region : Fin input.regionCount)
     (regionSurvives : (Domain input outer trace.inner).survives region = true)
-    (notAboveTarget : ¬ input.Encloses region trace.target)
+    (regionNeTarget : region ≠ trace.target)
     (node : Fin input.nodeCount) :
     ((Target trace).nodes node).region =
         (Domain input outer trace.inner).index region regionSurvives ↔
@@ -557,13 +555,13 @@ private theorem target_node_region_iff
       simpa [nodeEq] using node_region_ne_outer trace node
     simpa only [nodeEq, Concrete.CNode.region] using
       promoteRegionIndex_eq_iff input inputWellFormed trace region
-        regionSurvives notAboveTarget owner ownerNe
+        regionSurvives regionNeTarget owner ownerNe
   · rename_i owner binder nodeEq
     have ownerNe : owner ≠ outer := by
       simpa [nodeEq] using node_region_ne_outer trace node
     simpa only [nodeEq, Concrete.CNode.region] using
       promoteRegionIndex_eq_iff input inputWellFormed trace region
-        regionSurvives notAboveTarget owner ownerNe
+        regionSurvives regionNeTarget owner ownerNe
 
 private theorem target_child_parent_iff
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
@@ -571,7 +569,7 @@ private theorem target_child_parent_iff
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     (region : Fin input.regionCount)
     (regionSurvives : (Domain input outer trace.inner).survives region = true)
-    (notAboveTarget : ¬ input.Encloses region trace.target)
+    (regionNeTarget : region ≠ trace.target)
     (child : Fin (Domain input outer trace.inner).count) :
     ((Target trace).regions child).parent? =
         some ((Domain input outer trace.inner).index region regionSurvives) ↔
@@ -590,14 +588,14 @@ private theorem target_child_parent_iff
       rfl)
     simpa only [regionEq, Concrete.CRegion.parent?, Option.some.injEq] using
       promoteRegionIndex_eq_iff input inputWellFormed trace region
-        regionSurvives notAboveTarget parent parentNe
+        regionSurvives regionNeTarget parent parentNe
   · rename_i parent arity regionEq
     have parentNe := survivor_parent_ne_outer trace child parent (by
       rw [regionEq]
       rfl)
     simpa only [regionEq, Concrete.CRegion.parent?, Option.some.injEq] using
       promoteRegionIndex_eq_iff input inputWellFormed trace region
-        regionSurvives notAboveTarget parent parentNe
+        regionSurvives regionNeTarget parent parentNe
 
 private theorem promoteOccurrence_mem
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
@@ -605,7 +603,7 @@ private theorem promoteOccurrence_mem
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     (region : Fin input.regionCount)
     (regionSurvives : (Domain input outer trace.inner).survives region = true)
-    (notAboveTarget : ¬ input.Encloses region trace.target)
+    (regionNeTarget : region ≠ trace.target)
     (occurrence : Concrete.Elaboration.LocalOccurrence
       input.regionCount input.nodeCount)
     (member : occurrence ∈ Concrete.Elaboration.localOccurrences input region) :
@@ -619,15 +617,15 @@ private theorem promoteOccurrence_mem
       simp only [promoteOccurrence]
       rw [Concrete.Elaboration.mem_localOccurrences_node] at member ⊢
       exact (target_node_region_iff input inputWellFormed trace region
-        regionSurvives notAboveTarget node).2 member
+        regionSurvives regionNeTarget node).2 member
   | child child =>
-      have survival := child_survives trace regionSurvives notAboveTarget
+      have survival := child_survives trace regionSurvives regionNeTarget
         ((Concrete.Elaboration.mem_localOccurrences_child input region child).1
           member)
       simp only [promoteOccurrence, dif_pos survival]
       rw [Concrete.Elaboration.mem_localOccurrences_child]
       apply (target_child_parent_iff input inputWellFormed trace region
-        regionSurvives notAboveTarget
+        regionSurvives regionNeTarget
         ((Domain input outer trace.inner).index child survival)).2
       rw [(Domain input outer trace.inner).origin_index child survival]
       exact (Concrete.Elaboration.mem_localOccurrences_child input region child).1
@@ -639,7 +637,7 @@ private theorem sourceOccurrence_mem
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     (region : Fin input.regionCount)
     (regionSurvives : (Domain input outer trace.inner).survives region = true)
-    (notAboveTarget : ¬ input.Encloses region trace.target)
+    (regionNeTarget : region ≠ trace.target)
     (occurrence : Concrete.Elaboration.LocalOccurrence
       (Target trace).regionCount (Target trace).nodeCount)
     (member : occurrence ∈ Concrete.Elaboration.localOccurrences
@@ -652,30 +650,30 @@ private theorem sourceOccurrence_mem
       simp only [sourceOccurrence]
       rw [Concrete.Elaboration.mem_localOccurrences_node] at member ⊢
       exact (target_node_region_iff input inputWellFormed trace region
-        regionSurvives notAboveTarget node).1 member
+        regionSurvives regionNeTarget node).1 member
   | child child =>
       simp only [sourceOccurrence]
       rw [Concrete.Elaboration.mem_localOccurrences_child] at member ⊢
       exact (target_child_parent_iff input inputWellFormed trace region
-        regionSurvives notAboveTarget child).1 member
+        regionSurvives regionNeTarget child).1 member
 
-private noncomputable def localOccurrenceEquiv
+noncomputable def localOccurrenceEquiv
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     (region : Fin input.regionCount)
     (regionSurvives : (Domain input outer trace.inner).survives region = true)
-    (notAboveTarget : ¬ input.Encloses region trace.target) :
+    (regionNeTarget : region ≠ trace.target) :
     FiniteEquiv
       (Fin (Concrete.Elaboration.localOccurrences input region).length)
       (Fin (Concrete.Elaboration.localOccurrences (Target trace)
         ((Domain input outer trace.inner).index region regionSurvives)).length) where
   toFun := fun index => Classical.choose (indexOf?_complete
     (promoteOccurrence_mem input inputWellFormed trace region regionSurvives
-      notAboveTarget _ (List.get_mem _ index)))
+      regionNeTarget _ (List.get_mem _ index)))
   invFun := fun index => Classical.choose (indexOf?_complete
     (sourceOccurrence_mem input inputWellFormed trace region regionSurvives
-      notAboveTarget _ (List.get_mem _ index)))
+      regionNeTarget _ (List.get_mem _ index)))
   left_inv := by
     intro index
     apply Fin.ext
@@ -683,13 +681,13 @@ private noncomputable def localOccurrenceEquiv
       (Concrete.Elaboration.localOccurrences_nodup input region)).mp
     have forward := indexOf?_sound (Classical.choose_spec (indexOf?_complete
       (promoteOccurrence_mem input inputWellFormed trace region regionSurvives
-        notAboveTarget _ (List.get_mem _ index))))
+        regionNeTarget _ (List.get_mem _ index))))
     have backward := indexOf?_sound (Classical.choose_spec (indexOf?_complete
       (sourceOccurrence_mem input inputWellFormed trace region regionSurvives
-        notAboveTarget _ (List.get_mem _ (Classical.choose
+        regionNeTarget _ (List.get_mem _ (Classical.choose
           (indexOf?_complete
             (promoteOccurrence_mem input inputWellFormed trace region
-              regionSurvives notAboveTarget _ (List.get_mem _ index))))))))
+              regionSurvives regionNeTarget _ (List.get_mem _ index))))))))
     have roundtrip : sourceOccurrence trace
         (promoteOccurrence trace
           ((Domain input outer trace.inner).index region regionSurvives)
@@ -703,7 +701,7 @@ private noncomputable def localOccurrenceEquiv
               Concrete.Elaboration.localOccurrences input region := by
             rw [← occurrenceEq]
             exact List.get_mem _ index
-          have survival := child_survives trace regionSurvives notAboveTarget
+          have survival := child_survives trace regionSurvives regionNeTarget
             ((Concrete.Elaboration.mem_localOccurrences_child input region
               child).1 member)
           simpa only [occurrenceEq] using
@@ -716,7 +714,7 @@ private noncomputable def localOccurrenceEquiv
             ((Domain input outer trace.inner).index region regionSurvives)).get
               (Classical.choose (indexOf?_complete
                 (promoteOccurrence_mem input inputWellFormed trace region
-                  regionSurvives notAboveTarget _ (List.get_mem _ index))))) :=
+                  regionSurvives regionNeTarget _ (List.get_mem _ index))))) :=
         backward
       _ = sourceOccurrence trace
           (promoteOccurrence trace
@@ -733,20 +731,20 @@ private noncomputable def localOccurrenceEquiv
         ((Domain input outer trace.inner).index region regionSurvives))).mp
     have backward := indexOf?_sound (Classical.choose_spec (indexOf?_complete
       (sourceOccurrence_mem input inputWellFormed trace region regionSurvives
-        notAboveTarget _ (List.get_mem _ index))))
+        regionNeTarget _ (List.get_mem _ index))))
     have forward := indexOf?_sound (Classical.choose_spec (indexOf?_complete
       (promoteOccurrence_mem input inputWellFormed trace region regionSurvives
-        notAboveTarget _ (List.get_mem _ (Classical.choose
+        regionNeTarget _ (List.get_mem _ (Classical.choose
           (indexOf?_complete
             (sourceOccurrence_mem input inputWellFormed trace region
-              regionSurvives notAboveTarget _ (List.get_mem _ index))))))))
+              regionSurvives regionNeTarget _ (List.get_mem _ index))))))))
     calc
       _ = promoteOccurrence trace
           ((Domain input outer trace.inner).index region regionSurvives)
           ((Concrete.Elaboration.localOccurrences input region).get
             (Classical.choose (indexOf?_complete
               (sourceOccurrence_mem input inputWellFormed trace region
-                regionSurvives notAboveTarget _ (List.get_mem _ index))))) :=
+                regionSurvives regionNeTarget _ (List.get_mem _ index))))) :=
         forward
       _ = promoteOccurrence trace
           ((Domain input outer trace.inner).index region regionSurvives)
@@ -759,25 +757,25 @@ private noncomputable def localOccurrenceEquiv
             simpa only [List.get_eq_getElem] using backward)
       _ = _ := promote_sourceOccurrence trace _ _
 
-private theorem localOccurrenceEquiv_spec
+theorem localOccurrenceEquiv_spec
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
     {outer : Fin input.regionCount} {raw : Concrete.Diagram}
     (trace : Concrete.DoubleCutElimTrace input outer raw)
     (region : Fin input.regionCount)
     (regionSurvives : (Domain input outer trace.inner).survives region = true)
-    (notAboveTarget : ¬ input.Encloses region trace.target)
+    (regionNeTarget : region ≠ trace.target)
     (index : Fin (Concrete.Elaboration.localOccurrences input region).length) :
     (Concrete.Elaboration.localOccurrences (Target trace)
       ((Domain input outer trace.inner).index region regionSurvives)).get
         (localOccurrenceEquiv input inputWellFormed trace region regionSurvives
-          notAboveTarget index) =
+          regionNeTarget index) =
       promoteOccurrence trace
         ((Domain input outer trace.inner).index region regionSurvives)
         ((Concrete.Elaboration.localOccurrences input region).get index) := by
   unfold localOccurrenceEquiv
   exact indexOf?_sound (Classical.choose_spec (indexOf?_complete
     (promoteOccurrence_mem input inputWellFormed trace region regionSurvives
-      notAboveTarget _ (List.get_mem _ index))))
+      regionNeTarget _ (List.get_mem _ index))))
 
 private theorem endpointOccurs_iff
     (input : Concrete.Diagram) (inputWellFormed : input.WellFormed)
@@ -1037,15 +1035,19 @@ theorem compileRegion_promotion
           let targetExtended := targetContext.extend targetRegion
           let extended := appendContextMap wireMap
             (localWireEquiv input inputWellFormed trace sourceRegion
-              sourceSurvives notAboveTarget)
+              sourceSurvives
+              (region_ne_target trace sourceRegion notAboveTarget))
           have extendedAgreement : ∀ index,
               targetExtended.get (extended index) =
                 sourceExtended.get index := by
             exact appendContextMap_spec wireMap
               (localWireEquiv input inputWellFormed trace sourceRegion
-                sourceSurvives notAboveTarget) wireAgreement
+                sourceSurvives
+                (region_ne_target trace sourceRegion notAboveTarget))
+              wireAgreement
               (localWireEquiv_spec input inputWellFormed trace sourceRegion
-                sourceSurvives notAboveTarget)
+                sourceSurvives
+                (region_ne_target trace sourceRegion notAboveTarget))
           have occurrenceIso : ∀
               (occurrence : Concrete.Elaboration.LocalOccurrence
                 input.regionCount input.nodeCount),
@@ -1092,7 +1094,8 @@ theorem compileRegion_promotion
                   (Concrete.Elaboration.mem_localOccurrences_child input
                     sourceRegion child).1 occurrenceMember
                 have childSurvives := child_survives trace sourceSurvives
-                  notAboveTarget sourceParent
+                  (region_ne_target trace sourceRegion notAboveTarget)
+                  sourceParent
                 have childNotAbove := child_not_above_target inputWellFormed
                   trace notAboveTarget sourceParent
                 let targetChild := (Domain input outer trace.inner).index child
@@ -1254,7 +1257,7 @@ theorem compileRegion_promotion
                       (sourceItems.renameWires extended) targetItems := by
                     let occurrencePositions := localOccurrenceEquiv input
                       inputWellFormed trace sourceRegion sourceSurvives
-                      notAboveTarget
+                      (region_ne_target trace sourceRegion notAboveTarget)
                     let sourceLength :=
                       Concrete.Elaboration.compileOccurrencesWith?_length
                         (Concrete.Elaboration.compileRegion? input sourceFuel)
@@ -1282,10 +1285,13 @@ theorem compileRegion_promotion
                           targetFuel)
                         targetExtended targetBinders targetItemsCompiled
                         (localOccurrenceEquiv input inputWellFormed trace
-                          sourceRegion sourceSurvives notAboveTarget
+                          sourceRegion sourceSurvives
+                          (region_ne_target trace sourceRegion notAboveTarget)
                           occurrenceIndex)
                     rw [localOccurrenceEquiv_spec input inputWellFormed trace
-                      sourceRegion sourceSurvives notAboveTarget occurrenceIndex]
+                      sourceRegion sourceSurvives
+                      (region_ne_target trace sourceRegion notAboveTarget)
+                      occurrenceIndex]
                       at targetGet
                     exact occurrenceIso _ (List.get_mem _ _) _ _ sourceGet
                       (by simpa [positions, occurrencePositions, sourceLength,
@@ -1294,7 +1300,8 @@ theorem compileRegion_promotion
                   simp only [Region.renameWires]
                   apply RegionIso.mk
                     (localWireEquiv input inputWellFormed trace sourceRegion
-                      sourceSurvives notAboveTarget)
+                      sourceSurvives
+                      (region_ne_target trace sourceRegion notAboveTarget))
                   let sourceEq :=
                     Concrete.Elaboration.WireContext.length_extend
                       sourceContext sourceRegion
@@ -1302,7 +1309,8 @@ theorem compileRegion_promotion
                     Concrete.Elaboration.WireContext.length_extend
                       targetContext targetRegion
                   let localEquiv := localWireEquiv input inputWellFormed trace
-                    sourceRegion sourceSurvives notAboveTarget
+                    sourceRegion sourceSurvives
+                    (region_ne_target trace sourceRegion notAboveTarget)
                   let combined := extendWireEquiv
                     (FiniteEquiv.refl (Fin targetContext.length)) localEquiv
                   let sourcePrepared :=
