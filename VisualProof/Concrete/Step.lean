@@ -1,6 +1,7 @@
 import VisualProof.Concrete.Transport
 import VisualProof.Concrete.Operation.Structural
 import VisualProof.Concrete.Subgraph.Splice.Input.Discrete
+import VisualProof.Data.List
 
 namespace VisualProof.Concrete
 
@@ -56,6 +57,8 @@ inductive Step {arity : Nat} (source : State arity)
       (boundary : WireSeverBoundary source wire)
   | iteration (selection : CheckedSelection source.checked.val.diagram)
       (target : Fin source.checked.val.diagram.regionCount)
+      (boundaryDisjoint :
+        selection.val.explicitWires.Disjoint source.checked.val.boundary)
   | deiteration (selection : CheckedSelection source.checked.val.diagram)
       (witness : DeiterationWitness source selection)
   | doubleCutIntro (selection : CheckedSelection source.checked.val.diagram)
@@ -311,7 +314,7 @@ def execute (orientation : Orientation) {arity : Nat}
       finish source (applyErasure orientation source.diagram selection)
   | .wireSever wire keep boundary =>
       finishWireSever orientation source wire keep boundary
-  | .iteration selection target =>
+  | .iteration selection target _ =>
       finish source (applyIteration source.diagram selection target)
   | .deiteration selection witness =>
       finish source (applyDeiteration source.diagram selection witness.operation)
@@ -408,9 +411,11 @@ theorem execute_iteration_success
     {orientation : Orientation}
     (selection : CheckedSelection source.checked.val.diagram)
     (target : Fin source.checked.val.diagram.regionCount)
+    (boundaryDisjoint :
+      selection.val.explicitWires.Disjoint source.checked.val.boundary)
     {receipt : Receipt source}
-    (success : execute orientation source (.iteration selection target) =
-      .ok receipt) :
+    (success : execute orientation source
+      (.iteration selection target boundaryDisjoint) = .ok receipt) :
     ∃ result : OperationReceipt source.diagram,
       applyIteration source.diagram selection target = .ok result ∧
       result.toReceipt source = some receipt ∧
