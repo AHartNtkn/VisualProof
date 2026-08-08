@@ -1,49 +1,57 @@
-# Task 9 Iteration restricted-context compiler report
+# Task 9 Iteration source-factor certificate report
 
 ## Status
 
-`compileKeptOccurrences_restrict` is complete and kernel checked in
+`SourceFactorResult` and `sourceFactor_complete` are complete and kernel
+checked in
 `VisualProof/Refinement/Implementation/IterationSourceFactor.lean`.
 
-The theorem consumes the authoritative full-context
-`compileOccurrencesWith?` result at the compiler leaf's existing fuel and
-binders.  It produces the corresponding result over `retainedContext` and
-proves that renaming it through `retainedContextIndexMap` yields the full kept
-sequence up to `ItemSeqIso` with the identity full-wire equivalence.
+For an authoritative compiled anchor leaf, a successful extracted-fragment
+compilation, and a supplied route to a non-selected target, the theorem
+provides:
 
-## Compiler transport
+- an anchor-local retained-wire count;
+- a selected region whose local count is exactly
+  `selection.val.explicitWires.length`;
+- a descendant context and remainder region;
+- a `RegionIso` from the compiled source anchor focus to the retained anchor
+  block adjoined with the selected factor and its descendant remainder; and
+- a `RegionIso` from the extracted compiled material to the selected factor
+  under the inherited/anchor `anchorWireEquiv` factorization.
 
-The proof uses one retained-to-full lexical embedding.  Its index preserves
-wire lookup and classifies every target-only entry as a selection-owned
-explicit anchor wire.  Child extension uses `extendWireRenaming` over the
-authoritative exact-local suffix.
+The retained anchor wires and the retained descendant context remain outside
+the selected region and are each bound once.
 
-The recursive kernel is a fuel induction over `compileRegion?` itself:
+## Structural construction
 
-- direct nodes use `resolvePort?_map_of_embedding` and `compileNode?_map`;
-- port visibility reflection follows from the embedding's target-only
-  classification and the established no-explicit-endpoint facts;
-- cut and bubble children invoke the induction hypothesis, with bubble binders
-  pushed by the authoritative compiler operation;
-- the target exact context is extended through each direct child;
-- `compileOccurrencesWith?_map` transports the ordered child sequence; and
-- `finishRegion_renameWires` closes the exact-local cast and ambient renaming
-  equation.
+The proof consumes `partition_complete` to split the compiled anchor items and
+`keptRoute_complete` to obtain the retained route witness. It does not
+construct or search for a route.
 
-At the anchor, kept direct nodes use `keptNode_noExplicitEndpoint`; recursively
-compiled kept children use `keptChild_descendant_noExplicitEndpoint`.  The
-resulting compiler equation supplies the existential restricted sequence and
-the final `ItemSeqIso`.
+`compileKeptOccurrences_restrict` compiles the kept occurrences in the single
+retained context. The supplied route witness is aligned across its item
+isomorphism and reflected through the retained-to-full wire renaming as proof
+data. The resulting intrinsic path is cast from the retained list length to
+the explicit inherited-plus-anchor-local carrier.
 
-This unit defines no route, source-factor result, matcher, occurrence search,
-alternate compiler, semantic theorem, or rule witness.
+The selected material uses
+`extractionCompileSelectedItems_iso`. Its carrier is factored through
+`anchorLocalEquiv` and `anchorWireEquiv`, with `extendWireEquiv` separating the
+inherited block from retained and explicit anchor-local wires. The partitioned
+selected and kept item isomorphisms are appended, reassociated through the
+canonical `Region.conjoin` and `Region.adjoinAt` embeddings, and packaged with
+the authoritative compiler `finishRegion`. The compiler leaf's existing body
+equation supplies the final source-focus presentation.
+
+No matcher, occurrence search, route search, alternate compiler, semantic
+claim, rule soundness result, or rule witness is introduced.
 
 ## Theorem-driven validation
 
-RED compiled with `compileKeptOccurrences_restrict` as the sole owning proof
-hole after every helper in its dependency closure compiled completely.  GREEN
-then compiled after replacing that proof hole with the kernel-checked
-transport.
+RED compiled with `sourceFactor_complete` as the sole owning proof hole after
+`SourceFactorResult` and every definition in its dependency closure compiled
+completely. GREEN compiled after replacing that hole with the kernel-checked
+certificate proof.
 
 Validation completed serially:
 
@@ -53,5 +61,6 @@ Validation completed serially:
 - `scripts/audit-lean-authority.sh implementation`
 - `scripts/audit-lean-authority.sh proof`
 - `scripts/audit-lean-authority.sh roster`
-- owner no-hole, axiom, semantic, forbidden-prefix, matcher, and search scans
-- `git diff --check` on the owned theorem and report
+- owner proof-hole/axiom, semantic-authority, forbidden-prefix, and
+  matcher/search/fixture scans
+- `git diff --check`

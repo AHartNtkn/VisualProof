@@ -1,5 +1,6 @@
 import VisualProof.Refinement.Implementation.IterationExtractionSelected
 import VisualProof.Refinement.Implementation.IterationRoute
+import VisualProof.Diagram.RenamingIsomorphism
 
 namespace VisualProof.Refinement.Implementation.IterationSourceFactor
 
@@ -716,5 +717,907 @@ theorem compileKeptOccurrences_restrict
             simpa only [embedding, retainedContextEmbedding] using sequenceMap')
         rw [renamed]
         exact ItemSeqIso.refl _
+
+/-- Renaming wires preserves and reflects an already supplied intrinsic path.
+This transports proof data only; it performs no path search. -/
+private noncomputable def Region.ContextPath.unrenameWires
+    (region : Region sourceWires rels)
+    (wire : Fin sourceWires → Fin targetWires)
+    {path : List Nat}
+    (witness : Region.ContextPath (region.renameWires wire) path) :
+    Region.ContextPath region path := by
+  induction path generalizing sourceWires targetWires rels with
+  | nil =>
+      exact .here region
+  | cons index rest induction =>
+      cases region with
+      | mk localWires items =>
+          let extended := extendWireRenaming wire localWires
+          change Region.ContextPath
+            (Region.mk localWires (items.renameWires extended))
+            (index :: rest) at witness
+          cases witness with
+          | @cut _ _ _ _ _ _ targetFocus targetAt targetChild targetIsCut
+              targetNested =>
+              let sourceIndex : Fin items.length := ⟨index, by
+                simpa only [ItemSeq.renameWires_length] using
+                  ItemSeq.focusAt?_index_lt _ _ targetFocus targetAt⟩
+              let sourceComplete := ItemSeq.focusAt?_complete items sourceIndex
+              let sourceFocus := Classical.choose sourceComplete
+              have sourceAt := (Classical.choose_spec sourceComplete).1
+              have sourceItem := (Classical.choose_spec sourceComplete).2
+              have targetItem : targetFocus.item =
+                  sourceFocus.item.renameWires extended := by
+                have targetGet := ItemSeq.focusAt?_item _ _ targetFocus targetAt
+                have positionEq :
+                    items.renameWiresPositionEquiv extended sourceIndex =
+                      ⟨index, by
+                        simpa only [ItemSeq.renameWires_length] using
+                          ItemSeq.focusAt?_index_lt _ _ targetFocus targetAt⟩ := by
+                  apply Fin.ext
+                  rfl
+                rw [← positionEq, ItemSeq.get_renameWires] at targetGet
+                exact targetGet.trans (congrArg (Item.renameWires extended)
+                  sourceItem.symm)
+              cases sourceKind : sourceFocus.item with
+              | atom relation arguments =>
+                  rw [sourceKind, Item.renameWires] at targetItem
+                  exact False.elim (by
+                    rw [targetIsCut] at targetItem
+                    contradiction)
+              | identity arity arguments =>
+                  rw [sourceKind, Item.renameWires] at targetItem
+                  exact False.elim (by
+                    rw [targetIsCut] at targetItem
+                    contradiction)
+              | cut sourceChild =>
+                  have childEq : targetChild =
+                      sourceChild.renameWires extended := by
+                    rw [sourceKind, Item.renameWires, targetIsCut] at targetItem
+                    exact Item.cut.inj targetItem
+                  subst targetChild
+                  exact .cut sourceFocus sourceAt sourceKind
+                    (induction sourceChild extended targetNested)
+              | bubble arity sourceChild =>
+                  rw [sourceKind, Item.renameWires] at targetItem
+                  exact False.elim (by
+                    rw [targetIsCut] at targetItem
+                    contradiction)
+          | @bubble _ _ _ _ _ _ _ targetFocus targetAt targetChild
+              targetIsBubble targetNested =>
+              let sourceIndex : Fin items.length := ⟨index, by
+                simpa only [ItemSeq.renameWires_length] using
+                  ItemSeq.focusAt?_index_lt _ _ targetFocus targetAt⟩
+              let sourceComplete := ItemSeq.focusAt?_complete items sourceIndex
+              let sourceFocus := Classical.choose sourceComplete
+              have sourceAt := (Classical.choose_spec sourceComplete).1
+              have sourceItem := (Classical.choose_spec sourceComplete).2
+              have targetItem : targetFocus.item =
+                  sourceFocus.item.renameWires extended := by
+                have targetGet := ItemSeq.focusAt?_item _ _ targetFocus targetAt
+                have positionEq :
+                    items.renameWiresPositionEquiv extended sourceIndex =
+                      ⟨index, by
+                        simpa only [ItemSeq.renameWires_length] using
+                          ItemSeq.focusAt?_index_lt _ _ targetFocus targetAt⟩ := by
+                  apply Fin.ext
+                  rfl
+                rw [← positionEq, ItemSeq.get_renameWires] at targetGet
+                exact targetGet.trans (congrArg (Item.renameWires extended)
+                  sourceItem.symm)
+              cases sourceKind : sourceFocus.item with
+              | atom relation arguments =>
+                  rw [sourceKind, Item.renameWires] at targetItem
+                  exact False.elim (by
+                    rw [targetIsBubble] at targetItem
+                    contradiction)
+              | identity arity arguments =>
+                  rw [sourceKind, Item.renameWires] at targetItem
+                  exact False.elim (by
+                    rw [targetIsBubble] at targetItem
+                    contradiction)
+              | cut sourceChild =>
+                  rw [sourceKind, Item.renameWires] at targetItem
+                  exact False.elim (by
+                    rw [targetIsBubble] at targetItem
+                    contradiction)
+              | bubble sourceArity sourceChild =>
+                  have itemEq : Item.bubble sourceArity
+                        (sourceChild.renameWires extended) =
+                      Item.bubble _ targetChild := by
+                    rw [sourceKind, Item.renameWires, targetIsBubble] at targetItem
+                    exact targetItem.symm
+                  cases itemEq
+                  exact .bubble sourceFocus sourceAt sourceKind
+                    (induction sourceChild extended targetNested)
+/-- The selected fragment body compiled in the anchor's authoritative wire and
+relation contexts, before the anchor-local carrier is factored. -/
+noncomputable def extractedSelectedRegion
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    (layout : FragmentLayout input.val selection)
+    {outer : Nat} {rels fragmentRels : RelCtx}
+    {anchorBody : Region outer rels}
+    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
+      selection.val.anchor (.here anchorBody))
+    (fragmentContext : Concrete.Elaboration.WireContext
+      (input.val.extractDiagramRaw selection layout))
+    (fragmentBinders : Concrete.Elaboration.BinderContext
+      (input.val.extractDiagramRaw selection layout) fragmentRels)
+    (fragmentEnumeration : Concrete.Elaboration.BinderContext.Enumeration
+      (input.val.extractDiagramRaw selection layout) fragmentBinders
+      layout.bodyContainer)
+    (fragmentExact : fragmentContext.Exact layout.bodyContainer)
+    (fragmentItems : ItemSeq fragmentContext.length fragmentRels) :
+    Region anchorLeaf.inheritedWires.length rels :=
+  let binderWitness :=
+    IterationExtraction.ExtractionBinderWitness.terminal input selection layout
+      fragmentBinders fragmentEnumeration anchorLeaf.binders
+      anchorLeaf.bindersCover
+  let preparedItems :=
+    (fragmentItems.renameRelations binderWitness.relationMap).renameWires
+      (IterationExtraction.extractionContextIndexMap input selection layout
+        fragmentContext
+        (anchorLeaf.inheritedWires.extend selection.val.anchor)
+        fragmentExact anchorLeaf.wiresExact)
+  Region.mk
+    (Concrete.Elaboration.exactScopeWires input.val
+      selection.val.anchor).length
+    (preparedItems.castWiresEq
+      (Concrete.Elaboration.WireContext.length_extend
+        anchorLeaf.inheritedWires selection.val.anchor))
+
+/-- Base-ready source factorization at the compiled selection anchor.  The
+selected explicit wires are local to `selected`; the retained anchor wires and
+the retained descendant context are each bound exactly once outside it. -/
+structure SourceFactorResult
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    (layout : FragmentLayout input.val selection)
+    {outer : Nat} {rels fragmentRels : RelCtx}
+    {anchorBody : Region outer rels}
+    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
+      selection.val.anchor (.here anchorBody))
+    (fragmentContext : Concrete.Elaboration.WireContext
+      (input.val.extractDiagramRaw selection layout))
+    (fragmentBinders : Concrete.Elaboration.BinderContext
+      (input.val.extractDiagramRaw selection layout) fragmentRels)
+    (fragmentEnumeration : Concrete.Elaboration.BinderContext.Enumeration
+      (input.val.extractDiagramRaw selection layout) fragmentBinders
+      layout.bodyContainer)
+    (fragmentExact : fragmentContext.Exact layout.bodyContainer)
+    (fragmentItems : ItemSeq fragmentContext.length fragmentRels) where
+  anchorLocal : Nat
+  selected : Region (anchorLeaf.inheritedWires.length + anchorLocal) rels
+  descendantWires : Nat
+  descendantRels : RelCtx
+  descendant : DiagramContext
+    (anchorLeaf.inheritedWires.length + anchorLocal) descendantWires
+    rels descendantRels
+  remainder : Region descendantWires descendantRels
+  selected_local : ∃ selectedItems : ItemSeq
+      ((anchorLeaf.inheritedWires.length + anchorLocal) +
+        selection.val.explicitWires.length) rels,
+    selected = Region.mk selection.val.explicitWires.length selectedItems
+  source_iso : RegionIso
+    (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm) rels anchorBody
+    (Region.adjoinAt anchorLocal .nil
+      (selected.conjoin (descendant.fill remainder)))
+  material_iso : RegionIso
+    (FiniteEquiv.refl (Fin anchorLeaf.inheritedWires.length)) rels
+    (extractedSelectedRegion input selection layout anchorLeaf fragmentContext
+      fragmentBinders fragmentEnumeration fragmentExact fragmentItems)
+    (Region.adjoinAt anchorLocal .nil selected)
+
+theorem sourceFactor_complete
+    (input : Concrete.Checked)
+    (selection : CheckedSelection input.val)
+    (layout : FragmentLayout input.val selection)
+    {outer : Nat} {rels fragmentRels : RelCtx}
+    {anchorBody : Region outer rels}
+    (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
+      selection.val.anchor (.here anchorBody))
+    (fragmentFuel : Nat)
+    (fragmentContext : Concrete.Elaboration.WireContext
+      (input.val.extractDiagramRaw selection layout))
+    (fragmentBinders : Concrete.Elaboration.BinderContext
+      (input.val.extractDiagramRaw selection layout) fragmentRels)
+    (fragmentEnumeration : Concrete.Elaboration.BinderContext.Enumeration
+      (input.val.extractDiagramRaw selection layout) fragmentBinders
+      layout.bodyContainer)
+    (fragmentExact : fragmentContext.Exact layout.bodyContainer)
+    (fragmentItems : ItemSeq fragmentContext.length fragmentRels)
+    (fragmentCompiled : Concrete.Elaboration.compileOccurrencesWith?
+      (input.val.extractDiagramRaw selection layout)
+      (Concrete.Elaboration.compileRegion?
+        (input.val.extractDiagramRaw selection layout) fragmentFuel)
+      fragmentContext fragmentBinders
+      (Concrete.Elaboration.localOccurrences
+        (input.val.extractDiagramRaw selection layout) layout.bodyContainer) =
+      some fragmentItems)
+    {target : Fin input.val.regionCount} {path : List Nat}
+    (route : Concrete.Splice.RegionRoute input.val selection.val.anchor
+      target path)
+    (targetNotSelected : ¬ selection.val.SelectsRegion target) :
+    Nonempty (SourceFactorResult input selection layout anchorLeaf
+      fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+      fragmentItems) := by
+  obtain ⟨selectedItems, keptItems, selectedCompiled, keptCompiled,
+      partitionIso⟩ := partition_complete input selection anchorLeaf
+  obtain ⟨restrictedItems, restrictedCompiled, keptIso⟩ :=
+    compileKeptOccurrences_restrict input selection anchorLeaf keptCompiled
+  obtain ⟨keptRoute⟩ := keptRoute_complete input selection anchorLeaf
+    keptItems keptCompiled route targetNotSelected
+  let keptRegionIso : RegionIso
+      (FiniteEquiv.refl
+        (Fin (anchorLeaf.inheritedWires.extend
+          selection.val.anchor).length)) rels
+      (Region.mk 0 keptItems)
+      (Region.mk 0
+        (restrictedItems.renameWires
+          (retainedContextIndexMap input.val selection
+            anchorLeaf.inheritedWires))) :=
+    by
+      apply RegionIso.mk (FiniteEquiv.refl (Fin 0))
+      have extendedRefl :
+          extendWireEquiv
+              (FiniteEquiv.refl
+                (Fin (anchorLeaf.inheritedWires.extend
+                  selection.val.anchor).length))
+              (FiniteEquiv.refl (Fin 0)) =
+            FiniteEquiv.refl
+              (Fin ((anchorLeaf.inheritedWires.extend
+                selection.val.anchor).length + 0)) := by
+        apply FiniteEquiv.ext
+        intro wire
+        refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) wire
+        · simp only [extendWireEquiv_outer, FiniteEquiv.refl_apply]
+        · exact Fin.elim0 localIndex
+      rw [extendedRefl]
+      simpa using keptIso
+  let keptAlignment := Classical.choice
+    (keptRegionIso.alignContextPath keptRoute.witness)
+  have retainedIndexExtendZero :
+      extendWireRenaming
+          (retainedContextIndexMap input.val selection
+            anchorLeaf.inheritedWires) 0 =
+        retainedContextIndexMap input.val selection
+          anchorLeaf.inheritedWires := by
+    funext index
+    refine Fin.addCases (fun outerIndex => ?_) (fun localIndex => ?_) index
+    · simp only [extendWireRenaming, Fin.addCases_left]
+      apply Fin.ext
+      rfl
+    · exact Fin.elim0 localIndex
+  have renamedRestrictedWitness : Region.ContextPath
+      ((Region.mk 0 restrictedItems).renameWires
+        (retainedContextIndexMap input.val selection
+          anchorLeaf.inheritedWires)) keptAlignment.targetPath := by
+    simpa only [Region.renameWires, retainedIndexExtendZero] using
+      keptAlignment.targetWitness
+  let restrictedWitness := Region.ContextPath.unrenameWires
+    (Region.mk 0 restrictedItems)
+    (retainedContextIndexMap input.val selection anchorLeaf.inheritedWires)
+    renamedRestrictedWitness
+  let binderWitness :=
+    IterationExtraction.ExtractionBinderWitness.terminal input selection layout
+      fragmentBinders fragmentEnumeration anchorLeaf.binders
+      anchorLeaf.bindersCover
+  let preparedItems :=
+    (fragmentItems.renameRelations binderWitness.relationMap).renameWires
+      (IterationExtraction.extractionContextIndexMap input selection layout
+        fragmentContext
+        (anchorLeaf.inheritedWires.extend selection.val.anchor)
+        fragmentExact anchorLeaf.wiresExact)
+  let localEquiv := anchorLocalEquiv input.val selection
+  let wireEquiv := anchorWireEquiv input.val selection
+    anchorLeaf.inheritedWires
+  let retainedLength :
+      (retainedContext input.val selection
+        anchorLeaf.inheritedWires).length =
+        anchorLeaf.inheritedWires.length +
+          (retainedAnchorWires input.val selection).length := by
+    simp [retainedContext]
+  let factoredWitness := restrictedWitness.castWiresEq retainedLength
+  let factorRetained : Fin
+      (retainedContext input.val selection anchorLeaf.inheritedWires).length →
+      Fin (anchorLeaf.inheritedWires.length +
+        ((retainedAnchorWires input.val selection).length +
+          selection.val.explicitWires.length)) := fun index =>
+    Fin.cast (Nat.add_assoc anchorLeaf.inheritedWires.length
+      (retainedAnchorWires input.val selection).length
+      selection.val.explicitWires.length)
+      (Fin.castAdd selection.val.explicitWires.length
+        (Fin.cast retainedLength index))
+  have retainedFactor :
+      wireEquiv.symm.toFun ∘
+          Fin.cast (Concrete.Elaboration.WireContext.length_extend
+            anchorLeaf.inheritedWires selection.val.anchor) ∘
+          retainedContextIndexMap input.val selection
+            anchorLeaf.inheritedWires =
+        factorRetained := by
+    funext index
+    apply wireEquiv.injective
+    change wireEquiv
+        (wireEquiv.symm
+          (Fin.cast
+            (Concrete.Elaboration.WireContext.length_extend
+              anchorLeaf.inheritedWires selection.val.anchor)
+            (retainedContextIndexMap input.val selection
+              anchorLeaf.inheritedWires index))) =
+      wireEquiv (factorRetained index)
+    have cancel := wireEquiv.right_inv
+      (Fin.cast
+        (Concrete.Elaboration.WireContext.length_extend
+          anchorLeaf.inheritedWires selection.val.anchor)
+        (retainedContextIndexMap input.val selection
+          anchorLeaf.inheritedWires index))
+    change wireEquiv (wireEquiv.symm _) = _ at cancel
+    rw [cancel]
+    let lengthEq := Concrete.Elaboration.WireContext.length_extend
+      anchorLeaf.inheritedWires selection.val.anchor
+    let leftFull := Fin.cast lengthEq.symm
+      (Fin.cast lengthEq
+        (retainedContextIndexMap input.val selection
+          anchorLeaf.inheritedWires index))
+    let rightFull := Fin.cast lengthEq.symm
+      (wireEquiv (factorRetained index))
+    have factorGet :
+        (anchorLeaf.inheritedWires.extend selection.val.anchor).get rightFull =
+          (retainedContext input.val selection
+            anchorLeaf.inheritedWires).get index := by
+      let split := Fin.cast retainedLength index
+      refine Fin.addCases (motive := fun splitIndex => split = splitIndex →
+          (anchorLeaf.inheritedWires.extend selection.val.anchor).get
+              rightFull =
+            (retainedContext input.val selection
+              anchorLeaf.inheritedWires).get index)
+        (fun inherited splitEq => ?_)
+        (fun retained splitEq => ?_) split rfl
+      · have indexEq : index = Fin.cast retainedLength.symm
+            (Fin.castAdd
+              (retainedAnchorWires input.val selection).length inherited) := by
+          apply Fin.ext
+          simpa [split] using congrArg Fin.val splitEq
+        subst index
+        have factorEq : wireEquiv
+              (factorRetained (Fin.cast retainedLength.symm
+                (Fin.castAdd
+                  (retainedAnchorWires input.val selection).length
+                  inherited))) =
+            Fin.castAdd
+              (Concrete.Elaboration.exactScopeWires input.val
+                selection.val.anchor).length inherited := by
+          have inputEq : factorRetained
+                (Fin.cast retainedLength.symm
+                  (Fin.castAdd
+                    (retainedAnchorWires input.val selection).length
+                    inherited)) =
+              Fin.castAdd
+                ((retainedAnchorWires input.val selection).length +
+                  selection.val.explicitWires.length) inherited := by
+            apply Fin.ext
+            rfl
+          rw [inputEq]
+          simp [wireEquiv, anchorWireEquiv]
+        simp only [rightFull]
+        rw [factorEq]
+        simp only [retainedContext,
+          Concrete.Elaboration.WireContext.extend,
+          Concrete.Elaboration.get_append_castAdd]
+      · have indexEq : index = Fin.cast retainedLength.symm
+            (Fin.natAdd anchorLeaf.inheritedWires.length retained) := by
+          apply Fin.ext
+          simpa [split] using congrArg Fin.val splitEq
+        subst index
+        have factorEq : wireEquiv
+              (factorRetained (Fin.cast retainedLength.symm
+                (Fin.natAdd anchorLeaf.inheritedWires.length retained))) =
+            Fin.natAdd anchorLeaf.inheritedWires.length
+              (localEquiv (Fin.castAdd
+                selection.val.explicitWires.length retained)) := by
+          have inputEq : factorRetained
+                (Fin.cast retainedLength.symm
+                  (Fin.natAdd anchorLeaf.inheritedWires.length retained)) =
+              Fin.natAdd anchorLeaf.inheritedWires.length
+                (Fin.castAdd selection.val.explicitWires.length retained) := by
+            apply Fin.ext
+            rfl
+          rw [inputEq]
+          simp [wireEquiv, anchorWireEquiv, localEquiv]
+        simp only [rightFull]
+        rw [factorEq]
+        simp only [retainedContext,
+          Concrete.Elaboration.WireContext.extend,
+          Concrete.Elaboration.get_append_natAdd]
+        change (Concrete.Elaboration.exactScopeWires input.val
+            selection.val.anchor).get
+              (anchorLocalEquiv input.val selection
+                (Fin.castAdd selection.val.explicitWires.length retained)) =
+          (retainedAnchorWires input.val selection).get retained
+        rw [anchorLocalEquiv_spec]
+        simp only [Concrete.Elaboration.get_append_castAdd]
+    have leftGet :
+        (anchorLeaf.inheritedWires.extend selection.val.anchor).get leftFull =
+          (retainedContext input.val selection
+            anchorLeaf.inheritedWires).get index := by
+      simpa only [leftFull, lengthEq, Fin.cast_cast] using
+        retainedContextIndexMap_spec input.val selection
+          anchorLeaf.inheritedWires index
+    have fullIndexEq : leftFull = rightFull := by
+      apply Fin.ext
+      exact (List.getElem_inj anchorLeaf.wiresExact.nodup).mp (by
+        simpa only [List.get_eq_getElem] using leftGet.trans factorGet.symm)
+    apply Fin.ext
+    simpa only [leftFull, rightFull] using congrArg Fin.val fullIndexEq
+  let factoredItems : ItemSeq
+      ((anchorLeaf.inheritedWires.length +
+        (retainedAnchorWires input.val selection).length) +
+        selection.val.explicitWires.length) rels :=
+    ((preparedItems.castWiresEq
+      (Concrete.Elaboration.WireContext.length_extend
+        anchorLeaf.inheritedWires selection.val.anchor)).renameWires
+          wireEquiv.symm).castWiresEq
+      (Nat.add_assoc anchorLeaf.inheritedWires.length
+        (retainedAnchorWires input.val selection).length
+        selection.val.explicitWires.length).symm
+  let selected : Region
+      (anchorLeaf.inheritedWires.length +
+        (retainedAnchorWires input.val selection).length) rels :=
+    Region.mk selection.val.explicitWires.length factoredItems
+  have extractionIso :=
+    IterationExtraction.extractionCompileSelectedItems_iso input selection
+      layout fragmentFuel anchorLeaf.fuel fragmentContext
+      (anchorLeaf.inheritedWires.extend selection.val.anchor) fragmentBinders
+      anchorLeaf.binders fragmentEnumeration anchorLeaf.binderEnumeration
+      anchorLeaf.bindersCover fragmentExact anchorLeaf.wiresExact
+      fragmentItems selectedItems fragmentCompiled selectedCompiled
+  have materialIso : RegionIso
+      (FiniteEquiv.refl (Fin anchorLeaf.inheritedWires.length)) rels
+      (extractedSelectedRegion input selection layout anchorLeaf fragmentContext
+        fragmentBinders fragmentEnumeration fragmentExact fragmentItems)
+      (Region.adjoinAt (retainedAnchorWires input.val selection).length .nil
+        selected) := by
+    have targetEq :
+        Region.adjoinAt (retainedAnchorWires input.val selection).length .nil
+            selected =
+          Region.mk
+            ((retainedAnchorWires input.val selection).length +
+              selection.val.explicitWires.length)
+            ((preparedItems.castWiresEq
+              (Concrete.Elaboration.WireContext.length_extend
+                anchorLeaf.inheritedWires selection.val.anchor)).renameWires
+                  wireEquiv.symm) := by
+      simp only [selected, factoredItems, Region.adjoinAt,
+        ItemSeq.castWiresEq_eq_renameWires, ItemSeq.renameWires,
+        ItemSeq.nil_append]
+      apply congrArg (Region.mk
+        ((retainedAnchorWires input.val selection).length +
+          selection.val.explicitWires.length))
+      rw [ItemSeq.renameWires_comp, ItemSeq.renameWires_comp]
+      rw [ItemSeq.renameWires_comp]
+      have adjoinCancel :
+          Region.adjoinMaterialWire anchorLeaf.inheritedWires.length
+              (retainedAnchorWires input.val selection).length
+              selection.val.explicitWires.length ∘
+            Fin.cast (Nat.add_assoc anchorLeaf.inheritedWires.length
+              (retainedAnchorWires input.val selection).length
+              selection.val.explicitWires.length).symm = id := by
+        funext index
+        apply Fin.ext
+        rfl
+      rw [adjoinCancel, ItemSeq.renameWires_id]
+    rw [targetEq]
+    simp only [extractedSelectedRegion, preparedItems, binderWitness]
+    apply RegionIso.mk localEquiv.symm
+    have renamed := ItemSeqIso.renameWiresEquiv
+      (preparedItems.castWiresEq
+        (Concrete.Elaboration.WireContext.length_extend
+          anchorLeaf.inheritedWires selection.val.anchor)) wireEquiv.symm
+    have completeEq :
+        extendWireEquiv
+            (FiniteEquiv.refl (Fin anchorLeaf.inheritedWires.length))
+            localEquiv.symm = wireEquiv.symm := by
+      dsimp only [wireEquiv, anchorWireEquiv]
+      rw [extendWireEquiv_symm]
+      apply FiniteEquiv.ext
+      intro index
+      rfl
+    rw [completeEq]
+    exact renamed
+  let fullLength := Concrete.Elaboration.WireContext.length_extend
+    anchorLeaf.inheritedWires selection.val.anchor
+  have extractionCast : ItemSeqIso
+      (FiniteEquiv.refl (Fin
+        (anchorLeaf.inheritedWires.length +
+          (Concrete.Elaboration.exactScopeWires input.val
+            selection.val.anchor).length))) rels
+      (selectedItems.renameWires (Fin.cast fullLength))
+      (preparedItems.renameWires (Fin.cast fullLength)) := by
+    apply ItemSeqIso.renameWires_commuting extractionIso
+      (Fin.cast fullLength) (Fin.cast fullLength)
+      (FiniteEquiv.refl _)
+    funext index
+    rfl
+  have selectedFactorIso : ItemSeqIso wireEquiv.symm rels
+      (selectedItems.renameWires (Fin.cast fullLength))
+      ((preparedItems.renameWires (Fin.cast fullLength)).renameWires
+        wireEquiv.symm) := by
+    have renamed := ItemSeqIso.renameWiresEquiv
+      (preparedItems.renameWires (Fin.cast fullLength)) wireEquiv.symm
+    have combined := extractionCast.trans renamed
+    simpa [FiniteEquiv.trans, FiniteEquiv.refl] using combined
+  have keptCast : ItemSeqIso
+      (FiniteEquiv.refl (Fin
+        (anchorLeaf.inheritedWires.length +
+          (Concrete.Elaboration.exactScopeWires input.val
+            selection.val.anchor).length))) rels
+      (keptItems.renameWires (Fin.cast fullLength))
+      ((restrictedItems.renameWires
+        (retainedContextIndexMap input.val selection
+          anchorLeaf.inheritedWires)).renameWires (Fin.cast fullLength)) := by
+    apply ItemSeqIso.renameWires_commuting keptIso
+      (Fin.cast fullLength) (Fin.cast fullLength)
+      (FiniteEquiv.refl _)
+    funext index
+    rfl
+  have keptFactorTarget :
+      (((restrictedItems.renameWires
+          (retainedContextIndexMap input.val selection
+            anchorLeaf.inheritedWires)).renameWires
+            (Fin.cast fullLength)).renameWires wireEquiv.symm) =
+        restrictedItems.renameWires factorRetained := by
+    simp only [ItemSeq.renameWires_comp]
+    simpa [Function.comp_def] using
+      congrArg (fun rename => restrictedItems.renameWires rename)
+        retainedFactor
+  have keptFactorIso : ItemSeqIso wireEquiv.symm rels
+      (keptItems.renameWires (Fin.cast fullLength))
+      (restrictedItems.renameWires factorRetained) := by
+    have renamed := ItemSeqIso.renameWiresEquiv
+      ((restrictedItems.renameWires
+        (retainedContextIndexMap input.val selection
+          anchorLeaf.inheritedWires)).renameWires (Fin.cast fullLength))
+      wireEquiv.symm
+    have combined := keptCast.trans renamed
+    rw [keptFactorTarget] at combined
+    simpa [FiniteEquiv.trans, FiniteEquiv.refl] using combined
+  have combinedFactorIso := ItemSeqIso.append selectedFactorIso keptFactorIso
+  have partitionItems : ItemSeqIso
+      (FiniteEquiv.refl
+        (Fin (anchorLeaf.inheritedWires.extend
+          selection.val.anchor).length)) rels
+      anchorLeaf.items (selectedItems.append keptItems) := by
+    have reversed := partitionIso.symm
+    cases reversed with
+    | mk localEquiv items =>
+        have ambientSymm :
+            (FiniteEquiv.refl
+              (Fin (anchorLeaf.inheritedWires.extend
+                selection.val.anchor).length)).symm =
+              FiniteEquiv.refl
+                (Fin (anchorLeaf.inheritedWires.extend
+                  selection.val.anchor).length) := by
+          apply FiniteEquiv.ext
+          intro wire
+          rfl
+        rw [ambientSymm] at items
+        have extendedRefl :
+            extendWireEquiv
+                (FiniteEquiv.refl
+                  (Fin (anchorLeaf.inheritedWires.extend
+                    selection.val.anchor).length))
+                localEquiv =
+              FiniteEquiv.refl
+                (Fin (anchorLeaf.inheritedWires.extend
+                  selection.val.anchor).length) := by
+          apply FiniteEquiv.ext
+          intro wire
+          refine Fin.addCases (fun index => ?_) (fun index => ?_) wire
+          · simp only [extendWireEquiv_outer, FiniteEquiv.refl_apply]
+          · exact Fin.elim0 index
+        rw [extendedRefl] at items
+        exact items
+  have partitionCast : ItemSeqIso
+      (FiniteEquiv.refl (Fin
+        (anchorLeaf.inheritedWires.length +
+          (Concrete.Elaboration.exactScopeWires input.val
+            selection.val.anchor).length))) rels
+      (anchorLeaf.items.renameWires (Fin.cast fullLength))
+      ((selectedItems.append keptItems).renameWires
+        (Fin.cast fullLength)) := by
+    apply ItemSeqIso.renameWires_commuting partitionItems
+      (Fin.cast fullLength) (Fin.cast fullLength)
+      (FiniteEquiv.refl _)
+    funext index
+    rfl
+  have leafFactorItems : ItemSeqIso wireEquiv.symm rels
+      (anchorLeaf.items.renameWires (Fin.cast fullLength))
+      (((preparedItems.renameWires (Fin.cast fullLength)).renameWires
+          wireEquiv.symm).append
+        (restrictedItems.renameWires factorRetained)) := by
+    have partitionCast' : ItemSeqIso
+        (FiniteEquiv.refl (Fin
+          (anchorLeaf.inheritedWires.length +
+            (Concrete.Elaboration.exactScopeWires input.val
+              selection.val.anchor).length))) rels
+        (anchorLeaf.items.renameWires (Fin.cast fullLength))
+        ((selectedItems.renameWires (Fin.cast fullLength)).append
+          (keptItems.renameWires (Fin.cast fullLength))) := by
+      simpa only [ItemSeq.renameWires_append] using partitionCast
+    have combined := partitionCast'.trans combinedFactorIso
+    simpa [FiniteEquiv.trans, FiniteEquiv.refl] using combined
+  have renameNil {sourceWires targetWires : Nat}
+      (rename : Fin sourceWires → Fin targetWires) :
+      (ItemSeq.nil : ItemSeq sourceWires rels).renameWires rename =
+        (ItemSeq.nil : ItemSeq targetWires rels) := by
+    rfl
+  let selectedBase :=
+    (preparedItems.renameWires (Fin.cast fullLength)).renameWires
+      wireEquiv.symm
+  have selectedMapEq :
+      Region.adjoinMaterialWire anchorLeaf.inheritedWires.length
+          (retainedAnchorWires input.val selection).length
+          selection.val.explicitWires.length ∘
+        Region.conjoinLeftWire
+          (anchorLeaf.inheritedWires.length +
+            (retainedAnchorWires input.val selection).length)
+          selection.val.explicitWires.length 0 ∘
+        Fin.cast (Nat.add_assoc anchorLeaf.inheritedWires.length
+          (retainedAnchorWires input.val selection).length
+          selection.val.explicitWires.length).symm = id := by
+    funext index
+    refine Fin.addCases (fun inherited => ?_) (fun localIndex => ?_) index
+    · have castEq :
+          Fin.cast (Nat.add_assoc anchorLeaf.inheritedWires.length
+            (retainedAnchorWires input.val selection).length
+            selection.val.explicitWires.length).symm
+              (Fin.castAdd
+                ((retainedAnchorWires input.val selection).length +
+                  selection.val.explicitWires.length) inherited) =
+            Fin.castAdd selection.val.explicitWires.length
+              (Fin.castAdd
+                (retainedAnchorWires input.val selection).length inherited) := by
+        apply Fin.ext
+        rfl
+      simp only [Function.comp_apply, castEq, Region.conjoinLeftWire,
+        Fin.addCases_left, Region.adjoinMaterialWire]
+      apply Fin.ext
+      rfl
+    · refine Fin.addCases (fun retained => ?_) (fun explicitIndex => ?_)
+        localIndex
+      · have castEq :
+            Fin.cast (Nat.add_assoc anchorLeaf.inheritedWires.length
+              (retainedAnchorWires input.val selection).length
+              selection.val.explicitWires.length).symm
+                (Fin.natAdd anchorLeaf.inheritedWires.length
+                  (Fin.castAdd selection.val.explicitWires.length retained)) =
+              Fin.castAdd selection.val.explicitWires.length
+                (Fin.natAdd anchorLeaf.inheritedWires.length retained) := by
+          apply Fin.ext
+          rfl
+        simp only [Function.comp_apply, castEq, Region.conjoinLeftWire,
+          Fin.addCases_left, Region.adjoinMaterialWire]
+        apply Fin.ext
+        rfl
+      · have castEq :
+            Fin.cast (Nat.add_assoc anchorLeaf.inheritedWires.length
+              (retainedAnchorWires input.val selection).length
+              selection.val.explicitWires.length).symm
+                (Fin.natAdd anchorLeaf.inheritedWires.length
+                  (Fin.natAdd
+                    (retainedAnchorWires input.val selection).length
+                    explicitIndex)) =
+              Fin.natAdd
+                (anchorLeaf.inheritedWires.length +
+                  (retainedAnchorWires input.val selection).length)
+                explicitIndex := by
+          apply Fin.ext
+          change anchorLeaf.inheritedWires.length +
+              ((retainedAnchorWires input.val selection).length +
+                explicitIndex.val) =
+            (anchorLeaf.inheritedWires.length +
+              (retainedAnchorWires input.val selection).length) +
+                explicitIndex.val
+          omega
+        simp only [Function.comp_apply, castEq, Region.conjoinLeftWire,
+          Fin.addCases_right, Region.adjoinMaterialWire]
+        apply Fin.ext
+        change (anchorLeaf.inheritedWires.length +
+              (retainedAnchorWires input.val selection).length) +
+                explicitIndex.val =
+            anchorLeaf.inheritedWires.length +
+              ((retainedAnchorWires input.val selection).length +
+                explicitIndex.val)
+        omega
+  have selectedBlockEq :
+      (((selectedBase.renameWires
+          (Fin.cast (Nat.add_assoc anchorLeaf.inheritedWires.length
+            (retainedAnchorWires input.val selection).length
+            selection.val.explicitWires.length).symm)).renameWires
+        (Region.conjoinLeftWire
+          (anchorLeaf.inheritedWires.length +
+            (retainedAnchorWires input.val selection).length)
+          selection.val.explicitWires.length 0)).renameWires
+        (Region.adjoinMaterialWire anchorLeaf.inheritedWires.length
+          (retainedAnchorWires input.val selection).length
+          selection.val.explicitWires.length)) = selectedBase := by
+    calc
+      _ = selectedBase.renameWires
+          ((Region.adjoinMaterialWire anchorLeaf.inheritedWires.length
+              (retainedAnchorWires input.val selection).length
+              selection.val.explicitWires.length ∘
+            Region.conjoinLeftWire
+              (anchorLeaf.inheritedWires.length +
+                (retainedAnchorWires input.val selection).length)
+              selection.val.explicitWires.length 0) ∘
+            Fin.cast (Nat.add_assoc anchorLeaf.inheritedWires.length
+              (retainedAnchorWires input.val selection).length
+              selection.val.explicitWires.length).symm) := by
+              rw [ItemSeq.renameWires_comp, ItemSeq.renameWires_comp]
+      _ = selectedBase.renameWires id := by
+        apply congrArg (fun rename => selectedBase.renameWires rename)
+        exact selectedMapEq
+      _ = selectedBase := ItemSeq.renameWires_id selectedBase
+  dsimp only [selectedBase] at selectedBlockEq
+  have retainedMapEq :
+      Region.adjoinMaterialWire anchorLeaf.inheritedWires.length
+          (retainedAnchorWires input.val selection).length
+          selection.val.explicitWires.length ∘
+        Region.conjoinRightWire
+          (anchorLeaf.inheritedWires.length +
+            (retainedAnchorWires input.val selection).length)
+          selection.val.explicitWires.length 0 ∘
+        Fin.cast (congrArg (fun wires => wires + 0) retainedLength) =
+      factorRetained := by
+    funext index
+    have castEq :
+        Fin.cast (congrArg (fun wires => wires + 0) retainedLength) index =
+          Fin.castAdd 0 (Fin.cast retainedLength index) := by
+      apply Fin.ext
+      rfl
+    simp only [Function.comp_apply]
+    rw [castEq]
+    simp only [Region.conjoinRightWire,
+      Fin.addCases_left, Region.adjoinMaterialWire, factorRetained]
+    apply Fin.ext
+    rfl
+  have retainedBlockEq :
+      (((restrictedItems.renameWires
+          (Fin.cast (congrArg (fun wires => wires + 0)
+            retainedLength))).renameWires
+        (Region.conjoinRightWire
+          (anchorLeaf.inheritedWires.length +
+            (retainedAnchorWires input.val selection).length)
+          selection.val.explicitWires.length 0)).renameWires
+        (Region.adjoinMaterialWire anchorLeaf.inheritedWires.length
+          (retainedAnchorWires input.val selection).length
+          selection.val.explicitWires.length)) =
+        restrictedItems.renameWires factorRetained := by
+    calc
+      _ = restrictedItems.renameWires
+          ((Region.adjoinMaterialWire anchorLeaf.inheritedWires.length
+              (retainedAnchorWires input.val selection).length
+              selection.val.explicitWires.length ∘
+            Region.conjoinRightWire
+              (anchorLeaf.inheritedWires.length +
+                (retainedAnchorWires input.val selection).length)
+              selection.val.explicitWires.length 0) ∘
+            Fin.cast (congrArg (fun wires => wires + 0)
+              retainedLength)) := by
+                rw [ItemSeq.renameWires_comp, ItemSeq.renameWires_comp]
+      _ = restrictedItems.renameWires factorRetained := by
+        apply congrArg (fun rename => restrictedItems.renameWires rename)
+        exact retainedMapEq
+  have sourceTargetEq :
+      Region.adjoinAt (retainedAnchorWires input.val selection).length .nil
+          (selected.conjoin
+            (factoredWitness.toFocus.context.fill
+              factoredWitness.toFocus.body)) =
+        Region.mk
+          ((retainedAnchorWires input.val selection).length +
+            selection.val.explicitWires.length)
+          (((preparedItems.renameWires (Fin.cast fullLength)).renameWires
+              wireEquiv.symm).append
+            (restrictedItems.renameWires factorRetained)) := by
+    rw [factoredWitness.toFocus.rebuild]
+    simp only [selected, factoredItems, Region.conjoin, Region.adjoinAt,
+      Region.castWiresEq_mk, ItemSeq.nil_append,
+      ItemSeq.castWiresEq_eq_renameWires,
+      ItemSeq.renameWires_append,
+      renameNil, Nat.add_zero]
+    apply congrArg (Region.mk
+      ((retainedAnchorWires input.val selection).length +
+        selection.val.explicitWires.length))
+    congr 1
+  let finished := Concrete.Elaboration.finishRegion input.val
+    anchorLeaf.inheritedWires selection.val.anchor anchorLeaf.items
+  have completeEq :
+      extendWireEquiv
+          (FiniteEquiv.refl (Fin anchorLeaf.inheritedWires.length))
+          localEquiv.symm = wireEquiv.symm := by
+    dsimp only [wireEquiv, anchorWireEquiv]
+    rw [extendWireEquiv_symm]
+    apply FiniteEquiv.ext
+    intro index
+    rfl
+  have finishFactorIso : RegionIso
+      (FiniteEquiv.refl (Fin anchorLeaf.inheritedWires.length)) rels
+      finished
+      (Region.mk
+        ((retainedAnchorWires input.val selection).length +
+          selection.val.explicitWires.length)
+        (((preparedItems.renameWires (Fin.cast fullLength)).renameWires
+            wireEquiv.symm).append
+          (restrictedItems.renameWires factorRetained))) := by
+    apply RegionIso.mk localEquiv.symm
+    rw [completeEq]
+    simpa only [finished, Concrete.Elaboration.finishRegion,
+      ItemSeq.castWiresEq_eq_renameWires] using leafFactorItems
+  have finishSourceIso : RegionIso
+      (FiniteEquiv.refl (Fin anchorLeaf.inheritedWires.length)) rels
+      finished
+      (Region.adjoinAt
+        (retainedAnchorWires input.val selection).length .nil
+        (selected.conjoin
+          (factoredWitness.toFocus.context.fill
+            factoredWitness.toFocus.body))) := by
+    rw [sourceTargetEq]
+    exact finishFactorIso
+  have leafPresentation : RegionIso
+      (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm) rels
+      anchorBody finished := by
+    let inherited := anchorLeaf.inheritedWires
+    let lengthEq : inherited.length = outer := anchorLeaf.inheritedLength
+    let items := anchorLeaf.items
+    change RegionIso (FiniteEquiv.finCast lengthEq.symm) rels anchorBody
+      (Concrete.Elaboration.finishRegion input.val inherited
+        selection.val.anchor items)
+    have renamed := (RegionIso.renameWiresEquiv
+      (Concrete.Elaboration.finishRegion input.val inherited
+        selection.val.anchor items)
+      (FiniteEquiv.finCast lengthEq)).symm
+    have wireEq :
+        (FiniteEquiv.finCast lengthEq).symm =
+          FiniteEquiv.finCast lengthEq.symm := by
+      apply FiniteEquiv.ext
+      intro index
+      rfl
+    rw [wireEq] at renamed
+    have bodyEq : anchorBody = Region.castWiresEq lengthEq
+        (Concrete.Elaboration.finishRegion input.val inherited
+          selection.val.anchor items) := by
+      simpa [inherited, lengthEq, items] using anchorLeaf.bodyComputation
+    rw [bodyEq]
+    simpa only [Region.castWiresEq_eq_renameWires] using renamed
+  have sourceIso : RegionIso
+      (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm) rels
+      anchorBody
+      (Region.adjoinAt
+        (retainedAnchorWires input.val selection).length .nil
+        (selected.conjoin
+          (factoredWitness.toFocus.context.fill
+            factoredWitness.toFocus.body))) := by
+    have combined := leafPresentation.trans finishSourceIso
+    have wireEq :
+        (FiniteEquiv.finCast anchorLeaf.inheritedLength.symm).trans
+            (FiniteEquiv.refl (Fin anchorLeaf.inheritedWires.length)) =
+          FiniteEquiv.finCast anchorLeaf.inheritedLength.symm := by
+      apply FiniteEquiv.ext
+      intro index
+      rfl
+    rw [wireEq] at combined
+    exact combined
+  exact ⟨{
+    anchorLocal := (retainedAnchorWires input.val selection).length
+    selected := selected
+    descendantWires := factoredWitness.toFocus.holeWires
+    descendantRels := factoredWitness.toFocus.holeRels
+    descendant := factoredWitness.toFocus.context
+    remainder := factoredWitness.toFocus.body
+    selected_local := ⟨factoredItems, rfl⟩
+    source_iso := sourceIso
+    material_iso := materialIso
+  }⟩
 
 end VisualProof.Refinement.Implementation.IterationSourceFactor
