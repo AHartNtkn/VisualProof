@@ -101,3 +101,33 @@ certificate.
 No `baseOfSplice` theorem or helper was stated with `sorry`. No rule,
 concrete-legality, execution, or compiler definition was changed. The only
 task-owned change for this checkpoint is this report.
+
+## Material-local witness repair
+
+While assembling the operation-independent root splice bridge, the direct
+`SourceFactorResult.material_iso` witness was found to erase the exact local
+equivalence used by its constructor.  The endpoint isomorphism alone does not
+determine that map, so recovering it by unfolding `sourceFactor_complete`
+would have made the base proof depend on an opaque implementation term.
+
+`SourceFactorResult` now retains the canonical equality
+`material_local`: after transport across the named extracted-material and
+adjoined-material local-count equalities, `material_iso.localEquivCast` is
+exactly `(anchorLocalEquiv input.val selection).symm`.  The result uses the
+existing `route_alignment.retainedLength` as the sole authority for
+`anchorLocal = retainedAnchorWires.length`.  `sourceFactor_complete` constructs
+a direct `rawMaterialIso`, transports it to the public `Region.adjoinAt`
+endpoint, and proves `material_local` with
+`RegionIso.localEquivCast_castEndpoints`; no presentation, wrapper, choice, or
+second carrier map was introduced.
+
+Validation for this focused repair:
+
+- strict warning-as-error compilation of `IterationSourceFactor.lean` and
+  `IterationRootSourceFactor.lean` passed;
+- `lake build VisualProof.Refinement.Implementation.IterationSourceFactor`
+  passed;
+- authority audits `rules`, `implementation`, `proof`, and `roster` passed;
+- changed-line scans found no hole, axiom, structural choice recovery,
+  semantic import, compatibility alias, or example directive; and
+- `git diff --check` passed.
