@@ -689,6 +689,31 @@ tasks:
       full_outcome_complete: false
       rationale: "Task 8 is approved after remediation: translation is the sole check-then-elaborate authority, encoding preserves ordered aliases, all representation laws are kernel-checked, completeness is unconditional, and validation is clean."
       harness: codex
+  - id: T129
+    type: judge
+    assignee: Judge
+    status: done
+    reasoning_hint: high
+    objective: "Independently audit the governing structural-witness correction before foundation implementation begins."
+    inputs:
+      - "Commit 788b8dfd"
+      - "Corrected governing plan, Task 9 brief, goal, and board"
+    constraints:
+      - "Read-only."
+      - "Reject a second witness hierarchy, retained presentation substitute, duplicated compiler/context core, existential shortcut, or compatibility authority."
+      - "Require Task 9 to remain queued behind the independent foundation implementation gate."
+    expected_output:
+      - "approved | changes_required"
+      - "Witness-erasure correction evidence"
+    receipt:
+      result: done
+      decision: approved
+      full_outcome_complete: false
+      rationale: "The governing correction migrates the existing recursive isomorphism hierarchy to Type, requires Nonempty only at theorem-facing boundaries, retains canonical maps and OpenDiagramIso recursive data, retires presentation substitutes, establishes one compiler/context core, preserves operation-specific evidence, and queues Task 9 behind T128."
+      evidence:
+        - "Commit 788b8dfd"
+        - "GoalBuddy state validation passed with T127 active and T128/T117 queued"
+      harness: codex
   - id: T127
     type: worker
     assignee: Worker
