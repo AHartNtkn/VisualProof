@@ -18,9 +18,7 @@ theorem sound_iff
       denoteOpen model source args ↔
       denoteOpen model target args := by
   intro model args
-  let copy : Region step.descendantWires step.descendantRels :=
-    (step.selected.renameWires step.descendant.outerWire).renameRelations
-      step.descendant.outerRelation
+  let copy : Region step.descendantWires step.descendantRels := step.copy
   have copied :
       ∀ (ancestorEnv : Fin
           (step.ancestorWires + step.anchorLocal) → model.Carrier)
@@ -33,12 +31,19 @@ theorem sound_iff
             denoteRegion model descendantEnv descendantRelEnv copy := by
     intro ancestorEnv ancestorRelEnv selectedDenotes
       descendantEnv descendantRelEnv reachable
+    rw [show copy = step.copy from rfl, Iteration.Base.copy,
+      Region.denote_adjoinAt]
+    obtain ⟨freshEnv, freshEnvEq⟩ :=
+      step.copyWires.env_eq ancestorEnv descendantEnv reachable.outerWire
+    refine ⟨freshEnv, trivial, ?_⟩
     apply (denoteRegion_renameRelations model step.descendant.outerRelation
-      ancestorRelEnv descendantRelEnv reachable.outerRelation descendantEnv
-      (step.selected.renameWires step.descendant.outerWire)).mpr
-    apply (denoteRegion_renameWires model step.descendant.outerWire
-      descendantEnv ancestorRelEnv step.selected).mpr
-    rw [reachable.outerWire]
+      ancestorRelEnv descendantRelEnv reachable.outerRelation
+      (extendWireEnv descendantEnv freshEnv)
+      (step.selected.renameWires step.copyWires.wire)).mpr
+    apply (denoteRegion_renameWires model step.copyWires.wire
+      (extendWireEnv descendantEnv freshEnv) ancestorRelEnv
+      step.selected).mpr
+    rw [freshEnvEq]
     exact selectedDenotes
   have bodyEquiv :
       ∀ env : Fin step.interface.externalClasses → model.Carrier,
