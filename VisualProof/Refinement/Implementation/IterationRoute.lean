@@ -708,12 +708,12 @@ structure KeptRouteResult
     (keptItems : ItemSeq
       (anchorLeaf.inheritedWires.extend selection.val.anchor).length rels)
     {target : Fin input.val.regionCount} {path : List Nat}
-    (_route : Concrete.Splice.RegionRoute input.val selection.val.anchor target path) where
+    (route : Concrete.Splice.RegionRoute input.val selection.val.anchor target path) where
   keptPath : List Nat
   witness : Region.ContextPath
     (Region.mk 0 keptItems) keptPath
   terminal : RouteCase (target = selection.val.anchor)
-    (Concrete.Splice.Region.ContextPath.CompilerLeaf input.val target witness)
+    (CompiledRouteTerminal input anchorLeaf keptItems route keptPath witness)
 
 /-- Completeness of the retained-block path.  No second compilation authority
 is introduced: the top item block is the partition compiler result and every
@@ -764,7 +764,7 @@ noncomputable def keptRoute_complete
     terminal := by
       cases result.terminal with
       | atStart equal => exact .atStart equal
-      | proper terminalData => exact .proper terminalData.leaf
+      | proper terminalData => exact .proper terminalData
   }
 
 end VisualProof.Refinement.Implementation.IterationRoute

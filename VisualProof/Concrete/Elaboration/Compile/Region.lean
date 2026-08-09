@@ -41,25 +41,6 @@ noncomputable def regionIso_of_cast
   subst targetExtended
   simpa using RegionIso.mk localEquiv hitems
 
-private theorem regionIso_of_cast_localEquiv
-    {sourceOuter targetOuter sourceLocal targetLocal
-      sourceExtended targetExtended : Nat}
-    (sourceEq : sourceExtended = sourceOuter + sourceLocal)
-    (targetEq : targetExtended = targetOuter + targetLocal)
-    (ambient : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
-    (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
-    (sourceItems : ItemSeq sourceExtended rels)
-    (targetItems : ItemSeq targetExtended rels)
-    (hitems : ItemSeqIso
-      (castFinEquiv sourceEq targetEq
-        (extendWireEquiv ambient localEquiv)) rels
-      sourceItems targetItems) :
-    (regionIso_of_cast sourceEq targetEq ambient localEquiv
-      sourceItems targetItems hitems).localEquiv = localEquiv := by
-  subst sourceExtended
-  subst targetExtended
-  rfl
-
 /-- Fuelled region kernel of the sole concrete elaborator. -/
 def compileRegion? (d : Diagram) :
     Nat -> (region : Fin d.regionCount) ->
@@ -86,24 +67,6 @@ def compileRoot? (d : Diagram)
     (compileRegion?  d d.regionCount)
     rootWires BinderContext.empty (localOccurrences d d.root)
   pure (finishRoot ambient locals items)
-
-/-- A successful root compilation retains exactly the supplied local context. -/
-theorem compileRoot?_localCount
-    {d : Diagram} {ambient locals : WireContext d}
-    {body : Region ambient.length []}
-    (compiled : compileRoot? d ambient locals = some body) :
-    body.localCount = locals.length := by
-  simp only [compileRoot?] at compiled
-  generalize hitems : compileOccurrencesWith? d
-      (compileRegion? d d.regionCount) (ambient ++ locals)
-      BinderContext.empty (localOccurrences d d.root) = result at compiled
-  cases result with
-  | none => contradiction
-  | some items =>
-      injection compiled with equality
-      rw [← equality]
-      rfl
-
 
 theorem compileRoot?_closed_eq_compileRegion?
     (d : Diagram) :
@@ -1039,44 +1002,6 @@ noncomputable def compileRoot?_equivariant
     RegionIso  ambient [] sourceBody targetBody :=
   (compileRoot?_equivariant_with_items iso htarget hwires htargetExact
     hsource htargetResult).regionIso
-
-/-- Root equivariance retains the exact supplied equivalence on locally bound
-wires. -/
-theorem compileRoot?_equivariant_localEquivCast
-    {source target : Diagram}
-    (iso : Iso source target)
-    (htarget : target.WellFormed)
-    {sourceAmbient : WireContext source} {targetAmbient : WireContext target}
-    {sourceLocal : WireContext source} {targetLocal : WireContext target}
-    {ambient : FiniteEquiv (Fin sourceAmbient.length)
-      (Fin targetAmbient.length)}
-    {localEquiv : FiniteEquiv (Fin sourceLocal.length)
-      (Fin targetLocal.length)}
-    (hwires : WireContextsAgree iso (sourceAmbient ++ sourceLocal)
-      (targetAmbient ++ targetLocal) (appendContextEquiv ambient localEquiv))
-    (htargetExact : WireContext.Exact (targetAmbient ++ targetLocal) target.root)
-    {sourceBody : Region sourceAmbient.length []}
-    {targetBody : Region targetAmbient.length []}
-    (hsource : compileRoot? source sourceAmbient sourceLocal = some sourceBody)
-    (htargetResult : compileRoot? target targetAmbient targetLocal =
-      some targetBody) :
-    (compileRoot?_equivariant iso htarget hwires htargetExact
-      hsource htargetResult).localEquivCast
-        (compileRoot?_localCount hsource)
-        (compileRoot?_localCount htargetResult) = localEquiv := by
-  let result := compileRoot?_equivariant_with_items iso htarget hwires
-    htargetExact hsource htargetResult
-  change result.regionIso.localEquivCast _ _ = localEquiv
-  cases result with
-  | mk sourceItems targetItems source_eq target_eq _ _ items_iso =>
-      subst sourceBody
-      subst targetBody
-      change
-        (regionIso_of_cast (by simp) (by simp) ambient localEquiv
-          sourceItems targetItems items_iso).localEquivCast _ _ = localEquiv
-      simpa [RegionIso.localEquivCast] using
-        regionIso_of_cast_localEquiv (by simp) (by simp) ambient localEquiv
-          sourceItems targetItems items_iso
 
 /-- Public root-context equivariance with every supplied root wire treated as
 ambient.  Unlike `compileRoot?_equivariant`, its interface mentions only the

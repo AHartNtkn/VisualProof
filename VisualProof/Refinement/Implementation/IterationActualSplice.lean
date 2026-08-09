@@ -90,7 +90,7 @@ noncomputable def iterationActualSpliceOfEmpty
     Concrete.Splice.Input.PlugLayout.emptyRelationRenaming host.focus.holeRels
   Region.spliceAt targetLocal targetItems material actualWire actualRelation
 
-noncomputable def coalescedRouteTerminal_hostLexical
+private noncomputable def coalescedRouteTerminal_hostLexical
     (input : Concrete.Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount)
@@ -163,35 +163,20 @@ noncomputable def coalescedRouteTerminal_hostLexical
   refine ⟨routeRels.trans tail.terminalLexical.rels_eq, ?_⟩
   exact (routeTerminalBinders.trans tail.terminalLexical.binders_eq)
 
-noncomputable def Region.ContextPath.appendRootItemsRight_actualIso
-    {items suffix : ItemSeq  wires rels}
-    {index : Nat} {rest : List Nat}
-    (witness : Region.ContextPath (Region.mk 0 items) (index :: rest))
-    (replacement : Region  witness.toFocus.holeWires
-      witness.toFocus.holeRels)
-    {actualRels : RelCtx}
-    (actualRelsEq : witness.toFocus.holeRels = actualRels)
-    {actualWires : Nat}
-    (actualWire : FiniteEquiv (Fin witness.toFocus.holeWires)
-      (Fin actualWires))
-    (actual : Region  actualWires actualRels)
-    (iso : RegionIso  actualWire actualRels
-      (replacement.renameRelations
-        (Concrete.Splice.Input.relationRenamingOfEq actualRelsEq)) actual) :
-    RegionIso
-      ((witness.appendRootItemsRightHoleWire (suffix := suffix)).trans
-        actualWire)
-      actualRels
-      ((witness.appendRootItemsRightReplacement
-          (suffix := suffix) replacement).renameRelations
-        (Concrete.Splice.Input.relationRenamingOfEq
-          ((witness.appendRootItemsRightHoleRelsEq (suffix := suffix)).trans
-            actualRelsEq)))
-      actual := by
-  cases witness <;> simpa [Region.ContextPath.appendRootItemsRightHoleWire,
-    Region.ContextPath.appendRootItemsRightHoleRelsEq,
-    Region.ContextPath.appendRootItemsRightReplacement,
-    FiniteEquiv.trans, FiniteEquiv.refl] using iso
+/-- The route-native splice body.  Its dependent item decomposition is an
+implementation detail of the final isomorphism proof, not part of that
+isomorphism's public result. -/
+private noncomputable def routeNativeSplice
+    (body : Region sourceWires sourceRels)
+    (material : Region materialWires materialRels)
+    (routeWire : Fin materialWires → Fin sourceWires)
+    (routeRelation : RelationRenaming materialRels sourceRels) :
+    Region sourceWires sourceRels :=
+  match body with
+  | .mk sourceLocal sourceItems =>
+      Region.spliceAt sourceLocal sourceItems material
+        (fun index => Fin.castAdd sourceLocal (routeWire index))
+        routeRelation
 
 /-- The route-native splice used by the contraction proof is isomorphic to
 the executable compiler's splice at the canonical host focus.  This theorem
@@ -272,27 +257,20 @@ noncomputable def properRoute_actualSpliceIso
     let material := Concrete.Elaboration.finishRegion
       spliceInput.pattern.val.diagram pattern.leaf.inheritedWires
       spliceInput.binderSpine.bodyContainer pattern.leaf.items
-    Σ (sourceLocal : Nat)
-      (sourceItems : ItemSeq
-        (witness.toFocus.holeWires + sourceLocal)
-        witness.toFocus.holeRels),
-      PSigma fun _sourceBody :
-          witness.toFocus.body = Region.mk sourceLocal sourceItems =>
-      let hrels :=
-        (coalescedRouteTerminal_hostLexical input selection target hadmissible
-          hencloses route terminal).rels_eq
-      let relationWire :=
-        Concrete.Splice.Input.compilerLeafOuterWire witness terminal.leaf
-          host.intrinsicPath host.compilerLeaf
-          (Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
-            witness terminal.leaf host.intrinsicPath host.compilerLeaf)
-      RegionIso  relationWire host.focus.holeRels
-        ((Region.spliceAt sourceLocal sourceItems material
-          (fun index => Fin.castAdd sourceLocal (routeWire index))
-          routeRelation).renameRelations
-            (Concrete.Splice.Input.relationRenamingOfEq hrels))
-        (iterationActualSpliceOfNonempty input selection target hadmissible
-          hnonempty) := by
+    let hrels :=
+      (coalescedRouteTerminal_hostLexical input selection target hadmissible
+        hencloses route terminal).rels_eq
+    let relationWire :=
+      Concrete.Splice.Input.compilerLeafOuterWire witness terminal.leaf
+        host.intrinsicPath host.compilerLeaf
+        (Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+          witness terminal.leaf host.intrinsicPath host.compilerLeaf)
+    RegionIso  relationWire host.focus.holeRels
+      ((routeNativeSplice witness.toFocus.body material routeWire
+        routeRelation).renameRelations
+          (Concrete.Splice.Input.relationRenamingOfEq hrels))
+      (iterationActualSpliceOfNonempty input selection target hadmissible
+        hnonempty) := by
   dsimp only
   let spliceInput := iterationInput input selection target
   let layout : FragmentLayout input.val selection := {}
@@ -407,8 +385,8 @@ noncomputable def properRoute_actualSpliceIso
             intro arity relation
             exact iterationTerminalRelationFactor input selection target
               hadmissible hnonempty route terminal hrels hbinders relation
-          refine ⟨sourceLocal, sourceItems, rfl, ?_⟩
-          simpa [iterationActualSpliceOfNonempty, spliceInput, host, pattern,
+          simpa [routeNativeSplice, sourceBodyEq,
+            iterationActualSpliceOfNonempty, spliceInput, host, pattern,
             targetLocal, targetLength, targetItems, material, actualWire,
             actualRelation] using
             (RegionIso.spliceAt_renameRelations hostItemsIso material
@@ -482,26 +460,19 @@ noncomputable def properRoute_rootActualSpliceIso
     let material := Concrete.Elaboration.finishRoot
       spliceInput.pattern.val.exposedWires spliceInput.pattern.val.hiddenWires
       pattern.items
-    Σ (sourceLocal : Nat)
-      (sourceItems : ItemSeq
-        (witness.toFocus.holeWires + sourceLocal)
-        witness.toFocus.holeRels),
-      PSigma fun _sourceBody :
-          witness.toFocus.body = Region.mk sourceLocal sourceItems =>
-      let hrels :=
-        (coalescedRouteTerminal_hostLexical input selection target hadmissible
-          hencloses route terminal).rels_eq
-      let relationWire :=
-        Concrete.Splice.Input.compilerLeafOuterWire witness terminal.leaf
-          host.intrinsicPath host.compilerLeaf
-          (Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
-            witness terminal.leaf host.intrinsicPath host.compilerLeaf)
-      RegionIso  relationWire host.focus.holeRels
-        ((Region.spliceAt sourceLocal sourceItems material
-          (fun index => Fin.castAdd sourceLocal (routeWire index))
-          routeRelation).renameRelations
-            (Concrete.Splice.Input.relationRenamingOfEq hrels))
-        (iterationActualSpliceOfEmpty input selection target hadmissible) := by
+    let hrels :=
+      (coalescedRouteTerminal_hostLexical input selection target hadmissible
+        hencloses route terminal).rels_eq
+    let relationWire :=
+      Concrete.Splice.Input.compilerLeafOuterWire witness terminal.leaf
+        host.intrinsicPath host.compilerLeaf
+        (Concrete.Splice.Input.Region.ContextPath.CompilerLeaf.sameSiteInheritedEquiv
+          witness terminal.leaf host.intrinsicPath host.compilerLeaf)
+    RegionIso  relationWire host.focus.holeRels
+      ((routeNativeSplice witness.toFocus.body material routeWire
+        routeRelation).renameRelations
+          (Concrete.Splice.Input.relationRenamingOfEq hrels))
+      (iterationActualSpliceOfEmpty input selection target hadmissible) := by
   dsimp only
   let spliceInput := iterationInput input selection target
   let anchorView := IterationAnchor.coalescedAnchorView input selection target
@@ -594,8 +565,8 @@ noncomputable def properRoute_rootActualSpliceIso
                   (routeRelation relation) := by
             intro arity relation
             exact Fin.elim0 relation.index
-          refine ⟨sourceLocal, sourceItems, rfl, ?_⟩
-          simpa [iterationActualSpliceOfEmpty, spliceInput, host, pattern,
+          simpa [routeNativeSplice, sourceBodyEq,
+            iterationActualSpliceOfEmpty, spliceInput, host, pattern,
             targetLocal, targetLength, targetItems, material, actualWire,
             actualRelation] using
             (RegionIso.spliceAt_renameRelations hostItemsIso material
