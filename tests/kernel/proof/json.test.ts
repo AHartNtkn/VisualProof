@@ -98,6 +98,38 @@ describe('action allocation JSON', () => {
 })
 
 describe('step JSON', () => {
+  it('round-trips the durable iteration payload with its selected root wire', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.atom(builder.root, relSig([IOTA]))
+    const wire = builder.wire(builder.root, [
+      { node, port: { kind: 'arg', index: 0 } },
+    ])
+    const diagram = builder.build()
+    const step: ProofStep = {
+      rule: 'iteration',
+      sel: mkSelection(diagram, {
+        region: diagram.root,
+        regions: [],
+        nodes: [node],
+        wires: [wire],
+      }),
+      target: diagram.root,
+    }
+
+    const encoded = JSON.parse(JSON.stringify(stepToJson(step)))
+    expect(encoded).toEqual({
+      rule: 'iteration',
+      sel: {
+        region: diagram.root,
+        regions: [],
+        nodes: [node],
+        wires: [wire],
+      },
+      target: diagram.root,
+    })
+    expect(stepFromJson(encoded)).toEqual(step)
+  })
+
   it('round-trips every final Phase-1 primitive', () => {
     const steps: ProofStep[] = [
       { rule: 'refSpawn', region: 'r1', defId: 'nat', sig: relSig([IOTA]) },

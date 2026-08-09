@@ -19,6 +19,15 @@ function host() {
   return { diagram: builder.build(), node, wire, cut }
 }
 
+function rootAtomWithWire() {
+  const builder = new DiagramBuilder()
+  const node = builder.atom(builder.root, relSig([IOTA]))
+  const wire = builder.wire(builder.root, [
+    { node, port: { kind: 'arg', index: 0 } },
+  ])
+  return { diagram: builder.build(), node, wire }
+}
+
 function deiterate(
   diagram: Parameters<typeof applyDeiteration>[0],
   selection: Parameters<typeof applyDeiteration>[1],
@@ -34,6 +43,44 @@ function deiterate(
 }
 
 describe('applyIteration', () => {
+  it('keeps an explicitly selected root wire distinct from the copied atom wire', () => {
+    const { diagram, node, wire } = rootAtomWithWire()
+    const selection = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [node],
+      wires: [wire],
+    })
+
+    const iterated = applyIteration(diagram, selection, diagram.root)
+
+    expect(iterated.wires[wire]!.scope).toBe(diagram.root)
+    expect(iterated.wires[wire]!.endpoints).toEqual([
+      { node, port: { kind: 'arg', index: 0 } },
+    ])
+
+    const copiedNode = Object.entries(iterated.nodes).find(
+      ([id, candidate]) =>
+        id !== node
+        && candidate.kind === 'atom'
+        && candidate.region === diagram.root,
+    )
+    expect(copiedNode).toBeDefined()
+    const copiedWire = Object.entries(iterated.wires).find(
+      ([id, candidate]) =>
+        id !== wire
+        && candidate.scope === diagram.root
+        && candidate.endpoints.some(
+          (endpoint) =>
+            endpoint.node === copiedNode![0]
+            && endpoint.port.kind === 'arg'
+            && endpoint.port.index === 0,
+        ),
+    )
+    expect(copiedWire).toBeDefined()
+    expect(copiedWire![0]).not.toBe(wire)
+  })
+
   it('copies an exact subgraph into a descendant region with shared attachments', () => {
     const { diagram, node, wire, cut } = host()
     const selection = mkSelection(diagram, {

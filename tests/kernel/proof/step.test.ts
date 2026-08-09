@@ -127,6 +127,54 @@ describe('primitive replay', () => {
 })
 
 describe('normalized step receipts', () => {
+  it('maps an overlapped iteration boundary position to the surviving original wire', () => {
+    const builder = new DiagramBuilder()
+    const node = builder.atom(builder.root, relSig([IOTA]))
+    const wire = builder.wire(builder.root, [
+      { node, port: { kind: 'arg', index: 0 } },
+    ])
+    const diagram = builder.build()
+    const sel = mkSelection(diagram, {
+      region: diagram.root,
+      regions: [],
+      nodes: [node],
+      wires: [wire],
+    })
+    const receipt = applyStepWithReceipt(
+      diagram,
+      { rule: 'iteration', sel, target: diagram.root },
+      EMPTY_PROOF_CONTEXT,
+    )
+    const boundary = mkDiagramWithBoundary(diagram, [wire]).boundary
+    const copiedNode = Object.entries(receipt.result.nodes).find(
+      ([id, candidate]) =>
+        id !== node
+        && candidate.kind === 'atom'
+        && candidate.region === diagram.root,
+    )
+    expect(copiedNode).toBeDefined()
+    const copiedWire = Object.entries(receipt.result.wires).find(
+      ([id, candidate]) =>
+        id !== wire
+        && candidate.scope === diagram.root
+        && candidate.endpoints.some(
+          (endpoint) =>
+            endpoint.node === copiedNode![0]
+            && endpoint.port.kind === 'arg'
+            && endpoint.port.index === 0,
+        ),
+    )
+    expect(copiedWire).toBeDefined()
+
+    expect(receipt.interface.image(wire)).toBe(wire)
+    expect(receipt.interface.image(copiedWire![0])).toBeUndefined()
+    expect(transportBoundary(receipt.interface, boundary)).toEqual([wire])
+    expect(transportBoundary(receipt.interface, [
+      ...boundary,
+      copiedWire![0],
+    ])).toBeUndefined()
+  })
+
   it('composes wire-join intent with identity degeneration', () => {
     // The identity sits below both wire scopes so it survives the build
     // (two outer wires); the join then degenerates it to one wire.
