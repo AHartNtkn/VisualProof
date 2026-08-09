@@ -60,10 +60,6 @@ structure PatternTerminalCompilerView
   producer_witness : HEq producer.intrinsicPath witness
   producer_leaf : HEq (producer.compilerLeaf.nestedOfNe proper) leaf
 
-/-- Backwards-compatible input-facing name for the pattern-owned view. -/
-abbrev TerminalCompilerView (input : Input ) :=
-  PatternTerminalCompilerView input.pattern input.binderSpine
-
 /-- A nonempty pattern-owned spine reaches its body through the ordinary
 nested compiler kernel, independently of any host splice. -/
 noncomputable def patternTerminalCompilerView_complete
@@ -95,7 +91,7 @@ noncomputable def compiledPatternTerminalView
 noncomputable def compiledSpliceTerminalView
     (input : Input )
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    TerminalCompilerView input :=
+    PatternTerminalCompilerView input.pattern input.binderSpine :=
   compiledPatternTerminalView input.pattern input.binderSpine
     input.terminalBody hnonempty
 

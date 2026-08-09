@@ -1,4 +1,4 @@
-import VisualProof.Refinement.Implementation.IterationExtractionSelected
+import VisualProof.Refinement.Implementation.IterationFragment
 import VisualProof.Refinement.Implementation.IterationRoute
 import VisualProof.Diagram.RenamingIsomorphism
 
@@ -11,6 +11,7 @@ open VisualProof.Diagram
 open VisualProof.Theory
 open VisualProof.Refinement.Implementation.IterationPartition
 open VisualProof.Refinement.Implementation.IterationRoute
+open VisualProof.Refinement.Implementation.IterationFragment
 
 /-- Anchor-local wires retained by the source context.  The explicit block is
 owned by the selected factor instead. -/
@@ -1285,35 +1286,19 @@ noncomputable def sourceFactor_complete
     (input : Concrete.Checked)
     (selection : CheckedSelection input.val)
     (layout : FragmentLayout input.val selection)
-    {outer : Nat} {rels fragmentRels : RelCtx}
+    {outer : Nat} {rels : RelCtx}
     {anchorBody : Region outer rels}
     (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
       selection.val.anchor (.here anchorBody))
-    (fragmentFuel : Nat)
-    (fragmentContext : Concrete.Elaboration.WireContext
-      (input.val.extractDiagramRaw selection layout))
-    (fragmentBinders : Concrete.Elaboration.BinderContext
-      (input.val.extractDiagramRaw selection layout) fragmentRels)
-    (fragmentEnumeration : Concrete.Elaboration.BinderContext.Enumeration
-      (input.val.extractDiagramRaw selection layout) fragmentBinders
-      layout.bodyContainer)
-    (fragmentExact : fragmentContext.Exact layout.bodyContainer)
-    (fragmentItems : ItemSeq fragmentContext.length fragmentRels)
-    (fragmentCompiled : Concrete.Elaboration.compileOccurrencesWith?
-      (input.val.extractDiagramRaw selection layout)
-      (Concrete.Elaboration.compileRegion?
-        (input.val.extractDiagramRaw selection layout) fragmentFuel)
-      fragmentContext fragmentBinders
-      (Concrete.Elaboration.localOccurrences
-        (input.val.extractDiagramRaw selection layout) layout.bodyContainer) =
-      some fragmentItems)
+    {spliceInput : Concrete.Splice.Input}
+    (fragment : FragmentInput input selection layout spliceInput)
     {target : Fin input.val.regionCount} {path : List Nat}
     (route : Concrete.Splice.RegionRoute input.val selection.val.anchor
       target path)
     (targetNotSelected : ¬ selection.val.SelectsRegion target) :
     SourceFactorResult input selection layout anchorLeaf
-      fragmentContext fragmentBinders fragmentEnumeration fragmentExact
-      fragmentItems route := by
+      fragment.context fragment.binders fragment.enumeration
+      fragment.contextExact fragment.items route := by
   obtain ⟨selectedItems, keptItems, selectedCompiled, keptCompiled,
       partitionIso⟩ := partition_complete input selection anchorLeaf
   obtain ⟨restrictedItems, restrictedCompiled, keptIso⟩ :=
@@ -1358,14 +1343,14 @@ noncomputable def sourceFactor_complete
   }
   let binderWitness :=
     IterationExtraction.ExtractionBinderWitness.terminal input selection layout
-      fragmentBinders fragmentEnumeration anchorLeaf.binders
+      fragment.binders fragment.enumeration anchorLeaf.binders
       anchorLeaf.bindersCover
   let preparedItems :=
-    (fragmentItems.renameRelations binderWitness.relationMap).renameWires
+    (fragment.items.renameRelations binderWitness.relationMap).renameWires
       (IterationExtraction.extractionContextIndexMap input selection layout
-        fragmentContext
+        fragment.context
         (anchorLeaf.inheritedWires.extend selection.val.anchor)
-        fragmentExact anchorLeaf.wiresExact)
+        fragment.contextExact anchorLeaf.wiresExact)
   let localEquiv := anchorLocalEquiv input.val selection
   let wireEquiv := anchorWireEquiv input.val selection
     anchorLeaf.inheritedWires
@@ -1519,11 +1504,11 @@ noncomputable def sourceFactor_complete
     Region.mk selection.val.explicitWires.length factoredItems
   have extractionIso :=
     IterationExtraction.extractionCompileSelectedItems_iso input selection
-      layout fragmentFuel anchorLeaf.fuel fragmentContext
-      (anchorLeaf.inheritedWires.extend selection.val.anchor) fragmentBinders
-      anchorLeaf.binders fragmentEnumeration anchorLeaf.binderEnumeration
-      anchorLeaf.bindersCover fragmentExact anchorLeaf.wiresExact
-      fragmentItems selectedItems fragmentCompiled selectedCompiled
+      layout fragment.fuel anchorLeaf.fuel fragment.context
+      (anchorLeaf.inheritedWires.extend selection.val.anchor) fragment.binders
+      anchorLeaf.binders fragment.enumeration anchorLeaf.binderEnumeration
+      anchorLeaf.bindersCover fragment.contextExact anchorLeaf.wiresExact
+      fragment.items selectedItems fragment.computation selectedCompiled
   have materialTargetEq :
       Region.adjoinAt (retainedAnchorWires input.val selection).length .nil
           selected =
@@ -1555,8 +1540,9 @@ noncomputable def sourceFactor_complete
     rw [adjoinCancel, ItemSeq.renameWires_id]
   let rawMaterialIso : RegionIso
       (FiniteEquiv.refl (Fin anchorLeaf.inheritedWires.length)) rels
-      (extractedSelectedRegion input selection layout anchorLeaf fragmentContext
-        fragmentBinders fragmentEnumeration fragmentExact fragmentItems)
+      (extractedSelectedRegion input selection layout anchorLeaf fragment.context
+        fragment.binders fragment.enumeration fragment.contextExact
+        fragment.items)
       (Region.mk
         ((retainedAnchorWires input.val selection).length +
           selection.val.explicitWires.length)
@@ -1583,15 +1569,17 @@ noncomputable def sourceFactor_complete
     exact renamed
   let materialIso : RegionIso
       (FiniteEquiv.refl (Fin anchorLeaf.inheritedWires.length)) rels
-      (extractedSelectedRegion input selection layout anchorLeaf fragmentContext
-        fragmentBinders fragmentEnumeration fragmentExact fragmentItems)
+      (extractedSelectedRegion input selection layout anchorLeaf fragment.context
+        fragment.binders fragment.enumeration fragment.contextExact
+        fragment.items)
       (Region.adjoinAt (retainedAnchorWires input.val selection).length .nil
         selected) :=
     Eq.mp (congrArg (fun target => RegionIso
       (FiniteEquiv.refl (Fin anchorLeaf.inheritedWires.length)) rels
       (extractedSelectedRegion input selection layout anchorLeaf
-        fragmentContext fragmentBinders fragmentEnumeration fragmentExact
-        fragmentItems) target) materialTargetEq.symm) rawMaterialIso
+        fragment.context fragment.binders fragment.enumeration
+        fragment.contextExact fragment.items) target) materialTargetEq.symm)
+      rawMaterialIso
   let fullLength := Concrete.Elaboration.WireContext.length_extend
     anchorLeaf.inheritedWires selection.val.anchor
   have extractionCast : ItemSeqIso
@@ -2044,8 +2032,8 @@ noncomputable def sourceFactor_complete
       have transported := RegionIso.localEquivCast_castEndpoints
         rawMaterialIso rfl materialTargetEq.symm rfl rfl
         (extractedSelectedRegion_localWires input selection layout anchorLeaf
-          fragmentContext fragmentBinders fragmentEnumeration fragmentExact
-          fragmentItems)
+          fragment.context fragment.binders fragment.enumeration
+          fragment.contextExact fragment.items)
         resultTargetLocal
       simpa [materialIso, rawMaterialIso,
         RegionIso.localEquivCast, RegionIso.localEquiv, localEquiv]
