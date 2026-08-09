@@ -77,48 +77,6 @@ theorem compileOccurrence_success_of_mem
               · exact ⟨headItem, headResult⟩
               · exact induction tailResult member
 
-theorem compileOccurrences_append
-    (diagram : Concrete.Diagram)
-    (recurse : ∀ {rels : RelCtx},
-      (region : Fin diagram.regionCount) →
-      (context : Concrete.Elaboration.WireContext diagram) →
-      Concrete.Elaboration.BinderContext diagram rels →
-      Option (Region context.length rels))
-    (context : Concrete.Elaboration.WireContext diagram)
-    (binders : Concrete.Elaboration.BinderContext diagram rels)
-    (first second : List (Concrete.Elaboration.LocalOccurrence
-      diagram.regionCount diagram.nodeCount))
-    {firstItems secondItems : ItemSeq context.length rels}
-    (firstCompiled :
-      Concrete.Elaboration.compileOccurrencesWith? diagram recurse
-        context binders first = some firstItems)
-    (secondCompiled :
-      Concrete.Elaboration.compileOccurrencesWith? diagram recurse
-        context binders second = some secondItems) :
-    Concrete.Elaboration.compileOccurrencesWith? diagram recurse
-        context binders (first ++ second) =
-      some (firstItems.append secondItems) := by
-  induction first generalizing firstItems with
-  | nil =>
-      simp only [Concrete.Elaboration.compileOccurrencesWith?] at firstCompiled
-      cases firstCompiled
-      simpa using secondCompiled
-  | cons head tail induction =>
-      simp only [Concrete.Elaboration.compileOccurrencesWith?] at firstCompiled ⊢
-      cases headResult : Concrete.Elaboration.compileOccurrenceWith?
-          diagram recurse context binders head with
-      | none => simp [headResult] at firstCompiled
-      | some headItem =>
-          cases tailResult : Concrete.Elaboration.compileOccurrencesWith?
-              diagram recurse context binders tail with
-          | none => simp [headResult, tailResult] at firstCompiled
-          | some tailItems =>
-              simp [headResult, tailResult] at firstCompiled
-              subst firstItems
-              simp [Concrete.Elaboration.compileOccurrencesWith?, headResult,
-                induction tailResult]
-              rfl
-
 noncomputable def permIndexEquiv [DecidableEq α]
     (source target : List α) (permutation : source.Perm target)
     (sourceNodup : source.Nodup) (targetNodup : target.Nodup) :
@@ -310,9 +268,10 @@ noncomputable def partition_complete_of_perm
           Concrete.Elaboration.compileOccurrencesWith? input.val recurse
               (leaf.inheritedWires.extend anchor) leaf.binders partitioned =
             some (selectedItems.append keptItems) := by
-        simpa [partitioned] using compileOccurrences_append input.val recurse
-          (leaf.inheritedWires.extend anchor) leaf.binders selected kept
-          selectedResult keptResult
+        simpa [partitioned] using
+          Concrete.Elaboration.compileOccurrencesWith?_append recurse
+            (leaf.inheritedWires.extend anchor) leaf.binders selected kept
+            selectedItems keptItems selectedResult keptResult
       have partitionNodup : partitioned.Nodup :=
         (partition.nodup_iff).2
           (Concrete.Elaboration.localOccurrences_nodup input.val anchor)

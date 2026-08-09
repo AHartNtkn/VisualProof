@@ -666,10 +666,10 @@ noncomputable def source_items_partition
           Concrete.Elaboration.compileOccurrencesWith? input.val recurse context
               binders partitioned = some (kept.append selected) := by
         simpa [partitioned] using
-          VisualProof.Refinement.Implementation.IterationPartition.compileOccurrences_append
-            input.val recurse context binders
-            (keptOccurrences input.val selection)
-            (selectedOccurrences input.val selection) keptResult selectedResult
+          Concrete.Elaboration.compileOccurrencesWith?_append recurse context
+            binders (keptOccurrences input.val selection)
+            (selectedOccurrences input.val selection) kept selected keptResult
+            selectedResult
       have partitionNodup : partitioned.Nodup :=
         ((occurrences_perm input.val selection).nodup_iff).2
           (Concrete.Elaboration.localOccurrences_nodup input.val
