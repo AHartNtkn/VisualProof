@@ -8,6 +8,39 @@ open Diagram
 
 namespace Iteration
 
+structure WireFreshening
+    (sourceWires targetWires freshWires : Nat)
+    (inherited : Fin sourceWires → Fin targetWires) where
+  sourceOfFresh : Fin freshWires → Fin sourceWires
+  sourceOfFresh_injective : Function.Injective sourceOfFresh
+  wire : Fin sourceWires → Fin (targetWires + freshWires)
+  wire_fresh : ∀ fresh,
+    wire (sourceOfFresh fresh) = Fin.natAdd targetWires fresh
+  wire_inherited : ∀ source,
+    (∀ fresh, sourceOfFresh fresh ≠ source) →
+      wire source = Fin.castAdd freshWires (inherited source)
+
+theorem WireFreshening.env_eq
+    (freshening : WireFreshening sourceWires targetWires freshWires inherited)
+    (sourceEnv : Fin sourceWires → D)
+    (targetEnv : Fin targetWires → D)
+    (inheritedEq : targetEnv ∘ inherited = sourceEnv) :
+    ∃ freshEnv : Fin freshWires → D,
+      extendWireEnv targetEnv freshEnv ∘ freshening.wire = sourceEnv := by
+  refine ⟨fun fresh => sourceEnv (freshening.sourceOfFresh fresh), ?_⟩
+  funext source
+  by_cases sourceFresh : ∃ fresh, freshening.sourceOfFresh fresh = source
+  · rcases sourceFresh with ⟨fresh, sourceEq⟩
+    subst source
+    simp [extendWireEnv, freshening.wire_fresh]
+  · change extendWireEnv targetEnv
+      (fun fresh => sourceEnv (freshening.sourceOfFresh fresh))
+      (freshening.wire source) = sourceEnv source
+    rw [freshening.wire_inherited source (by
+      intro fresh sourceEq
+      exact sourceFresh ⟨fresh, sourceEq⟩)]
+    simpa [extendWireEnv] using congrFun inheritedEq source
+
 structure Base
     (source target : OpenDiagram arity) where
   interface : OpenDiagram arity
@@ -26,6 +59,10 @@ structure Base
     Region (ancestorWires + anchorLocal) ancestorRels
   remainder :
     Region descendantWires descendantRels
+  copyLocal : Nat
+  copyWires : WireFreshening
+    (ancestorWires + anchorLocal) descendantWires copyLocal
+    descendant.outerWire
   source_iso :
     OpenDiagramIso source
       (interface.withBody
@@ -40,8 +77,16 @@ structure Base
           (Region.adjoinAt anchorLocal .nil
             (selected.conjoin
               (descendant.fill
-                (((selected.renameWires descendant.outerWire).renameRelations
-                    descendant.outerRelation).conjoin remainder))))))
+                ((Region.adjoinAt copyLocal .nil
+                    ((selected.renameWires copyWires.wire).renameRelations
+                      descendant.outerRelation)).conjoin
+                  remainder))))))
+
+def Base.copy (step : Base source target) :
+    Region step.descendantWires step.descendantRels :=
+  Region.adjoinAt step.copyLocal .nil
+    ((step.selected.renameWires step.copyWires.wire).renameRelations
+      step.descendant.outerRelation)
 
 noncomputable def Base.iso
     (sourceIso : OpenDiagramIso source source')
@@ -58,6 +103,8 @@ noncomputable def Base.iso
   descendant := step.descendant
   selected := step.selected
   remainder := step.remainder
+  copyLocal := step.copyLocal
+  copyWires := step.copyWires
   source_iso := sourceIso.symm.trans step.source_iso
   target_iso := targetIso.symm.trans step.target_iso
 
