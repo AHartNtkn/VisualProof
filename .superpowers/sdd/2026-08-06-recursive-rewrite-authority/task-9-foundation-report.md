@@ -79,3 +79,48 @@ the next run.
 
 No Task 9 theorem was resumed. The untracked `Deiteration.lean` and
 `IterationRootSourceFactor.lean` files were neither edited nor staged.
+
+## Root source certificate local-map repair
+
+The tracked root source-factor owner now retains the canonical local carrier
+map that its direct `OpenDiagramIso` construction already uses. The public
+endpoint lemmas identify the arity-cast source body with the checked hidden
+wires and the arity-cast target body with the retained-hidden plus selected-
+explicit block. `Certificate.source_local` states that
+`source_iso.body.localEquivCast` at those endpoints is exactly
+`(rootLocalEquiv source.checked selection anchorRoot boundaryDisjoint).symm`.
+
+`complete` constructs the equality alongside its existing proof-relevant body
+isomorphism, starting from the explicit `regionIso_of_cast` local equivalence,
+then transporting it once across the body endpoints and once across the final
+open-diagram arity/`withBody` endpoint. No downstream unfolding, presentation,
+choice recovery, compatibility layer, or second certificate was added.
+
+Validation passed:
+
+```text
+LEAN_NUM_THREADS=1 lake env lean -DwarningAsError=true -DmaxHeartbeats=4000000 \
+  VisualProof/Refinement/Implementation/IterationRootSourceFactor.lean
+LEAN_NUM_THREADS=1 lake env lean -DwarningAsError=true \
+  VisualProof/Refinement/Implementation/IterationSourceFactor.lean
+LEAN_NUM_THREADS=1 lake build \
+  VisualProof.Refinement.Implementation.IterationRootSourceFactor \
+  VisualProof.Refinement.Implementation.IterationSourceFactor
+
+scripts/audit-lean-authority.sh rules
+scripts/audit-lean-authority.sh implementation
+scripts/audit-lean-authority.sh proof
+scripts/audit-lean-authority.sh roster
+```
+
+Both strict owners and the focused 67-job serial build passed. All four
+authority audits passed. The tracked-production hole/axiom scan was empty;
+`VisualProof/Audit.lean` reported only the accepted kernel foundations
+`propext`, `Quot.sound`, and `Classical.choice`. The repair diff adds no
+`Classical.choice`/`choose`, semantic import, compatibility or alias marker,
+`example`, `#check`, or `#eval`. The dependent SourceFactor owner retains two
+pre-existing `indexOf?_complete` choice calls; neither is changed or consumed
+by this certificate repair.
+
+The untracked `IterationBase.lean` and `Deiteration.lean` owners remained
+unstaged throughout this repair.

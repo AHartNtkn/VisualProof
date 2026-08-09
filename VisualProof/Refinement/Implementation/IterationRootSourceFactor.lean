@@ -496,6 +496,102 @@ noncomputable def factorBody : Region
               fragmentContext fragmentBinders fragmentEnumeration
               fragmentExact fragmentItems route result))))
 
+/-- The root certificate source body retains precisely the checked open
+diagram's hidden-wire carrier after arity transport. -/
+theorem certificateSourceBody_localWires :
+    (source.checked.elaborate.castArity
+      source.boundary_length).body.localCount =
+      source.checked.val.hiddenWires.length := by
+  let openCompiled :=
+    Concrete.Splice.Input.compiledSpliceOpenRootItems source.checked
+  have bodyEq := openCompiled.elaborate_body
+  have sourceLocal : source.checked.elaborate.body.localCount =
+      source.checked.val.hiddenWires.length := by
+    rw [bodyEq]
+    rfl
+  have castArity_localCount : ∀ {sourceArity targetArity : Nat}
+      (diagram : OpenDiagram sourceArity)
+      (equality : sourceArity = targetArity),
+      (diagram.castArity equality).body.localCount =
+        diagram.body.localCount := by
+    intro sourceArity targetArity diagram equality
+    subst targetArity
+    rfl
+  exact (castArity_localCount source.checked.elaborate
+    source.boundary_length).trans sourceLocal
+
+/-- The root certificate target body binds the retained hidden block followed
+by the selected explicit block, independently of its arity transport. -/
+theorem certificateTargetBody_localWires :
+    ((factorBody source selection anchorRoot boundaryDisjoint layout
+        fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+        fragmentItems route result).castWiresEq
+      (OpenDiagram.castArity_externalClasses source.checked.elaborate
+        source.boundary_length).symm).localCount =
+      (retainedHiddenWires source.checked selection).length +
+        selection.val.explicitWires.length := by
+  have castLocal :
+      ((factorBody source selection anchorRoot boundaryDisjoint layout
+          fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+          fragmentItems route result).castWiresEq
+        (OpenDiagram.castArity_externalClasses source.checked.elaborate
+          source.boundary_length).symm).localCount =
+        (factorBody source selection anchorRoot boundaryDisjoint layout
+          fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+          fragmentItems route result).localCount := by
+    generalize bodyEq :
+      factorBody source selection anchorRoot boundaryDisjoint layout
+        fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+        fragmentItems route result = body
+    cases body
+    rw [Region.castWiresEq_mk]
+    rfl
+  rw [castLocal]
+  have selectedLocal :
+      (selected source selection anchorRoot boundaryDisjoint layout
+        fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+        fragmentItems route result).localCount =
+        selection.val.explicitWires.length := by
+    obtain ⟨selectedItems, selectedEq⟩ := result.selected_local
+    dsimp only [selected]
+    rw [selectedEq]
+    simp [Region.castWiresEq_eq_renameWires, Region.renameWires,
+      Region.localCount]
+  have routedLocal :
+      ((descendant source selection anchorRoot boundaryDisjoint layout
+          fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+          fragmentItems route result).fill
+        (remainder source selection anchorRoot boundaryDisjoint layout
+          fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+          fragmentItems route result)).localCount = 0 := by
+    dsimp only [descendant, remainder]
+    rw [(routedWitness source selection anchorRoot boundaryDisjoint layout
+      fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+      fragmentItems route result).toFocus.rebuild]
+    simp [Region.castWiresEq_eq_renameWires, Region.renameWires,
+      Region.localCount]
+  generalize selectedEq :
+      selected source selection anchorRoot boundaryDisjoint layout
+        fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+        fragmentItems route result = selectedRegion at selectedLocal ⊢
+  generalize routedEq :
+      (descendant source selection anchorRoot boundaryDisjoint layout
+          fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+          fragmentItems route result).fill
+        (remainder source selection anchorRoot boundaryDisjoint layout
+          fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+          fragmentItems route result) = routedRegion at routedLocal ⊢
+  cases selectedRegion with
+  | mk selectedWires selectedItems =>
+      cases routedRegion with
+      | mk routedWires routedItems =>
+          simp only [Region.localCount] at selectedLocal routedLocal
+          subst selectedWires
+          subst routedWires
+          dsimp only [factorBody, outer]
+          rw [selectedEq, routedEq]
+          rfl
+
 /-- Operation-specific source certificate consumed verbatim by the root
 branch of iteration refinement. -/
 structure Certificate where
@@ -507,6 +603,12 @@ structure Certificate where
           fragmentItems route result).castWiresEq
         (OpenDiagram.castArity_externalClasses source.checked.elaborate
           source.boundary_length).symm))
+  source_local : source_iso.body.localEquivCast
+      (certificateSourceBody_localWires source)
+      (certificateTargetBody_localWires source selection anchorRoot
+        boundaryDisjoint layout fragmentContext fragmentBinders
+        fragmentEnumeration fragmentExact fragmentItems route result) =
+    (rootLocalEquiv source.checked selection anchorRoot boundaryDisjoint).symm
 
 noncomputable def complete :
     Certificate source selection anchorRoot boundaryDisjoint layout
@@ -523,12 +625,34 @@ noncomputable def complete :
         source.diagram.val.root)
       (Concrete.Elaboration.closedRootWires_exact source.diagram.property)
       closedCompiled.computation openCompiled.computation
-  have bodyIso : RegionIso
+  have sourceBodyLocalEq : source.checked.elaborate.body.localCount =
+      source.checked.val.hiddenWires.length := by
+    rw [openCompiled.elaborate_body]
+    rfl
+  have targetBodyLocalEq :
+      (factorBody source selection anchorRoot boundaryDisjoint layout
+        fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+        fragmentItems route result).localCount =
+        (retainedHiddenWires source.checked selection).length +
+          selection.val.explicitWires.length := by
+    have transported := certificateTargetBody_localWires source selection
+      anchorRoot boundaryDisjoint layout fragmentContext fragmentBinders
+      fragmentEnumeration fragmentExact fragmentItems route result
+    generalize bodyEq :
+      factorBody source selection anchorRoot boundaryDisjoint layout
+        fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+        fragmentItems route result = body at transported ⊢
+    cases body
+    simpa only [Region.castWiresEq_mk, Region.localCount] using transported
+  let bodyData : { iso : RegionIso
       (FiniteEquiv.refl (Fin source.checked.elaborate.externalClasses)) []
       source.checked.elaborate.body
       (factorBody source selection anchorRoot boundaryDisjoint layout
         fragmentContext fragmentBinders fragmentEnumeration fragmentExact
-        fragmentItems route result) := by
+        fragmentItems route result) //
+      iso.localEquivCast sourceBodyLocalEq targetBodyLocalEq =
+        (rootLocalEquiv source.checked selection anchorRoot
+          boundaryDisjoint).symm } := by
     generalize targetEq :
       (sourceFactorTargetRegion source.diagram selection
         (rootLeaf source selection anchorRoot) route result.anchorLocal
@@ -1026,8 +1150,107 @@ noncomputable def complete :
                 Region.adjoinMaterialWire, Region.conjoinRightWire,
                 extendWireRenaming, Function.comp_apply,
                 Fin.addCases_zero]
-          rw [openCompiled.elaborate_body, ← targetBodyEq]
-          simpa [Concrete.Elaboration.finishRoot] using rawBodyIso
+          have sourceBodyEq :
+              (Region.mk source.checked.val.hiddenWires.length
+                (openCompiled.items.castWiresEq sourceOpenEq) :
+                  Region source.checked.elaborate.externalClasses []) =
+                source.checked.elaborate.body := by
+            rw [openCompiled.elaborate_body]
+            rfl
+          let sourceIso := Eq.mp
+            (congrArg (fun sourceBody => RegionIso
+              (FiniteEquiv.refl
+                (Fin source.checked.elaborate.externalClasses)) []
+              sourceBody targetBody) sourceBodyEq) rawBodyIso
+          let finalIso := Eq.mp
+            (congrArg (fun targetBody => RegionIso
+              (FiniteEquiv.refl
+                (Fin source.checked.elaborate.externalClasses)) []
+              source.checked.elaborate.body targetBody) targetBodyEq) sourceIso
+          refine ⟨finalIso, ?_⟩
+          have regionIsoOfCast_localEquiv
+              {sourceOuter targetOuter sourceLocal targetLocal
+                sourceExtended targetExtended : Nat}
+              {targetRels : RelCtx}
+              (sourceEq : sourceExtended = sourceOuter + sourceLocal)
+              (targetEq : targetExtended = targetOuter + targetLocal)
+              (ambient : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
+              (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
+              (sourceItems : ItemSeq sourceExtended targetRels)
+              (targetItems : ItemSeq targetExtended targetRels)
+              (itemsIso : ItemSeqIso
+                (Concrete.Elaboration.castFinEquiv sourceEq targetEq
+                  (extendWireEquiv ambient localEquiv)) targetRels
+                sourceItems targetItems) :
+              (Concrete.Elaboration.regionIso_of_cast sourceEq targetEq
+                ambient localEquiv sourceItems targetItems
+                itemsIso).localEquivCast rfl rfl = localEquiv := by
+            subst sourceExtended
+            subst targetExtended
+            rfl
+          have rawLocal : rawBodyIso.localEquivCast rfl rfl =
+              (rootLocalEquiv source.checked selection anchorRoot
+                boundaryDisjoint).symm := by
+            exact regionIsoOfCast_localEquiv sourceOpenEq rfl
+              (FiniteEquiv.refl
+                (Fin source.checked.elaborate.externalClasses))
+              (rootLocalEquiv source.checked selection anchorRoot
+                boundaryDisjoint).symm openCompiled.items
+              (targetItems.renameWires targetWire) canonicalItems
+          have transported := RegionIso.localEquivCast_castEndpoints
+            rawBodyIso sourceBodyEq targetBodyEq rfl rfl
+              sourceBodyLocalEq targetBodyLocalEq
+          have finalLocal :
+              finalIso.localEquivCast sourceBodyLocalEq targetBodyLocalEq =
+                rawBodyIso.localEquivCast rfl rfl := by
+            simpa [finalIso, sourceIso] using transported
+          exact finalLocal.trans rawLocal
+  let bodyIso := bodyData.val
+  have bodyLocal := bodyData.property
+  have castArity_localCount : ∀ {sourceArity targetArity : Nat}
+      (diagram : OpenDiagram sourceArity)
+      (equality : sourceArity = targetArity),
+      (diagram.castArity equality).body.localCount =
+        diagram.body.localCount := by
+    intro sourceArity targetArity diagram equality
+    subst targetArity
+    rfl
+  have castArity_bodyLocal
+      {sourceArity targetArity : Nat}
+      (equality : sourceArity = targetArity)
+      {sourceDiagram targetDiagram : OpenDiagram sourceArity}
+      (iso : OpenDiagramIso sourceDiagram targetDiagram)
+      {sourceLocal targetLocal : Nat}
+      (sourceLocalEq : sourceDiagram.body.localCount = sourceLocal)
+      (targetLocalEq : targetDiagram.body.localCount = targetLocal)
+      (castSourceLocalEq :
+        (sourceDiagram.castArity equality).body.localCount = sourceLocal)
+      (castTargetLocalEq :
+        (targetDiagram.castArity equality).body.localCount = targetLocal)
+      {canonical : FiniteEquiv (Fin sourceLocal) (Fin targetLocal)}
+      (localEq : iso.body.localEquivCast sourceLocalEq targetLocalEq =
+        canonical) :
+      (OpenDiagramIso.castArity equality iso).body.localEquivCast
+          castSourceLocalEq castTargetLocalEq = canonical := by
+    subst targetArity
+    simpa only using localEq
+  have castTargetOpen_bodyLocal
+      {diagramArity : Nat}
+      {sourceDiagram targetDiagram targetDiagram' : OpenDiagram diagramArity}
+      (iso : OpenDiagramIso sourceDiagram targetDiagram)
+      (targetEq : targetDiagram = targetDiagram')
+      {sourceLocal targetLocal : Nat}
+      (sourceLocalEq : sourceDiagram.body.localCount = sourceLocal)
+      (targetLocalEq : targetDiagram.body.localCount = targetLocal)
+      (targetLocalEq' : targetDiagram'.body.localCount = targetLocal)
+      {canonical : FiniteEquiv (Fin sourceLocal) (Fin targetLocal)}
+      (localEq : iso.body.localEquivCast sourceLocalEq targetLocalEq =
+        canonical) :
+      (Eq.mp (congrArg (fun targetDiagram =>
+        OpenDiagramIso sourceDiagram targetDiagram) targetEq)
+          iso).body.localEquivCast sourceLocalEq targetLocalEq' = canonical := by
+    subst targetDiagram'
+    simpa only using localEq
   let baseIso : OpenDiagramIso source.checked.elaborate
       (source.checked.elaborate.withBody
         (factorBody source selection anchorRoot boundaryDisjoint layout
@@ -1035,9 +1258,47 @@ noncomputable def complete :
           fragmentItems route result)) :=
     OpenDiagram.withBody_iso bodyIso
   let castIso := OpenDiagramIso.castArity source.boundary_length baseIso
-  refine ⟨?_⟩
-  rw [← OpenDiagram.castArity_withBody]
-  exact castIso
+  have castTargetBodyLocalEq :
+      ((source.checked.elaborate.withBody
+        (factorBody source selection anchorRoot boundaryDisjoint layout
+          fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+          fragmentItems route result)).castArity
+            source.boundary_length).body.localCount =
+        (retainedHiddenWires source.checked selection).length +
+          selection.val.explicitWires.length :=
+    (castArity_localCount _ source.boundary_length).trans targetBodyLocalEq
+  have castLocal : castIso.body.localEquivCast
+      (certificateSourceBody_localWires source) castTargetBodyLocalEq =
+      (rootLocalEquiv source.checked selection anchorRoot
+        boundaryDisjoint).symm := by
+    exact castArity_bodyLocal source.boundary_length baseIso
+      sourceBodyLocalEq targetBodyLocalEq
+      (certificateSourceBody_localWires source) castTargetBodyLocalEq bodyLocal
+  let targetOpenEq := OpenDiagram.castArity_withBody
+    source.checked.elaborate source.boundary_length
+      (factorBody source selection anchorRoot boundaryDisjoint layout
+        fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+        fragmentItems route result)
+  let sourceIso : OpenDiagramIso
+      (source.checked.elaborate.castArity source.boundary_length)
+      ((source.checked.elaborate.castArity source.boundary_length).withBody
+        ((factorBody source selection anchorRoot boundaryDisjoint layout
+            fragmentContext fragmentBinders fragmentEnumeration fragmentExact
+            fragmentItems route result).castWiresEq
+          (OpenDiagram.castArity_externalClasses source.checked.elaborate
+            source.boundary_length).symm)) :=
+    Eq.mp (congrArg (fun targetDiagram => OpenDiagramIso
+      (source.checked.elaborate.castArity source.boundary_length)
+      targetDiagram) targetOpenEq) castIso
+  refine {
+    source_iso := sourceIso
+    source_local := ?_
+  }
+  exact castTargetOpen_bodyLocal castIso targetOpenEq
+    (certificateSourceBody_localWires source) castTargetBodyLocalEq
+    (certificateTargetBody_localWires source selection anchorRoot
+      boundaryDisjoint layout fragmentContext fragmentBinders
+      fragmentEnumeration fragmentExact fragmentItems route result) castLocal
 
 end RootFactor
 
