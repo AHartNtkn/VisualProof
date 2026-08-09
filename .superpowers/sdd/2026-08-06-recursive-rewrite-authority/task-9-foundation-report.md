@@ -124,3 +124,53 @@ by this certificate repair.
 
 The untracked `IterationBase.lean` and `Deiteration.lean` owners remained
 unstaged throughout this repair.
+
+## Open elaboration local-map projection repair
+
+The canonical root compiler now exposes the local-count invariant of every
+successful `compileRoot?` result and proves that
+`compileRoot?_equivariant` retains its supplied proof-relevant local wire
+equivalence under `RegionIso.localEquivCast`.  The proof destructures the
+existing private root-equivariance result and projects the local equivalence
+from its actual `regionIso_of_cast` construction; it introduces no new witness
+record or recovery operation.
+
+Certified open elaboration now exposes the source and arity-cast target body
+local counts as the corresponding hidden-wire lengths.
+`OpenIso.elaborate_isomorphic_localEquivCast` characterizes the body stored by
+the existing `elaborate_isomorphic`: its projected local equivalence is exactly
+`iso.hiddenWiresEquiv`.  The proof is derived from the general compiler
+projection and transports only across `OpenDiagramIso.ofArityEq`; downstream
+consumers need not unfold either compiler construction.
+
+Validation passed:
+
+```text
+LEAN_NUM_THREADS=1 lake env lean -DwarningAsError=true \
+  VisualProof/Concrete/Elaboration/Compile/Region.lean
+LEAN_NUM_THREADS=1 lake env lean -DwarningAsError=true \
+  VisualProof/Concrete/Elaboration/Compile/Elaborate.lean
+LEAN_NUM_THREADS=1 lake env lean -DwarningAsError=true \
+  VisualProof/Concrete/Elaboration/Compile/Certified.lean
+LEAN_NUM_THREADS=1 lake env lean -DwarningAsError=true \
+  VisualProof/Concrete/Elaboration/Compile/Occurrence.lean
+LEAN_NUM_THREADS=1 lake build VisualProof.Concrete
+
+scripts/audit-lean-authority.sh rules
+scripts/audit-lean-authority.sh implementation
+scripts/audit-lean-authority.sh proof
+scripts/audit-lean-authority.sh roster
+
+LEAN_NUM_THREADS=1 lake env lean -DwarningAsError=true VisualProof/Audit.lean
+git diff --check
+```
+
+All four strict owner/dependent compiles and the focused 61-job Concrete build
+passed.  All four authority audits passed.  `VisualProof/Audit.lean` reported
+only the accepted kernel foundations `propext`, `Quot.sound`, and
+`Classical.choice`.  The tracked-production hole/project-axiom scan and the
+added-line choice-recovery, semantic, compatibility/alias, and
+`example`/`#check`/`#eval` scans were empty.  `git diff --check` passed.
+
+The untracked `IterationBase.lean` and `Deiteration.lean` owners remained
+untouched and unstaged while this compiler projection repair was made.
