@@ -142,9 +142,6 @@ mutual
         ItemSeqIso  ambient rels source target
 end
 
-def Region.localCount : Region wires rels -> Nat
-  | .mk localWires _ => localWires
-
 def RegionIso.localEquiv
     {sourceWires targetWires : Nat}
     {ambient : FiniteEquiv (Fin sourceWires) (Fin targetWires)}

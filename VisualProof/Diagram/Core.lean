@@ -25,6 +25,28 @@ mutual
     | cons : Item wires rels -> ItemSeq wires rels -> ItemSeq wires rels
 end
 
+def Region.localCount : Region wires rels -> Nat
+  | .mk localWires _ => localWires
+
+def Region.items (region : Region wires rels) :
+    ItemSeq (wires + region.localCount) rels :=
+  match region with
+  | .mk _ items => items
+
+def Region.itemsCast (region : Region wires rels)
+    (localEq : region.localCount = localWires) :
+    ItemSeq (wires + localWires) rels :=
+  Eq.mp (congrArg (fun count => ItemSeq (wires + count) rels) localEq)
+    region.items
+
+theorem Region.itemsCast_eq_of_mk_eq
+    (items : ItemSeq (wires + localWires) rels)
+    (region : Region wires rels)
+    (equality : Region.mk localWires items = region) :
+    region.itemsCast (congrArg Region.localCount equality).symm = items := by
+  cases equality
+  rfl
+
 namespace ItemSeq
 
 def length : ItemSeq wires rels -> Nat
