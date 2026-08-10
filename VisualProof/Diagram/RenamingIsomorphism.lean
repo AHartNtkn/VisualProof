@@ -231,6 +231,32 @@ noncomputable def RegionIso.renameWires_commuting
       (source.renameWires sourceMap) (target.renameWires targetMap) :=
   regionIsoRenamingRec iso sourceMap targetMap renamedWire commutes
 
+theorem RegionIso.renameWires_commuting_localEquivCast
+    {sourceWires targetWires renamedSourceWires renamedTargetWires
+      sourceLocal targetLocal : Nat}
+    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    {rels : RelCtx}
+    {source : Region sourceWires rels}
+    {target : Region targetWires rels}
+    (iso : RegionIso wire rels source target)
+    (sourceMap : Fin sourceWires → Fin renamedSourceWires)
+    (targetMap : Fin targetWires → Fin renamedTargetWires)
+    (renamedWire : FiniteEquiv
+      (Fin renamedSourceWires) (Fin renamedTargetWires))
+    (commutes : renamedWire.toFun ∘ sourceMap =
+      targetMap ∘ wire.toFun)
+    (sourceLocalEq : source.localCount = sourceLocal)
+    (targetLocalEq : target.localCount = targetLocal) :
+    (iso.renameWires_commuting sourceMap targetMap renamedWire commutes
+      ).localEquivCast
+        (by cases source; exact sourceLocalEq)
+        (by cases target; exact targetLocalEq) =
+      iso.localEquivCast sourceLocalEq targetLocalEq := by
+  subst sourceLocal
+  subst targetLocal
+  cases iso
+  rfl
+
 noncomputable def ItemIso.renameWires_commuting
     {sourceWires targetWires renamedSourceWires renamedTargetWires : Nat}
     {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}

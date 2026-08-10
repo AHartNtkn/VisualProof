@@ -789,6 +789,29 @@ noncomputable def compileRoot?_certifiedEquivariant
               (by simp [targetRoot]) ambient localEquiv
               sourceItems targetItems hitems
 
+/-- Checked open elaboration retains exactly the hidden root-wire context as
+the body's local wires. -/
+theorem OpenDiagram.elaborate_body_localCount
+    (diagram : OpenDiagram) (wellFormed : diagram.WellFormed) :
+    (diagram.elaborate wellFormed).body.localCount =
+      diagram.hiddenWires.length := by
+  let checked : CheckedOpen := ⟨diagram, wellFormed⟩
+  change checked.elaborate.body.localCount = checked.val.hiddenWires.length
+  obtain ⟨body, compiled, elaborated⟩ :=
+    CheckedOpen.elaborate_body_computation checked
+  rw [elaborated]
+  exact Elaboration.compileRoot?_localCount compiled
+
+/-- Transporting only the ordered-boundary arity leaves the elaborated body's
+local-wire count unchanged. -/
+theorem OpenDiagram.elaborate_castArity_body_localCount
+    (diagram : OpenDiagram) (wellFormed : diagram.WellFormed)
+    (arityEq : diagram.boundary.length = arity) :
+    ((diagram.elaborate wellFormed).castArity arityEq).body.localCount =
+      diagram.hiddenWires.length := by
+  subst arity
+  exact diagram.elaborate_body_localCount wellFormed
+
 namespace Iso
 
 theorem elaborate_isomorphic {source target : Diagram}
@@ -826,6 +849,27 @@ theorem elaborate_isomorphic {source target : Diagram}
   exact ⟨hbody⟩
 
 end Iso
+
+private theorem openDiagramIso_ofArityEq_localEquivCast
+    {sourceArity targetArity sourceLocal targetLocal : Nat}
+    {source : Diagram.OpenDiagram sourceArity}
+    {target : Diagram.OpenDiagram targetArity}
+    (arityEq : sourceArity = targetArity)
+    (external : FiniteEquiv (Fin source.externalClasses)
+      (Fin target.externalClasses))
+    (boundary : ∀ position,
+      external (source.boundary position) =
+        target.boundary (Fin.cast arityEq position))
+    (body : RegionIso external [] source.body target.body)
+    (sourceLocalEq : source.body.localCount = sourceLocal)
+    (targetLocalEq : target.body.localCount = targetLocal)
+    (castTargetLocalEq :
+      (target.castArity arityEq.symm).body.localCount = targetLocal) :
+    (OpenDiagramIso.ofArityEq arityEq external boundary body).body.localEquivCast
+        sourceLocalEq castTargetLocalEq =
+      body.localEquivCast sourceLocalEq targetLocalEq := by
+  subst targetArity
+  rfl
 
 namespace OpenIso
 
@@ -875,6 +919,23 @@ noncomputable def elaborate_isomorphic {source target : OpenDiagram}
     simpa only [OpenDiagram.elaborate_boundary] using
       iso.boundaryClass_commute position
   · exact hbody
+
+/-- The body witness stored by ordered-open elaboration uses the hidden-wire
+equivalence supplied by the concrete open isomorphism. -/
+theorem elaborate_isomorphic_localEquivCast {source target : OpenDiagram}
+    (iso : OpenIso source target)
+    (hsource : source.WellFormed)
+    (htarget : target.WellFormed) :
+    (iso.elaborate_isomorphic hsource htarget).body.localEquivCast
+        (source.elaborate_body_localCount hsource)
+        (target.elaborate_castArity_body_localCount htarget
+          iso.boundary_length_eq.symm) =
+      iso.hiddenWiresEquiv := by
+  unfold elaborate_isomorphic
+  dsimp only
+  rw [openDiagramIso_ofArityEq_localEquivCast]
+  · apply Elaboration.compileRoot?_equivariant_localEquivCast
+  · exact target.elaborate_body_localCount htarget
 
 end OpenIso
 

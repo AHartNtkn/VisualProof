@@ -189,6 +189,41 @@ private noncomputable def OpenDiagramIso.castArity
   subst targetArity
   simpa using iso
 
+private theorem OpenDiagramIso.castArity_localEquivCast
+    {sourceArity targetArity sourceLocal targetLocal : Nat}
+    (equality : sourceArity = targetArity)
+    {source target : OpenDiagram sourceArity}
+    (iso : OpenDiagramIso source target)
+    (sourceLocalEq :
+      (source.castArity equality).body.localCount = sourceLocal)
+    (targetLocalEq :
+      (target.castArity equality).body.localCount = targetLocal)
+    (originalSourceLocalEq : source.body.localCount = sourceLocal)
+    (originalTargetLocalEq : target.body.localCount = targetLocal) :
+    (OpenDiagramIso.castArity equality iso).body.localEquivCast
+        sourceLocalEq targetLocalEq =
+      iso.body.localEquivCast originalSourceLocalEq
+        originalTargetLocalEq := by
+  subst targetArity
+  rfl
+
+private theorem OpenDiagramIso.castTarget_localEquivCast
+    {arity sourceLocal targetLocal : Nat}
+    {source target target' : OpenDiagram arity}
+    (iso : OpenDiagramIso source target)
+    (targetEq : target = target')
+    (sourceLocalEq : source.body.localCount = sourceLocal)
+    (targetLocalEq : target.body.localCount = targetLocal)
+    (targetLocalEq' : target'.body.localCount = targetLocal)
+    {localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal)}
+    (localEq : iso.body.localEquivCast sourceLocalEq targetLocalEq =
+      localEquiv) :
+    (Eq.mp (congrArg (fun targetDiagram =>
+      OpenDiagramIso source targetDiagram) targetEq) iso
+      ).body.localEquivCast sourceLocalEq targetLocalEq' = localEquiv := by
+  subst target'
+  simpa only using localEq
+
 private theorem OpenDiagram.castArity_withBody
     {sourceArity targetArity : Nat}
     (diagram : OpenDiagram sourceArity)
@@ -249,5 +284,84 @@ noncomputable def rootSourceIso
   exact Eq.mp (congrArg (fun targetDiagram => OpenDiagramIso
     (source.checked.elaborate.castArity source.boundary_length) targetDiagram)
     targetEq) castIso
+
+theorem rootSourceIso_localEquivCast
+    {arity : Nat}
+    (source : Concrete.State arity)
+    (selection : CheckedSelection source.diagram.val)
+    (anchorRoot : selection.val.anchor = source.diagram.val.root)
+    {layout : FragmentLayout source.diagram.val selection}
+    {spliceInput : Concrete.Splice.Input}
+    {fragment : FragmentInput source.diagram selection layout spliceInput}
+    {target : Fin source.diagram.val.regionCount} {path : List Nat}
+    {route : Concrete.Splice.RegionRoute source.diagram.val
+      selection.val.anchor target path}
+    (assembly : @FactorAssembly source.diagram selection layout
+      0 []
+      (Concrete.Elaboration.finishRegion source.diagram.val
+        ([] : Concrete.Elaboration.WireContext source.diagram.val)
+        source.diagram.val.root
+        (Concrete.Splice.Input.compiledSpliceClosedRootItems
+          source.diagram).items)
+      (rootLeaf source selection anchorRoot)
+      spliceInput fragment target path route
+      (rootSourcePartition source selection anchorRoot))
+    (sourceLocalEq :
+      (source.checked.elaborate.castArity source.boundary_length
+        ).body.localCount =
+          (rootSourcePartition source selection anchorRoot
+            ).sourceRegion.localCount)
+    (targetLocalEq :
+      ((source.checked.elaborate.castArity source.boundary_length).withBody
+        (assembly.sourceBody.castWiresEq
+          (OpenDiagram.castArity_externalClasses source.checked.elaborate
+            source.boundary_length).symm)).body.localCount =
+          assembly.sourceBody.localCount) :
+    (rootSourceIso source selection anchorRoot assembly
+      ).body.localEquivCast sourceLocalEq targetLocalEq =
+      assembly.source_iso.localEquiv := by
+  let sourceEq := rootSourceRegion_eq source selection anchorRoot
+  let sourceBodyLocalEq : source.checked.elaborate.body.localCount =
+      (rootSourcePartition source selection anchorRoot
+        ).sourceRegion.localCount :=
+    (congrArg Region.localCount sourceEq).symm
+  let bodyIso : RegionIso
+      (FiniteEquiv.refl
+        (Fin source.checked.elaborate.externalClasses)) []
+      source.checked.elaborate.body assembly.sourceBody :=
+    Eq.mp (congrArg (fun sourceBody => RegionIso
+      (FiniteEquiv.refl
+        (Fin source.checked.elaborate.externalClasses)) []
+      sourceBody assembly.sourceBody) sourceEq) assembly.source_iso
+  let openIso : OpenDiagramIso source.checked.elaborate
+      (source.checked.elaborate.withBody assembly.sourceBody) := by
+    simpa only [OpenDiagram.withBody] using OpenDiagram.withBody_iso bodyIso
+  let castIso := OpenDiagramIso.castArity source.boundary_length openIso
+  let targetEq := OpenDiagram.castArity_withBody source.checked.elaborate
+    source.boundary_length assembly.sourceBody
+  let castTargetLocalEq :
+      ((source.checked.elaborate.withBody assembly.sourceBody).castArity
+        source.boundary_length).body.localCount =
+          assembly.sourceBody.localCount :=
+    (congrArg (fun diagram => diagram.body.localCount) targetEq).trans
+      targetLocalEq
+  have bodyLocal : bodyIso.localEquivCast sourceBodyLocalEq rfl =
+      assembly.source_iso.localEquiv := by
+    have transported := RegionIso.localEquivCast_castEndpoints
+      assembly.source_iso sourceEq rfl rfl rfl sourceBodyLocalEq rfl
+    simpa only [bodyIso, RegionIso.localEquivCast] using transported
+  have openLocal : openIso.body.localEquivCast sourceBodyLocalEq rfl =
+      assembly.source_iso.localEquiv := by
+    simpa only [openIso, OpenDiagram.withBody,
+      OpenDiagram.withBody_iso] using bodyLocal
+  have castLocal : castIso.body.localEquivCast sourceLocalEq
+      castTargetLocalEq = assembly.source_iso.localEquiv := by
+    exact (OpenDiagramIso.castArity_localEquivCast source.boundary_length
+      openIso sourceLocalEq castTargetLocalEq sourceBodyLocalEq rfl).trans
+        openLocal
+  have finalLocal := OpenDiagramIso.castTarget_localEquivCast castIso targetEq
+    sourceLocalEq castTargetLocalEq targetLocalEq castLocal
+  simpa only [rootSourceIso, bodyIso, openIso, castIso, targetEq]
+    using finalLocal
 
 end VisualProof.Refinement.Implementation.IterationRootSourceFactor

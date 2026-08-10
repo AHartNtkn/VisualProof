@@ -941,6 +941,30 @@ noncomputable def RegionIso.trans
     RegionIso  (firstWire.trans secondWire) rels source target :=
   regionIsoTransRec first second
 
+theorem RegionIso.localEquivCast_trans
+    {sourceWires middleWires targetWires
+      sourceLocal middleLocal targetLocal : Nat}
+    {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
+    {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
+    {rels : RelCtx}
+    {source : Region sourceWires rels}
+    {middle : Region middleWires rels}
+    {target : Region targetWires rels}
+    (first : RegionIso firstWire rels source middle)
+    (second : RegionIso secondWire rels middle target)
+    (sourceLocalEq : source.localCount = sourceLocal)
+    (middleLocalEq : middle.localCount = middleLocal)
+    (targetLocalEq : target.localCount = targetLocal) :
+    (first.trans second).localEquivCast sourceLocalEq targetLocalEq =
+      (first.localEquivCast sourceLocalEq middleLocalEq).trans
+        (second.localEquivCast middleLocalEq targetLocalEq) := by
+  subst sourceLocal
+  subst middleLocal
+  subst targetLocal
+  cases first
+  cases second
+  rfl
+
 noncomputable def ItemIso.trans
     {firstWire : FiniteEquiv (Fin sourceWires) (Fin middleWires)}
     {secondWire : FiniteEquiv (Fin middleWires) (Fin targetWires)}
