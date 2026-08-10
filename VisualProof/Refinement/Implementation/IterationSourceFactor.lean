@@ -147,42 +147,6 @@ private theorem sourceFactorCopyWire_inherited
     obtain ⟨fresh, equality⟩ := present
     exact notFresh fresh equality)]
 
-private theorem extendWireRenaming_zero
-    (rename : Fin sourceWires → Fin targetWires) :
-    extendWireRenaming rename 0 = rename := by
-  funext wire
-  refine Fin.addCases (fun inherited => ?_)
-    (fun localIndex => Fin.elim0 localIndex) wire
-  change extendWireRenaming rename 0 (Fin.castAdd 0 inherited) =
-    rename inherited
-  simp only [extendWireRenaming, Fin.addCases_left]
-  apply Fin.ext
-  rfl
-
-private theorem conjoinLeftWire_zero (wires : Nat) :
-    Region.conjoinLeftWire wires 0 0 = id := by
-  funext wire
-  refine Fin.addCases (fun inherited => ?_)
-    (fun localIndex => Fin.elim0 localIndex) wire
-  change Region.conjoinLeftWire wires 0 0 (Fin.castAdd 0 inherited) =
-    Fin.castAdd 0 inherited
-  simp only [Region.conjoinLeftWire, Fin.addCases_left]
-
-private theorem conjoinRightWire_zero (wires : Nat) :
-    Region.conjoinRightWire wires 0 0 = id := by
-  funext wire
-  refine Fin.addCases (fun inherited => ?_)
-    (fun localIndex => Fin.elim0 localIndex) wire
-  change Region.conjoinRightWire wires 0 0 (Fin.castAdd 0 inherited) =
-    Fin.castAdd 0 inherited
-  simp only [Region.conjoinRightWire, Fin.addCases_left]
-
-private theorem adjoinMaterialWire_zero (outer hostLocal : Nat) :
-    Region.adjoinMaterialWire outer hostLocal 0 = id := by
-  funext wire
-  apply Fin.ext
-  rfl
-
 private theorem diagramContext_fill_transport_outer
     {sourceOuter targetOuter holeWires : Nat}
     {outerRels holeRels : RelCtx}
@@ -1046,8 +1010,8 @@ theorem sourceFactor_complete
     rw [routedAlignment.targetWitness.toFocus.rebuild]
     simp only [Region.renameWires, extendWireRenaming_zero,
       Region.conjoin, Region.adjoinAt, Nat.add_zero,
-      conjoinLeftWire_zero, conjoinRightWire_zero,
-      adjoinMaterialWire_zero, ItemSeq.renameWires_id,
+      Region.conjoinLeftWire_zero, Region.conjoinRightWire_zero,
+      Region.adjoinMaterialWire_zero, ItemSeq.renameWires_id,
       ItemSeq.renameWires, ItemSeq.nil_append, keptItems]
   let rawSourceIso : RegionIso
       (FiniteEquiv.refl (Fin partition.ancestorWires)) rels
@@ -1094,7 +1058,7 @@ theorem sourceFactor_complete
       · simp only [extendWireEquiv_outer, FiniteEquiv.refl_apply]
       · simp only [extendWireEquiv_local, FiniteEquiv.refl_apply]
     rw [extendedRefl]
-    simpa only [Region.adjoinAt, Nat.add_zero, adjoinMaterialWire_zero,
+    simpa only [Region.adjoinAt, Nat.add_zero, Region.adjoinMaterialWire_zero,
       ItemSeq.renameWires_id, ItemSeq.renameWires, ItemSeq.nil_append,
       materialSource, fragmentMaterialSource, selectedItems] using
       (ItemSeqIso.refl selectedItems)

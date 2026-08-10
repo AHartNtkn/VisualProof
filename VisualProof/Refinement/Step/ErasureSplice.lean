@@ -1,6 +1,7 @@
 import VisualProof.Concrete.Step
 import VisualProof.Concrete.Subgraph.Splice.Input.Discrete
-import VisualProof.Concrete.Subgraph.Splice.Input.Alignment.HostProjectionEmpty
+import VisualProof.Concrete.Subgraph.Splice.Input.Alignment.HostProjection
+import VisualProof.Concrete.Subgraph.Splice.Input.Layout.RootFactor
 import VisualProof.Diagram.RenamingIsomorphism
 import VisualProof.Refinement.Represents
 import VisualProof.Rule.Erasure
@@ -11,38 +12,6 @@ open VisualProof.Diagram
 open VisualProof.Data.Finite
 open VisualProof.Theory
 open VisualProof.Concrete.Elaboration
-
-private theorem renameRelationsToNilEqCast
-    (items : ItemSeq wires rels)
-    (hrels : rels = []) (rho : RelationRenaming rels []) :
-    items.renameRelations rho =
-      cast (congrArg (ItemSeq wires) hrels) items := by
-  subst rels
-  have hrho :
-      ((fun {arity} (relation : Theory.RelVar [] arity) => rho relation) :
-        RelationRenaming [] []) =
-      ((fun {arity} (relation : Theory.RelVar [] arity) => relation) :
-        RelationRenaming [] []) := by
-    apply @funext
-    intro arity
-    funext relation
-    exact Fin.elim0 relation.index
-  change items.renameRelations
-    ((fun {arity} (relation : Theory.RelVar [] arity) => rho relation) :
-      RelationRenaming [] []) = _
-  rw [hrho, ItemSeq.renameRelations_id]
-  rfl
-
-private theorem conjoinLeftWireEqAdjoinHostWire
-    (outer hostLocal extra : Nat) :
-    Region.conjoinLeftWire outer hostLocal extra =
-      Region.adjoinHostWire outer hostLocal extra := by
-  funext wire
-  refine Fin.addCases (fun inherited => ?_) (fun localWire => ?_) wire
-  · apply Fin.ext
-    simp [Region.conjoinLeftWire, Region.adjoinHostWire]
-  · apply Fin.ext
-    simp [Region.conjoinLeftWire, Region.adjoinHostWire]
 
 private noncomputable def materialFromTail
     {outer hostLocal extra : Nat} {rels : RelCtx}
@@ -135,499 +104,6 @@ private theorem rootFromParts
   exact ⟨_, _, before, target.body, occurrence, OpenDiagramIso.refl _, by
     simpa [Rule.atPolarity, DiagramContext.polarity] using localProof⟩
 
-private noncomputable def rootHostItemsIso
-    (input : Concrete.Splice.Input)
-    (admissible : input.Admissible)
-    (boundary : List (Fin input.frame.val.wireCount))
-    (rootScoped : ∀ wire, wire ∈ boundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (siteRoot : input.site = input.frame.val.root) :
-    let checked := Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-      input admissible boundary rootScoped
-    let host := input.compiledSpliceHostView admissible
-    let hrels := input.compiledSpliceHostView_root_holeRels_eq_nil admissible
-      siteRoot
-    let hostItems : ItemSeq
-        (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
-      cast (congrArg
-        (ItemSeq (host.compilerLeaf.inheritedWires.extend input.site).length)
-        hrels) host.compilerLeaf.items
-    let context := host.compilerLeaf.inheritedWires.extend input.site
-    let exact : context.Exact input.coalesceFrameRaw.root := by
-      change context.Exact input.frame.val.root
-      rw [← siteRoot]
-      exact host.compilerLeaf.wiresExact
-    let rootEq : checked.val.rootWires.length =
-        checked.val.exposedWires.length + checked.val.hiddenWires.length := by
-      simp [Concrete.OpenDiagram.rootWires]
-    let openItems := Concrete.Splice.Input.compiledSpliceOpenRootItems checked
-    let transport :=
-      (Concrete.exactContextToOpenRootWireEquiv checked context exact).trans
-        (FiniteEquiv.finCast rootEq)
-    ItemSeqIso
-      (FiniteEquiv.refl
-        (Fin (checked.val.exposedWires.length + checked.val.hiddenWires.length))) []
-      (hostItems.renameWires transport)
-      (openItems.items.castWiresEq rootEq) := by
-  dsimp only
-  let checked := Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-    input admissible boundary rootScoped
-  let host := input.compiledSpliceHostView admissible
-  let hrels := input.compiledSpliceHostView_root_holeRels_eq_nil admissible
-    siteRoot
-  let hostItems : ItemSeq
-      (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
-    cast (congrArg
-      (ItemSeq (host.compilerLeaf.inheritedWires.extend input.site).length)
-      hrels) host.compilerLeaf.items
-  let context := host.compilerLeaf.inheritedWires.extend input.site
-  let exact : context.Exact input.coalesceFrameRaw.root := by
-    change context.Exact input.frame.val.root
-    rw [← siteRoot]
-    exact host.compilerLeaf.wiresExact
-  let openItems := Concrete.Splice.Input.compiledSpliceOpenRootItems checked
-  let rootEq : checked.val.rootWires.length =
-      checked.val.exposedWires.length + checked.val.hiddenWires.length := by
-    simp [Concrete.OpenDiagram.rootWires]
-  let contextToOpen := Concrete.exactContextToOpenRootWireEquiv checked context exact
-  let transport := contextToOpen.trans (FiniteEquiv.finCast rootEq)
-  have hclosed : Concrete.Elaboration.compileOccurrencesWith?
-      input.coalesceFrameRaw
-      (Concrete.Elaboration.compileRegion? input.coalesceFrameRaw
-        input.coalesceFrameRaw.regionCount)
-      context Concrete.Elaboration.BinderContext.empty
-      (Concrete.Elaboration.localOccurrences input.coalesceFrameRaw
-        input.coalesceFrameRaw.root) = some hostItems := by
-    exact input.compiledSpliceRootHostItems_computation admissible siteRoot
-  have hopen := Concrete.Splice.Input.PlugLayout.compiledCoalescedRootItemsIsoFromExactContext
-    input admissible boundary rootScoped context exact hclosed
-      openItems.computation
-  have hopenCast : ItemSeqIso transport [] hostItems
-      (openItems.items.castWiresEq rootEq) := by
-    rw [ItemSeq.castWiresEq_eq_renameWires]
-    exact hopen.trans
-      (ItemSeqIso.renameWiresEquiv openItems.items
-        (FiniteEquiv.finCast rootEq))
-  let totalRefl := FiniteEquiv.refl
-    (Fin (checked.val.exposedWires.length + checked.val.hiddenWires.length))
-  have hitems : ItemSeqIso totalRefl []
-      (hostItems.renameWires transport)
-      (openItems.items.castWiresEq rootEq) := by
-    have renamed :=
-      (ItemSeqIso.renameWiresEquiv hostItems transport).symm.trans hopenCast
-    have hwire : transport.symm.trans transport = totalRefl := by
-      apply FiniteEquiv.ext
-      intro index
-      exact transport.right_inv index
-    exact hwire ▸ renamed
-  exact hitems
-
-private theorem rootEmptyBodyEqSplice
-    (input : Concrete.Splice.Input)
-    (layout : input.PlugLayout)
-    (admissible : input.Admissible)
-    (boundary : List (Fin input.frame.val.wireCount))
-    (rootScoped : ∀ wire, wire ∈ boundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (siteRoot : input.site = input.frame.val.root)
-    (empty : input.binderSpine.proxyCount = 0) :
-    let checked := Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-      input admissible boundary rootScoped
-    let host := input.compiledSpliceHostView admissible
-    let hrels := input.compiledSpliceHostView_root_holeRels_eq_nil admissible
-      siteRoot
-    let hostItems : ItemSeq
-        (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
-      cast (congrArg
-        (ItemSeq (host.compilerLeaf.inheritedWires.extend input.site).length)
-        hrels) host.compilerLeaf.items
-    let context := host.compilerLeaf.inheritedWires.extend input.site
-    let exact : context.Exact input.coalesceFrameRaw.root := by
-      change context.Exact input.frame.val.root
-      rw [← siteRoot]
-      exact host.compilerLeaf.wiresExact
-    let rootEq : checked.val.rootWires.length =
-        checked.val.exposedWires.length + checked.val.hiddenWires.length := by
-      simp [Concrete.OpenDiagram.rootWires]
-    let transport :=
-      (Concrete.exactContextToOpenRootWireEquiv checked context exact).trans
-        (FiniteEquiv.finCast rootEq)
-    let pattern := Concrete.Splice.Input.compiledSpliceOpenRootItems input.pattern
-    let outputWitness := input.compiledSpliceOutputRootWitness layout admissible
-      siteRoot
-    let outputLeaf := input.compiledSpliceOutputRootLeaf layout admissible
-      siteRoot
-    let patternPrepared :=
-      (pattern.items.renameWires
-        (layout.patternRootSeamPreparedWireOfEmpty admissible host))
-          |>.renameRelations
-            (Concrete.Splice.Input.PlugLayout.emptyRelationRenaming
-              outputWitness.toFocus.holeRels)
-    let castEq := Concrete.Elaboration.WireContext.length_extend
-      outputLeaf.inheritedWires (layout.frameRegion input.site)
-    let closedWire :=
-      (layout.siteCombinedWireEquivOfEmpty admissible host
-        (outputWitness := outputWitness) (outputLeaf := outputLeaf) empty).trans
-        (FiniteEquiv.finCast castEq).symm
-    let outputRootExact :
-        (outputLeaf.inheritedWires.extend
-          (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
-      simpa [siteRoot] using outputLeaf.wiresExact
-    let outputEq :
-        (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).rootWires.length =
-          (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).exposedWires.length +
-            (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).hiddenWires.length := by
-      simp [Concrete.OpenDiagram.rootWires]
-    let outputTransport :=
-      (Concrete.Splice.Input.PlugLayout.outputExactContextToOpenRootWireEquiv
-        input layout admissible boundary rootScoped
-        (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
-        outputRootExact).trans (FiniteEquiv.finCast outputEq)
-    let reindex :=
-      Concrete.Splice.Input.PlugLayout.closedSourceToOpenRootReindex closedWire
-        outputTransport
-        (Concrete.Splice.Input.PlugLayout.rootExposedWireEquiv input layout boundary)
-        (layout.rootLocalWireEquivOfEmpty input boundary siteRoot empty)
-    let tail := patternPrepared.renameWires reindex
-    (input.compiledSpliceRootSourceOfEmpty layout admissible boundary
-      rootScoped siteRoot empty).body =
-      Region.spliceAt checked.val.hiddenWires.length
-        (hostItems.renameWires transport) (materialFromTail tail)
-        id (fun relation => relation) := by
-  dsimp only
-  let checked := Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-    input admissible boundary rootScoped
-  let host := input.compiledSpliceHostView admissible
-  let hrels := input.compiledSpliceHostView_root_holeRels_eq_nil admissible
-    siteRoot
-  let hostItems : ItemSeq
-      (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
-    cast (congrArg
-      (ItemSeq (host.compilerLeaf.inheritedWires.extend input.site).length)
-      hrels) host.compilerLeaf.items
-  let context := host.compilerLeaf.inheritedWires.extend input.site
-  let exact : context.Exact input.coalesceFrameRaw.root := by
-    change context.Exact input.frame.val.root
-    rw [← siteRoot]
-    exact host.compilerLeaf.wiresExact
-  let rootEq : checked.val.rootWires.length =
-      checked.val.exposedWires.length + checked.val.hiddenWires.length := by
-    simp [Concrete.OpenDiagram.rootWires]
-  let transport :=
-    (Concrete.exactContextToOpenRootWireEquiv checked context exact).trans
-      (FiniteEquiv.finCast rootEq)
-  let pattern := Concrete.Splice.Input.compiledSpliceOpenRootItems input.pattern
-  let outputWitness := input.compiledSpliceOutputRootWitness layout admissible
-    siteRoot
-  let outputLeaf := input.compiledSpliceOutputRootLeaf layout admissible
-    siteRoot
-  let hostPrepared :=
-    (host.compilerLeaf.items.renameWires
-      (layout.hostSeamPreparedWireOfEmpty admissible host)).renameRelations
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf)
-  let patternPrepared :=
-    (pattern.items.renameWires
-      (layout.patternRootSeamPreparedWireOfEmpty admissible host))
-        |>.renameRelations
-          (Concrete.Splice.Input.PlugLayout.emptyRelationRenaming
-            outputWitness.toFocus.holeRels)
-  let castEq := Concrete.Elaboration.WireContext.length_extend
-    outputLeaf.inheritedWires (layout.frameRegion input.site)
-  let closedWire :=
-    (layout.siteCombinedWireEquivOfEmpty admissible host
-      (outputWitness := outputWitness) (outputLeaf := outputLeaf) empty).trans
-      (FiniteEquiv.finCast castEq).symm
-  let outputRootExact :
-      (outputLeaf.inheritedWires.extend
-        (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
-    simpa [siteRoot] using outputLeaf.wiresExact
-  let outputEq :
-      (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).rootWires.length =
-        (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).exposedWires.length +
-          (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).hiddenWires.length := by
-    simp [Concrete.OpenDiagram.rootWires]
-  let outputTransport :=
-    (Concrete.Splice.Input.PlugLayout.outputExactContextToOpenRootWireEquiv
-      input layout admissible boundary rootScoped
-      (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
-      outputRootExact).trans (FiniteEquiv.finCast outputEq)
-  let reindex :=
-    Concrete.Splice.Input.PlugLayout.closedSourceToOpenRootReindex closedWire
-      outputTransport
-      (Concrete.Splice.Input.PlugLayout.rootExposedWireEquiv input layout boundary)
-      (layout.rootLocalWireEquivOfEmpty input boundary siteRoot empty)
-  let tail := patternPrepared.renameWires reindex
-  have hsplice := splice_materialFromTail
-    (hostItems.renameWires transport) tail
-  change (input.compiledSpliceRootSourceOfEmpty layout admissible boundary
-      rootScoped siteRoot empty).body =
-    Region.spliceAt checked.val.hiddenWires.length
-      (hostItems.renameWires transport) (materialFromTail tail)
-      id (fun relation => relation)
-  apply Eq.trans (b := Region.mk
-    (checked.val.hiddenWires.length + input.pattern.val.hiddenWires.length)
-    ((hostItems.renameWires transport |>.renameWires
-      (Region.adjoinHostWire checked.val.exposedWires.length
-        checked.val.hiddenWires.length input.pattern.val.hiddenWires.length))
-      |>.append tail))
-  · unfold Concrete.Splice.Input.compiledSpliceRootSourceOfEmpty
-    unfold Concrete.Splice.Input.compiledSpliceRootSourceFromItems
-      Concrete.Splice.replaceOpenBody
-    dsimp only
-    change Region.mk (checked.val.hiddenWires.length +
-        input.pattern.val.hiddenWires.length)
-      ((hostPrepared.append patternPrepared).renameWires reindex) = _
-    rw [ItemSeq.renameWires_append]
-    congr 2
-    dsimp [hostPrepared]
-    have hrelation := renameRelationsToNilEqCast
-      host.compilerLeaf.items hrels
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf)
-    have hprepared :
-        (host.compilerLeaf.items.renameWires
-          (layout.hostSeamPreparedWireOfEmpty admissible host)).renameRelations
-            (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-              outputWitness outputLeaf) =
-          hostItems.renameWires
-            (layout.hostSeamPreparedWireOfEmpty admissible host) := by
-      rw [ItemSeq.renameWires_renameRelations]
-      exact congrArg
-        (fun items => items.renameWires
-          (layout.hostSeamPreparedWireOfEmpty admissible host)) hrelation
-    apply Eq.trans (b :=
-      (hostItems.renameWires
-        (layout.hostSeamPreparedWireOfEmpty admissible host)).renameWires
-          reindex)
-    · exact congrArg (fun items => items.renameWires reindex) hprepared
-    · rw [ItemSeq.renameWires_comp]
-      rw [ItemSeq.renameWires_comp]
-      apply congrArg (fun wireMap => hostItems.renameWires wireMap)
-      funext index
-      have hfactor :=
-        Concrete.Splice.Input.PlugLayout.closedSourceToOpenRootReindex_host_factor_empty
-          input layout admissible boundary rootScoped siteRoot empty index
-      change reindex
-          (layout.hostSeamPreparedWireOfEmpty admissible host index) = _ at hfactor
-      change reindex
-          (layout.hostSeamPreparedWireOfEmpty admissible host index) =
-        Region.adjoinHostWire checked.val.exposedWires.length
-          checked.val.hiddenWires.length input.pattern.val.hiddenWires.length
-          (transport index)
-      rw [hfactor]
-      unfold Concrete.Splice.Input.PlugLayout.rootHostOpenEmbedding
-      dsimp [checked, context, exact, transport]
-      rw [conjoinLeftWireEqAdjoinHostWire]
-      apply congrArg (Region.adjoinHostWire
-        checked.val.exposedWires.length checked.val.hiddenWires.length
-        input.pattern.val.hiddenWires.length)
-      apply Fin.ext
-      rfl
-  · exact hsplice.symm
-
-private theorem rootNonemptyBodyEqSplice
-    (input : Concrete.Splice.Input) (layout : input.PlugLayout)
-    (admissible : input.Admissible)
-    (boundary : List (Fin input.frame.val.wireCount))
-    (rootScoped : ∀ wire, wire ∈ boundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (siteRoot : input.site = input.frame.val.root)
-    (nonempty : input.binderSpine.proxyCount ≠ 0) :
-    let checked := Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-      input admissible boundary rootScoped
-    let host := input.compiledSpliceHostView admissible
-    let hrels := input.compiledSpliceHostView_root_holeRels_eq_nil admissible siteRoot
-    let hostItems : ItemSeq
-        (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
-      cast (congrArg
-        (ItemSeq (host.compilerLeaf.inheritedWires.extend input.site).length)
-        hrels) host.compilerLeaf.items
-    let context := host.compilerLeaf.inheritedWires.extend input.site
-    let exact : context.Exact input.coalesceFrameRaw.root := by
-      change context.Exact input.frame.val.root
-      rw [← siteRoot]
-      exact host.compilerLeaf.wiresExact
-    let rootEq : checked.val.rootWires.length =
-        checked.val.exposedWires.length + checked.val.hiddenWires.length := by
-      simp [Concrete.OpenDiagram.rootWires]
-    let transport :=
-      (Concrete.exactContextToOpenRootWireEquiv checked context exact).trans
-        (FiniteEquiv.finCast rootEq)
-    let pattern := Concrete.Splice.Input.compiledSpliceTerminalView input nonempty
-    let outputWitness := input.compiledSpliceOutputRootWitness layout admissible siteRoot
-    let outputLeaf := input.compiledSpliceOutputRootLeaf layout admissible siteRoot
-    let patternPrepared :=
-      (pattern.leaf.items.renameWires
-        (layout.patternSeamPreparedWireOfNonempty admissible host
-          pattern.witness pattern.leaf nonempty)).renameRelations
-        (fun {arity} relation =>
-          layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-            outputWitness outputLeaf
-            (layout.coalescedTerminalRelationRenaming admissible
-              host.intrinsicPath host.compilerLeaf pattern.witness pattern.leaf
-              nonempty relation))
-    let castEq := Concrete.Elaboration.WireContext.length_extend
-      outputLeaf.inheritedWires (layout.frameRegion input.site)
-    let closedWire :=
-      (layout.siteCombinedWireEquivOfNonempty admissible host
-        (outputWitness := outputWitness) (outputLeaf := outputLeaf) nonempty).trans
-        (FiniteEquiv.finCast castEq).symm
-    let outputRootExact :
-        (outputLeaf.inheritedWires.extend
-          (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
-      simpa [siteRoot] using outputLeaf.wiresExact
-    let outputEq :
-        (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).rootWires.length =
-          (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).exposedWires.length +
-            (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).hiddenWires.length := by
-      simp [Concrete.OpenDiagram.rootWires]
-    let outputTransport :=
-      (Concrete.Splice.Input.PlugLayout.outputExactContextToOpenRootWireEquiv
-        input layout admissible boundary rootScoped
-        (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
-        outputRootExact).trans (FiniteEquiv.finCast outputEq)
-    let reindex :=
-      Concrete.Splice.Input.PlugLayout.closedSourceToOpenRootReindex closedWire
-        outputTransport
-        (Concrete.Splice.Input.PlugLayout.rootExposedWireEquiv input layout boundary)
-        (layout.rootLocalWireEquivOfNonempty input boundary siteRoot nonempty)
-    let tail := patternPrepared.renameWires reindex
-    (input.compiledSpliceRootSourceOfNonempty layout admissible boundary
-      rootScoped siteRoot nonempty).body =
-      Region.spliceAt checked.val.hiddenWires.length
-        (hostItems.renameWires transport) (materialFromTail tail)
-        id (fun relation => relation) := by
-  dsimp only
-  let checked := Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-    input admissible boundary rootScoped
-  let host := input.compiledSpliceHostView admissible
-  let hrels := input.compiledSpliceHostView_root_holeRels_eq_nil admissible siteRoot
-  let hostItems : ItemSeq
-      (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
-    cast (congrArg
-      (ItemSeq (host.compilerLeaf.inheritedWires.extend input.site).length)
-      hrels) host.compilerLeaf.items
-  let context := host.compilerLeaf.inheritedWires.extend input.site
-  let exact : context.Exact input.coalesceFrameRaw.root := by
-    change context.Exact input.frame.val.root
-    rw [← siteRoot]
-    exact host.compilerLeaf.wiresExact
-  let rootEq : checked.val.rootWires.length =
-      checked.val.exposedWires.length + checked.val.hiddenWires.length := by
-    simp [Concrete.OpenDiagram.rootWires]
-  let transport :=
-    (Concrete.exactContextToOpenRootWireEquiv checked context exact).trans
-      (FiniteEquiv.finCast rootEq)
-  let pattern := Concrete.Splice.Input.compiledSpliceTerminalView input nonempty
-  let outputWitness := input.compiledSpliceOutputRootWitness layout admissible siteRoot
-  let outputLeaf := input.compiledSpliceOutputRootLeaf layout admissible siteRoot
-  let hostPrepared :=
-    (host.compilerLeaf.items.renameWires
-      (layout.hostSeamPreparedWireOfNonempty admissible host)).renameRelations
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf)
-  let patternPrepared :=
-    (pattern.leaf.items.renameWires
-      (layout.patternSeamPreparedWireOfNonempty admissible host
-        pattern.witness pattern.leaf nonempty)).renameRelations
-      (fun {arity} relation =>
-        layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-          outputWitness outputLeaf
-          (layout.coalescedTerminalRelationRenaming admissible
-            host.intrinsicPath host.compilerLeaf pattern.witness pattern.leaf
-            nonempty relation))
-  let castEq := Concrete.Elaboration.WireContext.length_extend
-    outputLeaf.inheritedWires (layout.frameRegion input.site)
-  let closedWire :=
-    (layout.siteCombinedWireEquivOfNonempty admissible host
-      (outputWitness := outputWitness) (outputLeaf := outputLeaf) nonempty).trans
-      (FiniteEquiv.finCast castEq).symm
-  let outputRootExact :
-      (outputLeaf.inheritedWires.extend
-        (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
-    simpa [siteRoot] using outputLeaf.wiresExact
-  let outputEq :
-      (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).rootWires.length =
-        (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).exposedWires.length +
-          (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).hiddenWires.length := by
-    simp [Concrete.OpenDiagram.rootWires]
-  let outputTransport :=
-    (Concrete.Splice.Input.PlugLayout.outputExactContextToOpenRootWireEquiv
-      input layout admissible boundary rootScoped
-      (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
-      outputRootExact).trans (FiniteEquiv.finCast outputEq)
-  let reindex :=
-    Concrete.Splice.Input.PlugLayout.closedSourceToOpenRootReindex closedWire
-      outputTransport
-      (Concrete.Splice.Input.PlugLayout.rootExposedWireEquiv input layout boundary)
-      (layout.rootLocalWireEquivOfNonempty input boundary siteRoot nonempty)
-  let tail := patternPrepared.renameWires reindex
-  let extra := (Concrete.Elaboration.exactScopeWires input.pattern.val.diagram
-    input.binderSpine.bodyContainer).length
-  have hsplice := splice_materialFromTail
-    (hostItems.renameWires transport) tail
-  change (input.compiledSpliceRootSourceOfNonempty layout admissible boundary
-      rootScoped siteRoot nonempty).body =
-    Region.spliceAt checked.val.hiddenWires.length
-      (hostItems.renameWires transport) (materialFromTail tail)
-      id (fun relation => relation)
-  apply Eq.trans (b := Region.mk (checked.val.hiddenWires.length + extra)
-    (((hostItems.renameWires transport).renameWires
-      (Region.adjoinHostWire checked.val.exposedWires.length
-        checked.val.hiddenWires.length extra)).append tail))
-  · unfold Concrete.Splice.Input.compiledSpliceRootSourceOfNonempty
-    unfold Concrete.Splice.Input.compiledSpliceRootSourceFromItems
-      Concrete.Splice.replaceOpenBody
-    dsimp only
-    change Region.mk (checked.val.hiddenWires.length + extra)
-      ((hostPrepared.append patternPrepared).renameWires reindex) = _
-    rw [ItemSeq.renameWires_append]
-    congr 2
-    dsimp [hostPrepared]
-    have hrelation := renameRelationsToNilEqCast
-      host.compilerLeaf.items hrels
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf)
-    have hprepared :
-        (host.compilerLeaf.items.renameWires
-          (layout.hostSeamPreparedWireOfNonempty admissible host)).renameRelations
-            (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-              outputWitness outputLeaf) =
-          hostItems.renameWires
-            (layout.hostSeamPreparedWireOfNonempty admissible host) := by
-      rw [ItemSeq.renameWires_renameRelations]
-      exact congrArg
-        (fun items => items.renameWires
-          (layout.hostSeamPreparedWireOfNonempty admissible host)) hrelation
-    apply Eq.trans (b :=
-      (hostItems.renameWires
-        (layout.hostSeamPreparedWireOfNonempty admissible host)).renameWires
-          reindex)
-    · exact congrArg (fun items => items.renameWires reindex) hprepared
-    · rw [ItemSeq.renameWires_comp]
-      rw [ItemSeq.renameWires_comp]
-      apply congrArg (fun wireMap => hostItems.renameWires wireMap)
-      funext index
-      have hfactor :=
-        Concrete.Splice.Input.PlugLayout.closedSourceToOpenRootReindex_host_factor_nonempty
-          input layout admissible boundary rootScoped siteRoot nonempty index
-      change reindex
-          (layout.hostSeamPreparedWireOfNonempty admissible host index) = _ at hfactor
-      change reindex
-          (layout.hostSeamPreparedWireOfNonempty admissible host index) =
-        Region.adjoinHostWire checked.val.exposedWires.length
-          checked.val.hiddenWires.length extra (transport index)
-      rw [hfactor]
-      unfold Concrete.Splice.Input.PlugLayout.rootHostOpenEmbedding
-      dsimp [checked, context, exact, transport]
-      rw [conjoinLeftWireEqAdjoinHostWire]
-      apply congrArg (Region.adjoinHostWire
-        checked.val.exposedWires.length checked.val.hiddenWires.length extra)
-      apply Fin.ext
-      rfl
-  · exact hsplice.symm
-
 private def frameOpen
     (input : Concrete.Splice.Input)
     (boundary : List (Fin input.frame.val.wireCount))
@@ -641,7 +117,7 @@ private def frameOpen
   }
 }
 
-theorem root_empty
+private theorem root_exact
     (input : Concrete.Splice.Input)
     (layout : input.PlugLayout)
     (admissible : input.Admissible)
@@ -649,265 +125,82 @@ theorem root_empty
     (rootScoped : ∀ wire, wire ∈ boundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (siteRoot : input.site = input.frame.val.root)
-    (empty : input.binderSpine.proxyCount = 0) :
+    (sourceContext : Concrete.Elaboration.WireContext
+      input.pattern.val.diagram)
+    (sourceExact : sourceContext.Exact input.binderSpine.bodyContainer)
+    (sourceBinders : Concrete.Elaboration.BinderContext
+      input.pattern.val.diagram sourceRels)
+    (sourceEnumeration : Concrete.Elaboration.BinderContext.Enumeration
+      input.pattern.val.diagram sourceBinders input.binderSpine.bodyContainer)
+    (sourceItems : ItemSeq sourceContext.length sourceRels) :
     Rule.Erasure
-      (input.compiledSpliceRootSourceOfEmpty layout admissible boundary
-        rootScoped siteRoot empty)
+      (input.compiledSpliceRootSourceOfExactPattern layout admissible boundary
+        rootScoped siteRoot sourceContext sourceExact sourceBinders
+        sourceEnumeration sourceItems)
       (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot input
         admissible boundary rootScoped).elaborate := by
   let checked := Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
     input admissible boundary rootScoped
   let target := checked.elaborate
-  let host := input.compiledSpliceHostView admissible
-  let hrels := input.compiledSpliceHostView_root_holeRels_eq_nil admissible
-    siteRoot
-  let hostItems : ItemSeq
-      (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
-    cast (congrArg
-      (ItemSeq (host.compilerLeaf.inheritedWires.extend input.site).length)
-      hrels) host.compilerLeaf.items
-  let context := host.compilerLeaf.inheritedWires.extend input.site
-  let exact : context.Exact input.coalesceFrameRaw.root := by
-    change context.Exact input.frame.val.root
-    rw [← siteRoot]
-    exact host.compilerLeaf.wiresExact
-  let openItems := Concrete.Splice.Input.compiledSpliceOpenRootItems checked
+  let hostPrepared :=
+    input.compiledSpliceRootHostPreparedOfExactPattern layout admissible
+      siteRoot
+  let patternPrepared :=
+    input.compiledSpliceRootPatternPreparedOfExactPattern layout admissible
+      siteRoot sourceContext sourceExact sourceBinders sourceEnumeration
+      sourceItems
+  let reindex := layout.rootReindexOfExactPattern input admissible boundary
+    rootScoped siteRoot
+  let extra := layout.bodyInternalCarriers.length
+  let tail := patternPrepared.renameWires reindex
   let rootEq : checked.val.rootWires.length =
       checked.val.exposedWires.length + checked.val.hiddenWires.length := by
     simp [Concrete.OpenDiagram.rootWires]
-  let transport :=
-    (Concrete.exactContextToOpenRootWireEquiv checked context exact).trans
-      (FiniteEquiv.finCast rootEq)
-  let targetItems := openItems.items.castWiresEq rootEq
-  let pattern := Concrete.Splice.Input.compiledSpliceOpenRootItems input.pattern
-  let outputWitness := input.compiledSpliceOutputRootWitness layout admissible
-    siteRoot
-  let outputLeaf := input.compiledSpliceOutputRootLeaf layout admissible
-    siteRoot
-  let patternPrepared :=
-    (pattern.items.renameWires
-      (layout.patternRootSeamPreparedWireOfEmpty admissible host))
-        |>.renameRelations
-          (Concrete.Splice.Input.PlugLayout.emptyRelationRenaming
-            outputWitness.toFocus.holeRels)
-  let castEq := Concrete.Elaboration.WireContext.length_extend
-    outputLeaf.inheritedWires (layout.frameRegion input.site)
-  let closedWire :=
-    (layout.siteCombinedWireEquivOfEmpty admissible host
-      (outputWitness := outputWitness) (outputLeaf := outputLeaf) empty).trans
-      (FiniteEquiv.finCast castEq).symm
-  let outputRootExact :
-      (outputLeaf.inheritedWires.extend
-        (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
-    simpa [siteRoot] using outputLeaf.wiresExact
-  let outputEq :
-      (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).rootWires.length =
-        (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).exposedWires.length +
-          (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).hiddenWires.length := by
-    simp [Concrete.OpenDiagram.rootWires]
-  let outputTransport :=
-    (Concrete.Splice.Input.PlugLayout.outputExactContextToOpenRootWireEquiv
-      input layout admissible boundary rootScoped
-      (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
-      outputRootExact).trans (FiniteEquiv.finCast outputEq)
-  let reindex :=
-    Concrete.Splice.Input.PlugLayout.closedSourceToOpenRootReindex closedWire
-      outputTransport
-      (Concrete.Splice.Input.PlugLayout.rootExposedWireEquiv input layout boundary)
-      (layout.rootLocalWireEquivOfEmpty input boundary siteRoot empty)
-  let tail := patternPrepared.renameWires reindex
-  have targetBody : target.body =
-      .mk checked.val.hiddenWires.length targetItems := by
-    exact openItems.elaborate_body
-  have baseIso := rootHostItemsIso input admissible boundary rootScoped siteRoot
-  let outputRefl := FiniteEquiv.refl
-    (Fin (checked.val.exposedWires.length +
-      (checked.val.hiddenWires.length + input.pattern.val.hiddenWires.length)))
-  have hostIso : ItemSeqIso outputRefl []
-      ((hostItems.renameWires transport).renameWires
-        (Region.adjoinHostWire checked.val.exposedWires.length
-          checked.val.hiddenWires.length input.pattern.val.hiddenWires.length))
-      (targetItems.renameWires
-        (Region.adjoinHostWire checked.val.exposedWires.length
-          checked.val.hiddenWires.length input.pattern.val.hiddenWires.length)) := by
-    have lifted := baseIso.renameWires_commuting
-      (Region.adjoinHostWire checked.val.exposedWires.length
-        checked.val.hiddenWires.length input.pattern.val.hiddenWires.length)
-      (Region.adjoinHostWire checked.val.exposedWires.length
-        checked.val.hiddenWires.length input.pattern.val.hiddenWires.length)
-      outputRefl (by
-        funext index
-        rfl)
-    exact lifted
-  have canonicalStep := rootFromParts target targetItems
-    ((hostItems.renameWires transport).renameWires
-      (Region.adjoinHostWire checked.val.exposedWires.length
-        checked.val.hiddenWires.length input.pattern.val.hiddenWires.length))
-    tail targetBody hostIso
-  let source := input.compiledSpliceRootSourceOfEmpty layout admissible boundary
-    rootScoped siteRoot empty
-  have sourceBody := rootEmptyBodyEqSplice input layout admissible boundary
-    rootScoped siteRoot empty
-  have spliceEq := splice_materialFromTail
-    (hostItems.renameWires transport) tail
-  have bodyEq : source.body =
-      .mk (checked.val.hiddenWires.length + input.pattern.val.hiddenWires.length)
-        (((hostItems.renameWires transport).renameWires
-          (Region.adjoinHostWire checked.val.exposedWires.length
-            checked.val.hiddenWires.length input.pattern.val.hiddenWires.length)).append
-          tail) := sourceBody.trans spliceEq
-  have sourceIso : OpenDiagramIso source
-      (target.withBody
-        (.mk (checked.val.hiddenWires.length + input.pattern.val.hiddenWires.length)
-          (((hostItems.renameWires transport).renameWires
-            (Region.adjoinHostWire checked.val.exposedWires.length
-              checked.val.hiddenWires.length input.pattern.val.hiddenWires.length)).append
-            tail))) := {
-    external := FiniteEquiv.refl (Fin source.externalClasses)
-    boundary := by
-      intro position
-      rfl
-    body := by
-      rw [bodyEq]
-      exact RegionIso.refl _
-  }
-  exact Rule.Erasure.iso sourceIso.symm canonicalStep
-    (OpenDiagramIso.refl target)
-
-theorem root_nonempty
-    (input : Concrete.Splice.Input)
-    (layout : input.PlugLayout)
-    (admissible : input.Admissible)
-    (boundary : List (Fin input.frame.val.wireCount))
-    (rootScoped : ∀ wire, wire ∈ boundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (siteRoot : input.site = input.frame.val.root)
-    (nonempty : input.binderSpine.proxyCount ≠ 0) :
-    Rule.Erasure
-      (input.compiledSpliceRootSourceOfNonempty layout admissible boundary
-        rootScoped siteRoot nonempty)
-      (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot input
-        admissible boundary rootScoped).elaborate := by
-  let checked := Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot
-    input admissible boundary rootScoped
-  let target := checked.elaborate
-  let host := input.compiledSpliceHostView admissible
-  let hrels := input.compiledSpliceHostView_root_holeRels_eq_nil admissible
-    siteRoot
-  let hostItems : ItemSeq
-      (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
-    cast (congrArg
-      (ItemSeq (host.compilerLeaf.inheritedWires.extend input.site).length)
-      hrels) host.compilerLeaf.items
-  let context := host.compilerLeaf.inheritedWires.extend input.site
-  let exact : context.Exact input.coalesceFrameRaw.root := by
-    change context.Exact input.frame.val.root
-    rw [← siteRoot]
-    exact host.compilerLeaf.wiresExact
   let openItems := Concrete.Splice.Input.compiledSpliceOpenRootItems checked
-  let rootEq : checked.val.rootWires.length =
-      checked.val.exposedWires.length + checked.val.hiddenWires.length := by
-    simp [Concrete.OpenDiagram.rootWires]
-  let transport :=
-    (Concrete.exactContextToOpenRootWireEquiv checked context exact).trans
-      (FiniteEquiv.finCast rootEq)
   let targetItems := openItems.items.castWiresEq rootEq
-  let pattern := Concrete.Splice.Input.compiledSpliceTerminalView input nonempty
-  let outputWitness := input.compiledSpliceOutputRootWitness layout admissible
-    siteRoot
-  let outputLeaf := input.compiledSpliceOutputRootLeaf layout admissible
-    siteRoot
-  let patternPrepared :=
-    (pattern.leaf.items.renameWires
-      (layout.patternSeamPreparedWireOfNonempty admissible host
-        pattern.witness pattern.leaf nonempty)).renameRelations
-      (fun {arity} relation =>
-        layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-          outputWitness outputLeaf
-          (layout.coalescedTerminalRelationRenaming admissible
-            host.intrinsicPath host.compilerLeaf pattern.witness pattern.leaf
-            nonempty relation))
-  let castEq := Concrete.Elaboration.WireContext.length_extend
-    outputLeaf.inheritedWires (layout.frameRegion input.site)
-  let closedWire :=
-    (layout.siteCombinedWireEquivOfNonempty admissible host
-      (outputWitness := outputWitness) (outputLeaf := outputLeaf) nonempty).trans
-      (FiniteEquiv.finCast castEq).symm
-  let outputRootExact :
-      (outputLeaf.inheritedWires.extend
-        (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
-    simpa [siteRoot] using outputLeaf.wiresExact
-  let outputEq :
-      (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).rootWires.length =
-        (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).exposedWires.length +
-          (Concrete.Splice.Input.PlugLayout.outputOpenRoot input layout boundary).hiddenWires.length := by
-    simp [Concrete.OpenDiagram.rootWires]
-  let outputTransport :=
-    (Concrete.Splice.Input.PlugLayout.outputExactContextToOpenRootWireEquiv
-      input layout admissible boundary rootScoped
-      (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
-      outputRootExact).trans (FiniteEquiv.finCast outputEq)
-  let reindex :=
-    Concrete.Splice.Input.PlugLayout.closedSourceToOpenRootReindex closedWire
-      outputTransport
-      (Concrete.Splice.Input.PlugLayout.rootExposedWireEquiv input layout boundary)
-      (layout.rootLocalWireEquivOfNonempty input boundary siteRoot nonempty)
-  let tail := patternPrepared.renameWires reindex
-  let extra := (Concrete.Elaboration.exactScopeWires input.pattern.val.diagram
-    input.binderSpine.bodyContainer).length
+  let hostEmbedding := Region.adjoinHostWire checked.val.exposedWires.length
+    checked.val.hiddenWires.length extra
   have targetBody : target.body =
       .mk checked.val.hiddenWires.length targetItems := by
     exact openItems.elaborate_body
-  have baseIso := rootHostItemsIso input admissible boundary rootScoped siteRoot
   let outputRefl := FiniteEquiv.refl
     (Fin (checked.val.exposedWires.length +
       (checked.val.hiddenWires.length + extra)))
   have hostIso : ItemSeqIso outputRefl []
-      ((hostItems.renameWires transport).renameWires
-        (Region.adjoinHostWire checked.val.exposedWires.length
-          checked.val.hiddenWires.length extra))
-      (targetItems.renameWires
-        (Region.adjoinHostWire checked.val.exposedWires.length
-          checked.val.hiddenWires.length extra)) := by
-    have lifted := baseIso.renameWires_commuting
-      (Region.adjoinHostWire checked.val.exposedWires.length
-        checked.val.hiddenWires.length extra)
-      (Region.adjoinHostWire checked.val.exposedWires.length
-        checked.val.hiddenWires.length extra)
-      outputRefl (by
-        funext index
-        rfl)
-    exact lifted
+      (hostPrepared.renameWires reindex)
+      (targetItems.renameWires hostEmbedding) := by
+    simpa [hostPrepared, reindex, checked, rootEq, openItems, targetItems,
+      hostEmbedding, outputRefl, extra] using
+      (Concrete.Splice.Input.PlugLayout.compiledSpliceRootHostNormalizationIso
+        input layout admissible boundary rootScoped siteRoot)
   have canonicalStep := rootFromParts target targetItems
-    ((hostItems.renameWires transport).renameWires
-      (Region.adjoinHostWire checked.val.exposedWires.length
-        checked.val.hiddenWires.length extra))
+    (hostPrepared.renameWires reindex)
     tail targetBody hostIso
-  let source := input.compiledSpliceRootSourceOfNonempty layout admissible
-    boundary rootScoped siteRoot nonempty
-  have sourceBody := rootNonemptyBodyEqSplice input layout admissible boundary
-    rootScoped siteRoot nonempty
-  have spliceEq := splice_materialFromTail
-    (hostItems.renameWires transport) tail
+  let source := input.compiledSpliceRootSourceOfExactPattern layout admissible
+    boundary rootScoped siteRoot sourceContext sourceExact sourceBinders
+    sourceEnumeration sourceItems
+  have sourceBody : source.body =
+      .mk (checked.val.hiddenWires.length + extra)
+        ((hostPrepared.renameWires reindex).append tail) := by
+    unfold source
+    unfold Concrete.Splice.Input.compiledSpliceRootSourceOfExactPattern
+    simp only [
+      Concrete.Splice.Input.compiledSpliceRootSourceFromItems,
+      Concrete.Splice.replaceOpenBody]
+    change Region.mk _
+        ((hostPrepared.append patternPrepared).renameWires reindex) = _
+    rw [ItemSeq.renameWires_append]
+    rfl
   have bodyEq : source.body =
       .mk (checked.val.hiddenWires.length + extra)
-        (((hostItems.renameWires transport).renameWires
-          (Region.adjoinHostWire checked.val.exposedWires.length
-            checked.val.hiddenWires.length extra)).append tail) :=
-    sourceBody.trans spliceEq
+        ((hostPrepared.renameWires reindex).append tail) := sourceBody
   have sourceIso : OpenDiagramIso source
       (target.withBody
         (.mk (checked.val.hiddenWires.length + extra)
-          (((hostItems.renameWires transport).renameWires
-            (Region.adjoinHostWire checked.val.exposedWires.length
-              checked.val.hiddenWires.length extra)).append tail))) := {
+          ((hostPrepared.renameWires reindex).append tail))) := {
     external := FiniteEquiv.refl (Fin source.externalClasses)
-    boundary := by
-      intro position
-      rfl
-    body := by
-      rw [bodyEq]
-      exact RegionIso.refl _
+    boundary := by intro position; rfl
+    body := by rw [bodyEq]; exact RegionIso.refl _
   }
   exact Rule.Erasure.iso sourceIso.symm canonicalStep
     (OpenDiagramIso.refl target)
@@ -1031,99 +324,114 @@ private theorem contextualAtPolarity
         rw [polarityEq]
         exact localProof⟩
 
-private theorem nestedFromSplice
-    {arity sourceOuter targetOuter hostLocal patternWires : Nat}
-    {sourceRels targetRels patternRels : RelCtx}
+private theorem nestedFromPrepared
+    {arity sourceOuter targetOuter hostLocal extra : Nat}
+    {rels : RelCtx}
     (interface : OpenDiagram arity)
-    (context : DiagramContext interface.externalClasses targetOuter [] targetRels)
-    (hostItems : ItemSeq (sourceOuter + hostLocal) sourceRels)
-    (material : Region patternWires patternRels)
-    (wireMap : Fin patternWires → Fin (sourceOuter + hostLocal))
-    (relationMap : RelationRenaming patternRels sourceRels)
-    (hostRelation : RelationRenaming sourceRels targetRels)
-    (rootWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)) :
-    let actualBefore :=
-      ((Region.spliceAt hostLocal hostItems material wireMap relationMap
-        ).renameRelations hostRelation).renameWires rootWire
-    let actualAfter :=
-      ((Region.mk hostLocal hostItems).renameRelations hostRelation
-        ).renameWires rootWire
+    (context : DiagramContext interface.externalClasses targetOuter [] rels)
+    (hostItems : ItemSeq (sourceOuter + hostLocal) rels)
+    (sourceHost tail : ItemSeq
+      (sourceOuter + (hostLocal + extra)) rels)
+    (rootWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
+    (hostIso : ItemSeqIso
+      (FiniteEquiv.refl (Fin (sourceOuter + (hostLocal + extra)))) rels
+      sourceHost
+      (hostItems.renameWires
+        (Region.adjoinHostWire sourceOuter hostLocal extra))) :
     Rule.atPolarity context.polarity Rule.Erasure
-      (interface.withBody (context.fill actualBefore))
-      (interface.withBody (context.fill actualAfter)) := by
-  dsimp only
-  let localWire := FiniteEquiv.refl (Fin hostLocal)
-  let hostWire := extendWireEquiv rootWire localWire
-  let targetHostItems :=
-    (hostItems.renameRelations hostRelation).renameWires hostWire
-  let targetWireMap := hostWire ∘ wireMap
-  let targetRelationMap : RelationRenaming patternRels targetRels :=
-    fun relation => hostRelation (relationMap relation)
-  let sourceBefore :=
-    (Region.spliceAt hostLocal hostItems material wireMap relationMap
-      ).renameRelations hostRelation
-  let sourceAfter :=
-    (Region.mk hostLocal hostItems).renameRelations hostRelation
-  let actualBefore := sourceBefore.renameWires rootWire
-  let actualAfter := sourceAfter.renameWires rootWire
-  let before := Region.spliceAt hostLocal targetHostItems material
-    targetWireMap targetRelationMap
-  let after := Region.mk hostLocal targetHostItems
-  have hostItemsIso : ItemSeqIso hostWire targetRels
-      (hostItems.renameRelations hostRelation) targetHostItems := by
-    exact ItemSeqIso.renameWiresEquiv
-      (hostItems.renameRelations hostRelation) hostWire
-  have sourceBeforeIso : RegionIso rootWire targetRels sourceBefore before := by
-    exact RegionIso.spliceAt_renameRelations hostItemsIso material
-      wireMap targetWireMap rfl relationMap targetRelationMap (fun _ => rfl)
-  have actualBeforeIso : RegionIso (FiniteEquiv.refl (Fin targetOuter))
-      targetRels actualBefore before := by
-    have renamed := RegionIso.renameWiresEquiv sourceBefore rootWire
-    have combined := renamed.symm.trans sourceBeforeIso
-    have wireEq : rootWire.symm.trans rootWire =
-        FiniteEquiv.refl (Fin targetOuter) := by
-      apply FiniteEquiv.ext
-      intro index
-      exact rootWire.right_inv index
-    simpa only [wireEq] using combined
-  have sourceAfterIso : RegionIso rootWire targetRels sourceAfter after := by
-    unfold sourceAfter after
-    simp only [Region.renameRelations]
-    exact RegionIso.mk localWire hostItemsIso
-  have actualAfterIso : RegionIso (FiniteEquiv.refl (Fin targetOuter))
-      targetRels actualAfter after := by
-    have renamed := RegionIso.renameWiresEquiv sourceAfter rootWire
-    have combined := renamed.symm.trans sourceAfterIso
-    have wireEq : rootWire.symm.trans rootWire =
-        FiniteEquiv.refl (Fin targetOuter) := by
-      apply FiniteEquiv.ext
-      intro index
-      exact rootWire.right_inv index
-    simpa only [wireEq] using combined
-  have localProof : Rule.Erasure.Local before after :=
-    .erase hostLocal targetHostItems material targetWireMap targetRelationMap
+      (interface.withBody (context.fill
+        ((Region.mk (hostLocal + extra) (sourceHost.append tail)
+          ).renameWires rootWire)))
+      (interface.withBody (context.fill
+        ((Region.mk hostLocal hostItems).renameWires rootWire))) := by
+  let totalWire := extendWireEquiv rootWire
+    (FiniteEquiv.refl (Fin (hostLocal + extra)))
+  let hostWire := extendWireEquiv rootWire
+    (FiniteEquiv.refl (Fin hostLocal))
+  let targetHost := hostItems.renameWires hostWire
+  let targetTail := tail.renameWires totalWire
+  let material := materialFromTail (outer := targetOuter)
+    (hostLocal := hostLocal) targetTail
+  let before := Region.spliceAt hostLocal targetHost material id
+    (fun relation => relation)
+  let after := Region.mk hostLocal targetHost
+  have beforeEq : before = .mk (hostLocal + extra)
+      ((targetHost.renameWires
+        (Region.adjoinHostWire targetOuter hostLocal extra)).append
+        targetTail) := by
+    exact splice_materialFromTail targetHost targetTail
+  have lifted := hostIso.renameWires_commuting totalWire totalWire
+    (FiniteEquiv.refl (Fin (targetOuter + (hostLocal + extra)))) (by
+      funext index
+      rfl)
+  have hostCommutes := Region.extendWireEquiv_adjoinHostWire_commutes
+    rootWire hostLocal extra
+  have targetHostIso : ItemSeqIso
+      (FiniteEquiv.refl (Fin (targetOuter + (hostLocal + extra)))) rels
+      (sourceHost.renameWires totalWire)
+      (targetHost.renameWires
+        (Region.adjoinHostWire targetOuter hostLocal extra)) := by
+    simpa only [targetHost, ItemSeq.renameWires_comp, hostCommutes,
+      totalWire, hostWire] using lifted
+  have bodyItems := targetHostIso.append (ItemSeqIso.refl targetTail)
+  let actualBefore :=
+    (Region.mk (hostLocal + extra) (sourceHost.append tail)).renameWires
+      rootWire
+  let actualAfter := (Region.mk hostLocal hostItems).renameWires rootWire
+  have totalWireEq :
+      extendWireRenaming rootWire.toFun (hostLocal + extra) =
+        totalWire.toFun := by
+    rfl
+  have actualBeforeEq : actualBefore =
+      Region.mk (hostLocal + extra)
+        ((sourceHost.renameWires totalWire).append targetTail) := by
+    simp only [actualBefore, Region.renameWires,
+      ItemSeq.renameWires_append, targetTail, totalWireEq]
+  have totalRefl : extendWireEquiv
+      (FiniteEquiv.refl (Fin targetOuter))
+      (FiniteEquiv.refl (Fin (hostLocal + extra))) =
+      FiniteEquiv.refl (Fin (targetOuter + (hostLocal + extra))) := by
+    apply FiniteEquiv.ext
+    intro index
+    refine Fin.addCases (fun _ => ?_) (fun _ => ?_) index <;>
+      simp [extendWireEquiv, FiniteEquiv.refl]
+  have actualBeforeIso : RegionIso
+      (FiniteEquiv.refl (Fin targetOuter)) rels actualBefore before := by
+    rw [actualBeforeEq, beforeEq]
+    refine RegionIso.mk (FiniteEquiv.refl (Fin (hostLocal + extra))) ?_
+    rw [totalRefl]
+    exact bodyItems
+  have actualAfterEq : actualAfter = after := by
+    unfold actualAfter after targetHost hostWire
+    rfl
+  have actualAfterIso : RegionIso
+      (FiniteEquiv.refl (Fin targetOuter)) rels actualAfter after := by
+    rw [actualAfterEq]
+    exact RegionIso.refl after
+  have localProof : Rule.Erasure.Local before after := by
+    unfold before after
+    exact .erase hostLocal targetHost material id
+      (fun relation => relation)
   exact contextualAtPolarity interface context actualBefore actualAfter
     before after actualBeforeIso actualAfterIso localProof
 
-theorem nested_empty
+theorem nested
     (input : Concrete.Splice.Input)
     (layout : input.PlugLayout)
     (admissible : input.Admissible)
     (boundary : List (Fin input.frame.val.wireCount))
     (rootScoped : ∀ wire, wire ∈ boundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
-    (nested : input.site ≠ input.frame.val.root)
-    (empty : input.binderSpine.proxyCount = 0) :
+    (nested : input.site ≠ input.frame.val.root) :
     let view := input.compiledSpliceOutputOpenView layout admissible
       boundary rootScoped
     Rule.atPolarity view.focus.context.polarity Rule.Erasure
-      (input.compiledSpliceNestedSourceOfEmpty layout admissible boundary
-        rootScoped nested empty)
+      (input.compiledSpliceNestedSource layout admissible boundary
+        rootScoped nested)
       (input.compiledSpliceNestedHostOpen layout admissible boundary
         rootScoped nested) := by
   dsimp only
   let host := input.compiledSpliceHostView admissible
-  let pattern := Concrete.Splice.Input.compiledSpliceOpenRootItems input.pattern
   let output := (Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot
     input layout admissible boundary rootScoped).elaborate
   let view := input.compiledSpliceOutputOpenView layout admissible
@@ -1132,18 +440,43 @@ theorem nested_empty
     boundary rootScoped nested
   let localEq := Concrete.Elaboration.WireContext.length_extend
     host.compilerLeaf.inheritedWires input.site
-  let hostItems := host.compilerLeaf.items.castWiresEq localEq
-  let material := Concrete.Elaboration.finishRoot
-    input.pattern.val.exposedWires input.pattern.val.hiddenWires pattern.items
-  let wireMap := fun index => Fin.cast localEq
-    (layout.exposedWireRenaming admissible host index)
-  let relationMap : RelationRenaming [] host.intrinsicPath.toFocus.holeRels :=
-    fun relation => Concrete.Splice.Input.PlugLayout.emptyRelationRenaming
-      host.intrinsicPath.toFocus.holeRels relation
   let hostRelation : RelationRenaming host.intrinsicPath.toFocus.holeRels
       view.intrinsicPath.toFocus.holeRels := fun relation =>
     layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
       view.intrinsicPath outputLeaf relation
+  let hostItems :=
+    (host.compilerLeaf.items.castWiresEq localEq).renameRelations hostRelation
+  let sourceHost :=
+    (host.compilerLeaf.items.renameWires
+      (layout.hostPreparedWireOfExactPattern host view.intrinsicPath
+        outputLeaf)).renameRelations hostRelation
+  let extra := layout.bodyInternalCarriers.length
+  let hostAdjoin := Region.adjoinHostWire
+    host.compilerLeaf.inheritedWires.length
+    (Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
+      input.site).length extra
+  have hostItemsEq : sourceHost = hostItems.renameWires hostAdjoin := by
+    unfold sourceHost hostItems hostAdjoin
+    rw [layout.hostPreparedWireOfExactPattern_eq_adjoinHost admissible host
+      view.intrinsicPath outputLeaf]
+    simp only [ItemSeq.castWiresEq_eq_renameWires]
+    simp only [ItemSeq.renameWires_renameRelations]
+    simpa only [extra, hostAdjoin] using
+      (ItemSeq.renameWires_comp
+        (host.compilerLeaf.items.renameRelations hostRelation)
+        (Fin.cast localEq)
+        (Region.adjoinHostWire host.compilerLeaf.inheritedWires.length
+          (Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
+            input.site).length layout.bodyInternalCarriers.length)).symm
+  have hostIso : ItemSeqIso
+      (FiniteEquiv.refl (Fin
+        (host.compilerLeaf.inheritedWires.length +
+          ((Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
+            input.site).length + extra))))
+      view.intrinsicPath.toFocus.holeRels sourceHost
+      (hostItems.renameWires hostAdjoin) := by
+    rw [hostItemsEq]
+    exact ItemSeqIso.refl _
   let rootWire :=
     (layout.inheritedWireEquiv host.intrinsicPath host.compilerLeaf
       view.intrinsicPath outputLeaf).trans
@@ -1157,90 +490,34 @@ theorem nested_empty
       Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot,
       Concrete.Splice.Input.PlugLayout.coalescedOpenRoot,
       Concrete.Splice.Input.PlugLayout.outputOpenRoot]
-  have uncastStep := nestedFromSplice (interface := output)
-    (context := view.focus.context) hostItems material wireMap relationMap
-    hostRelation rootWire
+  let pattern := Concrete.Splice.Input.compiledSplicePatternBodyEvidence input
+  let binderWitness := layout.patternBinderWitnessOfEnumeration admissible
+    pattern.binders pattern.enumeration view.intrinsicPath outputLeaf
+  let tail :=
+    (pattern.items.renameWires
+      (layout.patternPreparedWireOfExactPattern admissible host
+        pattern.context pattern.exact view.intrinsicPath outputLeaf)
+      ).renameRelations binderWitness.relationMap
+  have uncastStep := nestedFromPrepared (interface := output)
+    (context := view.focus.context) hostItems sourceHost tail rootWire hostIso
   have step := atPolarity_castArity arityEq.symm uncastStep
-  simpa [Concrete.Splice.Input.compiledSpliceNestedSourceOfEmpty,
+  simpa [Concrete.Splice.Input.compiledSpliceNestedSource,
+    Concrete.Splice.Input.PlugLayout.compiledSiteSource,
+    Concrete.Splice.Input.PlugLayout.compiledSiteSourceOfExactPattern,
     Concrete.Splice.Input.compiledSpliceNestedHostOpen,
     Concrete.Splice.replaceOpenBody, OpenDiagram.withBody,
-    host, pattern, output, view, outputLeaf, localEq, hostItems, material,
-    wireMap, relationMap, hostRelation, rootWire, arityEq] using step
+    host, output, view, outputLeaf, localEq, hostRelation, hostItems,
+    sourceHost, extra, hostAdjoin, rootWire, arityEq, pattern,
+    binderWitness, tail] using step
 
-theorem nested_nonempty
+private noncomputable def nestedSourceIso
     (input : Concrete.Splice.Input)
     (layout : input.PlugLayout)
     (admissible : input.Admissible)
     (boundary : List (Fin input.frame.val.wireCount))
     (rootScoped : ∀ wire, wire ∈ boundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
-    (nested : input.site ≠ input.frame.val.root)
-    (nonempty : input.binderSpine.proxyCount ≠ 0) :
-    let view := input.compiledSpliceOutputOpenView layout admissible
-      boundary rootScoped
-    Rule.atPolarity view.focus.context.polarity Rule.Erasure
-      (input.compiledSpliceNestedSourceOfNonempty layout admissible boundary
-        rootScoped nested nonempty)
-      (input.compiledSpliceNestedHostOpen layout admissible boundary
-        rootScoped nested) := by
-  dsimp only
-  let host := input.compiledSpliceHostView admissible
-  let pattern := input.compiledSpliceTerminalView nonempty
-  let output := (Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot
-    input layout admissible boundary rootScoped).elaborate
-  let view := input.compiledSpliceOutputOpenView layout admissible
-    boundary rootScoped
-  let outputLeaf := input.compiledSpliceOutputNestedLeaf layout admissible
-    boundary rootScoped nested
-  let localEq := Concrete.Elaboration.WireContext.length_extend
-    host.compilerLeaf.inheritedWires input.site
-  let hostItems := host.compilerLeaf.items.castWiresEq localEq
-  let material := Concrete.Elaboration.finishRegion input.pattern.val.diagram
-    pattern.leaf.inheritedWires input.binderSpine.bodyContainer
-    pattern.leaf.items
-  let wireMap := fun index => Fin.cast localEq
-    (layout.bodyTerminalWireRenaming admissible host pattern.witness
-      pattern.leaf nonempty index)
-  let relationMap : RelationRenaming pattern.witness.toFocus.holeRels
-      host.intrinsicPath.toFocus.holeRels := fun relation =>
-    layout.coalescedTerminalRelationRenaming admissible host.intrinsicPath
-      host.compilerLeaf pattern.witness pattern.leaf nonempty relation
-  let hostRelation : RelationRenaming host.intrinsicPath.toFocus.holeRels
-      view.intrinsicPath.toFocus.holeRels := fun relation =>
-    layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-      view.intrinsicPath outputLeaf relation
-  let rootWire :=
-    (layout.inheritedWireEquiv host.intrinsicPath host.compilerLeaf
-      view.intrinsicPath outputLeaf).trans
-      (FiniteEquiv.finCast outputLeaf.inheritedLength)
-  let arityEq :
-      (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot input admissible
-        boundary rootScoped).val.boundary.length =
-      (Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot input layout
-        admissible boundary rootScoped).val.boundary.length := by
-    simp [Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot,
-      Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot,
-      Concrete.Splice.Input.PlugLayout.coalescedOpenRoot,
-      Concrete.Splice.Input.PlugLayout.outputOpenRoot]
-  have uncastStep := nestedFromSplice (interface := output)
-    (context := view.focus.context) hostItems material wireMap relationMap
-    hostRelation rootWire
-  have step := atPolarity_castArity arityEq.symm uncastStep
-  simpa [Concrete.Splice.Input.compiledSpliceNestedSourceOfNonempty,
-    Concrete.Splice.Input.compiledSpliceNestedHostOpen,
-    Concrete.Splice.replaceOpenBody, OpenDiagram.withBody,
-    host, pattern, output, view, outputLeaf, localEq, hostItems, material,
-    wireMap, relationMap, hostRelation, rootWire, arityEq] using step
-
-private noncomputable def nestedNonemptySourceIso
-    (input : Concrete.Splice.Input)
-    (layout : input.PlugLayout)
-    (admissible : input.Admissible)
-    (boundary : List (Fin input.frame.val.wireCount))
-    (rootScoped : ∀ wire, wire ∈ boundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (nested : input.site ≠ input.frame.val.root)
-    (nonempty : input.binderSpine.proxyCount ≠ 0) :
+    (nested : input.site ≠ input.frame.val.root) :
     let arityEq :
         (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot input
           admissible boundary rootScoped).val.boundary.length =
@@ -1251,45 +528,26 @@ private noncomputable def nestedNonemptySourceIso
         Concrete.Splice.Input.PlugLayout.coalescedOpenRoot,
         Concrete.Splice.Input.PlugLayout.outputOpenRoot]
     OpenDiagramIso
-      (input.compiledSpliceNestedSourceOfNonempty layout admissible boundary
-        rootScoped nested nonempty)
+      (input.compiledSpliceNestedSource layout admissible boundary
+        rootScoped nested)
       ((Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot input layout
         admissible boundary rootScoped).elaborate.castArity arityEq.symm) := by
   dsimp only
   let host := input.compiledSpliceHostView admissible
-  let pattern := input.compiledSpliceTerminalView nonempty
   let output := (Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot
     input layout admissible boundary rootScoped).elaborate
   let view := input.compiledSpliceOutputOpenView layout admissible
     boundary rootScoped
   let outputLeaf := input.compiledSpliceOutputNestedLeaf layout admissible
     boundary rootScoped nested
-  let source :=
-    ((Region.spliceAt
-        (Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
-          input.site).length
-        (host.compilerLeaf.items.castWiresEq
-          (Concrete.Elaboration.WireContext.length_extend
-            host.compilerLeaf.inheritedWires input.site))
-        (Concrete.Elaboration.finishRegion input.pattern.val.diagram
-          pattern.leaf.inheritedWires input.binderSpine.bodyContainer
-          pattern.leaf.items)
-        (fun index => Fin.cast
-          (Concrete.Elaboration.WireContext.length_extend
-            host.compilerLeaf.inheritedWires input.site)
-          (layout.bodyTerminalWireRenaming admissible host pattern.witness
-            pattern.leaf nonempty index))
-        (layout.coalescedTerminalRelationRenaming admissible
-          host.intrinsicPath host.compilerLeaf pattern.witness pattern.leaf
-          nonempty)).renameRelations
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        view.intrinsicPath outputLeaf))
+  let source := layout.compiledSiteSource input admissible host
+    view.intrinsicPath outputLeaf
   let inherited := layout.inheritedWireEquiv host.intrinsicPath
     host.compilerLeaf view.intrinsicPath outputLeaf
   let rootWire := inherited.trans
     (FiniteEquiv.finCast outputLeaf.inheritedLength)
-  have siteIso := layout.compiledSiteRegionIsoOfNonempty input admissible host
-    pattern.witness pattern.leaf view.intrinsicPath outputLeaf nonempty
+  have siteIso := layout.compiledSiteRegionIso input admissible host
+    view.intrinsicPath outputLeaf
   have focusIso : RegionIso (FiniteEquiv.refl (Fin view.focus.holeWires))
       view.intrinsicPath.toFocus.holeRels
       (source.renameWires rootWire) view.focus.body := by
@@ -1331,108 +589,8 @@ private noncomputable def nestedNonemptySourceIso
       Concrete.Splice.Input.PlugLayout.coalescedOpenRoot,
       Concrete.Splice.Input.PlugLayout.outputOpenRoot]
   have castIso := openIso_castArity arityEq.symm uncastIso
-  simpa [Concrete.Splice.Input.compiledSpliceNestedSourceOfNonempty,
-    host, pattern, output, view, outputLeaf, source, inherited, rootWire,
-    arityEq] using castIso
-
-private noncomputable def nestedEmptySourceIso
-    (input : Concrete.Splice.Input)
-    (layout : input.PlugLayout)
-    (admissible : input.Admissible)
-    (boundary : List (Fin input.frame.val.wireCount))
-    (rootScoped : ∀ wire, wire ∈ boundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (nested : input.site ≠ input.frame.val.root)
-    (empty : input.binderSpine.proxyCount = 0) :
-    let arityEq :
-        (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot input
-          admissible boundary rootScoped).val.boundary.length =
-        (Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot input layout
-          admissible boundary rootScoped).val.boundary.length := by
-      simp [Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot,
-        Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot,
-        Concrete.Splice.Input.PlugLayout.coalescedOpenRoot,
-        Concrete.Splice.Input.PlugLayout.outputOpenRoot]
-    OpenDiagramIso
-      (input.compiledSpliceNestedSourceOfEmpty layout admissible boundary
-        rootScoped nested empty)
-      ((Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot input layout
-        admissible boundary rootScoped).elaborate.castArity arityEq.symm) := by
-  dsimp only
-  let host := input.compiledSpliceHostView admissible
-  let pattern := Concrete.Splice.Input.compiledSpliceOpenRootItems input.pattern
-  let output := (Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot
-    input layout admissible boundary rootScoped).elaborate
-  let view := input.compiledSpliceOutputOpenView layout admissible
-    boundary rootScoped
-  let outputLeaf := input.compiledSpliceOutputNestedLeaf layout admissible
-    boundary rootScoped nested
-  let source :=
-    ((Region.spliceAt
-        (Concrete.Elaboration.exactScopeWires input.coalesceFrameRaw
-          input.site).length
-        (host.compilerLeaf.items.castWiresEq
-          (Concrete.Elaboration.WireContext.length_extend
-            host.compilerLeaf.inheritedWires input.site))
-        (Concrete.Elaboration.finishRoot input.pattern.val.exposedWires
-          input.pattern.val.hiddenWires pattern.items)
-        (fun index => Fin.cast
-          (Concrete.Elaboration.WireContext.length_extend
-            host.compilerLeaf.inheritedWires input.site)
-          (layout.exposedWireRenaming admissible host index))
-        (Concrete.Splice.Input.PlugLayout.emptyRelationRenaming
-          host.intrinsicPath.toFocus.holeRels)).renameRelations
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        view.intrinsicPath outputLeaf))
-  let inherited := layout.inheritedWireEquiv host.intrinsicPath
-    host.compilerLeaf view.intrinsicPath outputLeaf
-  let rootWire := inherited.trans
-    (FiniteEquiv.finCast outputLeaf.inheritedLength)
-  have siteIso := layout.compiledSiteRegionIsoOfEmpty input admissible host
-    view.intrinsicPath outputLeaf empty pattern.items pattern.computation
-  have focusIso : RegionIso (FiniteEquiv.refl (Fin view.focus.holeWires))
-      view.intrinsicPath.toFocus.holeRels
-      (source.renameWires rootWire) view.focus.body := by
-    have lifted := siteIso.renameWires_commuting rootWire
-      (Fin.cast outputLeaf.inheritedLength)
-      (FiniteEquiv.refl (Fin view.focus.holeWires)) (by
-        funext index
-        rfl)
-    have focusBodyEq : view.focus.body =
-        (Concrete.Elaboration.finishRegion layout.plugRaw
-          outputLeaf.inheritedWires (layout.frameRegion input.site)
-          outputLeaf.items).renameWires
-            (Fin.cast outputLeaf.inheritedLength) := by
-      simpa [view, outputLeaf, Concrete.Splice.OpenSiteView.focus,
-        Region.castWiresEq_eq_renameWires] using outputLeaf.bodyComputation
-    rw [focusBodyEq]
-    simpa [source, inherited, rootWire] using lifted
-  have bodyIso := view.focus.context.fillIso focusIso
-  have outputEta : output.withBody output.body = output := by
-    cases output
-    rfl
-  have rebuilt : output.withBody
-      (view.focus.context.fill view.focus.body) = output := by
-    rw [view.rebuild]
-    exact outputEta
-  have uncastIso : OpenDiagramIso
-      (Concrete.Splice.replaceOpenBody output
-        (view.focus.context.fill (source.renameWires rootWire))) output := by
-    have iso := OpenDiagram.withBody_iso bodyIso
-    rw [rebuilt] at iso
-    simpa [Concrete.Splice.replaceOpenBody] using iso
-  let arityEq :
-      (Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot input admissible
-        boundary rootScoped).val.boundary.length =
-      (Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot input layout
-        admissible boundary rootScoped).val.boundary.length := by
-    simp [Concrete.Splice.Input.PlugLayout.checkedCoalescedOpenRoot,
-      Concrete.Splice.Input.PlugLayout.checkedOutputOpenRoot,
-      Concrete.Splice.Input.PlugLayout.coalescedOpenRoot,
-      Concrete.Splice.Input.PlugLayout.outputOpenRoot]
-  have castIso := openIso_castArity arityEq.symm uncastIso
-  simpa [Concrete.Splice.Input.compiledSpliceNestedSourceOfEmpty,
-    host, pattern, output, view, outputLeaf, source, inherited, rootWire,
+  simpa [Concrete.Splice.Input.compiledSpliceNestedSource,
+    host, output, view, outputLeaf, source, inherited, rootWire,
     arityEq] using castIso
 
 /-- The structural bridge needed by both insertion and erasure. -/
@@ -1511,52 +669,33 @@ theorem splice_refines
     rw [castArity_castArity]
     simpa using base
   by_cases siteRoot : input.site = input.frame.val.root
-  · by_cases empty : input.binderSpine.proxyCount = 0
-    · have step : Rule.atPolarity Polarity.positive Rule.Erasure
-          (input.compiledSpliceRootSourceOfEmpty layout admissible boundary
-            rootScoped siteRoot empty) coalescedOpen.elaborate := by
-        simpa [Rule.atPolarity] using
-          root_empty input layout admissible boundary rootScoped siteRoot empty
-      have sourceIso : OpenDiagramIso
-          (input.compiledSpliceRootSourceOfEmpty layout admissible boundary
-            rootScoped siteRoot empty)
-          (resultOpen.elaborate.castArity canonicalArity.symm) := by
-        have iso := input.compiledSpliceRootIsoOfEmpty layout admissible
-          boundary rootScoped siteRoot empty
-        have base : OpenDiagramIso
-            (input.compiledSpliceRootSourceOfEmpty layout admissible boundary
-              rootScoped siteRoot empty)
-            (outputOpen.elaborate.castArity outputArity.symm) := by
-          simpa [outputOpen] using iso
-        exact transportIsoCheckedOpenEq resultOpenEq.symm outputArity
-          canonicalArity base
-      have branch := refineBranch canonicalArity sourceIso step
-        coalescedToFrame
-      simpa [admissible, layout, siteRoot, resultOpen, targetOpen,
-        targetArity] using branch
-    · have step : Rule.atPolarity Polarity.positive Rule.Erasure
-          (input.compiledSpliceRootSourceOfNonempty layout admissible boundary
-            rootScoped siteRoot empty) coalescedOpen.elaborate := by
-        simpa [Rule.atPolarity] using
-          root_nonempty input layout admissible boundary rootScoped siteRoot
-            empty
-      have sourceIso : OpenDiagramIso
-          (input.compiledSpliceRootSourceOfNonempty layout admissible boundary
-            rootScoped siteRoot empty)
-          (resultOpen.elaborate.castArity canonicalArity.symm) := by
-        have iso := input.compiledSpliceRootIsoOfNonempty layout admissible
-          boundary rootScoped siteRoot empty
-        have base : OpenDiagramIso
-            (input.compiledSpliceRootSourceOfNonempty layout admissible boundary
-              rootScoped siteRoot empty)
-            (outputOpen.elaborate.castArity outputArity.symm) := by
-          simpa [outputOpen] using iso
-        exact transportIsoCheckedOpenEq resultOpenEq.symm outputArity
-          canonicalArity base
-      have branch := refineBranch canonicalArity sourceIso step
-        coalescedToFrame
-      simpa [admissible, layout, siteRoot, resultOpen, targetOpen,
-        targetArity] using branch
+  · let pattern :=
+      Concrete.Splice.Input.compiledSplicePatternBodyEvidence input
+    let rootSource := input.compiledSpliceRootSourceOfExactPattern layout
+      admissible boundary rootScoped siteRoot pattern.context pattern.exact
+      pattern.binders pattern.enumeration pattern.items
+    have step : Rule.atPolarity Polarity.positive Rule.Erasure rootSource
+        coalescedOpen.elaborate := by
+      simpa [Rule.atPolarity, rootSource, coalescedOpen] using
+        root_exact input layout admissible boundary rootScoped siteRoot
+          pattern.context pattern.exact pattern.binders pattern.enumeration
+          pattern.items
+    have sourceIso : OpenDiagramIso
+        rootSource
+        (resultOpen.elaborate.castArity canonicalArity.symm) := by
+      have iso := input.compiledSpliceRootIsoOfExactPattern layout admissible
+        boundary rootScoped siteRoot pattern.fuel pattern.context pattern.exact
+        pattern.binders pattern.enumeration pattern.items pattern.computation
+      have base : OpenDiagramIso
+          rootSource
+          (outputOpen.elaborate.castArity outputArity.symm) := by
+        simpa [outputOpen, rootSource] using iso
+      exact transportIsoCheckedOpenEq resultOpenEq.symm outputArity
+        canonicalArity base
+    have branch := refineBranch canonicalArity sourceIso step
+      coalescedToFrame
+    simpa [admissible, layout, siteRoot, resultOpen, targetOpen,
+      targetArity, pattern] using branch
   · let view := input.compiledSpliceOutputOpenView layout admissible boundary
       rootScoped
     let hostOpen := input.compiledSpliceNestedHostOpen layout admissible
@@ -1566,48 +705,23 @@ theorem splice_refines
           canonicalArity.symm) := by
       exact (input.compiledSpliceNestedHostIso layout admissible boundary
         rootScoped siteRoot).symm.trans coalescedToFrame
-    by_cases empty : input.binderSpine.proxyCount = 0
-    · have step : Rule.atPolarity view.focus.context.polarity Rule.Erasure
-          (input.compiledSpliceNestedSourceOfEmpty layout admissible boundary
-            rootScoped siteRoot empty) hostOpen := by
-        simpa [view, hostOpen] using nested_empty input layout admissible
-          boundary rootScoped siteRoot empty
-      have sourceIso : OpenDiagramIso
-          (input.compiledSpliceNestedSourceOfEmpty layout admissible boundary
-            rootScoped siteRoot empty)
-          (resultOpen.elaborate.castArity canonicalArity.symm) := by
-        have iso := nestedEmptySourceIso input layout admissible boundary
-          rootScoped siteRoot empty
-        have base : OpenDiagramIso
-            (input.compiledSpliceNestedSourceOfEmpty layout admissible boundary
-              rootScoped siteRoot empty)
-            (outputOpen.elaborate.castArity outputArity.symm) := by
-          simpa [outputOpen] using iso
-        exact transportIsoCheckedOpenEq resultOpenEq.symm outputArity
-          canonicalArity base
-      have branch := refineBranch canonicalArity sourceIso step hostToFrame
-      simpa [admissible, layout, siteRoot, view, hostOpen, resultOpen,
-        targetOpen, targetArity] using branch
-    · have step : Rule.atPolarity view.focus.context.polarity Rule.Erasure
-          (input.compiledSpliceNestedSourceOfNonempty layout admissible boundary
-            rootScoped siteRoot empty) hostOpen := by
-        simpa [view, hostOpen] using nested_nonempty input layout admissible
-          boundary rootScoped siteRoot empty
-      have sourceIso : OpenDiagramIso
-          (input.compiledSpliceNestedSourceOfNonempty layout admissible boundary
-            rootScoped siteRoot empty)
-          (resultOpen.elaborate.castArity canonicalArity.symm) := by
-        have iso := nestedNonemptySourceIso input layout admissible boundary
-          rootScoped siteRoot empty
-        have base : OpenDiagramIso
-            (input.compiledSpliceNestedSourceOfNonempty layout admissible
-              boundary rootScoped siteRoot empty)
-            (outputOpen.elaborate.castArity outputArity.symm) := by
-          simpa [outputOpen] using iso
-        exact transportIsoCheckedOpenEq resultOpenEq.symm outputArity
-          canonicalArity base
-      have branch := refineBranch canonicalArity sourceIso step hostToFrame
-      simpa [admissible, layout, siteRoot, view, hostOpen, resultOpen,
-        targetOpen, targetArity] using branch
+    let nestedSource := input.compiledSpliceNestedSource layout admissible
+      boundary rootScoped siteRoot
+    have sourceIso : OpenDiagramIso nestedSource
+        (resultOpen.elaborate.castArity canonicalArity.symm) := by
+      have iso := nestedSourceIso input layout admissible boundary rootScoped
+        siteRoot
+      have base : OpenDiagramIso nestedSource
+          (outputOpen.elaborate.castArity outputArity.symm) := by
+        simpa [outputOpen, nestedSource] using iso
+      exact transportIsoCheckedOpenEq resultOpenEq.symm outputArity
+        canonicalArity base
+    have step : Rule.atPolarity view.focus.context.polarity Rule.Erasure
+        nestedSource hostOpen := by
+      simpa [view, hostOpen, nestedSource] using
+        nested input layout admissible boundary rootScoped siteRoot
+    have branch := refineBranch canonicalArity sourceIso step hostToFrame
+    simpa [admissible, layout, siteRoot, view, hostOpen, resultOpen,
+      targetOpen, targetArity, nestedSource] using branch
 
 end VisualProof.Refinement.Erasure

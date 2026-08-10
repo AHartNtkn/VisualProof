@@ -1,4 +1,5 @@
-import VisualProof.Concrete.Subgraph.Splice.Input.Layout.NestedCompiler
+import VisualProof.Concrete.Subgraph.Splice.Input.Layout.ExactPatternCompiler
+import VisualProof.Diagram.RenamingIsomorphism
 
 namespace VisualProof.Concrete.Splice.Input
 
@@ -41,123 +42,6 @@ noncomputable def compiledSpliceHostView
     SiteView (input.coalesceFrame hadmissible) input.site :=
   siteView_complete (input.coalesceFrame hadmissible) input.site
 
-/-- The compiler evidence at a terminal pattern body. Its type depends only
-    on the pattern and designated spine, so every executor copy shares one
-    canonical presentation. -/
-structure PatternTerminalCompilerView
-    (pattern : CheckedOpen )
-    (binderSpine : BinderSpine pattern.val.diagram) where
-  path : List Nat
-  witness : Region.ContextPath pattern.elaborate.body path
-  leaf : Region.ContextPath.CompilerLeaf pattern.val.diagram
-    binderSpine.bodyContainer witness
-  proper : binderSpine.bodyContainer ≠ pattern.val.diagram.root
-  /-- The retained open compiler trace which produced `witness` and `leaf`.
-  Keeping this evidence prevents independently chosen terminal views from
-  concealing the lexical-alignment obligation across diagram transforms. -/
-  producer : OpenSiteView pattern binderSpine.bodyContainer
-  producer_path : producer.path = path
-  producer_witness : HEq producer.intrinsicPath witness
-  producer_leaf : HEq (producer.compilerLeaf.nestedOfNe proper) leaf
-
-/-- A nonempty pattern-owned spine reaches its body through the ordinary
-nested compiler kernel, independently of any host splice. -/
-noncomputable def patternTerminalCompilerView_complete
-    (pattern : CheckedOpen )
-    (binderSpine : BinderSpine pattern.val.diagram)
-    (hnonempty : binderSpine.proxyCount ≠ 0) :
-    PatternTerminalCompilerView pattern binderSpine := by
-  let view := openSiteView_complete pattern binderSpine.bodyContainer
-  let terminal : Fin binderSpine.proxyCount :=
-    ⟨binderSpine.proxyCount - 1, by omega⟩
-  have bodyEq := binderSpine.body_eq_terminal_of_nonempty hnonempty
-  have proper : binderSpine.bodyContainer ≠ pattern.val.diagram.root := by
-    intro hroot
-    apply binderSpine.proxy_ne_root terminal
-    exact bodyEq.symm.trans hroot
-  exact ⟨view.path, view.intrinsicPath,
-    view.compilerLeaf.nestedOfNe proper, proper, view, rfl, HEq.rfl, HEq.rfl⟩
-
-/-- Canonical terminal compiler evidence owned by the pattern rather than by
-one particular host splice. -/
-noncomputable def compiledPatternTerminalView
-    (pattern : CheckedOpen )
-    (binderSpine : BinderSpine pattern.val.diagram)
-    (_terminalBody : binderSpine.TerminalBodyContract pattern.val)
-    (hnonempty : binderSpine.proxyCount ≠ 0) :
-    PatternTerminalCompilerView pattern binderSpine :=
-  patternTerminalCompilerView_complete pattern binderSpine hnonempty
-
-noncomputable def compiledSpliceTerminalView
-    (input : Input )
-    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    PatternTerminalCompilerView input.pattern input.binderSpine :=
-  compiledPatternTerminalView input.pattern input.binderSpine
-    input.terminalBody hnonempty
-
-/-- The item sequence emitted by the checked open-root compiler. -/
-structure OpenRootCompilerItems (checked : CheckedOpen ) where
-  items : ItemSeq  checked.val.rootWires.length []
-  computation :
-    Elaboration.compileOccurrencesWith?
-      checked.val.diagram
-      (Elaboration.compileRegion?  checked.val.diagram
-        checked.val.diagram.regionCount)
-      checked.val.rootWires Elaboration.BinderContext.empty
-      (Elaboration.localOccurrences checked.val.diagram
-        checked.val.diagram.root) = some items
-
-noncomputable def compiledSpliceOpenRootItems
-    (checked : CheckedOpen ) :
-    OpenRootCompilerItems checked :=
-  let result := Elaboration.compileOccurrencesWith?
-    checked.val.diagram
-    (Elaboration.compileRegion? checked.val.diagram
-      checked.val.diagram.regionCount)
-    checked.val.rootWires Elaboration.BinderContext.empty
-    (Elaboration.localOccurrences checked.val.diagram
-      checked.val.diagram.root)
-  let present : result.isSome = true := by
-    obtain ⟨items, computation⟩ := checkedOpenRootItems_complete checked
-    rw [show result = some items by exact computation]
-    rfl
-  {
-    items := result.get present
-    computation := Option.eq_some_of_isSome present
-  }
-
-noncomputable def PlugLayout.compiledCoalescedRootItemsIsoFromExactContext
-    (input : Input ) (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (context : Elaboration.WireContext input.coalesceFrameRaw)
-    (exact : context.Exact input.coalesceFrameRaw.root)
-    {closedItems : ItemSeq  context.length []}
-    {openItems : ItemSeq
-      (PlugLayout.coalescedOpenRoot input sourceBoundary).rootWires.length []}
-    (hclosed : Elaboration.compileOccurrencesWith?
-      input.coalesceFrameRaw
-      (Elaboration.compileRegion?  input.coalesceFrameRaw
-        input.coalesceFrameRaw.regionCount)
-      context Elaboration.BinderContext.empty
-      (Elaboration.localOccurrences input.coalesceFrameRaw
-        input.coalesceFrameRaw.root) = some closedItems)
-    (hopen : Elaboration.compileOccurrencesWith?
-      input.coalesceFrameRaw
-      (Elaboration.compileRegion?  input.coalesceFrameRaw
-        input.coalesceFrameRaw.regionCount)
-      (PlugLayout.coalescedOpenRoot input sourceBoundary).rootWires
-      Elaboration.BinderContext.empty
-      (Elaboration.localOccurrences input.coalesceFrameRaw
-        input.coalesceFrameRaw.root) = some openItems) :
-    ItemSeqIso
-      (exactContextToOpenRootWireEquiv
-        (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-          sourceRoot) context exact) [] closedItems openItems := by
-  exact compiledOpenRootItemsIsoFromExactContext
-    (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-      sourceRoot) context exact hclosed hopen
 
 theorem OpenRootCompilerItems.elaborate_body
     {checked : CheckedOpen }
@@ -378,67 +262,401 @@ noncomputable def compiledSpliceRootSourceFromItems
     (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
       sourceRoot).elaborate sourceBody
 
-/-- The root host projection determined by a closed host item sequence.  It
-shares the source's complete open interface and local-wire block, but omits
-the appended pattern constraints. -/
-noncomputable def compiledSpliceRootHostFromItems
-    (input : Input ) (layout : PlugLayout input)
+noncomputable def PlugLayout.rootLocalWireEquivOfExactPattern
+    (input : Input) (layout : PlugLayout input)
+    (sourceBoundary : List (Fin input.frame.val.wireCount))
+    (hsite : input.site = input.frame.val.root) :
+    FiniteEquiv
+      (Fin ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
+        layout.bodyInternalCarriers.length))
+      (Fin (PlugLayout.outputOpenRoot input layout
+        sourceBoundary).hiddenWires.length) :=
+  (FiniteEquiv.finCast
+      (PlugLayout.semanticOpenRootHiddenWires_length input layout
+        sourceBoundary).symm).trans
+    (PlugLayout.rootHiddenWireEquiv input layout sourceBoundary hsite)
+
+theorem PlugLayout.rootLocalWireEquivOfExactPattern_host_spec
+    (input : Input) (layout : PlugLayout input)
+    (sourceBoundary : List (Fin input.frame.val.wireCount))
+    (hsite : input.site = input.frame.val.root)
+    (index : Fin
+      (PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length) :
+    (PlugLayout.outputOpenRoot input layout sourceBoundary).hiddenWires.get
+        (layout.rootLocalWireEquivOfExactPattern input sourceBoundary hsite
+          (Fin.castAdd layout.bodyInternalCarriers.length index)) =
+      layout.frameWire
+        ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.get
+          index) := by
+  rw [PlugLayout.rootLocalWireEquivOfExactPattern,
+    FiniteEquiv.trans_apply, PlugLayout.rootHiddenWireEquiv_spec]
+  simp [FiniteEquiv.finCast,
+    PlugLayout.semanticOpenRootHiddenWires]
+  have left : index.val <
+      ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.map
+        layout.frameWire).length := by
+    rw [List.length_map]
+    exact index.isLt
+  exact (List.getElem_append_left left).trans
+    (List.getElem_map layout.frameWire)
+
+theorem PlugLayout.rootLocalWireEquivOfExactPattern_internal_spec
+    (input : Input) (layout : PlugLayout input)
+    (sourceBoundary : List (Fin input.frame.val.wireCount))
+    (hsite : input.site = input.frame.val.root)
+    (carrier : Fin layout.bodyInternalCarriers.length) :
+    (PlugLayout.outputOpenRoot input layout sourceBoundary).hiddenWires.get
+        (layout.rootLocalWireEquivOfExactPattern input sourceBoundary hsite
+          (Fin.natAdd
+            (PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length
+            carrier)) =
+      layout.internalWire (layout.bodyInternalCarriers.get carrier) := by
+  rw [PlugLayout.rootLocalWireEquivOfExactPattern,
+    FiniteEquiv.trans_apply, PlugLayout.rootHiddenWireEquiv_spec]
+  simp [FiniteEquiv.finCast,
+    PlugLayout.semanticOpenRootHiddenWires]
+  have right :
+      ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.map
+          layout.frameWire).length ≤
+        (PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
+          carrier.val := by
+    rw [List.length_map]
+    exact Nat.le_add_right _ _
+  refine (List.getElem_append_right right).trans ?_
+  have hindex :
+      (PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
+          carrier.val -
+        ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.map
+          layout.frameWire).length = carrier.val := by
+    rw [List.length_map]
+    exact Nat.add_sub_cancel_left _ _
+  have hvalid :
+      (PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
+            carrier.val -
+          ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.map
+            layout.frameWire).length <
+        (layout.bodyInternalCarriers.map layout.internalWire).length := by
+    rw [hindex, List.length_map]
+    exact carrier.isLt
+  exact (getElem_congr rfl hindex hvalid).trans
+    (List.getElem_map layout.internalWire)
+
+private theorem rootContextPath_holeRels_eq_of_path_eq_nil
+    {region : Region wires rels} {path : List Nat}
+    (witness : Region.ContextPath region path) (hpath : path = []) :
+    witness.toFocus.holeRels = rels := by
+  subst path
+  cases witness
+  rfl
+
+private theorem RegionRoute.path_eq_nil_of_start_eq_target
+    {diagram : Diagram} (wellFormed : diagram.WellFormed)
+    {start target : Fin diagram.regionCount} {path : List Nat}
+    (route : RegionRoute diagram start target path)
+    (equality : start = target) : path = [] := by
+  subst target
+  cases route with
+  | here => rfl
+  | @step start child target rest parent position positionEq tail =>
+      exact False.elim
+        (Elaboration.checked_direct_child_not_encloses_parent
+          wellFormed parent
+          (PlugLayout.RegionRoute.encloses
+            tail wellFormed))
+
+/-- A root host compiler view has a closed relation context independently of
+the trace witness selected by the compiler. -/
+theorem compiledSpliceHostView_root_holeRels_eq_nil
+    (input : Input) (hadmissible : input.Admissible)
+    (hsite : input.site = input.frame.val.root) :
+    (compiledSpliceHostView input hadmissible).focus.holeRels = [] := by
+  let host := compiledSpliceHostView input hadmissible
+  have hpath : host.path = [] :=
+    RegionRoute.path_eq_nil_of_start_eq_target
+      (input.coalesceFrameRaw_wellFormed hadmissible) host.route (by
+        simpa [Input.coalesceFrameRaw] using hsite.symm)
+  change host.focus.holeRels = []
+  exact rootContextPath_holeRels_eq_of_path_eq_nil host.intrinsicPath hpath
+
+private theorem CompilerTrace.rootLeafItemsComputation
+    {diagram : Diagram}
+    {start target : Fin diagram.regionCount} {path : List Nat}
+    {body : Region 0 []}
+    {route : RegionRoute diagram start target path}
+    {witness : Region.ContextPath body path}
+    {state : Region.ContextPath.CompilerLeaf diagram start (.here body)}
+    (trace : CompilerTrace diagram route witness state)
+    (hpath : path = [])
+    (hinherited : state.inheritedWires = [])
+    (hbinders : state.binders = Elaboration.BinderContext.empty)
+    (hrels : witness.toFocus.holeRels = []) :
+    Elaboration.compileOccurrencesWith? diagram
+      (Elaboration.compileRegion? diagram state.fuel)
+      (trace.leaf.inheritedWires.extend target)
+      Elaboration.BinderContext.empty
+      (Elaboration.localOccurrences diagram target) =
+        some (cast (congrArg
+          (ItemSeq (trace.leaf.inheritedWires.extend target).length) hrels)
+          trace.leaf.items) := by
+  cases trace with
+  | here state =>
+      simpa [hinherited, hbinders] using state.itemsComputation
+  | cut state localWiresCanonical itemsCanonical childState childKind
+      inherited binders fuel tailTrace =>
+      simp at hpath
+  | bubble state localWiresCanonical itemsCanonical childState childKind
+      inherited binders fuel tailTrace =>
+      simp at hpath
+
+/-- The closed item computation represented by the root host compiler view. -/
+theorem compiledSpliceRootHostItems_computation
+    (input : Input) (hadmissible : input.Admissible)
+    (hsite : input.site = input.frame.val.root) :
+    let host := compiledSpliceHostView input hadmissible
+    let hostItems : ItemSeq
+        (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
+      cast (congrArg
+        (ItemSeq
+          (host.compilerLeaf.inheritedWires.extend input.site).length)
+        (compiledSpliceHostView_root_holeRels_eq_nil input hadmissible hsite))
+        host.compilerLeaf.items
+    Elaboration.compileOccurrencesWith?
+      input.coalesceFrameRaw
+      (Elaboration.compileRegion? input.coalesceFrameRaw
+        input.coalesceFrameRaw.regionCount)
+      (host.compilerLeaf.inheritedWires.extend input.site)
+      Elaboration.BinderContext.empty
+      (Elaboration.localOccurrences input.coalesceFrameRaw
+        input.coalesceFrameRaw.root) = some hostItems := by
+  dsimp only
+  let host := compiledSpliceHostView input hadmissible
+  have hpath : host.path = [] :=
+    RegionRoute.path_eq_nil_of_start_eq_target
+      (input.coalesceFrameRaw_wellFormed hadmissible) host.route (by
+        simpa [Input.coalesceFrameRaw] using hsite.symm)
+  have hinherited : host.result.state.inheritedWires = [] :=
+    host.result.inherited_eq
+  have hbinders : host.result.state.binders =
+      Elaboration.BinderContext.empty := host.result.binders_eq
+  have hfuel : host.result.state.fuel =
+      input.coalesceFrameRaw.regionCount := by
+    have fuelEq := host.result.fuel_eq
+    change host.result.state.fuel + 1 =
+      input.coalesceFrameRaw.regionCount + 1 at fuelEq
+    omega
+  have computation := CompilerTrace.rootLeafItemsComputation
+    host.result.trace hpath hinherited hbinders
+    (compiledSpliceHostView_root_holeRels_eq_nil input hadmissible hsite)
+  simpa [hsite, hfuel] using computation
+
+/-- The root host compiler items in the coalesced open root's exact
+external/local ordering.  This normalization is independent of the pattern
+compiler package appended at the splice site. -/
+noncomputable def compiledSpliceCoalescedHostItemsIso
+    (input : Input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
-    (sourceLocal : Nat)
-    (localEquiv : FiniteEquiv (Fin sourceLocal)
-      (Fin (PlugLayout.outputOpenRoot input layout sourceBoundary).hiddenWires.length))
-    (context : Elaboration.WireContext layout.plugRaw)
-    (exact : context.Exact layout.plugRaw.root)
-    {closedSourceWires : Nat}
-    (closedWire : FiniteEquiv (Fin closedSourceWires)
-      (Fin context.length))
-    (closedHostItems : ItemSeq  closedSourceWires []) :
-    VisualProof.Diagram.OpenDiagram
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-        sourceRoot).val.boundary.length :=
-  compiledSpliceRootSourceFromItems input layout hadmissible sourceBoundary
-    sourceRoot sourceLocal localEquiv context exact closedWire closedHostItems
+    (hsite : input.site = input.frame.val.root) :
+    let checked := PlugLayout.checkedCoalescedOpenRoot input hadmissible
+      sourceBoundary sourceRoot
+    let host := compiledSpliceHostView input hadmissible
+    let hrels := compiledSpliceHostView_root_holeRels_eq_nil input
+      hadmissible hsite
+    let hostItems : ItemSeq
+        (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
+      cast (congrArg
+        (ItemSeq (host.compilerLeaf.inheritedWires.extend input.site).length)
+        hrels) host.compilerLeaf.items
+    let context := host.compilerLeaf.inheritedWires.extend input.site
+    let exact : context.Exact input.coalesceFrameRaw.root := by
+      change context.Exact input.frame.val.root
+      rw [← hsite]
+      exact host.compilerLeaf.wiresExact
+    let rootEq : checked.val.rootWires.length =
+        checked.val.exposedWires.length + checked.val.hiddenWires.length := by
+      simp [OpenDiagram.rootWires]
+    let openItems := compiledSpliceOpenRootItems checked
+    let transport :=
+      (exactContextToOpenRootWireEquiv checked context exact).trans
+        (FiniteEquiv.finCast rootEq)
+    ItemSeqIso
+      (FiniteEquiv.refl
+        (Fin (checked.val.exposedWires.length +
+          checked.val.hiddenWires.length))) []
+      (hostItems.renameWires transport)
+      (openItems.items.castWiresEq rootEq) := by
+  dsimp only
+  let checked := PlugLayout.checkedCoalescedOpenRoot input hadmissible
+    sourceBoundary sourceRoot
+  let host := compiledSpliceHostView input hadmissible
+  let hrels := compiledSpliceHostView_root_holeRels_eq_nil input
+    hadmissible hsite
+  let hostItems : ItemSeq
+      (host.compilerLeaf.inheritedWires.extend input.site).length [] :=
+    cast (congrArg
+      (ItemSeq (host.compilerLeaf.inheritedWires.extend input.site).length)
+      hrels) host.compilerLeaf.items
+  let context := host.compilerLeaf.inheritedWires.extend input.site
+  let exact : context.Exact input.coalesceFrameRaw.root := by
+    change context.Exact input.frame.val.root
+    rw [← hsite]
+    exact host.compilerLeaf.wiresExact
+  let openItems := compiledSpliceOpenRootItems checked
+  let rootEq : checked.val.rootWires.length =
+      checked.val.exposedWires.length + checked.val.hiddenWires.length := by
+    simp [OpenDiagram.rootWires]
+  let contextToOpen := exactContextToOpenRootWireEquiv checked context exact
+  let transport := contextToOpen.trans (FiniteEquiv.finCast rootEq)
+  have hostComputation : Elaboration.compileOccurrencesWith?
+      input.coalesceFrameRaw
+      (Elaboration.compileRegion? input.coalesceFrameRaw
+        input.coalesceFrameRaw.regionCount)
+      context Elaboration.BinderContext.empty
+      (Elaboration.localOccurrences input.coalesceFrameRaw
+        input.coalesceFrameRaw.root) = some hostItems := by
+    exact compiledSpliceRootHostItems_computation input hadmissible hsite
+  have compiled := compiledOpenRootItemsIsoFromExactContext
+    (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
+      sourceRoot) context exact hostComputation openItems.computation
+  have casted : ItemSeqIso transport [] hostItems
+      (openItems.items.castWiresEq rootEq) := by
+    rw [ItemSeq.castWiresEq_eq_renameWires]
+    exact compiled.trans
+      (ItemSeqIso.renameWiresEquiv openItems.items
+        (FiniteEquiv.finCast rootEq))
+  let totalRefl := FiniteEquiv.refl
+    (Fin (checked.val.exposedWires.length + checked.val.hiddenWires.length))
+  have transported := casted.renameWires_commuting transport id totalRefl (by
+    funext index
+    rfl)
+  simpa [ItemSeq.renameWires_id] using transported
 
-noncomputable def compiledSpliceRootSourceOfNonempty
-    (input : Input ) (layout : PlugLayout input)
+/-- The exact root compiler's host block before transport to the coalesced
+open-root carrier. -/
+noncomputable def compiledSpliceRootHostPreparedOfExactPattern
+    (input : Input) (layout : PlugLayout input)
+    (hadmissible : input.Admissible)
+    (hsite : input.site = input.frame.val.root) :
+    ItemSeq
+      ((compiledSpliceHostView input hadmissible).compilerLeaf.inheritedWires.length +
+        ((Elaboration.exactScopeWires input.coalesceFrameRaw input.site).length +
+          layout.bodyInternalCarriers.length)) [] :=
+  let host := compiledSpliceHostView input hadmissible
+  let outputWitness := compiledSpliceOutputRootWitness input layout hadmissible
+    hsite
+  let outputLeaf := compiledSpliceOutputRootLeaf input layout hadmissible hsite
+  (host.compilerLeaf.items.renameWires
+    (layout.hostPreparedWireOfExactPattern host outputWitness outputLeaf)
+    ).renameRelations
+      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+        outputWitness outputLeaf)
+
+/-- The selected exact pattern compiler block in the root compiler's closed
+site coordinate system. -/
+noncomputable def compiledSpliceRootPatternPreparedOfExactPattern
+    (input : Input) (layout : PlugLayout input)
+    (hadmissible : input.Admissible)
+    (hsite : input.site = input.frame.val.root)
+    (sourceContext : Elaboration.WireContext input.pattern.val.diagram)
+    (sourceExact : sourceContext.Exact input.binderSpine.bodyContainer)
+    (sourceBinders : Elaboration.BinderContext
+      input.pattern.val.diagram sourceRels)
+    (sourceEnumeration : Elaboration.BinderContext.Enumeration
+      input.pattern.val.diagram sourceBinders input.binderSpine.bodyContainer)
+    (sourceItems : ItemSeq sourceContext.length sourceRels) :
+    ItemSeq
+      ((compiledSpliceHostView input hadmissible).compilerLeaf.inheritedWires.length +
+        ((Elaboration.exactScopeWires input.coalesceFrameRaw input.site).length +
+          layout.bodyInternalCarriers.length)) [] :=
+  let host := compiledSpliceHostView input hadmissible
+  let outputWitness := compiledSpliceOutputRootWitness input layout hadmissible
+    hsite
+  let outputLeaf := compiledSpliceOutputRootLeaf input layout hadmissible hsite
+  let binderWitness := layout.patternBinderWitnessOfEnumeration hadmissible
+    sourceBinders sourceEnumeration outputWitness outputLeaf
+  (sourceItems.renameWires
+    (layout.patternPreparedWireOfExactPattern hadmissible host sourceContext
+      sourceExact outputWitness outputLeaf)).renameRelations
+    binderWitness.relationMap
+
+/-- The exact root compiler's closed-site coordinates transported to the
+actual coalesced open-root carrier. -/
+noncomputable def PlugLayout.rootReindexOfExactPattern
+    (input : Input) (layout : PlugLayout input)
+    (hadmissible : input.Admissible)
+    (sourceBoundary : List (Fin input.frame.val.wireCount))
+    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
+      (input.frame.val.wires wire).scope = input.frame.val.root)
+    (hsite : input.site = input.frame.val.root) :
+    FiniteEquiv
+      (Fin ((compiledSpliceHostView input hadmissible
+          ).compilerLeaf.inheritedWires.length +
+        ((Elaboration.exactScopeWires input.coalesceFrameRaw input.site).length +
+          layout.bodyInternalCarriers.length)))
+      (Fin ((PlugLayout.coalescedOpenRoot input sourceBoundary
+          ).exposedWires.length +
+        ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
+          layout.bodyInternalCarriers.length))) :=
+  let host := compiledSpliceHostView input hadmissible
+  let outputWitness := compiledSpliceOutputRootWitness input layout hadmissible
+    hsite
+  let outputLeaf := compiledSpliceOutputRootLeaf input layout hadmissible hsite
+  let castEq := Elaboration.WireContext.length_extend
+    outputLeaf.inheritedWires (layout.frameRegion input.site)
+  let closedWire :=
+    (layout.siteCombinedWireEquivOfExactPattern host outputWitness
+      outputLeaf).trans (FiniteEquiv.finCast castEq).symm
+  let rootExact :
+      (outputLeaf.inheritedWires.extend
+        (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
+    simpa [hsite] using outputLeaf.wiresExact
+  let targetEq :
+      (PlugLayout.outputOpenRoot input layout sourceBoundary).rootWires.length =
+        (PlugLayout.outputOpenRoot input layout sourceBoundary).exposedWires.length +
+        (PlugLayout.outputOpenRoot input layout sourceBoundary).hiddenWires.length :=
+    by simp [OpenDiagram.rootWires]
+  let outputTransport :=
+    (PlugLayout.outputExactContextToOpenRootWireEquiv input layout hadmissible
+      sourceBoundary sourceRoot
+      (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
+      rootExact).trans (FiniteEquiv.finCast targetEq)
+  PlugLayout.closedSourceToOpenRootReindex closedWire outputTransport
+    (PlugLayout.rootExposedWireEquiv input layout sourceBoundary)
+    (layout.rootLocalWireEquivOfExactPattern input sourceBoundary hsite)
+
+noncomputable def compiledSpliceRootSourceOfExactPattern
+    (input : Input) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hsite : input.site = input.frame.val.root)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
+    (sourceContext : Elaboration.WireContext input.pattern.val.diagram)
+    (sourceExact : sourceContext.Exact input.binderSpine.bodyContainer)
+    (sourceBinders : Elaboration.BinderContext
+      input.pattern.val.diagram sourceRels)
+    (sourceEnumeration : Elaboration.BinderContext.Enumeration
+      input.pattern.val.diagram sourceBinders input.binderSpine.bodyContainer)
+    (sourceItems : ItemSeq sourceContext.length sourceRels) :
     VisualProof.Diagram.OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let host := compiledSpliceHostView input hadmissible
-  let pattern := compiledSpliceTerminalView input hnonempty
   let outputWitness := compiledSpliceOutputRootWitness input layout hadmissible
     hsite
   let outputLeaf := compiledSpliceOutputRootLeaf input layout hadmissible hsite
-  let hostPrepared :=
-    (host.compilerLeaf.items.renameWires
-      (layout.hostSeamPreparedWireOfNonempty hadmissible host)).renameRelations
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf)
-  let patternPrepared :=
-    (pattern.leaf.items.renameWires
-      (layout.patternSeamPreparedWireOfNonempty hadmissible host
-        pattern.witness pattern.leaf hnonempty)).renameRelations
-      (fun {arity} relation =>
-        layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-          outputWitness outputLeaf
-          (layout.coalescedTerminalRelationRenaming hadmissible
-            host.intrinsicPath host.compilerLeaf pattern.witness pattern.leaf
-            hnonempty relation))
+  let hostPrepared := compiledSpliceRootHostPreparedOfExactPattern input layout
+    hadmissible hsite
+  let patternPrepared := compiledSpliceRootPatternPreparedOfExactPattern input
+    layout hadmissible hsite sourceContext sourceExact sourceBinders
+    sourceEnumeration sourceItems
   let castEq := Elaboration.WireContext.length_extend
     outputLeaf.inheritedWires (layout.frameRegion input.site)
   let closedWire :=
-    (layout.siteCombinedWireEquivOfNonempty hadmissible host
-      (outputWitness := outputWitness) (outputLeaf := outputLeaf) hnonempty).trans
-      (FiniteEquiv.finCast castEq).symm
+    (layout.siteCombinedWireEquivOfExactPattern host outputWitness
+      outputLeaf).trans (FiniteEquiv.finCast castEq).symm
   let rootExact :
       (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
@@ -446,134 +664,12 @@ noncomputable def compiledSpliceRootSourceOfNonempty
   compiledSpliceRootSourceFromItems input layout hadmissible sourceBoundary
     sourceRoot
     ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
-      (Elaboration.exactScopeWires input.pattern.val.diagram
-        input.binderSpine.bodyContainer).length)
-    (layout.rootLocalWireEquivOfNonempty input sourceBoundary hsite hnonempty)
+      layout.bodyInternalCarriers.length)
+    (layout.rootLocalWireEquivOfExactPattern input sourceBoundary hsite)
     (outputLeaf.inheritedWires.extend (layout.frameRegion input.site)) rootExact
     closedWire (hostPrepared.append patternPrepared)
 
-noncomputable def compiledSpliceRootSourceOfEmpty
-    (input : Input ) (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hsite : input.site = input.frame.val.root)
-    (hzero : input.binderSpine.proxyCount = 0) :
-    VisualProof.Diagram.OpenDiagram
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-        sourceRoot).val.boundary.length :=
-  let host := compiledSpliceHostView input hadmissible
-  let pattern := compiledSpliceOpenRootItems input.pattern
-  let outputWitness := compiledSpliceOutputRootWitness input layout hadmissible
-    hsite
-  let outputLeaf := compiledSpliceOutputRootLeaf input layout hadmissible hsite
-  let hostPrepared :=
-    (host.compilerLeaf.items.renameWires
-      (layout.hostSeamPreparedWireOfEmpty hadmissible host)).renameRelations
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf)
-  let patternPrepared :=
-    (pattern.items.renameWires
-      (layout.patternRootSeamPreparedWireOfEmpty hadmissible host))
-        |>.renameRelations
-          (PlugLayout.emptyRelationRenaming outputWitness.toFocus.holeRels)
-  let castEq := Elaboration.WireContext.length_extend
-    outputLeaf.inheritedWires (layout.frameRegion input.site)
-  let closedWire :=
-    (layout.siteCombinedWireEquivOfEmpty hadmissible host
-      (outputWitness := outputWitness) (outputLeaf := outputLeaf) hzero).trans
-      (FiniteEquiv.finCast castEq).symm
-  let rootExact :
-      (outputLeaf.inheritedWires.extend
-        (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
-    simpa [hsite] using outputLeaf.wiresExact
-  compiledSpliceRootSourceFromItems input layout hadmissible sourceBoundary
-    sourceRoot
-    ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
-      input.pattern.val.hiddenWires.length)
-    (layout.rootLocalWireEquivOfEmpty input sourceBoundary hsite hzero)
-    (outputLeaf.inheritedWires.extend (layout.frameRegion input.site)) rootExact
-    closedWire (hostPrepared.append patternPrepared)
-
-noncomputable def compiledSpliceRootHostOfNonempty
-    (input : Input ) (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hsite : input.site = input.frame.val.root)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    VisualProof.Diagram.OpenDiagram
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-        sourceRoot).val.boundary.length :=
-  let host := compiledSpliceHostView input hadmissible
-  let outputWitness := compiledSpliceOutputRootWitness input layout hadmissible
-    hsite
-  let outputLeaf := compiledSpliceOutputRootLeaf input layout hadmissible hsite
-  let hostPrepared :=
-    (host.compilerLeaf.items.renameWires
-      (layout.hostSeamPreparedWireOfNonempty hadmissible host)).renameRelations
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf)
-  let castEq := Elaboration.WireContext.length_extend
-    outputLeaf.inheritedWires (layout.frameRegion input.site)
-  let closedWire :=
-    (layout.siteCombinedWireEquivOfNonempty hadmissible host
-      (outputWitness := outputWitness) (outputLeaf := outputLeaf) hnonempty).trans
-      (FiniteEquiv.finCast castEq).symm
-  let rootExact :
-      (outputLeaf.inheritedWires.extend
-        (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
-    simpa [hsite] using outputLeaf.wiresExact
-  compiledSpliceRootHostFromItems input layout hadmissible sourceBoundary
-    sourceRoot
-    ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
-      (Elaboration.exactScopeWires input.pattern.val.diagram
-        input.binderSpine.bodyContainer).length)
-    (layout.rootLocalWireEquivOfNonempty input sourceBoundary hsite hnonempty)
-    (outputLeaf.inheritedWires.extend (layout.frameRegion input.site)) rootExact
-    closedWire hostPrepared
-
-noncomputable def compiledSpliceRootHostOfEmpty
-    (input : Input ) (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hsite : input.site = input.frame.val.root)
-    (hzero : input.binderSpine.proxyCount = 0) :
-    VisualProof.Diagram.OpenDiagram
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-        sourceRoot).val.boundary.length :=
-  let host := compiledSpliceHostView input hadmissible
-  let outputWitness := compiledSpliceOutputRootWitness input layout hadmissible
-    hsite
-  let outputLeaf := compiledSpliceOutputRootLeaf input layout hadmissible hsite
-  let hostPrepared :=
-    (host.compilerLeaf.items.renameWires
-      (layout.hostSeamPreparedWireOfEmpty hadmissible host)).renameRelations
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf)
-  let castEq := Elaboration.WireContext.length_extend
-    outputLeaf.inheritedWires (layout.frameRegion input.site)
-  let closedWire :=
-    (layout.siteCombinedWireEquivOfEmpty hadmissible host
-      (outputWitness := outputWitness) (outputLeaf := outputLeaf) hzero).trans
-      (FiniteEquiv.finCast castEq).symm
-  let rootExact :
-      (outputLeaf.inheritedWires.extend
-        (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
-    simpa [hsite] using outputLeaf.wiresExact
-  compiledSpliceRootHostFromItems input layout hadmissible sourceBoundary
-    sourceRoot
-    ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
-      input.pattern.val.hiddenWires.length)
-    (layout.rootLocalWireEquivOfEmpty input sourceBoundary hsite hzero)
-    (outputLeaf.inheritedWires.extend (layout.frameRegion input.site)) rootExact
-    closedWire hostPrepared
-
-noncomputable def compiledSpliceRootSourceFromItemsIso
+private noncomputable def compiledSpliceRootSourceFromItemsIso
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
@@ -700,14 +796,33 @@ noncomputable def compiledSpliceRootSourceFromItemsIso
     rw [hbody]
     simpa only [Elaboration.finishRoot] using hregion
 
-noncomputable def compiledSpliceRootIsoOfNonempty
-    (input : Input ) (layout : PlugLayout input)
+/-- Close any exact site-item simulation against the compiled output root.
+The caller chooses the concrete source presentation and its actual local map;
+this theorem performs only the root-context cast and open-root transport. -/
+private noncomputable def compiledSpliceRootIsoFromItems
+    (input : Input) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hsite : input.site = input.frame.val.root)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
+    (sourceLocal : Nat)
+    (localEquiv : FiniteEquiv (Fin sourceLocal)
+      (Fin (PlugLayout.outputOpenRoot input layout sourceBoundary
+        ).hiddenWires.length))
+    {closedSourceWires : Nat}
+    (siteWire : FiniteEquiv (Fin closedSourceWires)
+      (Fin ((compiledSpliceOutputRootLeaf input layout hadmissible hsite
+        ).inheritedWires.length +
+        (Elaboration.exactScopeWires layout.plugRaw
+          (layout.frameRegion input.site)).length)))
+    (closedSourceItems : ItemSeq closedSourceWires [])
+    (siteItems : ItemSeqIso siteWire [] closedSourceItems
+      ((compiledSpliceOutputRootLeaf input layout hadmissible hsite
+        ).items.castWiresEq
+        (Elaboration.WireContext.length_extend
+          (compiledSpliceOutputRootLeaf input layout hadmissible hsite
+            ).inheritedWires (layout.frameRegion input.site)))) :
     let arityEq :
         (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
             sourceRoot).val.boundary.length =
@@ -717,87 +832,78 @@ noncomputable def compiledSpliceRootIsoOfNonempty
         PlugLayout.checkedOutputOpenRoot, PlugLayout.coalescedOpenRoot,
         PlugLayout.outputOpenRoot]
     OpenDiagramIso
-      (compiledSpliceRootSourceOfNonempty input layout hadmissible
-        sourceBoundary sourceRoot hsite hnonempty)
+      (compiledSpliceRootSourceFromItems input layout hadmissible
+        sourceBoundary sourceRoot sourceLocal localEquiv
+        ((compiledSpliceOutputRootLeaf input layout hadmissible hsite
+          ).inheritedWires.extend (layout.frameRegion input.site))
+        (by simpa [hsite] using
+          (compiledSpliceOutputRootLeaf input layout hadmissible hsite
+            ).wiresExact)
+        (siteWire.trans (FiniteEquiv.finCast
+          (Elaboration.WireContext.length_extend
+            (compiledSpliceOutputRootLeaf input layout hadmissible hsite
+              ).inheritedWires (layout.frameRegion input.site))).symm)
+        closedSourceItems)
       ((PlugLayout.checkedOutputOpenRoot input layout hadmissible
         sourceBoundary sourceRoot).elaborate.castArity arityEq.symm) := by
   dsimp only
-  let host := compiledSpliceHostView input hadmissible
-  let pattern := compiledSpliceTerminalView input hnonempty
-  let outputWitness := compiledSpliceOutputRootWitness input layout hadmissible
-    hsite
   let outputLeaf := compiledSpliceOutputRootLeaf input layout hadmissible hsite
-  let hostPrepared :=
-    (host.compilerLeaf.items.renameWires
-      (layout.hostSeamPreparedWireOfNonempty hadmissible host)).renameRelations
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf)
-  let patternPrepared :=
-    (pattern.leaf.items.renameWires
-      (layout.patternSeamPreparedWireOfNonempty hadmissible host
-        pattern.witness pattern.leaf hnonempty)).renameRelations
-      (fun {arity} relation =>
-        layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-          outputWitness outputLeaf
-          (layout.coalescedTerminalRelationRenaming hadmissible
-            host.intrinsicPath host.compilerLeaf pattern.witness pattern.leaf
-            hnonempty relation))
   let castEq := Elaboration.WireContext.length_extend
     outputLeaf.inheritedWires (layout.frameRegion input.site)
-  let closedWire :=
-    (layout.siteCombinedWireEquivOfNonempty hadmissible host
-      (outputWitness := outputWitness) (outputLeaf := outputLeaf) hnonempty).trans
-      (FiniteEquiv.finCast castEq).symm
   let rootExact :
       (outputLeaf.inheritedWires.extend
         (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
     simpa [hsite] using outputLeaf.wiresExact
-  have hsiteItems := layout.compiledSiteItemsIsoOfNonempty  input
-    hadmissible host pattern.witness pattern.leaf outputWitness outputLeaf
-    hnonempty
-  have hcast := ItemSeqIso.renameWiresEquiv outputLeaf.items
+  let closedWire := siteWire.trans (FiniteEquiv.finCast castEq).symm
+  have castIso := ItemSeqIso.renameWiresEquiv outputLeaf.items
     (FiniteEquiv.finCast castEq)
-  change ItemSeqIso  (FiniteEquiv.finCast castEq)
-    outputWitness.toFocus.holeRels outputLeaf.items
-      (outputLeaf.items.renameWires (FiniteEquiv.finCast castEq)) at hcast
-  have hcastBack : ItemSeqIso  (FiniteEquiv.finCast castEq).symm
-      outputWitness.toFocus.holeRels
+  change ItemSeqIso (FiniteEquiv.finCast castEq)
+    [] outputLeaf.items
+      (outputLeaf.items.renameWires (FiniteEquiv.finCast castEq)) at castIso
+  have castBack : ItemSeqIso (FiniteEquiv.finCast castEq).symm []
       (outputLeaf.items.castWiresEq castEq) outputLeaf.items := by
-    simpa only [ItemSeq.castWiresEq_eq_renameWires] using hcast.symm
-  have hclosed : ItemSeqIso  closedWire []
-      (hostPrepared.append patternPrepared) outputLeaf.items := by
-    exact hsiteItems.trans hcastBack
-  have houtputComputation :
-      Elaboration.compileOccurrencesWith?  layout.plugRaw
-        (Elaboration.compileRegion?  layout.plugRaw
-          layout.plugRaw.regionCount)
+    simpa only [ItemSeq.castWiresEq_eq_renameWires] using castIso.symm
+  have closedIso : ItemSeqIso closedWire [] closedSourceItems
+      outputLeaf.items := siteItems.trans castBack
+  have outputComputation :
+      Elaboration.compileOccurrencesWith? layout.plugRaw
+        (Elaboration.compileRegion? layout.plugRaw layout.plugRaw.regionCount)
         (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
         Elaboration.BinderContext.empty
-        (Elaboration.localOccurrences layout.plugRaw
-          layout.plugRaw.root) = some outputLeaf.items := by
+        (Elaboration.localOccurrences layout.plugRaw layout.plugRaw.root) =
+          some outputLeaf.items := by
     simpa [hsite] using outputLeaf.itemsComputation
   let openItems := compiledSpliceOpenRootItems
     (PlugLayout.checkedOutputOpenRoot input layout hadmissible sourceBoundary
       sourceRoot)
-  have hiso := compiledSpliceRootSourceFromItemsIso input layout hadmissible
-    sourceBoundary sourceRoot
-    ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
-      (Elaboration.exactScopeWires input.pattern.val.diagram
-        input.binderSpine.bodyContainer).length)
-    (layout.rootLocalWireEquivOfNonempty input sourceBoundary hsite hnonempty)
+  exact compiledSpliceRootSourceFromItemsIso input layout hadmissible
+    sourceBoundary sourceRoot sourceLocal localEquiv
     (outputLeaf.inheritedWires.extend (layout.frameRegion input.site)) rootExact
-    closedWire (hostPrepared.append patternPrepared) hclosed
-    houtputComputation openItems.computation
-  simpa only [compiledSpliceRootSourceOfNonempty] using hiso
+    closedWire closedSourceItems closedIso outputComputation
+    openItems.computation
 
-noncomputable def compiledSpliceRootIsoOfEmpty
-    (input : Input ) (layout : PlugLayout input)
+
+noncomputable def compiledSpliceRootIsoOfExactPattern
+    (input : Input) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
     (hsite : input.site = input.frame.val.root)
-    (hzero : input.binderSpine.proxyCount = 0) :
+    (sourceFuel : Nat)
+    (sourceContext : Elaboration.WireContext input.pattern.val.diagram)
+    (sourceExact : sourceContext.Exact input.binderSpine.bodyContainer)
+    (sourceBinders : Elaboration.BinderContext
+      input.pattern.val.diagram sourceRels)
+    (sourceEnumeration : Elaboration.BinderContext.Enumeration
+      input.pattern.val.diagram sourceBinders input.binderSpine.bodyContainer)
+    (sourceItems : ItemSeq sourceContext.length sourceRels)
+    (sourceItemsComputation : Elaboration.compileOccurrencesWith?
+      input.pattern.val.diagram
+      (Elaboration.compileRegion? input.pattern.val.diagram sourceFuel)
+      sourceContext sourceBinders
+      (Elaboration.localOccurrences input.pattern.val.diagram
+        input.binderSpine.bodyContainer) = some sourceItems) :
     let arityEq :
         (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
             sourceRoot).val.boundary.length =
@@ -807,75 +913,41 @@ noncomputable def compiledSpliceRootIsoOfEmpty
         PlugLayout.checkedOutputOpenRoot, PlugLayout.coalescedOpenRoot,
         PlugLayout.outputOpenRoot]
     OpenDiagramIso
-      (compiledSpliceRootSourceOfEmpty input layout hadmissible sourceBoundary
-        sourceRoot hsite hzero)
+      (compiledSpliceRootSourceOfExactPattern input layout hadmissible
+        sourceBoundary sourceRoot hsite sourceContext sourceExact sourceBinders
+        sourceEnumeration sourceItems)
       ((PlugLayout.checkedOutputOpenRoot input layout hadmissible
         sourceBoundary sourceRoot).elaborate.castArity arityEq.symm) := by
   dsimp only
   let host := compiledSpliceHostView input hadmissible
-  let pattern := compiledSpliceOpenRootItems input.pattern
   let outputWitness := compiledSpliceOutputRootWitness input layout hadmissible
     hsite
   let outputLeaf := compiledSpliceOutputRootLeaf input layout hadmissible hsite
+  let binderWitness := layout.patternBinderWitnessOfEnumeration hadmissible
+    sourceBinders sourceEnumeration outputWitness outputLeaf
   let hostPrepared :=
     (host.compilerLeaf.items.renameWires
-      (layout.hostSeamPreparedWireOfEmpty hadmissible host)).renameRelations
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        outputWitness outputLeaf)
+      (layout.hostPreparedWireOfExactPattern host outputWitness outputLeaf))
+      |>.renameRelations
+        (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
+          outputWitness outputLeaf)
   let patternPrepared :=
-    (pattern.items.renameWires
-      (layout.patternRootSeamPreparedWireOfEmpty hadmissible host))
-        |>.renameRelations
-          (PlugLayout.emptyRelationRenaming outputWitness.toFocus.holeRels)
-  let castEq := Elaboration.WireContext.length_extend
-    outputLeaf.inheritedWires (layout.frameRegion input.site)
-  let closedWire :=
-    (layout.siteCombinedWireEquivOfEmpty hadmissible host
-      (outputWitness := outputWitness) (outputLeaf := outputLeaf) hzero).trans
-      (FiniteEquiv.finCast castEq).symm
-  let rootExact :
-      (outputLeaf.inheritedWires.extend
-        (layout.frameRegion input.site)).Exact layout.plugRaw.root := by
-    simpa [hsite] using outputLeaf.wiresExact
-  have hsiteItems := layout.compiledSiteItemsIsoOfEmpty  input
-    hadmissible host outputWitness outputLeaf hzero pattern.items
-    pattern.computation
-  have hcast := ItemSeqIso.renameWiresEquiv outputLeaf.items
-    (FiniteEquiv.finCast castEq)
-  change ItemSeqIso  (FiniteEquiv.finCast castEq)
-    outputWitness.toFocus.holeRels outputLeaf.items
-      (outputLeaf.items.renameWires (FiniteEquiv.finCast castEq)) at hcast
-  have hcastBack : ItemSeqIso  (FiniteEquiv.finCast castEq).symm
-      outputWitness.toFocus.holeRels
-      (outputLeaf.items.castWiresEq castEq) outputLeaf.items := by
-    simpa only [ItemSeq.castWiresEq_eq_renameWires] using hcast.symm
-  have hclosed : ItemSeqIso  closedWire []
-      (hostPrepared.append patternPrepared) outputLeaf.items := by
-    exact hsiteItems.trans hcastBack
-  have houtputComputation :
-      Elaboration.compileOccurrencesWith?  layout.plugRaw
-        (Elaboration.compileRegion?  layout.plugRaw
-          layout.plugRaw.regionCount)
-        (outputLeaf.inheritedWires.extend (layout.frameRegion input.site))
-        Elaboration.BinderContext.empty
-        (Elaboration.localOccurrences layout.plugRaw
-          layout.plugRaw.root) = some outputLeaf.items := by
-    simpa [hsite] using outputLeaf.itemsComputation
-  let openItems := compiledSpliceOpenRootItems
-    (PlugLayout.checkedOutputOpenRoot input layout hadmissible sourceBoundary
-      sourceRoot)
-  have hiso := compiledSpliceRootSourceFromItemsIso input layout hadmissible
-    sourceBoundary sourceRoot
+    (sourceItems.renameWires
+      (layout.patternPreparedWireOfExactPattern hadmissible host sourceContext
+        sourceExact outputWitness outputLeaf)).renameRelations
+      binderWitness.relationMap
+  have siteItems := layout.compiledSiteItemsIsoOfExactPattern input
+    hadmissible host sourceFuel sourceContext sourceExact sourceBinders
+    sourceEnumeration sourceItems sourceItemsComputation outputWitness outputLeaf
+  have iso := compiledSpliceRootIsoFromItems input layout hadmissible
+    sourceBoundary sourceRoot hsite
     ((PlugLayout.coalescedOpenRoot input sourceBoundary).hiddenWires.length +
-      input.pattern.val.hiddenWires.length)
-    (layout.rootLocalWireEquivOfEmpty input sourceBoundary hsite hzero)
-    (outputLeaf.inheritedWires.extend (layout.frameRegion input.site)) rootExact
-    closedWire (hostPrepared.append patternPrepared) hclosed
-    houtputComputation openItems.computation
-  simpa only [compiledSpliceRootSourceOfEmpty] using hiso
+      layout.bodyInternalCarriers.length)
+    (layout.rootLocalWireEquivOfExactPattern input sourceBoundary hsite)
+    (layout.siteCombinedWireEquivOfExactPattern host outputWitness outputLeaf)
+    (hostPrepared.append patternPrepared) siteItems
+  simpa only [compiledSpliceRootSourceOfExactPattern] using iso
 
-/-- Below the sheet root the open compiler necessarily uses an ordinary
-`finishRegion` leaf. -/
 noncomputable def compiledSpliceOutputNestedLeaf
     (input : Input ) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
@@ -895,98 +967,25 @@ noncomputable def compiledSpliceOutputNestedLeaf
     apply layout.frameRegion_injective
     exact hroot)
 
-noncomputable def compiledSpliceNestedSourceOfNonempty
-    (input : Input ) (layout : PlugLayout input)
+noncomputable def compiledSpliceNestedSource
+    (input : Input) (layout : PlugLayout input)
     (hadmissible : input.Admissible)
     (sourceBoundary : List (Fin input.frame.val.wireCount))
     (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
       (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hnested : input.site ≠ input.frame.val.root)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
+    (hnested : input.site ≠ input.frame.val.root) :
     VisualProof.Diagram.OpenDiagram
       (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
         sourceRoot).val.boundary.length :=
   let host := compiledSpliceHostView input hadmissible
-  let pattern := compiledSpliceTerminalView input hnonempty
   let output := (PlugLayout.checkedOutputOpenRoot input layout hadmissible
     sourceBoundary sourceRoot).elaborate
   let view := compiledSpliceOutputOpenView input layout hadmissible
     sourceBoundary sourceRoot
   let outputLeaf := compiledSpliceOutputNestedLeaf input layout hadmissible
     sourceBoundary sourceRoot hnested
-  let source :=
-    ((Region.spliceAt
-        (Elaboration.exactScopeWires input.coalesceFrameRaw
-          input.site).length
-        (host.compilerLeaf.items.castWiresEq
-          (Elaboration.WireContext.length_extend
-            host.compilerLeaf.inheritedWires input.site))
-        (Elaboration.finishRegion input.pattern.val.diagram
-          pattern.leaf.inheritedWires input.binderSpine.bodyContainer
-          pattern.leaf.items)
-        (fun index => Fin.cast
-          (Elaboration.WireContext.length_extend
-            host.compilerLeaf.inheritedWires input.site)
-          (layout.bodyTerminalWireRenaming hadmissible host pattern.witness
-            pattern.leaf hnonempty index))
-        (layout.coalescedTerminalRelationRenaming hadmissible
-          host.intrinsicPath host.compilerLeaf pattern.witness pattern.leaf
-          hnonempty)).renameRelations
-      (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-        view.intrinsicPath outputLeaf))
-  let rootWireEquiv :=
-    (layout.inheritedWireEquiv host.intrinsicPath host.compilerLeaf
-      view.intrinsicPath outputLeaf).trans
-      (FiniteEquiv.finCast outputLeaf.inheritedLength)
-  let sourceBody := view.intrinsicPath.toFocus.context.fill
-    (source.renameWires rootWireEquiv)
-  let arityEq :
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-          sourceRoot).val.boundary.length =
-        (PlugLayout.checkedOutputOpenRoot input layout hadmissible
-          sourceBoundary sourceRoot).val.boundary.length := by
-    simp [PlugLayout.checkedCoalescedOpenRoot,
-      PlugLayout.checkedOutputOpenRoot, PlugLayout.coalescedOpenRoot,
-      PlugLayout.outputOpenRoot]
-  (replaceOpenBody output sourceBody).castArity arityEq.symm
-
-noncomputable def compiledSpliceNestedSourceOfEmpty
-    (input : Input ) (layout : PlugLayout input)
-    (hadmissible : input.Admissible)
-    (sourceBoundary : List (Fin input.frame.val.wireCount))
-    (sourceRoot : ∀ wire, wire ∈ sourceBoundary →
-      (input.frame.val.wires wire).scope = input.frame.val.root)
-    (hnested : input.site ≠ input.frame.val.root)
-    (_hzero : input.binderSpine.proxyCount = 0) :
-    VisualProof.Diagram.OpenDiagram
-      (PlugLayout.checkedCoalescedOpenRoot input hadmissible sourceBoundary
-        sourceRoot).val.boundary.length :=
-  let host := compiledSpliceHostView input hadmissible
-  let pattern := compiledSpliceOpenRootItems input.pattern
-  let output := (PlugLayout.checkedOutputOpenRoot input layout hadmissible
-    sourceBoundary sourceRoot).elaborate
-  let view := compiledSpliceOutputOpenView input layout hadmissible
-    sourceBoundary sourceRoot
-  let outputLeaf := compiledSpliceOutputNestedLeaf input layout hadmissible
-    sourceBoundary sourceRoot hnested
-  let source :=
-    ((Region.spliceAt
-        (Elaboration.exactScopeWires input.coalesceFrameRaw
-          input.site).length
-        (host.compilerLeaf.items.castWiresEq
-          (Elaboration.WireContext.length_extend
-            host.compilerLeaf.inheritedWires input.site))
-        (Elaboration.finishRoot input.pattern.val.exposedWires
-          input.pattern.val.hiddenWires pattern.items)
-        (fun index => Fin.cast
-          (Elaboration.WireContext.length_extend
-            host.compilerLeaf.inheritedWires input.site)
-          (layout.exposedWireRenaming hadmissible host index))
-        (PlugLayout.emptyRelationRenaming
-          host.intrinsicPath.toFocus.holeRels))
-      |>.renameRelations
-        (layout.hostRelationRenaming host.intrinsicPath host.compilerLeaf
-          view.intrinsicPath outputLeaf))
+  let source := layout.compiledSiteSource input hadmissible host
+    view.intrinsicPath outputLeaf
   let rootWireEquiv :=
     (layout.inheritedWireEquiv host.intrinsicPath host.compilerLeaf
       view.intrinsicPath outputLeaf).trans
@@ -1064,19 +1063,13 @@ noncomputable def compiledSpliceSourceOpen
   let hadmissible := (spliceChecked_sound hsplice).2.1
   let layout := input.plugLayout
   if hsite : input.site = input.frame.val.root then
-    if hzero : input.binderSpine.proxyCount = 0 then
-      compiledSpliceRootSourceOfEmpty input layout hadmissible sourceBoundary
-        sourceRoot hsite hzero
-    else
-      compiledSpliceRootSourceOfNonempty input layout hadmissible
-        sourceBoundary sourceRoot hsite hzero
+    let pattern := compiledSplicePatternBodyEvidence input
+    compiledSpliceRootSourceOfExactPattern input layout hadmissible
+      sourceBoundary sourceRoot hsite pattern.context pattern.exact
+      pattern.binders pattern.enumeration pattern.items
   else
-    if hzero : input.binderSpine.proxyCount = 0 then
-      compiledSpliceNestedSourceOfEmpty input layout hadmissible
-        sourceBoundary sourceRoot hsite hzero
-    else
-      compiledSpliceNestedSourceOfNonempty input layout hadmissible
-        sourceBoundary sourceRoot hsite hzero
+    compiledSpliceNestedSource input layout hadmissible sourceBoundary
+      sourceRoot hsite
 
 /-- Transport the canonical ordered output boundary onto the concrete diagram
 actually returned by `spliceChecked`.  The cast changes only the finite carrier

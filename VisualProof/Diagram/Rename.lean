@@ -22,6 +22,18 @@ def extendWireRenaming (rho : Fin source -> Fin target) (localWires : Nat) :
     (fun i => Fin.castAdd localWires (rho i))
     (fun i => Fin.natAdd target i)
 
+@[simp] theorem extendWireRenaming_zero
+    (rename : Fin sourceWires → Fin targetWires) :
+    extendWireRenaming rename 0 = rename := by
+  funext wire
+  refine Fin.addCases (fun inherited => ?_)
+    (fun localIndex => Fin.elim0 localIndex) wire
+  change extendWireRenaming rename 0 (Fin.castAdd 0 inherited) =
+    rename inherited
+  simp only [extendWireRenaming, Fin.addCases_left]
+  apply Fin.ext
+  rfl
+
 theorem extendWireRenaming_id (localWires : Nat) :
     extendWireRenaming (source := source) id localWires = id := by
   funext i

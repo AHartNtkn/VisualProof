@@ -529,4 +529,53 @@ noncomputable def RegionIso.spliceAt_renameRelations
   exact RegionIso.spliceAt hostItems material sourceWireMap targetWireMap
     wireFactor composed
 
+/-- Renaming a relation context known to be empty is the corresponding
+dependent cast; the chosen map carries no information. -/
+theorem ItemSeq.renameRelations_to_nil
+    (items : ItemSeq wires rels)
+    (relsEq : rels = [])
+    (relation : RelationRenaming rels []) :
+    items.renameRelations relation =
+      cast (congrArg (ItemSeq wires) relsEq) items := by
+  subst rels
+  have relationEq :
+      ((fun {arity} (rel : RelVar [] arity) => relation rel) :
+        RelationRenaming [] []) =
+      ((fun {arity} (rel : RelVar [] arity) => rel) :
+        RelationRenaming [] []) := by
+    apply @funext
+    intro arity
+    funext rel
+    exact Fin.elim0 rel.index
+  change items.renameRelations
+    ((fun {arity} (rel : RelVar [] arity) => relation rel) :
+      RelationRenaming [] []) = _
+  rw [relationEq, ItemSeq.renameRelations_id]
+  rfl
+
+/-- A relation-context cast commutes with wire renaming. -/
+theorem ItemSeq.castRels_renameWires
+    (items : ItemSeq sourceWires rels)
+    (relsEq : rels = [])
+    (wireMap : Fin sourceWires → Fin targetWires) :
+    cast (congrArg (ItemSeq targetWires) relsEq)
+        (items.renameWires wireMap) =
+      (cast (congrArg (ItemSeq sourceWires) relsEq) items).renameWires
+        wireMap := by
+  subst rels
+  rfl
+
+/-- The left injection used by region conjunction is the host injection used
+by material adjunction. -/
+theorem Region.conjoinLeftWire_eq_adjoinHostWire
+    (outer hostLocal extra : Nat) :
+    Region.conjoinLeftWire outer hostLocal extra =
+      Region.adjoinHostWire outer hostLocal extra := by
+  funext wire
+  refine Fin.addCases (fun inherited => ?_) (fun localWire => ?_) wire
+  · apply Fin.ext
+    simp [Region.conjoinLeftWire, Region.adjoinHostWire]
+  · apply Fin.ext
+    simp [Region.conjoinLeftWire, Region.adjoinHostWire]
+
 end VisualProof.Diagram

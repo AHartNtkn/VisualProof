@@ -146,6 +146,23 @@ theorem hiddenWiresEquiv_spec {source target : OpenDiagram}
   FiniteEquiv.restrictLists_spec iso.diagram.wires _ _ _ _
     iso.mem_hiddenWires_iff index
 
+/-- The combined exposed/hidden root-wire equivalence has the corresponding
+lookup action on the concatenated root-wire context. -/
+theorem rootWiresEquiv_spec {source target : OpenDiagram}
+    (iso : OpenIso source target)
+    (index : Fin (source.exposedWires.length + source.hiddenWires.length)) :
+    target.rootWires.get
+        (Fin.cast (by simp [OpenDiagram.rootWires])
+          ((extendWireEquiv iso.exposedWiresEquiv iso.hiddenWiresEquiv) index)) =
+      iso.diagram.wires
+        (source.rootWires.get
+          (Fin.cast (by simp [OpenDiagram.rootWires]) index)) := by
+  refine Fin.addCases (fun exposed => ?_) (fun hidden => ?_) index
+  · simpa [OpenDiagram.rootWires, extendWireEquiv] using
+      iso.exposedWiresEquiv_spec exposed
+  · simpa [OpenDiagram.rootWires, extendWireEquiv] using
+      iso.hiddenWiresEquiv_spec hidden
+
 /-- Ordered boundary lookup commutes with the underlying wire isomorphism. -/
 theorem boundary_get_transport {source target : OpenDiagram}
     (iso : OpenIso source target)

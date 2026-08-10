@@ -166,6 +166,226 @@ theorem ItemSeq.castWiresEq_eq_renameWires (equality : source = target)
   subst target
   simp [ItemSeq.castWiresEq, ItemSeq.renameWires_id]
 
+@[simp] theorem Region.adjoinMaterialWire_zero (outer hostLocal : Nat) :
+    Region.adjoinMaterialWire outer hostLocal 0 = id := by
+  funext wire
+  apply Fin.ext
+  rfl
+
+@[simp] theorem Region.conjoinLeftWire_zero (wires : Nat) :
+    Region.conjoinLeftWire wires 0 0 = id := by
+  funext wire
+  refine Fin.addCases (fun inherited => ?_)
+    (fun localIndex => Fin.elim0 localIndex) wire
+  change Region.conjoinLeftWire wires 0 0 (Fin.castAdd 0 inherited) =
+    Fin.castAdd 0 inherited
+  simp only [Region.conjoinLeftWire, Fin.addCases_left]
+
+@[simp] theorem Region.conjoinRightWire_zero (wires : Nat) :
+    Region.conjoinRightWire wires 0 0 = id := by
+  funext wire
+  refine Fin.addCases (fun inherited => ?_)
+    (fun localIndex => Fin.elim0 localIndex) wire
+  change Region.conjoinRightWire wires 0 0 (Fin.castAdd 0 inherited) =
+    Fin.castAdd 0 inherited
+  simp only [Region.conjoinRightWire, Fin.addCases_left]
+
+/-- Changing only a later material block does not affect the host prefix of
+an extended wire equivalence. -/
+theorem Region.extendWireEquiv_adjoinHostWire
+    (outer : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
+    (material : FiniteEquiv (Fin sourceMaterial) (Fin targetMaterial))
+    (localEquiv : FiniteEquiv (Fin (hostLocal + targetMaterial))
+      (Fin targetLocal)) :
+    (extendWireEquiv outer
+        ((extendWireEquiv (FiniteEquiv.refl (Fin hostLocal)) material).trans
+          localEquiv)).toFun ∘
+        Region.adjoinHostWire sourceOuter hostLocal sourceMaterial =
+      (extendWireEquiv outer localEquiv).toFun ∘
+        Region.adjoinHostWire sourceOuter hostLocal targetMaterial := by
+  funext wire
+  refine Fin.addCases (fun inherited => ?_) (fun host => ?_) wire
+  · simp only [Function.comp_apply]
+    calc
+      _ = (extendWireEquiv outer
+            ((extendWireEquiv (FiniteEquiv.refl (Fin hostLocal)) material
+              ).trans localEquiv))
+            (Fin.castAdd (hostLocal + sourceMaterial) inherited) := by
+          apply congrArg
+          apply Fin.ext
+          rfl
+
+      _ = Fin.castAdd targetLocal (outer inherited) :=
+          extendWireEquiv_outer _ _ _
+      _ = (extendWireEquiv outer localEquiv)
+            (Fin.castAdd (hostLocal + targetMaterial) inherited) :=
+          (extendWireEquiv_outer _ _ _).symm
+      _ = _ := by
+          apply congrArg
+          apply Fin.ext
+          rfl
+
+  · simp only [Function.comp_apply]
+    calc
+      _ = (extendWireEquiv outer
+            ((extendWireEquiv (FiniteEquiv.refl (Fin hostLocal)) material
+              ).trans localEquiv))
+            (Fin.natAdd sourceOuter
+              (Fin.castAdd sourceMaterial host)) := by
+          apply congrArg
+          apply Fin.ext
+          rfl
+      _ = Fin.natAdd targetOuter
+            (localEquiv (Fin.castAdd targetMaterial host)) := by
+          rw [extendWireEquiv_local, FiniteEquiv.trans_apply,
+            extendWireEquiv_outer]
+          rfl
+      _ = (extendWireEquiv outer localEquiv)
+            (Fin.natAdd sourceOuter
+              (Fin.castAdd targetMaterial host)) :=
+          (extendWireEquiv_local _ _ _).symm
+      _ = _ := by
+          apply congrArg
+          apply Fin.ext
+          rfl
+
+/-- Extending an ambient equivalence across a host and a retained trailing
+block commutes with embedding that host ahead of the trailing block. -/
+theorem Region.extendWireEquiv_adjoinHostWire_commutes
+    (outer : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
+    (hostLocal extra : Nat) :
+    (extendWireEquiv outer
+        (FiniteEquiv.refl (Fin (hostLocal + extra)))).toFun ∘
+        Region.adjoinHostWire sourceOuter hostLocal extra =
+      Region.adjoinHostWire targetOuter hostLocal extra ∘
+        (extendWireEquiv outer
+          (FiniteEquiv.refl (Fin hostLocal))).toFun := by
+  funext wire
+  refine Fin.addCases (fun inherited => ?_) (fun host => ?_) wire
+  · simp only [Function.comp_apply]
+    calc
+      _ = (extendWireEquiv outer
+            (FiniteEquiv.refl (Fin (hostLocal + extra))))
+            (Fin.castAdd (hostLocal + extra) inherited) := by
+          apply congrArg
+          apply Fin.ext
+          rfl
+      _ = Fin.castAdd (hostLocal + extra) (outer inherited) :=
+          extendWireEquiv_outer _ _ _
+      _ = Region.adjoinHostWire targetOuter hostLocal extra
+            (Fin.castAdd hostLocal (outer inherited)) := by
+          apply Fin.ext
+          rfl
+      _ = _ := by
+          apply congrArg
+          exact (extendWireEquiv_outer outer
+            (FiniteEquiv.refl (Fin hostLocal)) inherited).symm
+  · simp only [Function.comp_apply]
+    calc
+      _ = (extendWireEquiv outer
+            (FiniteEquiv.refl (Fin (hostLocal + extra))))
+            (Fin.natAdd sourceOuter (Fin.castAdd extra host)) := by
+          apply congrArg
+          apply Fin.ext
+          rfl
+      _ = Fin.natAdd targetOuter (Fin.castAdd extra host) :=
+          extendWireEquiv_local _ _ _
+      _ = Region.adjoinHostWire targetOuter hostLocal extra
+            (Fin.natAdd targetOuter host) := by
+          apply Fin.ext
+          rfl
+      _ = _ := by
+          apply congrArg
+          exact (extendWireEquiv_local outer
+            (FiniteEquiv.refl (Fin hostLocal)) host).symm
+
+@[simp] theorem Region.renameWires_localCount
+    (region : Region sourceWires rels)
+    (wire : Fin sourceWires → Fin targetWires) :
+    (region.renameWires wire).localCount = region.localCount := by
+  cases region
+  rfl
+
+@[simp] theorem Region.renameRelations_localCount
+    (region : Region wires sourceRels)
+    (relation : RelationRenaming sourceRels targetRels) :
+    (region.renameRelations relation).localCount = region.localCount := by
+  cases region
+  rfl
+
+@[simp] theorem Region.conjoin_localCount
+    (first second : Region wires rels) :
+    (first.conjoin second).localCount =
+      first.localCount + second.localCount := by
+  cases first
+  cases second
+  rfl
+
+@[simp] theorem Region.adjoinAt_localCount
+    (hostLocal : Nat) (hostItems : ItemSeq (wires + hostLocal) rels)
+    (material : Region (wires + hostLocal) rels) :
+    (Region.adjoinAt hostLocal hostItems material).localCount =
+      hostLocal + material.localCount := by
+  cases material
+  rfl
+
+@[simp] theorem Region.castWiresEq_localCount
+    (region : Region sourceWires rels)
+    (equality : sourceWires = targetWires) :
+    (region.castWiresEq equality).localCount = region.localCount := by
+  subst targetWires
+  cases region
+  rfl
+
+theorem Region.mk_itemsCast (region : Region wires rels)
+    (localEq : region.localCount = localWires) :
+    Region.mk localWires (region.itemsCast localEq) = region := by
+  cases region with
+  | mk actualLocal items =>
+    dsimp only [Region.localCount] at localEq
+    subst localWires
+    rfl
+
+theorem Region.itemsCast_eq_renameWires
+    (region : Region wires rels)
+    (localEq : region.localCount = localWires) :
+    region.itemsCast localEq =
+      region.items.renameWires
+        (Fin.cast (congrArg (fun count => wires + count) localEq)) := by
+  exact ItemSeq.castWiresEq_eq_renameWires _ _
+
+private theorem Region.conjoinLeftWire_zero_val
+    (wire : Fin (outer + 0)) :
+    (Region.conjoinLeftWire outer 0 added wire).val = wire.val := by
+  refine Fin.addCases (fun inherited => ?_)
+    (fun impossible => Fin.elim0 impossible) wire
+  change (Fin.addCases (motive := fun _ => Fin (outer + (0 + added)))
+      (fun wire : Fin outer => Fin.castAdd (0 + added) wire)
+      (fun wire : Fin 0 => Fin.natAdd outer (Fin.castAdd added wire))
+      (Fin.castAdd 0 inherited)).val = (Fin.castAdd 0 inherited).val
+  rw [Fin.addCases_left]
+  rfl
+
+private theorem Region.conjoinRightWire_zero_val
+    (wire : Fin (outer + added)) :
+    (Region.conjoinRightWire outer 0 added wire).val = wire.val := by
+  refine Fin.addCases (fun inherited => ?_) (fun localWire => ?_) wire
+  · change (Fin.addCases (motive := fun _ => Fin (outer + (0 + added)))
+        (fun wire : Fin outer => Fin.castAdd (0 + added) wire)
+        (fun wire : Fin added => Fin.natAdd outer (Fin.natAdd 0 wire))
+        (Fin.castAdd added inherited)).val =
+      (Fin.castAdd added inherited).val
+    rw [Fin.addCases_left]
+    rfl
+  · change (Fin.addCases (motive := fun _ => Fin (outer + (0 + added)))
+        (fun wire : Fin outer => Fin.castAdd (0 + added) wire)
+        (fun wire : Fin added => Fin.natAdd outer (Fin.natAdd 0 wire))
+        (Fin.natAdd outer localWire)).val =
+      (Fin.natAdd outer localWire).val
+    rw [Fin.addCases_right]
+    change outer + (0 + localWire.val) = outer + localWire.val
+    omega
+
 @[simp] theorem ItemSeq.castWiresEq_append
     (equality : source = target)
     (first second : ItemSeq  source rels) :
@@ -849,6 +1069,67 @@ theorem ItemSeq.renameWires_append
   | .cons item tail, second, rho =>
       congrArg (ItemSeq.cons (item.renameWires rho))
         (ItemSeq.renameWires_append tail second rho)
+
+/-- Project the exact item sequence of a zero-local first conjunct after
+adjoining it with a second region. -/
+theorem Region.itemsCast_adjoinAt_nil_conjoin_zero
+    (first second : Region (outer + hostLocal) rels)
+    (firstZero : first.localCount = 0)
+    (secondLocalEq : second.localCount = addedLocal)
+    (combinedLocalEq :
+      (Region.adjoinAt hostLocal .nil (first.conjoin second)).localCount =
+        hostLocal + addedLocal) :
+    let firstAdjoinEq :
+        (Region.adjoinAt hostLocal .nil first).localCount = hostLocal := by
+      rw [Region.adjoinAt_localCount, firstZero]
+      omega
+    (Region.adjoinAt hostLocal .nil (first.conjoin second)).itemsCast
+        combinedLocalEq =
+      (((Region.adjoinAt hostLocal .nil first).itemsCast firstAdjoinEq
+          ).renameWires
+        (Region.adjoinHostWire outer hostLocal addedLocal)).append
+      ((second.itemsCast secondLocalEq).renameWires
+        (Region.adjoinMaterialWire outer hostLocal addedLocal)) := by
+  cases first with
+  | mk firstLocal firstItems =>
+    cases second with
+    | mk secondLocal secondItems =>
+      dsimp only [Region.localCount] at firstZero secondLocalEq
+      subst firstLocal
+      subst secondLocal
+      have combinedDef :
+          (Region.adjoinAt hostLocal .nil
+            ((Region.mk 0 firstItems).conjoin
+              (Region.mk addedLocal secondItems))).localCount =
+            hostLocal + addedLocal := by
+        change hostLocal + (0 + addedLocal) = hostLocal + addedLocal
+        omega
+      rw [show combinedLocalEq = combinedDef from Subsingleton.elim _ _]
+      simp only [Region.itemsCast_eq_renameWires]
+      simp only [Region.adjoinAt, Region.conjoin,
+        Region.items, Region.localCount,
+        ItemSeq.renameWires_append, ItemSeq.renameWires_comp]
+      simp only [ItemSeq.renameWires, ItemSeq.nil_append]
+      congr 1
+      · apply congrArg (fun wireMap =>
+          ItemSeq.renameWires wireMap firstItems)
+        funext index
+        refine Fin.addCases (fun prior => ?_)
+          (fun impossible => Fin.elim0 impossible) index
+        apply Fin.ext
+        simp [Function.comp_apply, Region.adjoinMaterialWire,
+          Region.adjoinHostWire,
+          Region.conjoinLeftWire_zero_val]
+      · apply congrArg (fun wireMap =>
+          ItemSeq.renameWires wireMap secondItems)
+        funext index
+        refine Fin.addCases (fun prior => ?_) (fun added => ?_) index
+        · apply Fin.ext
+          simp [Function.comp_apply, Region.adjoinMaterialWire,
+            Region.conjoinRightWire_zero_val]
+        · apply Fin.ext
+          simp [Function.comp_apply, Region.adjoinMaterialWire,
+            Region.conjoinRightWire_zero_val]
 
 theorem ItemSeq.renameRelations_append
     : (first second : ItemSeq  wires source) →
