@@ -1,5 +1,5 @@
 import VisualProof.Refinement.Implementation.DoubleCutTransport
-import VisualProof.Refinement.Implementation.IterationPartition
+import VisualProof.Refinement.Implementation.CompilePartition
 
 namespace VisualProof.Refinement.Implementation.DoubleCutIntroPartition
 
@@ -625,7 +625,7 @@ noncomputable def source_items_partition
       ∃ item, Concrete.Elaboration.compileOccurrenceWith? input.val recurse
         context binders occurrence = some item := by
     intro occurrence member
-    exact VisualProof.Refinement.Implementation.IterationPartition.compileOccurrence_success_of_mem
+    exact VisualProof.Refinement.Implementation.CompilePartition.compileOccurrence_success_of_mem
       input.val recurse context binders compiled
       ((occurrences_perm input.val selection).mem_iff.mp member)
   have keptEach : ∀ occurrence,
@@ -675,7 +675,7 @@ noncomputable def source_items_partition
           (Concrete.Elaboration.localOccurrences_nodup input.val
             selection.val.anchor)
       have itemIso :=
-        VisualProof.Refinement.Implementation.IterationPartition.compileOccurrences_perm_iso
+        VisualProof.Refinement.Implementation.CompilePartition.compileOccurrences_perm_iso
           input.val recurse context binders (occurrences_perm input.val selection)
           partitionNodup
           (Concrete.Elaboration.localOccurrences_nodup input.val
@@ -690,11 +690,11 @@ noncomputable def source_partition
     {body : Region outerWires rels}
     (leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
       selection.val.anchor (.here body)) :
-    IterationPartition.PartitionResult input selection.val.anchor leaf
+    CompilePartition.PartitionResult input selection.val.anchor leaf
       (keptOccurrences input.val selection)
       (selectedOccurrences input.val selection) := by
   exact
-    VisualProof.Refinement.Implementation.IterationPartition.partition_complete_of_perm
+    VisualProof.Refinement.Implementation.CompilePartition.partition_complete_of_perm
       input selection.val.anchor leaf
       (keptOccurrences input.val selection)
       (selectedOccurrences input.val selection)

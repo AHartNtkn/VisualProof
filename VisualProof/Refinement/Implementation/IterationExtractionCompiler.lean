@@ -1,3 +1,4 @@
+import VisualProof.Refinement.Implementation.CompilePartition
 import VisualProof.Refinement.Implementation.IterationExtractionRegionContext
 import VisualProof.Refinement.Implementation.IterationExtractionRegionLocal
 import VisualProof.Refinement.Implementation.IterationExtractionRegionChild
@@ -213,7 +214,7 @@ noncomputable def extractionCompileRegion_iso
                     simp only [mappedOccurrences, List.mem_map] at hostMember
                     obtain ⟨fragmentOccurrence, fragmentMember, rfl⟩ :=
                       hostMember
-                    apply IterationPartition.compileOccurrence_success_of_mem
+                    apply CompilePartition.compileOccurrence_success_of_mem
                       input.val
                       (Concrete.Elaboration.compileRegion? input.val hostFuel)
                       hostExtended hostBinders hostItemsResult
@@ -678,7 +679,7 @@ noncomputable def extractionCompileRegion_iso
                   have mappedOccurrencesNodup :=
                     occurrencePermutation.nodup_iff.mpr hostOccurrencesNodup
                   have reorderedItems :=
-                    IterationPartition.compileOccurrences_perm_iso input.val
+                    CompilePartition.compileOccurrences_perm_iso input.val
                       (Concrete.Elaboration.compileRegion? input.val hostFuel)
                       hostExtended hostBinders occurrencePermutation
                       mappedOccurrencesNodup hostOccurrencesNodup

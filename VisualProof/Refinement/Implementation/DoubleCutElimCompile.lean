@@ -1,7 +1,7 @@
 import VisualProof.Refinement.Implementation.DoubleCutElimCompiler
 import VisualProof.Refinement.Implementation.DoubleCutElimOccurrence
 import VisualProof.Refinement.Implementation.DoubleCutIntroCompile
-import VisualProof.Refinement.Implementation.IterationPartition
+import VisualProof.Refinement.Implementation.CompilePartition
 import VisualProof.Rule.DoubleCut
 
 namespace VisualProof.Refinement.Implementation.DoubleCutElimCompile
@@ -430,7 +430,7 @@ theorem compileOccurrences_of_perm
     Concrete.Elaboration.compileOccurrencesWith?_complete recurse context
       binders targetOccurrences eachTarget
   exact ⟨targetItems, targetCompiled, ⟨
-    VisualProof.Refinement.Implementation.IterationPartition.compileOccurrences_perm_iso
+    VisualProof.Refinement.Implementation.CompilePartition.compileOccurrences_perm_iso
       diagram recurse context binders permutation sourceNodup targetNodup
       sourceCompiled targetCompiled⟩⟩
 

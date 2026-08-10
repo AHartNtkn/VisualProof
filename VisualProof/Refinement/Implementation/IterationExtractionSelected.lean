@@ -1,4 +1,5 @@
 import VisualProof.Refinement.Implementation.IterationExtractionCompiler
+import VisualProof.Refinement.Implementation.CompilePartition
 import VisualProof.Refinement.Implementation.IterationPartition
 
 namespace VisualProof.Refinement.Implementation.IterationExtraction
@@ -148,7 +149,7 @@ noncomputable def extractionCompileSelectedItems_iso
         (Concrete.Elaboration.compileRegion? input.val hostFuel)
         hostContext hostBinders hostOccurrence = some item := by
     intro hostOccurrence hostMember
-    apply IterationPartition.compileOccurrence_success_of_mem input.val
+    apply CompilePartition.compileOccurrence_success_of_mem input.val
       (Concrete.Elaboration.compileRegion? input.val hostFuel)
       hostContext hostBinders hostCompiled
     exact (extractionHostOccurrenceMap_terminal_perm_selected input
@@ -454,7 +455,7 @@ noncomputable def extractionCompileSelectedItems_iso
       (Concrete.Elaboration.localOccurrences_nodup input.val
         selection.val.anchor)
   have mappedNodup := occurrencePermutation.nodup_iff.mpr selectedNodup
-  have reorderedItems := IterationPartition.compileOccurrences_perm_iso
+  have reorderedItems := CompilePartition.compileOccurrences_perm_iso
     input.val (Concrete.Elaboration.compileRegion? input.val hostFuel)
     hostContext hostBinders occurrencePermutation mappedNodup selectedNodup
     mappedHostCompiled hostCompiled
