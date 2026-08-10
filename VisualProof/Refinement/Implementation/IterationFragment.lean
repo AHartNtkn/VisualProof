@@ -35,7 +35,8 @@ structure FragmentInput
       (source.val.extractDiagramRaw selection layout) layout.bodyContainer) =
     some items
 
-private noncomputable def fragmentOfEmpty
+/-- The common fragment package supplied by an empty extracted binder spine. -/
+noncomputable def fragmentOfEmpty
     (source : Concrete.Checked)
     (selection : CheckedSelection source.val)
     (layout : FragmentLayout source.val selection)
@@ -72,7 +73,8 @@ private noncomputable def fragmentOfEmpty
   · rw [bodyRoot]
     simpa [compiled, spliceInput, iterationInput] using compiled.computation
 
-private noncomputable def fragmentOfNonempty
+/-- The common fragment package supplied by a nonempty extracted binder spine. -/
+noncomputable def fragmentOfNonempty
     (source : Concrete.Checked)
     (selection : CheckedSelection source.val)
     (layout : FragmentLayout source.val selection)
