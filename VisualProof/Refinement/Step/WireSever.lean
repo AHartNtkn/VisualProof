@@ -1,5 +1,5 @@
 import VisualProof.Concrete.Step
-import VisualProof.Refinement.Represents
+import VisualProof.Refinement.Step.Core
 import VisualProof.Refinement.Implementation.WireSeverNested
 import VisualProof.Refinement.Implementation.WireSeverCanonical
 import VisualProof.Refinement.Implementation.WireSeverResult
@@ -59,20 +59,15 @@ private theorem checkedElaborate_cast_eq
 theorem wireSever
     {arity : Nat}
     {source : Concrete.State arity}
-    {sourceDiagram : OpenDiagram arity}
     {orientation : Concrete.Orientation}
     (wire : Fin source.checked.val.diagram.wireCount)
     (keep : List (Concrete.CEndpoint source.checked.val.diagram.nodeCount))
     (boundary : Concrete.WireSeverBoundary source wire)
     {receipt : Concrete.Receipt source}
-    (sourceRep : StateRepresents source sourceDiagram)
     (success : Concrete.execute orientation source
       (.wireSever wire keep boundary) = .ok receipt) :
-    ∃ targetDiagram : OpenDiagram arity,
-      (match orientation with
-      | .forward => Rule.WireSever sourceDiagram targetDiagram
-       | .backward => Rule.WireSever targetDiagram sourceDiagram) ∧
-      StateRepresents receipt.target targetDiagram := by
+    DirectedStep orientation (canonicalDiagram source)
+      (canonicalDiagram receipt.target) := by
   obtain ⟨result, operationSuccess, targetEq, realizes,
       operationPolarity⟩ :=
     Concrete.execute_wireSever_success wire keep boundary success
@@ -85,8 +80,7 @@ theorem wireSever
       targetWellFormed
   let separatedLength : separated.val.boundary.length = arity := by
     simp [separated, Implementation.WireSever.separatedOpen]
-  let sourceCanonical :=
-    source.checked.elaborate.castArity source.boundary_length
+  let sourceCanonical := canonicalDiagram source
   let separatedDiagram := separated.elaborate.castArity separatedLength
   have separatedStep :
       match orientation with
@@ -171,8 +165,7 @@ theorem wireSever
           simpa [Rule.atPolarity, Rule.converse] using normalizedStep
   let targetState := Concrete.wireSeverResultState orientation source wire keep
     boundary result operationSuccess
-  let targetCanonical :=
-    targetState.checked.elaborate.castArity targetState.boundary_length
+  let targetCanonical := canonicalDiagram targetState
   let resultConcreteIso :=
     Implementation.WireSever.separatedOpen_resultOpen_iso source wire keep
       boundary result operationSuccess
@@ -181,22 +174,16 @@ theorem wireSever
   have targetIso : OpenDiagramIso separatedDiagram targetCanonical := by
     have castIso := castOpenIso separatedLength resultElabIso
     rw [castArity_castArity] at castIso
-    simpa [separatedDiagram, targetCanonical, targetState,
+    simpa [separatedDiagram, targetCanonical, canonicalDiagram, targetState,
       resultConcreteIso] using castIso
-  have sourceCanonicalRep : StateRepresents source sourceCanonical :=
-    StateRepresents.checked source
-  obtain ⟨sourceIso⟩ :=
-    StateRepresents.unique sourceRep sourceCanonicalRep
-  have targetCanonicalRep : StateRepresents targetState targetCanonical :=
-    StateRepresents.checked targetState
-  refine ⟨targetCanonical, ?_, ?_⟩
-  · cases orientation with
-    | forward =>
-        exact Rule.WireSever.iso sourceIso.symm separatedStep targetIso
-    | backward =>
-        exact Rule.WireSever.iso targetIso separatedStep sourceIso.symm
-  · rw [targetEq]
-    exact targetCanonicalRep
+  rw [targetEq]
+  cases orientation with
+  | forward =>
+      exact .wireSever (Rule.WireSever.iso
+        (OpenDiagramIso.refl sourceCanonical) separatedStep targetIso)
+  | backward =>
+      exact .wireSever (Rule.WireSever.iso targetIso separatedStep
+        (OpenDiagramIso.refl sourceCanonical))
 
 end VisualProof.Refinement.WireSever
 
@@ -396,18 +383,13 @@ private theorem rootOpenStep
 theorem wireJoin
     {arity : Nat}
     {source : Concrete.State arity}
-    {sourceDiagram : OpenDiagram arity}
     {orientation : Concrete.Orientation}
     (first second : Fin source.checked.val.diagram.wireCount)
     {receipt : Concrete.Receipt source}
-    (sourceRep : StateRepresents source sourceDiagram)
     (success : Concrete.execute orientation source
       (.wireJoin first second) = .ok receipt) :
-    ∃ targetDiagram : OpenDiagram arity,
-      (match orientation with
-      | .forward => Rule.WireSever sourceDiagram targetDiagram
-      | .backward => Rule.WireSever targetDiagram sourceDiagram) ∧
-      StateRepresents receipt.target targetDiagram := by
+    DirectedStep orientation (canonicalDiagram source)
+      (canonicalDiagram receipt.target) := by
   obtain ⟨result, _operationSuccess, packed, distinct, execution⟩ :=
     Concrete.execute_wireJoin_success first second success
   have orderedRefinement : ∀
@@ -423,11 +405,8 @@ theorem wireJoin
         (Concrete.joinWireRaw source.checked.val.diagram outer inner)
         (Concrete.joinWireProvenance source.checked.val.diagram outer inner)
         (Concrete.joinWireWireTransport source.checked.val.diagram outer inner)),
-      ∃ targetDiagram : OpenDiagram arity,
-        (match orientation with
-        | .forward => Rule.WireSever sourceDiagram targetDiagram
-        | .backward => Rule.WireSever targetDiagram sourceDiagram) ∧
-        StateRepresents receipt.target targetDiagram := by
+      DirectedStep orientation (canonicalDiagram source)
+        (canonicalDiagram receipt.target) := by
     intro outer inner orderedDistinct ordered operationPolarity realizes
     let targetWellFormed :
         (Concrete.joinWireRaw source.checked.val.diagram outer inner).WellFormed :=
@@ -437,8 +416,7 @@ theorem wireJoin
     let targetLength : target.val.boundary.length = arity :=
       (VisualProof.Refinement.Implementation.WireJoin.boundaryLengthEq source.checked.val outer inner
         orderedDistinct).trans source.boundary_length
-    let sourceCanonical :=
-      source.checked.elaborate.castArity source.boundary_length
+    let sourceCanonical := canonicalDiagram source
     let targetJoined := target.elaborate.castArity targetLength
     have canonicalStep :
         match orientation with
@@ -511,8 +489,7 @@ theorem wireJoin
                     (Implementation.WireJoin.boundaryLengthEq source.checked.val
                       outer inner orderedDistinct)
                     source.boundary_length targetLength nestedStep
-    let targetCanonical := receipt.target.checked.elaborate.castArity
-      receipt.target.boundary_length
+    let targetCanonical := canonicalDiagram receipt.target
     let resultConcreteIso :=
       Implementation.WireJoin.targetOpen_result_iso source outer inner
         orderedDistinct ordered realizes packed
@@ -525,30 +502,18 @@ theorem wireJoin
           targetLength = receipt.target.boundary_length :=
         Subsingleton.elim _ _
       rw [proofEq] at castIso
-      simpa [targetJoined, targetCanonical] using castIso
-    have sourceCanonicalRep : StateRepresents source sourceCanonical :=
-      StateRepresents.checked source
-    obtain ⟨sourceIso⟩ :=
-      StateRepresents.unique sourceRep sourceCanonicalRep
-    have targetCanonicalRep :
-        StateRepresents receipt.target targetCanonical :=
-      StateRepresents.checked receipt.target
-    refine ⟨targetCanonical, ?_, targetCanonicalRep⟩
+      simpa [targetJoined, targetCanonical, canonicalDiagram] using castIso
     cases orientation with
     | forward =>
-        exact Rule.WireSever.iso sourceIso.symm canonicalStep targetIso
+        exact .wireSever (Rule.WireSever.iso
+          (OpenDiagramIso.refl sourceCanonical) canonicalStep targetIso)
     | backward =>
-        exact Rule.WireSever.iso targetIso canonicalStep sourceIso.symm
+        exact .wireSever (Rule.WireSever.iso targetIso canonicalStep
+          (OpenDiagramIso.refl sourceCanonical))
   rcases execution with forwardOrder | reverseOrder
-  · obtain ⟨targetDiagram, step, represents⟩ :=
-      orderedRefinement first second distinct forwardOrder.1
-        forwardOrder.2.1 forwardOrder.2.2
-    refine ⟨targetDiagram, ?_, represents⟩
-    cases orientation <;> exact step
-  · obtain ⟨targetDiagram, step, represents⟩ :=
-      orderedRefinement second first distinct.symm reverseOrder.1
-        reverseOrder.2.1 reverseOrder.2.2
-    refine ⟨targetDiagram, ?_, represents⟩
-    cases orientation <;> exact step
+  · exact orderedRefinement first second distinct forwardOrder.1
+      forwardOrder.2.1 forwardOrder.2.2
+  · exact orderedRefinement second first distinct.symm reverseOrder.1
+      reverseOrder.2.1 reverseOrder.2.2
 
 end VisualProof.Refinement.WireJoin

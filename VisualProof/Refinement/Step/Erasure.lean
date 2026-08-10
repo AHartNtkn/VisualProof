@@ -1,5 +1,6 @@
 import VisualProof.Concrete.Subgraph.Splice.Reassembly
 import VisualProof.Refinement.Step.ErasureSplice
+import VisualProof.Refinement.Step.Core
 
 namespace VisualProof.Refinement.Erasure
 
@@ -76,18 +77,13 @@ private theorem boundary_map_isoOfEq
 theorem erasure
     {arity : Nat}
     {source : Concrete.State arity}
-    {sourceDiagram : OpenDiagram arity}
     {orientation : Concrete.Orientation}
     (selection : Concrete.CheckedSelection source.checked.val.diagram)
     {receipt : Concrete.Receipt source}
-    (sourceRep : StateRepresents source sourceDiagram)
     (success : Concrete.execute orientation source (.erasure selection) =
       .ok receipt) :
-    ∃ targetDiagram : OpenDiagram arity,
-      (match orientation with
-       | .forward => Rule.Erasure sourceDiagram targetDiagram
-       | .backward => Rule.Erasure targetDiagram sourceDiagram) ∧
-      StateRepresents receipt.target targetDiagram := by
+    DirectedStep orientation (canonicalDiagram source)
+      (canonicalDiagram receipt.target) := by
   change Concrete.finish source
       (Concrete.applyErasure orientation source.diagram selection) =
         .ok receipt at success
@@ -205,14 +201,13 @@ theorem erasure
         Concrete.Splice.Input.PlugLayout.outputOpenRoot]
       rfl
     exact spliceRaw.trans rawArity
-  let sourceCanonical :=
-    source.checked.elaborate.castArity source.boundary_length
-  let targetCanonical :=
-    targetState.checked.elaborate.castArity targetState.boundary_length
+  let sourceCanonical := canonicalDiagram source
+  let targetCanonical := canonicalDiagram targetState
   have sourceIso : OpenDiagramIso spliceOpen.elaborate
       (sourceCanonical.castArity arityEq.symm) := by
+    dsimp only [sourceCanonical, canonicalDiagram]
     rw [castArity_castArity]
-    simpa [sourceCanonical] using sourceElabIso
+    simpa using sourceElabIso
   let frameArity : rawOpen.val.boundary.length =
       spliceOpen.val.boundary.length := by
     simp [rawOpen, rawMapped,
@@ -226,9 +221,10 @@ theorem erasure
   have targetIso : OpenDiagramIso frameDiagram
       (targetCanonical.castArity arityEq.symm) := by
     have castIso := castOpenIso frameArity targetElabIso
+    dsimp only [targetCanonical, canonicalDiagram]
     rw [castArity_castArity]
-    simpa [frameDiagram, targetCanonical, rawOpen, targetConcreteIso,
-      targetState, targetChecked, castArity_castArity] using castIso
+    simpa [frameDiagram, rawOpen, targetConcreteIso, targetState,
+      targetChecked, castArity_castArity] using castIso
   let admissible :=
     (Concrete.Splice.Input.spliceChecked_sound spliceSuccess).2.1
   let sitePolarity :=
@@ -326,46 +322,32 @@ theorem erasure
           simp only [sitePolarity, siteRoot, if_false,
             DiagramContext.polarity]
           rw [if_neg notEven]
-  have canonicalSourceRep : StateRepresents source sourceCanonical := by
-    exact StateRepresents.checked source
-  obtain ⟨sourceUserIso⟩ :=
-    StateRepresents.unique sourceRep canonicalSourceRep
-  have canonicalTargetRep : StateRepresents targetState targetCanonical := by
-    exact StateRepresents.checked targetState
-  refine ⟨targetCanonical, ?_, ?_⟩
-  · cases orientation with
+  have directedStep : DirectedStep orientation sourceCanonical
+      targetCanonical := by
+    cases orientation with
     | forward =>
         simp only at sitePolarityEq
         rw [sitePolarityEq] at canonicalStateStep
-        have step : Rule.Erasure sourceCanonical targetCanonical := by
-          simpa [Rule.atPolarity] using canonicalStateStep
-        exact Rule.Erasure.iso sourceUserIso.symm step
-          (OpenDiagramIso.refl targetCanonical)
+        exact .erasure (by
+          simpa [Rule.atPolarity] using canonicalStateStep)
     | backward =>
         simp only at sitePolarityEq
         rw [sitePolarityEq] at canonicalStateStep
-        have step : Rule.Erasure targetCanonical sourceCanonical := by
-          simpa [Rule.atPolarity, Rule.converse] using canonicalStateStep
-        exact Rule.Erasure.iso (OpenDiagramIso.refl targetCanonical) step
-          sourceUserIso.symm
-  · simpa [targetState, targetChecked, targetCanonical] using
-      canonicalTargetRep
+        exact .erasure (by
+          simpa [Rule.atPolarity, Rule.converse] using canonicalStateStep)
+  simpa [sourceCanonical, targetCanonical, canonicalDiagram, targetState,
+    targetChecked] using directedStep
 
 theorem boundRelationSpawn
     {arity : Nat}
     {source : Concrete.State arity}
-    {sourceDiagram : OpenDiagram arity}
     {orientation : Concrete.Orientation}
     (insertion : Concrete.Insertion source)
     {receipt : Concrete.Receipt source}
-    (sourceRep : StateRepresents source sourceDiagram)
     (success : Concrete.execute orientation source
       (.boundRelationSpawn insertion) = .ok receipt) :
-    ∃ targetDiagram : OpenDiagram arity,
-      (match orientation with
-       | .forward => Rule.Erasure sourceDiagram targetDiagram
-       | .backward => Rule.Erasure targetDiagram sourceDiagram) ∧
-      StateRepresents receipt.target targetDiagram := by
+    DirectedStep orientation (canonicalDiagram source)
+      (canonicalDiagram receipt.target) := by
   have execution := Concrete.execute_boundRelationSpawn_success insertion
     success
   dsimp only at execution
@@ -428,22 +410,19 @@ theorem boundRelationSpawn
       (fun checked : Concrete.CheckedOpen => checked.val.boundary.length)
       targetEq
     exact lengths.symm.trans receipt.target.boundary_length
-  let sourceCanonical :=
-    source.checked.elaborate.castArity source.boundary_length
-  let targetCanonical :=
-    receipt.target.checked.elaborate.castArity
-      receipt.target.boundary_length
+  let sourceCanonical := canonicalDiagram source
+  let targetCanonical := canonicalDiagram receipt.target
   have targetIso : OpenDiagramIso spliceOpen.elaborate
       (targetCanonical.castArity arityEq.symm) := by
+    dsimp only [targetCanonical, canonicalDiagram]
     rw [castArity_castArity]
-    simpa [targetCanonical, targetConcreteIso, spliceOpen, targetEq] using
-      targetElabIso
+    simpa [targetConcreteIso, spliceOpen, targetEq] using targetElabIso
   have sourceIso : OpenDiagramIso frameDiagram
       (sourceCanonical.castArity arityEq.symm) := by
     have castIso := castOpenIso frameArity frameElabIso
+    dsimp only [sourceCanonical, canonicalDiagram]
     rw [castArity_castArity]
-    simpa [frameDiagram, sourceCanonical, frameConcreteIso,
-      castArity_castArity] using castIso
+    simpa [frameDiagram, frameConcreteIso, castArity_castArity] using castIso
   have canonicalStateStep : Rule.atPolarity sitePolarity Rule.Erasure
       targetCanonical sourceCanonical :=
     refineAtPolarity arityEq targetIso canonicalStep sourceIso
@@ -522,27 +501,16 @@ theorem boundRelationSpawn
           simp only [sitePolarity, siteRoot, if_false,
             DiagramContext.polarity]
           rw [if_pos actualEven]
-  have canonicalSourceRep : StateRepresents source sourceCanonical := by
-    exact StateRepresents.checked source
-  obtain ⟨sourceUserIso⟩ :=
-    StateRepresents.unique sourceRep canonicalSourceRep
-  have canonicalTargetRep : StateRepresents receipt.target targetCanonical := by
-    exact StateRepresents.checked receipt.target
-  refine ⟨targetCanonical, ?_, canonicalTargetRep⟩
   cases orientation with
   | forward =>
       simp only at sitePolarityEq
       rw [sitePolarityEq] at canonicalStateStep
-      have step : Rule.Erasure sourceCanonical targetCanonical := by
-        simpa [Rule.atPolarity, Rule.converse] using canonicalStateStep
-      exact Rule.Erasure.iso sourceUserIso.symm step
-        (OpenDiagramIso.refl targetCanonical)
+      exact .erasure (by
+        simpa [Rule.atPolarity, Rule.converse] using canonicalStateStep)
   | backward =>
       simp only at sitePolarityEq
       rw [sitePolarityEq] at canonicalStateStep
-      have step : Rule.Erasure targetCanonical sourceCanonical := by
-        simpa [Rule.atPolarity] using canonicalStateStep
-      exact Rule.Erasure.iso (OpenDiagramIso.refl targetCanonical) step
-        sourceUserIso.symm
+      exact .erasure (by
+        simpa [Rule.atPolarity] using canonicalStateStep)
 
 end VisualProof.Refinement.Erasure

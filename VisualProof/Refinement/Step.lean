@@ -1,3 +1,4 @@
+import VisualProof.Refinement.Step.Core
 import VisualProof.Refinement.Step.Erasure
 import VisualProof.Refinement.Step.WireSever
 import VisualProof.Refinement.Step.DoubleCut
