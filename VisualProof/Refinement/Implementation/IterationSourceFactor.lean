@@ -1,3 +1,4 @@
+import VisualProof.Refinement.Implementation.CompilePartition
 import VisualProof.Refinement.Implementation.IterationFragment
 import VisualProof.Refinement.Implementation.IterationRoute
 import VisualProof.Diagram.RenamingIsomorphism
@@ -254,7 +255,7 @@ private noncomputable def factorPartitionResult
     {anchorBody : Region outer rels}
     (anchorLeaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
       selection.val.anchor (.here anchorBody)) :
-    PartitionResult input selection.val.anchor anchorLeaf
+    CompilePartition.PartitionResult input selection.val.anchor anchorLeaf
       (selectedOccurrences input.val selection)
       (keptOccurrences input.val selection) :=
   partition_complete input selection anchorLeaf

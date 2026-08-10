@@ -7,7 +7,6 @@ open VisualProof.Concrete
 open VisualProof.Data.Finite
 open VisualProof.Diagram
 open VisualProof.Theory
-open VisualProof.Refinement.Implementation.CompilePartition
 
 def occurrenceSelected (selection : CheckedSelection input) :
     Concrete.Elaboration.LocalOccurrence input.regionCount input.nodeCount →
@@ -46,10 +45,10 @@ noncomputable def partition_complete
     {body : Region outer rels}
     (leaf : Concrete.Splice.Region.ContextPath.CompilerLeaf input.val
       selection.val.anchor (.here body)) :
-    PartitionResult input selection.val.anchor leaf
+    CompilePartition.PartitionResult input selection.val.anchor leaf
       (selectedOccurrences input.val selection)
       (keptOccurrences input.val selection) := by
-  exact partition_complete_of_perm input selection.val.anchor leaf
+  exact CompilePartition.partition_complete_of_perm input selection.val.anchor leaf
     (selectedOccurrences input.val selection)
     (keptOccurrences input.val selection) (occurrences_perm input.val selection)
 
