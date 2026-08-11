@@ -61,6 +61,27 @@ theorem compileRegion?_succ_eq_step (diagram : Diagram) (fuel : Nat)
         binders := by
   rfl
 
+/-- Normalize one finished region against an explicit exact-context
+presentation.  This is proof transport only; no compiler call is rerun. -/
+theorem finishRegion_eq_mk_of_context
+    {diagram : Diagram} (context : WireContext diagram)
+    (region : Fin diagram.regionCount)
+    (targetContext targetLocals : WireContext diagram)
+    (targetLocalCount : Nat)
+    (contextEq : context.extend region = targetContext)
+    (localsEq : exactScopeWires diagram region = targetLocals)
+    (localsLengthEq : targetLocals.length = targetLocalCount)
+    (targetSplit : targetContext.length =
+      context.length + targetLocalCount)
+    (items : ItemSeq targetContext.length rels) :
+    finishRegion diagram context region
+        (items.castWiresEq (congrArg List.length contextEq.symm)) =
+      .mk targetLocalCount (items.castWiresEq targetSplit) := by
+  subst targetContext
+  subst targetLocals
+  subst targetLocalCount
+  simp only [finishRegion, ItemSeq.castWiresEq_trans]
+
 /-- Concrete identity maps used by a local compiler simulation.  Region and
 binder maps are distinct because an inserted node's lexical binder need not
 be the image of its containing region. -/
@@ -379,6 +400,214 @@ theorem compileRegionStep?_map
       (sourceContext.extend sourceRegion) sourceBinders
       (localOccurrences source sourceRegion) <;> rfl
 
+/-- Re-present only the target wire context of a fixed local simulation.
+The compiler laws and relation transport are unchanged. -/
+def castTargetContext
+    (simulation : CompilerCallSimulation mapping sourceContext targetContext
+      sourceBinders targetBinders sourceOccurrences)
+    (newTargetContext : WireContext target)
+    (contextEq : targetContext = newTargetContext) :
+    CompilerCallSimulation mapping sourceContext newTargetContext
+      sourceBinders targetBinders sourceOccurrences := by
+  subst newTargetContext
+  exact simulation
+
+theorem castTargetContext_mapItems
+    (simulation : CompilerCallSimulation mapping sourceContext targetContext
+      sourceBinders targetBinders sourceOccurrences)
+    (newTargetContext : WireContext target)
+    (contextEq : targetContext = newTargetContext)
+    (items : ItemSeq sourceContext.length sourceRels) :
+    (simulation.castTargetContext newTargetContext contextEq).mapItems items =
+      (simulation.mapItems items).castWiresEq
+        (congrArg List.length contextEq) := by
+  cases contextEq
+  rfl
+
+theorem castTargetContext_mapRegion
+    (simulation : CompilerCallSimulation mapping sourceContext targetContext
+      sourceBinders targetBinders sourceOccurrences)
+    (newTargetContext : WireContext target)
+    (contextEq : targetContext = newTargetContext)
+    (body : Region sourceContext.length sourceRels) :
+    (simulation.castTargetContext newTargetContext contextEq).mapRegion body =
+      (simulation.mapRegion body).castWiresEq
+        (congrArg List.length contextEq) := by
+  cases contextEq
+  rfl
+
+theorem castTargetContext_mapRegionLift
+    (simulation : CompilerCallSimulation mapping sourceContext targetContext
+      sourceBinders targetBinders sourceOccurrences)
+    (newTargetContext : WireContext target)
+    (contextEq : targetContext = newTargetContext) (arity : Nat)
+    (body : Region sourceContext.length (arity :: sourceRels)) :
+    (body.renameWires
+        (simulation.castTargetContext newTargetContext contextEq).wireMap
+      ).renameRelations (RelationRenaming.lift
+        (simulation.castTargetContext newTargetContext contextEq).relationMap
+        arity) =
+      ((body.renameWires simulation.wireMap).renameRelations
+        (RelationRenaming.lift simulation.relationMap arity)).castWiresEq
+          (congrArg List.length contextEq) := by
+  cases contextEq
+  rfl
+
 end CompilerCallSimulation
+
+/-- A hereditary family of exact local compiler simulations.  Context,
+binder, and result transport are explicit data, while recursive fuel remains
+the sole control exercised by the generic theorem below. -/
+structure FuelledRegionSimulation
+    {source target : Diagram} (mapping : CompilerDiagramMap source target)
+    (eligible : Fin source.regionCount → Prop)
+    (mapContext : WireContext source → WireContext target)
+    (mapBinders : ∀ {rels}, BinderContext source rels →
+      BinderContext target rels)
+    (mapBody : ∀ {rels} (context : WireContext source),
+      Region context.length rels → Region (mapContext context).length rels)
+    where
+  child_eligible : ∀ {region}, eligible region → ∀ child,
+    .child child ∈ localOccurrences source region → eligible child
+  context_extend : ∀ region, eligible region → ∀ context,
+    mapContext (context.extend region) =
+      (mapContext context).extend (mapping.regionMap region)
+  binders_push : ∀ {rels} (binders : BinderContext source rels)
+    (child : Fin source.regionCount), eligible child → ∀ arity : Nat,
+    mapBinders (binders.push child arity) =
+      (mapBinders binders).push (mapping.regionMap child) arity
+  call : ∀ {rels} (region) (_ : eligible region) (context)
+    (binders : BinderContext source rels),
+    CompilerCallSimulation mapping (context.extend region)
+      ((mapContext context).extend (mapping.regionMap region)) binders
+      (mapBinders binders) (localOccurrences source region)
+  target_occurrences : ∀ region, eligible region →
+    localOccurrences target (mapping.regionMap region) =
+      (localOccurrences source region).map mapping.mapOccurrence
+  call_mapRegion : ∀ {rels} (region) (property : eligible region)
+    (context) (binders : BinderContext source rels)
+    (body : Region (context.extend region).length rels),
+    (call region property context binders).mapRegion body =
+      (mapBody (context.extend region) body).castWiresEq
+        (congrArg List.length (context_extend region property context))
+  call_mapRegion_push : ∀ {rels} (region) (property : eligible region)
+    (context) (binders : BinderContext source rels) (arity : Nat)
+    (body : Region (context.extend region).length (arity :: rels)),
+    (body.renameWires (call region property context binders).wireMap
+      ).renameRelations (RelationRenaming.lift
+        (call region property context binders).relationMap arity) =
+      (mapBody (context.extend region) body).castWiresEq
+        (congrArg List.length (context_extend region property context))
+  finish_eq : ∀ {rels} (region) (property : eligible region)
+    (context) (binders : BinderContext source rels)
+    (items : ItemSeq (context.extend region).length rels),
+    finishRegion target (mapContext context) (mapping.regionMap region)
+        ((call region property context binders).mapItems items) =
+      mapBody context (finishRegion source context region items)
+
+namespace FuelledRegionSimulation
+
+variable {source target : Diagram}
+variable {mapping : CompilerDiagramMap source target}
+variable {eligible : Fin source.regionCount → Prop}
+variable {mapContext : WireContext source → WireContext target}
+variable {mapBinders : ∀ {rels}, BinderContext source rels →
+  BinderContext target rels}
+variable {mapBody : ∀ {rels} (context : WireContext source),
+  Region context.length rels → Region (mapContext context).length rels}
+
+private theorem compileRegion?_castContext_map
+    (region : Fin target.regionCount)
+    (sourceContext targetContext : WireContext target)
+    (contextEq : sourceContext = targetContext)
+    (binders : BinderContext target rels) (fuel : Nat) :
+    compileRegion? target fuel region targetContext binders =
+      (compileRegion? target fuel region sourceContext binders).map
+        (Region.castWiresEq (congrArg List.length contextEq)) := by
+  subst targetContext
+  cases compileRegion? target fuel region sourceContext binders <;> rfl
+
+/-- Iterate a hereditary local simulation through the recursive region
+compiler.  Operation-specific adapters supply only structural equalities;
+node, occurrence-list, and fuel recursion live here. -/
+theorem compileRegion?_map
+    (simulation : FuelledRegionSimulation mapping eligible mapContext
+      mapBinders mapBody)
+    (fuel : Nat) (region : Fin source.regionCount)
+    (property : eligible region) (context : WireContext source)
+    (binders : BinderContext source rels) :
+    compileRegion? target fuel (mapping.regionMap region)
+        (mapContext context) (mapBinders binders) =
+      (compileRegion? source fuel region context binders).map
+        (mapBody context) := by
+  induction fuel generalizing region rels context binders with
+  | zero => rfl
+  | succ fuel inductionHypothesis =>
+      let call := simulation.call region property context binders
+      have recursive : call.RecursiveCallsMapped
+          (compileRegion? source fuel) (compileRegion? target fuel) := by
+        intro child member
+        have childProperty := simulation.child_eligible property child member
+        have contextEq := simulation.context_extend region property context
+        cases childKind : source.regions child with
+        | sheet => trivial
+        | cut parent =>
+            change compileRegion? target fuel (mapping.regionMap child)
+                ((mapContext context).extend (mapping.regionMap region))
+                (mapBinders binders) =
+              (compileRegion? source fuel child (context.extend region)
+                binders).map call.mapRegion
+            have targetCast := compileRegion?_castContext_map
+              (mapping.regionMap child) (mapContext (context.extend region))
+              ((mapContext context).extend (mapping.regionMap region))
+              contextEq (mapBinders binders) fuel
+            have childMapped := inductionHypothesis child childProperty
+              (context.extend region) binders
+            rw [targetCast, childMapped]
+            cases sourceResult : compileRegion? source fuel child
+                (context.extend region) binders with
+            | none => rfl
+            | some body =>
+                apply congrArg some
+                exact (simulation.call_mapRegion region property context
+                  binders body).symm
+        | bubble parent arity =>
+            change compileRegion? target fuel (mapping.regionMap child)
+                ((mapContext context).extend (mapping.regionMap region))
+                ((mapBinders binders).push (mapping.regionMap child) arity) =
+              (compileRegion? source fuel child (context.extend region)
+                (binders.push child arity)).map fun body =>
+                  (body.renameWires call.wireMap).renameRelations
+                    (RelationRenaming.lift call.relationMap arity)
+            rw [← simulation.binders_push binders child childProperty arity]
+            have targetCast := compileRegion?_castContext_map
+              (mapping.regionMap child) (mapContext (context.extend region))
+              ((mapContext context).extend (mapping.regionMap region))
+              contextEq (mapBinders (binders.push child arity)) fuel
+            have childMapped := inductionHypothesis child childProperty
+              (context.extend region) (binders.push child arity)
+            rw [targetCast, childMapped]
+            cases sourceResult : compileRegion? source fuel child
+                (context.extend region) (binders.push child arity) with
+            | none => rfl
+            | some body =>
+                apply congrArg some
+                exact (simulation.call_mapRegion_push region property context
+                  binders arity body).symm
+      have mapped := call.compileRegionStep?_map context (mapContext context)
+        binders (mapBinders binders) (compileRegion? source fuel)
+        (compileRegion? target fuel) recursive
+        (simulation.target_occurrences region property)
+      rw [compileRegion?_succ_eq_step, compileRegion?_succ_eq_step]
+      rw [mapped]
+      unfold compileRegionStep?
+      cases compileOccurrencesWith? source (compileRegion? source fuel)
+          (context.extend region) binders (localOccurrences source region) with
+      | none => rfl
+      | some items =>
+          apply congrArg some
+          exact simulation.finish_eq region property context binders items
+
+end FuelledRegionSimulation
 
 end VisualProof.Concrete.Elaboration
