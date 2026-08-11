@@ -61,8 +61,8 @@ noncomputable def compiledOpenRootItemsIsoFromExactContext
     (checked : CheckedOpen )
     (context : WireContext checked.val.diagram)
     (exact : context.Exact checked.val.diagram.root)
-    {closedItems : ItemSeq  context.length []}
-    {openItems : ItemSeq  checked.val.rootWires.length []}
+    {closedItems : CompiledItems checked.val.diagram context.length []}
+    {openItems : CompiledItems checked.val.diagram checked.val.rootWires.length []}
     (hclosed : compileOccurrencesWith?  checked.val.diagram
       (compileRegion?  checked.val.diagram
         checked.val.diagram.regionCount)
@@ -77,7 +77,7 @@ noncomputable def compiledOpenRootItemsIsoFromExactContext
         some openItems) :
     ItemSeqIso
       (exactContextToOpenRootWireEquiv checked context exact) []
-      closedItems openItems := by
+      closedItems.erase openItems.erase := by
   apply compileRootItems?_equivariant
     (Iso.refl checked.val.diagram)
     checked.property.diagram_well_formed context checked.val.rootWires
@@ -89,26 +89,39 @@ noncomputable def compiledOpenRootItemsIsoFromExactContext
 
 namespace Checked
 
-def elaborate (checked : Checked ) : Region  0 [] :=
+def compilation (checked : Checked ) : CompiledRegion checked.val 0 [] :=
   (compileRoot?  checked.val []
     (exactScopeWires checked.val checked.val.root)).get
       (Option.isSome_iff_exists.mpr
         (compileRoot?_complete checked.property [] _
           (closedRootWires_exact checked.property)))
 
+def elaborate (checked : Checked ) : Region  0 [] := checked.compilation.erase
+
 theorem elaborate_computation (checked : Checked ) :
     exists body,
       compileRoot?  checked.val []
           (exactScopeWires checked.val checked.val.root) = some body /\
-        checked.elaborate = body := by
+        checked.compilation = body ∧
+        checked.elaborate = body.erase := by
   obtain ⟨body, hbody⟩ := compileRoot?_complete checked.property [] _
     (closedRootWires_exact checked.property)
-  refine ⟨body, hbody, ?_⟩
-  simp [elaborate, hbody]
+  refine ⟨body, hbody, ?_, ?_⟩
+  · simp [compilation, hbody]
+  · simp [elaborate, compilation, hbody]
 
 end Checked
 
 namespace CheckedOpen
+
+def compilation (checked : CheckedOpen ) :
+    CompiledRegion checked.val.diagram checked.val.exposedWires.length [] :=
+  (compileRoot? checked.val.diagram checked.val.exposedWires
+    checked.val.hiddenWires).get
+      (Option.isSome_iff_exists.mpr
+        (compileRoot?_complete checked.property.diagram_well_formed _ _ (by
+          simpa [OpenDiagram.rootWires] using
+            openRootWires_exact checked.property)))
 
 /-- Total elaboration of a checked open concrete diagram. -/
 def elaborate (checked : CheckedOpen ) :
@@ -116,12 +129,7 @@ def elaborate (checked : CheckedOpen ) :
   externalClasses := checked.val.exposedWires.length
   boundary := checked.val.boundaryClass
   boundary_surjective := checked.val.boundaryClass_surjective
-  body := (compileRoot?  checked.val.diagram
-    checked.val.exposedWires checked.val.hiddenWires).get
-      (Option.isSome_iff_exists.mpr
-        (compileRoot?_complete checked.property.diagram_well_formed _ _ (by
-          simpa [OpenDiagram.rootWires] using
-            openRootWires_exact checked.property)))
+  body := checked.compilation.erase
 
 @[simp] theorem elaborate_externalClasses
     (checked : CheckedOpen ) :
@@ -138,13 +146,15 @@ theorem elaborate_body_computation
     exists body,
       compileRoot?  checked.val.diagram checked.val.exposedWires
           checked.val.hiddenWires = some body ∧
-        checked.elaborate.body = body := by
+        checked.compilation = body ∧
+        checked.elaborate.body = body.erase := by
   obtain ⟨body, hbody⟩ := compileRoot?_complete
     checked.property.diagram_well_formed _ _ (by
       simpa [OpenDiagram.rootWires] using
         openRootWires_exact checked.property)
-  refine ⟨body, hbody, ?_⟩
-  simp [elaborate, hbody]
+  refine ⟨body, hbody, ?_, ?_⟩
+  · simp [compilation, hbody]
+  · simp [elaborate, compilation, hbody]
 
 end CheckedOpen
 
@@ -169,15 +179,16 @@ namespace Checked
 @[simp] theorem asOpen_elaborate_body
     (checked : Checked ) :
     checked.asOpen.elaborate.body = checked.elaborate := by
-  obtain ⟨openBody, hopenKernel, hopenElaborate⟩ :=
+  obtain ⟨openBody, hopenKernel, _, hopenElaborate⟩ :=
     CheckedOpen.elaborate_body_computation checked.asOpen
-  obtain ⟨closedBody, hclosedKernel, hclosedElaborate⟩ :=
+  obtain ⟨closedBody, hclosedKernel, _, hclosedElaborate⟩ :=
     Checked.elaborate_computation checked
   have hbodies : openBody = closedBody := by
     have hopenKernel' := hopenKernel
     rw [checked_asOpen_compileRoot_eq checked] at hopenKernel'
     exact Option.some.inj (hopenKernel'.symm.trans hclosedKernel)
-  exact hopenElaborate.trans (hbodies.trans hclosedElaborate.symm)
+  exact hopenElaborate.trans ((congrArg CompiledRegion.erase hbodies).trans
+    hclosedElaborate.symm)
 
 end Checked
 
@@ -229,8 +240,10 @@ theorem elaborate_computation (d : Diagram)
     (hwf : d.WellFormed ) :
     exists body,
       compileRoot?  d [] (exactScopeWires d d.root) = some body /\
-        d.elaborate hwf = body :=
-  Checked.elaborate_computation ⟨d, hwf⟩
+        d.elaborate hwf = body.erase := by
+  obtain ⟨body, compiled, _, erased⟩ :=
+    Checked.elaborate_computation ⟨d, hwf⟩
+  exact ⟨body, compiled, erased⟩
 
 end Diagram
 

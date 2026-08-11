@@ -1,4 +1,4 @@
-import VisualProof.Concrete.Elaboration.Context
+import VisualProof.Concrete.Elaboration.Compile.Tree
 import VisualProof.Concrete.Open
 import VisualProof.Concrete.OpenIsomorphism
 import VisualProof.Concrete.Occurrence
@@ -723,15 +723,15 @@ theorem resolvePort?_map_of_embedding
 surgeries can prove that they commute with elaboration. -/
 def compileNode? (d : Diagram)
     (context : WireContext d) (binders : BinderContext d rels)
-    (node : Fin d.nodeCount) : Option (Item  context.length rels) :=
+    (node : Fin d.nodeCount) : Option (CompiledItem d context.length rels) :=
   match d.nodes node with
   | .atom _ binder => do
       let relation <- binders binder
       let arguments <- resolvePorts? d context node relation.1
-      pure (.atom relation.2 arguments)
+      pure (.node node (.atom relation.2 arguments))
   | .identity _ arity => do
       let arguments <- resolvePorts? d context node arity
-      pure (.identity arity arguments)
+      pure (.node node (.identity arity arguments))
 /-- Transport one node compilation through an embedding of its concrete
 region/binder identities and a (not necessarily surjective) embedding of the
 visible wire context.  Graph-surgery proofs discharge the concrete lookup
@@ -762,10 +762,11 @@ theorem compileNode?_map
         targetBinders (binderMap binder) =
           (sourceBinders binder).map fun relation =>
             ⟨relation.1, relationMap relation.2⟩) :
-    compileNode?  target targetContext targetBinders targetNode =
+    (compileNode?  target targetContext targetBinders targetNode).map
+        CompiledItem.erase =
       (compileNode?  source sourceContext sourceBinders sourceNode).map
         (fun item =>
-          (item.renameWires wireMap).renameRelations relationMap) := by
+          (item.erase.renameWires wireMap).renameRelations relationMap) := by
   cases hsourceNode : source.nodes sourceNode with
   | atom region binder =>
       simp only [compileNode?, hsourceNode, hnode]
@@ -783,7 +784,7 @@ theorem compileNode?_map
               rw [harguments]
               cases hsourceArguments : resolvePorts? source sourceContext
                   sourceNode arity (fun index => .arg index) <;>
-                simp [Item.renameWires,
+                simp [CompiledItem.erase, Item.renameWires,
                   Item.renameRelations, Function.comp_def]
   | identity region arity =>
       simp only [compileNode?, hsourceNode, hnode]
@@ -792,7 +793,7 @@ theorem compileNode?_map
       rw [harguments]
       cases hsourceArguments : resolvePorts? source sourceContext sourceNode
           arity (fun index => .arg index) <;>
-        simp [Item.renameWires, Item.renameRelations,
+        simp [CompiledItem.erase, Item.renameWires, Item.renameRelations,
           Function.comp_def]
 noncomputable def compileNode?_equivariant {source target : Diagram}
     (iso : Iso source target)
@@ -805,13 +806,13 @@ noncomputable def compileNode?_equivariant {source target : Diagram}
     {targetBinders : BinderContext target rels}
     (hbinders : BinderContextsAgree iso sourceBinders targetBinders)
     (node : Fin source.nodeCount)
-    {sourceItem : Item  sourceContext.length rels}
-    {targetItem : Item  targetContext.length rels}
+    {sourceItem : CompiledItem source sourceContext.length rels}
+    {targetItem : CompiledItem target targetContext.length rels}
     (hsource : compileNode?  source sourceContext sourceBinders node =
       some sourceItem)
     (htargetResult : compileNode?  target targetContext targetBinders
       (iso.nodes node) = some targetItem) :
-    ItemIso  ambient rels sourceItem targetItem := by
+    ItemIso  ambient rels sourceItem.erase targetItem.erase := by
   unfold compileNode? at hsource htargetResult
   rw [<- iso.nodes_eq node] at htargetResult
   cases hnode : source.nodes node with
@@ -865,18 +866,18 @@ def compileOccurrenceWith?
     (recurse : forall {rels : RelCtx},
       (region : Fin d.regionCount) ->
       (context : WireContext d) -> BinderContext d rels ->
-      Option (Region  context.length rels))
+      Option (CompiledRegion d context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     (occurrence : LocalOccurrence d.regionCount d.nodeCount) :
-    Option (Item  context.length rels) :=
+    Option (CompiledItem d context.length rels) :=
   match occurrence with
   | .node node => compileNode?  d context binders node
   | .child child =>
       match d.regions child with
       | .sheet => none
-      | .cut _ => return .cut (← recurse child context binders)
+      | .cut _ => return .cut child (← recurse child context binders)
       | .bubble _ arity =>
-          return .bubble arity
+          return .bubble child arity
             (← recurse child context (binders.push child arity))
 
 /-- Compile an ordered list of direct occurrences. -/
@@ -885,15 +886,99 @@ def compileOccurrencesWith?
     (recurse : forall {rels : RelCtx},
       (region : Fin d.regionCount) ->
       (context : WireContext d) -> BinderContext d rels ->
-      Option (Region  context.length rels))
+      Option (CompiledRegion d context.length rels))
     (context : WireContext d) (binders : BinderContext d rels) :
     List (LocalOccurrence d.regionCount d.nodeCount) ->
-      Option (ItemSeq  context.length rels)
+      Option (CompiledItems d context.length rels)
   | [] => some .nil
   | occurrence :: tail => do
       let item <- compileOccurrenceWith?  d recurse context binders occurrence
       let rest <- compileOccurrencesWith?  d recurse context binders tail
       pure (.cons item rest)
+
+theorem compileNode?_origin
+    {item : CompiledItem d context.length rels}
+    (compiled : compileNode? d context binders node = some item) :
+    item.origin = LocalOccurrence.node node := by
+  cases hnode : d.nodes node with
+  | atom region binder =>
+      simp only [compileNode?, hnode] at compiled
+      cases hrelation : binders binder with
+      | none => simp [hrelation] at compiled
+      | some relation =>
+          cases relation with
+          | mk arity relation =>
+              cases harguments : resolvePorts? d context node arity with
+              | none => simp [hrelation, harguments] at compiled
+              | some arguments =>
+                  simp [hrelation, harguments] at compiled
+                  subst item
+                  rfl
+  | identity region arity =>
+      simp only [compileNode?, hnode] at compiled
+      cases harguments : resolvePorts? d context node arity with
+      | none => simp [harguments] at compiled
+      | some arguments =>
+          simp [harguments] at compiled
+          subst item
+          rfl
+
+theorem compileOccurrenceWith?_origin
+    (recurse : forall {rels : RelCtx},
+      (region : Fin d.regionCount) ->
+      (context : WireContext d) -> BinderContext d rels ->
+      Option (CompiledRegion d context.length rels))
+    {item : CompiledItem d context.length rels}
+    (compiled : compileOccurrenceWith? d recurse context binders occurrence =
+      some item) :
+    item.origin = occurrence := by
+  cases occurrence with
+  | node node => exact compileNode?_origin compiled
+  | child child =>
+      cases hregion : d.regions child with
+      | sheet => simp [compileOccurrenceWith?, hregion] at compiled
+      | cut parent =>
+          cases hbody : recurse child context binders with
+          | none => simp [compileOccurrenceWith?, hregion, hbody] at compiled
+          | some body =>
+              simp [compileOccurrenceWith?, hregion, hbody] at compiled
+              subst item
+              rfl
+      | bubble parent arity =>
+          cases hbody : recurse child context (binders.push child arity) with
+          | none => simp [compileOccurrenceWith?, hregion, hbody] at compiled
+          | some body =>
+              simp [compileOccurrenceWith?, hregion, hbody] at compiled
+              subst item
+              rfl
+
+theorem compileOccurrencesWith?_origins
+    (recurse : forall {rels : RelCtx},
+      (region : Fin d.regionCount) ->
+      (context : WireContext d) -> BinderContext d rels ->
+      Option (CompiledRegion d context.length rels))
+    {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
+    {items : CompiledItems d context.length rels}
+    (compiled : compileOccurrencesWith? d recurse context binders occurrences =
+      some items) :
+    items.origins = occurrences := by
+  induction occurrences generalizing items with
+  | nil =>
+      simp [compileOccurrencesWith?] at compiled
+      subst items
+      rfl
+  | cons occurrence tail ih =>
+      simp only [compileOccurrencesWith?] at compiled
+      cases hitem : compileOccurrenceWith? d recurse context binders occurrence with
+      | none => simp [hitem] at compiled
+      | some item =>
+          cases htail : compileOccurrencesWith? d recurse context binders tail with
+          | none => simp [hitem, htail] at compiled
+          | some rest =>
+              simp [hitem, htail] at compiled
+              subst items
+              simp only [CompiledItems.origins_cons, List.cons.injEq]
+              exact ⟨compileOccurrenceWith?_origin recurse hitem, ih htail⟩
 
 /-- Map a sequence compiler across an occurrence embedding when every
 individual occurrence compiler commutes with the same wire renaming.  The
@@ -903,11 +988,11 @@ theorem compileOccurrencesWith?_map
     (sourceRecurse : ∀ {rels : RelCtx},
       (region : Fin sourceDiagram.regionCount) →
       (context : WireContext sourceDiagram) → BinderContext sourceDiagram rels →
-      Option (Region  context.length rels))
+      Option (CompiledRegion sourceDiagram context.length rels))
     (targetRecurse : ∀ {rels : RelCtx},
       (region : Fin targetDiagram.regionCount) →
       (context : WireContext targetDiagram) → BinderContext targetDiagram rels →
-      Option (Region  context.length rels))
+      Option (CompiledRegion targetDiagram context.length rels))
     (sourceContext : WireContext sourceDiagram)
     (targetContext : WireContext targetDiagram)
     (sourceBinders : BinderContext sourceDiagram rels)
@@ -919,25 +1004,29 @@ theorem compileOccurrencesWith?_map
     (sourceOccurrences : List
       (LocalOccurrence sourceDiagram.regionCount sourceDiagram.nodeCount))
     (hoccurrence : ∀ occurrence, occurrence ∈ sourceOccurrences →
-      compileOccurrenceWith?  targetDiagram targetRecurse
-          targetContext targetBinders (mapOccurrence occurrence) =
+      (compileOccurrenceWith?  targetDiagram targetRecurse
+          targetContext targetBinders (mapOccurrence occurrence)).map
+            CompiledItem.erase =
         (compileOccurrenceWith?  sourceDiagram sourceRecurse
-          sourceContext sourceBinders occurrence).map (Item.renameWires wire)) :
-    compileOccurrencesWith?  targetDiagram targetRecurse
-        targetContext targetBinders (sourceOccurrences.map mapOccurrence) =
+          sourceContext sourceBinders occurrence).map
+            (fun item => item.erase.renameWires wire)) :
+    (compileOccurrencesWith?  targetDiagram targetRecurse
+        targetContext targetBinders
+        (sourceOccurrences.map mapOccurrence)).map CompiledItems.erase =
       (compileOccurrencesWith?  sourceDiagram sourceRecurse
         sourceContext sourceBinders sourceOccurrences).map
-          (ItemSeq.renameWires wire) := by
+          (fun items => items.erase.renameWires wire) := by
   induction sourceOccurrences with
   | nil => rfl
   | cons occurrence tail ih =>
       have hhead := hoccurrence occurrence (by simp)
       have htail : ∀ current, current ∈ tail →
-          compileOccurrenceWith?  targetDiagram targetRecurse
-              targetContext targetBinders (mapOccurrence current) =
+          (compileOccurrenceWith?  targetDiagram targetRecurse
+              targetContext targetBinders (mapOccurrence current)).map
+                CompiledItem.erase =
             (compileOccurrenceWith?  sourceDiagram sourceRecurse
               sourceContext sourceBinders current).map
-                (Item.renameWires wire) := by
+                (fun item => item.erase.renameWires wire) := by
         intro current hmem
         exact hoccurrence current (by simp [hmem])
       specialize ih htail
@@ -953,20 +1042,23 @@ theorem compileOccurrencesWith?_map
           | none =>
               simp [hsourceTail] at ih
               simp [compileOccurrencesWith?, hsourceHead, hsourceTail,
-                hhead, ih]
+                ih]
           | some rest =>
               simp [hsourceTail] at ih
+              obtain ⟨targetHead, htargetHead, heraseHead⟩ := hhead
+              obtain ⟨targetRest, htargetRest, heraseRest⟩ := ih
               simp [compileOccurrencesWith?, hsourceHead, hsourceTail,
-                hhead, ih, ItemSeq.renameWires]
+                htargetHead, htargetRest, heraseHead, heraseRest,
+                CompiledItems.erase, ItemSeq.renameWires]
 
 theorem compileOccurrencesWith?_append
     (recurse : ∀ {rels : RelCtx},
       (region : Fin d.regionCount) →
       (context : WireContext d) → BinderContext d rels →
-      Option (Region  context.length rels))
+      Option (CompiledRegion d context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     (first second : List (LocalOccurrence d.regionCount d.nodeCount))
-    (firstItems secondItems : ItemSeq  context.length rels)
+    (firstItems secondItems : CompiledItems d context.length rels)
     (hfirst : compileOccurrencesWith?  d recurse context binders first =
       some firstItems)
     (hsecond : compileOccurrencesWith?  d recurse context binders second =
@@ -996,7 +1088,7 @@ theorem compileOccurrencesWith?_append
                   context binders occurrence
                 let rest ← compileOccurrencesWith?  d recurse
                   context binders (tail ++ second)
-                pure (ItemSeq.cons compiled rest)) = _
+                pure (CompiledItems.cons compiled rest)) = _
               rw [hitem, ih tailItems htail]
               rfl
 
@@ -1007,10 +1099,10 @@ theorem compileOccurrencesWith?_append_split
     (recurse : ∀ {rels : RelCtx},
       (region : Fin d.regionCount) →
       (context : WireContext d) → BinderContext d rels →
-      Option (Region  context.length rels))
+      Option (CompiledRegion d context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     (first second : List (LocalOccurrence d.regionCount d.nodeCount))
-    (items : ItemSeq  context.length rels)
+    (items : CompiledItems d context.length rels)
     (hitems : compileOccurrencesWith?  d recurse context binders
       (first ++ second) = some items) :
     ∃ firstItems secondItems,
@@ -1044,10 +1136,10 @@ theorem compileOccurrencesWith?_length
     (recurse : forall {rels : RelCtx},
       (region : Fin d.regionCount) →
       (context : WireContext d) → BinderContext d rels →
-      Option (Region  context.length rels))
+      Option (CompiledRegion d context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
-    {items : ItemSeq  context.length rels}
+    {items : CompiledItems d context.length rels}
     (h : compileOccurrencesWith?  d recurse context binders occurrences =
       some items) :
     items.length = occurrences.length := by
@@ -1063,17 +1155,18 @@ theorem compileOccurrencesWith?_length
           | some rest =>
               simp [hitem, hrest] at h
               subst items
-              simp only [ItemSeq.length, List.length_cons, Nat.succ.injEq]
+              simp only [CompiledItems.length, CompiledItems.erase,
+                ItemSeq.length, List.length_cons, Nat.succ.injEq]
               exact ih hrest
 
 theorem compileOccurrencesWith?_get
     (recurse : forall {rels : RelCtx},
       (region : Fin d.regionCount) →
       (context : WireContext d) → BinderContext d rels →
-      Option (Region  context.length rels))
+      Option (CompiledRegion d context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
-    {items : ItemSeq  context.length rels}
+    {items : CompiledItems d context.length rels}
     (h : compileOccurrencesWith?  d recurse context binders occurrences =
       some items) (index : Fin occurrences.length) :
     compileOccurrenceWith?  d recurse context binders
@@ -1093,9 +1186,9 @@ theorem compileOccurrencesWith?_get
               simp [hitem, hrest] at h
               subst items
               refine Fin.cases ?_ (fun tailIndex => ?_) index
-              · simpa only [List.get, ItemSeq.get] using hitem
+              · simpa only [List.get, CompiledItems.get] using hitem
               · have ihResult := ih hrest tailIndex
-                simpa only [List.get, ItemSeq.get] using ihResult
+                simpa only [List.get, CompiledItems.get] using ihResult
 
 /-- Assemble pointwise compiler correctness over an explicit occurrence
 equivalence into correctness of the compiled item sequences.  This is the
@@ -1110,12 +1203,12 @@ noncomputable def compileOccurrencesWith?_iso
       (region : Fin sourceDiagram.regionCount) →
       (context : WireContext sourceDiagram) →
       BinderContext sourceDiagram rels →
-      Option (Region  context.length rels))
+      Option (CompiledRegion sourceDiagram context.length rels))
     (targetRecurse : forall {rels : RelCtx},
       (region : Fin targetDiagram.regionCount) →
       (context : WireContext targetDiagram) →
       BinderContext targetDiagram rels →
-      Option (Region  context.length rels))
+      Option (CompiledRegion targetDiagram context.length rels))
     (sourceContext : WireContext sourceDiagram)
     (targetContext : WireContext targetDiagram)
     (sourceBinders : BinderContext sourceDiagram rels)
@@ -1124,8 +1217,8 @@ noncomputable def compileOccurrencesWith?_iso
       (LocalOccurrence sourceDiagram.regionCount sourceDiagram.nodeCount))
     (targetOccurrences : List
       (LocalOccurrence targetDiagram.regionCount targetDiagram.nodeCount))
-    {sourceItems : ItemSeq  sourceContext.length rels}
-    {targetItems : ItemSeq  targetContext.length rels}
+    {sourceItems : CompiledItems sourceDiagram sourceContext.length rels}
+    {targetItems : CompiledItems targetDiagram targetContext.length rels}
     (hsource : compileOccurrencesWith?  sourceDiagram sourceRecurse
       sourceContext sourceBinders sourceOccurrences =
         some sourceItems)
@@ -1139,11 +1232,12 @@ noncomputable def compileOccurrencesWith?_iso
       ItemIso  wire rels
         (sourceItems.get
           (Fin.cast (compileOccurrencesWith?_length sourceRecurse
-            sourceContext sourceBinders hsource).symm index))
+            sourceContext sourceBinders hsource).symm index)).erase
         (targetItems.get
           (Fin.cast (compileOccurrencesWith?_length targetRecurse
-            targetContext targetBinders htarget).symm (occurrences index)))) :
-    ItemSeqIso  wire rels sourceItems targetItems := by
+            targetContext targetBinders htarget).symm
+            (occurrences index))).erase) :
+    ItemSeqIso  wire rels sourceItems.erase targetItems.erase := by
   have hsourceLength := compileOccurrencesWith?_length sourceRecurse
     sourceContext sourceBinders hsource
   have htargetLength := compileOccurrencesWith?_length targetRecurse
@@ -1162,13 +1256,14 @@ noncomputable def compileOccurrencesWith?_iso
         positions sourceIndex := by
     apply Fin.ext
     rfl
-  simpa only [hsourcePosition, htargetPosition] using hitem occurrenceIndex
+  simpa only [hsourcePosition, htargetPosition, CompiledItems.erase_get] using
+    hitem occurrenceIndex
 
 theorem compileOccurrencesWith?_complete
     (recurse : forall {rels : RelCtx},
       (region : Fin d.regionCount) →
       (context : WireContext d) → BinderContext d rels →
-      Option (Region  context.length rels))
+      Option (CompiledRegion d context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     (occurrences : List (LocalOccurrence d.regionCount d.nodeCount))
     (hsuccess : forall occurrence, occurrence ∈ occurrences →

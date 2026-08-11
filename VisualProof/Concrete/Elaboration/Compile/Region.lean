@@ -10,16 +10,19 @@ open VisualProof.Diagram
 /-- Package compiled direct occurrences with the wires locally bound here. -/
 def finishRegion (d : Diagram)
     (context : WireContext d) (region : Fin d.regionCount)
-    (items : ItemSeq  (context.extend region).length rels) :
-    Region  context.length rels :=
-  .mk (exactScopeWires d region).length
-    (items.castWiresEq (WireContext.length_extend context region))
+    (items : CompiledItems d (context.extend region).length rels) :
+    CompiledRegion d context.length rels :=
+  .mk (exactScopeWires d region).length items {
+    total_eq := WireContext.length_extend context region
+  }
 
 /-- Package the root after separating ambient from locally bound wires. -/
 def finishRoot (ambient locals : WireContext d)
-    (items : ItemSeq  (ambient ++ locals).length []) :
-    Region  ambient.length [] :=
-  .mk locals.length (items.castWiresEq (by simp))
+    (items : CompiledItems d (ambient ++ locals).length []) :
+    CompiledRegion d ambient.length [] :=
+  .mk locals.length items {
+    total_eq := by simp
+  }
 
 noncomputable def regionIso_of_cast
     {sourceOuter targetOuter sourceLocal targetLocal
@@ -64,7 +67,7 @@ private theorem regionIso_of_cast_localEquiv
 def compileRegion? (d : Diagram) :
     Nat -> (region : Fin d.regionCount) ->
       (context : WireContext d) -> BinderContext d rels ->
-      Option (Region  context.length rels)
+      Option (CompiledRegion d context.length rels)
   | 0, _, _, _ => none
   | fuel + 1, region, context, binders => do
       let extended := context.extend region
@@ -80,7 +83,7 @@ regions are compiled only by `compileRegion?`.
 -/
 def compileRoot? (d : Diagram)
     (ambient locals : WireContext d) :
-    Option (Region  ambient.length []) := do
+    Option (CompiledRegion d ambient.length []) := do
   let rootWires := ambient ++ locals
   let items <- compileOccurrencesWith?  d
     (compileRegion?  d d.regionCount)
@@ -90,7 +93,7 @@ def compileRoot? (d : Diagram)
 /-- A successful root compilation retains exactly the supplied local context. -/
 theorem compileRoot?_localCount
     {d : Diagram} {ambient locals : WireContext d}
-    {body : Region ambient.length []}
+    {body : CompiledRegion d ambient.length []}
     (compiled : compileRoot? d ambient locals = some body) :
     body.localCount = locals.length := by
   simp only [compileRoot?] at compiled
@@ -123,14 +126,14 @@ noncomputable def compileRegion?_equivariant {source target : Diagram}
     {sourceBinders : BinderContext source rels}
     {targetBinders : BinderContext target rels}
     (hbinders : BinderContextsAgree iso sourceBinders targetBinders)
-    {sourceBody : Region  sourceContext.length rels}
-    {targetBody : Region  targetContext.length rels}
+    {sourceBody : CompiledRegion source sourceContext.length rels}
+    {targetBody : CompiledRegion target targetContext.length rels}
     (hsource : compileRegion?  source sourceFuel region sourceContext
       sourceBinders = some sourceBody)
     (htargetResult : compileRegion?  target targetFuel
       (iso.regions region)
       targetContext targetBinders = some targetBody) :
-    RegionIso  ambient rels sourceBody targetBody := by
+    RegionIso  ambient rels sourceBody.erase targetBody.erase := by
   induction sourceFuel generalizing targetFuel region sourceContext
       targetContext rels sourceBinders targetBinders sourceBody targetBody with
   | zero => simp [compileRegion?] at hsource
@@ -148,8 +151,8 @@ noncomputable def compileRegion?_equivariant {source target : Diagram}
           have hoccurrence : forall
               (occurrence : LocalOccurrence source.regionCount source.nodeCount)
               (_ : occurrence ∈ localOccurrences source region)
-              (sourceItem : Item  sourceExtended.length rels)
-              (targetItem : Item  targetExtended.length rels),
+              (sourceItem : CompiledItem source sourceExtended.length rels)
+              (targetItem : CompiledItem target targetExtended.length rels),
               compileOccurrenceWith?  source
                   (compileRegion?  source sourceFuel) sourceExtended
                   sourceBinders
@@ -158,7 +161,7 @@ noncomputable def compileRegion?_equivariant {source target : Diagram}
                   (compileRegion?  target targetFuel) targetExtended
                   targetBinders
                   (renameOccurrence iso occurrence) = some targetItem →
-              ItemIso  extended rels sourceItem targetItem := by
+              ItemIso  extended rels sourceItem.erase targetItem.erase := by
             intro occurrence hoccurrenceMem sourceItem targetItem
               hsourceItem htargetItem
             cases occurrence with
@@ -269,7 +272,7 @@ noncomputable def compileRegion?_equivariant {source target : Diagram}
                     castFinEquiv hsourceLength htargetLength
                       (localOccurrenceEquiv iso region)
                   have hitems : ItemSeqIso  extended rels
-                      sourceItems targetItems := by
+                      sourceItems.erase targetItems.erase := by
                     apply ItemSeqIso.permute positions
                     intro sourceIndex
                     let occurrenceIndex : Fin (localOccurrences source region).length :=
@@ -293,14 +296,16 @@ noncomputable def compileRegion?_equivariant {source target : Diagram}
                       rfl
                     rw [hsourcePosition] at hsourceGet
                     rw [htargetPosition] at htargetGet
-                    exact hoccurrence _ (List.get_mem _ _) _ _
-                      hsourceGet htargetGet
+                    simpa only [CompiledItems.erase_get] using
+                      hoccurrence _ (List.get_mem _ _) _ _
+                        hsourceGet htargetGet
                   simpa only [finishRegion, sourceExtended, targetExtended,
-                    extended, extendedContextEquiv] using
+                    extended, extendedContextEquiv, CompiledRegion.erase] using
                     regionIso_of_cast
                       (WireContext.length_extend sourceContext region)
                       (WireContext.length_extend targetContext (iso.regions region))
-                      ambient (localWireEquiv iso region) sourceItems targetItems hitems
+                      ambient (localWireEquiv iso region) sourceItems.erase
+                        targetItems.erase hitems
 
 /-- Equivariance of one compiled direct occurrence, with recursive child
 regions discharged by the public region-kernel theorem. -/
@@ -319,15 +324,15 @@ noncomputable def compileOccurrenceWith?_equivariant
     (hbinders : BinderContextsAgree iso sourceBinders targetBinders)
     (occurrence : LocalOccurrence source.regionCount source.nodeCount)
     (hoccurrence : occurrence ∈ localOccurrences source region)
-    {sourceItem : Item  sourceContext.length rels}
-    {targetItem : Item  targetContext.length rels}
+    {sourceItem : CompiledItem source sourceContext.length rels}
+    {targetItem : CompiledItem target targetContext.length rels}
     (hsource : compileOccurrenceWith?  source
       (compileRegion?  source sourceFuel) sourceContext sourceBinders
       occurrence = some sourceItem)
     (htargetResult : compileOccurrenceWith?  target
       (compileRegion?  target targetFuel) targetContext targetBinders
       (renameOccurrence iso occurrence) = some targetItem) :
-    ItemIso  ambient rels sourceItem targetItem := by
+    ItemIso  ambient rels sourceItem.erase targetItem.erase := by
   cases occurrence with
   | node node =>
       exact compileNode?_equivariant iso htarget hwires htargetExact.nodup
@@ -424,15 +429,15 @@ noncomputable def compileOccurrencesWith?_equivariant
     (occurrences : List (LocalOccurrence source.regionCount source.nodeCount))
     (hlocal : ∀ occurrence, occurrence ∈ occurrences →
       occurrence ∈ localOccurrences source region)
-    {sourceItems : ItemSeq  sourceContext.length rels}
-    {targetItems : ItemSeq  targetContext.length rels}
+    {sourceItems : CompiledItems source sourceContext.length rels}
+    {targetItems : CompiledItems target targetContext.length rels}
     (hsource : compileOccurrencesWith?  source
       (compileRegion?  source sourceFuel) sourceContext sourceBinders
       occurrences = some sourceItems)
     (htargetResult : compileOccurrencesWith?  target
       (compileRegion?  target targetFuel) targetContext targetBinders
       (occurrences.map (renameOccurrence iso)) = some targetItems) :
-    ItemSeqIso  ambient rels sourceItems targetItems := by
+    ItemSeqIso  ambient rels sourceItems.erase targetItems.erase := by
   let positions : FiniteEquiv (Fin occurrences.length)
       (Fin (occurrences.map (renameOccurrence iso)).length) :=
     FiniteEquiv.finCast (List.length_map (renameOccurrence iso)).symm
@@ -473,13 +478,13 @@ noncomputable def compileRegion?_equivariant_sameDiagram
     (htargetExact : (targetContext.extend region).Exact region)
     {sourceBinders targetBinders : BinderContext d rels}
     (hbinders : targetBinders = sourceBinders)
-    {sourceBody : Region  sourceContext.length rels}
-    {targetBody : Region  targetContext.length rels}
+    {sourceBody : CompiledRegion d sourceContext.length rels}
+    {targetBody : CompiledRegion d targetContext.length rels}
     (hsource : compileRegion?  d sourceFuel region sourceContext
       sourceBinders = some sourceBody)
     (htarget : compileRegion?  d targetFuel region targetContext
       targetBinders = some targetBody) :
-    RegionIso  ambient rels sourceBody targetBody := by
+    RegionIso  ambient rels sourceBody.erase targetBody.erase := by
   apply compileRegion?_equivariant (Iso.refl d) hwf hwires
     htargetExact
   · intro binder
@@ -509,7 +514,7 @@ theorem compileNode?_complete
           intro index
           simp [Diagram.RequiresPort, hnode, hbubble]
           exact ⟨index, rfl⟩)
-      exact ⟨Item.atom relation arguments, by
+      exact ⟨CompiledItem.node node (Item.atom relation arguments), by
         simp [compileNode?, hnode, hrelation, harguments]⟩
   | identity nodeRegion arity =>
       obtain ⟨arguments, harguments⟩ := checked_resolvePorts?_complete hwf hwires
@@ -517,7 +522,7 @@ theorem compileNode?_complete
           intro index
           simp [Diagram.RequiresPort, hnode]
           exact ⟨index, rfl⟩)
-      exact ⟨Item.identity arity arguments, by
+      exact ⟨CompiledItem.node node (Item.identity arity arguments), by
         simp [compileNode?, hnode, harguments]⟩
 private theorem child_depth
     {d : Diagram} {child parent : Fin d.regionCount} {depth : Nat}
@@ -586,7 +591,7 @@ theorem compileRegion?_complete
                   BinderContext.covers_cut_child hbinders hchild
                 obtain ⟨body, hbody⟩ := ih hchildDepth hchildFuel
                   hchildWires hchildBinders
-                exact ⟨Item.cut body, by
+                exact ⟨CompiledItem.cut child body, by
                   simp [compileOccurrenceWith?, hchild, hbody]⟩
             | bubble parent arity =>
                 have hparentEq : parent = region := by
@@ -600,7 +605,7 @@ theorem compileRegion?_complete
                   BinderContext.push_covers_bubble_child hbinders hchild
                 obtain ⟨body, hbody⟩ := ih hchildDepth hchildFuel
                   hchildWires hchildBinders
-                exact ⟨Item.bubble arity body, by
+                exact ⟨CompiledItem.bubble child arity body, by
                   simp [compileOccurrenceWith?, hchild, hbody]⟩
       have hoccurrences : exists items,
           compileOccurrencesWith?  d (compileRegion?  d fuel)
@@ -660,7 +665,7 @@ theorem compileDirectOccurrences?_complete
           have hchildBinders := BinderContext.covers_cut_child hbinders hchild
           obtain ⟨body, hbody⟩ := compileRegion?_complete hwf hchildDepth
             hfuel hchildWires hchildBinders
-          exact ⟨Item.cut body, by
+          exact ⟨CompiledItem.cut child body, by
             simp [compileOccurrenceWith?, hchild, hbody]⟩
       | bubble parent arity =>
           have hparentEq : parent = region := by
@@ -672,7 +677,7 @@ theorem compileDirectOccurrences?_complete
             BinderContext.push_covers_bubble_child hbinders hchild
           obtain ⟨body, hbody⟩ := compileRegion?_complete hwf hchildDepth
             hfuel hchildWires hchildBinders
-          exact ⟨Item.bubble arity body, by
+          exact ⟨CompiledItem.bubble child arity body, by
             simp [compileOccurrenceWith?, hchild, hbody]⟩
 
 theorem openRootWires_exact
@@ -735,7 +740,7 @@ theorem compileRoot?_complete
             obtain ⟨body, hbody⟩ := compileRegion?_complete hwf
               (depth := 1) (fuel := d.regionCount)
               hchildDepth (by omega) hchildWires hchildBinders
-            exact ⟨Item.cut body, by
+            exact ⟨CompiledItem.cut child body, by
               simp [compileOccurrenceWith?, hchild, hbody]⟩
         | bubble parent arity =>
             have hparentEq : parent = d.root := by
@@ -749,7 +754,7 @@ theorem compileRoot?_complete
             obtain ⟨body, hbody⟩ := compileRegion?_complete hwf
               (depth := 1) (fuel := d.regionCount)
               hchildDepth (by omega) hchildWires hchildBinders
-            exact ⟨Item.bubble arity body, by
+            exact ⟨CompiledItem.bubble child arity body, by
               simp [compileOccurrenceWith?, hchild, hbody]⟩
   obtain ⟨items, hitems⟩ := compileOccurrencesWith?_complete
     (compileRegion?  d d.regionCount)
@@ -768,10 +773,10 @@ private structure RootEquivarianceResult
       (Fin targetAmbient.length))
     (localEquiv : FiniteEquiv (Fin sourceLocal.length)
       (Fin targetLocal.length))
-    (sourceBody : Region sourceAmbient.length [])
-    (targetBody : Region targetAmbient.length []) where
-  sourceItems : ItemSeq (sourceAmbient ++ sourceLocal).length []
-  targetItems : ItemSeq (targetAmbient ++ targetLocal).length []
+    (sourceBody : CompiledRegion source sourceAmbient.length [])
+    (targetBody : CompiledRegion target targetAmbient.length []) where
+  sourceItems : CompiledItems source (sourceAmbient ++ sourceLocal).length []
+  targetItems : CompiledItems target (targetAmbient ++ targetLocal).length []
   source_eq : sourceBody = finishRoot sourceAmbient sourceLocal sourceItems
   target_eq : targetBody = finishRoot targetAmbient targetLocal targetItems
   source_compiled : compileOccurrencesWith? source
@@ -783,7 +788,7 @@ private structure RootEquivarianceResult
       (targetAmbient ++ targetLocal) BinderContext.empty
       (localOccurrences target target.root) = some targetItems
   items_iso : ItemSeqIso (appendContextEquiv ambient localEquiv) []
-    sourceItems targetItems
+    sourceItems.erase targetItems.erase
 
 private noncomputable def RootEquivarianceResult.regionIso
     {source target : Diagram}
@@ -794,17 +799,18 @@ private noncomputable def RootEquivarianceResult.regionIso
       (Fin targetAmbient.length)}
     {localEquiv : FiniteEquiv (Fin sourceLocal.length)
       (Fin targetLocal.length)}
-    {sourceBody : Region sourceAmbient.length []}
-    {targetBody : Region targetAmbient.length []}
+    {sourceBody : CompiledRegion source sourceAmbient.length []}
+    {targetBody : CompiledRegion target targetAmbient.length []}
     (result : RootEquivarianceResult iso sourceAmbient targetAmbient
       sourceLocal targetLocal ambient localEquiv sourceBody targetBody) :
-    RegionIso ambient [] sourceBody targetBody := by
+    RegionIso ambient [] sourceBody.erase targetBody.erase := by
   cases result with
   | mk sourceItems targetItems source_eq target_eq _ _ items_iso =>
       subst sourceBody
       subst targetBody
-      exact regionIso_of_cast (by simp) (by simp) ambient localEquiv
-        sourceItems targetItems items_iso
+      simpa [finishRoot, CompiledRegion.erase] using
+        regionIso_of_cast (by simp) (by simp) ambient localEquiv
+          sourceItems.erase targetItems.erase items_iso
 
 private noncomputable def compileRoot?_equivariant_with_items
     {source target : Diagram}
@@ -819,8 +825,8 @@ private noncomputable def compileRoot?_equivariant_with_items
     (hwires : WireContextsAgree iso (sourceAmbient ++ sourceLocal)
       (targetAmbient ++ targetLocal) (appendContextEquiv ambient localEquiv))
     (htargetExact : WireContext.Exact (targetAmbient ++ targetLocal) target.root)
-    {sourceBody : Region  sourceAmbient.length []}
-    {targetBody : Region  targetAmbient.length []}
+    {sourceBody : CompiledRegion source sourceAmbient.length []}
+    {targetBody : CompiledRegion target targetAmbient.length []}
     (hsource : compileRoot?  source sourceAmbient sourceLocal =
       some sourceBody)
     (htargetResult : compileRoot?  target targetAmbient targetLocal =
@@ -841,8 +847,8 @@ private noncomputable def compileRoot?_equivariant_with_items
   have hoccurrence : forall
       (occurrence : LocalOccurrence source.regionCount source.nodeCount)
       (_ : occurrence ∈ localOccurrences source source.root)
-      (sourceItem : Item  sourceRoot.length [])
-      (targetItem : Item  targetRoot.length []),
+      (sourceItem : CompiledItem source sourceRoot.length [])
+      (targetItem : CompiledItem target targetRoot.length []),
       compileOccurrenceWith?  source
           (compileRegion?  source source.regionCount)
           sourceRoot BinderContext.empty occurrence = some sourceItem ->
@@ -850,7 +856,7 @@ private noncomputable def compileRoot?_equivariant_with_items
           (compileRegion?  target source.regionCount)
           targetRoot BinderContext.empty
           (renameOccurrence iso occurrence) = some targetItem ->
-      ItemIso  rootEquiv [] sourceItem targetItem := by
+      ItemIso  rootEquiv [] sourceItem.erase targetItem.erase := by
     intro occurrence hoccurrenceMem sourceItem targetItem
       hsourceItem htargetItem
     cases occurrence with
@@ -968,7 +974,7 @@ private noncomputable def compileRoot?_equivariant_with_items
             castFinEquiv hsourceLength htargetLength
               (localOccurrenceEquiv iso source.root)
           have hitems : ItemSeqIso  rootEquiv []
-              sourceItems targetItems := by
+              sourceItems.erase targetItems.erase := by
             apply ItemSeqIso.permute positions
             intro sourceIndex
             let occurrenceIndex :
@@ -994,8 +1000,9 @@ private noncomputable def compileRoot?_equivariant_with_items
               rfl
             rw [hsourcePosition] at hsourceGet
             rw [htargetPosition] at htargetGet
-            exact hoccurrence _ (List.get_mem _ _) _ _
-              hsourceGet htargetGet
+            simpa only [CompiledItems.erase_get] using
+              hoccurrence _ (List.get_mem _ _) _ _
+                hsourceGet htargetGet
           have hsourceItems' : compileOccurrencesWith?  source
               (compileRegion?  source source.regionCount)
               (sourceAmbient ++ sourceLocal) BinderContext.empty
@@ -1029,13 +1036,13 @@ noncomputable def compileRoot?_equivariant
     (hwires : WireContextsAgree iso (sourceAmbient ++ sourceLocal)
       (targetAmbient ++ targetLocal) (appendContextEquiv ambient localEquiv))
     (htargetExact : WireContext.Exact (targetAmbient ++ targetLocal) target.root)
-    {sourceBody : Region  sourceAmbient.length []}
-    {targetBody : Region  targetAmbient.length []}
+    {sourceBody : CompiledRegion source sourceAmbient.length []}
+    {targetBody : CompiledRegion target targetAmbient.length []}
     (hsource : compileRoot?  source sourceAmbient sourceLocal =
       some sourceBody)
     (htargetResult : compileRoot?  target targetAmbient targetLocal =
       some targetBody) :
-    RegionIso  ambient [] sourceBody targetBody :=
+    RegionIso  ambient [] sourceBody.erase targetBody.erase :=
   (compileRoot?_equivariant_with_items iso htarget hwires htargetExact
     hsource htargetResult).regionIso
 
@@ -1054,28 +1061,48 @@ theorem compileRoot?_equivariant_localEquivCast
     (hwires : WireContextsAgree iso (sourceAmbient ++ sourceLocal)
       (targetAmbient ++ targetLocal) (appendContextEquiv ambient localEquiv))
     (htargetExact : WireContext.Exact (targetAmbient ++ targetLocal) target.root)
-    {sourceBody : Region sourceAmbient.length []}
-    {targetBody : Region targetAmbient.length []}
+    {sourceBody : CompiledRegion source sourceAmbient.length []}
+    {targetBody : CompiledRegion target targetAmbient.length []}
     (hsource : compileRoot? source sourceAmbient sourceLocal = some sourceBody)
     (htargetResult : compileRoot? target targetAmbient targetLocal =
       some targetBody) :
     (compileRoot?_equivariant iso htarget hwires htargetExact
       hsource htargetResult).localEquivCast
-        (compileRoot?_localCount hsource)
-        (compileRoot?_localCount htargetResult) = localEquiv := by
+        (by simpa using compileRoot?_localCount hsource)
+        (by simpa using compileRoot?_localCount htargetResult) = localEquiv := by
   let result := compileRoot?_equivariant_with_items iso htarget hwires
     htargetExact hsource htargetResult
   change result.regionIso.localEquivCast _ _ = localEquiv
   cases result with
   | mk sourceItems targetItems source_eq target_eq _ _ items_iso =>
-      subst sourceBody
-      subst targetBody
-      change
-        (regionIso_of_cast (by simp) (by simp) ambient localEquiv
-          sourceItems targetItems items_iso).localEquivCast _ _ = localEquiv
-      simpa [RegionIso.localEquivCast] using
-        regionIso_of_cast_localEquiv (by simp) (by simp) ambient localEquiv
-          sourceItems targetItems items_iso
+      cases source_eq
+      cases target_eq
+      let sourceWireEq : (sourceAmbient ++ sourceLocal).length =
+          sourceAmbient.length + sourceLocal.length := by simp
+      let targetWireEq : (targetAmbient ++ targetLocal).length =
+          targetAmbient.length + targetLocal.length := by simp
+      let core := regionIso_of_cast sourceWireEq targetWireEq ambient
+        localEquiv sourceItems.erase targetItems.erase items_iso
+      have sourceEndpoint :
+          Region.mk sourceLocal.length
+              (sourceItems.erase.castWiresEq sourceWireEq) =
+            (finishRoot sourceAmbient sourceLocal sourceItems).erase := by
+        simp [finishRoot, CompiledRegion.erase]
+      have targetEndpoint :
+          Region.mk targetLocal.length
+              (targetItems.erase.castWiresEq targetWireEq) =
+            (finishRoot targetAmbient targetLocal targetItems).erase := by
+        simp [finishRoot, CompiledRegion.erase]
+      have transported := RegionIso.localEquivCast_castEndpoints core
+        sourceEndpoint targetEndpoint (by rfl) (by rfl) (by rfl) (by rfl)
+      have coreLocal : core.localEquivCast (by rfl) (by rfl) =
+          localEquiv := by
+        simpa [core, RegionIso.localEquivCast] using
+          regionIso_of_cast_localEquiv sourceWireEq targetWireEq ambient
+            localEquiv sourceItems.erase targetItems.erase items_iso
+      simpa [RootEquivarianceResult.regionIso, core, sourceWireEq,
+        targetWireEq, sourceEndpoint, targetEndpoint] using
+          transported.trans coreLocal
 
 /-- Public root-context equivariance with every supplied root wire treated as
 ambient.  Unlike `compileRoot?_equivariant`, its interface mentions only the
@@ -1090,12 +1117,12 @@ noncomputable def compileRoot?_equivariant_allAmbient
     (hwires : ∀ index,
       targetRoot.get (rootEquiv index) = iso.wires (sourceRoot.get index))
     (htargetExact : WireContext.Exact targetRoot target.root)
-    {sourceBody : Region  sourceRoot.length []}
-    {targetBody : Region  targetRoot.length []}
+    {sourceBody : CompiledRegion source sourceRoot.length []}
+    {targetBody : CompiledRegion target targetRoot.length []}
     (hsource : compileRoot?  source sourceRoot [] = some sourceBody)
     (htargetResult : compileRoot?  target targetRoot [] =
       some targetBody) :
-    RegionIso  rootEquiv [] sourceBody targetBody := by
+    RegionIso  rootEquiv [] sourceBody.erase targetBody.erase := by
   have hroot : WireContextsAgree iso sourceRoot targetRoot rootEquiv := hwires
   have hempty : WireContextsAgree iso ([] : WireContext source)
       ([] : WireContext target) (FiniteEquiv.refl (Fin 0)) := by
@@ -1120,8 +1147,8 @@ noncomputable def compileRootItems?_equivariant
     (hwires : ∀ index,
       targetRoot.get (rootEquiv index) = iso.wires (sourceRoot.get index))
     (htargetExact : WireContext.Exact targetRoot target.root)
-    {sourceItems : ItemSeq  sourceRoot.length []}
-    {targetItems : ItemSeq  targetRoot.length []}
+    {sourceItems : CompiledItems source sourceRoot.length []}
+    {targetItems : CompiledItems target targetRoot.length []}
     (hsource : compileOccurrencesWith?  source
       (compileRegion?  source source.regionCount)
       sourceRoot BinderContext.empty (localOccurrences source source.root) =
@@ -1130,7 +1157,7 @@ noncomputable def compileRootItems?_equivariant
       (compileRegion?  target target.regionCount)
       targetRoot BinderContext.empty (localOccurrences target target.root) =
         some targetItems) :
-    ItemSeqIso  rootEquiv [] sourceItems targetItems := by
+    ItemSeqIso  rootEquiv [] sourceItems.erase targetItems.erase := by
   have hsourceRoot : compileRoot?  source [] sourceRoot =
       some (finishRoot [] sourceRoot sourceItems) := by
     change (do

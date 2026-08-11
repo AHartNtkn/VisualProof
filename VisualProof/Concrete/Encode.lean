@@ -5226,11 +5226,12 @@ private noncomputable def compileEncodedAtom
       Fin (rawDiagram diagram).regionCount →
       (recursiveContext : Elaboration.WireContext (rawDiagram diagram)) →
       Elaboration.BinderContext (rawDiagram diagram) rels →
-      Option (Region  recursiveContext.length rels))
-    (target : Item  context.length rels)
+      Option (Elaboration.CompiledRegion (rawDiagram diagram)
+        recursiveContext.length rels))
+    (target : Elaboration.CompiledItem (rawDiagram diagram) context.length rels)
     (compiled : Elaboration.compileOccurrenceWith? (rawDiagram diagram) recurse
       context binderContext (.node node) = some target) :
-    ItemIso  wireEquiv rels (.atom relation arguments) target := by
+    ItemIso  wireEquiv rels (.atom relation arguments) target.erase := by
   obtain ⟨concreteRegion, concreteBinder, nodeEq, regionValue, binderValue⟩ :=
     rawDiagram_node_atom_lookup diagram node current.val
       (binderMap arity relation) arity (wireMap ∘ arguments) draftEq
@@ -5294,11 +5295,12 @@ private noncomputable def compileEncodedIdentity
       Fin (rawDiagram diagram).regionCount →
       (recursiveContext : Elaboration.WireContext (rawDiagram diagram)) →
       Elaboration.BinderContext (rawDiagram diagram) rels →
-      Option (Region  recursiveContext.length rels))
-    (target : Item  context.length rels)
+      Option (Elaboration.CompiledRegion (rawDiagram diagram)
+        recursiveContext.length rels))
+    (target : Elaboration.CompiledItem (rawDiagram diagram) context.length rels)
     (compiled : Elaboration.compileOccurrenceWith? (rawDiagram diagram) recurse
       context binderContext (.node node) = some target) :
-    ItemIso  wireEquiv rels (.identity arity arguments) target := by
+    ItemIso  wireEquiv rels (.identity arity arguments) target.erase := by
   obtain ⟨concreteRegion, nodeEq, regionValue⟩ :=
     rawDiagram_node_identity_lookup diagram node current.val arity
       (wireMap ∘ arguments) draftEq
@@ -5352,10 +5354,11 @@ private def RegionCompileMotive
     (binderContext : Elaboration.BinderContext (rawDiagram diagram) rels)
     (_binderAgreement : BinderMap.ContextAgreement diagram binders binderContext)
     (_extendedExact : (context.extend current).Exact current)
-    (fuel : Nat) (target : Region  context.length rels),
+    (fuel : Nat) (target : Elaboration.CompiledRegion
+      (rawDiagram diagram) context.length rels),
     Elaboration.compileRegion? (rawDiagram diagram) fuel current context
       binderContext = some target →
-    RegionIso  wireEquiv rels source target
+    RegionIso  wireEquiv rels source target.erase
 
 private def ItemCompileMotive
     (sourceWires : Nat) (rels : RelCtx)
@@ -5384,13 +5387,14 @@ private def ItemCompileMotive
     (fuel : Nat)
     (draftBounded : (itemOccurrenceDraft regionBase nodeBase source).Bounded
       (rawDiagram diagram).regionCount (rawDiagram diagram).nodeCount)
-    (target : Item  context.length rels),
+    (target : Elaboration.CompiledItem
+      (rawDiagram diagram) context.length rels),
     Elaboration.compileOccurrenceWith? (rawDiagram diagram)
       (Elaboration.compileRegion? (rawDiagram diagram) fuel)
       context binderContext
       ((itemOccurrenceDraft regionBase nodeBase source).toConcrete draftBounded) =
         some target →
-    ItemIso  wireEquiv rels source target
+    ItemIso  wireEquiv rels source target.erase
 
 private def ItemsCompileMotive
     (sourceWires : Nat) (rels : RelCtx)
@@ -5418,7 +5422,8 @@ private def ItemsCompileMotive
     (_binderAgreement : BinderMap.ContextAgreement diagram binders binderContext)
     (fuel : Nat)
     (index : Fin (occurrenceDrafts regionBase nodeBase source).length)
-    (target : Item  context.length rels),
+    (target : Elaboration.CompiledItem
+      (rawDiagram diagram) context.length rels),
     Elaboration.compileOccurrenceWith? (rawDiagram diagram)
       (Elaboration.compileRegion? (rawDiagram diagram) fuel)
       context binderContext
@@ -5427,7 +5432,7 @@ private def ItemsCompileMotive
           wireBase wireMap binders source allocated _
           (List.get_mem _ index))) = some target →
     ItemIso  wireEquiv rels
-      (source.get (Fin.cast (occurrenceDrafts_length source) index)) target
+      (source.get (Fin.cast (occurrenceDrafts_length source) index)) target.erase
 
 private noncomputable def compileEncodedAtomMotive
     (relation : RelVar rels arity)
@@ -5849,9 +5854,11 @@ private noncomputable def compileEncodedRegionMotive
       | some targetItems =>
           simp [compiledItemsEq] at compiled
           subst target
+          simp only [Elaboration.finishRegion,
+            Elaboration.CompiledRegion.erase]
           apply Elaboration.regionIso_of_cast rfl
             (Elaboration.WireContext.length_extend context current)
-            wireEquiv localEquiv items targetItems
+            wireEquiv localEquiv items targetItems.erase
           let positions : FiniteEquiv (Fin items.length) (Fin targetItems.length) :=
             (FiniteEquiv.finCast (occurrenceDrafts_length items).symm).trans
               (occurrenceEquiv.trans (FiniteEquiv.finCast
@@ -6071,7 +6078,7 @@ private theorem rawOpen_elaborate_isomorphic
       let occurrenceEquiv := localOccurrenceDraftEquiv
         (rawDiagram diagram).root record.occurrences occurrenceBounded
         occurrenceNodup occurrenceMemIff
-      obtain ⟨targetBody, compiledRoot, elaborateBody⟩ :=
+      obtain ⟨targetBody, compiledRoot, _, elaborateBody⟩ :=
         Concrete.CheckedOpen.elaborate_body_computation checked
       have compiledRoot' : Elaboration.compileRoot? (rawDiagram diagram)
           (rawOpen diagram).exposedWires (rawOpen diagram).hiddenWires =
@@ -6082,7 +6089,7 @@ private theorem rawOpen_elaborate_isomorphic
       have targetBodyEq : targetBody = Elaboration.finishRoot
           (rawOpen diagram).exposedWires (rawOpen diagram).hiddenWires
           targetItems := (Option.some.inj finishResult).symm
-      have itemsIso : ItemSeqIso rootEquiv [] items targetItems := by
+      have itemsIso : ItemSeqIso rootEquiv [] items targetItems.erase := by
         let positions : FiniteEquiv (Fin items.length)
             (Fin targetItems.length) :=
           (FiniteEquiv.finCast (occurrenceDrafts_length items).symm).trans
@@ -6139,15 +6146,18 @@ private theorem rawOpen_elaborate_isomorphic
           (BinderMap.empty_contextAgreement diagram)
           (rawDiagram diagram).regionCount draftIndex
           (targetItems.get targetIndex) (by simpa [targetIndex] using compiledAt)
-        simpa [positions, draftIndex, targetIndex] using itemResult
+        simpa [positions, draftIndex, targetIndex,
+          Elaboration.CompiledItems.erase_get] using itemResult
       have bodyIso : RegionIso (externalEquiv diagram) []
           (.mk localWires items)
           (Elaboration.finishRoot (rawOpen diagram).exposedWires
-            (rawOpen diagram).hiddenWires targetItems) := by
+            (rawOpen diagram).hiddenWires targetItems).erase := by
+        simp only [Elaboration.finishRoot,
+          Elaboration.CompiledRegion.erase]
         apply Elaboration.regionIso_of_cast rfl
           (List.length_append (as := (rawOpen diagram).exposedWires)
             (bs := (rawOpen diagram).hiddenWires))
-          (externalEquiv diagram) hiddenEquiv items targetItems
+          (externalEquiv diagram) hiddenEquiv items targetItems.erase
         exact itemsIso
       have compiledBodyIso : RegionIso (externalEquiv diagram) []
           diagram.body checked.elaborate.body := by

@@ -32,24 +32,25 @@ noncomputable def elaborate_equivalent {source target : OpenDiagram}
   have hbody : RegionIso  equiv.exposedWiresEquiv []
       (source.elaborate hsource).body (target.elaborate htarget).body := by
     have hsourceKernel : compileRoot? source.diagram source.exposedWires
-        source.hiddenWires = some (source.elaborate hsource).body := by
-      obtain ⟨sourceBody, hkernel, helaborate⟩ :=
+        source.hiddenWires =
+          some (CheckedOpen.compilation ⟨source, hsource⟩) := by
+      obtain ⟨sourceBody, hkernel, hcompilation, _⟩ :=
         CheckedOpen.elaborate_body_computation
           (show CheckedOpen from ⟨source, hsource⟩)
-      change (source.elaborate hsource).body = sourceBody at helaborate
-      rw [helaborate]
+      rw [hcompilation]
       exact hkernel
     have htargetKernel : compileRoot? target.diagram target.exposedWires
-        target.hiddenWires = some (target.elaborate htarget).body := by
-      obtain ⟨targetBody, hkernel, helaborate⟩ :=
+        target.hiddenWires =
+          some (CheckedOpen.compilation ⟨target, htarget⟩) := by
+      obtain ⟨targetBody, hkernel, hcompilation, _⟩ :=
         CheckedOpen.elaborate_body_computation
           (show CheckedOpen from ⟨target, htarget⟩)
-      change (target.elaborate htarget).body = targetBody at helaborate
-      rw [helaborate]
+      rw [hcompilation]
       exact hkernel
-    exact compileRoot?_certifiedEquivariant equiv.diagram
-      htarget.diagram_well_formed hwires htargetExact
-      hsourceKernel htargetKernel
+    simpa [OpenDiagram.elaborate, CheckedOpen.elaborate] using
+      compileRoot?_certifiedEquivariant equiv.diagram
+        htarget.diagram_well_formed hwires htargetExact
+        hsourceKernel htargetKernel
   apply OpenDiagramIso.ofArityEq equiv.boundary_length_eq
     equiv.exposedWiresEquiv
   · intro position
