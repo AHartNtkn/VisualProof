@@ -382,6 +382,81 @@ def prepareSelectionReplacement (input : Checked)
           spliceAttachmentConsistent := prepared.property.2
         }
 
+private theorem replacementSpliceInput?_pattern_spine
+    (input : Checked) (selection : CheckedSelection input.val)
+    (replacement : SelectionReplacement input selection)
+    (domains : FrameDomains input.val selection)
+    (frame : Checked)
+    (frameEq : frame.val = input.val.removeRaw selection domains)
+    (prepared : { spliceInput : Splice.Input //
+      spliceInput.frame = frame ∧ spliceInput.AttachmentConsistent })
+    (success : replacementSpliceInput? input selection replacement domains
+      frame frameEq = some prepared) :
+    prepared.val.pattern = replacement.pattern ∧
+      HEq prepared.val.binderSpine replacement.binderSpine ∧
+      HEq prepared.val.binderSpine.bodyContainer
+        replacement.binderSpine.bodyContainer := by
+  unfold replacementSpliceInput? at success
+  split at success <;> try contradiction
+  split at success <;> try contradiction
+  split at success <;> try contradiction
+  cases success
+  exact ⟨rfl, .rfl, .rfl⟩
+
+private theorem prepareSelectionReplacement_pattern_spine
+    {input : Checked} {selection : CheckedSelection input.val}
+    {replacement : SelectionReplacement input selection}
+    {prepared : PreparedSelectionReplacement input selection replacement}
+    (success : prepareSelectionReplacement input selection replacement =
+      .ok prepared) :
+    prepared.spliceInput.pattern = replacement.pattern ∧
+      HEq prepared.spliceInput.binderSpine replacement.binderSpine ∧
+      HEq prepared.spliceInput.binderSpine.bodyContainer
+        replacement.binderSpine.bodyContainer := by
+  unfold prepareSelectionReplacement at success
+  dsimp only at success
+  split at success <;> try contradiction
+  rename_i frame frameSuccess
+  split at success <;> try contradiction
+  rename_i preparedInput preparedInputSuccess
+  cases success
+  exact replacementSpliceInput?_pattern_spine input selection replacement _
+    frame _ preparedInput preparedInputSuccess
+
+/-- The prepared splice uses exactly the replacement pattern supplied to the
+flat primitive; successful preparation selects only its dense frame maps. -/
+theorem prepareSelectionReplacement_spliceInput_pattern
+    {input : Checked} {selection : CheckedSelection input.val}
+    {replacement : SelectionReplacement input selection}
+    {prepared : PreparedSelectionReplacement input selection replacement}
+    (success : prepareSelectionReplacement input selection replacement =
+      .ok prepared) :
+    prepared.spliceInput.pattern = replacement.pattern :=
+  (prepareSelectionReplacement_pattern_spine success).1
+
+/-- The prepared splice retains the supplied binder spine exactly, modulo the
+dependent pattern equality exposed above. -/
+theorem prepareSelectionReplacement_spliceInput_binderSpine
+    {input : Checked} {selection : CheckedSelection input.val}
+    {replacement : SelectionReplacement input selection}
+    {prepared : PreparedSelectionReplacement input selection replacement}
+    (success : prepareSelectionReplacement input selection replacement =
+      .ok prepared) :
+    HEq prepared.spliceInput.binderSpine replacement.binderSpine :=
+  (prepareSelectionReplacement_pattern_spine success).2.1
+
+/-- The material compiler site selected by preparation is the supplied
+replacement spine's body container. -/
+theorem prepareSelectionReplacement_spliceInput_bodyContainer
+    {input : Checked} {selection : CheckedSelection input.val}
+    {replacement : SelectionReplacement input selection}
+    {prepared : PreparedSelectionReplacement input selection replacement}
+    (success : prepareSelectionReplacement input selection replacement =
+      .ok prepared) :
+    HEq prepared.spliceInput.binderSpine.bodyContainer
+      replacement.binderSpine.bodyContainer :=
+  (prepareSelectionReplacement_pattern_spine success).2.2
+
 /-- Exact graph provenance from the replacement source to its prepared dense
 frame. -/
 def PreparedSelectionReplacement.frameProvenance
