@@ -28,15 +28,15 @@ theorem DirectedStep.ofCanonical
     (step : DirectedStep orientation
       (canonicalDiagram source) (canonicalDiagram target)) :
     ∃ targetDiagram : OpenDiagram arity,
-      DirectedStep orientation sourceDiagram targetDiagram ∧
-      StateRepresents target targetDiagram := by
+      StateRepresents target targetDiagram ∧
+      DirectedStep orientation sourceDiagram targetDiagram := by
   have sourceCanonicalRep : StateRepresents source (canonicalDiagram source) :=
     StateRepresents.checked source
   obtain ⟨sourceIso⟩ :=
     StateRepresents.unique sourceRep sourceCanonicalRep
   have targetCanonicalRep : StateRepresents target (canonicalDiagram target) :=
     StateRepresents.checked target
-  refine ⟨canonicalDiagram target, ?_, targetCanonicalRep⟩
+  refine ⟨canonicalDiagram target, targetCanonicalRep, ?_⟩
   cases orientation with
   | forward =>
       exact Rule.Step.iso sourceIso.symm step
