@@ -42,6 +42,7 @@ structure RegionSiteCompilation
   fullWires : WireContext diagram
   fullWires_exact : fullWires.Exact site
   binder_covers : siteBinders.Covers site
+  binder_enumeration : BinderContext.Enumeration diagram siteBinders site
   focus_wires : witness.toFocus.holeWires = siteContext.length
   focus_rels : witness.toFocus.holeRels = siteRels
   focus_body : HEq witness.toFocus.body siteBody
@@ -57,6 +58,7 @@ noncomputable def RegionSiteCompilation.ofRegion
       some body)
     (fullWires : (context.extend current).Exact current)
     (binderCovers : binders.Covers current)
+    (binderEnumeration : BinderContext.Enumeration diagram binders current)
     (encloses : diagram.Encloses current site) :
     RegionSiteCompilation diagram current site body := by
   by_cases atSite : current = site
@@ -74,6 +76,7 @@ noncomputable def RegionSiteCompilation.ofRegion
       fullWires := context.extend site
       fullWires_exact := fullWires
       binder_covers := binderCovers
+      binder_enumeration := binderEnumeration
       focus_wires := rfl
       focus_rels := rfl
       focus_body := .rfl
@@ -139,6 +142,7 @@ noncomputable def RegionSiteCompilation.ofRegion
                       childCompilation
                         (fullWires.extend_child wellFormed childParent)
                         (BinderContext.covers_cut_child binderCovers childKind)
+                        (binderEnumeration.cutChild wellFormed childKind)
                         childEncloses
                     let wireEq := WireContext.length_extend context current
                     let castFocus := focused.focus.castWiresEq wireEq
@@ -169,6 +173,7 @@ noncomputable def RegionSiteCompilation.ofRegion
                       fullWires := nested.fullWires
                       fullWires_exact := nested.fullWires_exact
                       binder_covers := nested.binder_covers
+                      binder_enumeration := nested.binder_enumeration
                       focus_wires := by
                         change castNested.toFocus.holeWires =
                           nested.siteContext.length
@@ -202,6 +207,7 @@ noncomputable def RegionSiteCompilation.ofRegion
                         (fullWires.extend_child wellFormed childParent)
                         (BinderContext.push_covers_bubble_child binderCovers
                           childKind)
+                        (binderEnumeration.bubbleChild wellFormed childKind)
                         childEncloses
                     let wireEq := WireContext.length_extend context current
                     let castFocus := focused.focus.castWiresEq wireEq
@@ -232,6 +238,7 @@ noncomputable def RegionSiteCompilation.ofRegion
                       fullWires := nested.fullWires
                       fullWires_exact := nested.fullWires_exact
                       binder_covers := nested.binder_covers
+                      binder_enumeration := nested.binder_enumeration
                       focus_wires := by
                         change castNested.toFocus.holeWires =
                           nested.siteContext.length
@@ -318,6 +325,8 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                 childCompilation
                   (rootWires.extend_child wellFormed childParent)
                   (BinderContext.covers_cut_child rootBinders childKind)
+                  ((BinderContext.Enumeration.empty diagram).cutChild
+                    wellFormed childKind)
                   childEncloses
               let wireEq : rootContext.length = ambient.length + locals.length :=
                 by simp [rootContext]
@@ -349,6 +358,7 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                 fullWires := nested.fullWires
                 fullWires_exact := nested.fullWires_exact
                 binder_covers := nested.binder_covers
+                binder_enumeration := nested.binder_enumeration
                 focus_wires := by
                   change castNested.toFocus.holeWires =
                     nested.siteContext.length
@@ -380,6 +390,8 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                 childCompilation
                   (rootWires.extend_child wellFormed childParent)
                   (BinderContext.push_covers_bubble_child rootBinders childKind)
+                  ((BinderContext.Enumeration.empty diagram).bubbleChild
+                    wellFormed childKind)
                   childEncloses
               let wireEq : rootContext.length = ambient.length + locals.length :=
                 by simp [rootContext]
@@ -411,6 +423,7 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                 fullWires := nested.fullWires
                 fullWires_exact := nested.fullWires_exact
                 binder_covers := nested.binder_covers
+                binder_enumeration := nested.binder_enumeration
                 focus_wires := by
                   change castNested.toFocus.holeWires =
                     nested.siteContext.length
@@ -468,6 +481,8 @@ structure CompiledSite (source : State arity)
   fullWires : WireContext source.checked.val.diagram
   fullWires_exact : fullWires.Exact site
   binder_covers : siteBinders.Covers site
+  binder_enumeration : BinderContext.Enumeration
+    source.checked.val.diagram siteBinders site
   focus_wires : witness.toFocus.holeWires = siteContext.length
   focus_rels : witness.toFocus.holeRels = siteRels
   focus_body : HEq witness.toFocus.body siteBody
@@ -525,6 +540,8 @@ noncomputable def CompiledSite.ofSource (source : State arity)
       fullWires_exact := openRootWires_exact source.checked.property
       binder_covers := BinderContext.empty_covers_root
         source.checked.property.diagram_well_formed
+      binder_enumeration := BinderContext.Enumeration.empty
+        source.checked.val.diagram
       focus_wires := rfl
       focus_rels := rfl
       focus_body := .rfl
@@ -548,6 +565,7 @@ noncomputable def CompiledSite.ofSource (source : State arity)
       fullWires := nested.fullWires
       fullWires_exact := nested.fullWires_exact
       binder_covers := nested.binder_covers
+      binder_enumeration := nested.binder_enumeration
       focus_wires := nested.focus_wires
       focus_rels := nested.focus_rels
       focus_body := nested.focus_body
