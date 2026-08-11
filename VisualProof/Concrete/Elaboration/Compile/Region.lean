@@ -119,6 +119,101 @@ def compileRoot? (d : Diagram) (ambient locals : WireContext d) :
       compileNode? d fuel context binders node := by
   cases fuel <;> rfl
 
+@[simp] theorem compileOccurrence?_child_zero
+    (d : Diagram) (context : WireContext d)
+    (binders : BinderContext d rels) (child : Fin d.regionCount) :
+    compileOccurrence? d 0 context binders (.child child) = none := by
+  rfl
+
+theorem compileOccurrence?_child_succ_sheet
+    (d : Diagram) (childFuel : Nat) (context : WireContext d)
+    (binders : BinderContext d rels) (child : Fin d.regionCount)
+    (hchild : d.regions child = .sheet) :
+    compileOccurrence? d (childFuel + 1) context binders (.child child) =
+      none := by
+  simp [compileOccurrence?, compileOccurrenceSuccWith?, hchild]
+
+theorem compileOccurrence?_child_succ_cut
+    (d : Diagram) (childFuel : Nat) (context : WireContext d)
+    (binders : BinderContext d rels) (child parent : Fin d.regionCount)
+    (hchild : d.regions child = .cut parent) :
+    compileOccurrence? d (childFuel + 1) context binders (.child child) =
+      (do
+        let body ← compileRegion? d childFuel child context binders
+        pure (.cut body)) := by
+  simp [compileOccurrence?, compileOccurrenceSuccWith?, hchild]
+
+theorem compileOccurrence?_child_succ_bubble
+    (d : Diagram) (childFuel : Nat) (context : WireContext d)
+    (binders : BinderContext d rels) (child parent : Fin d.regionCount)
+    (arity : Nat) (hchild : d.regions child = .bubble parent arity) :
+    compileOccurrence? d (childFuel + 1) context binders (.child child) =
+      (do
+        let body ← compileRegion? d childFuel child context
+          (binders.push child arity)
+        pure (.bubble arity body)) := by
+  simp [compileOccurrence?, compileOccurrenceSuccWith?, hchild]
+
+noncomputable def compileOccurrence?_child_cut_inv
+    (d : Diagram) (fuel : Nat) (context : WireContext d)
+    (binders : BinderContext d rels) (child parent : Fin d.regionCount)
+    (hchild : d.regions child = .cut parent)
+    {item : CompiledItem d fuel context rels binders}
+    (compiled : compileOccurrence? d fuel context binders (.child child) =
+      some item) :
+    PSigma fun childFuel => PSigma fun body =>
+      fuel = childFuel + 1 ∧
+        compileRegion? d childFuel child context binders = some body ∧
+        item.erase = Item.cut body.erase := by
+  cases fuel with
+  | zero => simp at compiled
+  | succ childFuel =>
+      rw [compileOccurrence?_child_succ_cut _ _ _ _ _ _ hchild] at compiled
+      cases hbody : compileRegion? d childFuel child context binders with
+      | none => simp [hbody] at compiled
+      | some body =>
+          simp [hbody] at compiled
+          subst item
+          exact ⟨childFuel, body, rfl, hbody, rfl⟩
+
+theorem compileOccurrence?_child_sheet_false
+    (d : Diagram) (fuel : Nat) (context : WireContext d)
+    (binders : BinderContext d rels) (child : Fin d.regionCount)
+    (hchild : d.regions child = .sheet)
+    {item : CompiledItem d fuel context rels binders}
+    (compiled : compileOccurrence? d fuel context binders (.child child) =
+      some item) : False := by
+  cases fuel with
+  | zero => simp at compiled
+  | succ childFuel =>
+      rw [compileOccurrence?_child_succ_sheet _ _ _ _ _ hchild] at compiled
+      contradiction
+
+noncomputable def compileOccurrence?_child_bubble_inv
+    (d : Diagram) (fuel : Nat) (context : WireContext d)
+    (binders : BinderContext d rels) (child parent : Fin d.regionCount)
+    (arity : Nat) (hchild : d.regions child = .bubble parent arity)
+    {item : CompiledItem d fuel context rels binders}
+    (compiled : compileOccurrence? d fuel context binders (.child child) =
+      some item) :
+    PSigma fun childFuel => PSigma fun body =>
+      fuel = childFuel + 1 ∧
+        compileRegion? d childFuel child context (binders.push child arity) =
+          some body ∧
+        item.erase = Item.bubble arity body.erase := by
+  cases fuel with
+  | zero => simp at compiled
+  | succ childFuel =>
+      rw [compileOccurrence?_child_succ_bubble _ _ _ _ _ _ _ hchild]
+        at compiled
+      cases hbody : compileRegion? d childFuel child context
+          (binders.push child arity) with
+      | none => simp [hbody] at compiled
+      | some body =>
+          simp [hbody] at compiled
+          subst item
+          exact ⟨childFuel, body, rfl, hbody, rfl⟩
+
 @[simp] theorem compileItems?_nil
     (d : Diagram) (fuel : Nat) (context : WireContext d)
     (binders : BinderContext d rels) :
