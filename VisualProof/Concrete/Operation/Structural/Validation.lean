@@ -8,12 +8,6 @@ def succeeds : Except ε α → Bool
   | .error _ => false
   | .ok _ => true
 
-def operationRegionCount (result : Except ε (OperationReceipt input)) :
-    Nat :=
-  match result with
-  | .error _ => 0
-  | .ok receipt => receipt.result.val.regionCount
-
 def receiptBoundaryValues (result : Except Error (Receipt source)) :
     List Nat :=
   match result with
@@ -23,12 +17,15 @@ def receiptBoundaryValues (result : Except Error (Receipt source)) :
 def nestedRaw : Concrete.Diagram where
   regionCount := 3
   nodeCount := 1
-  wireCount := 0
+  wireCount := 1
   root := 0
   regions := Fin.cases .sheet
-    (Fin.cases (.bubble 0 0) (fun _ => .cut 1))
+    (Fin.cases (.bubble 0 1) (fun _ => .cut 1))
   nodes := fun _ => .atom 2 1
-  wires := Fin.elim0
+  wires := fun _ => {
+    scope := 0
+    endpoints := [{ node := 0, port := .arg 0 }]
+  }
 
 theorem nestedRaw_accepted :
     (checkWellFormed nestedRaw).toOption.isSome := by
@@ -41,12 +38,26 @@ def nestedRoot : Fin nested.val.regionCount := ⟨0, by native_decide⟩
 def nestedBubble : Fin nested.val.regionCount := ⟨1, by native_decide⟩
 def nestedCut : Fin nested.val.regionCount := ⟨2, by native_decide⟩
 def nestedAtom : Fin nested.val.nodeCount := ⟨0, by native_decide⟩
+def nestedWire : Fin nested.val.wireCount := ⟨0, by native_decide⟩
+
+def nestedState : State 1 where
+  checked := {
+    val := { diagram := nested.val, boundary := [nestedWire] }
+    property := {
+      diagram_well_formed := nested.property
+      boundary_is_root_scoped := by
+        intro wire _
+        apply Fin.ext
+        native_decide +revert
+    }
+  }
+  boundary_length := rfl
 
 def rootSelectionRequest : SelectionRequest nested.val where
   anchor := nestedRoot
   childRoots := [nestedBubble]
   directNodes := []
-  explicitWires := []
+  explicitWires := [nestedWire]
 
 theorem rootSelectionRequest_accepted :
     (checkSelection rootSelectionRequest).toOption.isSome := by
@@ -70,14 +81,107 @@ def nestedSelection : CheckedSelection nested.val :=
   (checkSelection nestedSelectionRequest).toOption.get
     nestedSelectionRequest_accepted
 
-def selectionReplacementCounts : Nat × Nat :=
-  (operationRegionCount (replaceSelectionRaw nested rootSelection
-      (emptySelectionReplacement nested rootSelection)),
-    operationRegionCount (replaceSelectionRaw nested nestedSelection
-      (emptySelectionReplacement nested nestedSelection)))
+def isAtomAt {regionCount : Nat} (node : CNode regionCount)
+    (region binder : Fin regionCount) : Bool :=
+  match node with
+  | .atom actualRegion actualBinder =>
+      decide (actualRegion = region) && decide (actualBinder = binder)
+  | .identity .. => false
+
+def isEmptyRootDiagram (diagram : Concrete.Diagram) : Bool :=
+  if present : 0 < diagram.regionCount then
+    let root : Fin diagram.regionCount := ⟨0, present⟩
+    diagram.regionCount == 1 &&
+      diagram.nodeCount == 0 &&
+      diagram.wireCount == 0 &&
+      decide (diagram.root = root) &&
+      decide (diagram.regions root = .sheet)
+  else
+    false
+
+def isNestedBody (diagram : Concrete.Diagram) : Bool :=
+  if cutPresent : 2 < diagram.regionCount then
+    if nodePresent : 0 < diagram.nodeCount then
+      if wirePresent : 0 < diagram.wireCount then
+        let root : Fin diagram.regionCount := ⟨0, by omega⟩
+        let bubble : Fin diagram.regionCount := ⟨1, by omega⟩
+        let cut : Fin diagram.regionCount := ⟨2, cutPresent⟩
+        let node : Fin diagram.nodeCount := ⟨0, nodePresent⟩
+        let wire : Fin diagram.wireCount := ⟨0, wirePresent⟩
+        diagram.regionCount == 3 &&
+          diagram.nodeCount == 1 &&
+          diagram.wireCount == 1 &&
+          decide (diagram.root = root) &&
+          decide (diagram.regions root = .sheet) &&
+          decide (diagram.regions bubble = .bubble root 1) &&
+          decide (diagram.regions cut = .cut bubble) &&
+          isAtomAt (diagram.nodes node) cut bubble &&
+          decide ((diagram.wires wire).scope = root) &&
+          decide ((diagram.wires wire).endpoints =
+            [{ node := node, port := .arg 0 }])
+      else false
+    else false
+  else false
+
+def isNestedBodyRemoved (diagram : Concrete.Diagram) : Bool :=
+  if cutPresent : 2 < diagram.regionCount then
+    if wirePresent : 0 < diagram.wireCount then
+      let root : Fin diagram.regionCount := ⟨0, by omega⟩
+      let bubble : Fin diagram.regionCount := ⟨1, by omega⟩
+      let cut : Fin diagram.regionCount := ⟨2, cutPresent⟩
+      let wire : Fin diagram.wireCount := ⟨0, wirePresent⟩
+      diagram.regionCount == 3 &&
+        diagram.nodeCount == 0 &&
+        diagram.wireCount == 1 &&
+        decide (diagram.root = root) &&
+        decide (diagram.regions root = .sheet) &&
+        decide (diagram.regions bubble = .bubble root 1) &&
+        decide (diagram.regions cut = .cut bubble) &&
+        decide ((diagram.wires wire).scope = root) &&
+        (diagram.wires wire).endpoints.isEmpty
+    else false
+  else false
+
+def isNestedBodyIterated (diagram : Concrete.Diagram) : Bool :=
+  if cutPresent : 2 < diagram.regionCount then
+    if secondNodePresent : 1 < diagram.nodeCount then
+      if wirePresent : 0 < diagram.wireCount then
+        let root : Fin diagram.regionCount := ⟨0, by omega⟩
+        let bubble : Fin diagram.regionCount := ⟨1, by omega⟩
+        let cut : Fin diagram.regionCount := ⟨2, cutPresent⟩
+        let firstNode : Fin diagram.nodeCount := ⟨0, by omega⟩
+        let secondNode : Fin diagram.nodeCount := ⟨1, secondNodePresent⟩
+        let wire : Fin diagram.wireCount := ⟨0, wirePresent⟩
+        diagram.regionCount == 3 &&
+          diagram.nodeCount == 2 &&
+          diagram.wireCount == 1 &&
+          decide (diagram.root = root) &&
+          decide (diagram.regions root = .sheet) &&
+          decide (diagram.regions bubble = .bubble root 1) &&
+          decide (diagram.regions cut = .cut bubble) &&
+          isAtomAt (diagram.nodes firstNode) cut bubble &&
+          isAtomAt (diagram.nodes secondNode) cut bubble &&
+          decide ((diagram.wires wire).scope = root) &&
+          decide ((diagram.wires wire).endpoints =
+            [{ node := firstNode, port := .arg 0 },
+             { node := secondNode, port := .arg 0 }])
+      else false
+    else false
+  else false
+
+def selectionReplacementObservation : Bool :=
+  match replaceSelectionRaw nested rootSelection
+      (emptySelectionReplacement nested rootSelection) with
+  | .error _ => false
+  | .ok rootResult =>
+      isEmptyRootDiagram rootResult.result.val &&
+        match replaceSelectionRaw nested nestedSelection
+            (emptySelectionReplacement nested nestedSelection) with
+        | .error _ => false
+        | .ok nestedResult => isNestedBodyRemoved nestedResult.result.val
 
 theorem root_and_nested_selection_replacement :
-    selectionReplacementCounts = (1, 3) := by
+    selectionReplacementObservation := by
   native_decide
 
 def nestedBinderSpine :=
@@ -89,20 +193,25 @@ theorem extracted_nonempty_binder_spine :
 
 theorem empty_binder_spine : emptyReplacementSpine.proxyCount = 0 := rfl
 
-def binderSpliceCounts : Nat × Nat :=
-  (operationRegionCount (spliceRaw {
+def binderSpliceObservation : Bool :=
+  match spliceRaw {
       frame := nested
       pattern := emptyReplacementOpen
       site := nestedCut
       attachment := Fin.elim0
       binderSpine := emptyReplacementSpine
       binderTarget := Fin.elim0
-    }),
-    operationRegionCount
-      (spliceRaw (iterationSpliceInput nested nestedSelection nestedCut)))
+    } with
+  | .error _ => false
+  | .ok emptySplice =>
+      isNestedBody emptySplice.result.val &&
+        match spliceRaw
+            (iterationSpliceInput nested nestedSelection nestedCut) with
+        | .error _ => false
+        | .ok nonemptySplice => isNestedBodyIterated nonemptySplice.result.val
 
 theorem empty_and_nonempty_binder_splice :
-    binderSpliceCounts = (3, 3) := by
+    binderSpliceObservation := by
   native_decide
 
 def nonterminalPatternRaw : Concrete.Diagram where
@@ -369,181 +478,268 @@ theorem malformed_wrappers_are_rejected :
     wrapperRecognitionFailures = (true, true) := by
   native_decide
 
-def emptyChecked : Checked :=
-  ⟨emptyReplacementDiagram, emptyReplacementDiagram_wellFormed⟩
+def hasNestedOpenBoundary (state : State 1) : Bool :=
+  decide (state.checked.val.boundary.map Fin.val = [0])
 
-def emptyRoot : Fin emptyChecked.val.regionCount :=
-  ⟨0, by native_decide⟩
+def isNestedDoubleCut (diagram : Concrete.Diagram) : Bool :=
+  if innerPresent : 4 < diagram.regionCount then
+    if nodePresent : 0 < diagram.nodeCount then
+      if wirePresent : 0 < diagram.wireCount then
+        let root : Fin diagram.regionCount := ⟨0, by omega⟩
+        let binder : Fin diagram.regionCount := ⟨1, by omega⟩
+        let site : Fin diagram.regionCount := ⟨2, by omega⟩
+        let outer : Fin diagram.regionCount := ⟨3, by omega⟩
+        let inner : Fin diagram.regionCount := ⟨4, innerPresent⟩
+        let node : Fin diagram.nodeCount := ⟨0, nodePresent⟩
+        let wire : Fin diagram.wireCount := ⟨0, wirePresent⟩
+        diagram.regionCount == 5 &&
+          diagram.nodeCount == 1 &&
+          diagram.wireCount == 1 &&
+          decide (diagram.root = root) &&
+          decide (diagram.regions root = .sheet) &&
+          decide (diagram.regions binder = .bubble root 1) &&
+          decide (diagram.regions site = .cut binder) &&
+          decide (diagram.regions outer = .cut site) &&
+          decide (diagram.regions inner = .cut outer) &&
+          isAtomAt (diagram.nodes node) inner binder &&
+          decide ((diagram.wires wire).scope = root) &&
+          decide ((diagram.wires wire).endpoints =
+            [{ node := node, port := .arg 0 }])
+      else false
+    else false
+  else false
 
-def emptyRootSelectionRequest : SelectionRequest emptyChecked.val where
-  anchor := emptyRoot
-  childRoots := []
-  directNodes := []
-  explicitWires := []
+def isNestedVacuous (diagram : Concrete.Diagram) : Bool :=
+  if bubblePresent : 3 < diagram.regionCount then
+    if nodePresent : 0 < diagram.nodeCount then
+      if wirePresent : 0 < diagram.wireCount then
+        let root : Fin diagram.regionCount := ⟨0, by omega⟩
+        let binder : Fin diagram.regionCount := ⟨1, by omega⟩
+        let site : Fin diagram.regionCount := ⟨2, by omega⟩
+        let bubble : Fin diagram.regionCount := ⟨3, bubblePresent⟩
+        let node : Fin diagram.nodeCount := ⟨0, nodePresent⟩
+        let wire : Fin diagram.wireCount := ⟨0, wirePresent⟩
+        diagram.regionCount == 4 &&
+          diagram.nodeCount == 1 &&
+          diagram.wireCount == 1 &&
+          decide (diagram.root = root) &&
+          decide (diagram.regions root = .sheet) &&
+          decide (diagram.regions binder = .bubble root 1) &&
+          decide (diagram.regions site = .cut binder) &&
+          decide (diagram.regions bubble = .bubble site 2) &&
+          isAtomAt (diagram.nodes node) bubble binder &&
+          decide ((diagram.wires wire).scope = root) &&
+          decide ((diagram.wires wire).endpoints =
+            [{ node := node, port := .arg 0 }])
+      else false
+    else false
+  else false
 
-theorem emptyRootSelectionRequest_accepted :
-    (checkSelection emptyRootSelectionRequest).toOption.isSome := by
+def nestedDoubleCutRaw : Concrete.Diagram where
+  regionCount := 5
+  nodeCount := 1
+  wireCount := 1
+  root := 0
+  regions := Fin.cases .sheet
+    (Fin.cases (.bubble 0 1)
+      (Fin.cases (.cut 1)
+        (Fin.cases (.cut 2) (fun _ => .cut 3))))
+  nodes := fun _ => .atom 4 1
+  wires := fun _ => {
+    scope := 0
+    endpoints := [{ node := 0, port := .arg 0 }]
+  }
+
+theorem nestedDoubleCutRaw_accepted :
+    (checkWellFormed nestedDoubleCutRaw).toOption.isSome := by
   native_decide
 
-def emptyRootSelection : CheckedSelection emptyChecked.val :=
-  (checkSelection emptyRootSelectionRequest).toOption.get
-    emptyRootSelectionRequest_accepted
+def nestedDoubleCut : Checked :=
+  (checkWellFormed nestedDoubleCutRaw).toOption.get
+    nestedDoubleCutRaw_accepted
 
-def emptyRootSelectionFor (input : Checked) : CheckedSelection input.val :=
-  ⟨{
-    anchor := input.val.root
-    childRoots := []
-    directNodes := []
-    explicitWires := []
-  }, {
-    childRoots_nodup := by simp
-    childRoots_direct := by simp
-    directNodes_nodup := by simp
-    directNodes_at_anchor := by simp
-    explicitWires_nodup := by simp
-    explicitWires_at_anchor := by simp
-    explicitWireEndpoints_selected := by simp
-  }⟩
+def nestedDoubleCutWire : Fin nestedDoubleCut.val.wireCount :=
+  ⟨0, by native_decide⟩
 
-def isEmptyRootDiagram (diagram : Concrete.Diagram) : Bool :=
-  if present : 0 < diagram.regionCount then
-    let root : Fin diagram.regionCount := ⟨0, present⟩
-    diagram.regionCount == 1 &&
-      diagram.nodeCount == 0 &&
-      diagram.wireCount == 0 &&
-      decide (diagram.root = root) &&
-      decide (diagram.regions root = .sheet)
-  else
-    false
+def nestedDoubleCutState : State 1 where
+  checked := {
+    val := {
+      diagram := nestedDoubleCut.val
+      boundary := [nestedDoubleCutWire]
+    }
+    property := {
+      diagram_well_formed := nestedDoubleCut.property
+      boundary_is_root_scoped := by
+        intro wire _
+        apply Fin.ext
+        native_decide +revert
+    }
+  }
+  boundary_length := rfl
 
-def isCanonicalDoubleCut (diagram : Concrete.Diagram) : Bool :=
-  if innerPresent : 2 < diagram.regionCount then
-    let root : Fin diagram.regionCount := ⟨0, by omega⟩
-    let outer : Fin diagram.regionCount := ⟨1, by omega⟩
-    let inner : Fin diagram.regionCount := ⟨2, innerPresent⟩
-    diagram.regionCount == 3 &&
-      diagram.nodeCount == 0 &&
-      diagram.wireCount == 0 &&
-      decide (diagram.root = root) &&
-      decide (diagram.regions root = .sheet) &&
-      decide (diagram.regions outer = .cut root) &&
-      decide (diagram.regions inner = .cut outer)
-  else
-    false
+def nestedVacuousRaw : Concrete.Diagram where
+  regionCount := 4
+  nodeCount := 1
+  wireCount := 1
+  root := 0
+  regions := Fin.cases .sheet
+    (Fin.cases (.bubble 0 1)
+      (Fin.cases (.cut 1) (fun _ => .bubble 2 2)))
+  nodes := fun _ => .atom 3 1
+  wires := fun _ => {
+    scope := 0
+    endpoints := [{ node := 0, port := .arg 0 }]
+  }
 
-def isCanonicalVacuous (diagram : Concrete.Diagram) : Bool :=
-  if bubblePresent : 1 < diagram.regionCount then
-    let root : Fin diagram.regionCount := ⟨0, by omega⟩
-    let bubble : Fin diagram.regionCount := ⟨1, bubblePresent⟩
-    diagram.regionCount == 2 &&
-      diagram.nodeCount == 0 &&
-      diagram.wireCount == 0 &&
-      decide (diagram.root = root) &&
-      decide (diagram.regions root = .sheet) &&
-      decide (diagram.regions bubble = .bubble root 0)
-  else
-    false
+theorem nestedVacuousRaw_accepted :
+    (checkWellFormed nestedVacuousRaw).toOption.isSome := by
+  native_decide
+
+def nestedVacuous : Checked :=
+  (checkWellFormed nestedVacuousRaw).toOption.get
+    nestedVacuousRaw_accepted
+
+def nestedVacuousWire : Fin nestedVacuous.val.wireCount :=
+  ⟨0, by native_decide⟩
+
+def nestedVacuousState : State 1 where
+  checked := {
+    val := {
+      diagram := nestedVacuous.val
+      boundary := [nestedVacuousWire]
+    }
+    property := {
+      diagram_well_formed := nestedVacuous.property
+      boundary_is_root_scoped := by
+        intro wire _
+        apply Fin.ext
+        native_decide +revert
+    }
+  }
+  boundary_length := rfl
+
+def nestedBodySelection? (input : Checked) :
+    Option (CheckedSelection input.val) :=
+  if cutPresent : 2 < input.val.regionCount then
+    if nodePresent : 0 < input.val.nodeCount then
+      let request : SelectionRequest input.val := {
+        anchor := ⟨2, cutPresent⟩
+        childRoots := []
+        directNodes := [⟨0, nodePresent⟩]
+        explicitWires := []
+      }
+      (checkSelection request).toOption
+    else none
+  else none
 
 def doubleCutRoundTrip : Bool :=
-  match applyDoubleCutIntro emptyChecked emptyRootSelection with
+  match applyDoubleCutIntro nested nestedSelection with
   | .error _ => false
   | .ok introduced =>
-      if outerExists : 1 < introduced.result.val.regionCount then
-        (recognizeDoubleCut introduced.result ⟨1, outerExists⟩).isSome &&
-          match applyDoubleCutElim introduced.result ⟨1, outerExists⟩ with
-          | .error _ => false
-          | .ok eliminated =>
-              isEmptyRootDiagram eliminated.result.val &&
-                match eliminated.toReceipt (State.closed introduced.result) with
-                | none => false
-                | some receipt => receipt.target.checked.val.boundary.isEmpty
-      else false
+      match introduced.toReceipt nestedState with
+      | none => false
+      | some wrapped =>
+          isNestedDoubleCut wrapped.target.diagram.val &&
+            hasNestedOpenBoundary wrapped.target &&
+            if outerExists : 3 < wrapped.target.diagram.val.regionCount then
+              let outer : Fin wrapped.target.diagram.val.regionCount :=
+                ⟨3, outerExists⟩
+              (recognizeDoubleCut wrapped.target.diagram outer).isSome &&
+                match applyDoubleCutElim wrapped.target.diagram outer with
+                | .error _ => false
+                | .ok eliminated =>
+                    match eliminated.toReceipt wrapped.target with
+                    | none => false
+                    | some restored =>
+                        isNestedBody restored.target.diagram.val &&
+                          hasNestedOpenBoundary restored.target
+            else false
 
 theorem double_cut_intro_elim_round_trip : doubleCutRoundTrip := by
   native_decide
 
 def vacuousRoundTrip : Bool :=
-  match applyVacuousIntro emptyChecked emptyRootSelection 0 with
+  match applyVacuousIntro nested nestedSelection 2 with
   | .error _ => false
   | .ok introduced =>
-      if bubbleExists : 1 < introduced.result.val.regionCount then
-        (recognizeVacuous introduced.result ⟨1, bubbleExists⟩).isSome &&
-          match applyVacuousElim introduced.result ⟨1, bubbleExists⟩ with
-          | .error _ => false
-          | .ok eliminated =>
-              isEmptyRootDiagram eliminated.result.val &&
-                match eliminated.toReceipt (State.closed introduced.result) with
-                | none => false
-                | some receipt => receipt.target.checked.val.boundary.isEmpty
-      else false
+      match introduced.toReceipt nestedState with
+      | none => false
+      | some wrapped =>
+          isNestedVacuous wrapped.target.diagram.val &&
+            hasNestedOpenBoundary wrapped.target &&
+            if bubbleExists : 3 < wrapped.target.diagram.val.regionCount then
+              let bubble : Fin wrapped.target.diagram.val.regionCount :=
+                ⟨3, bubbleExists⟩
+              (recognizeVacuous wrapped.target.diagram bubble).isSome &&
+                match applyVacuousElim wrapped.target.diagram bubble with
+                | .error _ => false
+                | .ok eliminated =>
+                    match eliminated.toReceipt wrapped.target with
+                    | none => false
+                    | some restored =>
+                        isNestedBody restored.target.diagram.val &&
+                          hasNestedOpenBoundary restored.target
+            else false
 
 theorem vacuous_intro_elim_round_trip : vacuousRoundTrip := by
   native_decide
 
-def canonicalDoubleCutRaw : Concrete.Diagram where
-  regionCount := 3
-  nodeCount := 0
-  wireCount := 0
-  root := 0
-  regions := Fin.cases .sheet
-    (Fin.cases (.cut 0) (fun _ => .cut 1))
-  nodes := Fin.elim0
-  wires := Fin.elim0
-
-theorem canonicalDoubleCutRaw_accepted :
-    (checkWellFormed canonicalDoubleCutRaw).toOption.isSome := by
-  native_decide
-
-def canonicalDoubleCut : Checked :=
-  (checkWellFormed canonicalDoubleCutRaw).toOption.get
-    canonicalDoubleCutRaw_accepted
-
-def canonicalDoubleCutOuter : Fin canonicalDoubleCut.val.regionCount :=
-  ⟨1, by native_decide⟩
-
 def doubleCutReverseRoundTrip : Bool :=
-  match applyDoubleCutElim canonicalDoubleCut canonicalDoubleCutOuter with
-  | .error _ => false
-  | .ok eliminated =>
-      isEmptyRootDiagram eliminated.result.val &&
-        match applyDoubleCutIntro eliminated.result
-            (emptyRootSelectionFor eliminated.result) with
-        | .error _ => false
-        | .ok introduced =>
-            isCanonicalDoubleCut introduced.result.val
+  if outerExists : 3 < nestedDoubleCut.val.regionCount then
+    let outer : Fin nestedDoubleCut.val.regionCount := ⟨3, outerExists⟩
+    isNestedDoubleCut nestedDoubleCut.val &&
+      hasNestedOpenBoundary nestedDoubleCutState &&
+      (recognizeDoubleCut nestedDoubleCut outer).isSome &&
+      match applyDoubleCutElim nestedDoubleCut outer with
+      | .error _ => false
+      | .ok eliminated =>
+          match eliminated.toReceipt nestedDoubleCutState with
+          | none => false
+          | some body =>
+              isNestedBody body.target.diagram.val &&
+                hasNestedOpenBoundary body.target &&
+                match nestedBodySelection? body.target.diagram with
+                | none => false
+                | some selection =>
+                    match applyDoubleCutIntro body.target.diagram selection with
+                    | .error _ => false
+                    | .ok introduced =>
+                        match introduced.toReceipt body.target with
+                        | none => false
+                        | some restored =>
+                            isNestedDoubleCut restored.target.diagram.val &&
+                              hasNestedOpenBoundary restored.target
+  else false
 
 theorem double_cut_elim_intro_round_trip : doubleCutReverseRoundTrip := by
   native_decide
 
-def canonicalVacuousRaw : Concrete.Diagram where
-  regionCount := 2
-  nodeCount := 0
-  wireCount := 0
-  root := 0
-  regions := Fin.cases .sheet (fun _ => .bubble 0 0)
-  nodes := Fin.elim0
-  wires := Fin.elim0
-
-theorem canonicalVacuousRaw_accepted :
-    (checkWellFormed canonicalVacuousRaw).toOption.isSome := by
-  native_decide
-
-def canonicalVacuous : Checked :=
-  (checkWellFormed canonicalVacuousRaw).toOption.get
-    canonicalVacuousRaw_accepted
-
-def canonicalVacuousBubble : Fin canonicalVacuous.val.regionCount :=
-  ⟨1, by native_decide⟩
-
 def vacuousReverseRoundTrip : Bool :=
-  match applyVacuousElim canonicalVacuous canonicalVacuousBubble with
-  | .error _ => false
-  | .ok eliminated =>
-      isEmptyRootDiagram eliminated.result.val &&
-        match applyVacuousIntro eliminated.result
-            (emptyRootSelectionFor eliminated.result) 0 with
-        | .error _ => false
-        | .ok introduced => isCanonicalVacuous introduced.result.val
+  if bubbleExists : 3 < nestedVacuous.val.regionCount then
+    let bubble : Fin nestedVacuous.val.regionCount := ⟨3, bubbleExists⟩
+    isNestedVacuous nestedVacuous.val &&
+      hasNestedOpenBoundary nestedVacuousState &&
+      (recognizeVacuous nestedVacuous bubble).isSome &&
+      match applyVacuousElim nestedVacuous bubble with
+      | .error _ => false
+      | .ok eliminated =>
+          match eliminated.toReceipt nestedVacuousState with
+          | none => false
+          | some body =>
+              isNestedBody body.target.diagram.val &&
+                hasNestedOpenBoundary body.target &&
+                match nestedBodySelection? body.target.diagram with
+                | none => false
+                | some selection =>
+                    match applyVacuousIntro body.target.diagram selection 2 with
+                    | .error _ => false
+                    | .ok introduced =>
+                        match introduced.toReceipt body.target with
+                        | none => false
+                        | some restored =>
+                            isNestedVacuous restored.target.diagram.val &&
+                              hasNestedOpenBoundary restored.target
+  else false
 
 theorem vacuous_elim_intro_round_trip : vacuousReverseRoundTrip := by
   native_decide
