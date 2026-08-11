@@ -8,89 +8,11 @@ open Elaboration
 open VisualProof.Data.Finite
 open VisualProof.Theory
 
-private theorem checkedOpen_rootWires_exact
-    (checked : CheckedOpen ) :
-    WireContext.Exact checked.val.rootWires checked.val.diagram.root := by
-  constructor
-  · exact checked.val.rootWires_nodup
-  · intro wire
-    rw [OpenDiagram.mem_rootWires_iff checked.val checked.property]
-    constructor
-    · intro hscope
-      rw [hscope]
-      exact Diagram.Encloses.refl _ _
-    · exact Elaboration.encloses_sheet_eq
-        checked.property.diagram_well_formed.root_is_sheet
-
-/-- Canonically reorder any exact root context of an open diagram into that
-diagram's exposed-then-hidden root context. -/
-noncomputable def exactContextToOpenRootWireEquiv
-    (checked : CheckedOpen )
-    (context : WireContext checked.val.diagram)
-    (exact : context.Exact checked.val.diagram.root) :
-    FiniteEquiv (Fin context.length) (Fin checked.val.rootWires.length) :=
-  FiniteEquiv.restrictLists
-    (FiniteEquiv.refl (Fin checked.val.diagram.wireCount))
-    context checked.val.rootWires exact.nodup checked.val.rootWires_nodup
-    (fun wire => by
-      simp only [FiniteEquiv.refl_apply]
-      rw [exact.mem_iff]
-      constructor
-      · intro hmember
-        have hscope := (OpenDiagram.mem_rootWires_iff checked.val
-          checked.property wire).1 hmember
-        rw [hscope]
-        exact Diagram.Encloses.refl _ _
-      · intro hencloses
-        apply (OpenDiagram.mem_rootWires_iff checked.val
-          checked.property wire).2
-        exact Elaboration.encloses_sheet_eq
-          checked.property.diagram_well_formed.root_is_sheet hencloses)
-
-theorem exactContextToOpenRootWireEquiv_spec
-    (checked : CheckedOpen )
-    (context : WireContext checked.val.diagram)
-    (exact : context.Exact checked.val.diagram.root)
-    (index : Fin context.length) :
-    checked.val.rootWires.get
-        (exactContextToOpenRootWireEquiv checked context exact index) =
-      context.get index := by
-  exact FiniteEquiv.restrictLists_spec _ _ _ _ _ _ index
-
-noncomputable def compiledOpenRootItemsIsoFromExactContext
-    (checked : CheckedOpen )
-    (context : WireContext checked.val.diagram)
-    (exact : context.Exact checked.val.diagram.root)
-    {closedItems : CompiledItems checked.val.diagram context.length []}
-    {openItems : CompiledItems checked.val.diagram checked.val.rootWires.length []}
-    (hclosed : compileOccurrencesWith?  checked.val.diagram
-      (compileRegion?  checked.val.diagram
-        checked.val.diagram.regionCount)
-      context BinderContext.empty
-      (localOccurrences checked.val.diagram checked.val.diagram.root) =
-        some closedItems)
-    (hopen : compileOccurrencesWith?  checked.val.diagram
-      (compileRegion?  checked.val.diagram
-        checked.val.diagram.regionCount)
-      checked.val.rootWires BinderContext.empty
-      (localOccurrences checked.val.diagram checked.val.diagram.root) =
-        some openItems) :
-    ItemSeqIso
-      (exactContextToOpenRootWireEquiv checked context exact) []
-      closedItems.erase openItems.erase := by
-  apply compileRootItems?_equivariant
-    (Iso.refl checked.val.diagram)
-    checked.property.diagram_well_formed context checked.val.rootWires
-    (exactContextToOpenRootWireEquiv checked context exact)
-  · exact exactContextToOpenRootWireEquiv_spec checked context exact
-  · exact checkedOpen_rootWires_exact checked
-  · exact hclosed
-  · exact hopen
-
 namespace Checked
 
 def compilation (checked : Checked ) :
-    CompiledRegion checked.val checked.val.root 0 [] :=
+    CompiledRegion checked.val
+      (.root [] (exactScopeWires checked.val checked.val.root)) :=
   (compileRoot?  checked.val []
     (exactScopeWires checked.val checked.val.root)).get
       (Option.isSome_iff_exists.mpr
@@ -116,8 +38,8 @@ end Checked
 namespace CheckedOpen
 
 def compilation (checked : CheckedOpen ) :
-    CompiledRegion checked.val.diagram checked.val.diagram.root
-      checked.val.exposedWires.length [] :=
+    CompiledRegion checked.val.diagram
+      (.root checked.val.exposedWires checked.val.hiddenWires) :=
   (compileRoot? checked.val.diagram checked.val.exposedWires
     checked.val.hiddenWires).get
       (Option.isSome_iff_exists.mpr
@@ -170,16 +92,18 @@ theorem compilation_computation (checked : CheckedOpen) :
 
 end CheckedOpen
 
-private theorem checked_asOpen_compileRoot_eq
-    (checked : Checked ) :
-    compileRoot?  checked.asOpen.val.diagram
-        checked.asOpen.val.exposedWires checked.asOpen.val.hiddenWires =
-      compileRoot?  checked.val []
-        (exactScopeWires checked.val checked.val.root) := by
-  change compileRoot?  checked.val [] checked.val.asOpen.hiddenWires =
-    compileRoot?  checked.val []
-      (exactScopeWires checked.val checked.val.root)
-  rw [Diagram.asOpen_hiddenWires]
+private theorem compiledRootErase_eq_of_locals_eq
+    (d : Diagram) (ambient first second : WireContext d)
+    (localsEq : first = second)
+    {firstBody : CompiledRegion d (.root ambient first)}
+    {secondBody : CompiledRegion d (.root ambient second)}
+    (firstCompiled : compileRoot? d ambient first = some firstBody)
+    (secondCompiled : compileRoot? d ambient second = some secondBody) :
+    firstBody.erase = secondBody.erase := by
+  subst second
+  rw [firstCompiled] at secondCompiled
+  cases Option.some.inj secondCompiled
+  rfl
 
 namespace Checked
 
@@ -191,16 +115,16 @@ namespace Checked
 @[simp] theorem asOpen_elaborate_body
     (checked : Checked ) :
     checked.asOpen.elaborate.body = checked.elaborate := by
-  obtain ⟨openBody, hopenKernel, _, hopenElaborate⟩ :=
+  obtain ⟨openBody, openCompiled, _, openErased⟩ :=
     CheckedOpen.elaborate_body_computation checked.asOpen
-  obtain ⟨closedBody, hclosedKernel, _, hclosedElaborate⟩ :=
+  obtain ⟨closedBody, closedCompiled, _, closedErased⟩ :=
     Checked.elaborate_computation checked
-  have hbodies : openBody = closedBody := by
-    have hopenKernel' := hopenKernel
-    rw [checked_asOpen_compileRoot_eq checked] at hopenKernel'
-    exact Option.some.inj (hopenKernel'.symm.trans hclosedKernel)
-  exact hopenElaborate.trans ((congrArg CompiledRegion.erase hbodies).trans
-    hclosedElaborate.symm)
+  have erasedEq : openBody.erase = closedBody.erase :=
+    compiledRootErase_eq_of_locals_eq checked.val []
+      checked.val.asOpen.hiddenWires
+      (exactScopeWires checked.val checked.val.root)
+      (Diagram.asOpen_hiddenWires checked.val) openCompiled closedCompiled
+  exact openErased.trans (erasedEq.trans closedErased.symm)
 
 end Checked
 
