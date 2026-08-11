@@ -5,7 +5,11 @@ namespace VisualProof.Concrete
 open VisualProof.Diagram
 open VisualProof.Data.Finite
 
-private def doubleCutWrapperDiagram (pattern : OpenDiagram)
+namespace DoubleCutWrapper
+
+/-- Add the canonical pair of nested cut regions around a replacement
+fragment's binder-spine body while preserving its wire and node carriers. -/
+def diagram (pattern : OpenDiagram)
     (spine : BinderSpine pattern.diagram) : Concrete.Diagram :=
   let outer : Fin (pattern.diagram.regionCount + 2) :=
     Fin.natAdd pattern.diagram.regionCount ⟨0, by decide⟩
@@ -40,16 +44,17 @@ private def doubleCutWrapperDiagram (pattern : OpenDiagram)
       else
         liftCWireRegions 2 original }
 
-private def doubleCutWrapperOpen (pattern : OpenDiagram)
+/-- The canonical double-cut wrapper preserves the replacement boundary. -/
+def openDiagram (pattern : OpenDiagram)
     (spine : BinderSpine pattern.diagram) : OpenDiagram where
-  diagram := doubleCutWrapperDiagram pattern spine
+  diagram := diagram pattern spine
   boundary := pattern.boundary
 
 private theorem doubleCutWrapperBoundaryRootScoped
     (pattern : CheckedOpen) (spine : BinderSpine pattern.val.diagram) :
-    ∀ wire, wire ∈ (doubleCutWrapperOpen pattern.val spine).boundary →
-      ((doubleCutWrapperOpen pattern.val spine).diagram.wires wire).scope =
-        (doubleCutWrapperOpen pattern.val spine).diagram.root := by
+    ∀ wire, wire ∈ (openDiagram pattern.val spine).boundary →
+      ((openDiagram pattern.val spine).diagram.wires wire).scope =
+        (openDiagram pattern.val spine).diagram.root := by
   intro wire hwire
   change wire ∈ pattern.val.boundary at hwire
   have hroot := pattern.property.boundary_is_root_scoped wire hwire
@@ -63,9 +68,10 @@ private theorem doubleCutWrapperBoundaryRootScoped
   rw [if_pos hwire]
   exact congrArg (Fin.castAdd 2) hroot
 
-private def doubleCutWrapperSpine
+/-- Lift the source-derived binder spine through the canonical wrapper. -/
+def spine
     (pattern : OpenDiagram) (spine : BinderSpine pattern.diagram) :
-    BinderSpine (doubleCutWrapperDiagram pattern spine) where
+    BinderSpine (diagram pattern spine) where
   proxyCount := spine.proxyCount
   proxy := fun index => Fin.castAdd 2 (spine.proxy index)
   arity := spine.arity
@@ -93,18 +99,21 @@ private def doubleCutWrapperSpine
     intro index
     have isProxy : ∃ candidate, spine.proxy index = spine.proxy candidate :=
       ⟨index, rfl⟩
-    rw [show (doubleCutWrapperDiagram pattern spine).regions
+    rw [show (diagram pattern spine).regions
         (Fin.castAdd 2 (spine.proxy index)) =
           liftCRegion 2 (pattern.diagram.regions (spine.proxy index)) by
-      simp [doubleCutWrapperDiagram, isProxy]]
+      simp [diagram, isProxy]]
     rw [spine.proxy_region index]
     split <;> rfl
+
+end DoubleCutWrapper
 
 def doubleCutWrappedReplacement (input : Checked)
     (selection : CheckedSelection input.val) :
     Except Error (SelectionReplacement input selection) :=
   let base := extractedSelectionReplacementFor input selection selection
-  let rawOpen := doubleCutWrapperOpen base.pattern.val base.binderSpine
+  let rawOpen := DoubleCutWrapper.openDiagram
+    base.pattern.val base.binderSpine
   match hcheck : checkWellFormed rawOpen.diagram with
   | .error error => .error (.resultNotWellFormed error)
   | .ok checked =>
@@ -113,13 +122,15 @@ def doubleCutWrappedReplacement (input : Checked)
           rw [← checkWellFormed_preserves_input hcheck]
           exact checked.property
         boundary_is_root_scoped :=
-          doubleCutWrapperBoundaryRootScoped base.pattern base.binderSpine
+          DoubleCutWrapper.doubleCutWrapperBoundaryRootScoped
+            base.pattern base.binderSpine
       }⟩
       .ok {
         pattern
         attachment := base.attachment
         attachment_consistent := base.attachment_consistent
-        binderSpine := doubleCutWrapperSpine base.pattern.val base.binderSpine
+        binderSpine := DoubleCutWrapper.spine
+          base.pattern.val base.binderSpine
         binderTarget := base.binderTarget
       }
 
