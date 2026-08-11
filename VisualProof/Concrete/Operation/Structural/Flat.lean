@@ -382,19 +382,44 @@ def prepareSelectionReplacement (input : Checked)
           spliceAttachmentConsistent := prepared.property.2
         }
 
-private def replacementFrameProvenance
-    (input : Checked) (selection : CheckedSelection input.val)
-    (domains : FrameDomains input.val selection) :
-    WireProvenance input.val (input.val.removeRaw selection domains) :=
-  WireProvenance.survivors input.val
-    (input.val.removeRaw selection domains) domains.wires rfl
+/-- Exact graph provenance from the replacement source to its prepared dense
+frame. -/
+def PreparedSelectionReplacement.frameProvenance
+    (prepared : PreparedSelectionReplacement input selection replacement) :
+    WireProvenance input.val prepared.frame.val :=
+  (WireProvenance.survivors input.val
+    (input.val.removeRaw selection prepared.domains) prepared.domains.wires
+      rfl).castTarget prepared.frameEq.symm
 
-private def replacementFrameTransport
-    (input : Checked) (selection : CheckedSelection input.val)
-    (domains : FrameDomains input.val selection) :
-    WireTransport input.val (input.val.removeRaw selection domains) :=
-  WireTransport.survivors input.val
-    (input.val.removeRaw selection domains) domains.wires rfl
+/-- Exact logical wire transport from the replacement source to its prepared
+dense frame.  Ordered aliases are retained by `transportBoundary`. -/
+def PreparedSelectionReplacement.frameTransport
+    (prepared : PreparedSelectionReplacement input selection replacement) :
+    WireTransport input.val prepared.frame.val :=
+  (WireTransport.survivors input.val
+    (input.val.removeRaw selection prepared.domains) prepared.domains.wires
+      rfl).castTarget prepared.frameEq.symm
+
+/-- The removal phase as its own exact operation receipt. -/
+def PreparedSelectionReplacement.frameReceipt
+    (prepared : PreparedSelectionReplacement input selection replacement) :
+    OperationReceipt input where
+  result := prepared.frame
+  provenance := prepared.frameProvenance
+  interface := prepared.frameTransport
+
+/-- Exact receipt composition of the prepared removal frame with the splice
+computed in that frame. -/
+def PreparedSelectionReplacement.composeReceipt
+    (prepared : PreparedSelectionReplacement input selection replacement)
+    (spliced : OperationReceipt prepared.spliceInput.frame) :
+    OperationReceipt input :=
+  let splicedAtFrame := spliced.castInput prepared.spliceFrameEq
+  {
+    result := splicedAtFrame.result
+    provenance := prepared.frameProvenance.compose splicedAtFrame.provenance
+    interface := prepared.frameTransport.compose splicedAtFrame.interface
+  }
 
 /-- Replace one checked selection by one checked open pattern. Removal, dense
 frame allocation, insertion allocation, provenance, and boundary transport form
@@ -408,19 +433,7 @@ def replaceSelectionRaw (input : Checked)
   | .ok prepared =>
       match spliceRaw prepared.spliceInput with
       | .error error => .error (spliceError error)
-      | .ok spliced =>
-          let splicedAtFrame := spliced.castInput prepared.spliceFrameEq
-          .ok {
-            result := splicedAtFrame.result
-            provenance :=
-              ((replacementFrameProvenance input selection prepared.domains)
-                |>.castTarget prepared.frameEq.symm).compose
-                  splicedAtFrame.provenance
-            interface :=
-              ((replacementFrameTransport input selection prepared.domains)
-                |>.castTarget prepared.frameEq.symm).compose
-                  splicedAtFrame.interface
-          }
+      | .ok spliced => .ok (prepared.composeReceipt spliced)
 
 theorem replaceSelectionRaw_composition
     (success : replaceSelectionRaw input selection replacement = .ok result) :
@@ -428,8 +441,7 @@ theorem replaceSelectionRaw_composition
       (spliced : OperationReceipt prepared.spliceInput.frame),
       prepareSelectionReplacement input selection replacement = .ok prepared ∧
       spliceRaw prepared.spliceInput = .ok spliced ∧
-      result.result =
-        (spliced.castInput prepared.spliceFrameEq).result := by
+      result = prepared.composeReceipt spliced := by
   unfold replaceSelectionRaw at success
   split at success <;> try contradiction
   rename_i prepared hprepared
