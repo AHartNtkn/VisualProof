@@ -177,6 +177,50 @@ def plugRaw (layout : PlugLayout input) : Diagram where
   nodes := layout.plugNode
   wires := layout.plugWire
 
+@[simp] theorem plugRaw_regions_frame (layout : PlugLayout input)
+    (region : Fin input.frame.val.regionCount) :
+    layout.plugRaw.regions (layout.frameRegion region) =
+      layout.mapFrameRegion (input.frame.val.regions region) := by
+  simp [plugRaw, plugRegion, frameRegion]
+
+@[simp] theorem plugRaw_regions_material (layout : PlugLayout input)
+    (region : layout.materialRegions.Carrier) :
+    layout.plugRaw.regions (layout.materialRegion region) =
+      layout.mapPatternRegion
+        (input.pattern.val.diagram.regions
+          (layout.materialRegions.origin region)) := by
+  simp [plugRaw, plugRegion, materialRegion]
+
+@[simp] theorem plugRaw_nodes_frame (layout : PlugLayout input)
+    (node : Fin input.frame.val.nodeCount) :
+    layout.plugRaw.nodes (layout.frameNode node) =
+      layout.mapFrameNode (input.frame.val.nodes node) := by
+  simp [plugRaw, plugNode, frameNode]
+
+@[simp] theorem plugRaw_nodes_pattern (layout : PlugLayout input)
+    (node : Fin input.pattern.val.diagram.nodeCount) :
+    layout.plugRaw.nodes (layout.patternNode node) =
+      layout.mapPatternNode (input.pattern.val.diagram.nodes node) := by
+  simp [plugRaw, plugNode, patternNode]
+
+@[simp] theorem plugRaw_wires_frame (layout : PlugLayout input)
+    (wire : input.wireQuotient.Carrier) :
+    layout.plugRaw.wires (layout.frameWire wire) = {
+      scope := layout.frameRegion (input.coalescedScope wire)
+      endpoints :=
+        (input.coalescedEndpoints wire).map layout.mapFrameEndpoint ++
+          layout.boundaryEndpoints wire
+    } := by
+  simp [plugRaw, plugWire, frameWire]
+
+@[simp] theorem plugRaw_wires_internal (layout : PlugLayout input)
+    (wire : layout.internalWires.Carrier) :
+    layout.plugRaw.wires (layout.internalWire wire) =
+      layout.mapPatternWire
+        (input.pattern.val.diagram.wires
+          (layout.internalWires.origin wire)) := by
+  simp [plugRaw, plugWire, internalWire]
+
 def outputOpenRoot (input : Input) (layout : PlugLayout input)
     (sourceBoundary : List (Fin input.frame.val.wireCount)) : OpenDiagram where
   diagram := layout.plugRaw
