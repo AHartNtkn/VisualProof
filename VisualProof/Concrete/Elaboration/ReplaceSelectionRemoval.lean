@@ -264,6 +264,54 @@ theorem map_localOccurrences_removeRaw
       rw [List.filter_append, List.filter_map, List.filter_map]
       rfl
 
+private theorem removeRaw_wire_scope_eq_iff
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (region : domains.regions.Carrier)
+    (wire : domains.wires.Carrier) :
+    ((host.val.removeRaw selection domains).wires wire).scope = region ↔
+      (host.val.wires (domains.wires.origin wire)).scope =
+        domains.regions.origin region := by
+  let sourceScope :=
+    (host.val.wires (domains.wires.origin wire)).scope
+  let sourceScopeSurvives := domains.wireScope_survives
+    (domains.wires.origin_survives wire)
+  have scopeEq := Diagram.removeRaw_wire_scope host selection domains wire
+  constructor
+  · intro equality
+    rw [scopeEq] at equality
+    rw [← equality, domains.regions.origin_index]
+  · intro equality
+    rw [scopeEq]
+    apply domains.regions.origin_injective
+    rw [domains.regions.origin_index, equality]
+
+/-- Dense frame local-wire order is exactly the source local-wire order with
+the removed selection wires filtered out. -/
+theorem map_exactScopeWires_removeRaw
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (region : domains.regions.Carrier) :
+    (exactScopeWires (host.val.removeRaw selection domains) region).map
+        domains.wires.origin =
+      (exactScopeWires host.val (domains.regions.origin region)).filter
+        domains.wires.survives := by
+  let sourcePredicate : Fin host.val.wireCount → Bool := fun wire =>
+    decide ((host.val.wires wire).scope = domains.regions.origin region)
+  change
+    (filterFin fun wire : domains.wires.Carrier =>
+      decide (((host.val.removeRaw selection domains).wires wire).scope =
+        region)).map domains.wires.origin =
+      (filterFin sourcePredicate).filter domains.wires.survives
+  rw [← map_origin_filterFin domains.wires sourcePredicate]
+  apply congrArg (List.map domains.wires.origin)
+  apply List.filter_congr
+  intro wire _
+  simp only [sourcePredicate]
+  apply Bool.eq_iff_iff.mpr
+  simpa only [decide_eq_true_iff] using
+    domains.removeRaw_wire_scope_eq_iff host selection region wire
+
 end FrameDomains
 
 end VisualProof.Concrete
