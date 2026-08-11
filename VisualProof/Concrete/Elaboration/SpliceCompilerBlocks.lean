@@ -47,6 +47,12 @@ theorem fullWires_length (compiled : CompiledSite source site) :
       compiled.siteContext.length + compiled.siteLocals.length := by
   rw [compiled.fullWires_eq, List.length_append]
 
+/-- The normalized outer/local compiler context is exact at the source site. -/
+theorem completeContext_exact (compiled : CompiledSite source site) :
+    (compiled.siteContext ++ compiled.siteLocals).Exact site := by
+  rw [← compiled.fullWires_eq]
+  exact compiled.fullWires_exact
+
 /-- One successful site compiler call exposed at its direct-occurrence
 kernel.  Root and recursive compilation share this source-only normal form. -/
 structure Kernel (compiled : CompiledSite source site) where
