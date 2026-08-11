@@ -32,6 +32,36 @@ end DoubleCut
 def DoubleCut : Rule :=
   Contextual (symmetric DoubleCut.Local)
 
+/-- Introduce a double cut at an already presented occurrence.  The
+occurrence and target isomorphism are the complete endpoint authority; the
+rule layer only packages the local introduction and its contextual lift. -/
+theorem DoubleCut.introduceAt
+    {arity wires hostLocal materialWires : Nat}
+    {rels materialRels : RelCtx}
+    {source target : OpenDiagram arity}
+    (hostItems : ItemSeq (wires + hostLocal) rels)
+    (body : Region materialWires materialRels)
+    (wireMap : Fin materialWires → Fin (wires + hostLocal))
+    (relationMap : RelationRenaming materialRels rels)
+    (occurrence : Occurrence
+      (Region.spliceAt hostLocal hostItems body wireMap relationMap) source)
+    (targetIso : OpenDiagramIso target
+      (occurrence.interface.withBody
+        (occurrence.context.fill
+          (Region.spliceAt hostLocal hostItems (DoubleCut.wrap body)
+            wireMap relationMap)))) :
+    DoubleCut source target := by
+  refine ⟨wires, rels,
+    Region.spliceAt hostLocal hostItems body wireMap relationMap,
+    Region.spliceAt hostLocal hostItems (DoubleCut.wrap body)
+      wireMap relationMap,
+    occurrence, targetIso, ?_⟩
+  cases polarity : occurrence.context.polarity with
+  | positive =>
+      exact Or.inl (.introduce hostLocal hostItems body wireMap relationMap)
+  | negative =>
+      exact Or.inr (.introduce hostLocal hostItems body wireMap relationMap)
+
 theorem DoubleCut.iso
     {arity : Nat}
     {source source' target target' : OpenDiagram arity}
