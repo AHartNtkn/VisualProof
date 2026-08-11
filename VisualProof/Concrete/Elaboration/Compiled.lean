@@ -249,239 +249,6 @@ def CompiledZipper.toContextFocus
     (focus : CompiledZipper d source site endpointCall endpoint) :
     focus.toContextFocus.body = endpoint.erase := rfl
 
-mutual
-  private inductive CompiledRegion.OriginsValid (d : Diagram) :
-      {call : CompilerCall d} → CompiledRegion d call → Prop
-    | mk {call : CompilerCall d}
-        {items : CompiledItems d call.childFuel call.fullContext
-          call.rels call.binders}
-        (origins : items.origins = localOccurrences d call.origin)
-        (children : CompiledItems.OriginsValid d items) :
-        CompiledRegion.OriginsValid d (.mk items)
-
-  private inductive CompiledItem.OriginsValid (d : Diagram) :
-      {fuel : Nat} → {context : WireContext d} → {rels : RelCtx} →
-      {binders : BinderContext d rels} →
-      CompiledItem d fuel context rels binders → Prop
-    | node {fuel : Nat} {context : WireContext d} {rels : RelCtx}
-        {binders : BinderContext d rels} {origin : Fin d.nodeCount}
-        {item : Item context.length rels} :
-        CompiledItem.OriginsValid d
-          (CompiledItem.node (fuel := fuel) (binders := binders) origin item)
-    | cut {childFuel : Nat} {context : WireContext d} {rels : RelCtx}
-        {binders : BinderContext d rels} {origin : Fin d.regionCount}
-        {body : CompiledRegion d
-          (.nested childFuel origin context rels binders)}
-        (bodyValid : CompiledRegion.OriginsValid d body) :
-        CompiledItem.OriginsValid d (.cut body)
-    | bubble {childFuel : Nat} {context : WireContext d} {rels : RelCtx}
-        {binders : BinderContext d rels} {origin : Fin d.regionCount}
-        {arity : Nat}
-        {body : CompiledRegion d
-          (.nested childFuel origin context (arity :: rels)
-            (binders.push origin arity))}
-        (bodyValid : CompiledRegion.OriginsValid d body) :
-        CompiledItem.OriginsValid d (.bubble arity body)
-
-  private inductive CompiledItems.OriginsValid (d : Diagram) :
-      {fuel : Nat} → {context : WireContext d} → {rels : RelCtx} →
-      {binders : BinderContext d rels} →
-      CompiledItems d fuel context rels binders → Prop
-    | nil {fuel : Nat} {context : WireContext d} {rels : RelCtx}
-        {binders : BinderContext d rels} :
-        CompiledItems.OriginsValid d
-          (CompiledItems.nil (fuel := fuel) (context := context)
-            (rels := rels) (binders := binders))
-    | cons {fuel : Nat} {context : WireContext d} {rels : RelCtx}
-        {binders : BinderContext d rels}
-        {head : CompiledItem d fuel context rels binders}
-        {tail : CompiledItems d fuel context rels binders}
-        (headValid : CompiledItem.OriginsValid d head)
-        (tailValid : CompiledItems.OriginsValid d tail) :
-        CompiledItems.OriginsValid d (.cons head tail)
-end
-
-private theorem compileNode?_originsValid
-    {item : CompiledItem d fuel context rels binders}
-    (compiled : compileNode? d fuel context binders node = some item) :
-    CompiledItem.OriginsValid d item := by
-  cases hnode : d.nodes node with
-  | atom region binder =>
-      simp only [compileNode?, hnode] at compiled
-      cases hrelation : binders binder with
-      | none => simp [hrelation] at compiled
-      | some relation =>
-          cases relation with
-          | mk arity relation =>
-              cases harguments : resolvePorts? d context node arity with
-              | none => simp [hrelation, harguments] at compiled
-              | some arguments =>
-                  simp [hrelation, harguments] at compiled
-                  subst item
-                  exact .node
-  | identity region arity =>
-      simp only [compileNode?, hnode] at compiled
-      cases harguments : resolvePorts? d context node arity with
-      | none => simp [harguments] at compiled
-      | some arguments =>
-          simp [harguments] at compiled
-          subst item
-          exact .node
-
-private theorem compileOccurrenceZero?_originsValid
-    {item : CompiledItem d 0 context rels binders}
-    (compiled : compileOccurrence? d 0 context binders occurrence =
-      some item) : CompiledItem.OriginsValid d item := by
-  cases occurrence with
-  | node node => exact compileNode?_originsValid compiled
-  | child child => simp at compiled
-
-private theorem compileOccurrenceSucc?_originsValid
-    (nestedValid : ∀ {nestedRels : RelCtx}
-      {origin : Fin d.regionCount} {nestedContext : WireContext d}
-      {nestedBinders : BinderContext d nestedRels}
-      {body : CompiledRegion d
-        (.nested childFuel origin nestedContext nestedRels nestedBinders)},
-      compileRegion? d childFuel origin nestedContext nestedBinders =
-      some body → CompiledRegion.OriginsValid d body)
-    {item : CompiledItem d (childFuel + 1) context rels binders}
-    (compiled : compileOccurrence? d (childFuel + 1) context binders
-      occurrence = some item) : CompiledItem.OriginsValid d item := by
-  cases occurrence with
-  | node node => exact compileNode?_originsValid compiled
-  | child child =>
-      cases hregion : d.regions child with
-      | sheet =>
-          rw [compileOccurrence?_child_succ_sheet _ _ _ _ _ hregion]
-            at compiled
-          contradiction
-      | cut parent =>
-          rw [compileOccurrence?_child_succ_cut _ _ _ _ _ _ hregion]
-            at compiled
-          cases hbody : compileRegion? d childFuel child context binders with
-          | none => simp [hbody] at compiled
-          | some body =>
-              simp [hbody] at compiled
-              subst item
-              exact .cut (nestedValid hbody)
-      | bubble parent arity =>
-          rw [compileOccurrence?_child_succ_bubble _ _ _ _ _ _ _ hregion]
-            at compiled
-          cases hbody : compileRegion? d childFuel child context
-              (binders.push child arity) with
-          | none => simp [hbody] at compiled
-          | some body =>
-              simp [hbody] at compiled
-              subst item
-              exact .bubble (nestedValid hbody)
-
-private theorem compileItemsZero?_originsValid
-    {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
-    {items : CompiledItems d 0 context rels binders}
-    (compiled : compileItems? d 0 context binders occurrences = some items) :
-    CompiledItems.OriginsValid d items := by
-  induction occurrences generalizing items with
-  | nil =>
-      simp only [compileItems?_nil] at compiled
-      cases compiled
-      exact .nil
-  | cons occurrence tail ih =>
-      rw [compileItems?_cons] at compiled
-      cases hitem : compileOccurrence? d 0 context binders occurrence with
-      | none => simp [hitem] at compiled
-      | some item =>
-          cases htail : compileItems? d 0 context binders tail with
-          | none => simp [hitem, htail] at compiled
-          | some rest =>
-              simp [hitem, htail] at compiled
-              subst items
-              exact .cons (compileOccurrenceZero?_originsValid hitem)
-                (ih htail)
-
-private theorem compileItemsSucc?_originsValid
-    (nestedValid : ∀ {nestedRels : RelCtx}
-      {origin : Fin d.regionCount} {nestedContext : WireContext d}
-      {nestedBinders : BinderContext d nestedRels}
-      {body : CompiledRegion d
-        (.nested childFuel origin nestedContext nestedRels nestedBinders)},
-      compileRegion? d childFuel origin nestedContext nestedBinders =
-      some body → CompiledRegion.OriginsValid d body)
-    {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
-    {items : CompiledItems d (childFuel + 1) context rels binders}
-    (compiled : compileItems? d (childFuel + 1) context binders occurrences =
-      some items) : CompiledItems.OriginsValid d items := by
-  induction occurrences generalizing items with
-  | nil =>
-      simp only [compileItems?_nil] at compiled
-      cases compiled
-      exact .nil
-  | cons occurrence tail ih =>
-      rw [compileItems?_cons] at compiled
-      cases hitem : compileOccurrence? d (childFuel + 1) context binders
-          occurrence with
-      | none => simp [hitem] at compiled
-      | some item =>
-          cases htail : compileItems? d (childFuel + 1) context binders tail with
-          | none => simp [hitem, htail] at compiled
-          | some rest =>
-              simp [hitem, htail] at compiled
-              subst items
-              exact .cons
-                (compileOccurrenceSucc?_originsValid nestedValid hitem)
-                (ih htail)
-
-private theorem compileRegion?_originsValid
-    {body : CompiledRegion d
-      (.nested childFuel origin context rels binders)}
-    (compiled : compileRegion? d childFuel origin context binders = some body) :
-    CompiledRegion.OriginsValid d body := by
-  induction childFuel generalizing origin context rels binders with
-  | zero =>
-      rw [compileRegion?_eq_compileItems?] at compiled
-      cases hitems : compileItems? d 0 (context.extend origin) binders
-          (localOccurrences d origin) with
-      | none => simp [hitems] at compiled
-      | some items =>
-          simp [hitems] at compiled
-          subst body
-          exact .mk (compileItems?_origins hitems)
-            (compileItemsZero?_originsValid hitems)
-  | succ childFuel ih =>
-      rw [compileRegion?_eq_compileItems?] at compiled
-      cases hitems : compileItems? d (childFuel + 1)
-          (context.extend origin) binders (localOccurrences d origin) with
-      | none => simp [hitems] at compiled
-      | some items =>
-          simp [hitems] at compiled
-          subst body
-          exact .mk (compileItems?_origins hitems)
-            (compileItemsSucc?_originsValid
-              (fun equation => ih equation) hitems)
-
-private theorem compileItems?_originsValid
-    {items : CompiledItems d fuel context rels binders}
-    (compiled : compileItems? d fuel context binders occurrences =
-      some items) : CompiledItems.OriginsValid d items := by
-  cases fuel with
-  | zero => exact compileItemsZero?_originsValid compiled
-  | succ childFuel =>
-      exact compileItemsSucc?_originsValid
-        (fun equation => compileRegion?_originsValid equation) compiled
-
-private theorem compileRoot?_originsValid
-    {body : CompiledRegion d (.root ambient locals)}
-    (compiled : compileRoot? d ambient locals = some body) :
-    CompiledRegion.OriginsValid d body := by
-  simp only [compileRoot?] at compiled
-  cases hitems : compileItems? d d.regionCount (ambient ++ locals)
-      BinderContext.empty (localOccurrences d d.root) with
-  | none => simp [hitems] at compiled
-  | some items =>
-      simp [hitems] at compiled
-      subst body
-      exact .mk (compileItems?_origins hitems)
-        (compileItems?_originsValid hitems)
-
 private structure CompiledEndpointValidity (d : Diagram)
     (site : Fin d.regionCount) (call : CompilerCall d)
     (endpoint : CompiledRegion d call) : Prop where
@@ -489,6 +256,7 @@ private structure CompiledEndpointValidity (d : Diagram)
   origin : call.origin = site
   fullContext_exact : call.fullContext.Exact site
   binders_covers : call.binders.Covers site
+  origins : endpoint.items.origins = localOccurrences d site
 
 mutual
   private def CompiledZipper.endpoint_validity
@@ -501,8 +269,19 @@ mutual
       sourceCall.fullContext.Exact sourceCall.origin →
       sourceCall.binders.Covers sourceCall.origin →
       CompiledEndpointValidity d site endpointCall endpoint
-    | .here _, compiled, wires, binders =>
-        ⟨compiled, rfl, wires, binders⟩
+    | .here source, compiled, wires, binders => by
+        have origins : source.items.origins =
+            localOccurrences d sourceCall.origin := by
+          rw [CompilerCall.compile?_eq_compileItems?] at compiled
+          cases hitems : compileItems? d sourceCall.childFuel
+              sourceCall.fullContext sourceCall.binders
+              (localOccurrences d sourceCall.origin) with
+          | none => simp [hitems] at compiled
+          | some items =>
+              simp [hitems] at compiled
+              subst source
+              exact compileItems?_origins hitems
+        exact ⟨compiled, rfl, wires, binders, origins⟩
     | .child nested, compiled, wires, binders => by
         rw [CompilerCall.compile?_eq_compileItems?] at compiled
         cases hitems : compileItems? d sourceCall.childFuel
@@ -613,45 +392,6 @@ mutual
                   (fun occurrence member =>
                     localOccurrencesValid occurrence (by simp [member]))
                   htail
-end
-
-mutual
-  private def CompiledZipper.endpoint_origins
-      {d : Diagram} {sourceCall endpointCall : CompilerCall d}
-      {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
-      {endpoint : CompiledRegion d endpointCall} :
-      (focus : CompiledZipper d source site endpointCall endpoint) →
-      CompiledRegion.OriginsValid d source →
-      endpoint.items.origins = localOccurrences d site
-    | .here _, valid => by
-        cases valid with
-        | mk origins _ => exact origins
-    | .child nested, valid => by
-        cases valid with
-        | mk _ children => exact nested.endpoint_origins children
-
-  private def CompiledItemsZipper.endpoint_origins
-      {d : Diagram} {fuel : Nat} {context : WireContext d} {rels : RelCtx}
-      {binders : BinderContext d rels}
-      {items : CompiledItems d fuel context rels binders}
-      {site : Fin d.regionCount} {endpointCall : CompilerCall d}
-      {endpoint : CompiledRegion d endpointCall} :
-      (focus : CompiledItemsZipper d items site endpointCall endpoint) →
-      CompiledItems.OriginsValid d items →
-      endpoint.items.origins = localOccurrences d site
-    | .cut nested, valid => by
-        cases valid with
-        | cons headValid _ =>
-            cases headValid with
-            | cut bodyValid => exact nested.endpoint_origins bodyValid
-    | .bubble nested, valid => by
-        cases valid with
-        | cons headValid _ =>
-            cases headValid with
-            | bubble bodyValid => exact nested.endpoint_origins bodyValid
-    | .tail nested, valid => by
-        cases valid with
-        | cons _ tailValid => exact nested.endpoint_origins tailValid
 end
 
 private theorem compileItems?_zipper_of_child
@@ -816,10 +556,6 @@ private theorem compilation_focus
     checked.val.exposedWires checked.val.hiddenWires
     checked.compilation_computation site
 
-private theorem compilation_originsValid (checked : CheckedOpen) :
-    CompiledRegion.OriginsValid checked.val.diagram checked.compilation :=
-  compileRoot?_originsValid checked.compilation_computation
-
 end CheckedOpen
 
 /-- A source site stores exactly one structural focus over the checked root
@@ -886,8 +622,7 @@ def directItems (compiled : CompiledSite source site) :
 theorem directItems_origins (compiled : CompiledSite source site) :
     compiled.directItems.origins =
       localOccurrences source.checked.val.diagram site :=
-  compiled.zipper.endpoint_origins
-    (CheckedOpen.compilation_originsValid source.checked)
+  compiled.endpoint_validity.origins
 
 def intrinsic (compiled : CompiledSite source site) :
     Region.ContextFocus source.checked.elaborate.body :=
