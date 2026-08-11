@@ -79,6 +79,16 @@ noncomputable def elaborationIsoOfCheckedValEq
 
 end State
 
+/-- Successful primitive execution already contains the complete checked
+splice-input contract. -/
+theorem spliceRaw_admissible
+    (input : Splice.Input) (operation : OperationReceipt input.frame)
+    (success : spliceRaw input = .ok operation) : input.Admissible := by
+  unfold spliceRaw at success
+  split at success <;> try contradiction
+  rename_i checked checkedInput
+  exact (Splice.Input.checkInput_sound checkedInput).2
+
 /-- A successful raw splice produces a well-formed instance of its exact
 source-computed open target. -/
 theorem spliceRaw_receipt_output_wellFormed
