@@ -67,120 +67,120 @@ theorem region_encloses
 termination_by sizeOf route
 
 private theorem hiddenWires_eq_nil
-    (input : Input) (terminal : input.TerminalBody)
-    (nonempty : input.binderSpine.proxyCount ≠ 0) :
-    input.pattern.val.hiddenWires = [] := by
+    (pattern : CheckedOpen) (spine : BinderSpine pattern.val.diagram)
+    (terminal : spine.TerminalBodyContract pattern.val)
+    (nonempty : spine.proxyCount ≠ 0) :
+    pattern.val.hiddenWires = [] := by
   rw [List.eq_nil_iff_forall_not_mem]
   intro wire member
-  have hidden := (OpenDiagram.mem_hiddenWires input.pattern.val wire).1 member
-  have notBoundary : wire ∉ input.pattern.val.boundary := by
+  have hidden := (OpenDiagram.mem_hiddenWires pattern.val wire).1 member
+  have notBoundary : wire ∉ pattern.val.boundary := by
     simpa only [OpenDiagram.mem_exposedWires] using hidden.2
   exact (terminal.root_has_no_nonboundary_wires nonempty wire notBoundary)
     hidden.1
 
 private theorem exactScopeWires_proxy_eq_nil
-    (input : Input) (terminal : input.TerminalBody)
-    (proxy : Fin input.binderSpine.proxyCount)
-    (nonterminal : proxy.val + 1 < input.binderSpine.proxyCount) :
-    exactScopeWires input.pattern.val.diagram
-      (input.binderSpine.proxy proxy) = [] := by
+    (pattern : CheckedOpen) (spine : BinderSpine pattern.val.diagram)
+    (terminal : spine.TerminalBodyContract pattern.val)
+    (proxy : Fin spine.proxyCount)
+    (nonterminal : proxy.val + 1 < spine.proxyCount) :
+    exactScopeWires pattern.val.diagram (spine.proxy proxy) = [] := by
   rw [List.eq_nil_iff_forall_not_mem]
   intro wire member
-  have scopeEq := (mem_exactScopeWires input.pattern.val.diagram
-    (input.binderSpine.proxy proxy) wire).1 member
-  by_cases boundary : wire ∈ input.pattern.val.boundary
+  have scopeEq := (mem_exactScopeWires pattern.val.diagram
+    (spine.proxy proxy) wire).1 member
+  by_cases boundary : wire ∈ pattern.val.boundary
   · have rootScope := terminal.boundary_is_root_scoped wire boundary
-    exact input.binderSpine.proxy_ne_root proxy (scopeEq.symm.trans rootScope)
+    exact spine.proxy_ne_root proxy (scopeEq.symm.trans rootScope)
   · exact (terminal.nonterminal_has_no_nonboundary_wires
       proxy nonterminal wire boundary) scopeEq
 
 private theorem terminal_context_from_proxy
-    (input : Input) (terminal : input.TerminalBody)
-    (proxy : Fin input.binderSpine.proxyCount)
-    (context : WireContext input.pattern.val.diagram)
-    {site : Fin input.pattern.val.diagram.regionCount}
-    {siteContext : WireContext input.pattern.val.diagram}
-    (route : ConcreteCompilerRoute input.pattern.val.diagram
-      (.region (input.binderSpine.proxy proxy) context)
+    (pattern : CheckedOpen) (spine : BinderSpine pattern.val.diagram)
+    (terminal : spine.TerminalBodyContract pattern.val)
+    (proxy : Fin spine.proxyCount)
+    (context : WireContext pattern.val.diagram)
+    {site : Fin pattern.val.diagram.regionCount}
+    {siteContext : WireContext pattern.val.diagram}
+    (route : ConcreteCompilerRoute pattern.val.diagram
+      (.region (spine.proxy proxy) context)
       site siteContext)
-    (siteEq : site = input.binderSpine.bodyContainer) :
+    (siteEq : site = spine.bodyContainer) :
     siteContext = context := by
   cases route with
   | regionHere => rfl
   | @regionStep _ child _ _ _ parent nested =>
       have nestedEncloses := region_encloses
-        input.pattern.property.diagram_well_formed nested
-      have nonterminal : proxy.val + 1 < input.binderSpine.proxyCount := by
+        pattern.property.diagram_well_formed nested
+      have nonterminal : proxy.val + 1 < spine.proxyCount := by
         apply Classical.byContradiction
         intro atEnd
-        let last : Fin input.binderSpine.proxyCount :=
-          ⟨input.binderSpine.proxyCount - 1, by
+        let last : Fin spine.proxyCount :=
+          ⟨spine.proxyCount - 1, by
             have := proxy.isLt
             omega⟩
         have proxyEq : proxy = last := by
           apply Fin.ext
           dsimp [last]
           omega
-        have bodyEq : input.binderSpine.bodyContainer =
-            input.binderSpine.proxy last :=
-          input.binderSpine.body_eq_terminal_of_nonempty (by
+        have bodyEq : spine.bodyContainer = spine.proxy last :=
+          spine.body_eq_terminal_of_nonempty (by
             have := proxy.isLt
             omega)
-        have childEnclosesProxy : input.pattern.val.diagram.Encloses child
-            (input.binderSpine.proxy proxy) := by
+        have childEnclosesProxy : pattern.val.diagram.Encloses child
+            (spine.proxy proxy) := by
           simpa [siteEq, proxyEq, bodyEq] using nestedEncloses
         exact (checked_direct_child_not_encloses_parent
-          input.pattern.property.diagram_well_formed parent)
+          pattern.property.diagram_well_formed parent)
             childEnclosesProxy
-      let next : Fin input.binderSpine.proxyCount :=
+      let next : Fin spine.proxyCount :=
         ⟨proxy.val + 1, nonterminal⟩
-      have childEq : child = input.binderSpine.proxy next :=
+      have childEq : child = spine.proxy next :=
         terminal.nonterminal_direct_child proxy nonterminal child parent
       subst child
-      have noLocals := exactScopeWires_proxy_eq_nil input terminal proxy
-        nonterminal
-      have recursive := terminal_context_from_proxy input terminal next
-        (context.extend (input.binderSpine.proxy proxy)) nested siteEq
+      have noLocals := exactScopeWires_proxy_eq_nil pattern spine terminal
+        proxy nonterminal
+      have recursive := terminal_context_from_proxy pattern spine terminal next
+        (context.extend (spine.proxy proxy)) nested siteEq
       simpa [WireContext.extend, noLocals] using recursive
-termination_by input.binderSpine.proxyCount - proxy.val
+termination_by spine.proxyCount - proxy.val
 decreasing_by omega
 
 /-- A terminal-body route inherits exactly the pattern's ordered exposed-wire
 context.  All hidden root wires and nonterminal-proxy local blocks are empty
 by the terminal contract. -/
 theorem terminal_context
-    (input : Input) (terminal : input.TerminalBody)
-    {site : Fin input.pattern.val.diagram.regionCount}
-    {siteContext : WireContext input.pattern.val.diagram}
-    (route : ConcreteCompilerRoute input.pattern.val.diagram
-      (.openRoot input.pattern.val.exposedWires
-        input.pattern.val.hiddenWires)
+    (pattern : CheckedOpen) (spine : BinderSpine pattern.val.diagram)
+    (terminal : spine.TerminalBodyContract pattern.val)
+    {site : Fin pattern.val.diagram.regionCount}
+    {siteContext : WireContext pattern.val.diagram}
+    (route : ConcreteCompilerRoute pattern.val.diagram
+      (.openRoot pattern.val.exposedWires pattern.val.hiddenWires)
       site siteContext)
-    (siteEq : site = input.binderSpine.bodyContainer) :
-    siteContext = input.pattern.val.exposedWires := by
+    (siteEq : site = spine.bodyContainer) :
+    siteContext = pattern.val.exposedWires := by
   cases route with
   | root => rfl
   | @rootStep _ _ child _ _ parent nested =>
       have nestedEncloses := region_encloses
-        input.pattern.property.diagram_well_formed nested
-      have nonempty : input.binderSpine.proxyCount ≠ 0 := by
+        pattern.property.diagram_well_formed nested
+      have nonempty : spine.proxyCount ≠ 0 := by
         intro empty
-        have bodyEq := input.binderSpine.body_eq_root_of_empty empty
-        have childEnclosesRoot : input.pattern.val.diagram.Encloses child
-            input.pattern.val.diagram.root := by
+        have bodyEq := spine.body_eq_root_of_empty empty
+        have childEnclosesRoot : pattern.val.diagram.Encloses child
+            pattern.val.diagram.root := by
           simpa [siteEq, bodyEq] using nestedEncloses
         exact (checked_direct_child_not_encloses_parent
-          input.pattern.property.diagram_well_formed parent)
+          pattern.property.diagram_well_formed parent)
             childEnclosesRoot
-      let first : Fin input.binderSpine.proxyCount :=
+      let first : Fin spine.proxyCount :=
         ⟨0, Nat.pos_of_ne_zero nonempty⟩
-      have childEq : child = input.binderSpine.proxy first :=
+      have childEq : child = spine.proxy first :=
         terminal.root_direct_child nonempty child parent
       subst child
-      have noHidden := hiddenWires_eq_nil input terminal nonempty
-      have recursive := terminal_context_from_proxy input terminal first
-        (input.pattern.val.exposedWires ++ input.pattern.val.hiddenWires)
-        nested siteEq
+      have noHidden := hiddenWires_eq_nil pattern spine terminal nonempty
+      have recursive := terminal_context_from_proxy pattern spine terminal first
+        (pattern.val.exposedWires ++ pattern.val.hiddenWires) nested siteEq
       simpa [noHidden] using recursive
 
 end CompilerRoute
@@ -192,7 +192,8 @@ theorem compiledPattern_siteContext
     (compiled : CompiledSite input.patternState
       input.binderSpine.bodyContainer) :
     compiled.siteContext = input.pattern.val.exposedWires :=
-  CompilerRoute.terminal_context input terminal compiled.route rfl
+  CompilerRoute.terminal_context input.pattern input.binderSpine terminal
+    compiled.route rfl
 
 /-- The exact local material compiler input required by a splice.  The sole
 splice-specific field identifies the ordered inherited context with the

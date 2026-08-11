@@ -1,4 +1,4 @@
-import VisualProof.Concrete.Elaboration.Compile.SiteKernel
+import VisualProof.Concrete.Elaboration.Splice
 import VisualProof.Concrete.Operation.Structural.Flat
 
 namespace VisualProof.Concrete
@@ -39,15 +39,27 @@ structure CompiledSelection (source : State arity)
   anchor : CompiledSite source selection.val.anchor
   material : LocalCompiledSite (extractedSelectionState source selection)
     (extractedSelectionSpine source selection).bodyContainer
+  material_siteContext : material.siteContext =
+    (extractedSelectionOpen source selection).val.exposedWires
 
 /-- Compile all source-derived evidence for one selection as one proof-only
 operation. -/
 noncomputable def CompiledSelection.ofSource (source : State arity)
     (selection : CheckedSelection source.checked.val.diagram) :
-    CompiledSelection source selection where
-  anchor := CompiledSite.ofSource source selection.val.anchor
-  material := (CompiledSite.ofSource
+    CompiledSelection source selection := by
+  let material := CompiledSite.ofSource
     (extractedSelectionState source selection)
-    (extractedSelectionSpine source selection).bodyContainer).local
+    (extractedSelectionSpine source selection).bodyContainer
+  exact {
+    anchor := CompiledSite.ofSource source selection.val.anchor
+    material := material.local
+    material_siteContext := Splice.Input.CompilerRoute.terminal_context
+      (extractedSelectionOpen source selection)
+      (extractedSelectionSpine source selection)
+      (by
+        exact Diagram.extractedBinderSpine_terminalBodyContract
+          source.checked.val.diagram selection {})
+      material.route rfl
+  }
 
 end VisualProof.Concrete
