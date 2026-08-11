@@ -414,6 +414,23 @@ structure CompiledSite (source : State arity)
   focus_rels : witness.toFocus.holeRels = siteRels
   focus_body : HEq witness.toFocus.body siteBody
 
+/-- The source endpoint identified by the intrinsic compiler path. -/
+noncomputable def CompiledSite.occurrence
+    (compiled : CompiledSite source site) :
+    Occurrence compiled.witness.toFocus.body source.checked.elaborate where
+  interface := source.checked.elaborate
+  context := compiled.witness.toFocus.context
+  host_iso := by
+    rw [compiled.witness.toFocus.rebuild]
+    exact OpenDiagramIso.refl source.checked.elaborate
+
+/-- The same source endpoint after the execution state's arity cast. -/
+noncomputable def CompiledSite.canonicalOccurrence
+    (compiled : CompiledSite source site) :
+    Occurrence compiled.witness.toFocus.body
+      (source.checked.elaborate.castArity source.boundary_length) :=
+  compiled.occurrence.castArity source.boundary_length
+
 /-- Compile one source site exactly once, beginning with the source root
 computation and deriving all path data from that computation. -/
 noncomputable def CompiledSite.ofSource (source : State arity)

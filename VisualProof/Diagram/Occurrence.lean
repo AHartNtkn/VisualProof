@@ -11,6 +11,15 @@ structure Occurrence
   host_iso : OpenDiagramIso host
     (interface.withBody (context.fill pattern))
 
+noncomputable def Occurrence.castArity
+    {sourceArity targetArity : Nat}
+    {host : OpenDiagram sourceArity}
+    (occurrence : Occurrence pattern host)
+    (arityEq : sourceArity = targetArity) :
+    Occurrence pattern (host.castArity arityEq) := by
+  subst targetArity
+  exact occurrence
+
 noncomputable def Occurrence.transportHost
     (occurrence : Occurrence pattern host)
     (iso : OpenDiagramIso host host') :
