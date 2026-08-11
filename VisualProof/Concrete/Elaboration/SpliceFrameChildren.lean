@@ -268,16 +268,17 @@ theorem extendFrameContextIndexMap_get
         unfold mappedLocal
         exact List.getElem_map (layout.frameWireEmbedding consistent)
 
-/-- Successful recursive compilation of a retained frame region below the
-splice site is exactly source compilation renamed through the inherited
-frame-position embedding.  The source and target fuels may differ. -/
-theorem compileRegion?_frameRegion_map
+/-- The recursive retained-frame compiler kernel.  The source region is either
+below the splice site or belongs to a subtree that does not contain it; this
+source-only separation invariant is preserved by every direct child. -/
+private theorem compileRegion?_frameRegion_map_of_separated
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
     (terminal : input.TerminalBody)
     (sourceWellFormed : input.frame.val.WellFormed)
     (targetWellFormed : layout.plugRaw.WellFormed)
     (region : Fin input.frame.val.regionCount)
-    (belowSite : input.frame.val.Encloses input.site region)
+    (separated : input.frame.val.Encloses input.site region ∨
+      ¬input.frame.val.Encloses region input.site)
     (away : region ≠ input.site)
     (sourceContext : WireContext input.frame.val)
     (targetContext : WireContext layout.plugRaw)
@@ -402,15 +403,23 @@ theorem compileRegion?_frameRegion_map
                             have := child.isLt
                             omega⟩, ?_⟩
                           simp [Diagram.climb, sourceParent]
-                        have childBelow :
-                            input.frame.val.Encloses input.site child :=
-                          checked_encloses_trans sourceWellFormed belowSite
-                            parentChild
+                        have childSeparated :
+                            input.frame.val.Encloses input.site child ∨
+                              ¬input.frame.val.Encloses child input.site := by
+                          rcases separated with belowSite | siteOutside
+                          · exact .inl (checked_encloses_trans
+                              sourceWellFormed belowSite parentChild)
+                          · refine .inr ?_
+                            intro childContainsSite
+                            exact siteOutside (checked_encloses_trans
+                              sourceWellFormed parentChild childContainsSite)
                         have childAway : child ≠ input.site := by
                           intro childAtSite
                           subst child
-                          exact (checked_direct_child_not_encloses_parent
-                            sourceWellFormed sourceParent) belowSite
+                          rcases separated with belowSite | siteOutside
+                          · exact (checked_direct_child_not_encloses_parent
+                              sourceWellFormed sourceParent) belowSite
+                          · exact siteOutside parentChild
                         have sourceChildExact := sourceExact.extend_child
                           sourceWellFormed sourceParent
                         have targetParent :
@@ -460,7 +469,7 @@ theorem compileRegion?_frameRegion_map
                                       targetChildResult] at targetItemCompiled
                                     subst targetItem
                                     exact congrArg Item.cut
-                                      (inductionHypothesis child childBelow
+                                      (inductionHypothesis child childSeparated
                                         childAway
                                         sourceExtended targetExtended
                                         extendedWireMap extendedGet
@@ -510,7 +519,7 @@ theorem compileRegion?_frameRegion_map
                                       rw [← layout.mapFrameBinders_push]
                                       exact targetChildResult
                                     exact congrArg (Item.bubble arity)
-                                      (inductionHypothesis child childBelow
+                                      (inductionHypothesis child childSeparated
                                         childAway
                                         sourceExtended targetExtended
                                         extendedWireMap extendedGet
@@ -543,6 +552,84 @@ theorem compileRegion?_frameRegion_map
                         consistent terminal region away))
                   intro index
                   simp [Function.comp_apply, extendFrameContextIndexMap]
+
+/-- Successful recursive compilation of a retained frame region below the
+splice site is exactly source compilation renamed through the inherited
+frame-position embedding.  The source and target fuels may differ. -/
+theorem compileRegion?_frameRegion_map
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (terminal : input.TerminalBody)
+    (sourceWellFormed : input.frame.val.WellFormed)
+    (targetWellFormed : layout.plugRaw.WellFormed)
+    (region : Fin input.frame.val.regionCount)
+    (belowSite : input.frame.val.Encloses input.site region)
+    (away : region ≠ input.site)
+    (sourceContext : WireContext input.frame.val)
+    (targetContext : WireContext layout.plugRaw)
+    (wireMap : Fin sourceContext.length → Fin targetContext.length)
+    (getMapped : ∀ index,
+      targetContext.get (wireMap index) =
+        layout.frameWireEmbedding consistent (sourceContext.get index))
+    (sourceExact : (sourceContext.extend region).Exact region)
+    (targetExact :
+      (targetContext.extend (layout.frameRegion region)).Exact
+        (layout.frameRegion region))
+    (sourceBinders : BinderContext input.frame.val rels)
+    (sourceFuel targetFuel : Nat)
+    (sourceBody : Region sourceContext.length rels)
+    (targetBody : Region targetContext.length rels)
+    (sourceCompiled : compileRegion? input.frame.val sourceFuel region
+      sourceContext sourceBinders = some sourceBody)
+    (targetCompiled : compileRegion? layout.plugRaw targetFuel
+      (layout.frameRegion region) targetContext
+      (layout.mapFrameBinders sourceBinders) = some targetBody) :
+    targetBody = sourceBody.renameWires wireMap := by
+  exact layout.compileRegion?_frameRegion_map_of_separated consistent terminal
+    sourceWellFormed targetWellFormed region (.inl belowSite) away
+    sourceContext targetContext wireMap getMapped sourceExact targetExact
+    sourceBinders sourceFuel targetFuel sourceBody targetBody sourceCompiled
+    targetCompiled
+
+/-- Successful recursive compilation of a retained frame subtree disjoint
+from the insertion site is exactly the corresponding source compilation.
+The non-enclosure premise is source topology and is inherited by all children. -/
+theorem compileRegion?_frameRegion_map_of_not_encloses_site
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (terminal : input.TerminalBody)
+    (sourceWellFormed : input.frame.val.WellFormed)
+    (targetWellFormed : layout.plugRaw.WellFormed)
+    (region : Fin input.frame.val.regionCount)
+    (siteOutside : ¬input.frame.val.Encloses region input.site)
+    (sourceContext : WireContext input.frame.val)
+    (targetContext : WireContext layout.plugRaw)
+    (wireMap : Fin sourceContext.length → Fin targetContext.length)
+    (getMapped : ∀ index,
+      targetContext.get (wireMap index) =
+        layout.frameWireEmbedding consistent (sourceContext.get index))
+    (sourceExact : (sourceContext.extend region).Exact region)
+    (targetExact :
+      (targetContext.extend (layout.frameRegion region)).Exact
+        (layout.frameRegion region))
+    (sourceBinders : BinderContext input.frame.val rels)
+    (sourceFuel targetFuel : Nat)
+    (sourceBody : Region sourceContext.length rels)
+    (targetBody : Region targetContext.length rels)
+    (sourceCompiled : compileRegion? input.frame.val sourceFuel region
+      sourceContext sourceBinders = some sourceBody)
+    (targetCompiled : compileRegion? layout.plugRaw targetFuel
+      (layout.frameRegion region) targetContext
+      (layout.mapFrameBinders sourceBinders) = some targetBody) :
+    targetBody = sourceBody.renameWires wireMap := by
+  apply layout.compileRegion?_frameRegion_map_of_separated consistent terminal
+    sourceWellFormed targetWellFormed region (.inr siteOutside)
+  · intro atSite
+    subst region
+    exact siteOutside (Diagram.Encloses.refl input.frame.val input.site)
+  · exact getMapped
+  · exact sourceExact
+  · exact targetExact
+  · exact sourceCompiled
+  · exact targetCompiled
 
 /-- Given successful source and target child-block computations at the splice
 site, the retained target children are exactly the source children renamed by
