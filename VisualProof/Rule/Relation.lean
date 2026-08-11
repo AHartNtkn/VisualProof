@@ -25,6 +25,15 @@ def atPolarity (polarity : Polarity)
   | .positive => relation
   | .negative => converse relation
 
+/-- A symmetric local relation accepts forward evidence at either contextual
+polarity. -/
+theorem atPolarity_symmetric_of
+    (polarity : Polarity) (evidence : relation before after) :
+    atPolarity polarity (symmetric relation) before after := by
+  cases polarity with
+  | positive => exact Or.inl evidence
+  | negative => exact Or.inr evidence
+
 def Contextual («local» : LocalRule) : Rule :=
   fun {_arity} source target =>
     ∃ (wires : Nat) (rels : RelCtx)
