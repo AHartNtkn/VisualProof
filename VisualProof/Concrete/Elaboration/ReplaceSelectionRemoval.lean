@@ -312,6 +312,228 @@ theorem map_exactScopeWires_removeRaw
   simpa only [decide_eq_true_iff] using
     domains.removeRaw_wire_scope_eq_iff host selection region wire
 
+/-- Compact one source wire context through the exact frame survivor receipt. -/
+def mapWireContext (domains : FrameDomains d selection)
+    (context : WireContext d) : WireContext (d.removeRaw selection domains) :=
+  context.filterMap domains.wires.index?
+
+/-- Mapping a compacted wire context back to source identities gives exactly
+the stable source sublist of surviving wires. -/
+theorem map_mapWireContext_origin
+    (domains : FrameDomains d selection) (context : WireContext d) :
+    (domains.mapWireContext context).map domains.wires.origin =
+      context.filter domains.wires.survives := by
+  induction context with
+  | nil => rfl
+  | cons wire tail inductionHypothesis =>
+      change (tail.filterMap domains.wires.index?).map
+          domains.wires.origin = tail.filter domains.wires.survives
+        at inductionHypothesis
+      change ((wire :: tail).filterMap domains.wires.index?).map
+          domains.wires.origin =
+        (wire :: tail).filter domains.wires.survives
+      cases survives : domains.wires.survives wire with
+      | false =>
+          have missing : domains.wires.index? wire = none :=
+            (domains.wires.index?_eq_none_iff wire).2 survives
+          rw [List.filterMap_cons_none missing]
+          simp only [List.filter, survives]
+          exact inductionHypothesis
+      | true =>
+          have found := domains.wires.index?_index wire survives
+          rw [List.filterMap_cons_some found]
+          simp only [List.map_cons, List.filter, survives]
+          rw [domains.wires.origin_index, inductionHypothesis]
+
+/-- Context compaction preserves concatenation exactly. -/
+theorem mapWireContext_append (domains : FrameDomains d selection)
+    (first second : WireContext d) :
+    domains.mapWireContext (first ++ second) =
+      domains.mapWireContext first ++ domains.mapWireContext second := by
+  exact List.filterMap_append
+
+/-- The canonical compacted source local block is the target frame's exact
+local block at the represented dense region. -/
+theorem mapWireContext_exactScope
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (region : domains.regions.Carrier) :
+    domains.mapWireContext
+        (exactScopeWires host.val (domains.regions.origin region)) =
+      exactScopeWires (host.val.removeRaw selection domains) region := by
+  apply (List.map_inj_right domains.wires.origin_injective).mp
+  rw [domains.map_mapWireContext_origin,
+    domains.map_exactScopeWires_removeRaw host selection]
+
+/-- Route-context extension commutes with exact frame compaction. -/
+theorem mapWireContext_extend
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (context : WireContext host.val)
+    (region : domains.regions.Carrier) :
+    domains.mapWireContext
+        (context.extend (domains.regions.origin region)) =
+      (domains.mapWireContext context).extend region := by
+  unfold WireContext.extend
+  rw [domains.mapWireContext_append,
+    domains.mapWireContext_exactScope host selection region]
+
+/-- A checked selection never removes its own retained anchor. -/
+theorem anchor_survives
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection) :
+    domains.regions.survives selection.val.anchor = true := by
+  rw [domains.region_survives_iff]
+  right
+  intro selected
+  obtain ⟨child, childSelected, childEncloses⟩ :=
+    (selection.mem_selectedRegions selection.val.anchor).1 selected
+  exact checked_direct_child_not_encloses_parent host.property
+    (selection.property.childRoots_direct child childSelected) childEncloses
+
+/-- Exact mapped route data for a compiler call that starts at a retained
+source region.  Survival of the starting region is derived from the route and
+the supplied terminal survival proof. -/
+structure MappedRegionCompilerRoute
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    {origin site : Fin host.val.regionCount}
+    {context siteContext : WireContext host.val}
+    (sourceRoute : ConcreteCompilerRoute host.val (.region origin context)
+      site siteContext)
+    (siteSurvives : domains.regions.survives site = true) where
+  originSurvives : domains.regions.survives origin = true
+  route : ConcreteCompilerRoute (host.val.removeRaw selection domains)
+    (.region (domains.regions.index origin originSurvives)
+      (domains.mapWireContext context))
+    (domains.regions.index site siteSurvives)
+    (domains.mapWireContext siteContext)
+
+/-- Exact mapped route data for a compiler call that starts at the open root. -/
+structure MappedOpenCompilerRoute
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    {ambient locals : WireContext host.val}
+    {site : Fin host.val.regionCount}
+    {siteContext : WireContext host.val}
+    (sourceRoute : ConcreteCompilerRoute host.val (.openRoot ambient locals)
+      site siteContext)
+    (siteSurvives : domains.regions.survives site = true) where
+  route : ConcreteCompilerRoute (host.val.removeRaw selection domains)
+    (.openRoot (domains.mapWireContext ambient)
+      (domains.mapWireContext locals))
+    (domains.regions.index site siteSurvives)
+    (domains.mapWireContext siteContext)
+
+/-- Map one source region-start compiler route through exact selection
+removal.  Every target parent and context is inherited from the source route. -/
+noncomputable def mapRegionCompilerRoute
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    {origin site : Fin host.val.regionCount}
+    {context siteContext : WireContext host.val}
+    (sourceRoute : ConcreteCompilerRoute host.val (.region origin context)
+      site siteContext)
+    (siteSurvives : domains.regions.survives site = true) :
+    MappedRegionCompilerRoute host selection domains sourceRoute
+      siteSurvives := by
+  cases sourceRoute with
+  | regionHere =>
+      exact {
+        originSurvives := siteSurvives
+        route := .regionHere (domains.regions.index origin siteSurvives)
+          (domains.mapWireContext context)
+      }
+  | @regionStep sourceOrigin child sourceSite sourceContext
+      sourceSiteContext parent nestedRoute =>
+      let nested := domains.mapRegionCompilerRoute host selection nestedRoute
+        siteSurvives
+      let originSurvives := domains.parent_survives host selection
+        nested.originSurvives parent
+      have targetParent :
+          ((host.val.removeRaw selection domains).regions
+            (domains.regions.index child nested.originSurvives)).parent? =
+            some (domains.regions.index origin originSurvives) := by
+        exact Diagram.removeRaw_parent host selection domains
+          nested.originSurvives parent
+      have contextEq :
+          domains.mapWireContext (context.extend origin) =
+            (domains.mapWireContext context).extend
+              (domains.regions.index origin originSurvives) := by
+        simpa only [domains.regions.origin_index] using
+          domains.mapWireContext_extend host selection context
+            (domains.regions.index origin originSurvives)
+      have targetNested : ConcreteCompilerRoute
+          (host.val.removeRaw selection domains)
+          (.region (domains.regions.index child nested.originSurvives)
+            ((domains.mapWireContext context).extend
+              (domains.regions.index origin originSurvives)))
+          (domains.regions.index site siteSurvives)
+          (domains.mapWireContext siteContext) := by
+        rw [← contextEq]
+        exact nested.route
+      exact {
+        originSurvives := originSurvives
+        route := .regionStep targetParent targetNested
+      }
+
+/-- Map one source open-root compiler route through exact selection removal. -/
+noncomputable def mapOpenCompilerRoute
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    {ambient locals : WireContext host.val}
+    {site : Fin host.val.regionCount}
+    {siteContext : WireContext host.val}
+    (sourceRoute : ConcreteCompilerRoute host.val (.openRoot ambient locals)
+      site siteContext)
+    (siteSurvives : domains.regions.survives site = true) :
+    MappedOpenCompilerRoute host selection domains sourceRoute
+      siteSurvives := by
+  cases sourceRoute with
+  | root ambient locals =>
+      have rootEq : domains.regions.index host.val.root siteSurvives =
+          (host.val.removeRaw selection domains).root := by
+        change domains.regions.index host.val.root siteSurvives = domains.root
+        unfold FrameDomains.root
+        rfl
+      refine { route := ?_ }
+      rw [rootEq]
+      exact .root (domains.mapWireContext ambient)
+        (domains.mapWireContext locals)
+  | @rootStep sourceAmbient sourceLocals child sourceSite
+      sourceSiteContext parent nestedRoute =>
+      let nested := domains.mapRegionCompilerRoute host selection nestedRoute
+        siteSurvives
+      let rootSurvives := domains.parent_survives host selection
+        nested.originSurvives parent
+      have rootEq : domains.regions.index host.val.root rootSurvives =
+          (host.val.removeRaw selection domains).root := by
+        change domains.regions.index host.val.root rootSurvives = domains.root
+        unfold FrameDomains.root
+        rfl
+      have targetParent :
+          ((host.val.removeRaw selection domains).regions
+            (domains.regions.index child nested.originSurvives)).parent? =
+            some (host.val.removeRaw selection domains).root := by
+        rw [← rootEq]
+        exact Diagram.removeRaw_parent host selection domains
+          nested.originSurvives parent
+      have contextEq :
+          domains.mapWireContext (ambient ++ locals) =
+            domains.mapWireContext ambient ++
+              domains.mapWireContext locals :=
+        domains.mapWireContext_append ambient locals
+      have targetNested : ConcreteCompilerRoute
+          (host.val.removeRaw selection domains)
+          (.region (domains.regions.index child nested.originSurvives)
+            (domains.mapWireContext ambient ++
+              domains.mapWireContext locals))
+          (domains.regions.index site siteSurvives)
+          (domains.mapWireContext siteContext) := by
+        rw [← contextEq]
+        exact nested.route
+      exact { route := .rootStep targetParent targetNested }
+
 end FrameDomains
 
 end VisualProof.Concrete
