@@ -558,6 +558,12 @@ def OperationReceipt.ofChecked
   interface := interface.castTarget
     (Concrete.checkWellFormed_preserves_input hcheck).symm
 
+def OperationReceipt.castInput
+    (receipt : OperationReceipt input)
+    (inputEq : input = replacement) : OperationReceipt replacement := by
+  cases inputEq
+  exact receipt
+
 
 def OperationReceipt.transportOpen {input : Concrete.Checked }
     (receipt : OperationReceipt input)

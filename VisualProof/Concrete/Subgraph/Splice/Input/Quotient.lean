@@ -70,10 +70,194 @@ structure Input where
   site : Fin frame.val.regionCount
   attachment : Fin pattern.val.boundary.length → Fin frame.val.wireCount
   binderSpine : BinderSpine pattern.val.diagram
-  terminalBody : binderSpine.TerminalBodyContract pattern.val
   binderTarget : Fin binderSpine.proxyCount → Fin frame.val.regionCount
 
 namespace Input
+
+private def terminalRootDirectDecidable (pattern : CheckedOpen)
+    (spine : BinderSpine pattern.val.diagram) : Decidable
+      (∀ hnonzero : spine.proxyCount ≠ 0, ∀ region,
+        (pattern.val.diagram.regions region).parent? =
+            some pattern.val.diagram.root →
+          region = spine.proxy ⟨0, Nat.pos_of_ne_zero hnonzero⟩) := by
+  by_cases hzero : spine.proxyCount = 0
+  · exact isTrue (by intro nonzero; contradiction)
+  · let first : Fin spine.proxyCount := ⟨0, Nat.pos_of_ne_zero hzero⟩
+    letI : Decidable (∀ region,
+        (pattern.val.diagram.regions region).parent? =
+            some pattern.val.diagram.root → region = spine.proxy first) :=
+      inferInstance
+    exact decidable_of_iff
+      (∀ region, (pattern.val.diagram.regions region).parent? =
+          some pattern.val.diagram.root → region = spine.proxy first) (by
+        constructor
+        · intro direct _ region parent
+          exact direct region parent
+        · intro contract region parent
+          exact contract hzero region parent)
+
+private def terminalNonterminalDirectDecidable (pattern : CheckedOpen)
+    (spine : BinderSpine pattern.val.diagram) : Decidable
+      (∀ (proxy : Fin spine.proxyCount)
+        (hnonterminal : proxy.val + 1 < spine.proxyCount), ∀ region,
+          (pattern.val.diagram.regions region).parent? =
+              some (spine.proxy proxy) →
+            region = spine.proxy ⟨proxy.val + 1, hnonterminal⟩) := by
+  exact @Nat.decidableForallFin _ _ fun proxy => by
+    by_cases hnext : proxy.val + 1 < spine.proxyCount
+    · let next : Fin spine.proxyCount := ⟨proxy.val + 1, hnext⟩
+      letI : Decidable (∀ region,
+          (pattern.val.diagram.regions region).parent? =
+              some (spine.proxy proxy) → region = spine.proxy next) :=
+        inferInstance
+      exact decidable_of_iff
+        (∀ region, (pattern.val.diagram.regions region).parent? =
+            some (spine.proxy proxy) → region = spine.proxy next) (by
+          constructor
+          · intro direct _ region parent
+            exact direct region parent
+          · intro contract region parent
+            exact contract hnext region parent)
+    · exact isTrue (by intro impossible; exact (hnext impossible).elim)
+
+private def terminalRootNoNodesDecidable (pattern : CheckedOpen)
+    (spine : BinderSpine pattern.val.diagram) : Decidable
+      (spine.proxyCount ≠ 0 → ∀ node,
+        (pattern.val.diagram.nodes node).region ≠ pattern.val.diagram.root) := by
+  by_cases hzero : spine.proxyCount = 0
+  · exact isTrue (by intro nonzero; contradiction)
+  · letI : Decidable (∀ node,
+        (pattern.val.diagram.nodes node).region ≠ pattern.val.diagram.root) :=
+      inferInstance
+    exact decidable_of_iff
+      (∀ node, (pattern.val.diagram.nodes node).region ≠
+        pattern.val.diagram.root) (by
+          constructor
+          · intro noNodes _ node
+            exact noNodes node
+          · intro contract node
+            exact contract hzero node)
+
+private def terminalNonterminalNoNodesDecidable (pattern : CheckedOpen)
+    (spine : BinderSpine pattern.val.diagram) : Decidable
+      (∀ (proxy : Fin spine.proxyCount), proxy.val + 1 < spine.proxyCount →
+        ∀ node, (pattern.val.diagram.nodes node).region ≠ spine.proxy proxy) := by
+  exact @Nat.decidableForallFin _ _ fun proxy => by
+    by_cases hnext : proxy.val + 1 < spine.proxyCount
+    · letI : Decidable (∀ node,
+          (pattern.val.diagram.nodes node).region ≠ spine.proxy proxy) :=
+        inferInstance
+      exact decidable_of_iff
+        (∀ node, (pattern.val.diagram.nodes node).region ≠
+          spine.proxy proxy) (by
+          constructor
+          · intro noNodes _ node
+            exact noNodes node
+          · intro contract node
+            exact contract hnext node)
+    · exact isTrue (by intro impossible; exact (hnext impossible).elim)
+
+private def terminalRootNoWiresDecidable (pattern : CheckedOpen)
+    (spine : BinderSpine pattern.val.diagram) : Decidable
+      (spine.proxyCount ≠ 0 → ∀ wire, wire ∉ pattern.val.boundary →
+        (pattern.val.diagram.wires wire).scope ≠ pattern.val.diagram.root) := by
+  by_cases hzero : spine.proxyCount = 0
+  · exact isTrue (by intro nonzero; contradiction)
+  · letI : Decidable (∀ wire, wire ∉ pattern.val.boundary →
+        (pattern.val.diagram.wires wire).scope ≠ pattern.val.diagram.root) :=
+      inferInstance
+    exact decidable_of_iff
+      (∀ wire, wire ∉ pattern.val.boundary →
+        (pattern.val.diagram.wires wire).scope ≠ pattern.val.diagram.root) (by
+          constructor
+          · intro noWires _ wire boundary
+            exact noWires wire boundary
+          · intro contract wire boundary
+            exact contract hzero wire boundary)
+
+private def terminalNonterminalNoWiresDecidable (pattern : CheckedOpen)
+    (spine : BinderSpine pattern.val.diagram) : Decidable
+      (∀ (proxy : Fin spine.proxyCount), proxy.val + 1 < spine.proxyCount →
+        ∀ wire, wire ∉ pattern.val.boundary →
+          (pattern.val.diagram.wires wire).scope ≠ spine.proxy proxy) := by
+  exact @Nat.decidableForallFin _ _ fun proxy => by
+    by_cases hnext : proxy.val + 1 < spine.proxyCount
+    · letI : Decidable (∀ wire, wire ∉ pattern.val.boundary →
+          (pattern.val.diagram.wires wire).scope ≠ spine.proxy proxy) :=
+        inferInstance
+      exact decidable_of_iff
+        (∀ wire, wire ∉ pattern.val.boundary →
+          (pattern.val.diagram.wires wire).scope ≠ spine.proxy proxy) (by
+          constructor
+          · intro noWires _ wire boundary
+            exact noWires wire boundary
+          · intro contract wire boundary
+            exact contract hnext wire boundary)
+    · exact isTrue (by intro impossible; exact (hnext impossible).elim)
+
+/-- The designated proxy prefix reaches one terminal body, with no ordinary
+content stranded at the fresh root or at a nonterminal proxy. -/
+def TerminalBody (input : Input) : Prop :=
+  input.binderSpine.TerminalBodyContract input.pattern.val
+
+instance (input : Input) : Decidable input.TerminalBody := by
+  letI := terminalRootDirectDecidable input.pattern input.binderSpine
+  letI := terminalNonterminalDirectDecidable input.pattern input.binderSpine
+  letI := terminalRootNoNodesDecidable input.pattern input.binderSpine
+  letI := terminalNonterminalNoNodesDecidable input.pattern input.binderSpine
+  letI := terminalRootNoWiresDecidable input.pattern input.binderSpine
+  letI := terminalNonterminalNoWiresDecidable input.pattern input.binderSpine
+  unfold TerminalBody
+  by_cases hrootDirect : ∀ hnonzero : input.binderSpine.proxyCount ≠ 0,
+      ∀ region, (input.pattern.val.diagram.regions region).parent? =
+          some input.pattern.val.diagram.root →
+        region = input.binderSpine.proxy
+          ⟨0, Nat.pos_of_ne_zero hnonzero⟩
+  · by_cases hnonterminalDirect :
+        ∀ (proxy : Fin input.binderSpine.proxyCount)
+          (hnonterminal : proxy.val + 1 < input.binderSpine.proxyCount),
+          ∀ region, (input.pattern.val.diagram.regions region).parent? =
+              some (input.binderSpine.proxy proxy) →
+            region = input.binderSpine.proxy
+              ⟨proxy.val + 1, hnonterminal⟩
+    · by_cases hrootNodes : input.binderSpine.proxyCount ≠ 0 → ∀ node,
+          (input.pattern.val.diagram.nodes node).region ≠
+            input.pattern.val.diagram.root
+      · by_cases hnonterminalNodes :
+            ∀ (proxy : Fin input.binderSpine.proxyCount),
+              proxy.val + 1 < input.binderSpine.proxyCount → ∀ node,
+                (input.pattern.val.diagram.nodes node).region ≠
+                  input.binderSpine.proxy proxy
+        · by_cases hrootWires : input.binderSpine.proxyCount ≠ 0 →
+              ∀ wire, wire ∉ input.pattern.val.boundary →
+                (input.pattern.val.diagram.wires wire).scope ≠
+                  input.pattern.val.diagram.root
+          · by_cases hnonterminalWires :
+                ∀ (proxy : Fin input.binderSpine.proxyCount),
+                  proxy.val + 1 < input.binderSpine.proxyCount → ∀ wire,
+                    wire ∉ input.pattern.val.boundary →
+                      (input.pattern.val.diagram.wires wire).scope ≠
+                        input.binderSpine.proxy proxy
+            · exact isTrue {
+                root_direct_child := hrootDirect
+                nonterminal_direct_child := hnonterminalDirect
+                root_has_no_nodes := hrootNodes
+                nonterminal_has_no_nodes := hnonterminalNodes
+                root_has_no_nonboundary_wires := hrootWires
+                nonterminal_has_no_nonboundary_wires := hnonterminalWires
+                boundary_is_root_scoped :=
+                  input.pattern.property.boundary_is_root_scoped
+              }
+            · exact isFalse fun contract =>
+                hnonterminalWires contract.nonterminal_has_no_nonboundary_wires
+          · exact isFalse fun contract =>
+              hrootWires contract.root_has_no_nonboundary_wires
+        · exact isFalse fun contract =>
+            hnonterminalNodes contract.nonterminal_has_no_nodes
+      · exact isFalse fun contract => hrootNodes contract.root_has_no_nodes
+    · exact isFalse fun contract =>
+        hnonterminalDirect contract.nonterminal_direct_child
+  · exact isFalse fun contract => hrootDirect contract.root_direct_child
 
 /-- Boundary-position equations; equal pattern-wire identities alone generate them. -/
 def attachmentEdges (input : Input ) :
@@ -167,6 +351,7 @@ def BinderTargetsEnclose (input : Input ) : Prop :=
   ∀ index, input.frame.val.Encloses (input.binderTarget index) input.site
 
 structure Admissible (input : Input ) : Prop where
+  terminal_body : input.TerminalBody
   attachments_visible : input.AttachmentsVisible
   binder_targets_injective : input.BinderTargetsInjective
   binder_targets_match : input.BinderTargetsMatch
@@ -191,26 +376,30 @@ instance (input : Input ) : Decidable input.BinderTargetsEnclose := by
   exact @Nat.decidableForallFin _ _ fun _ => inferInstance
 
 instance (input : Input ) : Decidable input.Admissible := by
-  by_cases hvisible : input.AttachmentsVisible
-  · by_cases hinjective : input.BinderTargetsInjective
-    · by_cases hmatch : input.BinderTargetsMatch
-      · by_cases henclose : input.BinderTargetsEnclose
-        · exact isTrue {
-            attachments_visible := hvisible
-            binder_targets_injective := hinjective
-            binder_targets_match := hmatch
-            binder_targets_enclose := henclose
-          }
+  by_cases hterminal : input.TerminalBody
+  · by_cases hvisible : input.AttachmentsVisible
+    · by_cases hinjective : input.BinderTargetsInjective
+      · by_cases hmatch : input.BinderTargetsMatch
+        · by_cases henclose : input.BinderTargetsEnclose
+          · exact isTrue {
+              terminal_body := hterminal
+              attachments_visible := hvisible
+              binder_targets_injective := hinjective
+              binder_targets_match := hmatch
+              binder_targets_enclose := henclose
+            }
+          · exact isFalse fun hadmissible =>
+              henclose hadmissible.binder_targets_enclose
         · exact isFalse fun hadmissible =>
-            henclose hadmissible.binder_targets_enclose
+            hmatch hadmissible.binder_targets_match
       · exact isFalse fun hadmissible =>
-          hmatch hadmissible.binder_targets_match
+          hinjective hadmissible.binder_targets_injective
     · exact isFalse fun hadmissible =>
-        hinjective hadmissible.binder_targets_injective
-  · exact isFalse fun hadmissible =>
-      hvisible hadmissible.attachments_visible
+        hvisible hadmissible.attachments_visible
+  · exact isFalse fun hadmissible => hterminal hadmissible.terminal_body
 
 inductive Error
+  | nonterminalBinderSpine
   | attachmentNotVisible
   | duplicateBinderTarget
   | binderKindOrArityMismatch
@@ -223,25 +412,29 @@ abbrev CheckedInput :=
 
 def checkInput (input : Input ) :
     Except Error (CheckedInput ) :=
-  if hvisible : input.AttachmentsVisible then
-    if hinjective : input.BinderTargetsInjective then
-      if hmatch : input.BinderTargetsMatch then
-        if henclose : input.BinderTargetsEnclose then
-          .ok ⟨input, {
-            attachments_visible := hvisible
-            binder_targets_injective := hinjective
-            binder_targets_match := hmatch
-            binder_targets_enclose := henclose
-          }⟩
-        else .error .binderDoesNotEncloseSite
-      else .error .binderKindOrArityMismatch
-    else .error .duplicateBinderTarget
-  else .error .attachmentNotVisible
+  if hterminal : input.TerminalBody then
+    if hvisible : input.AttachmentsVisible then
+      if hinjective : input.BinderTargetsInjective then
+        if hmatch : input.BinderTargetsMatch then
+          if henclose : input.BinderTargetsEnclose then
+            .ok ⟨input, {
+              terminal_body := hterminal
+              attachments_visible := hvisible
+              binder_targets_injective := hinjective
+              binder_targets_match := hmatch
+              binder_targets_enclose := henclose
+            }⟩
+          else .error .binderDoesNotEncloseSite
+        else .error .binderKindOrArityMismatch
+      else .error .duplicateBinderTarget
+    else .error .attachmentNotVisible
+  else .error .nonterminalBinderSpine
 
 theorem checkInput_sound
     (hcheck : checkInput input = .ok checked) :
     checked.val = input ∧ input.Admissible := by
   unfold checkInput at hcheck
+  split at hcheck <;> try contradiction
   split at hcheck <;> try contradiction
   split at hcheck <;> try contradiction
   split at hcheck <;> try contradiction
@@ -253,7 +446,8 @@ theorem checkInput_sound
 theorem checkInput_complete (hadmissible : input.Admissible) :
     checkInput input = .ok ⟨input, hadmissible⟩ := by
   unfold checkInput
-  simp only [dif_pos hadmissible.attachments_visible,
+  simp only [dif_pos hadmissible.terminal_body,
+    dif_pos hadmissible.attachments_visible,
     dif_pos hadmissible.binder_targets_injective,
     dif_pos hadmissible.binder_targets_match,
     dif_pos hadmissible.binder_targets_enclose]
