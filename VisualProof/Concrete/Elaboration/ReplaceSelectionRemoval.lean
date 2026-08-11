@@ -1,5 +1,7 @@
 import VisualProof.Concrete.Elaboration.Selection
 import VisualProof.Concrete.Elaboration.Compile.Simulation
+import VisualProof.Concrete.Elaboration.ReplaceSelectionReceipt
+import VisualProof.Concrete.Elaboration.SpliceElaboration
 
 /-! Source-derived compiler transport through exact selection removal. -/
 
@@ -1296,5 +1298,212 @@ noncomputable def mapOpenCompilerDerivation
       }
 
 end FrameDomains
+
+namespace CompiledSelection
+
+private theorem canonicalRestorationFrame_eq
+    {source : State arity}
+    {selection : CheckedSelection source.checked.val.diagram}
+    {replacement : SelectionReplacement source.diagram selection}
+    {operation : OperationReceipt source.diagram}
+    {receipt : Receipt source}
+    (decomposition : ReplaceSelectionReceiptDecomposition source selection
+      replacement operation receipt) :
+    decomposition.frameReceipt.target.diagram.val =
+      source.checked.val.diagram.removeRaw selection
+        decomposition.prepared.domains := by
+  rw [← decomposition.prepared_frame_eq]
+  exact decomposition.prepared.frameEq
+
+private theorem canonicalRestorationTouchingWire_survives
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram)
+    (domains : FrameDomains source.checked.val.diagram selection)
+    (index : Fin selection.touchingWires.length) :
+    domains.wires.survives (selection.touchingWires.get index) = true := by
+  apply (domains.wire_survives_iff _).2
+  exact (selection.mem_touchingWires_consequences
+    (List.get_mem selection.touchingWires index)).1
+
+private theorem canonicalRestorationExternalBinder_survives
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram)
+    (domains : FrameDomains source.checked.val.diagram selection)
+    (layout : FragmentLayout source.checked.val.diagram selection)
+    (index : Fin layout.externalBinders.length) :
+    domains.regions.survives (layout.externalBinders.get index) = true := by
+  apply (domains.region_survives_iff _).2
+  right
+  have member : layout.externalBinders.get index ∈
+      selection.externalBinders := by
+    rw [← layout.externalBinders_exact]
+    exact List.get_mem layout.externalBinders index
+  exact (selection.mem_externalBinders_uses member).1
+
+private theorem enclosesWireRegion_of_diagram_eq
+    {target source : Concrete.Diagram} (diagramEq : target = source)
+    (wire : Fin source.wireCount) (region : Fin source.regionCount)
+    (encloses : source.Encloses (source.wires wire).scope region) :
+    target.Encloses
+      (target.wires
+        (Fin.cast (congrArg Concrete.Diagram.wireCount diagramEq).symm
+          wire)).scope
+      (Fin.cast (congrArg Concrete.Diagram.regionCount diagramEq).symm
+        region) := by
+  subst target
+  simpa
+
+/-- The unique source-derived splice input that restores the extracted
+selection material into the exact packed intermediate frame. -/
+noncomputable def canonicalRestorationInput
+    {source : State arity}
+    {selection : CheckedSelection source.checked.val.diagram}
+    {replacement : SelectionReplacement source.diagram selection}
+    {operation : OperationReceipt source.diagram}
+    {receipt : Receipt source}
+    (decomposition : ReplaceSelectionReceiptDecomposition source selection
+      replacement operation receipt) : Splice.Input := by
+  let domains := decomposition.prepared.domains
+  let layout : FragmentLayout source.checked.val.diagram selection := {}
+  let frameEq := canonicalRestorationFrame_eq decomposition
+  let regionCountEq :
+      decomposition.frameReceipt.target.diagram.val.regionCount =
+        domains.regions.count :=
+    (congrArg Concrete.Diagram.regionCount frameEq).trans rfl
+  let wireCountEq :
+      decomposition.frameReceipt.target.diagram.val.wireCount =
+        domains.wires.count :=
+    (congrArg Concrete.Diagram.wireCount frameEq).trans rfl
+  let anchorSurvives := domains.anchor_survives source.diagram selection
+  exact {
+    frame := decomposition.frameReceipt.target.diagram
+    pattern := extractedSelectionOpen source selection
+    site := Fin.cast regionCountEq.symm
+      (domains.regions.index selection.val.anchor anchorSurvives)
+    attachment := fun position =>
+      let sourcePosition : Fin selection.touchingWires.length :=
+        Fin.cast (source.checked.val.diagram.extractBoundaryRaw_length
+          selection layout) position
+      let sourceWire := selection.touchingWires.get sourcePosition
+      let survives := canonicalRestorationTouchingWire_survives source
+        selection domains sourcePosition
+      Fin.cast wireCountEq.symm (domains.wires.index sourceWire survives)
+    binderSpine := extractedSelectionSpine source selection
+    binderTarget := fun index =>
+      let sourceBinder := layout.externalBinders.get index
+      let survives := canonicalRestorationExternalBinder_survives source
+        selection domains layout index
+      Fin.cast regionCountEq.symm
+        (domains.regions.index sourceBinder survives)
+  }
+
+private theorem canonicalRestorationInput_consistent
+    {source : State arity}
+    {selection : CheckedSelection source.checked.val.diagram}
+    {replacement : SelectionReplacement source.diagram selection}
+    {operation : OperationReceipt source.diagram}
+    {receipt : Receipt source}
+    (decomposition : ReplaceSelectionReceiptDecomposition source selection
+      replacement operation receipt) :
+    (canonicalRestorationInput decomposition).AttachmentConsistent := by
+  intro left right boundaryEq
+  have positionEq : left = right := by
+    let layout : FragmentLayout source.checked.val.diagram selection := {}
+    apply source.checked.val.diagram.extractBoundaryRaw_get_injective
+      selection layout
+    simpa only [canonicalRestorationInput, extractedSelectionOpen] using
+      boundaryEq
+  subst right
+  rfl
+
+private noncomputable def canonicalRestorationMaterial
+    {source : State arity}
+    {selection : CheckedSelection source.checked.val.diagram}
+    {replacement : SelectionReplacement source.diagram selection}
+    {operation : OperationReceipt source.diagram}
+    {receipt : Receipt source}
+    (decomposition : ReplaceSelectionReceiptDecomposition source selection
+      replacement operation receipt)
+    (compiled : CompiledSelection source selection) :
+    Splice.Input.CompiledMaterial
+      (canonicalRestorationInput decomposition) := by
+  refine {
+    toLocalCompiledSite := {
+      siteRels := compiled.material.siteRels
+      siteContext := compiled.material.siteContext
+      siteBinders := compiled.material.siteBinders
+      siteBody := compiled.material.siteBody
+      siteLocals := compiled.material.siteLocals
+      compilation := compiled.material.compilation
+      siteLocals_eq := compiled.material.siteLocals_eq
+      completeContext_exact := compiled.material.completeContext_exact
+      binder_covers := compiled.material.binder_covers
+      binder_enumeration := compiled.material.binder_enumeration
+    }
+    siteContext_eq := ?_
+  }
+  simpa only [canonicalRestorationInput] using compiled.material_siteContext
+
+private theorem canonicalRestorationInput_terminal
+    {source : State arity}
+    {selection : CheckedSelection source.checked.val.diagram}
+    {replacement : SelectionReplacement source.diagram selection}
+    {operation : OperationReceipt source.diagram}
+    {receipt : Receipt source}
+    (decomposition : ReplaceSelectionReceiptDecomposition source selection
+      replacement operation receipt) :
+    (canonicalRestorationInput decomposition).TerminalBody := by
+  exact Diagram.extractedBinderSpine_terminalBodyContract
+    source.checked.val.diagram selection {}
+
+private theorem canonicalRestorationInput_attachmentsVisible
+    {source : State arity}
+    {selection : CheckedSelection source.checked.val.diagram}
+    {replacement : SelectionReplacement source.diagram selection}
+    {operation : OperationReceipt source.diagram}
+    {receipt : Receipt source}
+    (decomposition : ReplaceSelectionReceiptDecomposition source selection
+      replacement operation receipt) :
+    (canonicalRestorationInput decomposition).AttachmentsVisible := by
+  intro position
+  let domains := decomposition.prepared.domains
+  let layout : FragmentLayout source.checked.val.diagram selection := {}
+  let sourcePosition : Fin selection.touchingWires.length :=
+    Fin.cast (source.checked.val.diagram.extractBoundaryRaw_length
+      selection layout) position
+  let sourceWire := selection.touchingWires.get sourcePosition
+  let wireSurvives := canonicalRestorationTouchingWire_survives source
+    selection domains sourcePosition
+  let anchorSurvives := domains.anchor_survives source.diagram selection
+  have sourceEncloses := Diagram.touchingWire_scope_encloses_anchor
+    source.diagram selection sourcePosition
+  have frameEncloses := Diagram.removeRaw_encloses source.diagram selection
+    domains (domains.wireScope_survives wireSurvives) anchorSurvives
+    sourceEncloses
+  have frameScope := Diagram.removeRaw_wire_scope source.diagram selection
+    domains (domains.wires.index sourceWire wireSurvives)
+  have frameScope' :
+      ((source.diagram.val.removeRaw selection domains).wires
+        (domains.wires.index sourceWire wireSurvives)).scope =
+        domains.regions.index (source.diagram.val.wires sourceWire).scope
+          (domains.wireScope_survives wireSurvives) := by
+    simpa only [domains.wires.origin_index] using frameScope
+  simp only [canonicalRestorationInput]
+  have rawEncloses :
+      (source.diagram.val.removeRaw selection domains).Encloses
+        ((source.diagram.val.removeRaw selection domains).wires
+          (domains.wires.index sourceWire wireSurvives)).scope
+        (domains.regions.index selection.val.anchor anchorSurvives) := by
+    rw [frameScope']
+    exact frameEncloses
+  have transported := enclosesWireRegion_of_diagram_eq
+    (canonicalRestorationFrame_eq decomposition)
+    (domains.wires.index sourceWire wireSurvives)
+    (domains.regions.index selection.val.anchor anchorSurvives)
+    rawEncloses
+  simpa only [sourcePosition, sourceWire, wireSurvives,
+    anchorSurvives] using transported
+
+end CompiledSelection
 
 end VisualProof.Concrete
