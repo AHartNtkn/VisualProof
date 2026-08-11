@@ -77,6 +77,42 @@ report_source_matches() {
   done < <(rg -n --glob '*.lean' "$pattern" "$@" || true)
 }
 
+audit_documentation_authority() {
+  local -a control_files=(
+    "$repo_root/docs/goals/recursive-rewrite-authority/goal.md"
+    "$repo_root/docs/goals/recursive-rewrite-authority/state.yaml"
+    "$repo_root/docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md"
+  )
+  local compound='(?i)\b(?:compiler[-/]context|context[-/]compiler)\b'
+  local ownership='(?i)\b(?:compiler|elaboration|alignment|presentation|route|focus|trace|target[ -]proof)\b.{0,120}\b(?:authority|core|foundation|owner(?:ship)?|extension)\b|\b(?:authority|core|foundation|owner(?:ship)?|extension)\b.{0,120}\b(?:compiler|elaboration|alignment|presentation|route|focus|trace|target[ -]proof)\b'
+
+  local file match
+  for file in "${control_files[@]}"; do
+    if [[ ! -f $file ]]; then
+      printf 'missing documentation authority control: %s\n' \
+        "${file#"$repo_root"/}"
+      violations=$((violations + 1))
+    fi
+  done
+
+  while IFS= read -r match; do
+    [[ -n $match ]] || continue
+    printf 'competing proof authority in controlling documentation: %s\n' \
+      "${match#"$repo_root"/}"
+    violations=$((violations + 1))
+  done < <(rg -n --pcre2 -e "$compound" -e "$ownership" \
+    "${control_files[@]}" || true)
+
+  if (( violations > 0 )); then
+    printf 'documentation: %d authority-boundary violation(s)\n' \
+      "$violations" >&2
+    return 1
+  fi
+
+  printf 'documentation: source-derived generic flat-transformation authority across %d controlling file(s)\n' \
+    "${#control_files[@]}"
+}
+
 constructors_between() {
   local file=$1
   local start=$2
@@ -557,6 +593,11 @@ if [[ $mode == roster ]]; then
   exit $?
 fi
 
+if [[ $mode == documentation ]]; then
+  audit_documentation_authority
+  exit $?
+fi
+
 case "$mode" in
   rules)
     roots=(
@@ -604,7 +645,7 @@ case "$mode" in
     required_roots=("${roots[@]}")
     ;;
   *)
-    printf 'usage: %s {rules|implementation|proof|roster}\n' "$0" >&2
+    printf 'usage: %s {rules|implementation|proof|roster|documentation}\n' "$0" >&2
     exit 2
     ;;
 esac

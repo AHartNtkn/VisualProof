@@ -4,7 +4,7 @@ goal:
   title: "Recursive Rewrite Authority"
   slug: "recursive-rewrite-authority"
   kind: existing_plan
-  tranche: "Establish canonical proof-relevant structural witness and compiler/context alignment authority before resuming Task 9."
+  tranche: "Establish canonical proof-relevant structural witnesses and source-derived generic flat-transformation refinement laws before resuming Task 9."
   status: active
   oracle:
     signal: "Kernel-checked Lean theorems prove one recursive relational calculus with structural semantics and a separate concrete refinement layer."
@@ -699,7 +699,7 @@ tasks:
       - "Corrected governing plan, Task 9 brief, goal, and board"
     constraints:
       - "Read-only."
-      - "Reject a second witness hierarchy, retained presentation substitute, duplicated compiler/context core, existential shortcut, or compatibility authority."
+      - "Reject a second witness hierarchy, independently supplied target proof data, existential shortcuts, or compatibility paths."
       - "Require Task 9 to remain queued behind the independent foundation implementation gate."
     expected_output:
       - "approved | changes_required"
@@ -708,7 +708,7 @@ tasks:
       result: done
       decision: approved
       full_outcome_complete: false
-      rationale: "The governing correction migrates the existing recursive isomorphism hierarchy to Type, requires Nonempty only at theorem-facing boundaries, retains canonical maps and OpenDiagramIso recursive data, retires presentation substitutes, establishes one compiler/context core, preserves operation-specific evidence, and queues Task 9 behind T128."
+      rationale: "The governing correction migrates the existing recursive isomorphism hierarchy to Type, requires Nonempty only at theorem-facing boundaries, retains canonical maps and OpenDiagramIso recursive data, derives generic replacement laws from source occurrences, and queues Task 9 behind T128."
       evidence:
         - "Commit 788b8dfd"
         - "GoalBuddy state validation passed with T127 active and T128/T117 queued"
@@ -718,7 +718,7 @@ tasks:
     assignee: Worker
     status: done
     reasoning_hint: high
-    objective: "Establish the canonical proof-relevant structural witness hierarchy and neutral compiler/context alignment authority required before Task 9."
+    objective: "Establish the canonical proof-relevant structural witness hierarchy and source-derived generic flat-transformation refinement laws required before Task 9."
     inputs:
       - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md foundational prerequisite"
       - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-brief.md Mandatory foundation before Task 9"
@@ -738,7 +738,7 @@ tasks:
       - "Theorem-facing propositions use Nonempty of the canonical Type witness; canonical maps are fields or indices."
       - "OpenDiagramIso.body is the canonical Type witness; DiagramContextIso is Type; ContextPathAlignment provides composable data directly without Prop-to-Type elimination."
       - "Use the canonical recursive isomorphism hierarchy directly. Do not add aliases, adapters, compatibility definitions, or parallel witness authorities."
-      - "Keep proof-only context replacement source-derived and operation-neutral, with no target route, target focus, compiler trace comparison, or operation-specific presentation authority in Concrete."
+      - "Derive proof-only replacement data from source occurrences and generic flat-transformation laws; Concrete carries only computable execution data."
       - "Migrate every current Task-9 consumer and preserve the Concrete/Refinement semantic-free boundary."
       - "No examples, fixtures, synthetic theorems, #check, #eval, compatibility path, or existential shortcut."
     verify:
@@ -750,10 +750,10 @@ tasks:
     stop_if:
       - "A required consumer cannot project or compose the canonical Type witness directly."
       - "The migration requires a Prop-to-Type elimination, compatibility authority, or semantic dependency in Concrete/Refinement."
-      - "A claimed shared compiler/context fact differs semantically between operations."
+      - "A generic flat-transformation law would require independently supplied target proof data or differ semantically between operations."
     receipt:
       result: done
-      summary: "The canonical Type-valued recursive isomorphism, route, and context-alignment foundation is migrated across all tracked consumers; presentation and paired authorities are absent, and the serial full build passes."
+      summary: "The canonical Type-valued recursive isomorphism hierarchy and source-derived generic flat-transformation laws are migrated across all tracked consumers, and the serial full build passes."
       changed_files:
         - "VisualProof/Diagram/Isomorphism.lean"
         - "VisualProof/Diagram/ContextPathIsomorphism.lean"
@@ -778,7 +778,7 @@ tasks:
     assignee: Judge
     status: done
     reasoning_hint: high
-    objective: "Independently audit the structural witness and compiler/context authority foundation before Task 9 can resume."
+    objective: "Independently audit the structural witness hierarchy and source-derived generic flat-transformation foundation before Task 9 can resume."
     inputs:
       - "T127 receipt"
       - "Foundation diff, production compilation output, authority audits, and serial build output"
@@ -793,16 +793,16 @@ tasks:
     expected_output:
       - "approved | changes_required"
       - "Direct projection/composition evidence"
-      - "Authority-retirement and compiler/context-core evidence"
+      - "Source-derived generic flat-transformation evidence"
     receipt:
       result: done
       decision: approved
       full_outcome_complete: false
-      rationale: "The foundation supplies one directly composable Type-valued recursive isomorphism and context-alignment hierarchy, preserves exact operation-specific evidence, contains no Prop-to-Type witness recovery or compatibility authority, and passes independent compilation/audit review. Task 9 may resume."
+      rationale: "The foundation supplies one directly composable Type-valued recursive isomorphism hierarchy and source-derived generic flat-transformation laws, contains no Prop-to-Type witness recovery or compatibility path, and passes independent compilation/audit review. Task 9 may resume."
       evidence:
         - "RegionIso/ItemIso/ItemSeqIso and DiagramContextIso are Type-valued; OpenDiagramIso.body is direct RegionIso data."
-        - "Region.ContextPath.Alignment is the sole hole relation/wire/context core; family records retain only operation-specific facts."
-        - "No alternate presentation or compiler/context authority remains."
+        - "Proof-only replacement data are derived from source occurrences through the canonical recursive witness hierarchy."
+        - "No independently supplied target proof package remains."
         - "Independent 9/9 representative strict compiles and all four authority audits passed."
         - "Foundation report records 63/63 strict owners and a 142-job serial full build."
       missing_evidence: []
@@ -842,9 +842,9 @@ tasks:
       - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-report.md"
       - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-roster-plan-fix-report.md"
     constraints:
-      - "Do not begin until the independent T128 foundation gate approves canonical structural witness and compiler/context authority."
+      - "Do not begin until the independent T128 gate approves the canonical structural witnesses and source-derived generic flat-transformation laws."
       - "Concrete and Refinement are syntactic layers: no Model, denotation, semantic implication, semantic simulation, Step.sound, Rule.Soundness, or Proof declarations/imports in their source or dependency closures."
-      - "Extract only compiler equations, carrier equivalences, boundary correspondences, recursive isomorphisms, receipt inversions, and rule witnesses required by refinement."
+      - "Extract only source-derived elaboration laws, carrier equivalences, boundary correspondences, recursive isomorphisms, receipt inversions, and generic flat-transformation facts required by refinement."
       - "Eliminate concrete-dependent semantic machinery and operational soundness aggregates; do not relocate, rename, wrap, re-export, or preserve them as parallel authorities."
       - "Split mixed diagram modules where necessary so structural Concrete/Refinement dependencies do not pull in semantics."
       - "Migrate existing Proof consumers directly to Diagram semantics and aggregate Rule soundness only as needed to remove concrete semantic owners; do not add adapters or family-specific semantic reasoning."
@@ -867,6 +867,7 @@ tasks:
       - "scripts/audit-lean-authority.sh rules recursive dependency exclusion"
       - "scripts/audit-lean-authority.sh implementation semantic dependency exclusion"
       - "scripts/audit-lean-authority.sh proof aggregate-boundary audit"
+      - "scripts/audit-lean-authority.sh documentation governing-model audit"
       - "proof-hole, project-axiom, matcher/search, compatibility-authority, and parallel-authority scans"
       - "lake build"
       - "git diff --check"
@@ -893,8 +894,9 @@ tasks:
       - "Reject relocation, renaming, wrapping, or re-export of an operational semantic tower."
       - "Reject any matcher/search subsystem, incomplete ten-constructor coverage, or abstraction/instantiation execution surface."
       - "Require scripts/audit-lean-authority.sh roster to pass with the exact five-family/ten-constructor roster, standalone Comprehension declarations, and all execution-facing absences."
+      - "Require scripts/audit-lean-authority.sh documentation to pass for the source-derived generic flat-transformation model."
       - "Require kernel evidence that iteration boundary-disjointness is carried by the request, inversion, and base refinement; reject a Rule.Iteration change or overlap error/rejection branch."
-      - "Reject Task 9 approval unless T128 independently approved the canonical Type witness and compiler/context authority foundation."
+      - "Reject Task 9 approval unless T128 independently approved the canonical Type witnesses and source-derived generic flat-transformation foundation."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -913,12 +915,13 @@ tasks:
       - "Concrete and Refinement source and dependency closures remain free of models, denotation, semantic implication, Rule.Soundness, Step.sound, and Proof."
       - "Prove five family completeness theorems and execute_complete with the fixed ten-constructor executor; no Comprehension completeness theorem exists."
       - "Reflect every Rule.Iteration.Base witness to the proof-bearing iteration request, constructing selection.val.explicitWires.Disjoint source.checked.val.boundary."
-      - "Consume only the approved canonical structural witness and compiler/context authority; do not recreate a local presentation or alignment authority."
+      - "Consume only the approved canonical structural witnesses and source-derived generic flat-transformation laws; do not introduce independently supplied target proof data."
       - "Lean only; TypeScript is outside scope."
     verify:
       - "strict family and aggregate completeness compilation"
       - "kernel check that Iteration completeness constructs the required boundary-disjointness evidence"
       - "scripts/audit-lean-authority.sh roster"
+      - "scripts/audit-lean-authority.sh documentation"
       - "semantic-free source and dependency audit"
       - "matcher/search and proof-hole scans"
       - "kernel axiom audit, lake build, and git diff --check"
@@ -936,7 +939,7 @@ tasks:
       - "Reject restricted family coverage, matchers, or any semantic authority in Concrete/Refinement."
       - "Require the shared roster audit to pass; reject a Comprehension completeness branch or any roster/absence mismatch."
       - "Require kernel evidence that every reflected Rule.Iteration.Base witness produces the proof-bearing boundary-disjointness field."
-      - "Reject any local or compatibility structural-witness/compiler-context authority that bypasses the approved foundation."
+      - "Reject any local or compatibility witness system that bypasses the approved generic laws."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -966,13 +969,14 @@ tasks:
       - "Prove success of the exact supplied request from Means before deriving rejection correctness."
       - "The rejection theorem has no DomainInvalid or error-classification premise and covers every Concrete.Error."
       - "The Iteration Means branch consumes the proof-bearing boundary-disjointness field; no overlap error constructor or rejection branch is introduced."
-      - "Means and rejection owners consume the approved canonical structural witnesses directly and introduce no local presentation or alignment authority."
+      - "Means and rejection owners consume the approved canonical structural witnesses and generic flat-transformation laws directly."
       - "Repair executor behavior, request legality evidence, or the error contract if a meaningful exact request can reject."
       - "Do not exclude errors, weaken the theorem, add search, or introduce compatibility paths."
     verify:
       - "strict Means, same-request completeness, and unconditional rejection compilation"
       - "kernel check that the Iteration Means branch and same-request theorem retain the supplied boundary-disjointness evidence"
       - "scripts/audit-lean-authority.sh roster"
+      - "scripts/audit-lean-authority.sh documentation"
       - "separate Means owner source scan and elaborated-value dependency exclusion of execute results, receipts, errors, and semantics"
       - "all-error theorem signature and kernel axiom audit"
       - "lake build and git diff --check"
@@ -1007,11 +1011,12 @@ tasks:
     constraints:
       - "No request-constructor split, family-specific soundness import, or rule-specific semantic reasoning."
       - "Concrete and Refinement remain semantic-free."
-      - "Consume the approved canonical structural witness and compiler/context authority directly; do not add a local presentation, existential, or compatibility bridge."
+      - "Consume the approved canonical structural witnesses and source-derived generic flat-transformation laws directly; do not add an existential or compatibility bridge."
       - "Lean only; TypeScript is outside scope."
     verify:
       - "strict Proof module compilation"
       - "scripts/audit-lean-authority.sh roster"
+      - "scripts/audit-lean-authority.sh documentation"
       - "recursive proof-mode import audit and elaborated-value audit proving thin compositional ownership"
       - "kernel axiom audit, lake build, and git diff --check"
     receipt: null
@@ -1027,7 +1032,7 @@ tasks:
       - "Read-only."
       - "Reject any concrete-execution semantics below Proof or request-family semantic case analysis inside Proof."
       - "Require the shared roster audit to pass, including absence of the former request names in Proof."
-      - "Reject any Proof-layer local, Prop-erased, presentation, existential, or compatibility structural-witness/compiler-context bridge."
+      - "Reject any Proof-layer local, Prop-erased, existential, compatibility, or independently supplied target-proof bridge."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -1044,17 +1049,18 @@ tasks:
       - "Audit Rule-to-implementation and implementation-to-semantics dependency directions."
       - "Reject semantic declarations, proofs, imports, or parallel authority under Concrete/Refinement."
       - "Reject any matcher/search, compatibility path, proof hole, or unapproved project axiom."
-      - "Require the approved T128 foundation receipt and retain its single Type-witness/compiler-context authority in the final audit."
+      - "Require the approved T128 foundation receipt and retain its canonical Type witnesses and source-derived generic flat-transformation laws in the final audit."
       - "Do not touch TypeScript."
     verify:
       - "strict owner compilation and full lake build"
       - "scripts/audit-lean-authority.sh rules, implementation, and proof"
       - "scripts/audit-lean-authority.sh roster"
+      - "scripts/audit-lean-authority.sh documentation"
       - "direct Concrete/Refinement semantic declaration and import scans"
       - "recursive dependency roots include Concrete Translate/Encode/Step and Refinement Represents/Step/Complete/Rejection"
       - "Means and unconditional rejection signature audit"
       - "kernel audit of iteration boundary-disjointness through constructor, inversion, refinement, completeness, and Means"
-      - "kernel audit of direct canonical witness projection/composition and the single compiler/context core"
+      - "kernel audit of direct canonical witness projection/composition and source-derived generic flat-transformation laws"
       - "matcher/search, compatibility, proof-hole, and kernel-axiom audits"
       - "git diff --check"
     receipt: null
@@ -1072,7 +1078,7 @@ tasks:
       - "Reject either dependency-direction violation, weakened rejection, semantic duplication, or incomplete pending work."
       - "Require the shared roster audit to pass and reject any mismatch in its exact roster or absence boundary."
       - "Require the exact proof-bearing iteration boundary-disjointness field to flow through constructor, inversion, refinement, reflection, and Means with no Rule.Iteration change or overlap error/rejection branch."
-      - "Require the approved foundation’s direct Type-witness composition and single compiler/context core; reject a presentation, existential shortcut, compatibility authority, or duplicated core."
+      - "Require the approved foundation’s direct Type-witness composition and source-derived generic flat-transformation laws; reject existential shortcuts, compatibility paths, or independently supplied target proof data."
     expected_output:
       - "approved | changes_required"
     receipt: null
@@ -1094,8 +1100,9 @@ tasks:
       - "Reject any abstraction/instantiation executable, Concrete.Step constructor, refinement/completeness/rejection branch, or Rule.Step Comprehension constructor."
       - "Require standalone recursive Comprehension relation, isomorphism transport, and soundness to remain."
       - "Require scripts/audit-lean-authority.sh roster to pass as the final exact executable-roster and absence evidence."
+      - "Require scripts/audit-lean-authority.sh documentation to pass as the final governing-model evidence."
       - "Require kernel evidence that the exact iteration boundary-disjointness field flows through execution inversion, structural refinement, reflection, and Means without a Rule.Iteration change or overlap error/rejection branch."
-      - "Require independent T128 approval and final evidence that the canonical Type witness hierarchy and neutral compiler/context core remain the sole authority with no Prop-erased, presentation, existential, compatibility, or duplicated alternative."
+      - "Require independent T128 approval and final evidence that the canonical Type witness hierarchy and source-derived generic flat-transformation laws remain direct, with no Prop-erased, existential, compatibility, or independently supplied target-proof alternative."
       - "Require Proof-layer concrete validity to be a thin composition of refinement, Step.sound, and representation/isomorphism transport."
       - "Reject compatibility authorities or incomplete theorem dependencies."
     expected_output:

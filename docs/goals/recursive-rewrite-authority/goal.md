@@ -34,9 +34,9 @@ The PM must keep comparing task receipts to this oracle. Planning, discovery, a 
 
 ## Current Tranche
 
-Establish the canonical proof-relevant structural witness and compiler/context
-alignment foundation under an independent Worker/Judge gate, then resume the
-reviewed theorem-driven implementation plan.
+Establish canonical proof-relevant structural witnesses and source-derived
+generic flat-transformation refinement laws under an independent Worker/Judge
+gate, then resume the reviewed theorem-driven implementation plan.
 
 ## Non-Negotiable Constraints
 
@@ -53,9 +53,9 @@ reviewed theorem-driven implementation plan.
 - `OpenDiagramIso.body` and `DiagramContextIso` retain recursive/composable
   Type data. `ContextPathAlignment` provides that data directly, without
   Prop-to-Type elimination.
-- Proof-only context replacement is source-derived and operation-neutral; no
-  target route, target focus, compiler trace comparison, or operation-specific
-  presentation authority is part of the concrete execution boundary.
+- Proof-only context replacement is derived from the source occurrence and
+  generic flat-transformation laws; concrete execution contains only the
+  computable source-to-target transformation and its direct receipt data.
 - The Lean formalization has no matcher or occurrence-search subsystem; requests supply occurrence evidence.
 - Representation completeness and one-step execution completeness are required.
 - TypeScript is outside this goal's implementation, planning, and validation scope.
