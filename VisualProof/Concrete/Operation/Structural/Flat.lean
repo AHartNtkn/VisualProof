@@ -75,6 +75,36 @@ theorem spliceRaw_result
   cases success
   exact checkWellFormed_preserves_input hcheck
 
+/-- Successful raw splicing discharges every executable admissibility check. -/
+theorem spliceRaw_admissible
+    (success : spliceRaw input = .ok result) : input.Admissible := by
+  cases hinput : Splice.Input.checkInput input with
+  | error error => simp [spliceRaw, hinput] at success
+  | ok checked => exact (Splice.Input.checkInput_sound hinput).2
+
+/-- The raw operation result is the canonical concrete plug layout. -/
+theorem spliceRaw_result_plugRaw
+    (success : spliceRaw input = .ok result) :
+    result.result.val =
+      (({} : Splice.Input.PlugLayout input).plugRaw) := by
+  simpa [spliceLayout] using spliceRaw_result success
+
+/-- Packing changes only the open boundary: the canonical receipt target has
+the graph produced by the successful plug layout. -/
+theorem spliceRaw_packed_target
+    {arity : Nat} {source : State arity} {input : Splice.Input}
+    (frameEq : input.frame = source.diagram)
+    {operation : OperationReceipt input.frame}
+    (success : spliceRaw input = .ok operation)
+    {receipt : Receipt source}
+    (packed : (operation.castInput frameEq).toReceipt source = some receipt) :
+    receipt.target.checked.val.diagram =
+      (({} : Splice.Input.PlugLayout input).plugRaw) := by
+  exact (OperationReceipt.toReceipt_result packed).trans
+    ((congrArg (fun checked : Concrete.Checked => checked.val)
+      (OperationReceipt.castInput_result operation frameEq)).trans
+        (spliceRaw_result_plugRaw success))
+
 
 private def quotientWireDomain (input : Concrete.Diagram)
     (absorbed : Fin input.wireCount) : SurvivorDomain input.wireCount where

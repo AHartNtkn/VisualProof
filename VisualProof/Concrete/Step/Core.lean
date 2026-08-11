@@ -564,6 +564,13 @@ def OperationReceipt.castInput
   cases inputEq
   exact receipt
 
+@[simp] theorem OperationReceipt.castInput_result
+    (receipt : OperationReceipt input)
+    (inputEq : input = replacement) :
+    (receipt.castInput inputEq).result = receipt.result := by
+  cases inputEq
+  rfl
+
 
 def OperationReceipt.transportOpen {input : Concrete.Checked }
     (receipt : OperationReceipt input)
