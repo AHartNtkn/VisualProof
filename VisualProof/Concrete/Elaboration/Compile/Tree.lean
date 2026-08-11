@@ -215,6 +215,13 @@ def get : (items : CompiledItems d fuel context rels binders) →
     (items : CompiledItems d fuel context rels binders) :
     items.erase.length = items.length := rfl
 
+@[simp] theorem length_eq_origins_length
+    (items : CompiledItems d fuel context rels binders) :
+    items.length = items.origins.length :=
+  match items with
+  | .nil => rfl
+  | .cons _ tail => congrArg Nat.succ (length_eq_origins_length tail)
+
 @[simp] theorem erase_append
     (initial suffix : CompiledItems d fuel context rels binders) :
     (initial.append suffix).erase = initial.erase.append suffix.erase :=
