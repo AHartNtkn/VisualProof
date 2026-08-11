@@ -797,6 +797,57 @@ theorem compileNode?_map
         simp [CompiledItem.erase, Item.renameWires, Item.renameRelations,
           Function.comp_def]
 
+/-- Constructive success form of `compileNode?_map`. The target item remains
+the value returned by the sole target node compiler. -/
+theorem compileNode?_map_success
+    {source target : Diagram}
+    (sourceFuel targetFuel : Nat)
+    (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (sourceBinders : BinderContext source sourceRels)
+    (targetBinders : BinderContext target targetRels)
+    (sourceNode : Fin source.nodeCount)
+    (targetNode : Fin target.nodeCount)
+    (regionMap : Fin source.regionCount → Fin target.regionCount)
+    (binderMap : Fin source.regionCount → Fin target.regionCount)
+    (wireMap : Fin sourceContext.length → Fin targetContext.length)
+    (relationMap : RelationRenaming sourceRels targetRels)
+    (hnode : target.nodes targetNode =
+      match source.nodes sourceNode with
+      | .atom region binder =>
+          .atom (regionMap region) (binderMap binder)
+      | .identity region arity =>
+          .identity (regionMap region) arity)
+    (hports : ∀ port,
+      resolvePort? target targetContext targetNode port =
+        (resolvePort? source sourceContext sourceNode port).map wireMap)
+    (hbinders : ∀ region binder,
+      source.nodes sourceNode = .atom region binder →
+        targetBinders (binderMap binder) =
+          (sourceBinders binder).map fun relation =>
+            ⟨relation.1, relationMap relation.2⟩)
+    {sourceItem : CompiledItem source sourceFuel sourceContext sourceRels
+      sourceBinders}
+    (hsource : compileNode? source sourceFuel sourceContext sourceBinders
+      sourceNode = some sourceItem) :
+    ∃ targetItem : CompiledItem target targetFuel targetContext targetRels
+        targetBinders,
+      compileNode? target targetFuel targetContext targetBinders targetNode =
+        some targetItem ∧
+      targetItem.erase =
+        (sourceItem.erase.renameWires wireMap).renameRelations relationMap := by
+  have mapped := compileNode?_map sourceFuel targetFuel sourceContext
+    targetContext sourceBinders targetBinders sourceNode targetNode regionMap
+    binderMap wireMap relationMap hnode hports hbinders
+  rw [hsource] at mapped
+  cases htarget : compileNode? target targetFuel targetContext targetBinders
+      targetNode with
+  | none => simp [htarget] at mapped
+  | some targetItem =>
+      refine ⟨targetItem, rfl, ?_⟩
+      rw [htarget] at mapped
+      exact Option.some.inj mapped
+
 noncomputable def compileNode?_equivariant {source target : Diagram}
     (iso : Iso source target)
     (htarget : target.WellFormed)

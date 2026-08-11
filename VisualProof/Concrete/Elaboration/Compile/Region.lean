@@ -240,6 +240,55 @@ theorem compileRegion?_eq_compileItems?
       pure (.mk items)) := by
   cases childFuel <;> rfl
 
+/-- The root compiler is the fixed item compiler at the exact root call. -/
+theorem compileRoot?_eq_compileItems?
+    (d : Diagram) (ambient locals : WireContext d) :
+    compileRoot? d ambient locals = (do
+      let items ← compileItems? d d.regionCount (ambient ++ locals)
+        BinderContext.empty (localOccurrences d d.root)
+      pure (.mk items)) := rfl
+
+/-- Successful root-item compilation packages the exact root result. -/
+theorem compileRoot?_of_items
+    {items : CompiledItems d d.regionCount (ambient ++ locals) []
+      BinderContext.empty}
+    (compiled : compileItems? d d.regionCount (ambient ++ locals)
+      BinderContext.empty (localOccurrences d d.root) = some items) :
+    compileRoot? d ambient locals = some (.mk items) := by
+  rw [compileRoot?_eq_compileItems?]
+  simp [compiled]
+
+/-- Item compilation distributes constructively over ordinary list append. -/
+theorem compileItems?_append
+    (d : Diagram) (fuel : Nat) (context : WireContext d)
+    (binders : BinderContext d rels)
+    (initial suffix : List (LocalOccurrence d.regionCount d.nodeCount))
+    {initialResult suffixResult : CompiledItems d fuel context rels binders}
+    (initialCompiled :
+      compileItems? d fuel context binders initial = some initialResult)
+    (suffixCompiled :
+      compileItems? d fuel context binders suffix = some suffixResult) :
+    compileItems? d fuel context binders (initial ++ suffix) =
+      some (initialResult.append suffixResult) := by
+  induction initial generalizing initialResult with
+  | nil =>
+      simp only [compileItems?_nil] at initialCompiled
+      cases initialCompiled
+      simpa using suffixCompiled
+  | cons occurrence tail ih =>
+      rw [compileItems?_cons] at initialCompiled
+      cases hhead : compileOccurrence? d fuel context binders occurrence with
+      | none => simp [hhead] at initialCompiled
+      | some head =>
+          cases htail : compileItems? d fuel context binders tail with
+          | none => simp [hhead, htail] at initialCompiled
+          | some tailResult =>
+              simp [hhead, htail] at initialCompiled
+              subst initialResult
+              rw [List.cons_append, compileItems?_cons, hhead,
+                ih htail]
+              rfl
+
 theorem compileRoot?_localCount
     {body : CompiledRegion d (.root ambient locals)}
     (_compiled : compileRoot? d ambient locals = some body) :
