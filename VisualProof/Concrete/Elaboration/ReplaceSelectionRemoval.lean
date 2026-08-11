@@ -264,6 +264,138 @@ theorem map_localOccurrences_removeRaw
       rw [List.filter_append, List.filter_map, List.filter_map]
       rfl
 
+/-- The dense frame position corresponding to one retained source child
+occurrence.  Its position is selected only in the filtered source occurrence
+stream, then transported across the exact occurrence-list equation. -/
+structure MappedChildOccurrenceIndex
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    {parent child : Fin host.val.regionCount}
+    (parentSurvives : domains.regions.survives parent = true)
+    (childSurvives : domains.regions.survives child = true) where
+  index : Fin (localOccurrences (host.val.removeRaw selection domains)
+    (domains.regions.index parent parentSurvives)).length
+  occurrence : (localOccurrences (host.val.removeRaw selection domains)
+    (domains.regions.index parent parentSurvives)).get index =
+      .child (domains.regions.index child childSurvives)
+
+/-- Reindex one intrinsic source child position through exact selection
+removal without inspecting or searching the target occurrence stream. -/
+noncomputable def mapChildOccurrenceIndex
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    {parent child : Fin host.val.regionCount}
+    (parentSurvives : domains.regions.survives parent = true)
+    (childSurvives : domains.regions.survives child = true)
+    (sourceIndex : Fin (localOccurrences host.val parent).length)
+    (sourceOccurrence : (localOccurrences host.val parent).get sourceIndex =
+      .child child) :
+    MappedChildOccurrenceIndex host selection domains parentSurvives
+      childSurvives := by
+  let sourceOccurrences := localOccurrences host.val parent
+  let filteredOccurrences :=
+    sourceOccurrences.filter domains.occurrenceSurvives
+  have sourceMember : (.child child : LocalOccurrence host.val.regionCount
+      host.val.nodeCount) ∈ sourceOccurrences := by
+    rw [← sourceOccurrence]
+    exact List.get_mem sourceOccurrences sourceIndex
+  have filteredMember : (.child child : LocalOccurrence host.val.regionCount
+      host.val.nodeCount) ∈ filteredOccurrences := by
+    exact List.mem_filter.mpr ⟨sourceMember, childSurvives⟩
+  let filteredExistence := indexOf?_complete filteredMember
+  let filteredIndex := Classical.choose filteredExistence
+  have filteredFound : indexOf? filteredOccurrences (.child child) =
+      some filteredIndex := Classical.choose_spec filteredExistence
+  have filteredGet : filteredOccurrences.get filteredIndex =
+      (.child child : LocalOccurrence host.val.regionCount
+        host.val.nodeCount) := indexOf?_sound filteredFound
+  let targetOccurrences := localOccurrences
+    (host.val.removeRaw selection domains)
+    (domains.regions.index parent parentSurvives)
+  have occurrencesEq :
+      targetOccurrences.map domains.originOccurrence = filteredOccurrences := by
+    simpa only [targetOccurrences, filteredOccurrences, sourceOccurrences,
+      domains.regions.origin_index] using
+        domains.map_localOccurrences_removeRaw host selection
+          (domains.regions.index parent parentSurvives)
+  have targetLength : filteredOccurrences.length = targetOccurrences.length := by
+    have lengths := congrArg List.length occurrencesEq
+    simpa only [List.length_map] using lengths.symm
+  let targetIndex : Fin targetOccurrences.length :=
+    Fin.cast targetLength filteredIndex
+  let mappedIndex : Fin
+      (targetOccurrences.map domains.originOccurrence).length :=
+    Fin.cast (by simp only [List.length_map]; rfl) targetIndex
+  have transported := List.get_of_eq occurrencesEq mappedIndex
+  have filteredPosition :
+      Fin.cast (congrArg List.length occurrencesEq) mappedIndex =
+        filteredIndex := by
+    apply Fin.ext
+    rfl
+  change (targetOccurrences.map domains.originOccurrence).get mappedIndex =
+    filteredOccurrences.get
+      (Fin.cast (congrArg List.length occurrencesEq) mappedIndex)
+    at transported
+  rw [filteredPosition, filteredGet] at transported
+  have targetOrigin :
+      domains.originOccurrence (targetOccurrences.get targetIndex) =
+        (.child child : LocalOccurrence host.val.regionCount
+          host.val.nodeCount) := by
+    simpa only [List.get_eq_getElem, List.getElem_map] using transported
+  cases targetOccurrenceEq : targetOccurrences.get targetIndex with
+  | node targetNode =>
+      simp only [targetOccurrenceEq, originOccurrence] at targetOrigin
+      cases targetOrigin
+  | child targetChild =>
+      have targetChildOrigin : domains.regions.origin targetChild = child := by
+        simpa only [targetOccurrenceEq, originOccurrence,
+          LocalOccurrence.child.injEq] using targetOrigin
+      have targetChildEq : targetChild =
+          domains.regions.index child childSurvives := by
+        apply domains.regions.origin_injective
+        rw [targetChildOrigin, domains.regions.origin_index]
+      exact {
+        index := targetIndex
+        occurrence := by rw [targetOccurrenceEq, targetChildEq]
+      }
+
+/-- A retained source cut remains the corresponding dense frame cut. -/
+theorem removeRaw_cut
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    {parent child : Fin host.val.regionCount}
+    (parentSurvives : domains.regions.survives parent = true)
+    (childSurvives : domains.regions.survives child = true)
+    (childKind : host.val.regions child = .cut parent) :
+    (host.val.removeRaw selection domains).regions
+        (domains.regions.index child childSurvives) =
+      .cut (domains.regions.index parent parentSurvives) := by
+  have reindexed := Diagram.removeRaw_region_reindexed host selection domains
+    (domains.regions.index child childSurvives)
+  simp only [domains.regions.origin_index, childKind,
+    SurvivorDomain.reindexRegion?] at reindexed
+  rw [domains.regions.index?_index parent parentSurvives] at reindexed
+  exact (Option.some.inj reindexed).symm
+
+/-- A retained source bubble remains the corresponding dense frame bubble. -/
+theorem removeRaw_bubble
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    {parent child : Fin host.val.regionCount}
+    (parentSurvives : domains.regions.survives parent = true)
+    (childSurvives : domains.regions.survives child = true)
+    (arity : Nat)
+    (childKind : host.val.regions child = .bubble parent arity) :
+    (host.val.removeRaw selection domains).regions
+        (domains.regions.index child childSurvives) =
+      .bubble (domains.regions.index parent parentSurvives) arity := by
+  have reindexed := Diagram.removeRaw_region_reindexed host selection domains
+    (domains.regions.index child childSurvives)
+  simp only [domains.regions.origin_index, childKind,
+    SurvivorDomain.reindexRegion?] at reindexed
+  rw [domains.regions.index?_index parent parentSurvives] at reindexed
+  exact (Option.some.inj reindexed).symm
+
 private theorem removeRaw_wire_scope_eq_iff
     (host : Checked) (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
@@ -378,6 +510,47 @@ theorem mapWireContext_extend
   rw [domains.mapWireContext_append,
     domains.mapWireContext_exactScope host selection region]
 
+/-- Restrict a source binder context to the retained dense frame regions. -/
+def mapBinderContext (domains : FrameDomains d selection)
+    (context : BinderContext d rels) :
+    BinderContext (d.removeRaw selection domains) rels :=
+  fun region => context (domains.regions.origin region)
+
+/-- Empty binder state is preserved by exact frame compaction. -/
+theorem mapBinderContext_empty (domains : FrameDomains d selection) :
+    domains.mapBinderContext BinderContext.empty = BinderContext.empty := by
+  rfl
+
+/-- Pushing a surviving source binder commutes with exact frame compaction. -/
+theorem mapBinderContext_push
+    (domains : FrameDomains d selection)
+    (context : BinderContext d rels)
+    (binder : Fin d.regionCount)
+    (binderSurvives : domains.regions.survives binder = true)
+    (arity : Nat) :
+    domains.mapBinderContext (context.push binder arity) =
+      (domains.mapBinderContext context).push
+        (domains.regions.index binder binderSurvives) arity := by
+  funext candidate
+  have candidate_eq_iff :
+      domains.regions.origin candidate = binder ↔
+        candidate = domains.regions.index binder binderSurvives := by
+    constructor
+    · intro equality
+      apply domains.regions.origin_injective
+      rw [equality, domains.regions.origin_index]
+    · intro equality
+      rw [equality, domains.regions.origin_index]
+  by_cases equality : domains.regions.origin candidate = binder
+  · have targetEquality := candidate_eq_iff.mp equality
+    simp only [mapBinderContext, BinderContext.push, targetEquality,
+      domains.regions.origin_index, ↓reduceIte]
+  · have targetInequality :
+        candidate ≠ domains.regions.index binder binderSurvives :=
+      fun targetEquality => equality (candidate_eq_iff.mpr targetEquality)
+    simp only [mapBinderContext, BinderContext.push, equality,
+      targetInequality, ↓reduceIte]
+
 /-- A checked selection never removes its own retained anchor. -/
 theorem anchor_survives
     (host : Checked) (selection : CheckedSelection host.val)
@@ -391,71 +564,78 @@ theorem anchor_survives
   exact checked_direct_child_not_encloses_parent host.property
     (selection.property.childRoots_direct child childSelected) childEncloses
 
-/-- Exact mapped route data for a compiler call that starts at a retained
-source region.  Survival of the starting region is derived from the route and
-the supplied terminal survival proof. -/
-structure MappedRegionCompilerRoute
+/-- The exact route, intrinsic path, and binder derivation transported through
+selection removal as one dependent compiler certificate. -/
+structure MappedRegionCompilerDerivation
     (host : Checked) (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {origin site : Fin host.val.regionCount}
     {context siteContext : WireContext host.val}
-    (sourceRoute : ConcreteCompilerRoute host.val (.region origin context)
-      site siteContext)
+    {startRels siteRels : Theory.RelCtx}
+    {startBinders : BinderContext host.val startRels}
+    {siteBinders : BinderContext host.val siteRels}
+    {sourcePath : List Nat}
+    {sourceRoute : ConcreteCompilerRoute host.val (.region origin context)
+      site siteContext}
+    (sourceDerivation : sourceRoute.Derivation startBinders sourcePath
+      siteBinders)
     (siteSurvives : domains.regions.survives site = true) where
   originSurvives : domains.regions.survives origin = true
+  targetPath : List Nat
   route : ConcreteCompilerRoute (host.val.removeRaw selection domains)
     (.region (domains.regions.index origin originSurvives)
       (domains.mapWireContext context))
     (domains.regions.index site siteSurvives)
     (domains.mapWireContext siteContext)
+  derivation : route.Derivation (domains.mapBinderContext startBinders)
+    targetPath (domains.mapBinderContext siteBinders)
 
-/-- Exact mapped route data for a compiler call that starts at the open root. -/
-structure MappedOpenCompilerRoute
-    (host : Checked) (selection : CheckedSelection host.val)
-    (domains : FrameDomains host.val selection)
-    {ambient locals : WireContext host.val}
-    {site : Fin host.val.regionCount}
-    {siteContext : WireContext host.val}
-    (sourceRoute : ConcreteCompilerRoute host.val (.openRoot ambient locals)
-      site siteContext)
-    (siteSurvives : domains.regions.survives site = true) where
-  route : ConcreteCompilerRoute (host.val.removeRaw selection domains)
-    (.openRoot (domains.mapWireContext ambient)
-      (domains.mapWireContext locals))
-    (domains.regions.index site siteSurvives)
-    (domains.mapWireContext siteContext)
-
-/-- Map one source region-start compiler route through exact selection
-removal.  Every target parent and context is inherited from the source route. -/
-noncomputable def mapRegionCompilerRoute
+/-- Transport one source region derivation through survivor reindexing.  Each
+target path index is obtained from the filtered source occurrence stream. -/
+noncomputable def mapRegionCompilerDerivation
     (host : Checked) (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {origin site : Fin host.val.regionCount}
     {context siteContext : WireContext host.val}
-    (sourceRoute : ConcreteCompilerRoute host.val (.region origin context)
-      site siteContext)
+    {startRels siteRels : Theory.RelCtx}
+    {startBinders : BinderContext host.val startRels}
+    {siteBinders : BinderContext host.val siteRels}
+    {sourcePath : List Nat}
+    {sourceRoute : ConcreteCompilerRoute host.val (.region origin context)
+      site siteContext}
+    (sourceDerivation : sourceRoute.Derivation startBinders sourcePath
+      siteBinders)
     (siteSurvives : domains.regions.survives site = true) :
-    MappedRegionCompilerRoute host selection domains sourceRoute
+    MappedRegionCompilerDerivation host selection domains sourceDerivation
       siteSurvives := by
-  cases sourceRoute with
+  cases sourceDerivation with
   | regionHere =>
       exact {
         originSurvives := siteSurvives
+        targetPath := []
         route := .regionHere (domains.regions.index origin siteSurvives)
           (domains.mapWireContext context)
+        derivation := .regionHere (domains.regions.index origin siteSurvives)
+          (domains.mapWireContext context)
+          (domains.mapBinderContext startBinders)
       }
-  | @regionStep sourceOrigin child sourceSite sourceContext
-      sourceSiteContext parent nestedRoute =>
-      let nested := domains.mapRegionCompilerRoute host selection nestedRoute
-        siteSurvives
+  | @regionStepCut _ child _ _ _ _ _ parent childKind sourceIndex
+      sourceOccurrence _ _ _ nestedRoute nestedDerivation =>
+      let nestedResult := mapRegionCompilerDerivation host selection domains
+        nestedDerivation siteSurvives
+      let childSurvives := nestedResult.originSurvives
       let originSurvives := domains.parent_survives host selection
-        nested.originSurvives parent
+        childSurvives parent
+      let mappedOccurrence := domains.mapChildOccurrenceIndex host selection
+        originSurvives childSurvives sourceIndex sourceOccurrence
       have targetParent :
           ((host.val.removeRaw selection domains).regions
-            (domains.regions.index child nested.originSurvives)).parent? =
+            (domains.regions.index child childSurvives)).parent? =
             some (domains.regions.index origin originSurvives) := by
         exact Diagram.removeRaw_parent host selection domains
-          nested.originSurvives parent
+          childSurvives parent
+      have targetKind := domains.removeRaw_cut host selection originSurvives
+        childSurvives childKind
       have contextEq :
           domains.mapWireContext (context.extend origin) =
             (domains.mapWireContext context).extend
@@ -463,49 +643,151 @@ noncomputable def mapRegionCompilerRoute
         simpa only [domains.regions.origin_index] using
           domains.mapWireContext_extend host selection context
             (domains.regions.index origin originSurvives)
-      have targetNested : ConcreteCompilerRoute
+      let targetNested : Sigma fun route : ConcreteCompilerRoute
           (host.val.removeRaw selection domains)
-          (.region (domains.regions.index child nested.originSurvives)
+          (.region (domains.regions.index child childSurvives)
             ((domains.mapWireContext context).extend
               (domains.regions.index origin originSurvives)))
           (domains.regions.index site siteSurvives)
-          (domains.mapWireContext siteContext) := by
+          (domains.mapWireContext siteContext) =>
+        route.Derivation (domains.mapBinderContext startBinders)
+          nestedResult.targetPath
+          (domains.mapBinderContext siteBinders) := by
         rw [← contextEq]
-        exact nested.route
+        exact ⟨nestedResult.route, nestedResult.derivation⟩
       exact {
         originSurvives := originSurvives
-        route := .regionStep targetParent targetNested
+        targetPath := mappedOccurrence.index.val :: nestedResult.targetPath
+        route := .regionStep targetParent targetNested.1
+        derivation := ConcreteCompilerRoute.Derivation.regionStepCut
+          (domains.mapBinderContext startBinders) targetParent targetKind
+          mappedOccurrence.index mappedOccurrence.occurrence targetNested.2
+      }
+  | @regionStepBubble _ child _ _ _ _ _ arity parent childKind sourceIndex
+      sourceOccurrence _ _ _ nestedRoute nestedDerivation =>
+      let nestedResult := mapRegionCompilerDerivation host selection domains
+        nestedDerivation siteSurvives
+      let childSurvives := nestedResult.originSurvives
+      let originSurvives := domains.parent_survives host selection
+        childSurvives parent
+      let mappedOccurrence := domains.mapChildOccurrenceIndex host selection
+        originSurvives childSurvives sourceIndex sourceOccurrence
+      have targetParent :
+          ((host.val.removeRaw selection domains).regions
+            (domains.regions.index child childSurvives)).parent? =
+            some (domains.regions.index origin originSurvives) := by
+        exact Diagram.removeRaw_parent host selection domains
+          childSurvives parent
+      have targetKind := domains.removeRaw_bubble host selection
+        originSurvives childSurvives arity childKind
+      have contextEq :
+          domains.mapWireContext (context.extend origin) =
+            (domains.mapWireContext context).extend
+              (domains.regions.index origin originSurvives) := by
+        simpa only [domains.regions.origin_index] using
+          domains.mapWireContext_extend host selection context
+            (domains.regions.index origin originSurvives)
+      let targetNested : Sigma fun route : ConcreteCompilerRoute
+          (host.val.removeRaw selection domains)
+          (.region (domains.regions.index child childSurvives)
+            ((domains.mapWireContext context).extend
+              (domains.regions.index origin originSurvives)))
+          (domains.regions.index site siteSurvives)
+          (domains.mapWireContext siteContext) =>
+        route.Derivation
+          ((domains.mapBinderContext startBinders).push
+            (domains.regions.index child childSurvives) arity)
+          nestedResult.targetPath
+          (domains.mapBinderContext siteBinders) := by
+        rw [← domains.mapBinderContext_push startBinders child
+          childSurvives arity, ← contextEq]
+        exact ⟨nestedResult.route, nestedResult.derivation⟩
+      exact {
+        originSurvives := originSurvives
+        targetPath := mappedOccurrence.index.val :: nestedResult.targetPath
+        route := .regionStep targetParent targetNested.1
+        derivation := ConcreteCompilerRoute.Derivation.regionStepBubble
+          (domains.mapBinderContext startBinders) targetParent targetKind
+          mappedOccurrence.index mappedOccurrence.occurrence targetNested.2
       }
 
-/-- Map one source open-root compiler route through exact selection removal. -/
-noncomputable def mapOpenCompilerRoute
+/-- The exact open-root route, intrinsic path, and binder derivation
+transported through selection removal as one dependent certificate. -/
+structure MappedOpenCompilerDerivation
     (host : Checked) (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     {ambient locals : WireContext host.val}
     {site : Fin host.val.regionCount}
     {siteContext : WireContext host.val}
-    (sourceRoute : ConcreteCompilerRoute host.val (.openRoot ambient locals)
-      site siteContext)
+    {siteRels : Theory.RelCtx}
+    {siteBinders : BinderContext host.val siteRels}
+    {sourcePath : List Nat}
+    {sourceRoute : ConcreteCompilerRoute host.val (.openRoot ambient locals)
+      site siteContext}
+    (sourceDerivation : sourceRoute.Derivation BinderContext.empty sourcePath
+      siteBinders)
+    (siteSurvives : domains.regions.survives site = true) where
+  targetPath : List Nat
+  route : ConcreteCompilerRoute (host.val.removeRaw selection domains)
+    (.openRoot (domains.mapWireContext ambient)
+      (domains.mapWireContext locals))
+    (domains.regions.index site siteSurvives)
+    (domains.mapWireContext siteContext)
+  derivation : route.Derivation BinderContext.empty targetPath
+    (domains.mapBinderContext siteBinders)
+
+/-- Transport one open-root source derivation through exact selection
+removal.  Root-child positions come only from filtered source occurrences. -/
+noncomputable def mapOpenCompilerDerivation
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    {ambient locals : WireContext host.val}
+    {site : Fin host.val.regionCount}
+    {siteContext : WireContext host.val}
+    {siteRels : Theory.RelCtx}
+    {siteBinders : BinderContext host.val siteRels}
+    {sourcePath : List Nat}
+    {sourceRoute : ConcreteCompilerRoute host.val (.openRoot ambient locals)
+      site siteContext}
+    (sourceDerivation : sourceRoute.Derivation BinderContext.empty sourcePath
+      siteBinders)
     (siteSurvives : domains.regions.survives site = true) :
-    MappedOpenCompilerRoute host selection domains sourceRoute
+    MappedOpenCompilerDerivation host selection domains sourceDerivation
       siteSurvives := by
-  cases sourceRoute with
-  | root ambient locals =>
+  cases sourceDerivation with
+  | root =>
       have rootEq : domains.regions.index host.val.root siteSurvives =
           (host.val.removeRaw selection domains).root := by
         change domains.regions.index host.val.root siteSurvives = domains.root
         unfold FrameDomains.root
         rfl
-      refine { route := ?_ }
-      rw [rootEq]
-      exact .root (domains.mapWireContext ambient)
-        (domains.mapWireContext locals)
-  | @rootStep sourceAmbient sourceLocals child sourceSite
-      sourceSiteContext parent nestedRoute =>
-      let nested := domains.mapRegionCompilerRoute host selection nestedRoute
-        siteSurvives
+      let targetRoot : Sigma fun route : ConcreteCompilerRoute
+          (host.val.removeRaw selection domains)
+          (.openRoot (domains.mapWireContext ambient)
+            (domains.mapWireContext locals))
+          (domains.regions.index host.val.root siteSurvives)
+          (domains.mapWireContext ambient) =>
+        route.Derivation BinderContext.empty []
+          (domains.mapBinderContext BinderContext.empty) := by
+        rw [rootEq, domains.mapBinderContext_empty]
+        exact ⟨.root (domains.mapWireContext ambient)
+          (domains.mapWireContext locals),
+          .root (domains.mapWireContext ambient)
+            (domains.mapWireContext locals)⟩
+      exact {
+        targetPath := []
+        route := targetRoot.1
+        derivation := targetRoot.2
+      }
+  | @rootStepCut _ _ child _ _ parent childKind sourceIndex
+      sourceOccurrence _ _ _ nestedRoute nestedDerivation =>
+      let nestedResult := mapRegionCompilerDerivation host selection domains
+        nestedDerivation siteSurvives
+      let childSurvives := nestedResult.originSurvives
       let rootSurvives := domains.parent_survives host selection
-        nested.originSurvives parent
+        childSurvives parent
+      let mappedOccurrence := domains.mapChildOccurrenceIndex host selection
+        rootSurvives childSurvives sourceIndex sourceOccurrence
       have rootEq : domains.regions.index host.val.root rootSurvives =
           (host.val.removeRaw selection domains).root := by
         change domains.regions.index host.val.root rootSurvives = domains.root
@@ -513,26 +795,97 @@ noncomputable def mapOpenCompilerRoute
         rfl
       have targetParent :
           ((host.val.removeRaw selection domains).regions
-            (domains.regions.index child nested.originSurvives)).parent? =
+            (domains.regions.index child childSurvives)).parent? =
             some (host.val.removeRaw selection domains).root := by
         rw [← rootEq]
         exact Diagram.removeRaw_parent host selection domains
-          nested.originSurvives parent
+          childSurvives parent
+      have targetKind :
+          (host.val.removeRaw selection domains).regions
+              (domains.regions.index child childSurvives) =
+            .cut (host.val.removeRaw selection domains).root := by
+        rw [← rootEq]
+        exact domains.removeRaw_cut host selection rootSurvives
+          childSurvives childKind
       have contextEq :
           domains.mapWireContext (ambient ++ locals) =
             domains.mapWireContext ambient ++
               domains.mapWireContext locals :=
         domains.mapWireContext_append ambient locals
-      have targetNested : ConcreteCompilerRoute
+      let targetNested : Sigma fun route : ConcreteCompilerRoute
           (host.val.removeRaw selection domains)
-          (.region (domains.regions.index child nested.originSurvives)
+          (.region (domains.regions.index child childSurvives)
             (domains.mapWireContext ambient ++
               domains.mapWireContext locals))
           (domains.regions.index site siteSurvives)
-          (domains.mapWireContext siteContext) := by
-        rw [← contextEq]
-        exact nested.route
-      exact { route := .rootStep targetParent targetNested }
+          (domains.mapWireContext siteContext) =>
+        route.Derivation BinderContext.empty nestedResult.targetPath
+          (domains.mapBinderContext siteBinders) := by
+        rw [← domains.mapBinderContext_empty, ← contextEq]
+        exact ⟨nestedResult.route, nestedResult.derivation⟩
+      exact {
+        targetPath := mappedOccurrence.index.val :: nestedResult.targetPath
+        route := .rootStep targetParent targetNested.1
+        derivation := ConcreteCompilerRoute.Derivation.rootStepCut
+          targetParent targetKind mappedOccurrence.index
+          mappedOccurrence.occurrence targetNested.2
+      }
+  | @rootStepBubble _ _ child _ _ arity parent childKind sourceIndex
+      sourceOccurrence _ _ _ nestedRoute nestedDerivation =>
+      let nestedResult := mapRegionCompilerDerivation host selection domains
+        nestedDerivation siteSurvives
+      let childSurvives := nestedResult.originSurvives
+      let rootSurvives := domains.parent_survives host selection
+        childSurvives parent
+      let mappedOccurrence := domains.mapChildOccurrenceIndex host selection
+        rootSurvives childSurvives sourceIndex sourceOccurrence
+      have rootEq : domains.regions.index host.val.root rootSurvives =
+          (host.val.removeRaw selection domains).root := by
+        change domains.regions.index host.val.root rootSurvives = domains.root
+        unfold FrameDomains.root
+        rfl
+      have targetParent :
+          ((host.val.removeRaw selection domains).regions
+            (domains.regions.index child childSurvives)).parent? =
+            some (host.val.removeRaw selection domains).root := by
+        rw [← rootEq]
+        exact Diagram.removeRaw_parent host selection domains
+          childSurvives parent
+      have targetKind :
+          (host.val.removeRaw selection domains).regions
+              (domains.regions.index child childSurvives) =
+            .bubble (host.val.removeRaw selection domains).root arity := by
+        rw [← rootEq]
+        exact domains.removeRaw_bubble host selection rootSurvives
+          childSurvives arity childKind
+      have contextEq :
+          domains.mapWireContext (ambient ++ locals) =
+            domains.mapWireContext ambient ++
+              domains.mapWireContext locals :=
+        domains.mapWireContext_append ambient locals
+      let targetNested : Sigma fun route : ConcreteCompilerRoute
+          (host.val.removeRaw selection domains)
+          (.region (domains.regions.index child childSurvives)
+            (domains.mapWireContext ambient ++
+              domains.mapWireContext locals))
+          (domains.regions.index site siteSurvives)
+          (domains.mapWireContext siteContext) =>
+        route.Derivation
+          (BinderContext.empty.push
+            (domains.regions.index child childSurvives) arity)
+          nestedResult.targetPath
+          (domains.mapBinderContext siteBinders) := by
+        rw [← domains.mapBinderContext_empty,
+          ← domains.mapBinderContext_push BinderContext.empty child
+            childSurvives arity, ← contextEq]
+        exact ⟨nestedResult.route, nestedResult.derivation⟩
+      exact {
+        targetPath := mappedOccurrence.index.val :: nestedResult.targetPath
+        route := .rootStep targetParent targetNested.1
+        derivation := ConcreteCompilerRoute.Derivation.rootStepBubble
+          targetParent targetKind mappedOccurrence.index
+          mappedOccurrence.occurrence targetNested.2
+      }
 
 end FrameDomains
 
