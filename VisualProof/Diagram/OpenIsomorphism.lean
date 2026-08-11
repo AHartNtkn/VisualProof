@@ -11,6 +11,15 @@ structure OpenDiagramIso
 
 namespace OpenDiagramIso
 
+noncomputable def castArity
+    {source target : OpenDiagram sourceArity}
+    (iso : OpenDiagramIso source target)
+    (arityEq : sourceArity = targetArity) :
+    OpenDiagramIso (source.castArity arityEq)
+      (target.castArity arityEq) := by
+  subst targetArity
+  exact iso
+
 /-- Build an ordered open isomorphism across propositionally equal arities. -/
 def ofArityEq {sourceArity targetArity : Nat}
     {source : OpenDiagram  sourceArity}

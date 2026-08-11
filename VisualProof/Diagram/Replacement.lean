@@ -22,6 +22,15 @@ structure ContextReplacement
   target_iso : OpenDiagramIso target
     (interface.withBody (context.fill after))
 
+noncomputable def ContextReplacement.castArity
+    {source target : OpenDiagram sourceArity}
+    (replacement : ContextReplacement source target)
+    (arityEq : sourceArity = targetArity) :
+    ContextReplacement (source.castArity arityEq)
+      (target.castArity arityEq) := by
+  subst targetArity
+  exact replacement
+
 def ContextReplacement.occurrence
     (replacement : ContextReplacement source target) :
     Occurrence replacement.before source where
@@ -71,6 +80,15 @@ structure NestedContextReplacement
       (outer.fill
         (Region.adjoinAt anchorLocal .nil
           (selected.conjoin (descendant.fill after)))))
+
+noncomputable def NestedContextReplacement.castArity
+    {source target : OpenDiagram sourceArity}
+    (replacement : NestedContextReplacement source target)
+    (arityEq : sourceArity = targetArity) :
+    NestedContextReplacement (source.castArity arityEq)
+      (target.castArity arityEq) := by
+  subst targetArity
+  exact replacement
 
 noncomputable def NestedContextReplacement.iso
     (sourceIso : OpenDiagramIso source' source)

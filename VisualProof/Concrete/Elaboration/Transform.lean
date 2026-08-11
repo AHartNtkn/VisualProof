@@ -10,14 +10,26 @@ open VisualProof.Diagram
 open VisualProof.Theory
 open Elaboration
 
+/-- The concrete parent chain traversed by a source compiler derivation. -/
+inductive ConcreteRegionRoute (diagram : Concrete.Diagram) :
+    Fin diagram.regionCount → Fin diagram.regionCount → Type
+  | here (region : Fin diagram.regionCount) :
+      ConcreteRegionRoute diagram region region
+  | step {ancestor child site : Fin diagram.regionCount}
+      (parent : (diagram.regions child).parent? = some ancestor)
+      (nested : ConcreteRegionRoute diagram child site) :
+      ConcreteRegionRoute diagram ancestor site
+
 /-- A source compiler computation focused at one concrete region.  The
 intrinsic path belongs to the already compiled source body; the concrete wire
 and binder contexts are the exact inputs of the focused source compiler call. -/
 structure RegionSiteCompilation
     (diagram : Concrete.Diagram)
+    (origin : Fin diagram.regionCount)
     (site : Fin diagram.regionCount)
     {outerWires : Nat} {outerRels : RelCtx}
     (body : Region outerWires outerRels) where
+  route : ConcreteRegionRoute diagram origin site
   path : List Nat
   witness : Region.ContextPath body path
   siteRels : RelCtx
@@ -46,10 +58,11 @@ noncomputable def RegionSiteCompilation.ofRegion
     (fullWires : (context.extend current).Exact current)
     (binderCovers : binders.Covers current)
     (encloses : diagram.Encloses current site) :
-    RegionSiteCompilation diagram site body := by
+    RegionSiteCompilation diagram current site body := by
   by_cases atSite : current = site
   · subst current
     exact {
+      route := .here site
       path := []
       witness := .here body
       siteRels := rels
@@ -144,6 +157,7 @@ noncomputable def RegionSiteCompilation.ofRegion
                         (occurrenceIndex.val :: nested.path) :=
                       .cut castFocus castAt castCut castNested
                     exact {
+                      route := .step childParent nested.route
                       path := occurrenceIndex.val :: nested.path
                       witness := witness
                       siteRels := nested.siteRels
@@ -206,6 +220,7 @@ noncomputable def RegionSiteCompilation.ofRegion
                         (occurrenceIndex.val :: nested.path) :=
                       .bubble castFocus castAt castBubble castNested
                     exact {
+                      route := .step childParent nested.route
                       path := occurrenceIndex.val :: nested.path
                       witness := witness
                       siteRels := nested.siteRels
@@ -245,7 +260,7 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
     (rootBinders : (BinderContext.empty : BinderContext diagram []).Covers
       diagram.root)
     (notRoot : site ≠ diagram.root) :
-    RegionSiteCompilation diagram site body := by
+    RegionSiteCompilation diagram diagram.root site body := by
   simp only [compileRoot?] at compiled
   let rootContext := ambient ++ locals
   cases itemsResult : compileOccurrencesWith? diagram
@@ -322,6 +337,7 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                   (occurrenceIndex.val :: nested.path) :=
                 .cut castFocus castAt castCut castNested
               exact {
+                route := .step childParent nested.route
                 path := occurrenceIndex.val :: nested.path
                 witness := witness
                 siteRels := nested.siteRels
@@ -383,6 +399,7 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                   (occurrenceIndex.val :: nested.path) :=
                 .bubble castFocus castAt castBubble castNested
               exact {
+                route := .step childParent nested.route
                 path := occurrenceIndex.val :: nested.path
                 witness := witness
                 siteRels := nested.siteRels
@@ -434,10 +451,12 @@ inductive ExactSiteCompilation (diagram : Concrete.Diagram) :
       ExactSiteCompilation diagram site siteRels siteContext siteBinders body
 
 /-- Source-only compilation evidence for one concrete insertion site.  It
-contains the source compiler derivation and its intrinsic abstract focus, and
-contains no generated target or target-selected route. -/
+contains the source compiler derivation, its concrete parent chain, and its
+intrinsic abstract focus, with no generated target or target-selected data. -/
 structure CompiledSite (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) where
+  route : ConcreteRegionRoute source.checked.val.diagram
+    source.checked.val.diagram.root site
   path : List Nat
   witness : Region.ContextPath source.checked.elaborate.body path
   siteRels : RelCtx
@@ -491,6 +510,7 @@ noncomputable def CompiledSite.ofSource (source : State arity)
   by_cases atRoot : site = source.checked.val.diagram.root
   · subst site
     exact {
+      route := .here source.checked.val.diagram.root
       path := []
       witness := .here source.checked.elaborate.body
       siteRels := []
@@ -516,6 +536,7 @@ noncomputable def CompiledSite.ofSource (source : State arity)
           source.checked.property.diagram_well_formed)
         atRoot
     exact {
+      route := nested.route
       path := nested.path
       witness := nested.witness
       siteRels := nested.siteRels
