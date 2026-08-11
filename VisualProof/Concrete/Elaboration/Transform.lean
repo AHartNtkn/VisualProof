@@ -646,6 +646,9 @@ structure CompiledSite (source : State arity)
   binder_covers : siteBinders.Covers site
   binder_enumeration : BinderContext.Enumeration
     source.checked.val.diagram siteBinders site
+  root_compiled : compileRoot? source.checked.val.diagram
+    source.checked.val.exposedWires source.checked.val.hiddenWires =
+      some source.checked.elaborate.body
   focus_wires : witness.toFocus.holeWires = siteContext.length
   focus_rels : witness.toFocus.holeRels = siteRels
   focus_body : HEq witness.toFocus.body siteBody
@@ -692,6 +695,7 @@ noncomputable def CompiledSite.ofSource (source : State arity)
         source.checked.val.hiddenWires
       path := []
       witness := .here source.checked.elaborate.body
+      root_compiled := rootCompiledSource
       siteRels := []
       siteContext := source.checked.val.exposedWires
       siteBinders := BinderContext.empty
@@ -726,6 +730,7 @@ noncomputable def CompiledSite.ofSource (source : State arity)
       route := nested.route
       path := nested.path
       witness := nested.witness
+      root_compiled := rootCompiledSource
       siteRels := nested.siteRels
       siteContext := nested.siteContext
       siteBinders := nested.siteBinders
