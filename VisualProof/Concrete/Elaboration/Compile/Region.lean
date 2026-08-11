@@ -112,6 +112,26 @@ def compileRoot? (d : Diagram) (ambient locals : WireContext d) :
     BinderContext.empty (localOccurrences d d.root)
   pure (.mk items)
 
+/-- Run the sole compiler at the exact root or nested call described by its
+signature. -/
+def CompilerCall.compile? : (call : CompilerCall d) →
+    Option (CompiledRegion d call)
+  | .root ambient locals => compileRoot? d ambient locals
+  | .nested childFuel origin context _ binders =>
+      compileRegion? d childFuel origin context binders
+
+@[simp] theorem CompilerCall.compile?_root
+    (ambient locals : WireContext d) :
+    (CompilerCall.root ambient locals).compile? =
+      compileRoot? d ambient locals := rfl
+
+@[simp] theorem CompilerCall.compile?_nested
+    {rels : RelCtx}
+    (childFuel : Nat) (origin : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels) :
+    (CompilerCall.nested childFuel origin context rels binders).compile? =
+      compileRegion? d childFuel origin context binders := rfl
+
 @[simp] theorem compileOccurrence?_node
     (d : Diagram) (fuel : Nat) (context : WireContext d)
     (binders : BinderContext d rels) (node : Fin d.nodeCount) :
@@ -176,6 +196,35 @@ noncomputable def compileOccurrence?_child_cut_inv
           subst item
           exact ⟨childFuel, body, rfl, hbody, rfl⟩
 
+/-- An exact cut result exposes the recursive compiler equation for its body. -/
+theorem compileOccurrence?_child_cut_body
+    {childFuel : Nat} {child : Fin d.regionCount}
+    {context : WireContext d} {binders : BinderContext d rels}
+    {body : CompiledRegion d
+      (.nested childFuel child context rels binders)}
+    (compiled : compileOccurrence? d (childFuel + 1) context binders
+      (.child child) = some (.cut body)) :
+    compileRegion? d childFuel child context binders = some body := by
+  cases hregion : d.regions child with
+  | sheet =>
+      rw [compileOccurrence?_child_succ_sheet _ _ _ _ _ hregion] at compiled
+      contradiction
+  | cut parent =>
+      rw [compileOccurrence?_child_succ_cut _ _ _ _ _ _ hregion] at compiled
+      cases hbody : compileRegion? d childFuel child context binders with
+      | none => simp [hbody] at compiled
+      | some result =>
+          simp [hbody] at compiled
+          subst result
+          rfl
+  | bubble parent arity =>
+      rw [compileOccurrence?_child_succ_bubble _ _ _ _ _ _ _ hregion]
+        at compiled
+      cases hbody : compileRegion? d childFuel child context
+          (binders.push child arity) with
+      | none => simp [hbody] at compiled
+      | some result => simp [hbody] at compiled
+
 theorem compileOccurrence?_child_sheet_false
     (d : Diagram) (fuel : Nat) (context : WireContext d)
     (binders : BinderContext d rels) (child : Fin d.regionCount)
@@ -214,6 +263,39 @@ noncomputable def compileOccurrence?_child_bubble_inv
           subst item
           exact ⟨childFuel, body, rfl, hbody, rfl⟩
 
+/-- An exact bubble result exposes the recursive compiler equation for its
+body. -/
+theorem compileOccurrence?_child_bubble_body
+    {childFuel arity : Nat} {child : Fin d.regionCount}
+    {context : WireContext d} {binders : BinderContext d rels}
+    {body : CompiledRegion d
+      (.nested childFuel child context (arity :: rels)
+        (binders.push child arity))}
+    (compiled : compileOccurrence? d (childFuel + 1) context binders
+      (.child child) = some (.bubble arity body)) :
+    compileRegion? d childFuel child context (binders.push child arity) =
+      some body := by
+  cases hregion : d.regions child with
+  | sheet =>
+      rw [compileOccurrence?_child_succ_sheet _ _ _ _ _ hregion] at compiled
+      contradiction
+  | cut parent =>
+      rw [compileOccurrence?_child_succ_cut _ _ _ _ _ _ hregion] at compiled
+      cases hbody : compileRegion? d childFuel child context binders with
+      | none => simp [hbody] at compiled
+      | some result => simp [hbody] at compiled
+  | bubble parent actualArity =>
+      rw [compileOccurrence?_child_succ_bubble _ _ _ _ _ _ _ hregion]
+        at compiled
+      cases hbody : compileRegion? d childFuel child context
+          (binders.push child actualArity) with
+      | none => simp [hbody] at compiled
+      | some result =>
+          simp [hbody] at compiled
+          obtain ⟨rfl, bodyEq⟩ := compiled
+          cases bodyEq
+          exact hbody
+
 @[simp] theorem compileItems?_nil
     (d : Diagram) (fuel : Nat) (context : WireContext d)
     (binders : BinderContext d rels) :
@@ -247,6 +329,20 @@ theorem compileRoot?_eq_compileItems?
       let items ← compileItems? d d.regionCount (ambient ++ locals)
         BinderContext.empty (localOccurrences d d.root)
       pure (.mk items)) := rfl
+
+/-- Every exact compiler call is packaged from the ordinary compilation of
+its direct occurrence list. -/
+theorem CompilerCall.compile?_eq_compileItems? (call : CompilerCall d) :
+    call.compile? = (do
+      let items ← compileItems? d call.childFuel call.fullContext
+        call.binders (localOccurrences d call.origin)
+      pure (.mk items)) := by
+  cases call with
+  | root ambient locals => rfl
+  | nested childFuel origin context rels binders =>
+      simpa [CompilerCall.fullContext, CompilerCall.localContext,
+        WireContext.extend] using
+          compileRegion?_eq_compileItems? d childFuel origin context binders
 
 /-- Successful root-item compilation packages the exact root result. -/
 theorem compileRoot?_of_items

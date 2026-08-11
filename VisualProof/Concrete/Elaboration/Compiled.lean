@@ -483,6 +483,85 @@ private theorem compileRoot?_originsValid
         (compileItems?_originsValid hitems)
 
 mutual
+  private def CompiledZipper.endpoint_computation
+      {d : Diagram} {sourceCall endpointCall : CompilerCall d}
+      {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
+      {endpoint : CompiledRegion d endpointCall} :
+      (focus : CompiledZipper d source site endpointCall endpoint) →
+      sourceCall.compile? = some source →
+      endpointCall.compile? = some endpoint
+    | .here _, compiled => compiled
+    | .child nested, compiled => by
+        rw [CompilerCall.compile?_eq_compileItems?] at compiled
+        cases hitems : compileItems? d sourceCall.childFuel
+            sourceCall.fullContext sourceCall.binders
+            (localOccurrences d sourceCall.origin) with
+        | none => simp [hitems] at compiled
+        | some items =>
+            simp [hitems] at compiled
+            subst items
+            apply nested.endpoint_computation
+            have origins := compileItems?_origins hitems
+            rw [origins]
+            exact hitems
+
+  private def CompiledItemsZipper.endpoint_computation
+      {d : Diagram} {fuel : Nat} {context : WireContext d} {rels : RelCtx}
+      {binders : BinderContext d rels}
+      {items : CompiledItems d fuel context rels binders}
+      {site : Fin d.regionCount} {endpointCall : CompilerCall d}
+      {endpoint : CompiledRegion d endpointCall} :
+      (focus : CompiledItemsZipper d items site endpointCall endpoint) →
+      compileItems? d fuel context binders items.origins = some items →
+      endpointCall.compile? = some endpoint
+    | .cut (childFuel := childFuel) (origin := origin)
+        (suffix := suffix) nested, compiled => by
+        simp only [CompiledItems.origins, CompiledItem.origin] at compiled
+        rw [compileItems?_cons] at compiled
+        cases hhead : compileOccurrence? d (childFuel + 1) context binders
+            (.child origin) with
+        | none => simp [hhead] at compiled
+        | some head =>
+            cases htail : compileItems? d (childFuel + 1) context binders
+                suffix.origins with
+            | none => simp [hhead, htail] at compiled
+            | some rest =>
+                simp [hhead, htail] at compiled
+                obtain ⟨rfl, rfl⟩ := compiled
+                exact nested.endpoint_computation
+                  (compileOccurrence?_child_cut_body hhead)
+    | .bubble (childFuel := childFuel) (origin := origin)
+        (suffix := suffix) nested, compiled => by
+        simp only [CompiledItems.origins, CompiledItem.origin] at compiled
+        rw [compileItems?_cons] at compiled
+        cases hhead : compileOccurrence? d (childFuel + 1) context binders
+            (.child origin) with
+        | none => simp [hhead] at compiled
+        | some head =>
+            cases htail : compileItems? d (childFuel + 1) context binders
+                suffix.origins with
+            | none => simp [hhead, htail] at compiled
+            | some rest =>
+                simp [hhead, htail] at compiled
+                obtain ⟨rfl, rfl⟩ := compiled
+                exact nested.endpoint_computation
+                  (compileOccurrence?_child_bubble_body hhead)
+    | .tail (head := head) (suffix := suffix) nested, compiled => by
+        simp only [CompiledItems.origins] at compiled
+        rw [compileItems?_cons] at compiled
+        cases hhead : compileOccurrence? d fuel context binders head.origin with
+        | none => simp [hhead] at compiled
+        | some head =>
+            cases htail : compileItems? d fuel context binders
+                suffix.origins with
+            | none => simp [hhead, htail] at compiled
+            | some suffix =>
+                simp [hhead, htail] at compiled
+                obtain ⟨rfl, rfl⟩ := compiled
+                exact nested.endpoint_computation htail
+end
+
+mutual
   private def CompiledZipper.endpoint_origins
       {d : Diagram} {sourceCall endpointCall : CompilerCall d}
       {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
@@ -714,6 +793,11 @@ def zipper (compiled : CompiledSite source site) :
     CompiledZipper source.checked.val.diagram source.checked.compilation site
       compiled.endpointCall compiled.endpoint :=
   compiled.focus.zipper
+
+theorem endpoint_computation (compiled : CompiledSite source site) :
+    compiled.endpointCall.compile? = some compiled.endpoint := by
+  apply compiled.zipper.endpoint_computation
+  simpa using source.checked.compilation_computation
 
 def directItems (compiled : CompiledSite source site) :
     CompiledItems source.checked.val.diagram compiled.endpointCall.childFuel
