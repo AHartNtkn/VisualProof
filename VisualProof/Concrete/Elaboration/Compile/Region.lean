@@ -73,28 +73,6 @@ def compileRegion? (d : Diagram) :
         (localOccurrences d region)
       pure (finishRegion d context region items)
 
-/-- A successful recursive region compilation retains exactly the region's
-locally scoped concrete wire block. -/
-theorem compileRegion?_localCount
-    {d : Diagram} {fuel : Nat} {region : Fin d.regionCount}
-    {context : WireContext d} {binders : BinderContext d rels}
-    {body : Region context.length rels}
-    (compiled : compileRegion? d fuel region context binders = some body) :
-    body.localCount = (exactScopeWires d region).length := by
-  cases fuel with
-  | zero => simp [compileRegion?] at compiled
-  | succ fuel =>
-      simp only [compileRegion?] at compiled
-      generalize hitems : compileOccurrencesWith? d
-          (compileRegion? d fuel) (context.extend region) binders
-          (localOccurrences d region) = result at compiled
-      cases result with
-      | none => contradiction
-      | some items =>
-          injection compiled with equality
-          rw [← equality]
-          rfl
-
 /--
 The single proof-independent sheet compiler. `ambient` wires become the outer
 interface and `locals` become the root region's locally bound wires. Descendant

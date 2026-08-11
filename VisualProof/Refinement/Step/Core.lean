@@ -1,4 +1,4 @@
-import VisualProof.Concrete.Step.Core
+import VisualProof.Concrete.Operation.Structural.SpawnCore
 import VisualProof.Refinement.Represents
 import VisualProof.Rule.Step
 
