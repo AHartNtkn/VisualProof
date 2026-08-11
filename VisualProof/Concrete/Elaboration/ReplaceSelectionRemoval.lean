@@ -1353,6 +1353,31 @@ private theorem enclosesWireRegion_of_diagram_eq
   subst target
   simpa
 
+private theorem bubbleRegion_of_diagram_eq
+    {target source : Concrete.Diagram} (diagramEq : target = source)
+    (region parent : Fin source.regionCount) (arity : Nat)
+    (kind : source.regions region = .bubble parent arity) :
+    target.regions
+        (Fin.cast (congrArg Concrete.Diagram.regionCount diagramEq).symm
+          region) =
+      .bubble
+        (Fin.cast (congrArg Concrete.Diagram.regionCount diagramEq).symm
+          parent) arity := by
+  subst target
+  simpa
+
+private theorem enclosesRegions_of_diagram_eq
+    {target source : Concrete.Diagram} (diagramEq : target = source)
+    (ancestor descendant : Fin source.regionCount)
+    (encloses : source.Encloses ancestor descendant) :
+    target.Encloses
+      (Fin.cast (congrArg Concrete.Diagram.regionCount diagramEq).symm
+        ancestor)
+      (Fin.cast (congrArg Concrete.Diagram.regionCount diagramEq).symm
+        descendant) := by
+  subst target
+  simpa
+
 /-- The unique source-derived splice input that restores the extracted
 selection material into the exact packed intermediate frame. -/
 noncomputable def canonicalRestorationInput
@@ -1503,6 +1528,96 @@ private theorem canonicalRestorationInput_attachmentsVisible
     rawEncloses
   simpa only [sourcePosition, sourceWire, wireSurvives,
     anchorSurvives] using transported
+
+private theorem canonicalRestorationInput_admissible
+    {source : State arity}
+    {selection : CheckedSelection source.checked.val.diagram}
+    {replacement : SelectionReplacement source.diagram selection}
+    {operation : OperationReceipt source.diagram}
+    {receipt : Receipt source}
+    (decomposition : ReplaceSelectionReceiptDecomposition source selection
+      replacement operation receipt) :
+    (canonicalRestorationInput decomposition).Admissible := by
+  refine {
+    terminal_body := canonicalRestorationInput_terminal decomposition
+    attachments_visible :=
+      canonicalRestorationInput_attachmentsVisible decomposition
+    binder_targets_injective := ?_
+    binder_targets_match := ?_
+    binder_targets_enclose := ?_
+  }
+  · intro left right equality
+    let domains := decomposition.prepared.domains
+    let layout : FragmentLayout source.checked.val.diagram selection := {}
+    let leftSurvives :=
+      canonicalRestorationExternalBinder_survives source selection domains
+        layout left
+    let rightSurvives :=
+      canonicalRestorationExternalBinder_survives source selection domains
+        layout right
+    have denseEq :
+        domains.regions.index (layout.externalBinders.get left)
+            leftSurvives =
+          domains.regions.index (layout.externalBinders.get right)
+            rightSurvives := by
+      apply Fin.ext
+      simpa only [canonicalRestorationInput, Fin.val_cast] using
+        congrArg Fin.val equality
+    apply layout.externalBinderTarget_injective
+    rw [← domains.regions.origin_index (layout.externalBinders.get left)
+      leftSurvives,
+      ← domains.regions.origin_index (layout.externalBinders.get right)
+        rightSurvives]
+    exact congrArg domains.regions.origin denseEq
+  · intro index
+    let domains := decomposition.prepared.domains
+    let layout : FragmentLayout source.checked.val.diagram selection := {}
+    let sourceBinder := layout.externalBinders.get index
+    let binderSurvives :=
+      canonicalRestorationExternalBinder_survives source selection domains
+        layout index
+    obtain ⟨sourceParent, sourceKind⟩ :=
+      Diagram.extractedBinderSpine_target_region source.diagram selection
+        layout index
+    let parentSurvives := domains.parent_survives source.diagram selection
+      binderSurvives ((congrArg CRegion.parent? sourceKind).trans rfl)
+    refine ⟨Fin.cast
+      (congrArg Concrete.Diagram.regionCount
+        (canonicalRestorationFrame_eq decomposition)).symm
+      (domains.regions.index sourceParent parentSurvives), ?_⟩
+    have removedKind := Diagram.removeRaw_bubble source.diagram selection
+      domains binderSurvives sourceKind
+    have transported := bubbleRegion_of_diagram_eq
+      (canonicalRestorationFrame_eq decomposition)
+      (domains.regions.index sourceBinder binderSurvives)
+      (domains.regions.index sourceParent parentSurvives)
+      ((extractedSelectionSpine source selection).arity index) removedKind
+    simpa only [canonicalRestorationInput, sourceBinder, binderSurvives,
+      parentSurvives] using transported
+  · intro index
+    let domains := decomposition.prepared.domains
+    let layout : FragmentLayout source.checked.val.diagram selection := {}
+    let sourceBinder := layout.externalBinders.get index
+    let binderSurvives :=
+      canonicalRestorationExternalBinder_survives source selection domains
+        layout index
+    let anchorSurvives := domains.anchor_survives source.diagram selection
+    have sourceMember : sourceBinder ∈ selection.externalBinders := by
+      rw [← layout.externalBinders_exact]
+      exact List.get_mem layout.externalBinders index
+    have sourceEncloses :
+        source.diagram.val.Encloses sourceBinder selection.val.anchor :=
+      selection.usesExternalBinder_encloses_anchor source.diagram
+        (selection.mem_externalBinders_uses sourceMember)
+    have removedEncloses := Diagram.removeRaw_encloses source.diagram selection
+      domains binderSurvives anchorSurvives sourceEncloses
+    have transported := enclosesRegions_of_diagram_eq
+      (canonicalRestorationFrame_eq decomposition)
+      (domains.regions.index sourceBinder binderSurvives)
+      (domains.regions.index selection.val.anchor anchorSurvives)
+      removedEncloses
+    simpa only [canonicalRestorationInput, sourceBinder, binderSurvives,
+      anchorSurvives] using transported
 
 end CompiledSelection
 
