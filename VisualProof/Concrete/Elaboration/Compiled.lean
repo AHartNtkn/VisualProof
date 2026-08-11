@@ -9,7 +9,7 @@ open VisualProof.Theory
 open VisualProof.Diagram
 
 /-!
-The compiled source focus is one structural zipper over the sole
+A compiled source focus is one structural zipper found in the sole
 signature-indexed compiler result. Exact endpoint inputs remain indices of the
 selected result; intrinsic context, body, and rebuilding are projections of
 that zipper.
@@ -72,13 +72,76 @@ mutual
         CompiledItemsZipper d (.cons head suffix) site endpointCall endpoint
 end
 
-/-- The one stored source focus: an exact endpoint result and its structural
-selection from the root result. -/
+/-- The result of finding an exact endpoint and its structural selection in a
+compiled region. -/
 structure CompiledFocus {d : Diagram} {sourceCall : CompilerCall d}
     (source : CompiledRegion d sourceCall) (site : Fin d.regionCount) where
   endpointCall : CompilerCall d
   endpoint : CompiledRegion d endpointCall
   zipper : CompiledZipper d source site endpointCall endpoint
+
+mutual
+  /-- Canonically search the sole compiled region tree for a site. -/
+  def CompiledRegion.focus?
+      {d : Diagram} {sourceCall : CompilerCall d}
+      (source : CompiledRegion d sourceCall) (site : Fin d.regionCount) :
+      Option (CompiledFocus source site) :=
+    if same : sourceCall.origin = site then
+      some (same ▸ {
+        endpointCall := sourceCall
+        endpoint := source
+        zipper := .here source
+      })
+    else
+      match source with
+      | .mk items =>
+          (items.focus? site).map fun ⟨endpointCall, endpoint, zipper⟩ =>
+            ⟨endpointCall, endpoint, .child zipper⟩
+
+  private def CompiledItems.focus?
+      {d : Diagram} {fuel : Nat} {context : WireContext d} {rels : RelCtx}
+      {binders : BinderContext d rels}
+      (items : CompiledItems d fuel context rels binders)
+      (site : Fin d.regionCount) :
+      Option (Σ endpointCall, Σ endpoint : CompiledRegion d endpointCall,
+        CompiledItemsZipper d items site endpointCall endpoint) :=
+    match items with
+    | .nil => none
+    | .cons (.node _ _) tail =>
+        match tail.focus? site with
+        | none => none
+        | some ⟨endpointCall, endpoint, zipper⟩ =>
+            some ⟨endpointCall, endpoint, .tail zipper⟩
+    | .cons (.cut body) tail =>
+        match body.focus? site with
+        | some focus =>
+            some ⟨focus.endpointCall, focus.endpoint, .cut focus.zipper⟩
+        | none =>
+            match tail.focus? site with
+            | none => none
+            | some ⟨endpointCall, endpoint, zipper⟩ =>
+                some ⟨endpointCall, endpoint, .tail zipper⟩
+    | .cons (.bubble _ body) tail =>
+        match body.focus? site with
+        | some focus =>
+            some ⟨focus.endpointCall, focus.endpoint, .bubble focus.zipper⟩
+        | none =>
+            match tail.focus? site with
+            | none => none
+            | some ⟨endpointCall, endpoint, zipper⟩ =>
+                some ⟨endpointCall, endpoint, .tail zipper⟩
+end
+
+@[simp] theorem CompiledRegion.focus?_origin
+    {d : Diagram} {sourceCall : CompilerCall d}
+    (source : CompiledRegion d sourceCall) :
+    source.focus? sourceCall.origin = some {
+      endpointCall := sourceCall
+      endpoint := source
+      zipper := .here source
+    } := by
+  unfold CompiledRegion.focus?
+  simp
 
 /-- Intrinsic context and rebuilding obtained directly from one zipper. -/
 structure CompiledIntrinsic (d : Diagram)
@@ -394,7 +457,7 @@ mutual
                   htail
 end
 
-private theorem compileItems?_zipper_of_child
+private theorem compileItems?_focus?_isSome_of_child
     {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
     {items : CompiledItems d fuel context rels binders}
     (compiled : compileItems? d fuel context binders occurrences = some items)
@@ -405,7 +468,7 @@ private theorem compileItems?_zipper_of_child
         (.nested childFuel child context rels binders)},
       fuel = childFuel + 1 →
       compileRegion? d childFuel child context binders = some body →
-      Nonempty (CompiledFocus body site))
+      (body.focus? site).isSome = true)
     (bubbleComplete : ∀ {childFuel : Nat} {arity : Nat}
       {body : CompiledRegion d
         (.nested childFuel child context (arity :: rels)
@@ -413,9 +476,8 @@ private theorem compileItems?_zipper_of_child
       fuel = childFuel + 1 →
       compileRegion? d childFuel child context
         (binders.push child arity) = some body →
-      Nonempty (CompiledFocus body site)) :
-    Nonempty (Σ endpointCall, Σ endpoint : CompiledRegion d endpointCall,
-      CompiledItemsZipper d items site endpointCall endpoint) := by
+      (body.focus? site).isSome = true) :
+    (items.focus? site).isSome = true := by
   induction occurrences generalizing items with
   | nil => simp at member
   | cons occurrence tail ih =>
@@ -447,9 +509,12 @@ private theorem compileItems?_zipper_of_child
                         | some body =>
                             simp [hbody] at hitem
                             subst item
-                            obtain ⟨nested⟩ := cutComplete rfl hbody
-                            exact ⟨⟨nested.endpointCall, nested.endpoint,
-                              .cut nested.zipper⟩⟩
+                            obtain ⟨focus, hfocus⟩ :=
+                              Option.isSome_iff_exists.mp
+                                (cutComplete rfl hbody)
+                            unfold CompiledItems.focus?
+                            rw [hfocus]
+                            rfl
                     | bubble parent arity =>
                         rw [compileOccurrence?_child_succ_bubble
                           _ _ _ _ _ _ _ hregion] at hitem
@@ -459,25 +524,39 @@ private theorem compileItems?_zipper_of_child
                         | some body =>
                             simp [hbody] at hitem
                             subst item
-                            obtain ⟨nested⟩ := bubbleComplete rfl hbody
-                            exact ⟨⟨nested.endpointCall, nested.endpoint,
-                              .bubble nested.zipper⟩⟩
-              · obtain ⟨⟨endpointCall, endpoint, nested⟩⟩ :=
-                    ih htail tailMember
-                exact ⟨⟨endpointCall, endpoint, .tail nested⟩⟩
+                            obtain ⟨focus, hfocus⟩ :=
+                              Option.isSome_iff_exists.mp
+                                (bubbleComplete rfl hbody)
+                            unfold CompiledItems.focus?
+                            rw [hfocus]
+                            rfl
+              · obtain ⟨focus, hfocus⟩ := Option.isSome_iff_exists.mp
+                    (ih htail tailMember)
+                cases item <;> unfold CompiledItems.focus?
+                · rw [hfocus]
+                  rfl
+                · split
+                  · rfl
+                  · rw [hfocus]
+                    rfl
+                · split
+                  · rfl
+                  · rw [hfocus]
+                    rfl
 
-private theorem compileRegion?_focus
+private theorem compileRegion?_focus?_isSome
     (hwf : d.WellFormed)
     {body : CompiledRegion d
       (.nested childFuel origin context rels binders)}
     (compiled : compileRegion? d childFuel origin context binders = some body)
     (encloses : d.Encloses origin site) :
-    Nonempty (CompiledFocus body site) := by
+    (body.focus? site).isSome = true := by
   induction childFuel generalizing origin context rels binders site with
   | zero =>
       by_cases same : origin = site
       · subst site
-        exact ⟨⟨_, body, .here body⟩⟩
+        unfold CompiledRegion.focus?
+        simp [CompilerCall.origin]
       · obtain ⟨child, childParent, childEncloses⟩ :=
           exists_direct_child_enclosing hwf (Ne.symm same) encloses
         rw [compileRegion?_eq_compileItems?] at compiled
@@ -487,16 +566,17 @@ private theorem compileRegion?_focus
         | some items =>
             simp [hitems] at compiled
             subst body
-            obtain ⟨⟨endpointCall, endpoint, nested⟩⟩ :=
-              compileItems?_zipper_of_child hitems child site
-                ((mem_localOccurrences_child d origin child).mpr childParent)
-                (fun equality _ => by omega)
-                (fun equality _ => by omega)
-            exact ⟨⟨endpointCall, endpoint, .child nested⟩⟩
+            have found := compileItems?_focus?_isSome_of_child hitems child site
+              ((mem_localOccurrences_child d origin child).mpr childParent)
+              (fun equality _ => by omega)
+              (fun equality _ => by omega)
+            unfold CompiledRegion.focus?
+            simpa [CompilerCall.origin, same] using found
   | succ childFuel ih =>
       by_cases same : origin = site
       · subst site
-        exact ⟨⟨_, body, .here body⟩⟩
+        unfold CompiledRegion.focus?
+        simp [CompilerCall.origin]
       · obtain ⟨child, childParent, childEncloses⟩ :=
           exists_direct_child_enclosing hwf (Ne.symm same) encloses
         rw [compileRegion?_eq_compileItems?] at compiled
@@ -506,27 +586,28 @@ private theorem compileRegion?_focus
         | some items =>
             simp [hitems] at compiled
             subst body
-            obtain ⟨⟨endpointCall, endpoint, nested⟩⟩ :=
-              compileItems?_zipper_of_child hitems child site
-                ((mem_localOccurrences_child d origin child).mpr childParent)
-                (fun equality bodyCompiled => by
-                  have fuelEq := Nat.add_right_cancel equality
-                  subst_vars
-                  exact ih bodyCompiled childEncloses)
-                (fun equality bodyCompiled => by
-                  have fuelEq := Nat.add_right_cancel equality
-                  subst_vars
-                  exact ih bodyCompiled childEncloses)
-            exact ⟨⟨endpointCall, endpoint, .child nested⟩⟩
+            have found := compileItems?_focus?_isSome_of_child hitems child site
+              ((mem_localOccurrences_child d origin child).mpr childParent)
+              (fun equality bodyCompiled => by
+                have fuelEq := Nat.add_right_cancel equality
+                subst_vars
+                exact ih bodyCompiled childEncloses)
+              (fun equality bodyCompiled => by
+                have fuelEq := Nat.add_right_cancel equality
+                subst_vars
+                exact ih bodyCompiled childEncloses)
+            unfold CompiledRegion.focus?
+            simpa [CompilerCall.origin, same] using found
 
-private theorem compileRoot?_focus
+private theorem compileRoot?_focus?_isSome
     (hwf : d.WellFormed) (ambient locals : WireContext d)
     {body : CompiledRegion d (.root ambient locals)}
     (compiled : compileRoot? d ambient locals = some body)
-    (site : Fin d.regionCount) : Nonempty (CompiledFocus body site) := by
+    (site : Fin d.regionCount) : (body.focus? site).isSome = true := by
   by_cases same : d.root = site
   · subst site
-    exact ⟨⟨_, body, .here body⟩⟩
+    unfold CompiledRegion.focus?
+    simp [CompilerCall.origin]
   · obtain ⟨child, childParent, childEncloses⟩ :=
       exists_direct_child_enclosing hwf (Ne.symm same)
         (hwf.all_regions_reach_root site)
@@ -537,57 +618,56 @@ private theorem compileRoot?_focus
     | some items =>
         simp [hitems] at compiled
         subst body
-        obtain ⟨⟨endpointCall, endpoint, nested⟩⟩ :=
-          compileItems?_zipper_of_child hitems child site
-            ((mem_localOccurrences_child d d.root child).mpr childParent)
-            (fun _ bodyCompiled =>
-              compileRegion?_focus hwf bodyCompiled childEncloses)
-            (fun _ bodyCompiled =>
-              compileRegion?_focus hwf bodyCompiled childEncloses)
-        exact ⟨⟨endpointCall, endpoint, .child nested⟩⟩
+        have found := compileItems?_focus?_isSome_of_child hitems child site
+          ((mem_localOccurrences_child d d.root child).mpr childParent)
+          (fun _ bodyCompiled =>
+            compileRegion?_focus?_isSome hwf bodyCompiled childEncloses)
+          (fun _ bodyCompiled =>
+            compileRegion?_focus?_isSome hwf bodyCompiled childEncloses)
+        unfold CompiledRegion.focus?
+        simpa [CompilerCall.origin, same] using found
 
 namespace CheckedOpen
 
-private theorem compilation_focus
+theorem compilation_focus?_isSome
     (checked : CheckedOpen)
     (site : Fin checked.val.diagram.regionCount) :
-    Nonempty (CompiledFocus checked.compilation site) :=
-  compileRoot?_focus checked.property.diagram_well_formed
+    (checked.compilation.focus? site).isSome = true :=
+  compileRoot?_focus?_isSome checked.property.diagram_well_formed
     checked.val.exposedWires checked.val.hiddenWires
     checked.compilation_computation site
 
 end CheckedOpen
 
-/-- A source site stores exactly one structural focus over the checked root
-compilation. Every endpoint and intrinsic value is projected from this field. -/
-structure CompiledSite (source : State arity)
-    (site : Fin source.checked.val.diagram.regionCount) where
-  focus : CompiledFocus source.checked.compilation site
-
 namespace CompiledSite
 
-noncomputable def ofSource (source : State arity)
+def focus (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
-    CompiledSite source site where
-  focus := Classical.choice (CheckedOpen.compilation_focus source.checked site)
+    CompiledFocus source.checked.compilation site :=
+  (source.checked.compilation.focus? site).get
+    (CheckedOpen.compilation_focus?_isSome source.checked site)
 
-def endpointCall (compiled : CompiledSite source site) :
+def endpointCall (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
     CompilerCall source.checked.val.diagram :=
-  compiled.focus.endpointCall
+  (focus source site).endpointCall
 
-def endpoint (compiled : CompiledSite source site) :
-    CompiledRegion source.checked.val.diagram compiled.endpointCall :=
-  compiled.focus.endpoint
+def endpoint (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    CompiledRegion source.checked.val.diagram (endpointCall source site) :=
+  (focus source site).endpoint
 
-def zipper (compiled : CompiledSite source site) :
+def zipper (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
     CompiledZipper source.checked.val.diagram source.checked.compilation site
-      compiled.endpointCall compiled.endpoint :=
-  compiled.focus.zipper
+      (endpointCall source site) (endpoint source site) :=
+  (focus source site).zipper
 
-private def endpoint_validity (compiled : CompiledSite source site) :
+private def endpoint_validity (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
     CompiledEndpointValidity source.checked.val.diagram site
-      compiled.endpointCall compiled.endpoint :=
-  compiled.zipper.endpoint_validity
+      (endpointCall source site) (endpoint source site) :=
+  (zipper source site).endpoint_validity
     source.checked.property.diagram_well_formed
     (by simpa using source.checked.compilation_computation)
     (by
@@ -597,59 +677,86 @@ private def endpoint_validity (compiled : CompiledSite source site) :
       simpa using BinderContext.empty_covers_root
         source.checked.property.diagram_well_formed)
 
-theorem endpoint_computation (compiled : CompiledSite source site) :
-    compiled.endpointCall.compile? = some compiled.endpoint :=
-  compiled.endpoint_validity.computation
+theorem endpoint_computation (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    (endpointCall source site).compile? = some (endpoint source site) :=
+  (endpoint_validity source site).computation
 
-theorem endpoint_origin (compiled : CompiledSite source site) :
-    compiled.endpointCall.origin = site :=
-  compiled.endpoint_validity.origin
+theorem endpoint_origin (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    (endpointCall source site).origin = site :=
+  (endpoint_validity source site).origin
 
-theorem endpoint_fullContext_exact (compiled : CompiledSite source site) :
-    compiled.endpointCall.fullContext.Exact site :=
-  compiled.endpoint_validity.fullContext_exact
+theorem endpoint_fullContext_exact (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    (endpointCall source site).fullContext.Exact site :=
+  (endpoint_validity source site).fullContext_exact
 
-theorem endpoint_binders_covers (compiled : CompiledSite source site) :
-    compiled.endpointCall.binders.Covers site :=
-  compiled.endpoint_validity.binders_covers
+theorem endpoint_binders_covers (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    (endpointCall source site).binders.Covers site :=
+  (endpoint_validity source site).binders_covers
 
-def directItems (compiled : CompiledSite source site) :
-    CompiledItems source.checked.val.diagram compiled.endpointCall.childFuel
-      compiled.endpointCall.fullContext compiled.endpointCall.rels
-      compiled.endpointCall.binders :=
-  compiled.endpoint.items
+def directItems (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    CompiledItems source.checked.val.diagram
+      (endpointCall source site).childFuel
+      (endpointCall source site).fullContext (endpointCall source site).rels
+      (endpointCall source site).binders :=
+  (endpoint source site).items
 
-theorem directItems_origins (compiled : CompiledSite source site) :
-    compiled.directItems.origins =
+theorem directItems_origins (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    (directItems source site).origins =
       localOccurrences source.checked.val.diagram site :=
-  compiled.endpoint_validity.origins
+  (endpoint_validity source site).origins
 
-def intrinsic (compiled : CompiledSite source site) :
+def intrinsic (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
     Region.ContextFocus source.checked.elaborate.body :=
-  compiled.zipper.toContextFocus
+  (zipper source site).toContextFocus
 
-def context (compiled : CompiledSite source site) :
+def context (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
     DiagramContext source.checked.val.exposedWires.length
-      compiled.endpointCall.outerContext.length [] compiled.endpointCall.rels :=
-  compiled.zipper.context
+      (endpointCall source site).outerContext.length []
+      (endpointCall source site).rels :=
+  (zipper source site).context
 
-def body (compiled : CompiledSite source site) :
-    Region compiled.endpointCall.outerContext.length compiled.endpointCall.rels :=
-  compiled.endpoint.erase
+def body (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    Region (endpointCall source site).outerContext.length
+      (endpointCall source site).rels :=
+  (endpoint source site).erase
 
-def cutDepth (compiled : CompiledSite source site) : Nat :=
-  compiled.context.cutDepth
+def cutDepth (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) : Nat :=
+  (context source site).cutDepth
 
-def sourceOccurrence (compiled : CompiledSite source site) :
+def sourceOccurrence (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
     Option (LocalOccurrence source.checked.val.diagram.regionCount
       source.checked.val.diagram.nodeCount) :=
-  match compiled.endpointCall with
+  match endpointCall source site with
   | .root _ _ => none
   | .nested _ origin _ _ _ => some (.child origin)
 
-theorem rebuild (compiled : CompiledSite source site) :
-    compiled.context.fill compiled.body = source.checked.elaborate.body :=
-  compiled.zipper.intrinsic.rebuild
+theorem rebuild (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    (context source site).fill (body source site) =
+      source.checked.elaborate.body :=
+  (zipper source site).intrinsic.rebuild
+
+theorem focus_root (source : State arity) :
+    focus source source.checked.val.diagram.root = {
+      endpointCall := .root source.checked.val.exposedWires
+        source.checked.val.hiddenWires
+      endpoint := source.checked.compilation
+      zipper := .here source.checked.compilation
+    } := by
+  unfold focus
+  unfold CompiledRegion.focus?
+  simp [CompilerCall.origin]
 
 end CompiledSite
 
@@ -670,162 +777,187 @@ def checkedSelectionAnchorClassifier (selection : CheckedSelection d) :
     checkedSelectionAnchorClassifier selection (.child child) =
       decide (child ∈ selection.val.childRoots) := rfl
 
-/-- Selection compilation stores only the anchor's sole source focus. -/
-structure CompiledSelection (source : State arity)
-    (selection : CheckedSelection source.checked.val.diagram) where
-  anchor : CompiledSite source selection.val.anchor
-
 namespace CompiledSelection
 
-noncomputable def ofSource (source : State arity)
+def anchorItems (source : State arity)
     (selection : CheckedSelection source.checked.val.diagram) :
-    CompiledSelection source selection where
-  anchor := CompiledSite.ofSource source selection.val.anchor
-
-def anchorItems (compiled : CompiledSelection source selection) :
     CompiledItems source.checked.val.diagram
-      compiled.anchor.endpointCall.childFuel
-      compiled.anchor.endpointCall.fullContext
-      compiled.anchor.endpointCall.rels compiled.anchor.endpointCall.binders :=
-  compiled.anchor.directItems
+      (CompiledSite.endpointCall source selection.val.anchor).childFuel
+      (CompiledSite.endpointCall source selection.val.anchor).fullContext
+      (CompiledSite.endpointCall source selection.val.anchor).rels
+      (CompiledSite.endpointCall source selection.val.anchor).binders :=
+  CompiledSite.directItems source selection.val.anchor
 
-def partition (compiled : CompiledSelection source selection) :
-    CompiledItems.Partition compiled.anchorItems :=
-  compiled.anchorItems.partition (checkedSelectionAnchorClassifier selection)
+def partition (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    CompiledItems.Partition (anchorItems source selection) :=
+  (anchorItems source selection).partition
+    (checkedSelectionAnchorClassifier selection)
 
-def retained (compiled : CompiledSelection source selection) :
+def retained (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
     CompiledItems source.checked.val.diagram
-      compiled.anchor.endpointCall.childFuel
-      compiled.anchor.endpointCall.fullContext
-      compiled.anchor.endpointCall.rels compiled.anchor.endpointCall.binders :=
-  compiled.partition.retained
+      (CompiledSite.endpointCall source selection.val.anchor).childFuel
+      (CompiledSite.endpointCall source selection.val.anchor).fullContext
+      (CompiledSite.endpointCall source selection.val.anchor).rels
+      (CompiledSite.endpointCall source selection.val.anchor).binders :=
+  (partition source selection).retained
 
-def material (compiled : CompiledSelection source selection) :
+def material (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
     CompiledItems source.checked.val.diagram
-      compiled.anchor.endpointCall.childFuel
-      compiled.anchor.endpointCall.fullContext
-      compiled.anchor.endpointCall.rels compiled.anchor.endpointCall.binders :=
-  compiled.partition.material
+      (CompiledSite.endpointCall source selection.val.anchor).childFuel
+      (CompiledSite.endpointCall source selection.val.anchor).fullContext
+      (CompiledSite.endpointCall source selection.val.anchor).rels
+      (CompiledSite.endpointCall source selection.val.anchor).binders :=
+  (partition source selection).material
 
-def intrinsic (compiled : CompiledSelection source selection) :
-    ItemSeq compiled.anchor.endpointCall.fullContext.length
-      compiled.anchor.endpointCall.rels :=
-  compiled.anchorItems.erase
+def intrinsic (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    ItemSeq (CompiledSite.endpointCall source
+      selection.val.anchor).fullContext.length
+      (CompiledSite.endpointCall source selection.val.anchor).rels :=
+  (anchorItems source selection).erase
 
-def retainedIntrinsic (compiled : CompiledSelection source selection) :
-    ItemSeq compiled.anchor.endpointCall.fullContext.length
-      compiled.anchor.endpointCall.rels :=
-  compiled.retained.erase
+def retainedIntrinsic (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    ItemSeq (CompiledSite.endpointCall source
+      selection.val.anchor).fullContext.length
+      (CompiledSite.endpointCall source selection.val.anchor).rels :=
+  (retained source selection).erase
 
-def materialIntrinsic (compiled : CompiledSelection source selection) :
-    ItemSeq compiled.anchor.endpointCall.fullContext.length
-      compiled.anchor.endpointCall.rels :=
-  compiled.material.erase
+def materialIntrinsic (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    ItemSeq (CompiledSite.endpointCall source
+      selection.val.anchor).fullContext.length
+      (CompiledSite.endpointCall source selection.val.anchor).rels :=
+  (material source selection).erase
 
 noncomputable def factorization
-    (compiled : CompiledSelection source selection) :
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
     ItemSeqIso
       (FiniteEquiv.refl
-        (Fin compiled.anchor.endpointCall.fullContext.length))
-      compiled.anchor.endpointCall.rels compiled.intrinsic
-      (compiled.retainedIntrinsic.append compiled.materialIntrinsic) := by
+        (Fin (CompiledSite.endpointCall source
+          selection.val.anchor).fullContext.length))
+      (CompiledSite.endpointCall source selection.val.anchor).rels
+      (intrinsic source selection)
+      ((retainedIntrinsic source selection).append
+        (materialIntrinsic source selection)) := by
   simpa [intrinsic, retainedIntrinsic, materialIntrinsic, retained, material,
     partition, CompiledItems.erase_append] using
       CompiledItems.partitionFactorization
-        (checkedSelectionAnchorClassifier selection) compiled.anchorItems
+        (checkedSelectionAnchorClassifier selection)
+        (anchorItems source selection)
 
 noncomputable def positionMap
-    (compiled : CompiledSelection source selection) :
-    FiniteEquiv (Fin compiled.intrinsic.length)
-      (Fin (compiled.retainedIntrinsic.append
-        compiled.materialIntrinsic).length) :=
-  match compiled.factorization with
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    FiniteEquiv (Fin (intrinsic source selection).length)
+      (Fin ((retainedIntrinsic source selection).append
+        (materialIntrinsic source selection)).length) :=
+  match factorization source selection with
   | .permute positions _ => positions
 
-theorem anchor_origins (compiled : CompiledSelection source selection) :
-    compiled.anchorItems.origins =
+theorem anchor_origins (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    (anchorItems source selection).origins =
       localOccurrences source.checked.val.diagram selection.val.anchor :=
-  compiled.anchor.directItems_origins
+  CompiledSite.directItems_origins source selection.val.anchor
 
 theorem retained_origins_eq_unselected
-    (compiled : CompiledSelection source selection) :
-    compiled.retained.origins =
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    (retained source selection).origins =
       (localOccurrences source.checked.val.diagram selection.val.anchor).filter
         fun occurrence =>
           !checkedSelectionAnchorClassifier selection occurrence := by
-  change (compiled.anchorItems.partition
+  change ((anchorItems source selection).partition
     (checkedSelectionAnchorClassifier selection)).retained.origins = _
-  rw [CompiledItems.partition_retained_origins, compiled.anchor_origins]
+  rw [CompiledItems.partition_retained_origins, anchor_origins]
 
 theorem material_origins_eq_selected
-    (compiled : CompiledSelection source selection) :
-    compiled.material.origins =
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    (material source selection).origins =
       (localOccurrences source.checked.val.diagram selection.val.anchor).filter
         (checkedSelectionAnchorClassifier selection) := by
-  change (compiled.anchorItems.partition
+  change ((anchorItems source selection).partition
     (checkedSelectionAnchorClassifier selection)).material.origins = _
-  rw [CompiledItems.partition_material_origins, compiled.anchor_origins]
+  rw [CompiledItems.partition_material_origins, anchor_origins]
 
 theorem mem_retained_origins
-    (compiled : CompiledSelection source selection)
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram)
     (occurrence : LocalOccurrence source.checked.val.diagram.regionCount
       source.checked.val.diagram.nodeCount) :
-    occurrence ∈ compiled.retained.origins ↔
+    occurrence ∈ (retained source selection).origins ↔
       checkedSelectionAnchorClassifier selection occurrence = false ∧
         occurrence ∈ localOccurrences source.checked.val.diagram
           selection.val.anchor := by
-  rw [compiled.retained_origins_eq_unselected]
+  rw [retained_origins_eq_unselected]
   simp [and_comm]
 
 theorem mem_material_origins
-    (compiled : CompiledSelection source selection)
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram)
     (occurrence : LocalOccurrence source.checked.val.diagram.regionCount
       source.checked.val.diagram.nodeCount) :
-    occurrence ∈ compiled.material.origins ↔
+    occurrence ∈ (material source selection).origins ↔
       checkedSelectionAnchorClassifier selection occurrence = true ∧
         occurrence ∈ localOccurrences source.checked.val.diagram
           selection.val.anchor := by
-  rw [compiled.material_origins_eq_selected]
+  rw [material_origins_eq_selected]
   simp [and_comm]
 
-theorem retained_stable (compiled : CompiledSelection source selection) :
-    List.Sublist compiled.retained.origins compiled.anchorItems.origins :=
+theorem retained_stable (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    List.Sublist (retained source selection).origins
+      (anchorItems source selection).origins :=
   CompiledItems.partition_retained_stable
-    (checkedSelectionAnchorClassifier selection) compiled.anchorItems
+    (checkedSelectionAnchorClassifier selection) (anchorItems source selection)
 
-theorem material_stable (compiled : CompiledSelection source selection) :
-    List.Sublist compiled.material.origins compiled.anchorItems.origins :=
+theorem material_stable (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    List.Sublist (material source selection).origins
+      (anchorItems source selection).origins :=
   CompiledItems.partition_material_stable
-    (checkedSelectionAnchorClassifier selection) compiled.anchorItems
+    (checkedSelectionAnchorClassifier selection) (anchorItems source selection)
 
 theorem origins_factorization
-    (compiled : CompiledSelection source selection) :
-    compiled.anchorItems.origins.Perm
-      (compiled.retained.origins ++ compiled.material.origins) :=
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    (anchorItems source selection).origins.Perm
+      ((retained source selection).origins ++
+        (material source selection).origins) :=
   CompiledItems.partition_origins_perm
-    (checkedSelectionAnchorClassifier selection) compiled.anchorItems
+    (checkedSelectionAnchorClassifier selection) (anchorItems source selection)
 
-theorem classified_once (compiled : CompiledSelection source selection) :
-    (compiled.retained.origins ++ compiled.material.origins).Nodup := by
-  have originalNodup : compiled.anchorItems.origins.Nodup := by
-    rw [compiled.anchor_origins]
+theorem classified_once (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    ((retained source selection).origins ++
+      (material source selection).origins).Nodup := by
+  have originalNodup : (anchorItems source selection).origins.Nodup := by
+    rw [anchor_origins]
     exact localOccurrences_nodup source.checked.val.diagram selection.val.anchor
-  exact compiled.origins_factorization.nodup originalNodup
+  exact (origins_factorization source selection).nodup originalNodup
 
 theorem retained_material_disjoint
-    (compiled : CompiledSelection source selection) :
-    ∀ occurrence, occurrence ∈ compiled.retained.origins →
-      occurrence ∉ compiled.material.origins := by
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    ∀ occurrence, occurrence ∈ (retained source selection).origins →
+      occurrence ∉ (material source selection).origins := by
   intro occurrence retained material
-  exact (List.nodup_append.mp compiled.classified_once).2.2
+  exact (List.nodup_append.mp (classified_once source selection)).2.2
     occurrence retained occurrence material rfl
 
 theorem node_mem_material_origins
-    (compiled : CompiledSelection source selection)
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram)
     (node : Fin source.checked.val.diagram.nodeCount) :
-    LocalOccurrence.node node ∈ compiled.material.origins ↔
+    LocalOccurrence.node node ∈ (material source selection).origins ↔
       node ∈ selection.val.directNodes := by
-  rw [compiled.mem_material_origins]
+  rw [mem_material_origins]
   constructor
   · intro classified
     simpa using classified.1
@@ -837,11 +969,12 @@ theorem node_mem_material_origins
           (selection.property.directNodes_at_anchor node selected)
 
 theorem child_mem_material_origins
-    (compiled : CompiledSelection source selection)
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram)
     (child : Fin source.checked.val.diagram.regionCount) :
-    LocalOccurrence.child child ∈ compiled.material.origins ↔
+    LocalOccurrence.child child ∈ (material source selection).origins ↔
       child ∈ selection.val.childRoots := by
-  rw [compiled.mem_material_origins]
+  rw [mem_material_origins]
   constructor
   · intro classified
     simpa using classified.1
