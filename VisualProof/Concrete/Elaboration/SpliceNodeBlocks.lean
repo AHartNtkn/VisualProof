@@ -1,5 +1,7 @@
 import VisualProof.Concrete.Elaboration.SpliceBinderContext
-import VisualProof.Concrete.Elaboration.SpliceCompilerBlocks
+import VisualProof.Concrete.Elaboration.Compile.SiteKernel
+import VisualProof.Concrete.Elaboration.SpliceFramePorts
+import VisualProof.Concrete.Elaboration.SplicePatternPorts
 
 /-! Exact node-block compiler transport for a source-derived splice. -/
 
@@ -49,16 +51,6 @@ theorem frameSiteIndexMap_get (layout : PlugLayout input)
       get_append_castAdd (layout.mapFrameContext consistent hostContext)
         layout.bodyLocalWires _
     _ = _ := layout.mapFrameContext_get consistent hostContext index
-
-private theorem resolvePort?_context_eq
-    {diagram : Concrete.Diagram}
-    (first second : WireContext diagram) (contextEq : first = second)
-    (node : Fin diagram.nodeCount) (port : CPort) :
-    (resolvePort? diagram first node port).map
-        (Fin.cast (congrArg List.length contextEq)) =
-      resolvePort? diagram second node port := by
-  subst second
-  simp
 
 /-- Sequence compilation with simultaneous wire and relation renaming. -/
 private theorem compileOccurrencesWith?_mapBoth
@@ -131,8 +123,7 @@ private theorem compileOccurrencesWith?_mapBoth
 lookups commute with the source-derived relation substitution. -/
 theorem patternNode_binderMapped
     (layout : PlugLayout input) (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostBinders : BinderContext input.frame.val hostRels)
     (hostCovers : hostBinders.Covers input.site)
     (node : Fin input.pattern.val.diagram.nodeCount)
@@ -184,8 +175,7 @@ substitutions. -/
 theorem compileNode?_patternNode_map
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
     (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostContext : WireContext input.frame.val)
     (hostExact : hostContext.Exact input.site)
     (hostBinders : BinderContext input.frame.val hostRels)
@@ -227,24 +217,7 @@ theorem compileNode?_patternNode_map
         (compiled.siteContext ++ compiled.siteLocals) node port).map
           (layout.patternContextIndexMap consistent admissible compiled
             hostContext hostExact)
-    calc
-      _ = (resolvePort? input.pattern.val.diagram compiled.fullWires
-          node port).map
-            (layout.patternFullIndexMap consistent admissible compiled
-              hostContext hostExact) := mapped
-      _ = ((resolvePort? input.pattern.val.diagram compiled.fullWires
-            node port).map
-              (Fin.cast (congrArg List.length compiled.fullWires_eq))).map
-            (layout.patternContextIndexMap consistent admissible compiled
-              hostContext hostExact) := by
-        simp only [Option.map_map]
-        rfl
-      _ = _ := congrArg (Option.map
-        (layout.patternContextIndexMap consistent admissible compiled
-          hostContext hostExact))
-        (resolvePort?_context_eq compiled.fullWires
-          (compiled.siteContext ++ compiled.siteLocals)
-          compiled.fullWires_eq node port)
+    exact mapped
   · exact layout.patternNode_binderMapped admissible compiled
       hostBinders hostCovers node nodeRegion
 
@@ -314,8 +287,7 @@ theorem compileFrameNodeBlock
 theorem compilePatternNodeBlock
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
     (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (kernel : compiled.Kernel) (blocks : kernel.Blocks)
     (hostContext : WireContext input.frame.val)
     (hostExact : hostContext.Exact input.site)

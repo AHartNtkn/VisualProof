@@ -1,4 +1,4 @@
-import VisualProof.Concrete.Elaboration.Transform
+import VisualProof.Concrete.Elaboration.Compile.SiteKernel
 import VisualProof.Concrete.Subgraph.Splice.Input.Layout.Core
 
 /-! Proof kernels for transporting the unchanged frame through a splice layout.
@@ -193,6 +193,25 @@ theorem compiledPattern_siteContext
       input.binderSpine.bodyContainer) :
     compiled.siteContext = input.pattern.val.exposedWires :=
   CompilerRoute.terminal_context input terminal compiled.route rfl
+
+/-- The exact local material compiler input required by a splice.  The sole
+splice-specific field identifies the ordered inherited context with the
+pattern interface; no root route or abstract focus is retained. -/
+structure CompiledMaterial (input : Input)
+    extends LocalCompiledSite input.patternState
+      input.binderSpine.bodyContainer where
+  siteContext_eq : toLocalCompiledSite.siteContext =
+    input.pattern.val.exposedWires
+
+/-- Forget a full source focus after retaining the terminal pattern-interface
+identity needed by splice wire transport. -/
+def CompiledMaterial.ofCompiledSite
+    (input : Input) (terminal : input.TerminalBody)
+    (compiled : CompiledSite input.patternState
+      input.binderSpine.bodyContainer) :
+    CompiledMaterial input where
+  toLocalCompiledSite := compiled.local
+  siteContext_eq := compiledPattern_siteContext input terminal compiled
 
 namespace PlugLayout
 

@@ -1,4 +1,4 @@
-import VisualProof.Concrete.Elaboration.Transform
+import VisualProof.Concrete.Elaboration.Compile.SiteKernel
 import VisualProof.Concrete.Operation.Structural.Flat
 
 namespace VisualProof.Concrete
@@ -37,7 +37,7 @@ in either derivation. -/
 structure CompiledSelection (source : State arity)
     (selection : CheckedSelection source.checked.val.diagram) where
   anchor : CompiledSite source selection.val.anchor
-  material : CompiledSite (extractedSelectionState source selection)
+  material : LocalCompiledSite (extractedSelectionState source selection)
     (extractedSelectionSpine source selection).bodyContainer
 
 /-- Compile all source-derived evidence for one selection as one proof-only
@@ -46,7 +46,8 @@ noncomputable def CompiledSelection.ofSource (source : State arity)
     (selection : CheckedSelection source.checked.val.diagram) :
     CompiledSelection source selection where
   anchor := CompiledSite.ofSource source selection.val.anchor
-  material := CompiledSite.ofSource (extractedSelectionState source selection)
-    (extractedSelectionSpine source selection).bodyContainer
+  material := (CompiledSite.ofSource
+    (extractedSelectionState source selection)
+    (extractedSelectionSpine source selection).bodyContainer).local
 
 end VisualProof.Concrete

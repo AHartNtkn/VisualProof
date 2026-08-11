@@ -1,4 +1,5 @@
 import VisualProof.Concrete.Elaboration.Selection
+import VisualProof.Concrete.Elaboration.Compile.SiteKernel
 import VisualProof.Concrete.Operation.Structural.Modal
 
 /-! Source-only compiler evidence for the canonical double-cut replacement

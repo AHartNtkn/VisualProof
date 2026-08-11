@@ -1,17 +1,52 @@
-import VisualProof.Concrete.Elaboration.SpliceCompilerContext
-import VisualProof.Concrete.Elaboration.SpliceFramePorts
-import VisualProof.Concrete.Elaboration.SplicePatternPorts
-import VisualProof.Concrete.Elaboration.SpliceItems
+import VisualProof.Concrete.Elaboration.Transform
 
-/-! Exact source site compiler blocks used by compositional splice transport. -/
+/-! Operation-neutral local compiler certificates and direct-site kernels. -/
 
 namespace VisualProof.Concrete
 
 open VisualProof
 open VisualProof.Data.Finite
 open VisualProof.Diagram
-open Theory
+open VisualProof.Theory
 open Elaboration
+
+/-- Exact local compiler evidence at one concrete site, without an intrinsic
+root path, focus witness, or root compiler certificate. -/
+structure LocalCompiledSite (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) where
+  siteRels : RelCtx
+  siteContext : WireContext source.checked.val.diagram
+  siteBinders : BinderContext source.checked.val.diagram siteRels
+  siteBody : Region siteContext.length siteRels
+  siteLocals : WireContext source.checked.val.diagram
+  compilation : ExactSiteCompilation source.checked.val.diagram site siteRels
+    siteContext siteBinders siteLocals siteBody
+  siteLocals_eq : siteLocals =
+    if site = source.checked.val.diagram.root then
+      source.checked.val.hiddenWires
+    else
+      exactScopeWires source.checked.val.diagram site
+  completeContext_exact : (siteContext ++ siteLocals).Exact site
+  binder_covers : siteBinders.Covers site
+  binder_enumeration : BinderContext.Enumeration
+    source.checked.val.diagram siteBinders site
+
+/-- Forget the root route and abstract focus of a compiled host site while
+retaining its exact local compiler call. -/
+def CompiledSite.local (compiled : CompiledSite source site) :
+    LocalCompiledSite source site where
+  siteRels := compiled.siteRels
+  siteContext := compiled.siteContext
+  siteBinders := compiled.siteBinders
+  siteBody := compiled.siteBody
+  siteLocals := compiled.siteLocals
+  compilation := compiled.compilation
+  siteLocals_eq := compiled.siteLocals_eq
+  completeContext_exact := by
+    rw [← compiled.fullWires_eq]
+    exact compiled.fullWires_exact
+  binder_covers := compiled.binder_covers
+  binder_enumeration := compiled.binder_enumeration
 
 namespace Elaboration
 
@@ -38,24 +73,31 @@ theorem localOccurrences_eq_node_child (diagram : Concrete.Diagram)
 
 end Elaboration
 
-namespace CompiledSite
+namespace ExactSiteCompilation
 
-/-- The retained complete wire context has the exact outer/local length used by
-the successful source site compiler call. -/
-theorem fullWires_length (compiled : CompiledSite source site) :
-    compiled.fullWires.length =
-      compiled.siteContext.length + compiled.siteLocals.length := by
-  rw [compiled.fullWires_eq, List.length_append]
+/-- The local count produced by an exact compiler call is its supplied local
+wire count. -/
+theorem siteBody_localCount
+    (compilation : ExactSiteCompilation diagram site rels context binders
+      locals body) :
+    body.localCount = locals.length := by
+  cases compilation with
+  | root _ _ _ compiled => exact compileRoot?_localCount compiled
+  | region _ _ _ _ _ _ compiled => exact compileRegion?_localCount compiled
 
-/-- The normalized outer/local compiler context is exact at the source site. -/
-theorem completeContext_exact (compiled : CompiledSite source site) :
-    (compiled.siteContext ++ compiled.siteLocals).Exact site := by
-  rw [← compiled.fullWires_eq]
-  exact compiled.fullWires_exact
+end ExactSiteCompilation
 
-/-- One successful site compiler call exposed at its direct-occurrence
-kernel.  Root and recursive compilation share this source-only normal form. -/
-structure Kernel (compiled : CompiledSite source site) where
+namespace LocalCompiledSite
+
+/-- The local count of an exact site body is determined by its compiler call,
+not stored independently in the local certificate. -/
+theorem siteBody_localCount (compiled : LocalCompiledSite source site) :
+    compiled.siteBody.localCount = compiled.siteLocals.length :=
+  compiled.compilation.siteBody_localCount
+
+/-- One successful local compiler call exposed at its direct-occurrence
+kernel. Root and recursive compilation share this normal form. -/
+structure Kernel (compiled : LocalCompiledSite source site) where
   recurseFuel : Nat
   items : ItemSeq
     (compiled.siteContext ++ compiled.siteLocals).length compiled.siteRels
@@ -67,9 +109,9 @@ structure Kernel (compiled : CompiledSite source site) where
     .mk compiled.siteLocals.length
       (items.castWiresEq (by simp))
 
-/-- The successful site occurrence compiler split at its intrinsic
-node/child boundary. -/
-structure Kernel.Blocks {compiled : CompiledSite source site}
+/-- The successful site occurrence compiler split at its intrinsic node/child
+boundary. -/
+structure Kernel.Blocks {compiled : LocalCompiledSite source site}
     (kernel : Kernel compiled) where
   nodeItems : ItemSeq
     (compiled.siteContext ++ compiled.siteLocals).length compiled.siteRels
@@ -87,7 +129,7 @@ structure Kernel.Blocks {compiled : CompiledSite source site}
 
 /-- Invert the successful direct occurrence sequence once at the stable
 node/child boundary. -/
-noncomputable def Kernel.blocks {compiled : CompiledSite source site}
+noncomputable def Kernel.blocks {compiled : LocalCompiledSite source site}
     (kernel : Kernel compiled) : kernel.Blocks := by
   let existence := compileOccurrencesWith?_append_split
       (compileRegion? source.checked.val.diagram kernel.recurseFuel)
@@ -109,12 +151,12 @@ noncomputable def Kernel.blocks {compiled : CompiledSite source site}
     items_eq := specifications.2.2
   }
 
-end CompiledSite
+end LocalCompiledSite
 
 namespace ExactSiteCompilation
 
 /-- The direct compiler kernel before the equivalent retained full-context
-name from `CompiledSite` is substituted. -/
+name is substituted. -/
 structure DirectKernel
     (compilation : ExactSiteCompilation diagram site rels context binders
       locals body) where
@@ -171,11 +213,11 @@ noncomputable def directKernel
 
 end ExactSiteCompilation
 
-namespace CompiledSite
+namespace LocalCompiledSite
 
-/-- Invert the exact successful source site compiler call once, retaining its
+/-- Invert the exact successful local compiler call once, retaining its
 actual direct item sequence and recursive fuel. -/
-noncomputable def kernel (compiled : CompiledSite source site) :
+noncomputable def kernel (compiled : LocalCompiledSite source site) :
     Kernel compiled := by
   let direct := compiled.compilation.directKernel
   refine {
@@ -185,6 +227,6 @@ noncomputable def kernel (compiled : CompiledSite source site) :
     body_eq := direct.body_eq
   }
 
-end CompiledSite
+end LocalCompiledSite
 
 end VisualProof.Concrete

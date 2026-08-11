@@ -240,43 +240,38 @@ end PlugLayout
 
 end Splice.Input
 
-namespace CompiledSite
+namespace Splice.Input.CompiledMaterial
 
 /-- The exposed pattern class corresponding to one inherited terminal-body
 wire position. -/
 def spliceWireExternalIndex
-    (input : Splice.Input) (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
-    (terminal : input.TerminalBody)
+    (input : Splice.Input) (compiled : CompiledMaterial input)
     (wire : Fin compiled.siteContext.length) :
     Fin input.pattern.val.exposedWires.length :=
   Fin.cast (congrArg List.length
-    (Splice.Input.compiledPattern_siteContext input terminal compiled)) wire
+    compiled.siteContext_eq) wire
 
 /-- Map each inherited wire position of the compiled terminal material body
 to the exact complete host-site context position selected by its attachment. -/
 noncomputable def spliceWireMap
     (input : Splice.Input) (layout : Splice.Input.PlugLayout input)
     (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostContext : WireContext input.frame.val)
     (hostExact : hostContext.Exact input.site) :
     Fin compiled.siteContext.length → Fin hostContext.length :=
   fun wire => layout.attachedWireIndex admissible hostContext hostExact
-    (compiled.spliceWireExternalIndex input admissible.terminal_body wire)
+    (compiled.spliceWireExternalIndex input wire)
 
 theorem spliceWireMap_lookup
     (input : Splice.Input) (layout : Splice.Input.PlugLayout input)
     (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostContext : WireContext input.frame.val)
     (hostExact : hostContext.Exact input.site)
     (wire : Fin compiled.siteContext.length) :
     hostContext.lookup? (input.attachment (layout.exposedPosition
-        (compiled.spliceWireExternalIndex input admissible.terminal_body
-          wire))) =
+        (compiled.spliceWireExternalIndex input wire))) =
       some (compiled.spliceWireMap input layout admissible hostContext
         hostExact wire) :=
   layout.attachedWireIndex_lookup admissible hostContext hostExact _
@@ -284,37 +279,30 @@ theorem spliceWireMap_lookup
 theorem spliceWireMap_get
     (input : Splice.Input) (layout : Splice.Input.PlugLayout input)
     (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostContext : WireContext input.frame.val)
     (hostExact : hostContext.Exact input.site)
     (wire : Fin compiled.siteContext.length) :
     hostContext[compiled.spliceWireMap input layout admissible hostContext
         hostExact wire] =
       input.attachment (layout.exposedPosition
-        (compiled.spliceWireExternalIndex input admissible.terminal_body
-          wire)) :=
+        (compiled.spliceWireExternalIndex input wire)) :=
   layout.attachedWireIndex_get admissible hostContext hostExact _
 
 theorem spliceWireMap_source_get
     (input : Splice.Input) (layout : Splice.Input.PlugLayout input)
-    (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (wire : Fin compiled.siteContext.length) :
     input.pattern.val.boundary.get (layout.exposedPosition
-        (compiled.spliceWireExternalIndex input admissible.terminal_body
-          wire)) =
+        (compiled.spliceWireExternalIndex input wire)) =
       compiled.siteContext.get wire := by
   rw [layout.boundary_get_exposedPosition]
   exact (List.get_of_eq
-    (Splice.Input.compiledPattern_siteContext input
-      admissible.terminal_body compiled) wire).symm
+    compiled.siteContext_eq wire).symm
 
 private theorem relation_proxy
     (input : Splice.Input)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     {arity : Nat} (relation : RelVar compiled.siteRels arity) :
     ∃ proxy : Fin input.binderSpine.proxyCount,
       compiled.siteBinders (input.binderSpine.proxy proxy) =
@@ -335,8 +323,7 @@ private theorem relation_proxy
 
 private theorem hostRelation_exists
     (input : Splice.Input) (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostBinders : BinderContext input.frame.val hostRels)
     (hostCovers : hostBinders.Covers input.site)
     {arity : Nat} (relation : RelVar compiled.siteRels arity) :
@@ -361,8 +348,7 @@ private theorem hostRelation_exists
 the relations owned by the corresponding source host binders. -/
 noncomputable def spliceRelationMap
     (input : Splice.Input) (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostBinders : BinderContext input.frame.val hostRels)
     (hostCovers : hostBinders.Covers input.site) :
     RelationRenaming compiled.siteRels hostRels :=
@@ -373,8 +359,7 @@ noncomputable def spliceRelationMap
 admissible host binder target. -/
 theorem spliceRelationMap_lookup
     (input : Splice.Input) (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostBinders : BinderContext input.frame.val hostRels)
     (hostCovers : hostBinders.Covers input.site)
     {arity : Nat} (relation : RelVar compiled.siteRels arity) :
@@ -392,8 +377,7 @@ theorem spliceRelationMap_lookup
 to the host lookup selected by `spliceRelationMap`. -/
 theorem spliceRelationMap_of_lookup
     (input : Splice.Input) (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostBinders : BinderContext input.frame.val hostRels)
     (hostCovers : hostBinders.Covers input.site)
     {binder : Fin input.pattern.val.diagram.regionCount} {arity : Nat}
@@ -413,6 +397,6 @@ theorem spliceRelationMap_of_lookup
     patternLookup
   exact ⟨proxy, ownerEq.symm.trans proxyOwner, hostLookup⟩
 
-end CompiledSite
+end Splice.Input.CompiledMaterial
 
 end VisualProof.Concrete

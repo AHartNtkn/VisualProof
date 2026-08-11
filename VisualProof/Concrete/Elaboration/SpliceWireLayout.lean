@@ -590,8 +590,7 @@ theorem exactScopeWires_materialRegion
 non-boundary block represented by the plug layout. -/
 theorem compiledPattern_siteLocals
     (layout : PlugLayout input)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer) :
+    (compiled : CompiledMaterial input) :
     compiled.siteLocals = layout.bodySourceLocalWires := by
   by_cases atRoot : input.binderSpine.bodyContainer =
       input.pattern.val.diagram.root
@@ -655,8 +654,7 @@ theorem bodyLocalOrigins (layout : PlugLayout input) :
 cardinality, position for position. -/
 theorem compiledPattern_siteLocals_length
     (layout : PlugLayout input)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer) :
+    (compiled : CompiledMaterial input) :
     compiled.siteLocals.length = layout.bodyLocalWires.length := by
   rw [layout.compiledPattern_siteLocals compiled]
   unfold bodyLocalWires
@@ -674,8 +672,7 @@ theorem compiledPattern_siteLocals_length
 body to the target site's internal block. -/
 noncomputable def bodyLocalEquiv
     (layout : PlugLayout input)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer) :
+    (compiled : CompiledMaterial input) :
     FiniteEquiv (Fin compiled.siteLocals.length)
       (Fin layout.bodyLocalWires.length) :=
   FiniteEquiv.finCast (layout.compiledPattern_siteLocals_length compiled)
@@ -685,8 +682,7 @@ identifier whose source origin and target image are the corresponding list
 entries. -/
 theorem bodyLocalEquiv_get
     (layout : PlugLayout input)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (index : Fin compiled.siteLocals.length) :
     ∃ internal : layout.internalWires.Carrier,
       compiled.siteLocals.get index = layout.internalWires.origin internal ∧

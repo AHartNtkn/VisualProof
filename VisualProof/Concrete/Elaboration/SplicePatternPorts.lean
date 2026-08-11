@@ -183,8 +183,7 @@ theorem patternSiteWires_nodup (layout : PlugLayout input)
 inherited-and-local context to the raw plug's host-and-body context. -/
 noncomputable def patternContextIndexMap (layout : PlugLayout input)
     (consistent : input.AttachmentConsistent) (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostContext : WireContext input.frame.val)
     (hostExact : hostContext.Exact input.site) :
     Fin (compiled.siteContext ++ compiled.siteLocals).length →
@@ -201,8 +200,7 @@ noncomputable def patternContextIndexMap (layout : PlugLayout input)
 
 private theorem patternWireMap_siteContext_get (layout : PlugLayout input)
     (consistent : input.AttachmentConsistent) (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostContext : WireContext input.frame.val)
     (hostExact : hostContext.Exact input.site)
     (index : Fin compiled.siteContext.length) :
@@ -213,11 +211,10 @@ private theorem patternWireMap_siteContext_get (layout : PlugLayout input)
           (compiled.spliceWireMap input layout admissible hostContext
             hostExact index)) =
       layout.patternWireMap (compiled.siteContext.get index) := by
-  let external := compiled.spliceWireExternalIndex input
-    admissible.terminal_body index
+  let external := compiled.spliceWireExternalIndex input index
   have sourceEq : compiled.siteContext.get index =
       input.pattern.val.exposedWires.get external := by
-    exact (compiled.spliceWireMap_source_get input layout admissible index).symm
+    exact (compiled.spliceWireMap_source_get input layout index).symm
       |>.trans (layout.boundary_get_exposedPosition external)
   calc
     _ = layout.frameWireEmbedding consistent
@@ -238,8 +235,7 @@ private theorem patternWireMap_siteContext_get (layout : PlugLayout input)
       rfl
 
 private theorem patternWireMap_siteLocal_get (layout : PlugLayout input)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (index : Fin compiled.siteLocals.length) :
     layout.bodyLocalWires.get (layout.bodyLocalEquiv compiled index) =
       layout.patternWireMap (compiled.siteLocals.get index) := by
@@ -251,8 +247,7 @@ private theorem patternWireMap_siteLocal_get (layout : PlugLayout input)
 wire at every inherited or local compiler position. -/
 theorem patternContextIndexMap_get (layout : PlugLayout input)
     (consistent : input.AttachmentConsistent) (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostContext : WireContext input.frame.val)
     (hostExact : hostContext.Exact input.site)
     (index : Fin (compiled.siteContext ++ compiled.siteLocals).length) :
@@ -345,36 +340,6 @@ theorem patternContextIndexMap_get (layout : PlugLayout input)
         layout.patternWireMap_siteLocal_get compiled localIndex
       _ = _ := by
         rw [get_append_natAdd]
-
-/-- The same combined transport indexed by the exact full context retained in
-the source compilation certificate. -/
-noncomputable def patternFullIndexMap (layout : PlugLayout input)
-    (consistent : input.AttachmentConsistent) (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
-    (hostContext : WireContext input.frame.val)
-    (hostExact : hostContext.Exact input.site) :
-    Fin compiled.fullWires.length →
-      Fin (layout.patternSiteWires consistent hostContext).length :=
-  fun index => layout.patternContextIndexMap consistent admissible compiled
-    hostContext hostExact
-      (Fin.cast (congrArg List.length compiled.fullWires_eq) index)
-
-theorem patternFullIndexMap_get (layout : PlugLayout input)
-    (consistent : input.AttachmentConsistent) (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
-    (hostContext : WireContext input.frame.val)
-    (hostExact : hostContext.Exact input.site)
-    (index : Fin compiled.fullWires.length) :
-    (layout.patternSiteWires consistent hostContext).get
-        (layout.patternFullIndexMap consistent admissible compiled
-          hostContext hostExact index) =
-      layout.patternWireMap (compiled.fullWires.get index) := by
-  unfold patternFullIndexMap
-  rw [layout.patternContextIndexMap_get]
-  exact congrArg layout.patternWireMap
-    (List.get_of_eq compiled.fullWires_eq index).symm
 
 /-- Every endpoint owned by a source pattern wire is owned by its transported
 wire at the corresponding pattern node in the raw plug. -/
@@ -474,8 +439,7 @@ and lexical lookup directly, so distinct exposed classes may legitimately
 share one attachment. -/
 theorem resolvePort?_patternNode (layout : PlugLayout input)
     (consistent : input.AttachmentConsistent) (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostContext : WireContext input.frame.val)
     (hostExact : hostContext.Exact input.site)
     (targetDisjoint : layout.plugRaw.WireEndpointsAreDisjoint)
@@ -486,8 +450,9 @@ theorem resolvePort?_patternNode (layout : PlugLayout input)
     resolvePort? layout.plugRaw
         (layout.patternSiteWires consistent hostContext)
         (layout.patternNode node) port =
-      (resolvePort? input.pattern.val.diagram compiled.fullWires node port).map
-        (layout.patternFullIndexMap consistent admissible compiled
+      (resolvePort? input.pattern.val.diagram
+        (compiled.siteContext ++ compiled.siteLocals) node port).map
+        (layout.patternContextIndexMap consistent admissible compiled
           hostContext hostExact) := by
   unfold resolvePort?
   rw [endpointOwner?_map node (layout.patternNode node)
@@ -511,19 +476,23 @@ theorem resolvePort?_patternNode (layout : PlugLayout input)
           (input.pattern.val.diagram.wires sourceWire).scope
           input.binderSpine.bodyContainer := by
         simpa only [nodeRegion] using sourceEncloses
-      have sourceMember : sourceWire ∈ compiled.fullWires :=
-        (compiled.fullWires_exact.mem_iff sourceWire).2 sourceEnclosesBody
+      have sourceMember : sourceWire ∈
+          compiled.siteContext ++ compiled.siteLocals :=
+        (compiled.completeContext_exact.mem_iff sourceWire).2
+          sourceEnclosesBody
       obtain ⟨sourceIndex, sourceLookup⟩ :=
         WireContext.lookup?_complete sourceMember
-      have sourceGet : compiled.fullWires.get sourceIndex = sourceWire := by
+      have sourceGet :
+          (compiled.siteContext ++ compiled.siteLocals).get sourceIndex =
+            sourceWire := by
         simpa only [List.get_eq_getElem] using
           WireContext.lookup?_sound sourceLookup
       have mappedGet :
           (layout.patternSiteWires consistent hostContext).get
-              (layout.patternFullIndexMap consistent admissible compiled
+              (layout.patternContextIndexMap consistent admissible compiled
                 hostContext hostExact sourceIndex) =
             layout.patternWireMap sourceWire :=
-        (layout.patternFullIndexMap_get consistent admissible compiled
+        (layout.patternContextIndexMap_get consistent admissible compiled
           hostContext hostExact sourceIndex).trans
             (congrArg layout.patternWireMap sourceGet)
       have targetMember : layout.patternWireMap sourceWire ∈
@@ -538,7 +507,7 @@ theorem resolvePort?_patternNode (layout : PlugLayout input)
         simpa only [List.get_eq_getElem] using
           WireContext.lookup?_sound targetLookup
       have indexEq : targetIndex =
-          layout.patternFullIndexMap consistent admissible compiled
+          layout.patternContextIndexMap consistent admissible compiled
             hostContext hostExact sourceIndex := by
         apply Fin.ext
         exact (List.getElem_inj
@@ -548,8 +517,9 @@ theorem resolvePort?_patternNode (layout : PlugLayout input)
                 targetGet.trans mappedGet.symm)
       change (layout.patternSiteWires consistent hostContext).lookup?
           (layout.patternWireMap sourceWire) =
-        (compiled.fullWires.lookup? sourceWire).map
-          (layout.patternFullIndexMap consistent admissible compiled
+        ((compiled.siteContext ++ compiled.siteLocals).lookup?
+          sourceWire).map
+          (layout.patternContextIndexMap consistent admissible compiled
             hostContext hostExact)
       rw [sourceLookup, targetLookup, indexEq]
       rfl
