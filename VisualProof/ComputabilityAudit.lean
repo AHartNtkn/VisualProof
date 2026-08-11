@@ -1,5 +1,6 @@
 import Lean.Compiler
 import VisualProof.Concrete.Step
+import VisualProof.Concrete.Operation.Structural.Validation
 import VisualProof.Proof.Replay
 
 open Lean
@@ -16,6 +17,19 @@ run_meta Lean.compileDecls #[
   ``VisualProof.Concrete.applyDoubleCutElim,
   ``VisualProof.Concrete.applyVacuousIntro,
   ``VisualProof.Concrete.applyVacuousElim,
-  ``VisualProof.Concrete.Splice.Input.spliceChecked,
+  ``VisualProof.Concrete.spliceRaw,
+  ``VisualProof.Concrete.replaceSelectionRaw,
+  ``VisualProof.Concrete.quotientWiresRaw,
+  ``VisualProof.Concrete.splitWireRaw,
+  ``VisualProof.Concrete.StructuralValidation.selectionReplacementCounts,
+  ``VisualProof.Concrete.StructuralValidation.binderSpliceCounts,
+  ``VisualProof.Concrete.StructuralValidation.nonterminalSpineRejected,
+  ``VisualProof.Concrete.StructuralValidation.aliasedBoundaryValues,
+  ``VisualProof.Concrete.StructuralValidation.splitBoundaryValues,
+  ``VisualProof.Concrete.StructuralValidation.wrapperRecognitionFailures,
+  ``VisualProof.Concrete.StructuralValidation.doubleCutRoundTrip,
+  ``VisualProof.Concrete.StructuralValidation.doubleCutReverseRoundTrip,
+  ``VisualProof.Concrete.StructuralValidation.vacuousRoundTrip,
+  ``VisualProof.Concrete.StructuralValidation.vacuousReverseRoundTrip,
   ``VisualProof.Proof.replay
 ]

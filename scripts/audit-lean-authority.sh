@@ -488,6 +488,8 @@ audit_roster() {
   local rule_step="$repo_root/VisualProof/Rule/Step.lean"
   local concrete_step="$repo_root/VisualProof/Concrete/Step.lean"
   local step_core="$repo_root/VisualProof/Concrete/Step/Core.lean"
+  local flat="$repo_root/VisualProof/Concrete/Operation/Structural/Flat.lean"
+  local validation="$repo_root/VisualProof/Concrete/Operation/Structural/Validation.lean"
   local step_tags="$repo_root/VisualProof/Concrete/StepTags.lean"
   local comprehension_relation="$repo_root/VisualProof/Rule/Comprehension/Relation.lean"
   local comprehension_soundness="$repo_root/VisualProof/Rule/Soundness/Comprehension.lean"
@@ -523,6 +525,27 @@ audit_roster() {
   require_roster_file "$step_tags" &&
     reject_default_cases 'Concrete.StepTag.serializedName' "$step_tags" \
       '^def serializedName' '^def serializedAll'
+
+  require_roster_file "$flat"
+  local primitive
+  for primitive in spliceRaw replaceSelectionRaw quotientWiresRaw splitWireRaw; do
+    require_roster_declaration "Concrete flat primitive $primitive" \
+      "(?m)^def ${primitive}\\b" "$flat"
+  done
+  require_roster_declaration 'Concrete successful execution composition' \
+    '(?m)^theorem execute_success_composition\b' "$concrete_step"
+  require_roster_file "$validation" &&
+    require_roster_declaration 'Concrete structural executable validation' \
+      '(?m)^theorem double_cut_intro_elim_round_trip\b' "$validation"
+  require_roster_file "$validation" &&
+    require_roster_declaration 'Concrete structural executable validation' \
+      '(?m)^theorem vacuous_intro_elim_round_trip\b' "$validation"
+  require_roster_file "$validation" &&
+    require_roster_declaration 'Concrete structural executable validation' \
+      '(?m)^theorem double_cut_elim_intro_round_trip\b' "$validation"
+  require_roster_file "$validation" &&
+    require_roster_declaration 'Concrete structural executable validation' \
+      '(?m)^theorem vacuous_elim_intro_round_trip\b' "$validation"
 
   require_roster_file "$comprehension_relation" &&
     require_roster_declaration 'Comprehension relation' \
