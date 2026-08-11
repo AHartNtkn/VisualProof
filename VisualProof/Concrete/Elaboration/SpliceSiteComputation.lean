@@ -376,8 +376,8 @@ private noncomputable def spliceCompilerRootSiteComputationCore
   have atRoot : normalized.site = source.checked.val.diagram.root := rfl
   rcases host with ⟨path, witness, siteRels, siteContext, route,
     siteBinders, derivation, siteBody, siteLocals, compilation,
-    siteLocals_eq, fullWires, fullWires_eq, fullWires_exact,
-    siteBody_localCount, binder_covers, binder_enumeration, root_compiled,
+    siteLocals_eq, completeContext_exact, binder_covers,
+    binder_enumeration, root_compiled,
     focus_wires, focus_rels, focus_body, focus_cutDepth⟩
   cases derivation with
   | root =>
@@ -396,10 +396,7 @@ private noncomputable def spliceCompilerRootSiteComputationCore
         siteLocals := siteLocals
         compilation := compilation
         siteLocals_eq := siteLocals_eq
-        fullWires := fullWires
-        fullWires_eq := fullWires_eq
-        fullWires_exact := fullWires_exact
-        siteBody_localCount := siteBody_localCount
+        completeContext_exact := completeContext_exact
         binder_covers := binder_covers
         binder_enumeration := binder_enumeration
         focus_wires := focus_wires
