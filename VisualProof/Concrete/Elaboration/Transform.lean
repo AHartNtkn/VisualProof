@@ -490,13 +490,14 @@ inductive ExactSiteCompilation (diagram : Concrete.Diagram) :
     (siteRels : RelCtx) →
     (siteContext : WireContext diagram) →
     (siteBinders : BinderContext diagram siteRels) →
+    (siteLocals : WireContext diagram) →
     (siteBody : Region siteContext.length siteRels) → Type
   | root
       (ambient locals : WireContext diagram)
       (body : Region ambient.length [])
       (compiled : compileRoot? diagram ambient locals = some body) :
       ExactSiteCompilation diagram diagram.root [] ambient
-        BinderContext.empty body
+        BinderContext.empty locals body
   | region
       (site : Fin diagram.regionCount)
       (siteRels : RelCtx)
@@ -506,7 +507,8 @@ inductive ExactSiteCompilation (diagram : Concrete.Diagram) :
       (body : Region siteContext.length siteRels)
       (compiled : compileRegion? diagram fuel site siteContext siteBinders =
         some body) :
-      ExactSiteCompilation diagram site siteRels siteContext siteBinders body
+      ExactSiteCompilation diagram site siteRels siteContext siteBinders
+        (exactScopeWires diagram site) body
 
 /-- Source-only compilation evidence for one concrete insertion site.  It
 contains the source compiler derivation, its concrete parent chain, and its
@@ -522,9 +524,9 @@ structure CompiledSite (source : State arity)
       source.checked.val.hiddenWires) site siteContext
   siteBinders : BinderContext source.checked.val.diagram siteRels
   siteBody : Region siteContext.length siteRels
-  compilation : ExactSiteCompilation source.checked.val.diagram site siteRels
-    siteContext siteBinders siteBody
   siteLocals : WireContext source.checked.val.diagram
+  compilation : ExactSiteCompilation source.checked.val.diagram site siteRels
+    siteContext siteBinders siteLocals siteBody
   siteLocals_eq : siteLocals =
     if site = source.checked.val.diagram.root then
       source.checked.val.hiddenWires
@@ -619,16 +621,23 @@ noncomputable def CompiledSite.ofSource (source : State arity)
       siteContext := nested.siteContext
       siteBinders := nested.siteBinders
       siteBody := nested.siteBody
+      siteLocals := exactScopeWires source.checked.val.diagram site
       compilation := .region site nested.siteRels nested.siteContext
         nested.siteBinders nested.siteFuel nested.siteBody nested.site_compiled
-      siteLocals := nested.siteLocals
       siteLocals_eq := by
         rw [if_neg atRoot]
-        exact nested.siteLocals_eq
       fullWires := nested.fullWires
-      fullWires_eq := nested.fullWires_eq
+      fullWires_eq := by
+        calc
+          nested.fullWires = nested.siteContext ++ nested.siteLocals :=
+            nested.fullWires_eq
+          _ = nested.siteContext ++
+              exactScopeWires source.checked.val.diagram site :=
+            congrArg (List.append nested.siteContext) nested.siteLocals_eq
       fullWires_exact := nested.fullWires_exact
-      siteBody_localCount := nested.siteBody_localCount
+      siteBody_localCount := by
+        rw [← nested.siteLocals_eq]
+        exact nested.siteBody_localCount
       binder_covers := nested.binder_covers
       binder_enumeration := nested.binder_enumeration
       focus_wires := nested.focus_wires
