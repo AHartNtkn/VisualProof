@@ -8,6 +8,8 @@ open Diagram
 
 namespace Iteration
 
+/-- A local copy may keep inherited wires or allocate one fresh descendant
+wire for a selected source wire. -/
 structure WireFreshening
     (sourceWires targetWires freshWires : Nat)
     (inherited : Fin sourceWires → Fin targetWires) where
@@ -41,78 +43,46 @@ theorem WireFreshening.env_eq
       exact sourceFresh ⟨fresh, sourceEq⟩)]
     simpa [extendWireEnv] using congrFun inheritedEq source
 
-structure Base
-    (source target : OpenDiagram arity) where
-  interface : OpenDiagram arity
-  ancestorWires : Nat
-  anchorLocal : Nat
-  descendantWires : Nat
-  ancestorRels : RelCtx
-  descendantRels : RelCtx
-  outer :
-    DiagramContext interface.externalClasses ancestorWires
-      [] ancestorRels
-  descendant :
-    DiagramContext (ancestorWires + anchorLocal) descendantWires
-      ancestorRels descendantRels
-  selected :
-    Region (ancestorWires + anchorLocal) ancestorRels
-  remainder :
-    Region descendantWires descendantRels
+/-- The local iteration law.  All source/target endpoint and context ownership
+lives in `NestedContextReplacement`; this record owns only the copied region
+and its source-derived wire freshening. -/
+structure Local
+    {ancestorWires anchorLocal descendantWires : Nat}
+    {ancestorRels descendantRels : RelCtx}
+    (descendant : DiagramContext (ancestorWires + anchorLocal)
+      descendantWires ancestorRels descendantRels)
+    (selected : Region (ancestorWires + anchorLocal) ancestorRels)
+    (before after : Region descendantWires descendantRels) where
   copyLocal : Nat
   copyWires : WireFreshening
     (ancestorWires + anchorLocal) descendantWires copyLocal
     descendant.outerWire
-  source_iso :
-    OpenDiagramIso source
-      (interface.withBody
-        (outer.fill
-          (Region.adjoinAt anchorLocal .nil
-            (selected.conjoin
-              (descendant.fill remainder)))))
-  target_iso :
-    OpenDiagramIso target
-      (interface.withBody
-        (outer.fill
-          (Region.adjoinAt anchorLocal .nil
-            (selected.conjoin
-              (descendant.fill
-                ((Region.adjoinAt copyLocal .nil
-                    ((selected.renameWires copyWires.wire).renameRelations
-                      descendant.outerRelation)).conjoin
-                  remainder))))))
+  after_eq : after =
+    ((Region.adjoinAt copyLocal .nil
+      ((selected.renameWires copyWires.wire).renameRelations
+        descendant.outerRelation)).conjoin before)
 
-def Base.copy (step : Base source target) :
-    Region step.descendantWires step.descendantRels :=
-  Region.adjoinAt step.copyLocal .nil
-    ((step.selected.renameWires step.copyWires.wire).renameRelations
-      step.descendant.outerRelation)
-
-noncomputable def Base.iso
-    (sourceIso : OpenDiagramIso source source')
-    (step : Base source target)
-    (targetIso : OpenDiagramIso target target') :
-    Base source' target' where
-  interface := step.interface
-  ancestorWires := step.ancestorWires
-  anchorLocal := step.anchorLocal
-  descendantWires := step.descendantWires
-  ancestorRels := step.ancestorRels
-  descendantRels := step.descendantRels
-  outer := step.outer
-  descendant := step.descendant
-  selected := step.selected
-  remainder := step.remainder
-  copyLocal := step.copyLocal
-  copyWires := step.copyWires
-  source_iso := sourceIso.symm.trans step.source_iso
-  target_iso := targetIso.symm.trans step.target_iso
+def Local.copy
+    (descendant : DiagramContext (ancestorWires + anchorLocal)
+      descendantWires ancestorRels descendantRels)
+    (selected : Region (ancestorWires + anchorLocal) ancestorRels)
+    (remainder : Region descendantWires descendantRels)
+    (copyLocal : Nat)
+    (copyWires : WireFreshening
+      (ancestorWires + anchorLocal) descendantWires copyLocal
+      descendant.outerWire) :
+    Local descendant selected remainder
+      ((Region.adjoinAt copyLocal .nil
+        ((selected.renameWires copyWires.wire).renameRelations
+          descendant.outerRelation)).conjoin remainder) where
+  copyLocal := copyLocal
+  copyWires := copyWires
+  after_eq := rfl
 
 end Iteration
 
 def Iteration : Rule :=
-  symmetric fun source target =>
-    Nonempty (Iteration.Base source target)
+  symmetric (NestedContextual Iteration.Local)
 
 theorem Iteration.iso
     {arity : Nat}
@@ -123,11 +93,13 @@ theorem Iteration.iso
     Iteration source' target' := by
   cases step with
   | inl forward =>
-      rcases forward with ⟨forward⟩
-      exact Or.inl ⟨Iteration.Base.iso sourceIso forward targetIso⟩
+      rcases forward with ⟨replacement, ⟨localEvidence⟩⟩
+      exact Or.inl ⟨replacement.iso sourceIso.symm targetIso,
+        ⟨localEvidence⟩⟩
   | inr backward =>
-      rcases backward with ⟨backward⟩
-      exact Or.inr ⟨Iteration.Base.iso targetIso backward sourceIso⟩
+      rcases backward with ⟨replacement, ⟨localEvidence⟩⟩
+      exact Or.inr ⟨replacement.iso targetIso.symm sourceIso,
+        ⟨localEvidence⟩⟩
 
 theorem Iteration.symm
     {arity : Nat}

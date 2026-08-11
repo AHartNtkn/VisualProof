@@ -11,6 +11,7 @@ import VisualProof.Diagram.Isomorphism
 import VisualProof.Diagram.Algebra
 import VisualProof.Diagram.OpenIsomorphism
 import VisualProof.Diagram.Occurrence
+import VisualProof.Diagram.Replacement
 import VisualProof.Concrete
 import VisualProof.Concrete.Occurrence
 import VisualProof.Concrete.Subgraph.OccurrenceEmbedding
