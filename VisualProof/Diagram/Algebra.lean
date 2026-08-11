@@ -888,6 +888,14 @@ def Region.ContextPath.relocal
   subst target
   rfl
 
+theorem Region.ContextPath.castWiresEq_toFocus_body_heq
+    (equality : source = target)
+    (witness : Region.ContextPath region path) :
+    HEq (witness.castWiresEq equality).toFocus.body
+      witness.toFocus.body := by
+  subst target
+  rfl
+
 /-- Rebuilding after an outer-wire cast is the cast of the rebuilt region;
 the focused replacement is transported by the induced hole equalities. -/
 theorem Region.ContextPath.castWiresEq_fill
