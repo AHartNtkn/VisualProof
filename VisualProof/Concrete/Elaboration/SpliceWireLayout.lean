@@ -11,6 +11,65 @@ open Elaboration
 
 namespace Splice.Input.PlugLayout
 
+private theorem eraseDups_map_of_injective [BEq α] [LawfulBEq α]
+    [BEq β] [LawfulBEq β]
+    (map : α → β) (injective : Function.Injective map)
+    (values : List α) :
+    (values.map map).eraseDups = values.eraseDups.map map := by
+  cases values with
+  | nil => rfl
+  | cons head tail =>
+      rw [List.map_cons, List.eraseDups_cons, List.eraseDups_cons,
+        List.map_cons]
+      have filterEq :
+          (tail.map map).filter (fun value => !value == map head) =
+            (tail.filter (fun value => !value == head)).map map := by
+        rw [List.filter_map]
+        apply congrArg (List.map map)
+        apply List.filter_congr
+        intro value _
+        by_cases equality : value = head
+        · subst value
+          simp
+        · have mappedNe : map value ≠ map head := fun mappedEq =>
+            equality (injective mappedEq)
+          change (!(map value == map head)) = !(value == head)
+          rw [beq_false_of_ne mappedNe, beq_false_of_ne equality]
+      rw [filterEq, eraseDups_map_of_injective map injective]
+termination_by values.length
+decreasing_by
+  simpa using Nat.lt_succ_of_le (List.length_filter_le _ tail)
+
+private theorem filter_map_of_predicate_map
+    (map : α → β) (sourcePredicate : α → Bool)
+    (targetPredicate : β → Bool)
+    (commutes : ∀ value, targetPredicate (map value) = sourcePredicate value)
+    (values : List α) :
+    (values.map map).filter targetPredicate =
+      (values.filter sourcePredicate).map map := by
+  induction values with
+  | nil => rfl
+  | cons head tail ih =>
+      cases predicateEq : sourcePredicate head <;>
+        simp [predicateEq, commutes head, ih]
+
+private theorem filter_append_exact (predicate : α → Bool)
+    (first second : List α) :
+    (first ++ second).filter predicate =
+      first.filter predicate ++ second.filter predicate := by
+  induction first with
+  | nil => rfl
+  | cons head tail ih =>
+      cases predicateEq : predicate head <;>
+        simp [predicateEq, ih]
+
+private theorem append_assoc_exact (first second third : List α) :
+    first ++ (second ++ third) = (first ++ second) ++ third := by
+  induction first with
+  | nil => rfl
+  | cons head tail ih =>
+      simp only [List.cons_append, ih]
+
 private theorem allFin_add (left right : Nat) :
     allFin (left + right) =
       (allFin left).map (Fin.castAdd right) ++
@@ -70,6 +129,40 @@ private theorem filterFin_eq_enumeration_filter
   | true =>
       rw [survives original predicateEq]
       rfl
+
+/-- The source frame equipped with an arbitrary ordered open boundary. -/
+def frameOpen (input : Input)
+    (boundary : List (Fin input.frame.val.wireCount)) : OpenDiagram where
+  diagram := input.frame.val
+  boundary := boundary
+
+/-- No-coalescence preserves the stable exposed-class enumeration of an
+arbitrary frame boundary. -/
+theorem outputOpenRoot_exposedWires
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (boundary : List (Fin input.frame.val.wireCount)) :
+    (layout.outputOpenRoot input boundary).exposedWires =
+      (frameOpen input boundary).exposedWires.map
+        (layout.frameWireEmbedding consistent) := by
+  unfold OpenDiagram.exposedWires PlugLayout.outputOpenRoot frameOpen
+  exact eraseDups_map_of_injective
+    (layout.frameWireEmbedding consistent)
+    (layout.frameWireEmbedding_injective consistent) boundary
+
+/-- The internal carrier and retained frame carrier occupy disjoint halves of
+the raw plug wire space. -/
+theorem internalWire_ne_frameWireEmbedding
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (internal : layout.internalWires.Carrier)
+    (frame : Fin input.frame.val.wireCount) :
+    layout.internalWire internal ≠
+      layout.frameWireEmbedding consistent frame := by
+  intro equality
+  have values := congrArg Fin.val equality
+  change input.wireQuotient.count + internal.val =
+    (input.quotientWire frame).val at values
+  have quotientLt := (input.quotientWire frame).isLt
+  omega
 
 /-- Frame wires local to one source region, embedded in stable source order. -/
 noncomputable def frameLocalWires (layout : PlugLayout input)
@@ -294,6 +387,175 @@ theorem exactScopeWires_frameRegion
       simpa only [PlugLayout.mapPatternWire, PlugLayout.internalWire] using
         internalBlock]
   rfl
+
+/-- The target root's hidden block consists of the source frame hidden block,
+followed by the terminal body's internal block exactly when insertion is at
+the frame root. -/
+theorem outputOpenRoot_hiddenWires
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (terminal : input.TerminalBody)
+    (boundary : List (Fin input.frame.val.wireCount)) :
+    (layout.outputOpenRoot input boundary).hiddenWires =
+      ((frameOpen input boundary).hiddenWires.map
+          (layout.frameWireEmbedding consistent) :
+            WireContext layout.plugRaw) ++
+        (if input.frame.val.root = input.site then
+          layout.bodyLocalWires
+        else []) := by
+  change (exactScopeWires layout.plugRaw
+      (layout.frameRegion input.frame.val.root)).filter
+        (fun wire => decide
+          (wire ∉ (layout.outputOpenRoot input boundary).exposedWires)) = _
+  rw [layout.exactScopeWires_frameRegion consistent terminal
+      input.frame.val.root,
+    layout.outputOpenRoot_exposedWires consistent boundary]
+  have frameBlock :
+      (layout.frameLocalWires consistent input.frame.val.root).filter
+          (fun targetWire => decide
+            (targetWire ∉
+              (frameOpen input boundary).exposedWires.map
+                (layout.frameWireEmbedding consistent))) =
+        (frameOpen input boundary).hiddenWires.map
+          (layout.frameWireEmbedding consistent) := by
+    change
+      ((exactScopeWires input.frame.val input.frame.val.root).map
+          (layout.frameWireEmbedding consistent)).filter
+        (fun targetWire => decide
+          (targetWire ∉
+            (frameOpen input boundary).exposedWires.map
+              (layout.frameWireEmbedding consistent))) =
+      ((exactScopeWires input.frame.val input.frame.val.root).filter
+          (fun wire => decide
+            (wire ∉ (frameOpen input boundary).exposedWires))).map
+        (layout.frameWireEmbedding consistent)
+    apply filter_map_of_predicate_map
+    intro wire
+    have membership :
+        layout.frameWireEmbedding consistent wire ∈
+            (frameOpen input boundary).exposedWires.map
+              (layout.frameWireEmbedding consistent) ↔
+          wire ∈ (frameOpen input boundary).exposedWires := by
+      constructor
+      · intro member
+        obtain ⟨sourceWire, sourceMember, equality⟩ := List.mem_map.mp member
+        have sourceEq : sourceWire = wire :=
+          layout.frameWireEmbedding_injective consistent equality
+        simpa [sourceEq] using sourceMember
+      · intro member
+        exact List.mem_map.mpr ⟨wire, member, rfl⟩
+    by_cases sourceMember :
+        wire ∈ (frameOpen input boundary).exposedWires
+    · have targetMember := membership.mpr sourceMember
+      have targetFalse : decide
+          (layout.frameWireEmbedding consistent wire ∉
+            (frameOpen input boundary).exposedWires.map
+              (layout.frameWireEmbedding consistent)) = false :=
+        decide_eq_false_iff_not.mpr (fun absent => absent targetMember)
+      have sourceFalse : decide
+          (wire ∉ (frameOpen input boundary).exposedWires) = false :=
+        decide_eq_false_iff_not.mpr (fun absent => absent sourceMember)
+      exact targetFalse.trans sourceFalse.symm
+    · have targetMember :
+          layout.frameWireEmbedding consistent wire ∉
+              (frameOpen input boundary).exposedWires.map
+                (layout.frameWireEmbedding consistent) := by
+        intro member
+        exact sourceMember (membership.mp member)
+      have targetTrue : decide
+          (layout.frameWireEmbedding consistent wire ∉
+            (frameOpen input boundary).exposedWires.map
+              (layout.frameWireEmbedding consistent)) = true :=
+        decide_eq_true targetMember
+      have sourceTrue : decide
+          (wire ∉ (frameOpen input boundary).exposedWires) = true :=
+        decide_eq_true sourceMember
+      exact targetTrue.trans sourceTrue.symm
+  have bodyBlock :
+      layout.bodyLocalWires.filter (fun targetWire => decide
+        (targetWire ∉
+          (frameOpen input boundary).exposedWires.map
+            (layout.frameWireEmbedding consistent))) =
+        layout.bodyLocalWires := by
+    apply List.filter_eq_self.mpr
+    intro targetWire member
+    obtain ⟨internal, _, equality⟩ := List.mem_map.mp member
+    subst targetWire
+    apply decide_eq_true
+    intro exposed
+    obtain ⟨frame, _, mapped⟩ := List.mem_map.mp exposed
+    exact layout.internalWire_ne_frameWireEmbedding consistent internal frame
+      mapped.symm
+  by_cases atRoot : input.frame.val.root = input.site
+  · rw [if_pos atRoot]
+    calc
+      _ =
+          (layout.frameLocalWires consistent
+              input.frame.val.root).filter (fun targetWire => decide
+                (targetWire ∉
+                  (frameOpen input boundary).exposedWires.map
+                    (layout.frameWireEmbedding consistent))) ++
+            layout.bodyLocalWires.filter (fun targetWire => decide
+              (targetWire ∉
+                (frameOpen input boundary).exposedWires.map
+                  (layout.frameWireEmbedding consistent))) :=
+        filter_append_exact _ _ _
+      _ = (frameOpen input boundary).hiddenWires.map
+              (layout.frameWireEmbedding consistent) ++
+            layout.bodyLocalWires.filter (fun targetWire => decide
+              (targetWire ∉
+                (frameOpen input boundary).exposedWires.map
+                  (layout.frameWireEmbedding consistent))) :=
+        congrArg (fun first => first ++
+          layout.bodyLocalWires.filter (fun targetWire => decide
+            (targetWire ∉
+              (frameOpen input boundary).exposedWires.map
+                (layout.frameWireEmbedding consistent)))) frameBlock
+      _ = _ := congrArg (fun second =>
+        (frameOpen input boundary).hiddenWires.map
+            (layout.frameWireEmbedding consistent) ++ second) bodyBlock
+  · rw [if_neg atRoot, List.append_nil]
+    simpa only [List.append_nil] using frameBlock
+
+/-- The complete target root compiler context is the stable source root
+context, followed only at a root insertion by the terminal body's internal
+local block. -/
+theorem outputOpenRoot_rootWires
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (terminal : input.TerminalBody)
+    (boundary : List (Fin input.frame.val.wireCount)) :
+    (layout.outputOpenRoot input boundary).rootWires =
+      ((frameOpen input boundary).rootWires.map
+          (layout.frameWireEmbedding consistent) :
+            WireContext layout.plugRaw) ++
+        (if input.frame.val.root = input.site then
+          layout.bodyLocalWires
+        else []) := by
+  change
+    (layout.outputOpenRoot input boundary).exposedWires ++
+        (layout.outputOpenRoot input boundary).hiddenWires =
+      (((frameOpen input boundary).exposedWires ++
+          (frameOpen input boundary).hiddenWires).map
+            (layout.frameWireEmbedding consistent) :
+              WireContext layout.plugRaw) ++
+        (if input.frame.val.root = input.site then
+          layout.bodyLocalWires
+        else [])
+  rw [layout.outputOpenRoot_exposedWires consistent boundary,
+    layout.outputOpenRoot_hiddenWires consistent terminal boundary]
+  calc
+    _ = (((frameOpen input boundary).exposedWires.map
+            (layout.frameWireEmbedding consistent) :
+              WireContext layout.plugRaw) ++
+          ((frameOpen input boundary).hiddenWires.map
+            (layout.frameWireEmbedding consistent) :
+              WireContext layout.plugRaw)) ++
+        (if input.frame.val.root = input.site then
+          layout.bodyLocalWires
+        else []) := append_assoc_exact _ _ _
+    _ = _ := congrArg (fun rootContext => rootContext ++
+      if input.frame.val.root = input.site then
+        layout.bodyLocalWires
+      else []) List.map_append.symm
 
 /-- Exact target local-wire order at a surviving material region. -/
 theorem exactScopeWires_materialRegion
