@@ -3,10 +3,40 @@ import VisualProof.Concrete.Elaboration.SpliceSiteRegion
 
 /-! Canonical source and receipt endpoints for generic splice elaboration. -/
 
-namespace VisualProof.Concrete
-
 open VisualProof
 open VisualProof.Diagram
+
+namespace VisualProof.Diagram.ContextReplacement
+
+/-- Package an exact source-derived one-hole context and a generated target
+identification as a neutral replacement witness. -/
+noncomputable def ofSourceContext
+    {holeWires : Nat} {holeRels : Theory.RelCtx}
+    (source target : OpenDiagram arity)
+    (context : DiagramContext source.externalClasses holeWires [] holeRels)
+    (before after : Region holeWires holeRels)
+    (sourceRebuild : context.fill before = source.body)
+    (targetIso : OpenDiagramIso target
+      (source.withBody (context.fill after))) :
+    ContextReplacement source target where
+  holeWires := holeWires
+  holeRels := holeRels
+  interface := source
+  context := context
+  before := before
+  after := after
+  source_iso := {
+    external := FiniteEquiv.refl (Fin source.externalClasses)
+    boundary := fun _ => rfl
+    body := by
+      rw [sourceRebuild]
+      exact RegionIso.refl source.body
+  }
+  target_iso := targetIso
+
+end VisualProof.Diagram.ContextReplacement
+
+namespace VisualProof.Concrete
 
 namespace CompiledSite
 
