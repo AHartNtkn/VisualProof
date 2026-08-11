@@ -52,6 +52,27 @@ theorem contextPolarity_of_spawnPolarity
       simp only [Concrete.spawnPolarity] at guard
       simp [DiagramContext.polarity, depthEq, guard]
 
+/-- Transport both endpoints of a directed step across one arity equality. -/
+theorem DirectedStep.castArity
+    {source target : OpenDiagram sourceArity}
+    (step : DirectedStep orientation source target)
+    (arityEq : sourceArity = targetArity) :
+    DirectedStep orientation (source.castArity arityEq)
+      (target.castArity arityEq) := by
+  subst targetArity
+  exact step
+
+/-- Transport a directed step along endpoint isomorphisms. -/
+theorem DirectedStep.iso
+    {source source' target target' : OpenDiagram arity}
+    (sourceIso : OpenDiagramIso source source')
+    (step : DirectedStep orientation source target)
+    (targetIso : OpenDiagramIso target target') :
+    DirectedStep orientation source' target' := by
+  cases orientation with
+  | forward => exact Rule.Step.iso sourceIso step targetIso
+  | backward => exact Rule.Step.iso targetIso step sourceIso
+
 /-- Transport a canonical directed step to an arbitrary represented source.
 The target remains the actual target state's canonical diagram. -/
 theorem DirectedStep.ofCanonical
