@@ -377,14 +377,13 @@ private noncomputable def spliceCompilerRootSiteComputationCore
   rcases host with ⟨path, witness, siteRels, siteContext, route,
     siteBinders, derivation, siteBody, siteLocals, compilation,
     siteLocals_eq, completeContext_exact, binder_covers,
-    binder_enumeration, root_compiled,
-    focus_wires, focus_rels, focus_body, focus_cutDepth⟩
+    binder_enumeration, focus_wires, focus_rels, focus_body,
+    focus_cutDepth⟩
   cases derivation with
   | root =>
       let rootHost : CompiledSite source normalized.site := {
         path := []
         witness := witness
-        root_compiled := root_compiled
         siteRels := []
         siteContext := source.checked.val.exposedWires
         route := .root source.checked.val.exposedWires

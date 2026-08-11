@@ -536,14 +536,21 @@ structure CompiledSite (source : State arity)
   binder_covers : siteBinders.Covers site
   binder_enumeration : BinderContext.Enumeration
     source.checked.val.diagram siteBinders site
-  root_compiled : compileRoot? source.checked.val.diagram
-    source.checked.val.exposedWires source.checked.val.hiddenWires =
-      some source.checked.elaborate.body
   focus_wires : witness.toFocus.holeWires = siteContext.length
   focus_rels : witness.toFocus.holeRels = siteRels
   focus_body : HEq witness.toFocus.body siteBody
   focus_cutDepth : witness.toFocus.context.cutDepth =
     concreteCutDepth source.checked.val.diagram site
+
+/-- The exact root computation belongs to the checked source, not to each
+focused-site certificate. -/
+theorem CompiledSite.root_compiled (_compiled : CompiledSite source site) :
+    compileRoot? source.checked.val.diagram source.checked.val.exposedWires
+        source.checked.val.hiddenWires = some source.checked.elaborate.body := by
+  obtain ⟨body, compiled, bodyEq⟩ :=
+    CheckedOpen.elaborate_body_computation source.checked
+  rw [bodyEq]
+  exact compiled
 
 /-- The source endpoint identified by the intrinsic compiler path. -/
 noncomputable def CompiledSite.occurrence
@@ -709,7 +716,6 @@ noncomputable def CompiledSite.ofSource (source : State arity)
         source.checked.val.hiddenWires
       path := []
       witness := .here source.checked.elaborate.body
-      root_compiled := rootCompiledSource
       siteRels := []
       siteContext := source.checked.val.exposedWires
       siteBinders := BinderContext.empty
@@ -745,7 +751,6 @@ noncomputable def CompiledSite.ofSource (source : State arity)
       route := nested.route
       path := nested.path
       witness := nested.witness
-      root_compiled := rootCompiledSource
       siteRels := nested.siteRels
       siteContext := nested.siteContext
       siteBinders := nested.siteBinders
