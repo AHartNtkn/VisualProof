@@ -13,8 +13,11 @@ is its source compiler focus.
   data. It is not indexed by `LocalOccurrence`.
 - `CompiledItems` owns the ordered annotated item sequence. Compiler success
   proves that `CompiledItems.origins` is exactly the ordered occurrence input.
-- `CompiledRegion` owns the annotated sequence at the exact total-wire index
-  returned by `compileOccurrencesWith?`.
+- `CompiledRegion` is indexed by its concrete source region and owns the
+  annotated sequence at the exact total-wire index returned by
+  `compileOccurrencesWith?`.
+- A compiled cut or bubble child is definitionally indexed by the same source
+  region stored as that item's origin.
 - `RegionWireSplit` contains the local-wire count equation used only when
   erasing a compiled region to an intrinsic `Region`. No annotated item or
   recursively owned child tree is cast for region packaging.
@@ -22,13 +25,15 @@ is its source compiler focus.
   `compileRegion?`, and `compileRoot?` are the single compiler authority.
 - `Checked.compilation` and `CheckedOpen.compilation` are the canonical trees;
   their elaborations are the corresponding intrinsic erasures.
-- `CompiledSite.focus` is exactly one dependent pair containing a source path
-  and its `CompiledPath` witness. The intrinsic `Region.ContextPath`, context,
-  local body, intrinsic cut depth, source occurrence, and rebuild theorem are
-  derived from that field.
-- `CompiledSite.ofSource` privately runs one source-tree search. Checked
-  enclosure and the recursive compiler success equations prove that search
-  total for every source region.
+- `CompiledRegionFocus` and `CompiledItemsFocus` are the two mutually
+  structural layers of one zipper: constructors select the current region,
+  enter a cut or bubble child, or advance through an item tail.
+- `CompiledSite.focus` stores exactly that zipper. Numeric index, route list,
+  intrinsic `Region.ContextPath`, context, local body, intrinsic cut depth,
+  source occurrence, and rebuild theorem are derived functions.
+- `CompiledSite.ofSource` chooses the zipper directly from a proof that the
+  checked source compiler contains every enclosed region. It does not compute,
+  pair, or retain a second route or path presentation.
 
 ## Changed boundary
 
@@ -50,8 +55,8 @@ is its source compiler focus.
 - No compatibility wrapper, mirrored compiler result, alternate stored focus,
   target-derived data, operation-specific logic, or consumer-supplied
   occurrence/index equality was introduced.
-- The source search and its totality proofs are private construction details;
-  consumers receive the single stored `CompiledPath` focus.
+- Navigation authority is the single structural zipper; its route exists only
+  as a derived projection consumed by the intrinsic context API.
 - No concrete execution file or execution import boundary changed.
 - No `sorry` occurs in the changed compiler/focus dependency closure.
 

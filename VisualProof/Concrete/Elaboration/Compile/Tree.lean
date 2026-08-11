@@ -17,21 +17,23 @@ structure RegionWireSplit (outerWires totalWires localWires : Nat) : Prop where
   total_eq : totalWires = outerWires + localWires
 
 mutual
-  inductive CompiledRegion (d : Diagram) : Nat -> RelCtx -> Type
-    | mk {outerWires totalWires : Nat} {rels : RelCtx}
+  inductive CompiledRegion (d : Diagram) :
+      Fin d.regionCount -> Nat -> RelCtx -> Type
+    | mk {origin : Fin d.regionCount} {outerWires totalWires : Nat}
+        {rels : RelCtx}
         (localWires : Nat)
         (items : CompiledItems d totalWires rels)
         (split : RegionWireSplit outerWires totalWires localWires) :
-        CompiledRegion d outerWires rels
+        CompiledRegion d origin outerWires rels
 
   inductive CompiledItem (d : Diagram) : Nat -> RelCtx -> Type
     | node {wires : Nat} {rels : RelCtx} (origin : Fin d.nodeCount)
         (item : Item wires rels) : CompiledItem d wires rels
     | cut {wires : Nat} {rels : RelCtx} (origin : Fin d.regionCount)
-        (body : CompiledRegion d wires rels) : CompiledItem d wires rels
+        (body : CompiledRegion d origin wires rels) : CompiledItem d wires rels
     | bubble {wires : Nat} {rels : RelCtx} (origin : Fin d.regionCount)
         (arity : Nat)
-        (body : CompiledRegion d wires (arity :: rels)) :
+        (body : CompiledRegion d origin wires (arity :: rels)) :
         CompiledItem d wires rels
 
   inductive CompiledItems (d : Diagram) : Nat -> RelCtx -> Type
@@ -42,7 +44,7 @@ end
 
 mutual
   def CompiledRegion.erase :
-      CompiledRegion d wires rels -> Region wires rels
+      CompiledRegion d origin wires rels -> Region wires rels
     | .mk localWires items split =>
         .mk localWires (items.erase.castWiresEq split.total_eq)
 
@@ -58,11 +60,11 @@ end
 
 namespace CompiledRegion
 
-def localCount : CompiledRegion d wires rels -> Nat
+def localCount : CompiledRegion d origin wires rels -> Nat
   | .mk localWires _ _ => localWires
 
 @[simp] theorem erase_localCount
-    (region : CompiledRegion d wires rels) :
+    (region : CompiledRegion d origin wires rels) :
     region.erase.localCount = region.localCount := by
   cases region
   rfl

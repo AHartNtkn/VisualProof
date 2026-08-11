@@ -409,8 +409,9 @@ private noncomputable def compileRegion?_certifiedEquivariant
     {sourceBinders : BinderContext source rels}
     {targetBinders : BinderContext target rels}
     (hbinders : CertifiedBinderContextsAgree equiv sourceBinders targetBinders)
-    {sourceBody : CompiledRegion source sourceContext.length rels}
-    {targetBody : CompiledRegion target targetContext.length rels}
+    {sourceBody : CompiledRegion source region sourceContext.length rels}
+    {targetBody : CompiledRegion target (equiv.regions region)
+      targetContext.length rels}
     (hsource : compileRegion?  source sourceFuel region sourceContext
       sourceBinders = some sourceBody)
     (htargetResult : compileRegion?  target targetFuel
@@ -610,8 +611,8 @@ noncomputable def compileRoot?_certifiedEquivariant
       (appendContextEquiv ambient localEquiv))
     (htargetExact : WireContext.Exact
       (targetAmbient ++ targetLocal) target.root)
-    {sourceBody : CompiledRegion source sourceAmbient.length []}
-    {targetBody : CompiledRegion target targetAmbient.length []}
+    {sourceBody : CompiledRegion source source.root sourceAmbient.length []}
+    {targetBody : CompiledRegion target target.root targetAmbient.length []}
     (hsource : compileRoot?  source sourceAmbient sourceLocal =
       some sourceBody)
     (htargetResult : compileRoot?  target targetAmbient targetLocal =
@@ -730,7 +731,7 @@ noncomputable def compileRoot?_certifiedEquivariant
                       htarget hwires hchildExact hchildBinders
                       hsourceBody htargetBody)
   simp only [compileRoot?] at hsource htargetResult
-  rw [← equiv.regionCount_eq, ← equiv.root_eq] at htargetResult
+  rw [← equiv.regionCount_eq] at htargetResult
   cases hsourceItems : compileOccurrencesWith?  source
       (compileRegion?  source source.regionCount)
       sourceRoot BinderContext.empty
@@ -742,17 +743,23 @@ noncomputable def compileRoot?_certifiedEquivariant
       cases htargetItems : compileOccurrencesWith?  target
           (compileRegion?  target source.regionCount)
           targetRoot BinderContext.empty
-          (localOccurrences target (equiv.regions source.root)) with
+          (localOccurrences target target.root) with
       | none => simp [targetRoot, htargetItems] at htargetResult
       | some targetItems =>
           simp [targetRoot, htargetItems] at htargetResult
           subst targetBody
+          have htargetItemsMapped : compileOccurrencesWith? target
+              (compileRegion? target source.regionCount)
+              targetRoot BinderContext.empty
+              (localOccurrences target (equiv.regions source.root)) =
+                some targetItems := by
+            simpa only [equiv.root_eq] using htargetItems
           have hsourceLength := compileOccurrencesWith?_length
             (compileRegion?  source source.regionCount)
             sourceRoot BinderContext.empty hsourceItems
           have htargetLength := compileOccurrencesWith?_length
             (compileRegion?  target source.regionCount)
-            targetRoot BinderContext.empty htargetItems
+            targetRoot BinderContext.empty htargetItemsMapped
           let positions : FiniteEquiv (Fin sourceItems.length)
               (Fin targetItems.length) :=
             castFinEquiv hsourceLength htargetLength
@@ -771,7 +778,8 @@ noncomputable def compileRoot?_certifiedEquivariant
               sourceRoot BinderContext.empty hsourceItems occurrenceIndex
             have htargetGet := compileOccurrencesWith?_get
               (compileRegion?  target source.regionCount)
-              targetRoot BinderContext.empty htargetItems targetOccurrenceIndex
+              targetRoot BinderContext.empty htargetItemsMapped
+              targetOccurrenceIndex
             rw [certifiedLocalOccurrenceEquiv_spec equiv source.root
               occurrenceIndex] at htargetGet
             have hsourcePosition : Fin.cast hsourceLength.symm
@@ -827,28 +835,30 @@ theorem elaborate_isomorphic {source target : Diagram}
     Diagram.elaborate_computation source hsource
   obtain ⟨targetBody, htargetKernel, htargetElaborate⟩ :=
     Diagram.elaborate_computation target htarget
-  have htargetKernel' := htargetKernel
-  rw [<- iso.root_eq] at htargetKernel'
   have hambient : Elaboration.WireContextsAgree iso
       ([] : Elaboration.WireContext source)
       ([] : Elaboration.WireContext target) (.refl (Fin 0)) := by
     intro index
     exact Fin.elim0 index
-  have hlocal : Elaboration.WireContextsAgree iso
-      (Elaboration.exactScopeWires source source.root)
-      (Elaboration.exactScopeWires target (iso.regions source.root))
-      (Elaboration.localWireEquiv iso source.root) := by
-    exact Elaboration.localWireEquiv_spec iso source.root
+  have hlocalRoot : ∃ localEquiv : FiniteEquiv
+      (Fin (Elaboration.exactScopeWires source source.root).length)
+      (Fin (Elaboration.exactScopeWires target target.root).length),
+      Elaboration.WireContextsAgree iso
+        (Elaboration.exactScopeWires source source.root)
+        (Elaboration.exactScopeWires target target.root) localEquiv := by
+    rw [← iso.root_eq]
+    exact ⟨Elaboration.localWireEquiv iso source.root,
+      Elaboration.localWireEquiv_spec iso source.root⟩
+  obtain ⟨localEquiv, hlocal⟩ := hlocalRoot
   have hwires := Elaboration.appendContextsAgree hambient hlocal
   have htargetExact : Elaboration.WireContext.Exact
       (([] : Elaboration.WireContext target) ++
         Elaboration.exactScopeWires target
-          (iso.regions source.root)) target.root := by
-    rw [iso.root_eq]
+          target.root) target.root := by
     exact Elaboration.closedRootWires_exact htarget
   have hbody : RegionIso  (.refl (Fin 0)) [] sourceBody.erase targetBody.erase :=
     Elaboration.compileRoot?_equivariant iso htarget hwires
-      htargetExact hsourceKernel htargetKernel'
+      htargetExact hsourceKernel htargetKernel
   rw [hsourceElaborate, htargetElaborate]
   exact ⟨hbody⟩
 

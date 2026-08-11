@@ -5223,11 +5223,11 @@ private noncomputable def compileEncodedAtom
     (binderContext : Elaboration.BinderContext (rawDiagram diagram) rels)
     (binderAgreement : BinderMap.ContextAgreement diagram binderMap binderContext)
     (recurse : ∀ {rels : RelCtx},
-      Fin (rawDiagram diagram).regionCount →
+      (region : Fin (rawDiagram diagram).regionCount) →
       (recursiveContext : Elaboration.WireContext (rawDiagram diagram)) →
       Elaboration.BinderContext (rawDiagram diagram) rels →
       Option (Elaboration.CompiledRegion (rawDiagram diagram)
-        recursiveContext.length rels))
+        region recursiveContext.length rels))
     (target : Elaboration.CompiledItem (rawDiagram diagram) context.length rels)
     (compiled : Elaboration.compileOccurrenceWith? (rawDiagram diagram) recurse
       context binderContext (.node node) = some target) :
@@ -5292,11 +5292,11 @@ private noncomputable def compileEncodedIdentity
     (contextNodup : context.Nodup)
     (binderContext : Elaboration.BinderContext (rawDiagram diagram) rels)
     (recurse : ∀ {rels : RelCtx},
-      Fin (rawDiagram diagram).regionCount →
+      (region : Fin (rawDiagram diagram).regionCount) →
       (recursiveContext : Elaboration.WireContext (rawDiagram diagram)) →
       Elaboration.BinderContext (rawDiagram diagram) rels →
       Option (Elaboration.CompiledRegion (rawDiagram diagram)
-        recursiveContext.length rels))
+        region recursiveContext.length rels))
     (target : Elaboration.CompiledItem (rawDiagram diagram) context.length rels)
     (compiled : Elaboration.compileOccurrenceWith? (rawDiagram diagram) recurse
       context binderContext (.node node) = some target) :
@@ -5355,7 +5355,7 @@ private def RegionCompileMotive
     (_binderAgreement : BinderMap.ContextAgreement diagram binders binderContext)
     (_extendedExact : (context.extend current).Exact current)
     (fuel : Nat) (target : Elaboration.CompiledRegion
-      (rawDiagram diagram) context.length rels),
+      (rawDiagram diagram) current context.length rels),
     Elaboration.compileRegion? (rawDiagram diagram) fuel current context
       binderContext = some target →
     RegionIso  wireEquiv rels source target.erase

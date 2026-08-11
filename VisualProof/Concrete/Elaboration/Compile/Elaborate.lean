@@ -89,7 +89,8 @@ noncomputable def compiledOpenRootItemsIsoFromExactContext
 
 namespace Checked
 
-def compilation (checked : Checked ) : CompiledRegion checked.val 0 [] :=
+def compilation (checked : Checked ) :
+    CompiledRegion checked.val checked.val.root 0 [] :=
   (compileRoot?  checked.val []
     (exactScopeWires checked.val checked.val.root)).get
       (Option.isSome_iff_exists.mpr
@@ -115,7 +116,8 @@ end Checked
 namespace CheckedOpen
 
 def compilation (checked : CheckedOpen ) :
-    CompiledRegion checked.val.diagram checked.val.exposedWires.length [] :=
+    CompiledRegion checked.val.diagram checked.val.diagram.root
+      checked.val.exposedWires.length [] :=
   (compileRoot? checked.val.diagram checked.val.exposedWires
     checked.val.hiddenWires).get
       (Option.isSome_iff_exists.mpr

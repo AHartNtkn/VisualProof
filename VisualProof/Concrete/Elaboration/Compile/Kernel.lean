@@ -866,7 +866,7 @@ def compileOccurrenceWith?
     (recurse : forall {rels : RelCtx},
       (region : Fin d.regionCount) ->
       (context : WireContext d) -> BinderContext d rels ->
-      Option (CompiledRegion d context.length rels))
+      Option (CompiledRegion d region context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     (occurrence : LocalOccurrence d.regionCount d.nodeCount) :
     Option (CompiledItem d context.length rels) :=
@@ -886,7 +886,7 @@ def compileOccurrencesWith?
     (recurse : forall {rels : RelCtx},
       (region : Fin d.regionCount) ->
       (context : WireContext d) -> BinderContext d rels ->
-      Option (CompiledRegion d context.length rels))
+      Option (CompiledRegion d region context.length rels))
     (context : WireContext d) (binders : BinderContext d rels) :
     List (LocalOccurrence d.regionCount d.nodeCount) ->
       Option (CompiledItems d context.length rels)
@@ -927,7 +927,7 @@ theorem compileOccurrenceWith?_origin
     (recurse : forall {rels : RelCtx},
       (region : Fin d.regionCount) ->
       (context : WireContext d) -> BinderContext d rels ->
-      Option (CompiledRegion d context.length rels))
+      Option (CompiledRegion d region context.length rels))
     {item : CompiledItem d context.length rels}
     (compiled : compileOccurrenceWith? d recurse context binders occurrence =
       some item) :
@@ -956,7 +956,7 @@ theorem compileOccurrencesWith?_origins
     (recurse : forall {rels : RelCtx},
       (region : Fin d.regionCount) ->
       (context : WireContext d) -> BinderContext d rels ->
-      Option (CompiledRegion d context.length rels))
+      Option (CompiledRegion d region context.length rels))
     {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
     {items : CompiledItems d context.length rels}
     (compiled : compileOccurrencesWith? d recurse context binders occurrences =
@@ -988,11 +988,11 @@ theorem compileOccurrencesWith?_map
     (sourceRecurse : ∀ {rels : RelCtx},
       (region : Fin sourceDiagram.regionCount) →
       (context : WireContext sourceDiagram) → BinderContext sourceDiagram rels →
-      Option (CompiledRegion sourceDiagram context.length rels))
+      Option (CompiledRegion sourceDiagram region context.length rels))
     (targetRecurse : ∀ {rels : RelCtx},
       (region : Fin targetDiagram.regionCount) →
       (context : WireContext targetDiagram) → BinderContext targetDiagram rels →
-      Option (CompiledRegion targetDiagram context.length rels))
+      Option (CompiledRegion targetDiagram region context.length rels))
     (sourceContext : WireContext sourceDiagram)
     (targetContext : WireContext targetDiagram)
     (sourceBinders : BinderContext sourceDiagram rels)
@@ -1055,7 +1055,7 @@ theorem compileOccurrencesWith?_append
     (recurse : ∀ {rels : RelCtx},
       (region : Fin d.regionCount) →
       (context : WireContext d) → BinderContext d rels →
-      Option (CompiledRegion d context.length rels))
+      Option (CompiledRegion d region context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     (first second : List (LocalOccurrence d.regionCount d.nodeCount))
     (firstItems secondItems : CompiledItems d context.length rels)
@@ -1099,7 +1099,7 @@ theorem compileOccurrencesWith?_append_split
     (recurse : ∀ {rels : RelCtx},
       (region : Fin d.regionCount) →
       (context : WireContext d) → BinderContext d rels →
-      Option (CompiledRegion d context.length rels))
+      Option (CompiledRegion d region context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     (first second : List (LocalOccurrence d.regionCount d.nodeCount))
     (items : CompiledItems d context.length rels)
@@ -1136,7 +1136,7 @@ theorem compileOccurrencesWith?_length
     (recurse : forall {rels : RelCtx},
       (region : Fin d.regionCount) →
       (context : WireContext d) → BinderContext d rels →
-      Option (CompiledRegion d context.length rels))
+      Option (CompiledRegion d region context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
     {items : CompiledItems d context.length rels}
@@ -1163,7 +1163,7 @@ theorem compileOccurrencesWith?_get
     (recurse : forall {rels : RelCtx},
       (region : Fin d.regionCount) →
       (context : WireContext d) → BinderContext d rels →
-      Option (CompiledRegion d context.length rels))
+      Option (CompiledRegion d region context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
     {items : CompiledItems d context.length rels}
@@ -1203,12 +1203,12 @@ noncomputable def compileOccurrencesWith?_iso
       (region : Fin sourceDiagram.regionCount) →
       (context : WireContext sourceDiagram) →
       BinderContext sourceDiagram rels →
-      Option (CompiledRegion sourceDiagram context.length rels))
+      Option (CompiledRegion sourceDiagram region context.length rels))
     (targetRecurse : forall {rels : RelCtx},
       (region : Fin targetDiagram.regionCount) →
       (context : WireContext targetDiagram) →
       BinderContext targetDiagram rels →
-      Option (CompiledRegion targetDiagram context.length rels))
+      Option (CompiledRegion targetDiagram region context.length rels))
     (sourceContext : WireContext sourceDiagram)
     (targetContext : WireContext targetDiagram)
     (sourceBinders : BinderContext sourceDiagram rels)
@@ -1263,7 +1263,7 @@ theorem compileOccurrencesWith?_complete
     (recurse : forall {rels : RelCtx},
       (region : Fin d.regionCount) →
       (context : WireContext d) → BinderContext d rels →
-      Option (CompiledRegion d context.length rels))
+      Option (CompiledRegion d region context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     (occurrences : List (LocalOccurrence d.regionCount d.nodeCount))
     (hsuccess : forall occurrence, occurrence ∈ occurrences →

@@ -7,84 +7,219 @@ open VisualProof
 open VisualProof.Theory
 open VisualProof.Diagram
 
-inductive CompiledCutAt (d : Diagram) {wires : Nat} {rels : RelCtx} :
-    CompiledItems d wires rels -> Nat -> (origin : Fin d.regionCount) ->
-      CompiledRegion d wires rels -> Type
-  | here (origin : Fin d.regionCount) (body : CompiledRegion d wires rels)
-      (suffix : CompiledItems d wires rels) :
-      CompiledCutAt d (.cons (.cut origin body) suffix) 0 origin body
-  | tail (head : CompiledItem d wires rels) {items index origin body}
-      (rest : CompiledCutAt d items index origin body) :
-      CompiledCutAt d (.cons head items) (index + 1) origin body
-
-inductive CompiledBubbleAt (d : Diagram) {wires : Nat} {rels : RelCtx} :
-    CompiledItems d wires rels -> Nat -> (origin : Fin d.regionCount) ->
-      (arity : Nat) -> CompiledRegion d wires (arity :: rels) -> Type
-  | here (origin : Fin d.regionCount) (arity : Nat)
-      (body : CompiledRegion d wires (arity :: rels))
-      (suffix : CompiledItems d wires rels) :
-      CompiledBubbleAt d (.cons (.bubble origin arity body) suffix) 0 origin
-        arity body
-  | tail (head : CompiledItem d wires rels) {items index origin arity body}
-      (rest : CompiledBubbleAt d items index origin arity body) :
-      CompiledBubbleAt d (.cons head items) (index + 1) origin arity body
-
-inductive CompiledPath (d : Diagram) :
-    (origin : Fin d.regionCount) -> {wires : Nat} -> {rels : RelCtx} ->
-      CompiledRegion d wires rels ->
-      (site : Fin d.regionCount) -> List Nat -> Type
-  | here (origin : Fin d.regionCount) (body : CompiledRegion d wires rels) :
-      CompiledPath d origin body origin []
-  | cut {origin site childOrigin : Fin d.regionCount}
-      {totalWires : Nat} {items : CompiledItems d totalWires rels}
-      {localWires : Nat}
-      {split : RegionWireSplit wires totalWires localWires}
-      {index : Nat} {rest : List Nat}
-      {childBody : CompiledRegion d totalWires rels}
-      (direct : CompiledCutAt d items index childOrigin childBody)
-      (nested : CompiledPath d childOrigin childBody site rest) :
-      CompiledPath d origin (.mk localWires items split) site (index :: rest)
-  | bubble {origin site childOrigin : Fin d.regionCount}
-      {totalWires : Nat} {items : CompiledItems d totalWires rels}
-      {localWires : Nat}
-      {split : RegionWireSplit wires totalWires localWires}
-      {index arity : Nat} {rest : List Nat}
-      {childBody : CompiledRegion d totalWires (arity :: rels)}
-      (direct : CompiledBubbleAt d items index childOrigin arity childBody)
-      (nested : CompiledPath d childOrigin childBody site rest) :
-      CompiledPath d origin (.mk localWires items split) site (index :: rest)
+/-!
+The compiled focus is a single structural zipper.  Its constructors either
+select the current region, enter a child item, or skip an item.  Numeric
+positions and intrinsic context paths are projections of this structure.
+-/
 
 mutual
-  private def CompiledRegion.findPath? (origin : Fin d.regionCount)
-      (body : CompiledRegion d wires rels) (site : Fin d.regionCount) :
-      Option (List Nat) :=
-    if origin = site then some []
-    else
-      match body with
-      | .mk _ items _ =>
-          (items.findPath? site).map fun result => result.1 :: result.2
+  inductive CompiledRegionFocus (d : Diagram) :
+      {origin : Fin d.regionCount} -> {wires : Nat} -> {rels : RelCtx} ->
+        CompiledRegion d origin wires rels ->
+        (site : Fin d.regionCount) -> Type
+    | here (body : CompiledRegion d site wires rels) :
+        CompiledRegionFocus d body site
+    | child {origin site : Fin d.regionCount}
+        {totalWires localWires : Nat} {rels : RelCtx}
+        {items : CompiledItems d totalWires rels}
+        {split : RegionWireSplit wires totalWires localWires}
+        (nested : CompiledItemsFocus d items site) :
+        CompiledRegionFocus d (.mk localWires items split) site
 
-  private def CompiledItems.findPath? (items : CompiledItems d wires rels)
-      (site : Fin d.regionCount) : Option (Nat × List Nat) :=
-    match items with
-    | .nil => none
-    | .cons head tail =>
-        let nested? :=
-          match head with
-          | .node _ _ => none
-          | .cut childOrigin childBody =>
-              (childBody.findPath? childOrigin site).map fun path => (0, path)
-          | .bubble childOrigin _ childBody =>
-              (childBody.findPath? childOrigin site).map fun path => (0, path)
-        nested?.orElse fun _ =>
-          (tail.findPath? site).map fun result => (result.1 + 1, result.2)
+  inductive CompiledItemsFocus (d : Diagram) :
+      {wires : Nat} -> {rels : RelCtx} -> CompiledItems d wires rels ->
+        (site : Fin d.regionCount) -> Type
+    | cut {site childOrigin : Fin d.regionCount}
+        {body : CompiledRegion d childOrigin wires rels}
+        (suffix : CompiledItems d wires rels)
+        (nested : CompiledRegionFocus d body site) :
+        CompiledItemsFocus d (.cons (.cut childOrigin body) suffix) site
+    | bubble {site childOrigin : Fin d.regionCount} {arity : Nat}
+        {body : CompiledRegion d childOrigin wires (arity :: rels)}
+        (suffix : CompiledItems d wires rels)
+        (nested : CompiledRegionFocus d body site) :
+        CompiledItemsFocus d (.cons (.bubble childOrigin arity body) suffix) site
+    | tail (head : CompiledItem d wires rels)
+        {suffix : CompiledItems d wires rels}
+        (nested : CompiledItemsFocus d suffix site) :
+        CompiledItemsFocus d (.cons head suffix) site
 end
 
-private theorem compileOccurrencesWith?_findPath?_isSome_of_child
+mutual
+  def CompiledRegionFocus.route :
+      CompiledRegionFocus d body site -> List Nat
+    | .here _ => []
+    | .child nested => nested.index :: nested.childRoute
+
+  def CompiledItemsFocus.childRoute :
+      CompiledItemsFocus d items site -> List Nat
+    | .cut _ nested => nested.route
+    | .bubble _ nested => nested.route
+    | .tail _ nested => nested.childRoute
+
+  def CompiledItemsFocus.index :
+      CompiledItemsFocus d items site -> Nat
+    | .cut _ _ => 0
+    | .bubble _ _ => 0
+    | .tail _ nested => nested.index + 1
+end
+
+namespace CompiledItemsFocus
+
+def intrinsicFocus (focus : CompiledItemsFocus d items site) :
+    ItemSeq.Focus items.erase :=
+  match focus with
+  | .cut (body := body) suffix nested => {
+      before := .nil
+      item := .cut body.erase
+      after := suffix.erase
+      rebuild := rfl
+    }
+  | .bubble (arity := arity) (body := body) suffix nested => {
+      before := .nil
+      item := .bubble arity body.erase
+      after := suffix.erase
+      rebuild := rfl
+    }
+  | .tail head nested =>
+      let direct := nested.intrinsicFocus
+      {
+        before := .cons head.erase direct.before
+        item := direct.item
+        after := direct.after
+        rebuild := congrArg (ItemSeq.cons head.erase) direct.rebuild
+      }
+
+theorem intrinsicFocus_atIndex (focus : CompiledItemsFocus d items site) :
+    items.erase.focusAt? focus.index = some focus.intrinsicFocus :=
+  match focus with
+  | .cut _ _ => rfl
+  | .bubble _ _ => rfl
+  | .tail head nested => by
+      simp [CompiledItemsFocus.index, ItemSeq.focusAt?, intrinsicFocus,
+        intrinsicFocus_atIndex nested]
+
+end CompiledItemsFocus
+
+private def Region.ContextPath.prependItem
+    (head : Item totalWires rels)
+    {tail : ItemSeq totalWires rels}
+    (split : RegionWireSplit outerWires totalWires localWires)
+    (path : Region.ContextPath
+      (.mk localWires (tail.castWiresEq split.total_eq)) (index :: rest)) :
+    Region.ContextPath
+      (.mk localWires
+        ((ItemSeq.cons head tail).castWiresEq split.total_eq))
+      ((index + 1) :: rest) := by
+  obtain ⟨totalEq⟩ := split
+  subst totalWires
+  simp [ItemSeq.castWiresEq] at path ⊢
+  cases path with
+  | cut focus atIndex isCut nested =>
+      let lifted : ItemSeq.Focus
+          (ItemSeq.cons head tail) := {
+        before := .cons head focus.before
+        item := focus.item
+        after := focus.after
+        rebuild := by
+          simp only [ItemSeq.append]
+          exact congrArg (ItemSeq.cons head) focus.rebuild
+      }
+      exact .cut lifted (by
+        change (do
+          let inner ← tail.focusAt? index
+          pure {
+            before := .cons head inner.before
+            item := inner.item
+            after := inner.after
+            rebuild := congrArg (ItemSeq.cons head) inner.rebuild
+          }) = some lifted
+        rw [atIndex]
+        rfl) isCut nested
+  | bubble focus atIndex isBubble nested =>
+      let lifted : ItemSeq.Focus
+          (ItemSeq.cons head tail) := {
+        before := .cons head focus.before
+        item := focus.item
+        after := focus.after
+        rebuild := by
+          simp only [ItemSeq.append]
+          exact congrArg (ItemSeq.cons head) focus.rebuild
+      }
+      exact .bubble lifted (by
+        change (do
+          let inner ← tail.focusAt? index
+          pure {
+            before := .cons head inner.before
+            item := inner.item
+            after := inner.after
+            rebuild := congrArg (ItemSeq.cons head) inner.rebuild
+          }) = some lifted
+        rw [atIndex]
+        rfl) isBubble nested
+
+mutual
+  def CompiledRegionFocus.intrinsic
+      (focus : CompiledRegionFocus d body site) :
+      Region.ContextPath body.erase focus.route :=
+    match focus with
+    | .here body => .here body.erase
+    | .child (origin := origin) (split := split) nested =>
+        nested.intrinsic origin split
+
+  private def CompiledItemsFocus.intrinsic
+      {d : Diagram} {totalWires : Nat} {rels : RelCtx}
+      {items : CompiledItems d totalWires rels}
+      {site : Fin d.regionCount} :
+      (focus : CompiledItemsFocus d items site) ->
+      (origin : Fin d.regionCount) ->
+      {outerWires localWires : Nat} ->
+      (split : RegionWireSplit outerWires totalWires localWires) ->
+      Region.ContextPath
+        (CompiledRegion.erase
+          (CompiledRegion.mk (origin := origin) localWires items split))
+        (focus.index :: focus.childRoute)
+    | .cut suffix nested, origin, _, _, split =>
+        .cut
+          ((CompiledItemsFocus.cut suffix nested).intrinsicFocus.castWiresEq
+            split.total_eq)
+          (ItemSeq.focusAt?_castWiresEq split.total_eq
+            (CompiledItems.cons (.cut _ _) suffix).erase 0
+            (CompiledItemsFocus.cut suffix nested).intrinsicFocus rfl)
+          (by simp [CompiledItemsFocus.intrinsicFocus])
+          (nested.intrinsic.castWiresEq split.total_eq)
+    | .bubble suffix nested, origin, _, _, split =>
+        .bubble
+          ((CompiledItemsFocus.bubble suffix nested).intrinsicFocus.castWiresEq
+            split.total_eq)
+          (ItemSeq.focusAt?_castWiresEq split.total_eq
+            (CompiledItems.cons (.bubble _ _ _) suffix).erase 0
+            (CompiledItemsFocus.bubble suffix nested).intrinsicFocus rfl)
+          (by simp [CompiledItemsFocus.intrinsicFocus])
+          (nested.intrinsic.castWiresEq split.total_eq)
+    | .tail head nested, origin, _, _, split =>
+        Region.ContextPath.prependItem head.erase split
+          (nested.intrinsic origin split)
+end
+
+def CompiledRegionFocus.depth
+    (focus : CompiledRegionFocus d body site) : Nat := focus.route.length
+
+def CompiledRegionFocus.endpoint
+    (_focus : CompiledRegionFocus d body site) : Fin d.regionCount := site
+
+def CompiledRegionFocus.sourceOccurrence :
+    CompiledRegionFocus d body site ->
+      Option (LocalOccurrence d.regionCount d.nodeCount)
+  | .here _ => none
+  | .child _ => some (.child site)
+
+private theorem compileOccurrencesWith?_focus_of_child
     (recurse : ∀ {rels : RelCtx},
-      (region : Fin d.regionCount) →
-      (context : WireContext d) → BinderContext d rels →
-      Option (CompiledRegion d context.length rels))
+      (region : Fin d.regionCount) ->
+      (context : WireContext d) -> BinderContext d rels ->
+      Option (CompiledRegion d region context.length rels))
     (context : WireContext d) (binders : BinderContext d rels)
     (occurrences : List (LocalOccurrence d.regionCount d.nodeCount))
     {items : CompiledItems d context.length rels}
@@ -93,24 +228,26 @@ private theorem compileOccurrencesWith?_findPath?_isSome_of_child
     (child site : Fin d.regionCount)
     (member : LocalOccurrence.child child ∈ occurrences)
     (cutComplete : ∀ {parent : Fin d.regionCount}
-      {body : CompiledRegion d context.length rels},
-      d.regions child = .cut parent →
-      recurse child context binders = some body →
-      (body.findPath? child site).isSome)
+      {body : CompiledRegion d child context.length rels},
+      d.regions child = .cut parent ->
+      recurse child context binders = some body ->
+      Nonempty (CompiledRegionFocus d body site))
     (bubbleComplete : ∀ {parent : Fin d.regionCount} {arity : Nat}
-      {body : CompiledRegion d context.length (arity :: rels)},
-      d.regions child = .bubble parent arity →
-      recurse child context (binders.push child arity) = some body →
-      (body.findPath? child site).isSome) :
-    (items.findPath? site).isSome := by
+      {body : CompiledRegion d child context.length (arity :: rels)},
+      d.regions child = .bubble parent arity ->
+      recurse child context (binders.push child arity) = some body ->
+      Nonempty (CompiledRegionFocus d body site)) :
+    Nonempty (CompiledItemsFocus d items site) := by
   induction occurrences generalizing items with
   | nil => simp at member
   | cons occurrence tail ih =>
       simp only [compileOccurrencesWith?] at compiled
-      cases itemResult : compileOccurrenceWith? d recurse context binders occurrence with
+      cases itemResult : compileOccurrenceWith? d recurse context binders
+          occurrence with
       | none => simp [itemResult] at compiled
       | some item =>
-          cases tailResult : compileOccurrencesWith? d recurse context binders tail with
+          cases tailResult : compileOccurrencesWith? d recurse context binders
+              tail with
           | none => simp [itemResult, tailResult] at compiled
           | some rest =>
               simp [itemResult, tailResult] at compiled
@@ -123,50 +260,43 @@ private theorem compileOccurrencesWith?_findPath?_isSome_of_child
                 | cut parent =>
                     cases bodyResult : recurse child context binders with
                     | none =>
-                        simp [compileOccurrenceWith?, regionEq, bodyResult] at itemResult
+                        simp [compileOccurrenceWith?, regionEq, bodyResult]
+                          at itemResult
                     | some body =>
-                        simp [compileOccurrenceWith?, regionEq, bodyResult] at itemResult
+                        simp [compileOccurrenceWith?, regionEq, bodyResult]
+                          at itemResult
                         subst item
-                        obtain ⟨path, pathEq⟩ := Option.isSome_iff_exists.mp
-                          (cutComplete regionEq bodyResult)
-                        simp [CompiledItems.findPath?, pathEq]
+                        obtain ⟨nested⟩ := cutComplete regionEq bodyResult
+                        exact ⟨.cut rest nested⟩
                 | bubble parent arity =>
                     cases bodyResult : recurse child context
                         (binders.push child arity) with
                     | none =>
-                        simp [compileOccurrenceWith?, regionEq, bodyResult] at itemResult
+                        simp [compileOccurrenceWith?, regionEq, bodyResult]
+                          at itemResult
                     | some body =>
-                        simp [compileOccurrenceWith?, regionEq, bodyResult] at itemResult
+                        simp [compileOccurrenceWith?, regionEq, bodyResult]
+                          at itemResult
                         subst item
-                        obtain ⟨path, pathEq⟩ := Option.isSome_iff_exists.mp
-                          (bubbleComplete regionEq bodyResult)
-                        simp [CompiledItems.findPath?, pathEq]
-              · obtain ⟨result, resultEq⟩ := Option.isSome_iff_exists.mp
-                  (ih tailResult tailMember)
-                cases item with
-                | node => simp [CompiledItems.findPath?, resultEq]
-                | cut itemOrigin body =>
-                    cases nested : body.findPath? itemOrigin site <;>
-                      simp [CompiledItems.findPath?, nested, resultEq]
-                | bubble itemOrigin arity body =>
-                    cases nested : body.findPath? itemOrigin site <;>
-                      simp [CompiledItems.findPath?, nested, resultEq]
+                        obtain ⟨nested⟩ := bubbleComplete regionEq bodyResult
+                        exact ⟨.bubble rest nested⟩
+              · obtain ⟨nested⟩ := ih tailResult tailMember
+                exact ⟨.tail item nested⟩
 
-private theorem compileRegion?_findPath?_isSome
+private theorem compileRegion?_focus
     (hwf : d.WellFormed)
     {fuel : Nat} {origin site : Fin d.regionCount}
     {context : WireContext d} {binders : BinderContext d rels}
-    {body : CompiledRegion d context.length rels}
+    {body : CompiledRegion d origin context.length rels}
     (compiled : compileRegion? d fuel origin context binders = some body)
     (encloses : d.Encloses origin site) :
-    (body.findPath? origin site).isSome := by
+    Nonempty (CompiledRegionFocus d body site) := by
   induction fuel generalizing origin context rels binders body site with
   | zero => simp [compileRegion?] at compiled
   | succ fuel ih =>
       by_cases same : origin = site
       · subst site
-        cases body
-        simp [CompiledRegion.findPath?]
+        exact ⟨.here body⟩
       · obtain ⟨child, childParent, childEncloses⟩ :=
           exists_direct_child_enclosing hwf (Ne.symm same) encloses
         simp only [compileRegion?] at compiled
@@ -177,37 +307,24 @@ private theorem compileRegion?_findPath?_isSome
         | some items =>
             simp [extended, itemsResult] at compiled
             subst body
-            let split : RegionWireSplit context.length extended.length
-                (exactScopeWires d origin).length := {
-              total_eq := WireContext.length_extend context origin
-            }
-            have packageEq : finishRegion d context origin items =
-                .mk (exactScopeWires d origin).length items split := by
-              unfold finishRegion
-              apply congrArg (CompiledRegion.mk
-                (exactScopeWires d origin).length items)
-              exact Subsingleton.elim _ _
-            rw [packageEq]
-            rw [CompiledRegion.findPath?]
-            simp only [same, ↓reduceIte, Option.isSome_map]
-            exact compileOccurrencesWith?_findPath?_isSome_of_child
+            obtain ⟨nested⟩ := compileOccurrencesWith?_focus_of_child
               (compileRegion? d fuel) extended binders
               (localOccurrences d origin) itemsResult child site
               ((mem_localOccurrences_child d origin child).mpr childParent)
               (fun _ bodyResult => ih bodyResult childEncloses)
               (fun _ bodyResult => ih bodyResult childEncloses)
+            exact ⟨.child (origin := origin) nested⟩
 
-private theorem compileRoot?_findPath?_isSome
+private theorem compileRoot?_focus
     (hwf : d.WellFormed)
     (ambient locals : WireContext d)
-    {body : CompiledRegion d ambient.length []}
+    {body : CompiledRegion d d.root ambient.length []}
     (compiled : compileRoot? d ambient locals = some body)
     (site : Fin d.regionCount) :
-    (body.findPath? d.root site).isSome := by
+    Nonempty (CompiledRegionFocus d body site) := by
   by_cases same : d.root = site
   · subst site
-    cases body
-    simp [CompiledRegion.findPath?]
+    exact ⟨.here body⟩
   · obtain ⟨child, childParent, childEncloses⟩ :=
       exists_direct_child_enclosing hwf (Ne.symm same)
         (hwf.all_regions_reach_root site)
@@ -220,283 +337,47 @@ private theorem compileRoot?_findPath?_isSome
     | some items =>
         simp [rootWires, itemsResult] at compiled
         subst body
-        let split : RegionWireSplit ambient.length rootWires.length
-            locals.length := { total_eq := by simp [rootWires] }
-        have packageEq : finishRoot ambient locals items =
-            .mk locals.length items split := by
-          unfold finishRoot
-          apply congrArg (CompiledRegion.mk locals.length items)
-          exact Subsingleton.elim _ _
-        rw [packageEq]
-        rw [CompiledRegion.findPath?]
-        simp only [same, ↓reduceIte, Option.isSome_map]
-        exact compileOccurrencesWith?_findPath?_isSome_of_child
+        obtain ⟨nested⟩ := compileOccurrencesWith?_focus_of_child
           (compileRegion? d d.regionCount) rootWires BinderContext.empty
           (localOccurrences d d.root) itemsResult child site
           ((mem_localOccurrences_child d d.root child).mpr childParent)
           (fun _ bodyResult =>
-            compileRegion?_findPath?_isSome hwf bodyResult childEncloses)
+            compileRegion?_focus hwf bodyResult childEncloses)
           (fun _ bodyResult =>
-            compileRegion?_findPath?_isSome hwf bodyResult childEncloses)
-
-mutual
-  private theorem CompiledRegion.findPath?_sound
-      (body : CompiledRegion d wires rels)
-      (origin site : Fin d.regionCount) (path : List Nat)
-      (found : body.findPath? origin site = some path) :
-      Nonempty (CompiledPath d origin body site path) := by
-    by_cases equality : origin = site
-    · subst site
-      cases body with
-      | mk localWires items split =>
-          simp [CompiledRegion.findPath?] at found
-          subst path
-          exact ⟨CompiledPath.here origin (.mk localWires items split)⟩
-    · cases body with
-      | mk localWires items split =>
-          simp only [CompiledRegion.findPath?, equality, ↓reduceIte,
-            ] at found
-          cases itemResult : items.findPath? site with
-          | none => simp [itemResult] at found
-          | some result =>
-              obtain ⟨index, rest⟩ := result
-              simp [itemResult] at found
-              subst path
-              exact items.findPath?_sound localWires split origin site index rest
-                itemResult
-
-  private theorem CompiledItems.findPath?_sound
-      (items : CompiledItems d totalWires rels)
-      (localWires : Nat)
-      (split : RegionWireSplit outerWires totalWires localWires)
-      (origin site : Fin d.regionCount) (index : Nat) (rest : List Nat)
-      (found : items.findPath? site = some (index, rest)) :
-      Nonempty (CompiledPath d origin (.mk localWires items split) site
-        (index :: rest)) := by
-    cases items with
-    | nil => simp [CompiledItems.findPath?] at found
-    | cons head tail =>
-        cases head with
-        | node node item =>
-            simp only [CompiledItems.findPath?, Option.orElse_none,
-              ] at found
-            cases tailResult : tail.findPath? site with
-            | none => simp [tailResult] at found
-            | some result =>
-                obtain ⟨tailIndex, tailRest⟩ := result
-                simp [tailResult] at found
-                rw [← found.1, ← found.2]
-                obtain ⟨nested⟩ := tail.findPath?_sound localWires split origin
-                  site tailIndex tailRest tailResult
-                cases nested with
-                | cut direct inner =>
-                    exact ⟨CompiledPath.cut (CompiledCutAt.tail (.node node item)
-                      direct) inner⟩
-                | bubble direct inner =>
-                    exact ⟨CompiledPath.bubble (CompiledBubbleAt.tail
-                      (.node node item) direct) inner⟩
-        | cut childOrigin childBody =>
-            cases childResult : childBody.findPath? childOrigin site with
-            | some childPath =>
-                simp [CompiledItems.findPath?, childResult] at found
-                rw [← found.1, ← found.2]
-                obtain ⟨nested⟩ := childBody.findPath?_sound childOrigin site
-                  childPath childResult
-                exact ⟨CompiledPath.cut
-                  (CompiledCutAt.here childOrigin childBody tail) nested⟩
-            | none =>
-                simp only [CompiledItems.findPath?, childResult, Option.map_none,
-                  Option.orElse_none] at found
-                cases tailResult : tail.findPath? site with
-                | none => simp [tailResult] at found
-                | some result =>
-                    obtain ⟨tailIndex, tailRest⟩ := result
-                    simp [tailResult] at found
-                    rw [← found.1, ← found.2]
-                    obtain ⟨nested⟩ := tail.findPath?_sound localWires split
-                      origin site tailIndex tailRest tailResult
-                    cases nested with
-                    | cut direct inner =>
-                        exact ⟨CompiledPath.cut (CompiledCutAt.tail
-                          (.cut childOrigin childBody) direct) inner⟩
-                    | bubble direct inner =>
-                        exact ⟨CompiledPath.bubble (CompiledBubbleAt.tail
-                          (.cut childOrigin childBody) direct) inner⟩
-        | bubble childOrigin arity childBody =>
-            cases childResult : childBody.findPath? childOrigin site with
-            | some childPath =>
-                simp [CompiledItems.findPath?, childResult] at found
-                rw [← found.1, ← found.2]
-                obtain ⟨nested⟩ := childBody.findPath?_sound childOrigin site
-                  childPath childResult
-                exact ⟨CompiledPath.bubble
-                  (CompiledBubbleAt.here childOrigin arity childBody tail) nested⟩
-            | none =>
-                simp only [CompiledItems.findPath?, childResult, Option.map_none,
-                  Option.orElse_none] at found
-                cases tailResult : tail.findPath? site with
-                | none => simp [tailResult] at found
-                | some result =>
-                    obtain ⟨tailIndex, tailRest⟩ := result
-                    simp [tailResult] at found
-                    rw [← found.1, ← found.2]
-                    obtain ⟨nested⟩ := tail.findPath?_sound localWires split
-                      origin site tailIndex tailRest tailResult
-                    cases nested with
-                    | cut direct inner =>
-                        exact ⟨CompiledPath.cut (CompiledCutAt.tail
-                          (.bubble childOrigin arity childBody) direct) inner⟩
-                    | bubble direct inner =>
-                        exact ⟨CompiledPath.bubble (CompiledBubbleAt.tail
-                          (.bubble childOrigin arity childBody) direct) inner⟩
-end
-
-namespace CompiledCutAt
-
-def intrinsicFocus (focus : CompiledCutAt d items index origin body) :
-    ItemSeq.Focus items.erase :=
-  match focus with
-  | .here _ body suffix => {
-      before := .nil
-      item := .cut body.erase
-      after := suffix.erase
-      rebuild := rfl
-    }
-  | .tail head rest =>
-      let nested := rest.intrinsicFocus
-      {
-        before := .cons head.erase nested.before
-        item := nested.item
-        after := nested.after
-        rebuild := congrArg (ItemSeq.cons head.erase) nested.rebuild
-      }
-
-@[simp] theorem intrinsicFocus_item
-    (focus : CompiledCutAt d items index origin body) :
-    focus.intrinsicFocus.item = .cut body.erase := by
-  induction focus with
-  | here => rfl
-  | tail _ _ ih => exact ih
-
-theorem intrinsicFocus_atIndex
-    (focus : CompiledCutAt d items index origin body) :
-    items.erase.focusAt? index = some focus.intrinsicFocus := by
-  induction focus with
-  | here => rfl
-  | tail head rest ih => simp [ItemSeq.focusAt?, intrinsicFocus, ih]
-
-end CompiledCutAt
-
-namespace CompiledBubbleAt
-
-def intrinsicFocus (focus : CompiledBubbleAt d items index origin arity body) :
-    ItemSeq.Focus items.erase :=
-  match focus with
-  | .here _ arity body suffix => {
-      before := .nil
-      item := .bubble arity body.erase
-      after := suffix.erase
-      rebuild := rfl
-    }
-  | .tail head rest =>
-      let nested := rest.intrinsicFocus
-      {
-        before := .cons head.erase nested.before
-        item := nested.item
-        after := nested.after
-        rebuild := congrArg (ItemSeq.cons head.erase) nested.rebuild
-      }
-
-@[simp] theorem intrinsicFocus_item
-    (focus : CompiledBubbleAt d items index origin arity body) :
-    focus.intrinsicFocus.item = .bubble arity body.erase := by
-  induction focus with
-  | here => rfl
-  | tail _ _ ih => exact ih
-
-theorem intrinsicFocus_atIndex
-    (focus : CompiledBubbleAt d items index origin arity body) :
-    items.erase.focusAt? index = some focus.intrinsicFocus := by
-  induction focus with
-  | here => rfl
-  | tail head rest ih => simp [ItemSeq.focusAt?, intrinsicFocus, ih]
-
-end CompiledBubbleAt
-
-namespace CompiledPath
-
-def intrinsic : CompiledPath d origin body site path ->
-    Region.ContextPath body.erase path
-  | .here _ _ => .here _
-  | .cut (split := split) direct nested =>
-      .cut (direct.intrinsicFocus.castWiresEq split.total_eq)
-        (ItemSeq.focusAt?_castWiresEq split.total_eq _ _ _
-          direct.intrinsicFocus_atIndex)
-        (by simp)
-        (nested.intrinsic.castWiresEq split.total_eq)
-  | .bubble (split := split) direct nested =>
-      .bubble (direct.intrinsicFocus.castWiresEq split.total_eq)
-        (ItemSeq.focusAt?_castWiresEq split.total_eq _ _ _
-          direct.intrinsicFocus_atIndex)
-        (by simp)
-        (nested.intrinsic.castWiresEq split.total_eq)
-
-def depth (_focus : CompiledPath d origin body site path) : Nat := path.length
-
-def endpoint (_focus : CompiledPath d origin body site path) :
-    Fin d.regionCount := site
-
-def sourceOccurrence :
-    CompiledPath d origin body site path ->
-      Option (LocalOccurrence d.regionCount d.nodeCount)
-  | .here _ _ => none
-  | .cut _ nested => some (.child nested.endpoint)
-  | .bubble _ nested => some (.child nested.endpoint)
-
-end CompiledPath
+            compileRegion?_focus hwf bodyResult childEncloses)
+        exact ⟨.child (origin := d.root) nested⟩
 
 namespace CheckedOpen
 
-private theorem compilation_findPath?_isSome
+private theorem compilation_focus
     (checked : CheckedOpen)
     (site : Fin checked.val.diagram.regionCount) :
-    (checked.compilation.findPath? checked.val.diagram.root site).isSome := by
+    Nonempty (CompiledRegionFocus checked.val.diagram
+      checked.compilation site) := by
   obtain ⟨body, compiled, compilationEq, _⟩ :=
     checked.elaborate_body_computation
-  rw [compilationEq]
-  exact compileRoot?_findPath?_isSome
-    checked.property.diagram_well_formed checked.val.exposedWires
-      checked.val.hiddenWires compiled site
+  subst body
+  exact compileRoot?_focus checked.property.diagram_well_formed
+    checked.val.exposedWires checked.val.hiddenWires compiled site
 
 end CheckedOpen
 
 structure CompiledSite (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) where
-  focus : (path : List Nat) ×'
-    CompiledPath source.checked.val.diagram source.checked.val.diagram.root
-      source.checked.compilation site path
+  focus : CompiledRegionFocus source.checked.val.diagram
+    source.checked.compilation site
 
 namespace CompiledSite
 
 noncomputable def ofSource (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
-    CompiledSite source site := by
-  let pathIsSome := CheckedOpen.compilation_findPath?_isSome source.checked site
-  let path :=
-    (source.checked.compilation.findPath? source.checked.val.diagram.root site).get
-      pathIsSome
-  have pathSpec : source.checked.compilation.findPath?
-      source.checked.val.diagram.root site = some path :=
-    (Option.some_get pathIsSome).symm
-  exact {
-    focus := ⟨path, Classical.choice
-      (source.checked.compilation.findPath?_sound
-        source.checked.val.diagram.root site path pathSpec)⟩
-  }
+    CompiledSite source site where
+  focus := Classical.choice
+    (CheckedOpen.compilation_focus source.checked site)
 
 def intrinsic (compiled : CompiledSite source site) :
-    Region.ContextPath source.checked.elaborate.body compiled.focus.1 :=
-  compiled.focus.2.intrinsic
+    Region.ContextPath source.checked.elaborate.body compiled.focus.route :=
+  compiled.focus.intrinsic
 
 def context (compiled : CompiledSite source site) :
     DiagramContext source.checked.elaborate.externalClasses
@@ -515,7 +396,7 @@ def cutDepth (compiled : CompiledSite source site) : Nat :=
 def sourceOccurrence (compiled : CompiledSite source site) :
     Option (LocalOccurrence source.checked.val.diagram.regionCount
       source.checked.val.diagram.nodeCount) :=
-  compiled.focus.2.sourceOccurrence
+  compiled.focus.sourceOccurrence
 
 theorem rebuild (compiled : CompiledSite source site) :
     compiled.intrinsic.toFocus.context.fill compiled.intrinsic.toFocus.body =
