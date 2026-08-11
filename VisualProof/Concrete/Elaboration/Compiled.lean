@@ -48,6 +48,166 @@ mutual
         CompiledItemsFocus d (.cons head suffix) site
 end
 
+/-- One successful invocation of the sole source compiler at a focused
+annotated body.  This is an endpoint frame, never an ancestor trace. -/
+inductive RegionCallFrame (d : Diagram) :
+    {origin : Fin d.regionCount} → {wires : Nat} → {rels : RelCtx} →
+      CompiledRegion d origin wires rels → Type
+  | root (ambient locals : WireContext d)
+      {body : CompiledRegion d d.root ambient.length []}
+      (compiled : compileRoot? d ambient locals = some body) :
+      RegionCallFrame d body
+  | nested (fuel : Nat) (origin : Fin d.regionCount)
+      (context : WireContext d) (binders : BinderContext d rels)
+      {body : CompiledRegion d origin context.length rels}
+      (compiled : compileRegion? d fuel origin context binders = some body) :
+      RegionCallFrame d body
+
+/-- The hidden indices and annotated body at the endpoint of one focused
+compiler call. -/
+abbrev FocusedRegionCallFrame (d : Diagram)
+    (site : Fin d.regionCount) :=
+  Σ wires, Σ rels, Σ body : CompiledRegion d site wires rels,
+    RegionCallFrame d body
+
+mutual
+  private noncomputable def CompiledRegionFocus.deriveRootCallFrame
+      (ambient locals : WireContext d)
+      {body : CompiledRegion d d.root ambient.length []}
+      (focus : CompiledRegionFocus d body site)
+      (compiled : compileRoot? d ambient locals = some body) :
+      FocusedRegionCallFrame d site := by
+    let endpoint := RegionCallFrame.root ambient locals compiled
+    simp only [compileRoot?] at compiled
+    let rootWires := ambient ++ locals
+    cases itemsResult : compileOccurrencesWith? d
+        (compileRegion? d d.regionCount) rootWires BinderContext.empty
+        (localOccurrences d d.root) with
+    | none => simp [rootWires, itemsResult] at compiled
+    | some items =>
+        simp [rootWires, itemsResult] at compiled
+        cases compiled
+        cases focus with
+        | here body => exact ⟨_, _, _, endpoint⟩
+        | child nested =>
+            exact CompiledItemsFocus.deriveCallFrame d.regionCount rootWires
+              BinderContext.empty (localOccurrences d d.root) nested itemsResult
+
+  private noncomputable def CompiledRegionFocus.deriveNestedCallFrame
+      (fuel : Nat) (origin : Fin d.regionCount) (context : WireContext d)
+      (binders : BinderContext d rels)
+      {body : CompiledRegion d origin context.length rels}
+      (focus : CompiledRegionFocus d body site)
+      (compiled : compileRegion? d fuel origin context binders = some body) :
+      FocusedRegionCallFrame d site := by
+    let endpoint := RegionCallFrame.nested fuel origin context binders compiled
+    cases fuel with
+    | zero => simp [compileRegion?] at compiled
+    | succ fuel =>
+        simp only [compileRegion?] at compiled
+        let extended := context.extend origin
+        cases itemsResult : compileOccurrencesWith? d
+            (compileRegion? d fuel) extended binders
+            (localOccurrences d origin) with
+        | none => simp [extended, itemsResult] at compiled
+        | some items =>
+            simp [extended, itemsResult] at compiled
+            cases compiled
+            cases focus with
+            | here body => exact ⟨_, _, _, endpoint⟩
+            | child nested =>
+                exact CompiledItemsFocus.deriveCallFrame fuel extended binders
+                  (localOccurrences d origin) nested itemsResult
+
+  private noncomputable def CompiledItemsFocus.deriveCallFrame
+      (fuel : Nat) (context : WireContext d)
+      (binders : BinderContext d rels)
+      (occurrences : List (LocalOccurrence d.regionCount d.nodeCount))
+      {items : CompiledItems d context.length rels}
+      (focus : CompiledItemsFocus d items site)
+      (compiled : compileOccurrencesWith? d (compileRegion? d fuel)
+        context binders occurrences = some items) :
+      FocusedRegionCallFrame d site := by
+    cases occurrences with
+    | nil =>
+        simp only [compileOccurrencesWith?] at compiled
+        cases compiled
+        cases focus
+    | cons occurrence tail =>
+        simp only [compileOccurrencesWith?] at compiled
+        cases itemResult : compileOccurrenceWith? d (compileRegion? d fuel)
+            context binders occurrence with
+        | none => simp [itemResult] at compiled
+        | some item =>
+            cases tailResult : compileOccurrencesWith? d
+                (compileRegion? d fuel) context binders tail with
+            | none => simp [itemResult, tailResult] at compiled
+            | some suffix =>
+                simp [itemResult, tailResult] at compiled
+                cases compiled
+                cases focus with
+                | tail head nested =>
+                    exact CompiledItemsFocus.deriveCallFrame fuel context
+                      binders tail nested tailResult
+                | cut suffix nested =>
+                    rename_i childOrigin childBody
+                    have occurrenceEq : occurrence = .child childOrigin :=
+                      (compileOccurrenceWith?_origin
+                        (recurse := compileRegion? d fuel) itemResult).symm
+                    subst occurrence
+                    simp only [compileOccurrenceWith?] at itemResult
+                    cases regionEq : d.regions childOrigin with
+                    | sheet =>
+                        simp [regionEq] at itemResult
+                    | cut parent =>
+                        cases bodyResult : compileRegion? d fuel childOrigin
+                            context binders with
+                        | none =>
+                            simp [regionEq, bodyResult] at itemResult
+                        | some produced =>
+                            simp [regionEq, bodyResult] at itemResult
+                            cases itemResult
+                            exact CompiledRegionFocus.deriveNestedCallFrame fuel
+                              childOrigin context binders nested bodyResult
+                    | bubble parent arity =>
+                        cases bodyResult : compileRegion? d fuel childOrigin
+                            context (binders.push childOrigin arity) with
+                        | none =>
+                            simp [regionEq, bodyResult] at itemResult
+                        | some produced =>
+                            simp [regionEq, bodyResult] at itemResult
+                | bubble suffix nested =>
+                    rename_i childOrigin childArity childBody
+                    have occurrenceEq : occurrence = .child childOrigin :=
+                      (compileOccurrenceWith?_origin
+                        (recurse := compileRegion? d fuel) itemResult).symm
+                    subst occurrence
+                    simp only [compileOccurrenceWith?] at itemResult
+                    cases regionEq : d.regions childOrigin with
+                    | sheet =>
+                        simp [regionEq] at itemResult
+                    | cut parent =>
+                        cases bodyResult : compileRegion? d fuel childOrigin
+                            context binders with
+                        | none =>
+                            simp [regionEq, bodyResult] at itemResult
+                        | some produced =>
+                            simp [regionEq, bodyResult] at itemResult
+                    | bubble parent arity =>
+                        cases bodyResult : compileRegion? d fuel childOrigin
+                            context (binders.push childOrigin arity) with
+                        | none =>
+                            simp [regionEq, bodyResult] at itemResult
+                        | some produced =>
+                            simp [regionEq, bodyResult] at itemResult
+                            rcases itemResult with ⟨rfl, bodyEq⟩
+                            cases bodyEq
+                            exact CompiledRegionFocus.deriveNestedCallFrame fuel
+                              childOrigin context
+                              (binders.push childOrigin arity) nested
+                              bodyResult
+end
+
 /-- The annotated direct items at one compiled region.  Wire and relation
 indices are existential projections of the sole compiler tree. -/
 structure CompiledRegionItems (d : Diagram)
@@ -591,6 +751,14 @@ noncomputable def ofSource (source : State arity)
     CompiledSite source site where
   focus := Classical.choice
     (CheckedOpen.compilation_focus source.checked site)
+
+/-- Recover the one actual compiler invocation whose annotated result is the
+endpoint of the stored source focus. -/
+noncomputable def callFrame (compiled : CompiledSite source site) :
+    FocusedRegionCallFrame source.checked.val.diagram site :=
+  CompiledRegionFocus.deriveRootCallFrame
+    source.checked.val.exposedWires source.checked.val.hiddenWires
+    compiled.focus (CheckedOpen.compilation_computation source.checked)
 
 def directItems (compiled : CompiledSite source site) :
     CompiledRegionItems source.checked.val.diagram site :=

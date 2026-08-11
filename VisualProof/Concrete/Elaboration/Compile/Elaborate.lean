@@ -158,6 +158,16 @@ theorem elaborate_body_computation
   · simp [compilation, hbody]
   · simp [elaborate, compilation, hbody]
 
+/-- The canonical annotated open compilation is returned by the sole root
+compiler call that defines it. -/
+theorem compilation_computation (checked : CheckedOpen) :
+    compileRoot? checked.val.diagram checked.val.exposedWires
+      checked.val.hiddenWires = some checked.compilation := by
+  obtain ⟨body, compiled, compilationEq, _⟩ :=
+    checked.elaborate_body_computation
+  rw [compilationEq]
+  exact compiled
+
 end CheckedOpen
 
 private theorem checked_asOpen_compileRoot_eq
