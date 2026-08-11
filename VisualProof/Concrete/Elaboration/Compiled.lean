@@ -1,5 +1,7 @@
 import VisualProof.Concrete.Elaboration.Compile
+import VisualProof.Concrete.Elaboration.Compile.Tree
 import VisualProof.Concrete.State
+import VisualProof.Concrete.Subgraph.Selection
 
 namespace VisualProof.Concrete.Elaboration
 
@@ -44,6 +46,214 @@ mutual
         {suffix : CompiledItems d wires rels}
         (nested : CompiledItemsFocus d suffix site) :
         CompiledItemsFocus d (.cons head suffix) site
+end
+
+/-- The annotated direct items at one compiled region.  Wire and relation
+indices are existential projections of the sole compiler tree. -/
+structure CompiledRegionItems (d : Diagram)
+    (origin : Fin d.regionCount) where
+  wires : Nat
+  rels : RelCtx
+  items : CompiledItems d wires rels
+
+def CompiledRegion.directItems
+    (body : CompiledRegion d origin wires rels) :
+    CompiledRegionItems d origin :=
+  match body with
+  | .mk _ items _ => ⟨_, _, items⟩
+
+mutual
+  def CompiledRegionFocus.focusedItems
+      (focus : CompiledRegionFocus d body site) :
+      CompiledRegionItems d site :=
+    match focus with
+    | .here body => body.directItems
+    | .child nested => nested.focusedItems
+
+  def CompiledItemsFocus.focusedItems
+      (focus : CompiledItemsFocus d items site) :
+      CompiledRegionItems d site :=
+    match focus with
+    | .cut _ nested => nested.focusedItems
+    | .bubble _ nested => nested.focusedItems
+    | .tail _ nested => nested.focusedItems
+end
+
+mutual
+  private def CompiledRegion.originsValid
+      (body : CompiledRegion d origin wires rels) : Prop :=
+    match body with
+    | .mk _ items _ =>
+        items.origins = localOccurrences d origin ∧ items.originsValid
+
+  private def CompiledItem.originsValid
+      (item : CompiledItem d wires rels) : Prop :=
+    match item with
+    | .node _ _ => True
+    | .cut _ body => body.originsValid
+    | .bubble _ _ body => body.originsValid
+
+  private def CompiledItems.originsValid
+      (items : CompiledItems d wires rels) : Prop :=
+    match items with
+    | .nil => True
+    | .cons head tail => head.originsValid ∧ tail.originsValid
+end
+
+private theorem compileNode?_originsValid
+    {item : CompiledItem d context.length rels}
+    (compiled : compileNode? d context binders node = some item) :
+    item.originsValid := by
+  cases hnode : d.nodes node with
+  | atom region binder =>
+      simp only [compileNode?, hnode] at compiled
+      cases hrelation : binders binder with
+      | none => simp [hrelation] at compiled
+      | some relation =>
+          cases relation with
+          | mk arity relation =>
+              cases harguments : resolvePorts? d context node arity with
+              | none => simp [hrelation, harguments] at compiled
+              | some arguments =>
+                  simp [hrelation, harguments] at compiled
+                  subst item
+                  trivial
+  | identity region arity =>
+      simp only [compileNode?, hnode] at compiled
+      cases harguments : resolvePorts? d context node arity with
+      | none => simp [harguments] at compiled
+      | some arguments =>
+          simp [harguments] at compiled
+          subst item
+          trivial
+
+private theorem compileOccurrenceWith?_originsValid
+    (recurse : ∀ {rels : RelCtx},
+      (region : Fin d.regionCount) →
+      (context : WireContext d) → BinderContext d rels →
+      Option (CompiledRegion d region context.length rels))
+    (recurseValid : ∀ {rels : RelCtx}
+      {region : Fin d.regionCount} {context : WireContext d}
+      {binders : BinderContext d rels}
+      {body : CompiledRegion d region context.length rels},
+      recurse region context binders = some body → body.originsValid)
+    {item : CompiledItem d context.length rels}
+    (compiled : compileOccurrenceWith? d recurse context binders occurrence =
+      some item) :
+    item.originsValid := by
+  cases occurrence with
+  | node node =>
+      exact compileNode?_originsValid (by
+        simpa [compileOccurrenceWith?] using compiled)
+  | child child =>
+      cases hregion : d.regions child with
+      | sheet => simp [compileOccurrenceWith?, hregion] at compiled
+      | cut parent =>
+          cases hbody : recurse child context binders with
+          | none => simp [compileOccurrenceWith?, hregion, hbody] at compiled
+          | some body =>
+              simp [compileOccurrenceWith?, hregion, hbody] at compiled
+              subst item
+              exact recurseValid hbody
+      | bubble parent arity =>
+          cases hbody : recurse child context (binders.push child arity) with
+          | none => simp [compileOccurrenceWith?, hregion, hbody] at compiled
+          | some body =>
+              simp [compileOccurrenceWith?, hregion, hbody] at compiled
+              subst item
+              exact recurseValid hbody
+
+private theorem compileOccurrencesWith?_originsValid
+    (recurse : ∀ {rels : RelCtx},
+      (region : Fin d.regionCount) →
+      (context : WireContext d) → BinderContext d rels →
+      Option (CompiledRegion d region context.length rels))
+    (recurseValid : ∀ {rels : RelCtx}
+      {region : Fin d.regionCount} {context : WireContext d}
+      {binders : BinderContext d rels}
+      {body : CompiledRegion d region context.length rels},
+      recurse region context binders = some body → body.originsValid)
+    {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
+    {items : CompiledItems d context.length rels}
+    (compiled : compileOccurrencesWith? d recurse context binders occurrences =
+      some items) :
+    items.originsValid := by
+  induction occurrences generalizing items with
+  | nil =>
+      simp [compileOccurrencesWith?] at compiled
+      subst items
+      trivial
+  | cons occurrence tail ih =>
+      simp only [compileOccurrencesWith?] at compiled
+      cases hitem : compileOccurrenceWith? d recurse context binders occurrence with
+      | none => simp [hitem] at compiled
+      | some item =>
+          cases htail : compileOccurrencesWith? d recurse context binders tail with
+          | none => simp [hitem, htail] at compiled
+          | some rest =>
+              simp [hitem, htail] at compiled
+              subst items
+              exact ⟨compileOccurrenceWith?_originsValid recurse recurseValid
+                hitem, ih htail⟩
+
+private theorem compileRegion?_originsValid
+    {body : CompiledRegion d origin context.length rels}
+    (compiled : compileRegion? d fuel origin context binders = some body) :
+    body.originsValid := by
+  induction fuel generalizing origin context rels binders body with
+  | zero => simp [compileRegion?] at compiled
+  | succ fuel ih =>
+      simp only [compileRegion?] at compiled
+      let extended := context.extend origin
+      cases hitems : compileOccurrencesWith? d (compileRegion? d fuel)
+          extended binders (localOccurrences d origin) with
+      | none => simp [extended, hitems] at compiled
+      | some items =>
+          simp [extended, hitems] at compiled
+          subst body
+          exact ⟨compileOccurrencesWith?_origins
+              (compileRegion? d fuel) hitems,
+            compileOccurrencesWith?_originsValid (compileRegion? d fuel)
+              (fun equation => ih equation) hitems⟩
+
+private theorem compileRoot?_originsValid
+    {body : CompiledRegion d d.root ambient.length []}
+    (compiled : compileRoot? d ambient locals = some body) :
+    body.originsValid := by
+  simp only [compileRoot?] at compiled
+  let rootWires := ambient ++ locals
+  cases hitems : compileOccurrencesWith? d
+      (compileRegion? d d.regionCount) rootWires BinderContext.empty
+      (localOccurrences d d.root) with
+  | none => simp [rootWires, hitems] at compiled
+  | some items =>
+      simp [rootWires, hitems] at compiled
+      subst body
+      exact ⟨compileOccurrencesWith?_origins
+          (compileRegion? d d.regionCount) hitems,
+        compileOccurrencesWith?_originsValid
+          (compileRegion? d d.regionCount)
+          (fun equation => compileRegion?_originsValid equation) hitems⟩
+
+mutual
+  private theorem CompiledRegionFocus.focusedItems_origins
+      (focus : CompiledRegionFocus d body site)
+      (valid : body.originsValid) :
+      focus.focusedItems.items.origins = localOccurrences d site := by
+    cases focus with
+    | here body =>
+        cases body
+        exact valid.1
+    | child nested => exact nested.focusedItems_origins valid.2
+
+  private theorem CompiledItemsFocus.focusedItems_origins
+      (focus : CompiledItemsFocus d items site)
+      (valid : items.originsValid) :
+      focus.focusedItems.items.origins = localOccurrences d site := by
+    cases focus with
+    | cut suffix nested => exact nested.focusedItems_origins valid.1
+    | bubble suffix nested => exact nested.focusedItems_origins valid.1
+    | tail head nested => exact nested.focusedItems_origins valid.2
 end
 
 mutual
@@ -360,6 +570,13 @@ private theorem compilation_focus
   exact compileRoot?_focus checked.property.diagram_well_formed
     checked.val.exposedWires checked.val.hiddenWires compiled site
 
+private theorem compilation_originsValid (checked : CheckedOpen) :
+    checked.compilation.originsValid := by
+  obtain ⟨body, compiled, compilationEq, _⟩ :=
+    checked.elaborate_body_computation
+  subst body
+  exact compileRoot?_originsValid compiled
+
 end CheckedOpen
 
 structure CompiledSite (source : State arity)
@@ -374,6 +591,16 @@ noncomputable def ofSource (source : State arity)
     CompiledSite source site where
   focus := Classical.choice
     (CheckedOpen.compilation_focus source.checked site)
+
+def directItems (compiled : CompiledSite source site) :
+    CompiledRegionItems source.checked.val.diagram site :=
+  compiled.focus.focusedItems
+
+theorem directItems_origins (compiled : CompiledSite source site) :
+    compiled.directItems.items.origins =
+      localOccurrences source.checked.val.diagram site :=
+  compiled.focus.focusedItems_origins
+    (CheckedOpen.compilation_originsValid source.checked)
 
 def intrinsic (compiled : CompiledSite source site) :
     Region.ContextPath source.checked.elaborate.body compiled.focus.route :=
@@ -404,5 +631,206 @@ theorem rebuild (compiled : CompiledSite source site) :
   compiled.intrinsic.toFocus.rebuild
 
 end CompiledSite
+
+/-- Classify exactly the direct anchor occurrences named by a checked
+selection.  A selected child root remains one atomic occurrence here. -/
+def checkedSelectionAnchorClassifier (selection : CheckedSelection d) :
+    LocalOccurrence d.regionCount d.nodeCount → Bool
+  | .node node => decide (node ∈ selection.val.directNodes)
+  | .child child => decide (child ∈ selection.val.childRoots)
+
+@[simp] theorem checkedSelectionAnchorClassifier_node
+    (selection : CheckedSelection d)
+    (node : Fin d.nodeCount) :
+    checkedSelectionAnchorClassifier selection (.node node) =
+      decide (node ∈ selection.val.directNodes) := rfl
+
+@[simp] theorem checkedSelectionAnchorClassifier_child
+    (selection : CheckedSelection d)
+    (child : Fin d.regionCount) :
+    checkedSelectionAnchorClassifier selection (.child child) =
+      decide (child ∈ selection.val.childRoots) := rfl
+
+/-- Source-only selection compilation.  Every partition and intrinsic braid
+is derived from this one annotated anchor zipper. -/
+structure CompiledSelection (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) where
+  anchor : CompiledSite source selection.val.anchor
+
+namespace CompiledSelection
+
+noncomputable def ofSource (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram) :
+    CompiledSelection source selection where
+  anchor := CompiledSite.ofSource source selection.val.anchor
+
+def anchorItems (compiled : CompiledSelection source selection) :
+    CompiledRegionItems source.checked.val.diagram selection.val.anchor :=
+  compiled.anchor.directItems
+
+def partition (compiled : CompiledSelection source selection) :
+    CompiledItems.Partition compiled.anchorItems.items :=
+  compiled.anchorItems.items.partition
+    (checkedSelectionAnchorClassifier selection)
+
+def retained (compiled : CompiledSelection source selection) :
+    CompiledItems source.checked.val.diagram compiled.anchorItems.wires
+      compiled.anchorItems.rels :=
+  compiled.partition.retained
+
+def material (compiled : CompiledSelection source selection) :
+    CompiledItems source.checked.val.diagram compiled.anchorItems.wires
+      compiled.anchorItems.rels :=
+  compiled.partition.material
+
+def intrinsic (compiled : CompiledSelection source selection) :
+    ItemSeq compiled.anchorItems.wires compiled.anchorItems.rels :=
+  compiled.anchorItems.items.erase
+
+def retainedIntrinsic (compiled : CompiledSelection source selection) :
+    ItemSeq compiled.anchorItems.wires compiled.anchorItems.rels :=
+  compiled.retained.erase
+
+def materialIntrinsic (compiled : CompiledSelection source selection) :
+    ItemSeq compiled.anchorItems.wires compiled.anchorItems.rels :=
+  compiled.material.erase
+
+/-- The source-derived intrinsic factorization.  Its position equivalence is
+the canonical stable-partition braid, never caller supplied. -/
+noncomputable def factorization
+    (compiled : CompiledSelection source selection) :
+    ItemSeqIso (FiniteEquiv.refl (Fin compiled.anchorItems.wires))
+      compiled.anchorItems.rels compiled.intrinsic
+      (compiled.retainedIntrinsic.append compiled.materialIntrinsic) := by
+  simpa [intrinsic, retainedIntrinsic, materialIntrinsic, retained, material,
+    partition, CompiledItems.erase_append] using
+      CompiledItems.partitionFactorization
+        (checkedSelectionAnchorClassifier selection)
+        compiled.anchorItems.items
+
+noncomputable def positionMap
+    (compiled : CompiledSelection source selection) :
+    FiniteEquiv (Fin compiled.intrinsic.length)
+      (Fin (compiled.retainedIntrinsic.append
+        compiled.materialIntrinsic).length) :=
+  match compiled.factorization with
+  | .permute positions _ => positions
+
+theorem anchor_origins (compiled : CompiledSelection source selection) :
+    compiled.anchorItems.items.origins =
+      localOccurrences source.checked.val.diagram selection.val.anchor :=
+  compiled.anchor.directItems_origins
+
+theorem retained_origins_eq_unselected
+    (compiled : CompiledSelection source selection) :
+    compiled.retained.origins =
+      (localOccurrences source.checked.val.diagram selection.val.anchor).filter
+        fun occurrence =>
+          !checkedSelectionAnchorClassifier selection occurrence := by
+  change (compiled.anchorItems.items.partition
+    (checkedSelectionAnchorClassifier selection)).retained.origins = _
+  rw [CompiledItems.partition_retained_origins, compiled.anchor_origins]
+
+theorem material_origins_eq_selected
+    (compiled : CompiledSelection source selection) :
+    compiled.material.origins =
+      (localOccurrences source.checked.val.diagram selection.val.anchor).filter
+        (checkedSelectionAnchorClassifier selection) := by
+  change (compiled.anchorItems.items.partition
+    (checkedSelectionAnchorClassifier selection)).material.origins = _
+  rw [CompiledItems.partition_material_origins, compiled.anchor_origins]
+
+theorem mem_retained_origins
+    (compiled : CompiledSelection source selection)
+    (occurrence : LocalOccurrence source.checked.val.diagram.regionCount
+      source.checked.val.diagram.nodeCount) :
+    occurrence ∈ compiled.retained.origins ↔
+      checkedSelectionAnchorClassifier selection occurrence = false ∧
+        occurrence ∈ localOccurrences source.checked.val.diagram
+          selection.val.anchor := by
+  rw [compiled.retained_origins_eq_unselected]
+  simp [and_comm]
+
+theorem mem_material_origins
+    (compiled : CompiledSelection source selection)
+    (occurrence : LocalOccurrence source.checked.val.diagram.regionCount
+      source.checked.val.diagram.nodeCount) :
+    occurrence ∈ compiled.material.origins ↔
+      checkedSelectionAnchorClassifier selection occurrence = true ∧
+        occurrence ∈ localOccurrences source.checked.val.diagram
+          selection.val.anchor := by
+  rw [compiled.material_origins_eq_selected]
+  simp [and_comm]
+
+theorem retained_stable (compiled : CompiledSelection source selection) :
+    List.Sublist compiled.retained.origins
+      compiled.anchorItems.items.origins :=
+  CompiledItems.partition_retained_stable
+    (checkedSelectionAnchorClassifier selection)
+    compiled.anchorItems.items
+
+theorem material_stable (compiled : CompiledSelection source selection) :
+    List.Sublist compiled.material.origins
+      compiled.anchorItems.items.origins :=
+  CompiledItems.partition_material_stable
+    (checkedSelectionAnchorClassifier selection)
+    compiled.anchorItems.items
+
+theorem origins_factorization
+    (compiled : CompiledSelection source selection) :
+    compiled.anchorItems.items.origins.Perm
+      (compiled.retained.origins ++ compiled.material.origins) :=
+  CompiledItems.partition_origins_perm
+    (checkedSelectionAnchorClassifier selection)
+    compiled.anchorItems.items
+
+theorem classified_once (compiled : CompiledSelection source selection) :
+    (compiled.retained.origins ++ compiled.material.origins).Nodup := by
+  have originalNodup : compiled.anchorItems.items.origins.Nodup := by
+    rw [compiled.anchor_origins]
+    exact localOccurrences_nodup source.checked.val.diagram selection.val.anchor
+  exact compiled.origins_factorization.nodup originalNodup
+
+theorem retained_material_disjoint
+    (compiled : CompiledSelection source selection) :
+    ∀ occurrence, occurrence ∈ compiled.retained.origins →
+      occurrence ∉ compiled.material.origins := by
+  intro occurrence retained material
+  exact (List.nodup_append.mp compiled.classified_once).2.2
+    occurrence retained occurrence material rfl
+
+theorem node_mem_material_origins
+    (compiled : CompiledSelection source selection)
+    (node : Fin source.checked.val.diagram.nodeCount) :
+    LocalOccurrence.node node ∈ compiled.material.origins ↔
+      node ∈ selection.val.directNodes := by
+  rw [compiled.mem_material_origins]
+  constructor
+  · intro classified
+    simpa using classified.1
+  · intro selected
+    constructor
+    · simpa using selected
+    · exact (mem_localOccurrences_node source.checked.val.diagram
+        selection.val.anchor node).2
+          (selection.property.directNodes_at_anchor node selected)
+
+theorem child_mem_material_origins
+    (compiled : CompiledSelection source selection)
+    (child : Fin source.checked.val.diagram.regionCount) :
+    LocalOccurrence.child child ∈ compiled.material.origins ↔
+      child ∈ selection.val.childRoots := by
+  rw [compiled.mem_material_origins]
+  constructor
+  · intro classified
+    simpa using classified.1
+  · intro selected
+    constructor
+    · simpa using selected
+    · exact (mem_localOccurrences_child source.checked.val.diagram
+        selection.val.anchor child).2
+          (selection.property.childRoots_direct child selected)
+
+end CompiledSelection
 
 end VisualProof.Concrete.Elaboration

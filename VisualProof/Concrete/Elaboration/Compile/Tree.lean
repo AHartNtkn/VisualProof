@@ -1,5 +1,6 @@
 import VisualProof.Concrete.Elaboration.Context
 import VisualProof.Diagram.Algebra
+import VisualProof.Diagram.RenamingIsomorphism
 
 namespace VisualProof.Concrete.Elaboration
 
@@ -80,6 +81,24 @@ def CompiledItem.origin (item : CompiledItem d wires rels) :
 
 namespace CompiledItems
 
+/-- The two stable subsequences determined by one origin classifier.  This is
+derived data: callers retain the original annotated sequence as authority. -/
+structure Partition (items : CompiledItems d wires rels) where
+  retained : CompiledItems d wires rels
+  material : CompiledItems d wires rels
+
+/-- Stably partition annotated items without descending into child bodies. -/
+def partition (classifier :
+    LocalOccurrence d.regionCount d.nodeCount → Bool) :
+    (items : CompiledItems d wires rels) → Partition items
+  | .nil => ⟨.nil, .nil⟩
+  | .cons head tail =>
+      let divided := tail.partition classifier
+      if classifier head.origin then
+        ⟨divided.retained, .cons head divided.material⟩
+      else
+        ⟨.cons head divided.retained, divided.material⟩
+
 def origins : CompiledItems d wires rels ->
     List (LocalOccurrence d.regionCount d.nodeCount)
   | .nil => []
@@ -134,6 +153,107 @@ def get : (items : CompiledItems d wires rels) ->
   match items with
   | .nil => Fin.elim0 index
   | .cons _ tail => Fin.cases rfl (fun tailIndex => erase_get tail tailIndex) index
+
+@[simp] theorem partition_retained_origins
+    (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool)
+    (items : CompiledItems d wires rels) :
+    (items.partition classifier).retained.origins =
+      items.origins.filter fun origin => !classifier origin :=
+  match items with
+  | .nil => rfl
+  | .cons head tail => by
+      cases hclassifier : classifier head.origin <;>
+        simp [partition, hclassifier, partition_retained_origins]
+
+@[simp] theorem partition_material_origins
+    (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool)
+    (items : CompiledItems d wires rels) :
+    (items.partition classifier).material.origins =
+      items.origins.filter classifier :=
+  match items with
+  | .nil => rfl
+  | .cons head tail => by
+      cases hclassifier : classifier head.origin <;>
+        simp [partition, hclassifier, partition_material_origins]
+
+theorem partition_retained_stable
+    (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool)
+    (items : CompiledItems d wires rels) :
+    List.Sublist (items.partition classifier).retained.origins
+      items.origins := by
+  rw [partition_retained_origins]
+  exact List.filter_sublist
+
+theorem partition_material_stable
+    (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool)
+    (items : CompiledItems d wires rels) :
+    List.Sublist (items.partition classifier).material.origins
+      items.origins := by
+  rw [partition_material_origins]
+  exact List.filter_sublist
+
+theorem partition_origins_perm
+    (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool)
+    (items : CompiledItems d wires rels) :
+    items.origins.Perm
+      ((items.partition classifier).retained.origins ++
+        (items.partition classifier).material.origins) :=
+  match items with
+  | .nil => .nil
+  | .cons head tail => by
+      cases hclassifier : classifier head.origin with
+      | false => simpa [partition, hclassifier] using
+          (partition_origins_perm classifier tail).cons head.origin
+      | true =>
+          exact ((partition_origins_perm classifier tail).cons
+            head.origin).trans (by
+            simpa [partition, hclassifier] using
+              (List.perm_middle (a := head.origin)).symm)
+
+private noncomputable def intrinsicTrans
+    {source middle target : ItemSeq wires rels}
+    (first : ItemSeqIso (FiniteEquiv.refl (Fin wires)) rels source middle)
+    (second : ItemSeqIso (FiniteEquiv.refl (Fin wires)) rels middle target) :
+    ItemSeqIso (FiniteEquiv.refl (Fin wires)) rels source target := by
+  have composed := first.trans second
+  have wireEquality :
+      (FiniteEquiv.refl (Fin wires)).trans
+          (FiniteEquiv.refl (Fin wires)) =
+        FiniteEquiv.refl (Fin wires) := by
+    apply FiniteEquiv.ext
+    intro index
+    rfl
+  rw [wireEquality] at composed
+  exact composed
+
+/-- The canonical intrinsic braid from compiler order to the stable retained
+block followed by the stable material block. -/
+noncomputable def partitionFactorization
+    (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool) :
+    (items : CompiledItems d wires rels) →
+      ItemSeqIso (FiniteEquiv.refl (Fin wires)) rels items.erase
+        (((items.partition classifier).retained.append
+          (items.partition classifier).material).erase)
+  | .nil => ItemSeqIso.refl .nil
+  | .cons head tail => by
+      let tailFactorization := tail.partitionFactorization classifier
+      let headItems : ItemSeq wires rels := .cons head.erase .nil
+      let lifted := (ItemSeqIso.refl headItems).append tailFactorization
+      cases hclassifier : classifier head.origin with
+      | false =>
+          simpa [partition, hclassifier, headItems, CompiledItems.erase_append,
+            ItemSeq.append_assoc] using lifted
+      | true =>
+          let retained := (tail.partition classifier).retained.erase
+          let material := (tail.partition classifier).material.erase
+          let rotated :=
+            (ItemSeqIso.appendCommRename headItems retained
+              (FiniteEquiv.refl (Fin wires))).append
+                (ItemSeqIso.refl material)
+          apply intrinsicTrans lifted
+          simpa [partition, hclassifier, headItems, retained, material,
+            CompiledItems.erase_append, ItemSeq.append_assoc,
+            FiniteEquiv.refl, ItemSeq.renameWires_id] using rotated
 
 end CompiledItems
 
