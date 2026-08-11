@@ -653,8 +653,7 @@ theorem compileNode?_material_map (layout : PlugLayout input)
 binder context selected by the splice relation substitution. -/
 theorem compiledPattern_bindersForward
     (layout : PlugLayout input) (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (hostBinders : BinderContext input.frame.val hostRels)
     (hostCovers : hostBinders.Covers input.site) :
     layout.PatternBindersForward
@@ -1134,8 +1133,7 @@ relation transport of the source items. -/
 theorem compilePatternChildBlock
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
     (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (kernel : compiled.Kernel) (blocks : kernel.Blocks)
     (hostContext : WireContext input.frame.val)
     (hostExact : hostContext.Exact input.site)
@@ -1374,8 +1372,7 @@ transport fixes its result to the canonical renamed source child items. -/
 theorem compilePatternChildBlock_complete
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
     (admissible : input.Admissible)
-    (compiled : CompiledSite input.patternState
-      input.binderSpine.bodyContainer)
+    (compiled : CompiledMaterial input)
     (kernel : compiled.Kernel) (blocks : kernel.Blocks)
     (hostContext : WireContext input.frame.val)
     (hostExact : hostContext.Exact input.site)

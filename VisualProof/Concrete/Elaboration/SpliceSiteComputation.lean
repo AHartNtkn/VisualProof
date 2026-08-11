@@ -145,15 +145,14 @@ noncomputable def spliceSiteCompilerBlocks
     (consistent : normalized.toInput.AttachmentConsistent)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer)
+    (material : CompiledMaterial normalized.toInput)
     (targetWellFormed : (layout.outputOpenRoot normalized.toInput
       source.checked.val.boundary).WellFormed) :
     SiteCompilerBlocks layout consistent
       (host.siteContext ++ host.siteLocals) host.siteBinders
       (layout.sourceDerivedSiteFuel
         source.checked.property.diagram_well_formed).recurseFuel := by
-  let hostKernel := host.kernel
+  let hostKernel := host.local.kernel
   let hostBlocks := hostKernel.blocks
   let materialKernel := material.kernel
   let materialBlocks := materialKernel.blocks
@@ -162,7 +161,7 @@ noncomputable def spliceSiteCompilerBlocks
   let targetDiagramWellFormed := targetWellFormed.diagram_well_formed
   let fuel := layout.sourceDerivedSiteFuel sourceWellFormed
   have hostExact : hostContext.Exact normalized.site := by
-    simpa only [hostContext] using host.completeContext_exact
+    simpa only [hostContext] using host.local.completeContext_exact
   have targetExact :
       (layout.patternSiteWires consistent hostContext).Exact
         (layout.frameRegion normalized.site) := by
@@ -215,8 +214,7 @@ noncomputable def spliceCompilerRegionSiteComputation
     (consistent : normalized.toInput.AttachmentConsistent)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer)
+    (material : CompiledMaterial normalized.toInput)
     (targetWellFormed : (layout.outputOpenRoot normalized.toInput
       source.checked.val.boundary).WellFormed)
     (away : normalized.site ≠ source.checked.val.diagram.root) :
@@ -227,9 +225,9 @@ noncomputable def spliceCompilerRegionSiteComputation
         (layout.mapFrameContext consistent host.siteContext)
         (layout.mapFrameBinders host.siteBinders) =
       some (layout.spliceCompilerSiteBody normalized consistent admissible
-        host host.kernel host.kernel.blocks material material.kernel
+        host host.local.kernel host.local.kernel.blocks material material.kernel
         material.kernel.blocks) := by
-  let hostKernel := host.kernel
+  let hostKernel := host.local.kernel
   let hostBlocks := hostKernel.blocks
   let materialKernel := material.kernel
   let materialBlocks := materialKernel.blocks
@@ -315,7 +313,7 @@ noncomputable def spliceCompilerRegionSiteComputation
           (siteBlocks.items.castWiresEq
             (congrArg List.length extendedEq.symm)) =
         layout.spliceCompilerSiteBody normalized consistent admissible
-          host host.kernel host.kernel.blocks material material.kernel
+          host host.local.kernel host.local.kernel.blocks material material.kernel
           material.kernel.blocks := by
     rw [finishRegion_castContext_eq_mk
       (layout.mapFrameContext consistent host.siteContext)
@@ -356,14 +354,13 @@ private noncomputable def spliceCompilerRootSiteComputationCore
     (consistent : normalized.toInput.AttachmentConsistent)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer)
+    (material : CompiledMaterial normalized.toInput)
     (targetWellFormed : (layout.outputOpenRoot normalized.toInput
       source.checked.val.boundary).WellFormed)
     (siteAtRoot : normalized.site = source.checked.val.diagram.root) :
     RootSiteComputation normalized layout consistent host
       (layout.spliceCompilerSiteBody normalized consistent admissible
-        host host.kernel host.kernel.blocks material material.kernel
+        host host.local.kernel host.local.kernel.blocks material material.kernel
         material.kernel.blocks) := by
   rcases normalized with ⟨pattern, site, attachment, binderSpine,
     binderTarget⟩
@@ -412,7 +409,7 @@ private noncomputable def spliceCompilerRootSiteComputationCore
       }
       change RootSiteComputation normalized layout consistent rootHost
         (layout.spliceCompilerSiteBody normalized consistent admissible
-          rootHost rootHost.kernel rootHost.kernel.blocks material
+          rootHost rootHost.local.kernel rootHost.local.kernel.blocks material
           material.kernel material.kernel.blocks)
       let hostContext := rootHost.siteContext ++ rootHost.siteLocals
       let sourceWellFormed := source.checked.property.diagram_well_formed
@@ -557,14 +554,13 @@ noncomputable def spliceCompilerRootSiteComputation
     (consistent : normalized.toInput.AttachmentConsistent)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer)
+    (material : CompiledMaterial normalized.toInput)
     (targetWellFormed : (layout.outputOpenRoot normalized.toInput
       source.checked.val.boundary).WellFormed)
     (atRoot : normalized.site = source.checked.val.diagram.root) :
     RootSiteComputation normalized layout consistent host
       (layout.spliceCompilerSiteBody normalized consistent admissible
-        host host.kernel host.kernel.blocks material material.kernel
+        host host.local.kernel host.local.kernel.blocks material material.kernel
         material.kernel.blocks) :=
   spliceCompilerRootSiteComputationCore normalized layout consistent
     admissible host material targetWellFormed atRoot

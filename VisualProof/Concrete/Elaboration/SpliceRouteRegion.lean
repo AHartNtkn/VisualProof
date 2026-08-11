@@ -3337,8 +3337,7 @@ structure SpliceMappedOpenRouteResult
     (consistent : normalized.toInput.AttachmentConsistent)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer) where
+    (material : CompiledMaterial normalized.toInput) where
   targetBody : Region
     (layout.outputOpenRoot normalized.toInput
       source.checked.val.boundary).exposedWires.length []
@@ -3352,7 +3351,7 @@ structure SpliceMappedOpenRouteResult
     (layout.mapFrameContextEquiv consistent host.siteContext)
     source.checked.elaborate.body targetBody host.siteBody
     (layout.spliceCompilerSiteBody normalized consistent admissible host
-      host.kernel host.kernel.blocks material material.kernel
+      host.local.kernel host.local.kernel.blocks material material.kernel
       material.kernel.blocks)
   source_context_eq : alignment.sourceContext =
     host.siteOccurrence.context
@@ -3425,14 +3424,13 @@ noncomputable def compileSpliceMappedOpenRoute
     (consistent : normalized.toInput.AttachmentConsistent)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer)
+    (material : CompiledMaterial normalized.toInput)
     (targetWellFormed : (layout.outputOpenRoot normalized.toInput
       source.checked.val.boundary).WellFormed) :
     SpliceMappedOpenRouteResult normalized layout consistent admissible host
       material := by
   let targetSite := layout.spliceCompilerSiteBody normalized consistent
-    admissible host host.kernel host.kernel.blocks material material.kernel
+    admissible host host.local.kernel host.local.kernel.blocks material material.kernel
     material.kernel.blocks
   let sourceDiagramWellFormed :=
     source.checked.property.diagram_well_formed

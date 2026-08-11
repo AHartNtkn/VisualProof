@@ -1,4 +1,5 @@
 import VisualProof.Concrete.Elaboration.SpliceSiteCompiler
+import VisualProof.Concrete.Elaboration.SpliceItems
 
 /-! Intrinsic identification of the exact compiler body at a splice site. -/
 
@@ -111,7 +112,7 @@ private noncomputable def renameRelationsSame
 body under the retained local-count equality. -/
 theorem kernel_siteBody_itemsCast_eq
     {source : State arity} {site : Fin source.checked.val.diagram.regionCount}
-    {compiled : CompiledSite source site} (kernel : compiled.Kernel) :
+    {compiled : LocalCompiledSite source site} (kernel : compiled.Kernel) :
     compiled.siteBody.itemsCast compiled.siteBody_localCount =
       kernel.items.castWiresEq (by simp) := by
   have bodyEq : Region.mk compiled.siteLocals.length
@@ -129,8 +130,7 @@ noncomputable def siteOutputWireEquiv {source : State arity}
     (layout : PlugLayout normalized.toInput)
     (consistent : normalized.toInput.AttachmentConsistent)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer) :
+    (material : CompiledMaterial normalized.toInput) :
     FiniteEquiv
       (Fin (host.siteContext.length +
         (host.siteLocals.length + material.siteLocals.length)))
@@ -148,8 +148,7 @@ noncomputable def siteOutputWireEquiv {source : State arity}
     (layout : PlugLayout normalized.toInput)
     (consistent : normalized.toInput.AttachmentConsistent)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer)
+    (material : CompiledMaterial normalized.toInput)
     (index : Fin (host.siteContext.length +
       (host.siteLocals.length + material.siteLocals.length))) :
     (layout.siteOutputWireEquiv normalized consistent host material index).val =
@@ -207,9 +206,8 @@ noncomputable def spliceCompilerSiteBody {source : State arity}
     (consistent : normalized.toInput.AttachmentConsistent)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (hostKernel : host.Kernel) (hostBlocks : hostKernel.Blocks)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer)
+    (hostKernel : host.local.Kernel) (hostBlocks : hostKernel.Blocks)
+    (material : CompiledMaterial normalized.toInput)
     (materialKernel : material.Kernel)
     (materialBlocks : materialKernel.Blocks) :
     Region (layout.mapFrameContext consistent host.siteContext).length
@@ -217,7 +215,7 @@ noncomputable def spliceCompilerSiteBody {source : State arity}
   let hostContext := host.siteContext ++ host.siteLocals
   let hostMap := layout.frameSiteIndexMap consistent hostContext
   let materialMap := layout.patternContextIndexMap consistent admissible
-    material hostContext host.completeContext_exact
+    material hostContext host.local.completeContext_exact
   let relationMap : RelationRenaming material.siteRels host.siteRels :=
     fun relation => material.spliceRelationMap normalized.toInput admissible
       host.siteBinders host.binder_covers relation
@@ -239,8 +237,7 @@ private theorem siteOutputWireEquiv_frameSiteIndexMap
     (layout : PlugLayout normalized.toInput)
     (consistent : normalized.toInput.AttachmentConsistent)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer) :
+    (material : CompiledMaterial normalized.toInput) :
     layout.siteOutputWireEquiv normalized consistent host material ∘
         Region.adjoinHostWire host.siteContext.length host.siteLocals.length
           material.siteLocals.length ∘
@@ -261,8 +258,7 @@ private theorem siteOutputWireEquiv_patternContextIndexMap
     (consistent : normalized.toInput.AttachmentConsistent)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer) :
+    (material : CompiledMaterial normalized.toInput) :
     layout.siteOutputWireEquiv normalized consistent host material ∘
         Region.adjoinMaterialWire host.siteContext.length
           host.siteLocals.length material.siteLocals.length ∘
@@ -270,14 +266,14 @@ private theorem siteOutputWireEquiv_patternContextIndexMap
           (Fin.cast (List.length_append) ∘
             material.spliceWireMap normalized.toInput layout admissible
               (host.siteContext ++ host.siteLocals)
-              host.completeContext_exact)
+              host.local.completeContext_exact)
           material.siteLocals.length ∘
         Fin.cast (List.length_append) =
       Fin.cast (layout.patternSiteWires_split_length consistent
         host.siteContext host.siteLocals) ∘
         layout.patternContextIndexMap consistent admissible material
           (host.siteContext ++ host.siteLocals)
-          host.completeContext_exact := by
+          host.local.completeContext_exact := by
   funext index
   apply Fin.ext
   simp only [Function.comp_apply]
@@ -309,9 +305,8 @@ private noncomputable def frameItemsIso
     (layout : PlugLayout normalized.toInput)
     (consistent : normalized.toInput.AttachmentConsistent)
     (host : CompiledSite source normalized.site)
-    (hostKernel : host.Kernel) (hostBlocks : hostKernel.Blocks)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer) :
+    (hostKernel : host.local.Kernel) (hostBlocks : hostKernel.Blocks)
+    (material : CompiledMaterial normalized.toInput) :
     ItemSeqIso (layout.siteOutputWireEquiv normalized consistent host material)
       host.siteRels
       ((hostKernel.items.castWiresEq List.length_append).renameWires
@@ -416,19 +411,19 @@ private noncomputable def materialItemsIso
     (consistent : normalized.toInput.AttachmentConsistent)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer)
+    (material : CompiledMaterial normalized.toInput)
     (materialKernel : material.Kernel)
     (materialBlocks : materialKernel.Blocks) :
     let sourceWireMap := Fin.cast List.length_append ∘
       material.spliceWireMap normalized.toInput layout admissible
-        (host.siteContext ++ host.siteLocals) host.completeContext_exact
+        (host.siteContext ++ host.siteLocals)
+          host.local.completeContext_exact
     let relationMap : RelationRenaming material.siteRels host.siteRels :=
       fun relation => material.spliceRelationMap normalized.toInput admissible
         host.siteBinders host.binder_covers relation
     let materialMap := layout.patternContextIndexMap consistent admissible
       material (host.siteContext ++ host.siteLocals)
-        host.completeContext_exact
+        host.local.completeContext_exact
     ItemSeqIso (layout.siteOutputWireEquiv normalized consistent host material)
       host.siteRels
       ((((materialKernel.items.castWiresEq List.length_append).renameWires
@@ -446,7 +441,7 @@ private noncomputable def materialItemsIso
   let sourceItems := materialBlocks.nodeItems.append materialBlocks.childItems
   let sourceWireMap := Fin.cast List.length_append ∘
     material.spliceWireMap normalized.toInput layout admissible
-      (host.siteContext ++ host.siteLocals) host.completeContext_exact
+      (host.siteContext ++ host.siteLocals) host.local.completeContext_exact
   let relationMap : RelationRenaming material.siteRels host.siteRels :=
     fun relation => material.spliceRelationMap normalized.toInput admissible
       host.siteBinders host.binder_covers relation
@@ -456,7 +451,8 @@ private noncomputable def materialItemsIso
       extendWireRenaming sourceWireMap material.siteLocals.length ∘
       Fin.cast List.length_append
   let materialMap := layout.patternContextIndexMap consistent admissible
-    material (host.siteContext ++ host.siteLocals) host.completeContext_exact
+    material (host.siteContext ++ host.siteLocals)
+      host.local.completeContext_exact
   let targetMap :=
     Fin.cast (layout.patternSiteWires_split_length consistent
       host.siteContext host.siteLocals) ∘ materialMap
@@ -623,9 +619,8 @@ noncomputable def spliceCompilerSiteBodyIso
     (consistent : normalized.toInput.AttachmentConsistent)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (hostKernel : host.Kernel) (hostBlocks : hostKernel.Blocks)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer)
+    (hostKernel : host.local.Kernel) (hostBlocks : hostKernel.Blocks)
+    (material : CompiledMaterial normalized.toInput)
     (materialKernel : material.Kernel)
     (materialBlocks : materialKernel.Blocks) :
     RegionIso (layout.mapFrameContextEquiv consistent host.siteContext)
@@ -636,7 +631,7 @@ noncomputable def spliceCompilerSiteBodyIso
         (Fin.cast List.length_append ∘
           material.spliceWireMap normalized.toInput layout admissible
             (host.siteContext ++ host.siteLocals)
-            host.completeContext_exact)
+            host.local.completeContext_exact)
         (fun relation => material.spliceRelationMap normalized.toInput admissible
           host.siteBinders host.binder_covers relation))
       (layout.spliceCompilerSiteBody normalized consistent admissible host
@@ -644,7 +639,7 @@ noncomputable def spliceCompilerSiteBodyIso
   let hostContext := host.siteContext ++ host.siteLocals
   let frameMap := layout.frameSiteIndexMap consistent hostContext
   let materialMap := layout.patternContextIndexMap consistent admissible
-    material hostContext host.completeContext_exact
+    material hostContext host.local.completeContext_exact
   let relationMap : RelationRenaming material.siteRels host.siteRels :=
     fun relation => material.spliceRelationMap normalized.toInput admissible
       host.siteBinders host.binder_covers relation
@@ -662,7 +657,7 @@ noncomputable def spliceCompilerSiteBodyIso
     host.siteContext host.siteLocals
   let sourceWireMap := Fin.cast List.length_append ∘
     material.spliceWireMap normalized.toInput layout admissible hostContext
-      host.completeContext_exact
+      host.local.completeContext_exact
   let frameSourceItems :=
     (hostKernel.items.castWiresEq List.length_append).renameWires
       (Region.adjoinHostWire host.siteContext.length host.siteLocals.length

@@ -48,15 +48,14 @@ noncomputable def spliceBody
     (layout : Splice.Input.PlugLayout normalized.toInput)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer) :
+    (material : Splice.Input.CompiledMaterial normalized.toInput) :
     Region host.siteContext.length host.siteRels :=
   Region.spliceAt host.siteLocals.length
     (host.siteBody.itemsCast host.siteBody_localCount)
     material.siteBody
     (Fin.cast List.length_append ∘
       material.spliceWireMap normalized.toInput layout admissible
-        (host.siteContext ++ host.siteLocals) host.completeContext_exact)
+        (host.siteContext ++ host.siteLocals) host.local.completeContext_exact)
     (fun relation => material.spliceRelationMap normalized.toInput admissible
       host.siteBinders host.binder_covers relation)
 
@@ -130,8 +129,7 @@ private noncomputable def naturalIso
     (consistent : normalized.toInput.AttachmentConsistent)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer)
+    (material : Splice.Input.CompiledMaterial normalized.toInput)
     (targetWellFormed : (layout.outputOpenRoot normalized.toInput
       source.checked.val.boundary).WellFormed)
     (result : SpliceMappedOpenRouteResult normalized layout consistent
@@ -181,7 +179,7 @@ private noncomputable def naturalIso
         result.target_compiled
     have filled := result.alignment.fill
       (layout.spliceCompilerSiteBodyIso normalized consistent admissible host
-        host.kernel host.kernel.blocks material material.kernel
+        host.local.kernel host.local.kernel.blocks material material.kernel
         material.kernel.blocks)
     rw [result.source_context_eq] at filled
     exact targetBodyEq.symm ▸ filled.symm
@@ -194,8 +192,7 @@ private noncomputable def sourceContextIso
     (consistent : normalized.toInput.AttachmentConsistent)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer)
+    (material : Splice.Input.CompiledMaterial normalized.toInput)
     (targetWellFormed : (layout.outputOpenRoot normalized.toInput
       source.checked.val.boundary).WellFormed)
     (result : SpliceMappedOpenRouteResult normalized layout consistent
@@ -296,8 +293,7 @@ structure SpliceResult
     (layout : Splice.Input.PlugLayout normalized.toInput)
     (admissible : normalized.toInput.Admissible)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer)
+    (material : Splice.Input.CompiledMaterial normalized.toInput)
     (receipt : Receipt source) where
   target_iso : OpenDiagramIso
     (receipt.target.checked.elaborate.castArity
@@ -313,8 +309,7 @@ noncomputable def SpliceResult.rawReplacement
     {layout : Splice.Input.PlugLayout normalized.toInput}
     {admissible : normalized.toInput.Admissible}
     {host : CompiledSite source normalized.site}
-    {material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer}
+    {material : Splice.Input.CompiledMaterial normalized.toInput}
     {receipt : Receipt source}
     (result : SpliceResult normalized layout admissible host material receipt) :
     Diagram.ContextReplacement source.checked.elaborate
@@ -330,8 +325,7 @@ noncomputable def SpliceResult.rawReplacement
     {layout : Splice.Input.PlugLayout normalized.toInput}
     {admissible : normalized.toInput.Admissible}
     {host : CompiledSite source normalized.site}
-    {material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer}
+    {material : Splice.Input.CompiledMaterial normalized.toInput}
     {receipt : Receipt source}
     (result : SpliceResult normalized layout admissible host material receipt) :
     result.rawReplacement.context = host.siteOccurrence.context := rfl
@@ -341,8 +335,7 @@ noncomputable def SpliceResult.rawReplacement
     {layout : Splice.Input.PlugLayout normalized.toInput}
     {admissible : normalized.toInput.Admissible}
     {host : CompiledSite source normalized.site}
-    {material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer}
+    {material : Splice.Input.CompiledMaterial normalized.toInput}
     {receipt : Receipt source}
     (result : SpliceResult normalized layout admissible host material receipt) :
     result.rawReplacement.before = host.siteBody := rfl
@@ -352,8 +345,7 @@ noncomputable def SpliceResult.rawReplacement
     {layout : Splice.Input.PlugLayout normalized.toInput}
     {admissible : normalized.toInput.Admissible}
     {host : CompiledSite source normalized.site}
-    {material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer}
+    {material : Splice.Input.CompiledMaterial normalized.toInput}
     {receipt : Receipt source}
     (result : SpliceResult normalized layout admissible host material receipt) :
     result.rawReplacement.after =
@@ -364,8 +356,7 @@ noncomputable def SpliceResult.rawReplacement
     {layout : Splice.Input.PlugLayout normalized.toInput}
     {admissible : normalized.toInput.Admissible}
     {host : CompiledSite source normalized.site}
-    {material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer}
+    {material : Splice.Input.CompiledMaterial normalized.toInput}
     {receipt : Receipt source}
     (result : SpliceResult normalized layout admissible host material receipt) :
     result.rawReplacement.target_iso = result.target_iso := rfl
@@ -377,8 +368,7 @@ noncomputable def SpliceResult.replacement
     {layout : Splice.Input.PlugLayout normalized.toInput}
     {admissible : normalized.toInput.Admissible}
     {host : CompiledSite source normalized.site}
-    {material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer}
+    {material : Splice.Input.CompiledMaterial normalized.toInput}
     {receipt : Receipt source}
     (result : SpliceResult normalized layout admissible host material receipt) :
     Diagram.ContextReplacement
@@ -402,8 +392,7 @@ noncomputable def SpliceResult.replacement
     {layout : Splice.Input.PlugLayout normalized.toInput}
     {admissible : normalized.toInput.Admissible}
     {host : CompiledSite source normalized.site}
-    {material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer}
+    {material : Splice.Input.CompiledMaterial normalized.toInput}
     {receipt : Receipt source}
     (result : SpliceResult normalized layout admissible host material receipt) :
     HEq result.replacement.context host.siteOccurrence.context := by
@@ -418,8 +407,7 @@ noncomputable def SpliceResult.replacement
     {layout : Splice.Input.PlugLayout normalized.toInput}
     {admissible : normalized.toInput.Admissible}
     {host : CompiledSite source normalized.site}
-    {material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer}
+    {material : Splice.Input.CompiledMaterial normalized.toInput}
     {receipt : Receipt source}
     (result : SpliceResult normalized layout admissible host material receipt) :
     HEq result.replacement.before host.siteBody := by
@@ -434,8 +422,7 @@ noncomputable def SpliceResult.replacement
     {layout : Splice.Input.PlugLayout normalized.toInput}
     {admissible : normalized.toInput.Admissible}
     {host : CompiledSite source normalized.site}
-    {material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer}
+    {material : Splice.Input.CompiledMaterial normalized.toInput}
     {receipt : Receipt source}
     (result : SpliceResult normalized layout admissible host material receipt) :
     HEq result.replacement.after
@@ -457,8 +444,7 @@ noncomputable def spliceResult
     (success : spliceRaw normalized.toInput = .ok operation)
     (packed : operation.toReceipt source = some receipt)
     (host : CompiledSite source normalized.site)
-    (material : CompiledSite normalized.toInput.patternState
-      normalized.binderSpine.bodyContainer) :
+    (material : Splice.Input.CompiledMaterial normalized.toInput) :
     SpliceResult normalized ({} : Splice.Input.PlugLayout normalized.toInput)
       (spliceRaw_admissible normalized.toInput operation success)
       host material receipt := by
@@ -540,8 +526,7 @@ noncomputable def splice
     (packed : (operation.castInput frameEq).toReceipt source = some receipt)
     (host : CompiledSite source
       (Splice.Input.sourceNormalized source input frameEq).site)
-    (material : CompiledSite input.patternState
-      input.binderSpine.bodyContainer) :
+    (material : Splice.Input.CompiledMaterial input) :
     Diagram.ContextReplacement
       (source.checked.elaborate.castArity source.boundary_length)
       (receipt.target.checked.elaborate.castArity

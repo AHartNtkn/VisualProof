@@ -33,7 +33,7 @@ structure LocalCompiledSite (source : State arity)
 
 /-- Forget the root route and abstract focus of a compiled host site while
 retaining its exact local compiler call. -/
-def CompiledSite.local (compiled : CompiledSite source site) :
+abbrev CompiledSite.local (compiled : CompiledSite source site) :
     LocalCompiledSite source site where
   siteRels := compiled.siteRels
   siteContext := compiled.siteContext
