@@ -385,6 +385,40 @@ noncomputable def CompilerRouteAlignment.fill
   exact DiagramContextIso.root alignment.contextIso site rfl
     alignment.target_rebuild
 
+private noncomputable def CompilerRouteAlignment.castSourceSite
+    {sourceOuter targetOuter sourceHole targetHole : Nat}
+    {outerRels holeRels : RelCtx}
+    {outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
+    {holeWire : FiniteEquiv (Fin sourceHole) (Fin targetHole)}
+    {sourceRoot : Region sourceOuter outerRels}
+    {targetRoot : Region targetOuter outerRels}
+    {sourceSite normalizedSourceSite : Region sourceHole holeRels}
+    {targetSite : Region targetHole holeRels}
+    (alignment : CompilerRouteAlignment outerWire holeWire sourceRoot
+      targetRoot sourceSite targetSite)
+    (sourceSiteEq : sourceSite = normalizedSourceSite) :
+    CompilerRouteAlignment outerWire holeWire sourceRoot targetRoot
+      normalizedSourceSite targetSite := by
+  subst normalizedSourceSite
+  exact alignment
+
+private theorem CompilerRouteAlignment.castSourceSite_sourceContext
+    {sourceOuter targetOuter sourceHole targetHole : Nat}
+    {outerRels holeRels : RelCtx}
+    {outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
+    {holeWire : FiniteEquiv (Fin sourceHole) (Fin targetHole)}
+    {sourceRoot : Region sourceOuter outerRels}
+    {targetRoot : Region targetOuter outerRels}
+    {sourceSite normalizedSourceSite : Region sourceHole holeRels}
+    {targetSite : Region targetHole holeRels}
+    (alignment : CompilerRouteAlignment outerWire holeWire sourceRoot
+      targetRoot sourceSite targetSite)
+    (sourceSiteEq : sourceSite = normalizedSourceSite) :
+    (alignment.castSourceSite sourceSiteEq).sourceContext =
+      alignment.sourceContext := by
+  subst normalizedSourceSite
+  rfl
+
 /-- Add one cut compiler frame around a recursively aligned child.  Both
 focuses are computed at the already related item positions. -/
 private noncomputable def CompilerRouteAlignment.cutFrame
@@ -1251,6 +1285,89 @@ private noncomputable def CompilerRouteAlignment.castOuterWires
   subst normalizedWire
   exact alignment
 
+private theorem CompilerRouteAlignment.castOuterWires_sourceContext_heq
+    {sourceOuter targetOuter normalizedSource normalizedTarget
+      sourceHole targetHole : Nat}
+    {outerRels holeRels : RelCtx}
+    {outerWire : FiniteEquiv (Fin sourceOuter) (Fin targetOuter)}
+    {holeWire : FiniteEquiv (Fin sourceHole) (Fin targetHole)}
+    {sourceRoot : Region sourceOuter outerRels}
+    {targetRoot : Region targetOuter outerRels}
+    {sourceSite : Region sourceHole holeRels}
+    {targetSite : Region targetHole holeRels}
+    (alignment : CompilerRouteAlignment outerWire holeWire
+      sourceRoot targetRoot sourceSite targetSite)
+    (sourceEq : sourceOuter = normalizedSource)
+    (targetEq : targetOuter = normalizedTarget)
+    (normalizedWire : FiniteEquiv
+      (Fin normalizedSource) (Fin normalizedTarget))
+    (commutes : normalizedWire.toFun ∘ Fin.cast sourceEq =
+      Fin.cast targetEq ∘ outerWire.toFun) :
+    HEq (alignment.castOuterWires sourceEq targetEq normalizedWire
+      commutes).sourceContext alignment.sourceContext := by
+  subst normalizedSource
+  subst normalizedTarget
+  have wireEq : normalizedWire = outerWire := by
+    apply FiniteEquiv.ext
+    intro index
+    exact congrFun commutes index
+  subst normalizedWire
+  rfl
+
+private theorem Region.ContextPath.castWiresEq_toFocus_context_heq
+    (equality : source = target)
+    (witness : Region.ContextPath region path) :
+    HEq (witness.castWiresEq equality).toFocus.context
+      witness.toFocus.context := by
+  subst target
+  rfl
+
+private def castRouteFocusContext
+    (wireEq : sourceWires = targetWires)
+    (relsEq : sourceRels = targetRels)
+    (context : DiagramContext outerWires sourceWires outerRels sourceRels) :
+    DiagramContext outerWires targetWires outerRels targetRels := by
+  subst targetWires
+  subst targetRels
+  exact context
+
+private theorem castRouteFocusContext_heq
+    (wireEq : sourceWires = targetWires)
+    (relsEq : sourceRels = targetRels)
+    (context : DiagramContext outerWires sourceWires outerRels sourceRels) :
+    HEq (castRouteFocusContext wireEq relsEq context) context := by
+  subst targetWires
+  subst targetRels
+  rfl
+
+private theorem castRouteFocusContext_cut
+    (wireEq : sourceWires = targetWires)
+    (relsEq : sourceRels = targetRels)
+    (before after : ItemSeq (outerWires + localWires) outerRels)
+    (child : DiagramContext (outerWires + localWires) sourceWires
+      outerRels sourceRels) :
+    castRouteFocusContext wireEq relsEq
+        (DiagramContext.cut localWires before after child) =
+      DiagramContext.cut localWires before after
+        (castRouteFocusContext wireEq relsEq child) := by
+  subst targetWires
+  subst targetRels
+  rfl
+
+private theorem castRouteFocusContext_bubble
+    (wireEq : sourceWires = targetWires)
+    (relsEq : sourceRels = targetRels)
+    (before after : ItemSeq (outerWires + localWires) outerRels)
+    (child : DiagramContext (outerWires + localWires) sourceWires
+      (arity :: outerRels) sourceRels) :
+    castRouteFocusContext wireEq relsEq
+        (DiagramContext.bubble localWires before after arity child) =
+      DiagramContext.bubble localWires before after arity
+        (castRouteFocusContext wireEq relsEq child) := by
+  subst targetWires
+  subst targetRels
+  rfl
+
 /-- Canonical mapped inherited context at a retained child, normalized to
 the outer-plus-local presentation required by a diagram context layer. -/
 private theorem mappedExtendedContext_length
@@ -1314,6 +1431,27 @@ private noncomputable def CompilerRouteAlignment.normalizeFrameChild
         FiniteEquiv.finCast]
     · simp [extendWireEquiv, mapFrameContextEquiv,
         mapFrameContext, FiniteEquiv.finCast]
+
+private theorem CompilerRouteAlignment.normalizeFrameChild_sourceContext_heq
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (terminal : input.TerminalBody)
+    (context : WireContext input.frame.val)
+    (region : Fin input.frame.val.regionCount) (away : region ≠ input.site)
+    {holeSource holeTarget : Nat} {outerRels holeRels : RelCtx}
+    {sourceRoot : Region (context.extend region).length outerRels}
+    {targetRoot : Region
+      (layout.mapFrameContext consistent (context.extend region)).length
+      outerRels}
+    {sourceSite : Region holeSource holeRels}
+    {targetSite : Region holeTarget holeRels}
+    {holeWire : FiniteEquiv (Fin holeSource) (Fin holeTarget)}
+    (alignment : CompilerRouteAlignment
+      (layout.mapFrameContextEquiv consistent (context.extend region))
+      holeWire sourceRoot targetRoot sourceSite targetSite) :
+    HEq (alignment.normalizeFrameChild layout consistent terminal context
+      region away).sourceContext alignment.sourceContext := by
+  unfold CompilerRouteAlignment.normalizeFrameChild
+  apply CompilerRouteAlignment.castOuterWires_sourceContext_heq
 
 /-- The mapped source root context has the generated target's exact
 exposed-plus-hidden compiler length away from a root insertion. -/
@@ -1396,6 +1534,30 @@ private noncomputable def CompilerRouteAlignment.normalizeOpenRootChild
         index.val
   exact layout.outputRootSplitEquiv_of_ne_val consistent terminal boundary
     away _
+
+private theorem
+    CompilerRouteAlignment.normalizeOpenRootChild_sourceContext_heq
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (terminal : input.TerminalBody)
+    (boundary : List (Fin input.frame.val.wireCount))
+    (away : input.frame.val.root ≠ input.site)
+    {holeSource holeTarget : Nat} {outerRels holeRels : RelCtx}
+    {sourceRoot : Region (frameOpen input boundary).rootWires.length
+      outerRels}
+    {targetRoot : Region
+      (layout.mapFrameContext consistent
+        (frameOpen input boundary).rootWires).length outerRels}
+    {sourceSite : Region holeSource holeRels}
+    {targetSite : Region holeTarget holeRels}
+    {holeWire : FiniteEquiv (Fin holeSource) (Fin holeTarget)}
+    (alignment : CompilerRouteAlignment
+      (layout.mapFrameContextEquiv consistent
+        (frameOpen input boundary).rootWires)
+      holeWire sourceRoot targetRoot sourceSite targetSite) :
+    HEq (alignment.normalizeOpenRootChild layout consistent terminal boundary
+      away).sourceContext alignment.sourceContext := by
+  unfold CompilerRouteAlignment.normalizeOpenRootChild
+  apply CompilerRouteAlignment.castOuterWires_sourceContext_heq
 
 /-- One explicit target-site computation at the exact fuel delivered by a
 source-derived compiler route. -/
@@ -1488,6 +1650,8 @@ structure MappedRegionRouteResult
   source_focus_wires : sourceWitness.toFocus.holeWires = siteContext.length
   source_focus_rels : sourceWitness.toFocus.holeRels = siteRels
   source_focus_body : HEq sourceWitness.toFocus.body sourceSite
+  source_context_heq :
+    HEq alignment.sourceContext sourceWitness.toFocus.context
 
 /-- Bottom-up open-root result.  Its target root body and compiler equation
 are constructed from the source route; no target elaboration witness is
@@ -1516,6 +1680,8 @@ structure MappedOpenRouteResult
   source_focus_wires : sourceWitness.toFocus.holeWires = siteContext.length
   source_focus_rels : sourceWitness.toFocus.holeRels = siteRels
   source_focus_body : HEq sourceWitness.toFocus.body sourceSite
+  source_context_heq :
+    HEq alignment.sourceContext sourceWitness.toFocus.context
 
 /-- GREEN zero-depth open-root assembler.  The target root is the canonical
 mapped site body transported only by the generated exposed-length equality. -/
@@ -1569,6 +1735,10 @@ private noncomputable def mappedOpenHere
     source_focus_wires := rfl
     source_focus_rels := rfl
     source_focus_body := .rfl
+    source_context_heq := by
+      exact (rawAlignment.castOuterWires_sourceContext_heq rfl outerEq
+        (layout.outputExternalEquiv consistent boundary) commutes).trans
+          HEq.rfl
   }
 
 /-- GREEN base case of the mapped-route construction. -/
@@ -1602,6 +1772,7 @@ private noncomputable def mappedRegionHere
     source_focus_wires := rfl
     source_focus_rels := rfl
     source_focus_body := .rfl
+    source_context_heq := .rfl
   }
 
 /-- GREEN cut-step assembler for the mapped-route construction. -/
@@ -1811,6 +1982,41 @@ private noncomputable def mappedRegionCutStep
     source_focus_wires := focusWires
     source_focus_rels := focusRels
     source_focus_body := focusBody
+    source_context_heq := by
+      have normalizedContext :
+          HEq nestedAlignment.sourceContext
+            nested.alignment.sourceContext :=
+        nested.alignment.normalizeFrameChild_sourceContext_heq layout
+          consistent terminal context origin away
+      have castWitness : HEq nestedWitness.toFocus.context
+          nested.sourceWitness.toFocus.context :=
+        Region.ContextPath.castWiresEq_toFocus_context_heq sourceEq
+          nested.sourceWitness
+      have childHeq : HEq nestedAlignment.sourceContext
+          nestedWitness.toFocus.context :=
+        normalizedContext.trans
+          (nested.source_context_heq.trans castWitness.symm)
+      let normalizedNestedContext := castRouteFocusContext focusWires
+        focusRels nestedWitness.toFocus.context
+      have normalizedNestedHeq : HEq normalizedNestedContext
+          nestedWitness.toFocus.context :=
+        castRouteFocusContext_heq focusWires focusRels
+          nestedWitness.toFocus.context
+      have childEq : nestedAlignment.sourceContext =
+          normalizedNestedContext :=
+        eq_of_heq (childHeq.trans normalizedNestedHeq.symm)
+      have parentEq : alignment.sourceContext =
+          castRouteFocusContext focusWires focusRels
+            sourceWitness.toFocus.context := by
+        change DiagramContext.cut _ sourceFocused.focus.before
+            sourceFocused.focus.after nestedAlignment.sourceContext =
+          castRouteFocusContext focusWires focusRels
+            (DiagramContext.cut _ sourceFocused.focus.before
+              sourceFocused.focus.after nestedWitness.toFocus.context)
+        rw [castRouteFocusContext_cut, childEq]
+      exact (heq_of_eq parentEq).trans
+        (castRouteFocusContext_heq focusWires focusRels
+          sourceWitness.toFocus.context)
   }
 
 /-- GREEN bubble-step assembler for the mapped-route construction. -/
@@ -2012,6 +2218,9 @@ private noncomputable def mappedRegionBubbleStep
     source_focus_wires := focusWires
     source_focus_rels := focusRels
     source_focus_body := focusBody
+    source_context_heq := by
+      cases nested.source_context_heq
+      rfl
   }
 
 /-- GREEN cut-step assembler from a proper root child to the generated open
@@ -2235,6 +2444,9 @@ private noncomputable def mappedOpenCutStep
     source_focus_wires := focusWires
     source_focus_rels := focusRels
     source_focus_body := focusBody
+    source_context_heq := by
+      cases nested.source_context_heq
+      rfl
   }
 
 /-- GREEN bubble-step assembler from a proper root child to the generated
@@ -2456,6 +2668,9 @@ private noncomputable def mappedOpenBubbleStep
     source_focus_wires := focusWires
     source_focus_rels := focusRels
     source_focus_body := focusBody
+    source_context_heq := by
+      cases nested.source_context_heq
+      rfl
   }
 
 /-- Compile the deterministically mapped target route bottom-up from one
@@ -3043,6 +3258,8 @@ structure SpliceMappedOpenRouteResult
     (layout.spliceCompilerSiteBody normalized consistent admissible host
       host.kernel host.kernel.blocks material material.kernel
       material.kernel.blocks)
+  source_context_eq : alignment.sourceContext =
+    host.siteOccurrence.context
 
 /-- Identify the source terminal retained by a mapped open route with the
 source compiler site's intrinsic terminal.  The target terminal is already
@@ -3070,8 +3287,39 @@ noncomputable def MappedOpenRouteResult.alignCompiledSite
     have resultFocus := result.source_focus_body
     rw [witnessEq] at resultFocus
     exact resultFocus.symm.trans host.focus_body
-  rw [← sourceSiteEq]
-  exact result.alignment
+  exact result.alignment.castSourceSite sourceSiteEq
+
+/-- Normalizing the terminal body of a mapped route preserves its intrinsic
+source context, which is exactly the source compiler occurrence context. -/
+theorem MappedOpenRouteResult.alignCompiledSite_sourceContext
+    {source : State arity} (normalized : SourceNormalized source)
+    (layout : PlugLayout normalized.toInput)
+    (consistent : normalized.toInput.AttachmentConsistent)
+    (host : CompiledSite source normalized.site)
+    {targetSite : Region
+      (layout.mapFrameContext consistent host.siteContext).length
+        host.siteRels}
+    (result : MappedOpenRouteResult layout consistent
+      source.checked.val.boundary host.siteContext host.path
+      source.checked.elaborate.body targetSite) :
+    (result.alignCompiledSite normalized layout consistent host).sourceContext =
+      host.siteOccurrence.context := by
+  have witnessEq : result.sourceWitness = host.witness :=
+    Region.ContextPath.unique result.sourceWitness host.witness
+  have sourceSiteEq : result.sourceSite = host.siteBody := by
+    apply eq_of_heq
+    have resultFocus := result.source_focus_body
+    rw [witnessEq] at resultFocus
+    exact resultFocus.symm.trans host.focus_body
+  calc
+    (result.alignCompiledSite normalized layout consistent host).sourceContext =
+        result.alignment.sourceContext :=
+      result.alignment.castSourceSite_sourceContext sourceSiteEq
+    _ = host.siteOccurrence.context := by
+      have context := result.source_context_heq
+      rw [witnessEq] at context
+      exact eq_of_heq
+        (context.trans host.siteOccurrence_context_heq.symm)
 
 /-- Reconstruct the generated splice root solely from the retained source
 compiler route and the canonical source-derived site computations. -/
@@ -3129,6 +3377,8 @@ noncomputable def compileSpliceMappedOpenRoute
     targetBody := result.targetBody
     target_compiled := result.target_compiled
     alignment := result.alignCompiledSite normalized layout consistent host
+    source_context_eq :=
+      result.alignCompiledSite_sourceContext normalized layout consistent host
   }
 
 end Splice.Input.PlugLayout

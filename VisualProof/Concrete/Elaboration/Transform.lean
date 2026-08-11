@@ -663,6 +663,107 @@ noncomputable def CompiledSite.occurrence
     rw [compiled.witness.toFocus.rebuild]
     exact OpenDiagramIso.refl source.checked.elaborate
 
+private def castFocusContext
+    (wireEq : sourceWires = targetWires)
+    (relsEq : sourceRels = targetRels)
+    (context : DiagramContext outerWires sourceWires outerRels sourceRels) :
+    DiagramContext outerWires targetWires outerRels targetRels := by
+  subst targetWires
+  subst targetRels
+  exact context
+
+private def castFocusRegion
+    (wireEq : sourceWires = targetWires)
+    (relsEq : sourceRels = targetRels)
+    (body : Region sourceWires sourceRels) :
+    Region targetWires targetRels := by
+  subst targetWires
+  subst targetRels
+  exact body
+
+private theorem castFocusRegion_heq
+    (wireEq : sourceWires = targetWires)
+    (relsEq : sourceRels = targetRels)
+    (body : Region sourceWires sourceRels) :
+    HEq (castFocusRegion wireEq relsEq body) body := by
+  subst targetWires
+  subst targetRels
+  rfl
+
+private theorem castFocusContext_heq
+    (wireEq : sourceWires = targetWires)
+    (relsEq : sourceRels = targetRels)
+    (context : DiagramContext outerWires sourceWires outerRels sourceRels) :
+    HEq (castFocusContext wireEq relsEq context) context := by
+  subst targetWires
+  subst targetRels
+  rfl
+
+private theorem castFocusContext_fill
+    (wireEq : sourceWires = targetWires)
+    (relsEq : sourceRels = targetRels)
+    (context : DiagramContext outerWires sourceWires outerRels sourceRels)
+    (body : Region sourceWires sourceRels) :
+    (castFocusContext wireEq relsEq context).fill
+        (castFocusRegion wireEq relsEq body) = context.fill body := by
+  subst targetWires
+  subst targetRels
+  rfl
+
+/-- The intrinsic source occurrence normalized to the compiler site's exact
+wire and relation indices. -/
+noncomputable def CompiledSite.siteOccurrence
+    (compiled : CompiledSite source site) :
+    Occurrence compiled.siteBody source.checked.elaborate := by
+  let context := castFocusContext compiled.focus_wires compiled.focus_rels
+    compiled.witness.toFocus.context
+  let body := castFocusRegion compiled.focus_wires compiled.focus_rels
+    compiled.witness.toFocus.body
+  have bodyEq : body = compiled.siteBody := eq_of_heq
+    ((castFocusRegion_heq compiled.focus_wires compiled.focus_rels
+      compiled.witness.toFocus.body).trans compiled.focus_body)
+  have rebuild : context.fill compiled.siteBody =
+      source.checked.elaborate.body := by
+    rw [← bodyEq]
+    exact (castFocusContext_fill compiled.focus_wires compiled.focus_rels
+      compiled.witness.toFocus.context compiled.witness.toFocus.body).trans
+        compiled.witness.toFocus.rebuild
+  exact {
+    interface := source.checked.elaborate
+    context := context
+    host_iso := by
+      rw [rebuild]
+      exact OpenDiagramIso.refl source.checked.elaborate
+  }
+
+/-- Normalization changes only the dependent presentation of the intrinsic
+compiler focus; its enclosing context is the source path's context. -/
+theorem CompiledSite.siteOccurrence_context_heq
+    (compiled : CompiledSite source site) :
+    HEq compiled.siteOccurrence.context
+      compiled.witness.toFocus.context := by
+  exact castFocusContext_heq compiled.focus_wires compiled.focus_rels
+    compiled.witness.toFocus.context
+
+/-- Filling the normalized intrinsic context with its compiled site body
+reconstructs the source compiler body exactly. -/
+theorem CompiledSite.siteOccurrence_rebuild
+    (compiled : CompiledSite source site) :
+    compiled.siteOccurrence.context.fill compiled.siteBody =
+      source.checked.elaborate.body := by
+  let context := castFocusContext compiled.focus_wires compiled.focus_rels
+    compiled.witness.toFocus.context
+  let body := castFocusRegion compiled.focus_wires compiled.focus_rels
+    compiled.witness.toFocus.body
+  have bodyEq : body = compiled.siteBody := eq_of_heq
+    ((castFocusRegion_heq compiled.focus_wires compiled.focus_rels
+      compiled.witness.toFocus.body).trans compiled.focus_body)
+  change context.fill compiled.siteBody = source.checked.elaborate.body
+  rw [← bodyEq]
+  exact (castFocusContext_fill compiled.focus_wires compiled.focus_rels
+    compiled.witness.toFocus.context compiled.witness.toFocus.body).trans
+      compiled.witness.toFocus.rebuild
+
 /-- The same source endpoint after the execution state's arity cast. -/
 noncomputable def CompiledSite.canonicalOccurrence
     (compiled : CompiledSite source site) :

@@ -139,7 +139,7 @@ private noncomputable def naturalIso
     OpenDiagramIso
       (mappedOutputState normalized layout targetWellFormed).checked.elaborate
       ((source.checked.elaborate.withBody
-        (result.alignment.sourceContext.fill
+        (host.siteOccurrence.context.fill
           (host.spliceBody normalized layout admissible material))).castArity
             (mappedOutputBoundaryLength normalized layout).symm) := by
   apply OpenDiagramIso.ofArityEq
@@ -179,10 +179,12 @@ private noncomputable def naturalIso
       CheckedOpen.elaborate_body_eq_of_computation
         (mappedOutputState normalized layout targetWellFormed).checked
         result.target_compiled
-    exact targetBodyEq.symm ▸ (result.alignment.fill
+    have filled := result.alignment.fill
       (layout.spliceCompilerSiteBodyIso normalized consistent admissible host
         host.kernel host.kernel.blocks material material.kernel
-        material.kernel.blocks)).symm
+        material.kernel.blocks)
+    rw [result.source_context_eq] at filled
+    exact targetBodyEq.symm ▸ filled.symm
 
 /-- Put the generated root at the raw source boundary arity and identify it
 with the source compiler context filled by the intrinsic splice body. -/
@@ -203,14 +205,14 @@ private noncomputable def sourceContextIso
         ).castArity
           (mappedOutputBoundaryLength normalized layout))
       (source.checked.elaborate.withBody
-        (result.alignment.sourceContext.fill
+        (host.siteOccurrence.context.fill
           (host.spliceBody normalized layout admissible material))) :=
   (result.naturalIso normalized layout consistent admissible host material
     targetWellFormed).castArity
       (mappedOutputBoundaryLength normalized layout)
     |>.trans
       (normalizeCastIso (source.checked.elaborate.withBody
-        (result.alignment.sourceContext.fill
+        (host.siteOccurrence.context.fill
           (host.spliceBody normalized layout admissible material)))
         (mappedOutputBoundaryLength normalized layout).symm
         (mappedOutputBoundaryLength normalized layout) rfl)
@@ -337,14 +339,14 @@ noncomputable def splice
   let generatedAtSource := generated.checked.elaborate.castArity boundaryEq
   let generatedSourceIso : OpenDiagramIso generatedAtSource
       (source.checked.elaborate.withBody
-        (result.alignment.sourceContext.fill after)) :=
+        (host.siteOccurrence.context.fill after)) :=
     result.sourceContextIso normalized layout consistent admissible host
       material targetWellFormed
   let rawReplacement : Diagram.ContextReplacement
       source.checked.elaborate generatedAtSource :=
     Diagram.ContextReplacement.ofSourceContext source.checked.elaborate
-      generatedAtSource result.alignment.sourceContext host.siteBody after
-      result.alignment.source_rebuild generatedSourceIso
+      generatedAtSource host.siteOccurrence.context host.siteBody after
+      host.siteOccurrence_rebuild generatedSourceIso
   let stateReplacement := rawReplacement.castArity source.boundary_length
   let generatedNormalization : OpenDiagramIso
       ((generated.checked.elaborate.castArity boundaryEq).castArity
