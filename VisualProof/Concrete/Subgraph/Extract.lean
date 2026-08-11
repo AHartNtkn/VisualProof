@@ -442,6 +442,65 @@ theorem proxy_not_mem_materialRegions (spine : BinderSpine diagram)
   intro hmember
   exact ((spine.mem_materialRegions (spine.proxy index)).1 hmember).2 index rfl
 
+theorem materialRegions_length (spine : BinderSpine diagram) :
+    spine.materialRegions.length + spine.proxyCount + 1 =
+      diagram.regionCount := by
+  let proxies := (allFin spine.proxyCount).map spine.proxy
+  let partition := spine.materialRegions ++ diagram.root :: proxies
+  have proxiesNodup : proxies.Nodup := by
+    exact (allFin_nodup spine.proxyCount).map spine.proxy fun _ _ hne heq =>
+      hne (spine.proxy_injective heq)
+  have rootNotProxy : diagram.root ∉ proxies := by
+    intro hmember
+    obtain ⟨index, _, heq⟩ := List.mem_map.mp hmember
+    exact spine.proxy_ne_root index heq
+  have partitionNodup : partition.Nodup := by
+    rw [List.nodup_append, List.nodup_cons]
+    refine ⟨spine.materialRegions_nodup, ⟨rootNotProxy, proxiesNodup⟩, ?_⟩
+    intro material hmaterial other hother heq
+    rw [List.mem_cons] at hother
+    rcases hother with hroot | hproxy
+    · have hmaterialRoot : material = diagram.root := heq.trans hroot
+      exact spine.root_not_mem_materialRegions (hmaterialRoot ▸ hmaterial)
+    · obtain ⟨index, _, hproxy⟩ := List.mem_map.mp hproxy
+      have hmaterialProxy : material = spine.proxy index :=
+        heq.trans hproxy.symm
+      exact spine.proxy_not_mem_materialRegions index
+        (hmaterialProxy ▸ hmaterial)
+  have partitionMem (region : Fin diagram.regionCount) :
+      region ∈ partition ↔ region ∈ allFin diagram.regionCount := by
+    constructor
+    · intro _
+      exact mem_allFin region
+    · intro _
+      by_cases hroot : region = diagram.root
+      · rw [List.mem_append, List.mem_cons]
+        exact Or.inr (Or.inl hroot)
+      · by_cases hproxy : ∃ index, region = spine.proxy index
+        · obtain ⟨index, heq⟩ := hproxy
+          rw [List.mem_append, List.mem_cons]
+          exact Or.inr (Or.inr (List.mem_map.mpr
+            ⟨index, mem_allFin index, heq.symm⟩))
+        · rw [List.mem_append]
+          apply Or.inl
+          apply (mem_materialRegions spine region).mpr
+          exact ⟨hroot, fun index heq => hproxy ⟨index, heq⟩⟩
+  let partitionEquiv :=
+    VisualProof.Diagram.FiniteEquiv.restrictLists
+      (VisualProof.Diagram.FiniteEquiv.refl
+        (Fin diagram.regionCount))
+      (allFin diagram.regionCount) partition
+      (allFin_nodup diagram.regionCount) partitionNodup (by
+        intro region
+        simpa using (partitionMem region).symm)
+  have forward := fin_card_le_of_injective partitionEquiv
+    partitionEquiv.injective
+  have backward := fin_card_le_of_injective partitionEquiv.symm
+    partitionEquiv.symm.injective
+  have lengths : (allFin diagram.regionCount).length = partition.length :=
+    Nat.le_antisymm forward backward
+  simpa [partition, proxies, allFin_eq_finRange, Nat.add_assoc] using lengths.symm
+
 /--
 The semantic side conditions that make a designated spine a terminal-body
 interface rather than an arbitrary list of bubbles.

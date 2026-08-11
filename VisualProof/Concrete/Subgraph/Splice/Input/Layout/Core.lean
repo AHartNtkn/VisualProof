@@ -11,6 +11,15 @@ namespace PlugLayout
 def regionCount (layout : PlugLayout input) : Nat :=
   input.frame.val.regionCount + layout.materialRegions.count
 
+@[simp] theorem materialRegions_count (layout : PlugLayout input) :
+    layout.materialRegions.count =
+      input.binderSpine.materialRegions.length := by
+  simp only [SurvivorDomain.count_eq_filterFin_length]
+  unfold BinderSpine.materialRegions
+  congr 2
+  funext region
+  exact layout.materialRegions_exact region
+
 def nodeCount (_layout : PlugLayout input) : Nat :=
   input.frame.val.nodeCount + input.pattern.val.diagram.nodeCount
 
