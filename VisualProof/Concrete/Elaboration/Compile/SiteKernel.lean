@@ -42,9 +42,7 @@ abbrev CompiledSite.local (compiled : CompiledSite source site) :
   siteLocals := compiled.siteLocals
   compilation := compiled.compilation
   siteLocals_eq := compiled.siteLocals_eq
-  completeContext_exact := by
-    rw [← compiled.fullWires_eq]
-    exact compiled.fullWires_exact
+  completeContext_exact := compiled.completeContext_exact
   binder_covers := compiled.binder_covers
   binder_enumeration := compiled.binder_enumeration
 
@@ -228,5 +226,15 @@ noncomputable def kernel (compiled : LocalCompiledSite source site) :
   }
 
 end LocalCompiledSite
+
+namespace CompiledSite
+
+/-- The local count of a compiled host site is derived from its exact compiler
+call rather than stored independently. -/
+theorem siteBody_localCount (compiled : CompiledSite source site) :
+    compiled.siteBody.localCount = compiled.siteLocals.length :=
+  compiled.compilation.siteBody_localCount
+
+end CompiledSite
 
 end VisualProof.Concrete

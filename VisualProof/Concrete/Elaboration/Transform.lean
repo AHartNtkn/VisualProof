@@ -33,10 +33,7 @@ structure RegionSiteCompilation
     siteBinders = some siteBody
   siteLocals : WireContext diagram
   siteLocals_eq : siteLocals = exactScopeWires diagram site
-  fullWires : WireContext diagram
-  fullWires_eq : fullWires = siteContext ++ siteLocals
-  fullWires_exact : fullWires.Exact site
-  siteBody_localCount : siteBody.localCount = siteLocals.length
+  completeContext_exact : (siteContext ++ siteLocals).Exact site
   binder_covers : siteBinders.Covers site
   binder_enumeration : BinderContext.Enumeration diagram siteBinders site
   focus_wires : witness.toFocus.holeWires = siteContext.length
@@ -75,10 +72,7 @@ noncomputable def RegionSiteCompilation.ofRegion
       site_compiled := compiled
       siteLocals := exactScopeWires diagram site
       siteLocals_eq := rfl
-      fullWires := context.extend site
-      fullWires_eq := rfl
-      fullWires_exact := fullWires
-      siteBody_localCount := compileRegion?_localCount compiled
+      completeContext_exact := fullWires
       binder_covers := binderCovers
       binder_enumeration := binderEnumeration
       focus_wires := rfl
@@ -182,10 +176,7 @@ noncomputable def RegionSiteCompilation.ofRegion
                       site_compiled := nested.site_compiled
                       siteLocals := nested.siteLocals
                       siteLocals_eq := nested.siteLocals_eq
-                      fullWires := nested.fullWires
-                      fullWires_eq := nested.fullWires_eq
-                      fullWires_exact := nested.fullWires_exact
-                      siteBody_localCount := nested.siteBody_localCount
+                      completeContext_exact := nested.completeContext_exact
                       binder_covers := nested.binder_covers
                       binder_enumeration := nested.binder_enumeration
                       focus_wires := by
@@ -268,10 +259,7 @@ noncomputable def RegionSiteCompilation.ofRegion
                       site_compiled := nested.site_compiled
                       siteLocals := nested.siteLocals
                       siteLocals_eq := nested.siteLocals_eq
-                      fullWires := nested.fullWires
-                      fullWires_eq := nested.fullWires_eq
-                      fullWires_exact := nested.fullWires_exact
-                      siteBody_localCount := nested.siteBody_localCount
+                      completeContext_exact := nested.completeContext_exact
                       binder_covers := nested.binder_covers
                       binder_enumeration := nested.binder_enumeration
                       focus_wires := by
@@ -409,10 +397,7 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                 site_compiled := nested.site_compiled
                 siteLocals := nested.siteLocals
                 siteLocals_eq := nested.siteLocals_eq
-                fullWires := nested.fullWires
-                fullWires_eq := nested.fullWires_eq
-                fullWires_exact := nested.fullWires_exact
-                siteBody_localCount := nested.siteBody_localCount
+                completeContext_exact := nested.completeContext_exact
                 binder_covers := nested.binder_covers
                 binder_enumeration := nested.binder_enumeration
                 focus_wires := by
@@ -494,10 +479,7 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                 site_compiled := nested.site_compiled
                 siteLocals := nested.siteLocals
                 siteLocals_eq := nested.siteLocals_eq
-                fullWires := nested.fullWires
-                fullWires_eq := nested.fullWires_eq
-                fullWires_exact := nested.fullWires_exact
-                siteBody_localCount := nested.siteBody_localCount
+                completeContext_exact := nested.completeContext_exact
                 binder_covers := nested.binder_covers
                 binder_enumeration := nested.binder_enumeration
                 focus_wires := by
@@ -550,10 +532,7 @@ structure CompiledSite (source : State arity)
       source.checked.val.hiddenWires
     else
       exactScopeWires source.checked.val.diagram site
-  fullWires : WireContext source.checked.val.diagram
-  fullWires_eq : fullWires = siteContext ++ siteLocals
-  fullWires_exact : fullWires.Exact site
-  siteBody_localCount : siteBody.localCount = siteLocals.length
+  completeContext_exact : (siteContext ++ siteLocals).Exact site
   binder_covers : siteBinders.Covers site
   binder_enumeration : BinderContext.Enumeration
     source.checked.val.diagram siteBinders site
@@ -742,11 +721,7 @@ noncomputable def CompiledSite.ofSource (source : State arity)
           rootCompiledSource
       siteLocals := source.checked.val.hiddenWires
       siteLocals_eq := by simp
-      fullWires := source.checked.val.exposedWires ++
-        source.checked.val.hiddenWires
-      fullWires_eq := rfl
-      fullWires_exact := openRootWires_exact source.checked.property
-      siteBody_localCount := compileRoot?_localCount rootCompiledSource
+      completeContext_exact := openRootWires_exact source.checked.property
       binder_covers := BinderContext.empty_covers_root
         source.checked.property.diagram_well_formed
       binder_enumeration := BinderContext.Enumeration.empty
@@ -781,18 +756,8 @@ noncomputable def CompiledSite.ofSource (source : State arity)
         nested.siteBinders nested.siteFuel nested.siteBody nested.site_compiled
       siteLocals_eq := by
         rw [if_neg atRoot]
-      fullWires := nested.fullWires
-      fullWires_eq := by
-        calc
-          nested.fullWires = nested.siteContext ++ nested.siteLocals :=
-            nested.fullWires_eq
-          _ = nested.siteContext ++
-              exactScopeWires source.checked.val.diagram site :=
-            congrArg (List.append nested.siteContext) nested.siteLocals_eq
-      fullWires_exact := nested.fullWires_exact
-      siteBody_localCount := by
-        rw [← nested.siteLocals_eq]
-        exact nested.siteBody_localCount
+      completeContext_exact := by
+        simpa [nested.siteLocals_eq] using nested.completeContext_exact
       binder_covers := nested.binder_covers
       binder_enumeration := nested.binder_enumeration
       focus_wires := nested.focus_wires
