@@ -525,6 +525,11 @@ structure CompiledSite (source : State arity)
   compilation : ExactSiteCompilation source.checked.val.diagram site siteRels
     siteContext siteBinders siteBody
   siteLocals : WireContext source.checked.val.diagram
+  siteLocals_eq : siteLocals =
+    if site = source.checked.val.diagram.root then
+      source.checked.val.hiddenWires
+    else
+      exactScopeWires source.checked.val.diagram site
   fullWires : WireContext source.checked.val.diagram
   fullWires_eq : fullWires = siteContext ++ siteLocals
   fullWires_exact : fullWires.Exact site
@@ -586,6 +591,7 @@ noncomputable def CompiledSite.ofSource (source : State arity)
         source.checked.val.hiddenWires source.checked.elaborate.body
           rootCompiledSource
       siteLocals := source.checked.val.hiddenWires
+      siteLocals_eq := by simp
       fullWires := source.checked.val.exposedWires ++
         source.checked.val.hiddenWires
       fullWires_eq := rfl
@@ -616,6 +622,9 @@ noncomputable def CompiledSite.ofSource (source : State arity)
       compilation := .region site nested.siteRels nested.siteContext
         nested.siteBinders nested.siteFuel nested.siteBody nested.site_compiled
       siteLocals := nested.siteLocals
+      siteLocals_eq := by
+        rw [if_neg atRoot]
+        exact nested.siteLocals_eq
       fullWires := nested.fullWires
       fullWires_eq := nested.fullWires_eq
       fullWires_exact := nested.fullWires_exact
