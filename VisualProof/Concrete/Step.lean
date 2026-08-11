@@ -8,6 +8,7 @@ structure Insertion {arity : Nat} (source : State arity) where
   input : Concrete.Splice.Input
   frame_eq : input.frame = source.diagram
   admissible : input.Admissible
+  attachment_consistent : input.AttachmentConsistent
 
 /-- The ten concrete, proof-bearing execution requests. -/
 inductive Step {arity : Nat} (source : State arity)

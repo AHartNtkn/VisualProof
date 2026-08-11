@@ -118,6 +118,7 @@ def doubleCutWrappedReplacement (input : Checked)
       .ok {
         pattern
         attachment := base.attachment
+        attachment_consistent := base.attachment_consistent
         binderSpine := doubleCutWrapperSpine base.pattern.val base.binderSpine
         binderTarget := base.binderTarget
       }
@@ -234,6 +235,7 @@ def vacuousWrappedReplacement (input : Checked)
       .ok {
         pattern
         attachment := base.attachment
+        attachment_consistent := base.attachment_consistent
         binderSpine := vacuousWrapperSpine base.pattern.val
           base.binderSpine arity
         binderTarget := base.binderTarget

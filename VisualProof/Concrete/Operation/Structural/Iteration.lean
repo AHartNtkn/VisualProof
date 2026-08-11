@@ -25,6 +25,17 @@ def iterationSpliceInput (input : Checked)
     binderSpine := input.val.extractedBinderSpine selection layout
     binderTarget := fun index => layout.externalBinders.get index }
 
+theorem iterationSpliceInput_attachmentConsistent (input : Checked)
+    (selection : CheckedSelection input.val)
+    (target : Fin input.val.regionCount) :
+    (iterationSpliceInput input selection target).AttachmentConsistent := by
+  intro left right boundaryEq
+  let layout : FragmentLayout input.val selection := {}
+  have positionEq := input.val.extractBoundaryRaw_get_injective
+    selection layout boundaryEq
+  subst right
+  rfl
+
 def applyIteration (input : Checked )
     (selection : CheckedSelection input.val)
     (target : Fin input.val.regionCount) :

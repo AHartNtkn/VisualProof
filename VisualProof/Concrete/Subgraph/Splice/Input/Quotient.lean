@@ -270,6 +270,20 @@ def attachmentEdges (input : Input ) :
       else
         none
 
+/-- A contextual insertion may identify repeated boundary positions only when
+those positions already name the same frame wire.  This source-only contract
+separates logical insertion from the more general raw splice operation, which
+also supports intentional frame-wire coalescence. -/
+def AttachmentConsistent (input : Input) : Prop :=
+  ∀ left right : Fin input.pattern.val.boundary.length,
+    input.pattern.val.boundary.get left =
+        input.pattern.val.boundary.get right →
+      input.attachment left = input.attachment right
+
+instance (input : Input) : Decidable input.AttachmentConsistent := by
+  unfold AttachmentConsistent
+  infer_instance
+
 theorem mem_attachmentEdges_iff (input : Input )
     (edge : Fin input.frame.val.wireCount × Fin input.frame.val.wireCount) :
     edge ∈ input.attachmentEdges ↔
@@ -288,6 +302,14 @@ theorem mem_attachmentEdges_iff (input : Input )
     refine ⟨left, mem_allFin left, right, mem_allFin right, ?_⟩
     rw [if_pos (by
       simpa only [List.get_eq_getElem] using hwire)]
+
+theorem attachmentEdge_eq (input : Input)
+    (consistent : input.AttachmentConsistent)
+    {edge : Fin input.frame.val.wireCount × Fin input.frame.val.wireCount}
+    (member : edge ∈ input.attachmentEdges) : edge.1 = edge.2 := by
+  rw [input.mem_attachmentEdges_iff] at member
+  obtain ⟨left, right, boundaryEq, rfl⟩ := member
+  exact consistent left right boundaryEq
 
 def attachmentPartition (input : Input ) :
     FinitePartition input.frame.val.wireCount :=
@@ -312,6 +334,23 @@ theorem quotientWire_eq_iff (input : Input )
       input.attachmentPartition.related left right = true :=
   input.attachmentPartition.classIndex_eq_iff_related
     input.attachmentPartition_normalized left right
+
+theorem attachmentPartition_related_eq (input : Input)
+    (consistent : input.AttachmentConsistent)
+    {left right : Fin input.frame.val.wireCount}
+    (related : input.attachmentPartition.related left right = true) :
+    left = right := by
+  exact FinitePartition.least (relation := fun first second => first = second)
+    (fun _ => rfl) (fun equality => equality.symm)
+    (fun first second => first.trans second)
+    (fun edge member => input.attachmentEdge_eq consistent member) related
+
+theorem quotientWire_injective (input : Input)
+    (consistent : input.AttachmentConsistent) :
+    Function.Injective input.quotientWire := by
+  intro left right equality
+  apply input.attachmentPartition_related_eq consistent
+  exact (input.quotientWire_eq_iff left right).1 equality
 
 @[simp] theorem quotientWire_wireQuotient_origin (input : Input )
     (quotient : input.wireQuotient.Carrier) :

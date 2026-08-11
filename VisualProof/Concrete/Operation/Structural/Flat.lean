@@ -300,6 +300,9 @@ structure SelectionReplacement (input : Checked)
     (selection : CheckedSelection input.val) where
   pattern : CheckedOpen
   attachment : Fin pattern.val.boundary.length → Fin input.val.wireCount
+  attachment_consistent : ∀ left right,
+    pattern.val.boundary.get left = pattern.val.boundary.get right →
+      attachment left = attachment right
   binderSpine : BinderSpine pattern.val.diagram
   binderTarget : Fin binderSpine.proxyCount → Fin input.val.regionCount
 
@@ -309,26 +312,42 @@ private def replacementSpliceInput?
     (domains : FrameDomains input.val selection)
     (frame : Checked)
     (frameEq : frame.val = input.val.removeRaw selection domains) :
-    Option { spliceInput : Splice.Input // spliceInput.frame = frame } := do
-  let site ← domains.regions.index? selection.val.anchor
-  let attachment ← sequenceFin fun position =>
-    domains.wires.index? (replacement.attachment position)
-  let binderTarget ← sequenceFin fun index =>
-    domains.regions.index? (replacement.binderTarget index)
-  let regionCountEq : frame.val.regionCount = domains.regions.count :=
-    (congrArg Concrete.Diagram.regionCount frameEq).trans rfl
-  let wireCountEq : frame.val.wireCount = domains.wires.count :=
-    (congrArg Concrete.Diagram.wireCount frameEq).trans rfl
-  pure ⟨{
-      frame
-      pattern := replacement.pattern
-      site := Fin.cast regionCountEq.symm site
-      attachment := fun position =>
-        Fin.cast wireCountEq.symm (attachment position)
-      binderSpine := replacement.binderSpine
-      binderTarget := fun index =>
-        Fin.cast regionCountEq.symm (binderTarget index)
-    }, rfl⟩
+    Option { spliceInput : Splice.Input //
+      spliceInput.frame = frame ∧ spliceInput.AttachmentConsistent } :=
+  match domains.regions.index? selection.val.anchor with
+  | none => none
+  | some site =>
+      match hattachment : sequenceFin fun position =>
+          domains.wires.index? (replacement.attachment position) with
+      | none => none
+      | some attachment =>
+          match sequenceFin fun index =>
+              domains.regions.index? (replacement.binderTarget index) with
+          | none => none
+          | some binderTarget =>
+              let regionCountEq : frame.val.regionCount =
+                  domains.regions.count :=
+                (congrArg Concrete.Diagram.regionCount frameEq).trans rfl
+              let wireCountEq : frame.val.wireCount = domains.wires.count :=
+                (congrArg Concrete.Diagram.wireCount frameEq).trans rfl
+              some ⟨{
+                  frame
+                  pattern := replacement.pattern
+                  site := Fin.cast regionCountEq.symm site
+                  attachment := fun position =>
+                    Fin.cast wireCountEq.symm (attachment position)
+                  binderSpine := replacement.binderSpine
+                  binderTarget := fun index =>
+                    Fin.cast regionCountEq.symm (binderTarget index)
+                }, rfl, by
+                  intro left right boundaryEq
+                  have sourceEq := replacement.attachment_consistent
+                    left right boundaryEq
+                  have denseEq : attachment left = attachment right := by
+                    apply Option.some.inj
+                    rw [← sequenceFin_sound hattachment left,
+                      ← sequenceFin_sound hattachment right, sourceEq]
+                  exact congrArg (Fin.cast wireCountEq.symm) denseEq⟩
 
 /-- The exact removal-plus-splice input computed for one selection replacement. -/
 structure PreparedSelectionReplacement (input : Checked)
@@ -339,6 +358,7 @@ structure PreparedSelectionReplacement (input : Checked)
   frameEq : frame.val = input.val.removeRaw selection domains
   spliceInput : Splice.Input
   spliceFrameEq : spliceInput.frame = frame
+  spliceAttachmentConsistent : spliceInput.AttachmentConsistent
 
 def prepareSelectionReplacement (input : Checked)
     (selection : CheckedSelection input.val)
@@ -358,7 +378,8 @@ def prepareSelectionReplacement (input : Checked)
           frame
           frameEq
           spliceInput := prepared.val
-          spliceFrameEq := prepared.property
+          spliceFrameEq := prepared.property.1
+          spliceAttachmentConsistent := prepared.property.2
         }
 
 private def replacementFrameProvenance
@@ -484,6 +505,7 @@ def emptySelectionReplacement (input : Checked)
     SelectionReplacement input selection where
   pattern := emptyReplacementOpen
   attachment := Fin.elim0
+  attachment_consistent := fun left => Fin.elim0 left
   binderSpine := emptyReplacementSpine
   binderTarget := Fin.elim0
 
@@ -501,6 +523,12 @@ def extractedSelectionReplacementFor (input : Checked)
       material.touchingWires.get
         (Fin.cast (input.val.extractBoundaryRaw_length material layout)
           position)
+    attachment_consistent := by
+      intro left right boundaryEq
+      have positionEq := input.val.extractBoundaryRaw_get_injective
+        material layout boundaryEq
+      subst right
+      rfl
     binderSpine := input.val.extractedBinderSpine material layout
     binderTarget := fun index => layout.externalBinders.get index }
 
