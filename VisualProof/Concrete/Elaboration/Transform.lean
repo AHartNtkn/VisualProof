@@ -10,37 +10,62 @@ open VisualProof.Diagram
 open VisualProof.Theory
 open Elaboration
 
-/-- The concrete parent chain traversed by a source compiler derivation. -/
-inductive ConcreteRegionRoute (diagram : Concrete.Diagram) :
-    Fin diagram.regionCount → Fin diagram.regionCount → Type
-  | here (region : Fin diagram.regionCount) :
-      ConcreteRegionRoute diagram region region
-  | step {ancestor child site : Fin diagram.regionCount}
-      (parent : (diagram.regions child).parent? = some ancestor)
-      (nested : ConcreteRegionRoute diagram child site) :
-      ConcreteRegionRoute diagram ancestor site
+/-- The exact initial call from which a source compiler route descends. -/
+inductive ConcreteCompilerStart (diagram : Concrete.Diagram)
+  | openRoot (ambient locals : WireContext diagram)
+  | region (origin : Fin diagram.regionCount) (context : WireContext diagram)
+
+/-- A source compiler route indexed by its exact terminal concrete context.
+The open-root constructors retain the exceptional ambient/local split, while
+recursive steps extend the context by the current region's local wires. -/
+inductive ConcreteCompilerRoute (diagram : Concrete.Diagram) :
+    ConcreteCompilerStart diagram →
+      (site : Fin diagram.regionCount) → WireContext diagram → Type
+  | root (ambient locals : WireContext diagram) :
+      ConcreteCompilerRoute diagram (.openRoot ambient locals)
+        diagram.root ambient
+  | rootStep {ambient locals : WireContext diagram}
+      {child site : Fin diagram.regionCount} {siteContext : WireContext diagram}
+      (parent : (diagram.regions child).parent? = some diagram.root)
+      (nested : ConcreteCompilerRoute diagram
+        (.region child (ambient ++ locals)) site siteContext) :
+      ConcreteCompilerRoute diagram (.openRoot ambient locals)
+        site siteContext
+  | regionHere (region : Fin diagram.regionCount)
+      (context : WireContext diagram) :
+      ConcreteCompilerRoute diagram (.region region context) region context
+  | regionStep {origin child site : Fin diagram.regionCount}
+      {context siteContext : WireContext diagram}
+      (parent : (diagram.regions child).parent? = some origin)
+      (nested : ConcreteCompilerRoute diagram
+        (.region child (context.extend origin)) site siteContext) :
+      ConcreteCompilerRoute diagram (.region origin context) site siteContext
 
 /-- A source compiler computation focused at one concrete region.  The
 intrinsic path belongs to the already compiled source body; the concrete wire
 and binder contexts are the exact inputs of the focused source compiler call. -/
 structure RegionSiteCompilation
     (diagram : Concrete.Diagram)
-    (origin : Fin diagram.regionCount)
+    (start : ConcreteCompilerStart diagram)
     (site : Fin diagram.regionCount)
     {outerWires : Nat} {outerRels : RelCtx}
     (body : Region outerWires outerRels) where
-  route : ConcreteRegionRoute diagram origin site
   path : List Nat
   witness : Region.ContextPath body path
   siteRels : RelCtx
   siteContext : WireContext diagram
+  route : ConcreteCompilerRoute diagram start site siteContext
   siteBinders : BinderContext diagram siteRels
   siteFuel : Nat
   siteBody : Region siteContext.length siteRels
   site_compiled : compileRegion? diagram siteFuel site siteContext
     siteBinders = some siteBody
+  siteLocals : WireContext diagram
+  siteLocals_eq : siteLocals = exactScopeWires diagram site
   fullWires : WireContext diagram
+  fullWires_eq : fullWires = siteContext ++ siteLocals
   fullWires_exact : fullWires.Exact site
+  siteBody_localCount : siteBody.localCount = siteLocals.length
   binder_covers : siteBinders.Covers site
   binder_enumeration : BinderContext.Enumeration diagram siteBinders site
   focus_wires : witness.toFocus.holeWires = siteContext.length
@@ -60,11 +85,11 @@ noncomputable def RegionSiteCompilation.ofRegion
     (binderCovers : binders.Covers current)
     (binderEnumeration : BinderContext.Enumeration diagram binders current)
     (encloses : diagram.Encloses current site) :
-    RegionSiteCompilation diagram current site body := by
+    RegionSiteCompilation diagram (.region current context) site body := by
   by_cases atSite : current = site
   · subst current
     exact {
-      route := .here site
+      route := .regionHere site context
       path := []
       witness := .here body
       siteRels := rels
@@ -73,8 +98,12 @@ noncomputable def RegionSiteCompilation.ofRegion
       siteFuel := fuel
       siteBody := body
       site_compiled := compiled
+      siteLocals := exactScopeWires diagram site
+      siteLocals_eq := rfl
       fullWires := context.extend site
+      fullWires_eq := rfl
       fullWires_exact := fullWires
+      siteBody_localCount := compileRegion?_localCount compiled
       binder_covers := binderCovers
       binder_enumeration := binderEnumeration
       focus_wires := rfl
@@ -161,7 +190,7 @@ noncomputable def RegionSiteCompilation.ofRegion
                         (occurrenceIndex.val :: nested.path) :=
                       .cut castFocus castAt castCut castNested
                     exact {
-                      route := .step childParent nested.route
+                      route := .regionStep childParent nested.route
                       path := occurrenceIndex.val :: nested.path
                       witness := witness
                       siteRels := nested.siteRels
@@ -170,8 +199,12 @@ noncomputable def RegionSiteCompilation.ofRegion
                       siteFuel := nested.siteFuel
                       siteBody := nested.siteBody
                       site_compiled := nested.site_compiled
+                      siteLocals := nested.siteLocals
+                      siteLocals_eq := nested.siteLocals_eq
                       fullWires := nested.fullWires
+                      fullWires_eq := nested.fullWires_eq
                       fullWires_exact := nested.fullWires_exact
+                      siteBody_localCount := nested.siteBody_localCount
                       binder_covers := nested.binder_covers
                       binder_enumeration := nested.binder_enumeration
                       focus_wires := by
@@ -226,7 +259,7 @@ noncomputable def RegionSiteCompilation.ofRegion
                         (occurrenceIndex.val :: nested.path) :=
                       .bubble castFocus castAt castBubble castNested
                     exact {
-                      route := .step childParent nested.route
+                      route := .regionStep childParent nested.route
                       path := occurrenceIndex.val :: nested.path
                       witness := witness
                       siteRels := nested.siteRels
@@ -235,8 +268,12 @@ noncomputable def RegionSiteCompilation.ofRegion
                       siteFuel := nested.siteFuel
                       siteBody := nested.siteBody
                       site_compiled := nested.site_compiled
+                      siteLocals := nested.siteLocals
+                      siteLocals_eq := nested.siteLocals_eq
                       fullWires := nested.fullWires
+                      fullWires_eq := nested.fullWires_eq
                       fullWires_exact := nested.fullWires_exact
+                      siteBody_localCount := nested.siteBody_localCount
                       binder_covers := nested.binder_covers
                       binder_enumeration := nested.binder_enumeration
                       focus_wires := by
@@ -267,7 +304,7 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
     (rootBinders : (BinderContext.empty : BinderContext diagram []).Covers
       diagram.root)
     (notRoot : site ≠ diagram.root) :
-    RegionSiteCompilation diagram diagram.root site body := by
+    RegionSiteCompilation diagram (.openRoot ambient locals) site body := by
   simp only [compileRoot?] at compiled
   let rootContext := ambient ++ locals
   cases itemsResult : compileOccurrencesWith? diagram
@@ -346,7 +383,7 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                   (occurrenceIndex.val :: nested.path) :=
                 .cut castFocus castAt castCut castNested
               exact {
-                route := .step childParent nested.route
+                route := .rootStep childParent nested.route
                 path := occurrenceIndex.val :: nested.path
                 witness := witness
                 siteRels := nested.siteRels
@@ -355,8 +392,12 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                 siteFuel := nested.siteFuel
                 siteBody := nested.siteBody
                 site_compiled := nested.site_compiled
+                siteLocals := nested.siteLocals
+                siteLocals_eq := nested.siteLocals_eq
                 fullWires := nested.fullWires
+                fullWires_eq := nested.fullWires_eq
                 fullWires_exact := nested.fullWires_exact
+                siteBody_localCount := nested.siteBody_localCount
                 binder_covers := nested.binder_covers
                 binder_enumeration := nested.binder_enumeration
                 focus_wires := by
@@ -411,7 +452,7 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                   (occurrenceIndex.val :: nested.path) :=
                 .bubble castFocus castAt castBubble castNested
               exact {
-                route := .step childParent nested.route
+                route := .rootStep childParent nested.route
                 path := occurrenceIndex.val :: nested.path
                 witness := witness
                 siteRels := nested.siteRels
@@ -420,8 +461,12 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                 siteFuel := nested.siteFuel
                 siteBody := nested.siteBody
                 site_compiled := nested.site_compiled
+                siteLocals := nested.siteLocals
+                siteLocals_eq := nested.siteLocals_eq
                 fullWires := nested.fullWires
+                fullWires_eq := nested.fullWires_eq
                 fullWires_exact := nested.fullWires_exact
+                siteBody_localCount := nested.siteBody_localCount
                 binder_covers := nested.binder_covers
                 binder_enumeration := nested.binder_enumeration
                 focus_wires := by
@@ -468,18 +513,22 @@ contains the source compiler derivation, its concrete parent chain, and its
 intrinsic abstract focus, with no generated target or target-selected data. -/
 structure CompiledSite (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) where
-  route : ConcreteRegionRoute source.checked.val.diagram
-    source.checked.val.diagram.root site
   path : List Nat
   witness : Region.ContextPath source.checked.elaborate.body path
   siteRels : RelCtx
   siteContext : WireContext source.checked.val.diagram
+  route : ConcreteCompilerRoute source.checked.val.diagram
+    (.openRoot source.checked.val.exposedWires
+      source.checked.val.hiddenWires) site siteContext
   siteBinders : BinderContext source.checked.val.diagram siteRels
   siteBody : Region siteContext.length siteRels
   compilation : ExactSiteCompilation source.checked.val.diagram site siteRels
     siteContext siteBinders siteBody
+  siteLocals : WireContext source.checked.val.diagram
   fullWires : WireContext source.checked.val.diagram
+  fullWires_eq : fullWires = siteContext ++ siteLocals
   fullWires_exact : fullWires.Exact site
+  siteBody_localCount : siteBody.localCount = siteLocals.length
   binder_covers : siteBinders.Covers site
   binder_enumeration : BinderContext.Enumeration
     source.checked.val.diagram siteBinders site
@@ -525,7 +574,8 @@ noncomputable def CompiledSite.ofSource (source : State arity)
   by_cases atRoot : site = source.checked.val.diagram.root
   · subst site
     exact {
-      route := .here source.checked.val.diagram.root
+      route := .root source.checked.val.exposedWires
+        source.checked.val.hiddenWires
       path := []
       witness := .here source.checked.elaborate.body
       siteRels := []
@@ -535,9 +585,12 @@ noncomputable def CompiledSite.ofSource (source : State arity)
       compilation := .root source.checked.val.exposedWires
         source.checked.val.hiddenWires source.checked.elaborate.body
           rootCompiledSource
+      siteLocals := source.checked.val.hiddenWires
       fullWires := source.checked.val.exposedWires ++
         source.checked.val.hiddenWires
+      fullWires_eq := rfl
       fullWires_exact := openRootWires_exact source.checked.property
+      siteBody_localCount := compileRoot?_localCount rootCompiledSource
       binder_covers := BinderContext.empty_covers_root
         source.checked.property.diagram_well_formed
       binder_enumeration := BinderContext.Enumeration.empty
@@ -562,8 +615,11 @@ noncomputable def CompiledSite.ofSource (source : State arity)
       siteBody := nested.siteBody
       compilation := .region site nested.siteRels nested.siteContext
         nested.siteBinders nested.siteFuel nested.siteBody nested.site_compiled
+      siteLocals := nested.siteLocals
       fullWires := nested.fullWires
+      fullWires_eq := nested.fullWires_eq
       fullWires_exact := nested.fullWires_exact
+      siteBody_localCount := nested.siteBody_localCount
       binder_covers := nested.binder_covers
       binder_enumeration := nested.binder_enumeration
       focus_wires := nested.focus_wires
