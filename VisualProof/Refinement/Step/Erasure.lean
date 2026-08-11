@@ -4,6 +4,8 @@ import VisualProof.Refinement.Step.Core
 
 namespace VisualProof.Refinement.Erasure
 
+open VisualProof.Diagram
+
 private theorem spliceLocal
     {arity : Nat} {source : Concrete.State arity}
     (normalized : Concrete.Splice.Input.SourceNormalized source)
@@ -31,6 +33,50 @@ private theorem spliceLocal
     Diagram.Region.mk_itemsCast host.siteBody host.siteBody_localCount
   rw [← hostBody]
   exact evidence
+
+private theorem directedErasure
+    {orientation : Concrete.Orientation}
+    {source target : OpenDiagram arity}
+    (replacement : Diagram.ContextReplacement source target)
+    (localEvidence : Rule.Erasure.Local replacement.before replacement.after)
+    (depthEq : replacement.context.cutDepth = depth)
+    (guard : Concrete.erasurePolarity orientation depth) :
+    DirectedStep orientation source target := by
+  have polarity := contextPolarity_of_erasurePolarity replacement.context
+    depthEq guard
+  cases orientation with
+  | forward =>
+      exact Rule.Step.erasure (replacement.lift (by
+        simpa only [polarity, Rule.atPolarity] using localEvidence))
+  | backward =>
+      apply Rule.Step.erasure
+      apply replacement.symm.lift
+      change Rule.atPolarity replacement.context.polarity
+        Rule.Erasure.Local replacement.after replacement.before
+      simpa only [polarity, Rule.atPolarity, Rule.converse] using
+        localEvidence
+
+private theorem directedSpawn
+    {orientation : Concrete.Orientation}
+    {source target : OpenDiagram arity}
+    (replacement : Diagram.ContextReplacement source target)
+    (localEvidence : Rule.Erasure.Local replacement.after replacement.before)
+    (depthEq : replacement.context.cutDepth = depth)
+    (guard : Concrete.spawnPolarity orientation depth) :
+    DirectedStep orientation source target := by
+  have polarity := contextPolarity_of_spawnPolarity replacement.context
+    depthEq guard
+  cases orientation with
+  | forward =>
+      exact Rule.Step.erasure (replacement.lift (by
+        simpa only [polarity, Rule.atPolarity, Rule.converse] using
+          localEvidence))
+  | backward =>
+      apply Rule.Step.erasure
+      apply replacement.symm.lift
+      change Rule.atPolarity replacement.context.polarity
+        Rule.Erasure.Local replacement.after replacement.before
+      simpa only [polarity, Rule.atPolarity] using localEvidence
 
 theorem erasure
     {arity : Nat}
