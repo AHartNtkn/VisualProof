@@ -551,6 +551,249 @@ theorem mapBinderContext_push
     simp only [mapBinderContext, BinderContext.push, equality,
       targetInequality, ↓reduceIte]
 
+/-- The source lexical position represented by one compacted frame-context
+position.  Lookup is performed only in the supplied source context. -/
+noncomputable def mapWireContextOriginIndex
+    (domains : FrameDomains d selection) (context : WireContext d)
+    (index : Fin (domains.mapWireContext context).length) :
+    Fin context.length := by
+  let mappedWire := domains.wires.origin
+    ((domains.mapWireContext context).get index)
+  have mappedMember : mappedWire ∈
+      (domains.mapWireContext context).map domains.wires.origin := by
+    exact List.mem_map.mpr ⟨(domains.mapWireContext context).get index,
+      List.get_mem _ index, rfl⟩
+  have sourceMember : mappedWire ∈ context := by
+    rw [domains.map_mapWireContext_origin] at mappedMember
+    exact (List.mem_filter.mp mappedMember).1
+  exact Classical.choose (WireContext.lookup?_complete sourceMember)
+
+/-- A compacted context position retrieves its represented source wire at the
+source-only position selected above. -/
+theorem mapWireContextOriginIndex_get
+    (domains : FrameDomains d selection) (context : WireContext d)
+    (index : Fin (domains.mapWireContext context).length) :
+    context.get (domains.mapWireContextOriginIndex context index) =
+      domains.wires.origin ((domains.mapWireContext context).get index) := by
+  let mappedWire := domains.wires.origin
+    ((domains.mapWireContext context).get index)
+  have mappedMember : mappedWire ∈
+      (domains.mapWireContext context).map domains.wires.origin := by
+    exact List.mem_map.mpr ⟨(domains.mapWireContext context).get index,
+      List.get_mem _ index, rfl⟩
+  have sourceMember : mappedWire ∈ context := by
+    rw [domains.map_mapWireContext_origin] at mappedMember
+    exact (List.mem_filter.mp mappedMember).1
+  exact indexOf?_sound
+    (Classical.choose_spec (WireContext.lookup?_complete sourceMember))
+
+/-- A retained dense node represents exactly its source node with region and
+binder identities mapped back through the survivor receipt. -/
+theorem removeRaw_node_origin
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (node : domains.nodes.Carrier) :
+    host.val.nodes (domains.nodes.origin node) =
+      match (host.val.removeRaw selection domains).nodes node with
+      | .atom region binder =>
+          .atom (domains.regions.origin region)
+            (domains.regions.origin binder)
+      | .identity region arity =>
+          .identity (domains.regions.origin region) arity := by
+  let original := domains.nodes.origin node
+  have survives := domains.nodes.origin_survives node
+  have indexEq : domains.nodes.index original survives = node :=
+    domains.nodes.index_origin node
+  cases sourceKind : host.val.nodes original with
+  | atom region binder =>
+      rw [← indexEq]
+      rw [Diagram.removeRaw_atom host selection domains survives sourceKind]
+      simp only
+      rw [domains.regions.origin_index, domains.regions.origin_index]
+  | identity region arity =>
+      rw [← indexEq]
+      rw [Diagram.removeRaw_identity host selection domains survives sourceKind]
+      simp only
+      rw [domains.regions.origin_index]
+
+/-- Every retained frame endpoint occurrence maps back to the represented
+source endpoint occurrence. -/
+theorem endpointOccurs_removeRaw_origin_forward
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (wire : domains.wires.Carrier) (node : domains.nodes.Carrier)
+    (port : CPort)
+    (occurs : (host.val.removeRaw selection domains).EndpointOccurs wire
+      ⟨node, port⟩) :
+    host.val.EndpointOccurs (domains.wires.origin wire)
+      ⟨domains.nodes.origin node, port⟩ := by
+  obtain ⟨original, sourceOccurs, reindexed⟩ :=
+    (Diagram.mem_removeRaw_wire_endpoints_iff host selection domains wire
+      ⟨node, port⟩).1 occurs
+  have originalEq := Diagram.reindexEndpoint?_origin domains reindexed
+  simpa only [originalEq] using sourceOccurs
+
+/-- Every source endpoint at a retained node comes from its unique dense frame
+wire. -/
+theorem endpointOccurs_removeRaw_origin_backward
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (sourceWire : Fin host.val.wireCount) (node : domains.nodes.Carrier)
+    (port : CPort)
+    (occurs : host.val.EndpointOccurs sourceWire
+      ⟨domains.nodes.origin node, port⟩) :
+    ∃ targetWire : domains.wires.Carrier,
+      domains.wires.origin targetWire = sourceWire ∧
+        (host.val.removeRaw selection domains).EndpointOccurs targetWire
+          ⟨node, port⟩ := by
+  have nodeSurvives := domains.nodes.origin_survives node
+  have wireSurvives := domains.incidentWire_survives host selection
+    occurs nodeSurvives
+  let targetWire := domains.wires.index sourceWire wireSurvives
+  refine ⟨targetWire, domains.wires.origin_index sourceWire wireSurvives, ?_⟩
+  apply (Diagram.mem_removeRaw_wire_endpoints_iff host selection domains
+    targetWire ⟨node, port⟩).2
+  refine ⟨⟨domains.nodes.origin node, port⟩, ?_, ?_⟩
+  · simpa only [targetWire, domains.wires.origin_index] using occurs
+  · unfold SurvivorDomain.reindexEndpoint?
+    rw [domains.nodes.index?_index]
+    change some ({
+      node := domains.nodes.index (domains.nodes.origin node)
+        (domains.nodes.origin_survives node)
+      port := port
+    } : CEndpoint domains.nodes.count) =
+      some ({ node := node, port := port } : CEndpoint domains.nodes.count)
+    exact congrArg some (congrArg (fun targetNode => ({
+      node := targetNode
+      port := port
+    } : CEndpoint domains.nodes.count)) (domains.nodes.index_origin node))
+
+/-- Port lookup at a retained frame node is the source port lookup transported
+through the exact compacted-context position map. -/
+theorem resolvePort?_removeRaw_origin_map
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (context : WireContext host.val) (contextNodup : context.Nodup)
+    (node : domains.nodes.Carrier) (port : CPort) :
+    resolvePort? host.val context (domains.nodes.origin node) port =
+      (resolvePort? (host.val.removeRaw selection domains)
+        (domains.mapWireContext context) node port).map
+          (domains.mapWireContextOriginIndex context) := by
+  apply resolvePort?_map_of_embedding
+    (domains.mapWireContext context) context node (domains.nodes.origin node)
+    domains.wires.origin domains.wires.origin_injective
+    (domains.mapWireContextOriginIndex context) contextNodup
+    (domains.mapWireContextOriginIndex_get context)
+  · intro wire sourceOccurs
+    exact domains.endpointOccurs_removeRaw_origin_forward host selection wire
+      node port sourceOccurs
+  · intro sourceWire sourceOccurs
+    exact domains.endpointOccurs_removeRaw_origin_backward host selection
+      sourceWire node port sourceOccurs
+  · intro wire _ sourceMember
+    exact List.mem_filterMap.mpr
+      ⟨domains.wires.origin wire, sourceMember,
+        domains.wires.index?_origin wire⟩
+  · exact host.property.wire_endpoints_are_disjoint
+
+/-- Compilation of a retained frame node maps back to the exact source-node
+item.  Thus source success determines frame-node success without a fresh
+compiler choice. -/
+theorem compileNode?_removeRaw_origin_map
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (context : WireContext host.val) (contextNodup : context.Nodup)
+    (binders : BinderContext host.val rels)
+    (node : domains.nodes.Carrier) :
+    compileNode? host.val context binders (domains.nodes.origin node) =
+      (compileNode? (host.val.removeRaw selection domains)
+        (domains.mapWireContext context) (domains.mapBinderContext binders)
+        node).map
+          (Item.renameWires (domains.mapWireContextOriginIndex context)) := by
+  let regionMap :
+      Fin (host.val.removeRaw selection domains).regionCount →
+        Fin host.val.regionCount := domains.regions.origin
+  let binderMap :
+      Fin (host.val.removeRaw selection domains).regionCount →
+        Fin host.val.regionCount := regionMap
+  let wireMap :
+      Fin (domains.mapWireContext context).length → Fin context.length :=
+    domains.mapWireContextOriginIndex context
+  let relationMap : RelationRenaming rels rels := fun relation => relation
+  have mapped := compileNode?_map
+    (source := host.val.removeRaw selection domains) (target := host.val)
+    (domains.mapWireContext context) context
+    (domains.mapBinderContext binders) binders node
+    (domains.nodes.origin node) regionMap binderMap wireMap relationMap
+    (by
+      cases targetKind : (host.val.removeRaw selection domains).nodes node with
+      | atom region binder =>
+          have mappedKind :=
+            domains.removeRaw_node_origin host selection node
+          rw [targetKind] at mappedKind
+          simpa only [regionMap, binderMap] using mappedKind
+      | identity region arity =>
+          have mappedKind :=
+            domains.removeRaw_node_origin host selection node
+          rw [targetKind] at mappedKind
+          simpa only [regionMap, binderMap] using mappedKind)
+    (domains.resolvePort?_removeRaw_origin_map host selection context
+      contextNodup node)
+    (by
+      intro _ binder _
+      unfold mapBinderContext
+      cases binders (domains.regions.origin binder) <;> rfl)
+  simpa only [wireMap, relationMap, Item.renameRelations_id] using mapped
+
+/-- The exact retained-frame node item determined by one successful source
+node computation. -/
+structure MappedNodeCompilation
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (context : WireContext host.val) (binders : BinderContext host.val rels)
+    (node : domains.nodes.Carrier) (sourceItem : Item context.length rels) where
+  targetItem : Item (domains.mapWireContext context).length rels
+  target_compiled :
+    compileNode? (host.val.removeRaw selection domains)
+      (domains.mapWireContext context) (domains.mapBinderContext binders) node =
+        some targetItem
+  source_item_eq :
+    sourceItem =
+      targetItem.renameWires (domains.mapWireContextOriginIndex context)
+
+/-- Source-node success fixes the retained-frame node computation and item;
+no frame compiler witness is independently selected. -/
+def mapNodeCompilation
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (context : WireContext host.val) (contextNodup : context.Nodup)
+    (binders : BinderContext host.val rels)
+    (node : domains.nodes.Carrier) (sourceItem : Item context.length rels)
+    (sourceCompiled :
+      compileNode? host.val context binders (domains.nodes.origin node) =
+        some sourceItem) :
+    MappedNodeCompilation host selection domains context binders node
+      sourceItem := by
+  have mapped := domains.compileNode?_removeRaw_origin_map host selection
+    context contextNodup binders node
+  cases targetCompiled : compileNode? (host.val.removeRaw selection domains)
+      (domains.mapWireContext context) (domains.mapBinderContext binders) node with
+  | none =>
+      rw [targetCompiled] at mapped
+      simp only [Option.map_none] at mapped
+      rw [mapped] at sourceCompiled
+      contradiction
+  | some targetItem =>
+      refine {
+        targetItem := targetItem
+        target_compiled := targetCompiled
+        source_item_eq := ?_
+      }
+      rw [targetCompiled] at mapped
+      simp only [Option.map_some] at mapped
+      rw [mapped] at sourceCompiled
+      exact (Option.some.inj sourceCompiled).symm
+
 /-- A checked selection never removes its own retained anchor. -/
 theorem anchor_survives
     (host : Checked) (selection : CheckedSelection host.val)
