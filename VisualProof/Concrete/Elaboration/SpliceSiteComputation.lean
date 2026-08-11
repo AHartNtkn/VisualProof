@@ -381,7 +381,7 @@ private noncomputable def spliceCompilerRootSiteComputationCore
     siteBinders, derivation, siteBody, siteLocals, compilation,
     siteLocals_eq, fullWires, fullWires_eq, fullWires_exact,
     siteBody_localCount, binder_covers, binder_enumeration, root_compiled,
-    focus_wires, focus_rels, focus_body⟩
+    focus_wires, focus_rels, focus_body, focus_cutDepth⟩
   cases derivation with
   | root =>
       let rootHost : CompiledSite source normalized.site := {
@@ -408,6 +408,7 @@ private noncomputable def spliceCompilerRootSiteComputationCore
         focus_wires := focus_wires
         focus_rels := focus_rels
         focus_body := focus_body
+        focus_cutDepth := focus_cutDepth
       }
       change RootSiteComputation normalized layout consistent rootHost
         (layout.spliceCompilerSiteBody normalized consistent admissible

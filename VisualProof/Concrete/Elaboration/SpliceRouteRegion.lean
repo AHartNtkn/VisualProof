@@ -2219,8 +2219,40 @@ private noncomputable def mappedRegionBubbleStep
     source_focus_rels := focusRels
     source_focus_body := focusBody
     source_context_heq := by
-      cases nested.source_context_heq
-      rfl
+      have normalizedContext :
+          HEq nestedAlignment.sourceContext
+            nested.alignment.sourceContext :=
+        nested.alignment.normalizeFrameChild_sourceContext_heq layout
+          consistent terminal context origin away
+      have castWitness : HEq nestedWitness.toFocus.context
+          nested.sourceWitness.toFocus.context :=
+        Region.ContextPath.castWiresEq_toFocus_context_heq sourceEq
+          nested.sourceWitness
+      have childHeq : HEq nestedAlignment.sourceContext
+          nestedWitness.toFocus.context :=
+        normalizedContext.trans
+          (nested.source_context_heq.trans castWitness.symm)
+      let normalizedNestedContext := castRouteFocusContext focusWires
+        focusRels nestedWitness.toFocus.context
+      have normalizedNestedHeq : HEq normalizedNestedContext
+          nestedWitness.toFocus.context :=
+        castRouteFocusContext_heq focusWires focusRels
+          nestedWitness.toFocus.context
+      have childEq : nestedAlignment.sourceContext =
+          normalizedNestedContext :=
+        eq_of_heq (childHeq.trans normalizedNestedHeq.symm)
+      have parentEq : alignment.sourceContext =
+          castRouteFocusContext focusWires focusRels
+            sourceWitness.toFocus.context := by
+        change DiagramContext.bubble _ sourceFocused.focus.before
+            sourceFocused.focus.after _ nestedAlignment.sourceContext =
+          castRouteFocusContext focusWires focusRels
+            (DiagramContext.bubble _ sourceFocused.focus.before
+              sourceFocused.focus.after _ nestedWitness.toFocus.context)
+        rw [castRouteFocusContext_bubble, childEq]
+      exact (heq_of_eq parentEq).trans
+        (castRouteFocusContext_heq focusWires focusRels
+          sourceWitness.toFocus.context)
   }
 
 /-- GREEN cut-step assembler from a proper root child to the generated open
@@ -2445,8 +2477,40 @@ private noncomputable def mappedOpenCutStep
     source_focus_rels := focusRels
     source_focus_body := focusBody
     source_context_heq := by
-      cases nested.source_context_heq
-      rfl
+      have normalizedContext :
+          HEq nestedAlignment.sourceContext
+            nested.alignment.sourceContext :=
+        nested.alignment.normalizeOpenRootChild_sourceContext_heq layout
+          consistent terminal boundary away
+      have castWitness : HEq nestedWitness.toFocus.context
+          nested.sourceWitness.toFocus.context :=
+        Region.ContextPath.castWiresEq_toFocus_context_heq sourceEq
+          nested.sourceWitness
+      have childHeq : HEq nestedAlignment.sourceContext
+          nestedWitness.toFocus.context :=
+        normalizedContext.trans
+          (nested.source_context_heq.trans castWitness.symm)
+      let normalizedNestedContext := castRouteFocusContext focusWires
+        focusRels nestedWitness.toFocus.context
+      have normalizedNestedHeq : HEq normalizedNestedContext
+          nestedWitness.toFocus.context :=
+        castRouteFocusContext_heq focusWires focusRels
+          nestedWitness.toFocus.context
+      have childEq : nestedAlignment.sourceContext =
+          normalizedNestedContext :=
+        eq_of_heq (childHeq.trans normalizedNestedHeq.symm)
+      have parentEq : alignment.sourceContext =
+          castRouteFocusContext focusWires focusRels
+            sourceWitness.toFocus.context := by
+        change DiagramContext.cut _ sourceFocused.focus.before
+            sourceFocused.focus.after nestedAlignment.sourceContext =
+          castRouteFocusContext focusWires focusRels
+            (DiagramContext.cut _ sourceFocused.focus.before
+              sourceFocused.focus.after nestedWitness.toFocus.context)
+        rw [castRouteFocusContext_cut, childEq]
+      exact (heq_of_eq parentEq).trans
+        (castRouteFocusContext_heq focusWires focusRels
+          sourceWitness.toFocus.context)
   }
 
 /-- GREEN bubble-step assembler from a proper root child to the generated
@@ -2669,8 +2733,40 @@ private noncomputable def mappedOpenBubbleStep
     source_focus_rels := focusRels
     source_focus_body := focusBody
     source_context_heq := by
-      cases nested.source_context_heq
-      rfl
+      have normalizedContext :
+          HEq nestedAlignment.sourceContext
+            nested.alignment.sourceContext :=
+        nested.alignment.normalizeOpenRootChild_sourceContext_heq layout
+          consistent terminal boundary away
+      have castWitness : HEq nestedWitness.toFocus.context
+          nested.sourceWitness.toFocus.context :=
+        Region.ContextPath.castWiresEq_toFocus_context_heq sourceEq
+          nested.sourceWitness
+      have childHeq : HEq nestedAlignment.sourceContext
+          nestedWitness.toFocus.context :=
+        normalizedContext.trans
+          (nested.source_context_heq.trans castWitness.symm)
+      let normalizedNestedContext := castRouteFocusContext focusWires
+        focusRels nestedWitness.toFocus.context
+      have normalizedNestedHeq : HEq normalizedNestedContext
+          nestedWitness.toFocus.context :=
+        castRouteFocusContext_heq focusWires focusRels
+          nestedWitness.toFocus.context
+      have childEq : nestedAlignment.sourceContext =
+          normalizedNestedContext :=
+        eq_of_heq (childHeq.trans normalizedNestedHeq.symm)
+      have parentEq : alignment.sourceContext =
+          castRouteFocusContext focusWires focusRels
+            sourceWitness.toFocus.context := by
+        change DiagramContext.bubble _ sourceFocused.focus.before
+            sourceFocused.focus.after _ nestedAlignment.sourceContext =
+          castRouteFocusContext focusWires focusRels
+            (DiagramContext.bubble _ sourceFocused.focus.before
+              sourceFocused.focus.after _ nestedWitness.toFocus.context)
+        rw [castRouteFocusContext_bubble, childEq]
+      exact (heq_of_eq parentEq).trans
+        (castRouteFocusContext_heq focusWires focusRels
+          sourceWitness.toFocus.context)
   }
 
 /-- Compile the deterministically mapped target route bottom-up from one

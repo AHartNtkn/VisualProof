@@ -1,4 +1,5 @@
 import VisualProof.Concrete.Elaboration.Compile
+import VisualProof.Concrete.Elaboration.CutDepth
 import VisualProof.Concrete.State
 import VisualProof.Diagram.Replacement
 
@@ -14,6 +15,14 @@ open Elaboration
 inductive ConcreteCompilerStart (diagram : Concrete.Diagram)
   | openRoot (ambient locals : WireContext diagram)
   | region (origin : Fin diagram.regionCount) (context : WireContext diagram)
+
+/-- Concrete cut depth at the compiler call from which a route begins.  An
+open-root call starts outside every cut; a recursive call starts at its
+concrete origin. -/
+def ConcreteCompilerStart.cutDepth :
+    ConcreteCompilerStart diagram → Nat
+  | .openRoot _ _ => 0
+  | .region origin _ => concreteCutDepth diagram origin
 
 /-- A source compiler route indexed by its exact terminal concrete context.
 The open-root constructors retain the exceptional ambient/local split, while
@@ -165,6 +174,8 @@ structure RegionSiteCompilation
   focus_wires : witness.toFocus.holeWires = siteContext.length
   focus_rels : witness.toFocus.holeRels = siteRels
   focus_body : HEq witness.toFocus.body siteBody
+  focus_cutDepth : witness.toFocus.context.cutDepth + start.cutDepth =
+    concreteCutDepth diagram site
 
 noncomputable def RegionSiteCompilation.ofRegion
     {diagram : Concrete.Diagram}
@@ -205,6 +216,10 @@ noncomputable def RegionSiteCompilation.ofRegion
       focus_wires := rfl
       focus_rels := rfl
       focus_body := .rfl
+      focus_cutDepth := by
+        change 0 + concreteCutDepth diagram site =
+          concreteCutDepth diagram site
+        omega
     }
   · let childExistence := exists_direct_child_enclosing wellFormed
       (ancestor := current) (descendant := site)
@@ -316,6 +331,20 @@ noncomputable def RegionSiteCompilation.ofRegion
                         change HEq castNested.toFocus.body nested.siteBody
                         exact (Region.ContextPath.castWiresEq_toFocus_body_heq
                           wireEq nested.witness).trans nested.focus_body
+                      focus_cutDepth := by
+                        have nestedDepth :
+                            nested.witness.toFocus.context.cutDepth +
+                                concreteCutDepth diagram child =
+                              concreteCutDepth diagram site := by
+                          simpa [ConcreteCompilerStart.cutDepth] using
+                            nested.focus_cutDepth
+                        have childDepth := concreteCutDepth_cut_child
+                          wellFormed childKind
+                        change castNested.toFocus.context.cutDepth + 1 +
+                            concreteCutDepth diagram current =
+                          concreteCutDepth diagram site
+                        rw [Region.ContextPath.castWiresEq_toFocus_cutDepth]
+                        omega
                     }
             | bubble parent arity =>
                 have parentEq : parent = current := by
@@ -388,6 +417,20 @@ noncomputable def RegionSiteCompilation.ofRegion
                         change HEq castNested.toFocus.body nested.siteBody
                         exact (Region.ContextPath.castWiresEq_toFocus_body_heq
                           wireEq nested.witness).trans nested.focus_body
+                      focus_cutDepth := by
+                        have nestedDepth :
+                            nested.witness.toFocus.context.cutDepth +
+                                concreteCutDepth diagram child =
+                              concreteCutDepth diagram site := by
+                          simpa [ConcreteCompilerStart.cutDepth] using
+                            nested.focus_cutDepth
+                        have childDepth := concreteCutDepth_bubble_child
+                          wellFormed childKind
+                        change castNested.toFocus.context.cutDepth +
+                            concreteCutDepth diagram current =
+                          concreteCutDepth diagram site
+                        rw [Region.ContextPath.castWiresEq_toFocus_cutDepth]
+                        omega
                     }
 termination_by fuel
 
@@ -515,6 +558,20 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                   change HEq castNested.toFocus.body nested.siteBody
                   exact (Region.ContextPath.castWiresEq_toFocus_body_heq
                     wireEq nested.witness).trans nested.focus_body
+                focus_cutDepth := by
+                  have nestedDepth :
+                      nested.witness.toFocus.context.cutDepth +
+                          concreteCutDepth diagram child =
+                        concreteCutDepth diagram site := by
+                    simpa [ConcreteCompilerStart.cutDepth] using
+                      nested.focus_cutDepth
+                  have childDepth := concreteCutDepth_cut_child
+                    wellFormed childKind
+                  have rootDepth := concreteCutDepth_root wellFormed
+                  change castNested.toFocus.context.cutDepth + 1 + 0 =
+                    concreteCutDepth diagram site
+                  rw [Region.ContextPath.castWiresEq_toFocus_cutDepth]
+                  omega
               }
       | bubble parent arity =>
           have parentEq : parent = diagram.root := by
@@ -586,6 +643,20 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                   change HEq castNested.toFocus.body nested.siteBody
                   exact (Region.ContextPath.castWiresEq_toFocus_body_heq
                     wireEq nested.witness).trans nested.focus_body
+                focus_cutDepth := by
+                  have nestedDepth :
+                      nested.witness.toFocus.context.cutDepth +
+                          concreteCutDepth diagram child =
+                        concreteCutDepth diagram site := by
+                    simpa [ConcreteCompilerStart.cutDepth] using
+                      nested.focus_cutDepth
+                  have childDepth := concreteCutDepth_bubble_child
+                    wellFormed childKind
+                  have rootDepth := concreteCutDepth_root wellFormed
+                  change castNested.toFocus.context.cutDepth + 0 =
+                    concreteCutDepth diagram site
+                  rw [Region.ContextPath.castWiresEq_toFocus_cutDepth]
+                  omega
               }
 
 /-- The exact successful compiler call that owns a concrete site.  The root
@@ -652,6 +723,8 @@ structure CompiledSite (source : State arity)
   focus_wires : witness.toFocus.holeWires = siteContext.length
   focus_rels : witness.toFocus.holeRels = siteRels
   focus_body : HEq witness.toFocus.body siteBody
+  focus_cutDepth : witness.toFocus.context.cutDepth =
+    concreteCutDepth source.checked.val.diagram site
 
 /-- The source endpoint identified by the intrinsic compiler path. -/
 noncomputable def CompiledSite.occurrence
@@ -695,6 +768,15 @@ private theorem castFocusContext_heq
     (relsEq : sourceRels = targetRels)
     (context : DiagramContext outerWires sourceWires outerRels sourceRels) :
     HEq (castFocusContext wireEq relsEq context) context := by
+  subst targetWires
+  subst targetRels
+  rfl
+
+private theorem castFocusContext_cutDepth
+    (wireEq : sourceWires = targetWires)
+    (relsEq : sourceRels = targetRels)
+    (context : DiagramContext outerWires sourceWires outerRels sourceRels) :
+    (castFocusContext wireEq relsEq context).cutDepth = context.cutDepth := by
   subst targetWires
   subst targetRels
   rfl
@@ -744,6 +826,18 @@ theorem CompiledSite.siteOccurrence_context_heq
       compiled.witness.toFocus.context := by
   exact castFocusContext_heq compiled.focus_wires compiled.focus_rels
     compiled.witness.toFocus.context
+
+/-- The abstract polarity context retained by the source compiler is exactly
+the concrete cut depth at its selected site. -/
+theorem CompiledSite.siteOccurrence_cutDepth
+    (compiled : CompiledSite source site) :
+    compiled.siteOccurrence.context.cutDepth =
+      concreteCutDepth source.checked.val.diagram site := by
+  change (castFocusContext compiled.focus_wires compiled.focus_rels
+    compiled.witness.toFocus.context).cutDepth =
+      concreteCutDepth source.checked.val.diagram site
+  exact (castFocusContext_cutDepth compiled.focus_wires compiled.focus_rels
+    compiled.witness.toFocus.context).trans compiled.focus_cutDepth
 
 /-- Filling the normalized intrinsic context with its compiled site body
 reconstructs the source compiler body exactly. -/
@@ -820,6 +914,11 @@ noncomputable def CompiledSite.ofSource (source : State arity)
       focus_wires := rfl
       focus_rels := rfl
       focus_body := .rfl
+      focus_cutDepth := by
+        change 0 = concreteCutDepth source.checked.val.diagram
+          source.checked.val.diagram.root
+        exact (concreteCutDepth_root
+          source.checked.property.diagram_well_formed).symm
     }
   · let nested := RegionSiteCompilation.ofRootDescendant
       source.checked.property.diagram_well_formed rootCompiledSource
@@ -859,6 +958,8 @@ noncomputable def CompiledSite.ofSource (source : State arity)
       focus_wires := nested.focus_wires
       focus_rels := nested.focus_rels
       focus_body := nested.focus_body
+      focus_cutDepth := by
+        simpa [ConcreteCompilerStart.cutDepth] using nested.focus_cutDepth
     }
 
 end VisualProof.Concrete
