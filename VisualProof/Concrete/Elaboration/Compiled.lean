@@ -482,16 +482,28 @@ private theorem compileRoot?_originsValid
       exact .mk (compileItems?_origins hitems)
         (compileItems?_originsValid hitems)
 
+private structure CompiledEndpointValidity (d : Diagram)
+    (site : Fin d.regionCount) (call : CompilerCall d)
+    (endpoint : CompiledRegion d call) : Prop where
+  computation : call.compile? = some endpoint
+  origin : call.origin = site
+  fullContext_exact : call.fullContext.Exact site
+  binders_covers : call.binders.Covers site
+
 mutual
-  private def CompiledZipper.endpoint_computation
+  private def CompiledZipper.endpoint_validity
       {d : Diagram} {sourceCall endpointCall : CompilerCall d}
       {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
-      {endpoint : CompiledRegion d endpointCall} :
+      {endpoint : CompiledRegion d endpointCall}
+      (hwf : d.WellFormed) :
       (focus : CompiledZipper d source site endpointCall endpoint) →
       sourceCall.compile? = some source →
-      endpointCall.compile? = some endpoint
-    | .here _, compiled => compiled
-    | .child nested, compiled => by
+      sourceCall.fullContext.Exact sourceCall.origin →
+      sourceCall.binders.Covers sourceCall.origin →
+      CompiledEndpointValidity d site endpointCall endpoint
+    | .here _, compiled, wires, binders =>
+        ⟨compiled, rfl, wires, binders⟩
+    | .child nested, compiled, wires, binders => by
         rw [CompilerCall.compile?_eq_compileItems?] at compiled
         cases hitems : compileItems? d sourceCall.childFuel
             sourceCall.fullContext sourceCall.binders
@@ -500,22 +512,32 @@ mutual
         | some items =>
             simp [hitems] at compiled
             subst items
-            apply nested.endpoint_computation
-            have origins := compileItems?_origins hitems
-            rw [origins]
-            exact hitems
+            refine nested.endpoint_validity hwf sourceCall.origin wires binders
+              ?_ ?_
+            · intro occurrence member
+              have origins := compileItems?_origins hitems
+              simpa only [origins] using member
+            · have origins := compileItems?_origins hitems
+              rw [origins]
+              exact hitems
 
-  private def CompiledItemsZipper.endpoint_computation
+  private def CompiledItemsZipper.endpoint_validity
       {d : Diagram} {fuel : Nat} {context : WireContext d} {rels : RelCtx}
       {binders : BinderContext d rels}
       {items : CompiledItems d fuel context rels binders}
       {site : Fin d.regionCount} {endpointCall : CompilerCall d}
-      {endpoint : CompiledRegion d endpointCall} :
+      {endpoint : CompiledRegion d endpointCall}
+      (hwf : d.WellFormed) :
       (focus : CompiledItemsZipper d items site endpointCall endpoint) →
+      (parent : Fin d.regionCount) →
+      context.Exact parent → binders.Covers parent →
+      (∀ occurrence, occurrence ∈ items.origins →
+        occurrence ∈ localOccurrences d parent) →
       compileItems? d fuel context binders items.origins = some items →
-      endpointCall.compile? = some endpoint
+      CompiledEndpointValidity d site endpointCall endpoint
     | .cut (childFuel := childFuel) (origin := origin)
-        (suffix := suffix) nested, compiled => by
+        (suffix := suffix) nested,
+        parent, wires, bindersCover, localOccurrencesValid, compiled => by
         simp only [CompiledItems.origins, CompiledItem.origin] at compiled
         rw [compileItems?_cons] at compiled
         cases hhead : compileOccurrence? d (childFuel + 1) context binders
@@ -528,10 +550,24 @@ mutual
             | some rest =>
                 simp [hhead, htail] at compiled
                 obtain ⟨rfl, rfl⟩ := compiled
-                exact nested.endpoint_computation
-                  (compileOccurrence?_child_cut_body hhead)
+                obtain ⟨childParent, hregion, hbody⟩ :=
+                  compileOccurrence?_child_cut_body hhead
+                have hparent : (d.regions origin).parent? = some parent :=
+                  (mem_localOccurrences_child d parent origin).mp
+                    (localOccurrencesValid (.child origin)
+                      (by simp [CompiledItem.origin]))
+                have childParentEq : childParent = parent := by
+                  apply Option.some.inj
+                  simpa [hregion, CRegion.parent?] using hparent
+                subst childParent
+                apply nested.endpoint_validity hwf hbody
+                · simpa [CompilerCall.fullContext, CompilerCall.localContext,
+                    WireContext.extend] using
+                    wires.extend_child hwf (by simp [hregion, CRegion.parent?])
+                · exact BinderContext.covers_cut_child bindersCover hregion
     | .bubble (childFuel := childFuel) (origin := origin)
-        (suffix := suffix) nested, compiled => by
+        (arity := arity) (suffix := suffix) nested,
+        parent, wires, bindersCover, localOccurrencesValid, compiled => by
         simp only [CompiledItems.origins, CompiledItem.origin] at compiled
         rw [compileItems?_cons] at compiled
         cases hhead : compileOccurrence? d (childFuel + 1) context binders
@@ -544,21 +580,39 @@ mutual
             | some rest =>
                 simp [hhead, htail] at compiled
                 obtain ⟨rfl, rfl⟩ := compiled
-                exact nested.endpoint_computation
-                  (compileOccurrence?_child_bubble_body hhead)
-    | .tail (head := head) (suffix := suffix) nested, compiled => by
+                obtain ⟨childParent, hregion, hbody⟩ :=
+                  compileOccurrence?_child_bubble_body hhead
+                have hparent : (d.regions origin).parent? = some parent :=
+                  (mem_localOccurrences_child d parent origin).mp
+                    (localOccurrencesValid (.child origin)
+                      (by simp [CompiledItem.origin]))
+                have childParentEq : childParent = parent := by
+                  apply Option.some.inj
+                  simpa [hregion, CRegion.parent?] using hparent
+                subst childParent
+                apply nested.endpoint_validity hwf hbody
+                · simpa [CompilerCall.fullContext, CompilerCall.localContext,
+                    WireContext.extend] using
+                    wires.extend_child hwf (by simp [hregion, CRegion.parent?])
+                · exact BinderContext.push_covers_bubble_child
+                    bindersCover hregion
+    | .tail (head := head) (suffix := suffix) nested,
+        parent, wires, bindersCover, localOccurrencesValid, compiled => by
         simp only [CompiledItems.origins] at compiled
         rw [compileItems?_cons] at compiled
         cases hhead : compileOccurrence? d fuel context binders head.origin with
         | none => simp [hhead] at compiled
-        | some head =>
+        | some compiledHead =>
             cases htail : compileItems? d fuel context binders
                 suffix.origins with
             | none => simp [hhead, htail] at compiled
-            | some suffix =>
+            | some rest =>
                 simp [hhead, htail] at compiled
                 obtain ⟨rfl, rfl⟩ := compiled
-                exact nested.endpoint_computation htail
+                exact nested.endpoint_validity hwf parent wires bindersCover
+                  (fun occurrence member =>
+                    localOccurrencesValid occurrence (by simp [member]))
+                  htail
 end
 
 mutual
@@ -794,10 +848,34 @@ def zipper (compiled : CompiledSite source site) :
       compiled.endpointCall compiled.endpoint :=
   compiled.focus.zipper
 
+private def endpoint_validity (compiled : CompiledSite source site) :
+    CompiledEndpointValidity source.checked.val.diagram site
+      compiled.endpointCall compiled.endpoint :=
+  compiled.zipper.endpoint_validity
+    source.checked.property.diagram_well_formed
+    (by simpa using source.checked.compilation_computation)
+    (by
+      simpa [CompilerCall.fullContext, OpenDiagram.rootWires] using
+        openRootWires_exact source.checked.property)
+    (by
+      simpa using BinderContext.empty_covers_root
+        source.checked.property.diagram_well_formed)
+
 theorem endpoint_computation (compiled : CompiledSite source site) :
-    compiled.endpointCall.compile? = some compiled.endpoint := by
-  apply compiled.zipper.endpoint_computation
-  simpa using source.checked.compilation_computation
+    compiled.endpointCall.compile? = some compiled.endpoint :=
+  compiled.endpoint_validity.computation
+
+theorem endpoint_origin (compiled : CompiledSite source site) :
+    compiled.endpointCall.origin = site :=
+  compiled.endpoint_validity.origin
+
+theorem endpoint_fullContext_exact (compiled : CompiledSite source site) :
+    compiled.endpointCall.fullContext.Exact site :=
+  compiled.endpoint_validity.fullContext_exact
+
+theorem endpoint_binders_covers (compiled : CompiledSite source site) :
+    compiled.endpointCall.binders.Covers site :=
+  compiled.endpoint_validity.binders_covers
 
 def directItems (compiled : CompiledSite source site) :
     CompiledItems source.checked.val.diagram compiled.endpointCall.childFuel

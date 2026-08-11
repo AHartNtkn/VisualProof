@@ -196,7 +196,8 @@ noncomputable def compileOccurrence?_child_cut_inv
           subst item
           exact ⟨childFuel, body, rfl, hbody, rfl⟩
 
-/-- An exact cut result exposes the recursive compiler equation for its body. -/
+/-- An exact cut result exposes its concrete child kind and recursive compiler
+equation. -/
 theorem compileOccurrence?_child_cut_body
     {childFuel : Nat} {child : Fin d.regionCount}
     {context : WireContext d} {binders : BinderContext d rels}
@@ -204,7 +205,8 @@ theorem compileOccurrence?_child_cut_body
       (.nested childFuel child context rels binders)}
     (compiled : compileOccurrence? d (childFuel + 1) context binders
       (.child child) = some (.cut body)) :
-    compileRegion? d childFuel child context binders = some body := by
+    ∃ parent, d.regions child = .cut parent ∧
+      compileRegion? d childFuel child context binders = some body := by
   cases hregion : d.regions child with
   | sheet =>
       rw [compileOccurrence?_child_succ_sheet _ _ _ _ _ hregion] at compiled
@@ -216,7 +218,7 @@ theorem compileOccurrence?_child_cut_body
       | some result =>
           simp [hbody] at compiled
           subst result
-          rfl
+          exact ⟨parent, rfl, rfl⟩
   | bubble parent arity =>
       rw [compileOccurrence?_child_succ_bubble _ _ _ _ _ _ _ hregion]
         at compiled
@@ -263,8 +265,8 @@ noncomputable def compileOccurrence?_child_bubble_inv
           subst item
           exact ⟨childFuel, body, rfl, hbody, rfl⟩
 
-/-- An exact bubble result exposes the recursive compiler equation for its
-body. -/
+/-- An exact bubble result exposes its concrete child kind and recursive
+compiler equation. -/
 theorem compileOccurrence?_child_bubble_body
     {childFuel arity : Nat} {child : Fin d.regionCount}
     {context : WireContext d} {binders : BinderContext d rels}
@@ -273,8 +275,9 @@ theorem compileOccurrence?_child_bubble_body
         (binders.push child arity))}
     (compiled : compileOccurrence? d (childFuel + 1) context binders
       (.child child) = some (.bubble arity body)) :
-    compileRegion? d childFuel child context (binders.push child arity) =
-      some body := by
+    ∃ parent, d.regions child = .bubble parent arity ∧
+      compileRegion? d childFuel child context (binders.push child arity) =
+        some body := by
   cases hregion : d.regions child with
   | sheet =>
       rw [compileOccurrence?_child_succ_sheet _ _ _ _ _ hregion] at compiled
@@ -294,7 +297,7 @@ theorem compileOccurrence?_child_bubble_body
           simp [hbody] at compiled
           obtain ⟨rfl, bodyEq⟩ := compiled
           cases bodyEq
-          exact hbody
+          exact ⟨parent, rfl, hbody⟩
 
 @[simp] theorem compileItems?_nil
     (d : Diagram) (fuel : Nat) (context : WireContext d)
