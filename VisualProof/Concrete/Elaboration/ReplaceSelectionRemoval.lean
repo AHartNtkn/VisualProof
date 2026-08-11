@@ -396,6 +396,73 @@ theorem removeRaw_bubble
   rw [domains.regions.index?_index parent parentSurvives] at reindexed
   exact (Option.some.inj reindexed).symm
 
+/-- At every common parent-traversal fuel, a retained dense region has the
+same accumulated cut depth as the source region it represents. -/
+private theorem concreteCutDepthAux_removeRaw_origin
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (fuel : Nat) (region : domains.regions.Carrier) :
+    concreteCutDepthAux (host.val.removeRaw selection domains) fuel region =
+      concreteCutDepthAux host.val fuel (domains.regions.origin region) := by
+  induction fuel generalizing region with
+  | zero => rfl
+  | succ fuel inductionHypothesis =>
+      cases sourceKind : host.val.regions (domains.regions.origin region) with
+      | sheet =>
+          have reindexed := Diagram.removeRaw_region_reindexed host selection
+            domains region
+          rw [sourceKind] at reindexed
+          simp only [SurvivorDomain.reindexRegion?] at reindexed
+          have targetKind :
+              (host.val.removeRaw selection domains).regions region =
+                .sheet := (Option.some.inj reindexed).symm
+          simp only [concreteCutDepthAux, sourceKind, targetKind]
+      | cut parent =>
+          have childSurvives := domains.regions.origin_survives region
+          have parentSurvives := domains.parent_survives
+            (region := domains.regions.origin region) (parent := parent)
+            host selection childSurvives
+              (by simp only [sourceKind, CRegion.parent?])
+          have targetKind := domains.removeRaw_cut host selection
+            parentSurvives childSurvives sourceKind
+          rw [domains.regions.index_origin] at targetKind
+          simp only [concreteCutDepthAux, sourceKind, targetKind]
+          rw [inductionHypothesis, domains.regions.origin_index]
+      | bubble parent arity =>
+          have childSurvives := domains.regions.origin_survives region
+          have parentSurvives := domains.parent_survives
+            (region := domains.regions.origin region) (parent := parent)
+            host selection childSurvives
+              (by simp only [sourceKind, CRegion.parent?])
+          have targetKind := domains.removeRaw_bubble host selection
+            parentSurvives childSurvives arity sourceKind
+          rw [domains.regions.index_origin] at targetKind
+          simp only [concreteCutDepthAux, sourceKind, targetKind]
+          rw [inductionHypothesis, domains.regions.origin_index]
+
+/-- Selection removal preserves concrete cut depth at every retained dense
+region, including the retained selection anchor. -/
+theorem concreteCutDepth_removeRaw_origin
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (region : domains.regions.Carrier) :
+    concreteCutDepth (host.val.removeRaw selection domains) region =
+      concreteCutDepth host.val (domains.regions.origin region) := by
+  obtain ⟨steps, sourceClimb⟩ :=
+    host.property.all_regions_reach_root (domains.regions.origin region)
+  obtain ⟨rootSurvives, targetClimb⟩ := Diagram.removeRaw_climb host
+    selection domains (domains.regions.origin_survives region) sourceClimb
+  have targetClimbToRoot :
+      (host.val.removeRaw selection domains).climb steps.val region =
+        some (host.val.removeRaw selection domains).root := by
+    rw [domains.regions.index_origin] at targetClimb
+    simpa only [Diagram.removeRaw_root, FrameDomains.root] using targetClimb
+  rw [concreteCutDepth_eq_aux_of_climb_to_root
+      (Diagram.removeRaw_wellFormed host selection domains) targetClimbToRoot,
+    concreteCutDepth_eq_aux_of_climb_to_root host.property sourceClimb]
+  exact domains.concreteCutDepthAux_removeRaw_origin host selection
+    steps.val region
+
 private theorem removeRaw_wire_scope_eq_iff
     (host : Checked) (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
@@ -793,6 +860,310 @@ def mapNodeCompilation
       simp only [Option.map_some] at mapped
       rw [mapped] at sourceCompiled
       exact (Option.some.inj sourceCompiled).symm
+
+/-- Every member of one successfully compiled occurrence sequence has its
+own successful occurrence computation. -/
+private theorem compileOccurrencesWith?_member_success
+    {diagram : Diagram}
+    (recurse : ∀ {currentRels : Theory.RelCtx},
+      (region : Fin diagram.regionCount) →
+      (currentContext : WireContext diagram) →
+      BinderContext diagram currentRels →
+      Option (Region currentContext.length currentRels))
+    (context : WireContext diagram) (binders : BinderContext diagram rels)
+    (occurrences : List
+      (LocalOccurrence diagram.regionCount diagram.nodeCount))
+    (items : ItemSeq context.length rels)
+    (compiled : compileOccurrencesWith? diagram recurse context binders
+      occurrences = some items)
+    (occurrence : LocalOccurrence diagram.regionCount diagram.nodeCount)
+    (member : occurrence ∈ occurrences) :
+    ∃ item, compileOccurrenceWith? diagram recurse context binders
+      occurrence = some item := by
+  induction occurrences generalizing items with
+  | nil => contradiction
+  | cons head tail inductionHypothesis =>
+      simp only [compileOccurrencesWith?] at compiled
+      cases headCompiled : compileOccurrenceWith? diagram recurse context
+          binders head with
+      | none => simp [headCompiled] at compiled
+      | some headItem =>
+          cases tailCompiled : compileOccurrencesWith? diagram recurse context
+              binders tail with
+          | none =>
+              simp [headCompiled, tailCompiled] at compiled
+          | some tailItems =>
+              by_cases atHead : occurrence = head
+              · subst occurrence
+                exact ⟨headItem, headCompiled⟩
+              · exact inductionHypothesis tailItems tailCompiled
+                  ((List.mem_cons.mp member).resolve_left atHead)
+
+/-- The exact retained-frame region body determined by one successful source
+region computation at a corresponding survivor. -/
+structure MappedRegionCompilation
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (region : Fin host.val.regionCount)
+    (regionSurvives : domains.regions.survives region = true)
+    (context : WireContext host.val) (binders : BinderContext host.val rels)
+    (targetFuel : Nat) where
+  targetBody : Region (domains.mapWireContext context).length rels
+  target_compiled :
+    compileRegion? (host.val.removeRaw selection domains) targetFuel
+      (domains.regions.index region regionSurvives)
+      (domains.mapWireContext context) (domains.mapBinderContext binders) =
+        some targetBody
+
+/-- Transport successful recursive region compilation through exact survivor
+removal.  Target success is derived occurrence-by-occurrence from the supplied
+source computation; target fuel is justified by its retained root climb. -/
+noncomputable def mapRegionCompilation
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    {sourceFuel targetFuel targetDepth : Nat}
+    {region : Fin host.val.regionCount}
+    (regionSurvives : domains.regions.survives region = true)
+    {context : WireContext host.val} {binders : BinderContext host.val rels}
+    {sourceBody : Region context.length rels}
+    (sourceCompiled :
+      compileRegion? host.val sourceFuel region context binders =
+        some sourceBody)
+    (sourceFullExact : (context.extend region).Exact region)
+    (targetClimb :
+      (host.val.removeRaw selection domains).climb targetDepth
+          (domains.regions.index region regionSurvives) =
+        some (host.val.removeRaw selection domains).root)
+    (targetFuelEq : targetDepth + targetFuel =
+      (host.val.removeRaw selection domains).regionCount + 1) :
+    MappedRegionCompilation host selection domains region regionSurvives
+      context binders targetFuel := by
+  cases targetFuel with
+  | zero =>
+      have targetWellFormed :=
+        Diagram.removeRaw_wellFormed host selection domains
+      have depthBound :=
+        ParentTraversal.climb_to_root_steps_le_regionCount
+          (host.val.removeRaw selection domains)
+          targetWellFormed.root_is_sheet
+          targetWellFormed.all_regions_reach_root targetClimb
+      omega
+  | succ targetChildFuel =>
+      cases sourceFuel with
+      | zero =>
+          simp only [compileRegion?] at sourceCompiled
+          contradiction
+      | succ sourceChildFuel =>
+          let targetRegion := domains.regions.index region regionSurvives
+          let sourceExtended := context.extend region
+          let targetExtended :=
+            (domains.mapWireContext context).extend targetRegion
+          have targetExtendedEq :
+              domains.mapWireContext sourceExtended = targetExtended := by
+            simpa only [sourceExtended, targetExtended, targetRegion,
+              domains.regions.origin_index] using
+                domains.mapWireContext_extend host selection context
+                  targetRegion
+          simp only [compileRegion?] at sourceCompiled
+          cases sourceItemsCompiled : compileOccurrencesWith? host.val
+              (compileRegion? host.val sourceChildFuel) sourceExtended binders
+              (localOccurrences host.val region) with
+          | none =>
+              simp only [sourceExtended, sourceItemsCompiled]
+                at sourceCompiled
+              contradiction
+          | some sourceItems =>
+              have targetOccurrenceSuccess : ∀ occurrence,
+                  occurrence ∈ localOccurrences
+                      (host.val.removeRaw selection domains) targetRegion →
+                    ∃ item, compileOccurrenceWith?
+                      (host.val.removeRaw selection domains)
+                      (compileRegion? (host.val.removeRaw selection domains)
+                        targetChildFuel)
+                      targetExtended (domains.mapBinderContext binders)
+                      occurrence = some item := by
+                intro occurrence occurrenceMember
+                have originMemberMapped : domains.originOccurrence occurrence ∈
+                    (localOccurrences
+                      (host.val.removeRaw selection domains) targetRegion).map
+                        domains.originOccurrence :=
+                  List.mem_map.mpr ⟨occurrence, occurrenceMember, rfl⟩
+                have occurrencesEq :
+                    (localOccurrences
+                      (host.val.removeRaw selection domains) targetRegion).map
+                        domains.originOccurrence =
+                      (localOccurrences host.val region).filter
+                        domains.occurrenceSurvives := by
+                  simpa only [targetRegion, domains.regions.origin_index] using
+                    domains.map_localOccurrences_removeRaw host selection
+                      targetRegion
+                rw [occurrencesEq] at originMemberMapped
+                have originMember : domains.originOccurrence occurrence ∈
+                    localOccurrences host.val region :=
+                  (List.mem_filter.mp originMemberMapped).1
+                obtain ⟨sourceItem, sourceOccurrenceCompiled⟩ :=
+                  compileOccurrencesWith?_member_success
+                    (compileRegion? host.val sourceChildFuel) sourceExtended
+                    binders (localOccurrences host.val region) sourceItems
+                    sourceItemsCompiled (domains.originOccurrence occurrence)
+                    originMember
+                cases occurrence with
+                | node node =>
+                    simp only [originOccurrence, compileOccurrenceWith?]
+                      at sourceOccurrenceCompiled ⊢
+                    let mappedNode := domains.mapNodeCompilation host selection
+                      sourceExtended sourceFullExact.nodup binders node
+                      sourceItem sourceOccurrenceCompiled
+                    rw [← targetExtendedEq]
+                    exact ⟨mappedNode.targetItem,
+                      mappedNode.target_compiled⟩
+                | child child =>
+                    have sourceParent :
+                        (host.val.regions
+                          (domains.regions.origin child)).parent? = some region :=
+                      (mem_localOccurrences_child host.val region
+                        (domains.regions.origin child)).mp originMember
+                    have targetParent :
+                        ((host.val.removeRaw selection domains).regions
+                          child).parent? = some targetRegion :=
+                      (mem_localOccurrences_child
+                        (host.val.removeRaw selection domains) targetRegion
+                        child).mp occurrenceMember
+                    have childSurvives :=
+                      domains.regions.origin_survives child
+                    have targetChildClimb :
+                        (host.val.removeRaw selection domains).climb
+                            (targetDepth + 1) child =
+                          some (host.val.removeRaw selection domains).root := by
+                      change (host.val.removeRaw selection domains).climb
+                          (Nat.succ targetDepth) child =
+                        some (host.val.removeRaw selection domains).root
+                      simp only [Diagram.climb]
+                      rw [targetParent]
+                      simpa only [targetRegion] using targetClimb
+                    have targetChildFuelEq :
+                        targetDepth + 1 + targetChildFuel =
+                          (host.val.removeRaw selection domains).regionCount +
+                            1 := by
+                      omega
+                    cases sourceKind : host.val.regions
+                        (domains.regions.origin child) with
+                    | sheet =>
+                        simp only [sourceKind, CRegion.parent?] at sourceParent
+                        contradiction
+                    | cut parent =>
+                        have parentEq : parent = region := by
+                          simpa only [sourceKind, CRegion.parent?,
+                            Option.some.injEq] using sourceParent
+                        subst parent
+                        cases sourceChildCompiled : compileRegion? host.val
+                            sourceChildFuel (domains.regions.origin child)
+                            sourceExtended binders with
+                        | none =>
+                            simp only [originOccurrence,
+                              compileOccurrenceWith?, sourceKind,
+                              sourceChildCompiled]
+                                at sourceOccurrenceCompiled
+                            contradiction
+                        | some sourceChildBody =>
+                            have sourceChildFullExact :=
+                              sourceFullExact.extend_child host.property
+                                sourceParent
+                            let nested := mapRegionCompilation host selection
+                              domains childSurvives sourceChildCompiled
+                              sourceChildFullExact (by
+                                simpa only [domains.regions.index_origin] using
+                                  targetChildClimb)
+                              targetChildFuelEq
+                            have targetKind := domains.removeRaw_cut host
+                              selection regionSurvives childSurvives sourceKind
+                            rw [domains.regions.index_origin] at targetKind
+                            have targetChildCompiled := nested.target_compiled
+                            rw [domains.regions.index_origin]
+                              at targetChildCompiled
+                            rw [← targetExtendedEq]
+                            exact ⟨.cut nested.targetBody, by
+                              simp only [compileOccurrenceWith?, targetKind]
+                              rw [targetChildCompiled]
+                              rfl⟩
+                    | bubble parent arity =>
+                        have parentEq : parent = region := by
+                          simpa only [sourceKind, CRegion.parent?,
+                            Option.some.injEq] using sourceParent
+                        subst parent
+                        let sourceChildBinders := binders.push
+                          (domains.regions.origin child) arity
+                        cases sourceChildCompiled : compileRegion? host.val
+                            sourceChildFuel (domains.regions.origin child)
+                            sourceExtended sourceChildBinders with
+                        | none =>
+                            simp only [originOccurrence,
+                              compileOccurrenceWith?, sourceKind,
+                              sourceChildBinders, sourceChildCompiled]
+                                at sourceOccurrenceCompiled
+                            contradiction
+                        | some sourceChildBody =>
+                            have sourceChildFullExact :=
+                              sourceFullExact.extend_child host.property
+                                sourceParent
+                            let nested := mapRegionCompilation host selection
+                              domains childSurvives sourceChildCompiled
+                              sourceChildFullExact (by
+                                simpa only [domains.regions.index_origin] using
+                                  targetChildClimb)
+                              targetChildFuelEq
+                            have targetKind := domains.removeRaw_bubble host
+                              selection regionSurvives childSurvives arity
+                              sourceKind
+                            rw [domains.regions.index_origin] at targetKind
+                            have targetBindersEq :
+                                domains.mapBinderContext sourceChildBinders =
+                                  (domains.mapBinderContext binders).push child
+                                    arity := by
+                              simpa only [sourceChildBinders,
+                                domains.regions.index_origin] using
+                                  domains.mapBinderContext_push binders
+                                    (domains.regions.origin child)
+                                    childSurvives arity
+                            have targetChildCompiled := nested.target_compiled
+                            rw [domains.regions.index_origin, targetBindersEq]
+                              at targetChildCompiled
+                            rw [← targetExtendedEq]
+                            exact ⟨.bubble arity nested.targetBody, by
+                              simp only [compileOccurrenceWith?, targetKind]
+                              rw [targetChildCompiled]
+                              rfl⟩
+              let targetItemsExistence := compileOccurrencesWith?_complete
+                  (compileRegion?
+                    (host.val.removeRaw selection domains) targetChildFuel)
+                  targetExtended (domains.mapBinderContext binders)
+                  (localOccurrences
+                    (host.val.removeRaw selection domains) targetRegion)
+                  targetOccurrenceSuccess
+              let targetItems := Classical.choose targetItemsExistence
+              have targetItemsCompiled :=
+                Classical.choose_spec targetItemsExistence
+              refine {
+                targetBody := finishRegion
+                  (host.val.removeRaw selection domains)
+                  (domains.mapWireContext context) targetRegion targetItems
+                target_compiled := ?_
+              }
+              simp only [compileRegion?]
+              change (compileOccurrencesWith?
+                (host.val.removeRaw selection domains)
+                (compileRegion? (host.val.removeRaw selection domains)
+                  targetChildFuel)
+                targetExtended (domains.mapBinderContext binders)
+                (localOccurrences
+                  (host.val.removeRaw selection domains) targetRegion)).bind
+                    (fun items => some (finishRegion
+                      (host.val.removeRaw selection domains)
+                      (domains.mapWireContext context) targetRegion items)) =
+                some (finishRegion (host.val.removeRaw selection domains)
+                  (domains.mapWireContext context) targetRegion targetItems)
+              rw [targetItemsCompiled]
+              rfl
 
 /-- A checked selection never removes its own retained anchor. -/
 theorem anchor_survives
