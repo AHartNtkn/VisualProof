@@ -52,6 +52,20 @@ noncomputable def ContextReplacement.iso
   source_iso := sourceIso.trans replacement.source_iso
   target_iso := targetIso.symm.trans replacement.target_iso
 
+/-- Reverse a neutral contextual replacement without changing its context or
+either local region. -/
+noncomputable def ContextReplacement.symm
+    (replacement : ContextReplacement source target) :
+    ContextReplacement target source where
+  holeWires := replacement.holeWires
+  holeRels := replacement.holeRels
+  interface := replacement.interface
+  context := replacement.context
+  before := replacement.after
+  after := replacement.before
+  source_iso := replacement.target_iso
+  target_iso := replacement.source_iso
+
 /-- A nested replacement keeps one selected ancestor factor fixed while a
 descendant context replaces its local body.  It is neutral with respect to the
 rule that justifies `before` to `after`. -/
