@@ -18,6 +18,40 @@ def DirectedStep
   | .forward => Rule.Step source target
   | .backward => Rule.Step target source
 
+/-- The erasure execution guard selects the matching abstract contextual
+polarity at the source-derived site. -/
+theorem contextPolarity_of_erasurePolarity
+    (context : DiagramContext outerWires holeWires outerRels holeRels)
+    (depthEq : context.cutDepth = depth)
+    (guard : Concrete.erasurePolarity orientation depth) :
+    context.polarity = match orientation with
+      | .forward => .positive
+      | .backward => .negative := by
+  cases orientation with
+  | forward =>
+      simp only [Concrete.erasurePolarity] at guard
+      simp [DiagramContext.polarity, depthEq, guard]
+  | backward =>
+      simp only [Concrete.erasurePolarity] at guard
+      simp [DiagramContext.polarity, depthEq, guard]
+
+/-- The spawn execution guard selects the opposite abstract contextual
+polarity, so insertion is the converse of erasure at that site. -/
+theorem contextPolarity_of_spawnPolarity
+    (context : DiagramContext outerWires holeWires outerRels holeRels)
+    (depthEq : context.cutDepth = depth)
+    (guard : Concrete.spawnPolarity orientation depth) :
+    context.polarity = match orientation with
+      | .forward => .negative
+      | .backward => .positive := by
+  cases orientation with
+  | forward =>
+      simp only [Concrete.spawnPolarity] at guard
+      simp [DiagramContext.polarity, depthEq, guard]
+  | backward =>
+      simp only [Concrete.spawnPolarity] at guard
+      simp [DiagramContext.polarity, depthEq, guard]
+
 /-- Transport a canonical directed step to an arbitrary represented source.
 The target remains the actual target state's canonical diagram. -/
 theorem DirectedStep.ofCanonical
