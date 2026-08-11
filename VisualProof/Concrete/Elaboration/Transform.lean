@@ -31,9 +31,8 @@ structure RegionSiteCompilation
   siteBody : Region siteContext.length siteRels
   site_compiled : compileRegion? diagram siteFuel site siteContext
     siteBinders = some siteBody
-  siteLocals : WireContext diagram
-  siteLocals_eq : siteLocals = exactScopeWires diagram site
-  completeContext_exact : (siteContext ++ siteLocals).Exact site
+  completeContext_exact :
+    (siteContext ++ exactScopeWires diagram site).Exact site
   binder_covers : siteBinders.Covers site
   binder_enumeration : BinderContext.Enumeration diagram siteBinders site
   focus_wires : witness.toFocus.holeWires = siteContext.length
@@ -70,8 +69,6 @@ noncomputable def RegionSiteCompilation.ofRegion
       siteFuel := fuel
       siteBody := body
       site_compiled := compiled
-      siteLocals := exactScopeWires diagram site
-      siteLocals_eq := rfl
       completeContext_exact := fullWires
       binder_covers := binderCovers
       binder_enumeration := binderEnumeration
@@ -174,8 +171,6 @@ noncomputable def RegionSiteCompilation.ofRegion
                       siteFuel := nested.siteFuel
                       siteBody := nested.siteBody
                       site_compiled := nested.site_compiled
-                      siteLocals := nested.siteLocals
-                      siteLocals_eq := nested.siteLocals_eq
                       completeContext_exact := nested.completeContext_exact
                       binder_covers := nested.binder_covers
                       binder_enumeration := nested.binder_enumeration
@@ -257,8 +252,6 @@ noncomputable def RegionSiteCompilation.ofRegion
                       siteFuel := nested.siteFuel
                       siteBody := nested.siteBody
                       site_compiled := nested.site_compiled
-                      siteLocals := nested.siteLocals
-                      siteLocals_eq := nested.siteLocals_eq
                       completeContext_exact := nested.completeContext_exact
                       binder_covers := nested.binder_covers
                       binder_enumeration := nested.binder_enumeration
@@ -395,8 +388,6 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                 siteFuel := nested.siteFuel
                 siteBody := nested.siteBody
                 site_compiled := nested.site_compiled
-                siteLocals := nested.siteLocals
-                siteLocals_eq := nested.siteLocals_eq
                 completeContext_exact := nested.completeContext_exact
                 binder_covers := nested.binder_covers
                 binder_enumeration := nested.binder_enumeration
@@ -477,8 +468,6 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                 siteFuel := nested.siteFuel
                 siteBody := nested.siteBody
                 site_compiled := nested.site_compiled
-                siteLocals := nested.siteLocals
-                siteLocals_eq := nested.siteLocals_eq
                 completeContext_exact := nested.completeContext_exact
                 binder_covers := nested.binder_covers
                 binder_enumeration := nested.binder_enumeration
@@ -509,6 +498,16 @@ noncomputable def RegionSiteCompilation.ofRootDescendant
                   omega
               }
 
+/-- The local wire block at a compiled source site is fixed by whether the
+site is the open root or a recursively compiled region. -/
+def CompiledSiteLocals (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    WireContext source.checked.val.diagram :=
+  if site = source.checked.val.diagram.root then
+    source.checked.val.hiddenWires
+  else
+    exactScopeWires source.checked.val.diagram site
+
 /-- Source-only compilation evidence for one concrete insertion site.  It
 contains the source compiler derivation, its concrete parent chain, and its
 intrinsic abstract focus, with no generated target or target-selected data. -/
@@ -524,15 +523,10 @@ structure CompiledSite (source : State arity)
   siteBinders : BinderContext source.checked.val.diagram siteRels
   derivation : route.Derivation BinderContext.empty path siteBinders
   siteBody : Region siteContext.length siteRels
-  siteLocals : WireContext source.checked.val.diagram
   compilation : ExactSiteCompilation source.checked.val.diagram site siteRels
-    siteContext siteBinders siteLocals siteBody
-  siteLocals_eq : siteLocals =
-    if site = source.checked.val.diagram.root then
-      source.checked.val.hiddenWires
-    else
-      exactScopeWires source.checked.val.diagram site
-  completeContext_exact : (siteContext ++ siteLocals).Exact site
+    siteContext siteBinders (CompiledSiteLocals source site) siteBody
+  completeContext_exact :
+    (siteContext ++ CompiledSiteLocals source site).Exact site
   binder_covers : siteBinders.Covers site
   binder_enumeration : BinderContext.Enumeration
     source.checked.val.diagram siteBinders site
@@ -541,6 +535,20 @@ structure CompiledSite (source : State arity)
   focus_body : HEq witness.toFocus.body siteBody
   focus_cutDepth : witness.toFocus.context.cutDepth =
     concreteCutDepth source.checked.val.diagram site
+
+/-- The canonical local wire block of a compiled site. -/
+def CompiledSite.siteLocals (_compiled : CompiledSite source site) :
+    WireContext source.checked.val.diagram :=
+  CompiledSiteLocals source site
+
+/-- A compiled site's local wires are exactly its canonical root-or-region
+local block. -/
+theorem CompiledSite.siteLocals_eq (compiled : CompiledSite source site) :
+    compiled.siteLocals =
+      if site = source.checked.val.diagram.root then
+        source.checked.val.hiddenWires
+      else
+        exactScopeWires source.checked.val.diagram site := rfl
 
 /-- The exact root computation belongs to the checked source, not to each
 focused-site certificate. -/
@@ -722,12 +730,14 @@ noncomputable def CompiledSite.ofSource (source : State arity)
       derivation := .root source.checked.val.exposedWires
         source.checked.val.hiddenWires
       siteBody := source.checked.elaborate.body
-      compilation := .root source.checked.val.exposedWires
-        source.checked.val.hiddenWires source.checked.elaborate.body
-          rootCompiledSource
-      siteLocals := source.checked.val.hiddenWires
-      siteLocals_eq := by simp
-      completeContext_exact := openRootWires_exact source.checked.property
+      compilation := by
+        simpa [CompiledSiteLocals] using
+          ExactSiteCompilation.root source.checked.val.exposedWires
+            source.checked.val.hiddenWires source.checked.elaborate.body
+              rootCompiledSource
+      completeContext_exact := by
+        simpa [CompiledSiteLocals] using
+          openRootWires_exact source.checked.property
       binder_covers := BinderContext.empty_covers_root
         source.checked.property.diagram_well_formed
       binder_enumeration := BinderContext.Enumeration.empty
@@ -756,13 +766,14 @@ noncomputable def CompiledSite.ofSource (source : State arity)
       siteBinders := nested.siteBinders
       derivation := nested.derivation
       siteBody := nested.siteBody
-      siteLocals := exactScopeWires source.checked.val.diagram site
-      compilation := .region site nested.siteRels nested.siteContext
-        nested.siteBinders nested.siteFuel nested.siteBody nested.site_compiled
-      siteLocals_eq := by
-        rw [if_neg atRoot]
+      compilation := by
+        simpa [CompiledSiteLocals, atRoot] using
+          ExactSiteCompilation.region site nested.siteRels nested.siteContext
+            nested.siteBinders nested.siteFuel nested.siteBody
+              nested.site_compiled
       completeContext_exact := by
-        simpa [nested.siteLocals_eq] using nested.completeContext_exact
+        simpa [CompiledSiteLocals, atRoot] using
+          nested.completeContext_exact
       binder_covers := nested.binder_covers
       binder_enumeration := nested.binder_enumeration
       focus_wires := nested.focus_wires

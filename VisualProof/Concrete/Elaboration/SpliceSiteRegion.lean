@@ -350,8 +350,8 @@ private noncomputable def frameItemsIso
         sourceItems.renameWires sourceMap := by
     rw [hostBlocks.items_eq]
     dsimp only [sourceItems, sourceMap]
-    rw [ItemSeq.castWiresEq_eq_renameWires,
-      ItemSeq.renameWires_comp]
+    rw [ItemSeq.castWiresEq_eq_renameWires]
+    exact ItemSeq.renameWires_comp _ _ _
   have targetEq :
       ((hostBlocks.nodeItems.renameWires
           (layout.frameSiteIndexMap consistent
@@ -723,7 +723,15 @@ noncomputable def spliceCompilerSiteBodyIso
           layout.bodyLocalWires.length)
         (compilerItems.castWiresEq outputLength)) := by
     exact RegionIso.mk localWire normalized
-  rw [kernel_siteBody_itemsCast_eq hostKernel, materialKernel.body_eq]
+  have hostBodyEq :
+      host.siteBody.itemsCast host.siteBody_localCount =
+        hostKernel.items.castWiresEq (by
+          change (host.siteContext ++ host.siteLocals).length =
+            host.siteContext.length + host.siteLocals.length
+          simp) := by
+    simpa only [CompiledSite.siteLocals] using
+      kernel_siteBody_itemsCast_eq hostKernel
+  rw [hostBodyEq, materialKernel.body_eq]
   simpa only [hostContext, relationMap, compilerItems, frameNodes,
     materialNodes, frameChildren, materialChildren, sourceWireMap,
     frameSourceItems, materialSourceItems,

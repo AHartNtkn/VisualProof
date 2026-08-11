@@ -39,9 +39,9 @@ abbrev CompiledSite.local (compiled : CompiledSite source site) :
   siteContext := compiled.siteContext
   siteBinders := compiled.siteBinders
   siteBody := compiled.siteBody
-  siteLocals := compiled.siteLocals
+  siteLocals := CompiledSiteLocals source site
   compilation := compiled.compilation
-  siteLocals_eq := compiled.siteLocals_eq
+  siteLocals_eq := rfl
   completeContext_exact := compiled.completeContext_exact
   binder_covers := compiled.binder_covers
   binder_enumeration := compiled.binder_enumeration
