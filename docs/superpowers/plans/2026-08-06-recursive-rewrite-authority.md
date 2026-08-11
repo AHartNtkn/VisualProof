@@ -999,14 +999,9 @@ structure Concrete.Insertion
   input : Concrete.Splice.Input
   frame_eq : input.frame = source.diagram
   admissible : input.Admissible
-  respects : input.AttachmentsRespectBoundary
 ```
 
 `Concrete.Splice.Input` already contains the checked open material, target region, ordered attachment map, binder spine, terminal-body contract, and binder targets. `admissible` supplies attachment visibility, binder matching, injectivity, and scope. Consequently `Insertion` realizes arbitrary insertion rather than only one bound atom.
-`respects` ensures equal intrinsic boundary identities use one retained host wire,
-so insertion does not also perform a wire join and is exactly the converse of
-`Erasure`.
-
 Then move the ten-constructor `Concrete.Step (source : State arity)` mechanically. Abstraction and instantiation are not concrete requests and their payloads, tags, operation functions, and executor branches do not move into the final execution API. The changed retained constructors are:
 
 ```lean
@@ -1242,22 +1237,15 @@ authority, a compatibility path, or a Task-9-local substitute.
   canonical Type witness. Canonical maps are fields or indices of the witness,
   not existentially recovered data.
 - Make `OpenDiagramIso.body` the canonical Type witness.
-- Strengthen `RegionIsoPresentation` until every consumer has migrated, then
-  retire it. Strengthen and then retire the Task-9-local
-  `SourceFactorPresentation` on the same basis. Do not retain aliases,
-  adapters, re-exports, compatibility definitions, or parallel witnesses.
 - Convert `DiagramContextIso` to Type. Strengthen the existing
   `ContextPathAlignment` so it directly returns or contains composable data;
   it may not rely on `Nonempty` caused by Prop erasure.
-- Extract one neutral common compiler/context alignment authority from
-  `PairedCompilerContextAlignment` and the repeated family
-  `CompilerTraceAlignment`/`OpenCompilerTraceAlignment` records.
-  Operation-specific records may extend it only with actual carrier changes,
-  exact concrete maps, binders, boundary order, routes, and local-rule
-  witnesses. They must not redeclare `holeRelsEq`, `holeWire`, or context
-  alignment.
-- Migrate every current Task-9 consumer to these owners and eliminate alternate
-  authorities while keeping Concrete and Refinement semantic-free.
+- Derive proof-only context replacement directly from the source occurrence
+  and canonical recursive isomorphism hierarchy. Keep target route, target
+  focus, compiler trace comparison, and operation-specific presentation data
+  outside the Concrete execution boundary.
+- Migrate every current Task-9 consumer to these owners while keeping Concrete
+  and Refinement semantic-free.
 
 The foundation Worker must compile only production declarations with
 `LEAN_NUM_THREADS=1` and `-DwarningAsError=true`; it may add no examples,

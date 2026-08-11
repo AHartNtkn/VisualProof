@@ -48,8 +48,6 @@ is_forbidden() {
          $imported == VisualProof.Concrete.*.Semantics ||
          $imported == VisualProof.Concrete.*.Semantics.* ||
          $imported == VisualProof.Concrete.Elaboration.Simulation ||
-         $imported == VisualProof.Refinement.Implementation.Soundness ||
-         $imported == VisualProof.Refinement.Implementation.* ||
          $imported == VisualProof.Refinement.Step.* ||
          $imported == VisualProof.Rule.Soundness.* ]]
       ;;

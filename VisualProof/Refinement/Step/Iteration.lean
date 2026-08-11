@@ -21,10 +21,10 @@ theorem deiteration
     {source : Concrete.State arity}
     {orientation : Concrete.Orientation}
     (selection : Concrete.CheckedSelection source.checked.val.diagram)
-    (witness : Concrete.DeiterationWitness source selection)
+    (certificate : Concrete.DeiterationCertificate source.diagram selection)
     {receipt : Concrete.Receipt source}
     (success : Concrete.execute orientation source
-      (.deiteration selection witness) = .ok receipt) :
+      (.deiteration selection certificate) = .ok receipt) :
     DirectedStep orientation (canonicalDiagram source)
       (canonicalDiagram receipt.target) := by
   sorry

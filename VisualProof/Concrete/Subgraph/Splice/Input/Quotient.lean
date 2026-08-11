@@ -1,4 +1,59 @@
-import VisualProof.Concrete.Subgraph.Splice.Trace
+import VisualProof.Concrete.Subgraph.Decomposition
+
+namespace VisualProof.Data.Finite.FinitePartition
+
+open VisualProof.Concrete
+
+def quotientDomain (partition : FinitePartition size) : SurvivorDomain size where
+  survives index := decide (partition.representative index = index)
+
+@[simp] theorem quotientDomain_survives_iff
+    (partition : FinitePartition size) (index : Fin size) :
+    partition.quotientDomain.survives index = true ↔
+      partition.representative index = index := by
+  simp [quotientDomain]
+
+def classIndex (partition : FinitePartition size)
+    (normalized : partition.Normalized) (index : Fin size) :
+    partition.quotientDomain.Carrier :=
+  partition.quotientDomain.index (partition.representative index) (by
+    rw [quotientDomain_survives_iff]
+    exact normalized index)
+
+@[simp] theorem quotientOrigin_classIndex
+    (partition : FinitePartition size) (normalized : partition.Normalized)
+    (index : Fin size) :
+    partition.quotientDomain.origin (partition.classIndex normalized index) =
+      partition.representative index := by
+  exact SurvivorDomain.origin_index _ _ _
+
+theorem classIndex_eq_iff_related
+    (partition : FinitePartition size) (normalized : partition.Normalized)
+    (left right : Fin size) :
+    partition.classIndex normalized left =
+        partition.classIndex normalized right ↔
+      partition.related left right = true := by
+  constructor
+  · intro heq
+    apply (related_eq_true_iff partition left right).2
+    have horigin := congrArg partition.quotientDomain.origin heq
+    simpa only [quotientOrigin_classIndex] using horigin
+  · intro hrelated
+    apply partition.quotientDomain.origin_injective
+    simp only [quotientOrigin_classIndex]
+    exact (related_eq_true_iff partition left right).1 hrelated
+
+theorem classIndex_surjective
+    (partition : FinitePartition size) (normalized : partition.Normalized) :
+    Function.Surjective (partition.classIndex normalized) := by
+  intro quotient
+  refine ⟨partition.quotientDomain.origin quotient, ?_⟩
+  apply partition.quotientDomain.origin_injective
+  rw [quotientOrigin_classIndex]
+  exact (quotientDomain_survives_iff partition _).1
+    (partition.quotientDomain.origin_survives quotient)
+
+end VisualProof.Data.Finite.FinitePartition
 
 namespace VisualProof.Concrete.Splice
 
@@ -19,47 +74,6 @@ structure Input where
   binderTarget : Fin binderSpine.proxyCount → Fin frame.val.regionCount
 
 namespace Input
-
-/-- The designated terminal body of every splice pattern has an intrinsic view. -/
-theorem patternBodyView_complete (input : Input ) :
-    Nonempty (OpenSiteView input.pattern input.binderSpine.bodyContainer) :=
-  ⟨openSiteView_complete input.pattern input.binderSpine.bodyContainer⟩
-
-def terminalProxy (input : Input )
-    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    Fin input.binderSpine.proxyCount :=
-  ⟨input.binderSpine.proxyCount - 1, by omega⟩
-
-@[simp] theorem terminalProxy_is_last (input : Input )
-    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    (input.terminalProxy hnonempty).val =
-      input.binderSpine.proxyCount - 1 := rfl
-
-/-- A nonempty proxy spine reaches its body through the ordinary nested
-compiler kernel, never through the open sheet-root kernel. -/
-theorem patternTerminalCompilerLeaf_complete (input : Input )
-    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    ∃ (path : List Nat)
-      (witness : Region.ContextPath input.pattern.elaborate.body path),
-      Nonempty (Region.ContextPath.CompilerLeaf input.pattern.val.diagram
-        input.binderSpine.bodyContainer witness) := by
-  obtain ⟨view⟩ := input.patternBodyView_complete
-  have hbody := input.binderSpine.body_eq_terminal_of_nonempty hnonempty
-  refine ⟨view.path, view.intrinsicPath, ?_⟩
-  rcases view.compilerLeaf.root_or_nested with hroot | leaf
-  · exfalso
-    apply input.binderSpine.proxy_ne_root (input.terminalProxy hnonempty)
-    have hterminal :
-        input.binderSpine.proxy (input.terminalProxy hnonempty) =
-          input.binderSpine.bodyContainer := by
-      rw [show input.terminalProxy hnonempty =
-          (⟨input.binderSpine.proxyCount - 1, by omega⟩ :
-            Fin input.binderSpine.proxyCount) by
-        apply Fin.ext
-        rfl]
-      exact hbody.symm
-    exact hterminal.trans hroot
-  · exact leaf
 
 /-- Boundary-position equations; equal pattern-wire identities alone generate them. -/
 def attachmentEdges (input : Input ) :
@@ -157,55 +171,6 @@ structure Admissible (input : Input ) : Prop where
   binder_targets_injective : input.BinderTargetsInjective
   binder_targets_match : input.BinderTargetsMatch
   binder_targets_enclose : input.BinderTargetsEnclose
-
-/-- Each admissible target bubble is represented by the host compiler's
-lexical relation environment at the insertion site. -/
-theorem Admissible.binderTarget_relation
-    (input : Input ) (hadmissible : input.Admissible)
-    (view : SiteView input.frame input.site)
-    (proxy : Fin input.binderSpine.proxyCount) :
-    ∃ relation : Theory.RelVar view.focus.holeRels
-        (input.binderSpine.arity proxy),
-      view.compilerLeaf.binders (input.binderTarget proxy) =
-        some ⟨input.binderSpine.arity proxy, relation⟩ := by
-  obtain ⟨parent, htarget⟩ := hadmissible.binder_targets_match proxy
-  exact view.compilerLeaf.bindersCover
-    (input.binderTarget proxy) parent (input.binderSpine.arity proxy)
-    htarget (hadmissible.binder_targets_enclose proxy)
-
-/-- Capture-avoiding transport of the terminal pattern's relation variables
-into the host lexical context.  The map is determined by concrete proxy
-identity and the checked target-binder assignment, not by de Bruijn position. -/
-noncomputable def Admissible.terminalRelationRenaming
-    (input : Input ) (hadmissible : input.Admissible)
-    (host : SiteView input.frame input.site)
-    {body : Region  outer rels} {path : List Nat}
-    (patternPath : Region.ContextPath body path)
-    (terminal : Fin input.binderSpine.proxyCount)
-    (patternLeaf : Region.ContextPath.CompilerLeaf input.pattern.val.diagram
-      (input.binderSpine.proxy terminal) patternPath) :
-    RelationRenaming patternPath.toFocus.holeRels host.focus.holeRels :=
-  fun {arity} relation =>
-    let proxy : Fin input.binderSpine.proxyCount :=
-      Classical.choose
-        (patternLeaf.binder_is_proxy input.pattern input.binderSpine
-          patternPath terminal relation.index)
-    let proxySpec : patternLeaf.binderEnumeration.binder relation.index =
-        input.binderSpine.proxy proxy :=
-      Classical.choose_spec
-        (patternLeaf.binder_is_proxy input.pattern input.binderSpine
-          patternPath terminal relation.index)
-    let arityEq : input.binderSpine.arity proxy = arity :=
-      (patternLeaf.binder_proxy_arity input.pattern input.binderSpine
-        patternPath relation.index proxy proxySpec).symm.trans
-          relation.hasArity
-    let target : Theory.RelVar host.focus.holeRels
-        (input.binderSpine.arity proxy) :=
-      Classical.choose (hadmissible.binderTarget_relation input host proxy)
-    {
-      index := target.index
-      hasArity := target.hasArity.trans arityEq
-    }
 
 instance (input : Input ) : Decidable input.AttachmentsVisible := by
   unfold AttachmentsVisible
@@ -811,78 +776,6 @@ theorem coalesceFrameRaw_wellFormed (input : Input )
     have hold := input.frame.property.wire_scopes_enclose wire endpoint hwire
     rw [input.coalesceFrameRaw_encloses_iff]
     exact Elaboration.checked_encloses_trans input.frame.property hscope hold
-
-def coalesceFrame (input : Input ) (hadmissible : input.Admissible) :
-    Checked  :=
-  ⟨input.coalesceFrameRaw, input.coalesceFrameRaw_wellFormed hadmissible⟩
-
-/-- The coalesced frame retains a checked intrinsic view at the splice site. -/
-theorem coalescedSiteView_complete (input : Input )
-    (hadmissible : input.Admissible) :
-    Nonempty (SiteView (input.coalesceFrame hadmissible) input.site) :=
-  ⟨siteView_complete (input.coalesceFrame hadmissible) input.site⟩
-
-/-- Every attached boundary class is visible at the splice site after host
-wire coalescing.  The quotient wire is scoped at an outermost member scope,
-so merging aliases never captures it below the site. -/
-theorem quotientAttachment_visible (input : Input )
-    (hadmissible : input.Admissible)
-    (position : Fin input.pattern.val.boundary.length) :
-    input.coalesceFrameRaw.Encloses
-      (input.coalesceFrameRaw.wires
-        (input.quotientWire (input.attachment position))).scope input.site := by
-  change input.coalesceFrameRaw.Encloses
-    (input.coalescedScope (input.quotientWire (input.attachment position)))
-      input.site
-  rw [input.coalesceFrameRaw_encloses_iff]
-  exact Elaboration.checked_encloses_trans input.frame.property
-    (input.coalescedScope_encloses_member hadmissible
-      (input.quotientWire (input.attachment position))
-      (input.attachment position)
-      ((input.mem_classWires _ _).2 rfl))
-    (hadmissible.attachments_visible position)
-
-/-- Visibility of a quotient wire at the splice site is equivalent to
-visibility of any chosen original representative.  Nontrivial quotient
-classes contain only admissible attachment wires, hence all of their members
-are site-visible; singleton classes retain the original scope. -/
-theorem quotientWire_visible_at_site_iff
-    (input : Input )
-    (hadmissible : input.Admissible)
-    (wire : Fin input.frame.val.wireCount) :
-    input.coalesceFrameRaw.Encloses
-        (input.coalesceFrameRaw.wires
-          (input.quotientWire wire)).scope input.site ↔
-      input.frame.val.Encloses
-        (input.frame.val.wires wire).scope input.site := by
-  rw [input.coalesceFrameRaw_wire]
-  change input.coalesceFrameRaw.Encloses
-      (input.coalescedScope (input.quotientWire wire)) input.site ↔ _
-  rw [input.coalesceFrameRaw_encloses_iff]
-  constructor
-  · intro quotientVisible
-    by_cases hall : input.classAllVisible (input.quotientWire wire)
-    · exact hall wire ((input.mem_classWires _ _).2 rfl)
-    · let first := input.firstClassWire (input.quotientWire wire)
-      have related :
-          input.attachmentPartition.related wire first = true := by
-        rw [← input.quotientWire_eq_iff,
-          input.quotientWire_firstClassWire]
-      rcases input.related_eq_or_both_visible hadmissible related with
-        equality | bothVisible
-      · have firstVisible :
-            input.frame.val.Encloses
-              (input.frame.val.wires first).scope input.site := by
-          simpa only [coalescedScope, hall, ↓reduceIte, first] using
-            quotientVisible
-        exact equality.symm ▸ firstVisible
-      · exact bothVisible.1
-  · intro wireVisible
-    exact Elaboration.checked_encloses_trans input.frame.property
-      (input.coalescedScope_encloses_member hadmissible
-        (input.quotientWire wire) wire
-        ((input.mem_classWires _ _).2 rfl))
-      wireVisible
 
 /-- Stable material/proxy and internal-wire blocks for plugging. -/
 structure PlugLayout (input : Input ) where

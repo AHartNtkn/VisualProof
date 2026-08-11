@@ -53,12 +53,9 @@ reviewed theorem-driven implementation plan.
 - `OpenDiagramIso.body` and `DiagramContextIso` retain recursive/composable
   Type data. `ContextPathAlignment` provides that data directly, without
   Prop-to-Type elimination.
-- One neutral compiler/context alignment authority owns the shared core.
-  Operation-specific records extend it only with genuine operation facts and
-  never redeclare shared hole relation, hole wire, or context alignment data.
-- `RegionIsoPresentation` and `SourceFactorPresentation` are strengthened
-  only long enough to migrate all consumers, then retired with no aliases,
-  adapters, compatibility definitions, or parallel witnesses.
+- Proof-only context replacement is source-derived and operation-neutral; no
+  target route, target focus, compiler trace comparison, or operation-specific
+  presentation authority is part of the concrete execution boundary.
 - The Lean formalization has no matcher or occurrence-search subsystem; requests supply occurrence evidence.
 - Representation completeness and one-step execution completeness are required.
 - TypeScript is outside this goal's implementation, planning, and validation scope.

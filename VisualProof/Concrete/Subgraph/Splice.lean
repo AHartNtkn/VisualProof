@@ -1,3 +1,1 @@
-import VisualProof.Concrete.Subgraph.Splice.Removal
-import VisualProof.Concrete.Subgraph.Splice.AliasMaterialization
-import VisualProof.Concrete.Subgraph.Splice.AttachmentAliasMaterialization
+import VisualProof.Concrete.Subgraph.Splice.Input.CompilerSource

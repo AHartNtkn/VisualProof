@@ -564,7 +564,6 @@ tasks:
       changed_files:
         - "VisualProof/Rule/Step.lean"
         - "VisualProof/Rule/Soundness.lean"
-        - "VisualProof/Refinement/Implementation/Soundness.lean"
         - "VisualProof/Rule/Soundness/Contextual.lean"
         - "VisualProof/Rule/Soundness/Erasure.lean"
         - "VisualProof/Rule/Soundness/WireSever.lean"
@@ -723,7 +722,7 @@ tasks:
     inputs:
       - "docs/superpowers/plans/2026-08-06-recursive-rewrite-authority.md foundational prerequisite"
       - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-brief.md Mandatory foundation before Task 9"
-      - "Current RegionIso/ItemIso/ItemSeqIso, OpenDiagramIso, DiagramContextIso, ContextPathAlignment, PairedCompilerContextAlignment, CompilerTraceAlignment, and OpenCompilerTraceAlignment consumers"
+      - "Current RegionIso/ItemIso/ItemSeqIso, OpenDiagramIso, DiagramContextIso, and ContextPathAlignment consumers"
     allowed_files:
       - "VisualProof/Diagram/*.lean"
       - "VisualProof/Diagram/**/*.lean"
@@ -738,8 +737,8 @@ tasks:
       - "Convert the existing RegionIso/ItemIso/ItemSeqIso hierarchy itself to one proof-relevant Type authority with ambient/local wire equivalences, position equivalences, per-item witnesses, and recursive cut/bubble witnesses."
       - "Theorem-facing propositions use Nonempty of the canonical Type witness; canonical maps are fields or indices."
       - "OpenDiagramIso.body is the canonical Type witness; DiagramContextIso is Type; ContextPathAlignment provides composable data directly without Prop-to-Type elimination."
-      - "Strengthen then retire RegionIsoPresentation and SourceFactorPresentation after all consumers migrate. Do not add aliases, adapters, compatibility definitions, or parallel witness authorities."
-      - "Extract one neutral compiler/context core from PairedCompilerContextAlignment and repeated CompilerTraceAlignment/OpenCompilerTraceAlignment records. Operation-specific extensions retain only actual carrier changes, exact concrete maps, binders, boundary order, routes, and local-rule witnesses; they do not redeclare holeRelsEq, holeWire, or context alignment."
+      - "Use the canonical recursive isomorphism hierarchy directly. Do not add aliases, adapters, compatibility definitions, or parallel witness authorities."
+      - "Keep proof-only context replacement source-derived and operation-neutral, with no target route, target focus, compiler trace comparison, or operation-specific presentation authority in Concrete."
       - "Migrate every current Task-9 consumer and preserve the Concrete/Refinement semantic-free boundary."
       - "No examples, fixtures, synthetic theorems, #check, #eval, compatibility path, or existential shortcut."
     verify:
@@ -758,9 +757,6 @@ tasks:
       changed_files:
         - "VisualProof/Diagram/Isomorphism.lean"
         - "VisualProof/Diagram/ContextPathIsomorphism.lean"
-        - "VisualProof/Concrete/Subgraph/Splice/Trace.lean"
-        - "VisualProof/Concrete/Subgraph/Splice/Input/Alignment/Nested.lean"
-        - "VisualProof/Refinement/Implementation/IterationSourceFactor.lean"
         - ".superpowers/sdd/2026-08-06-recursive-rewrite-authority/task-9-foundation-report.md"
       commands:
         - cmd: "63/63 foundation production owners strict warning-as-error compilation"
@@ -790,8 +786,8 @@ tasks:
       - "Read-only."
       - "Verify direct projection and composition of canonical Type witnesses without Prop-to-Type elimination."
       - "Verify recursive proof-relevant OpenDiagramIso.body data and Type-valued DiagramContextIso/ContextPathAlignment."
-      - "Reject RegionIsoPresentation, SourceFactorPresentation, aliases, adapters, compatibility definitions, existential shortcuts, or any parallel witness authority after migration."
-      - "Verify one neutral compiler/context core with no duplicated holeRelsEq, holeWire, or context alignment; operation extensions must retain genuine carrier, map, binder, boundary-order, route, and local-rule facts."
+      - "Reject aliases, adapters, compatibility definitions, existential shortcuts, or any parallel witness authority after migration."
+      - "Verify proof-only context replacement is source-derived and operation-neutral, with no duplicated hole relation, hole wire, or context alignment data."
       - "Verify all current Task-9 consumers migrated, Concrete/Refinement remain semantic-free, no holes or unapproved axioms remain, authority audits pass, and LEAN_NUM_THREADS=1 warning-as-error production compilation plus serial full build pass."
       - "Reject examples, fixtures, synthetic theorems, #check, or #eval."
     expected_output:
@@ -806,7 +802,7 @@ tasks:
       evidence:
         - "RegionIso/ItemIso/ItemSeqIso and DiagramContextIso are Type-valued; OpenDiagramIso.body is direct RegionIso data."
         - "Region.ContextPath.Alignment is the sole hole relation/wire/context core; family records retain only operation-specific facts."
-        - "RegionIsoPresentation, SourceFactorPresentation, and PairedCompilerContextAlignment are absent."
+        - "No alternate presentation or compiler/context authority remains."
         - "Independent 9/9 representative strict compiles and all four authority audits passed."
         - "Foundation report records 63/63 strict owners and a 142-job serial full build."
       missing_evidence: []
