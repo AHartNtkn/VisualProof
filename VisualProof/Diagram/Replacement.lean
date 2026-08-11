@@ -31,6 +31,30 @@ noncomputable def ContextReplacement.castArity
   subst targetArity
   exact replacement
 
+@[simp] theorem ContextReplacement.castArity_context_heq
+    {source target : OpenDiagram sourceArity}
+    (replacement : ContextReplacement source target)
+    (arityEq : sourceArity = targetArity) :
+    HEq (replacement.castArity arityEq).context replacement.context := by
+  subst targetArity
+  rfl
+
+@[simp] theorem ContextReplacement.castArity_before_heq
+    {source target : OpenDiagram sourceArity}
+    (replacement : ContextReplacement source target)
+    (arityEq : sourceArity = targetArity) :
+    HEq (replacement.castArity arityEq).before replacement.before := by
+  subst targetArity
+  rfl
+
+@[simp] theorem ContextReplacement.castArity_after_heq
+    {source target : OpenDiagram sourceArity}
+    (replacement : ContextReplacement source target)
+    (arityEq : sourceArity = targetArity) :
+    HEq (replacement.castArity arityEq).after replacement.after := by
+  subst targetArity
+  rfl
+
 def ContextReplacement.occurrence
     (replacement : ContextReplacement source target) :
     Occurrence replacement.before source where

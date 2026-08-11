@@ -288,6 +288,245 @@ noncomputable def spliceRaw_receipt_outputStateIso
 
 namespace CompiledSite
 
+/-- Exact proof-side result retained before the execution-arity cast.  Its
+single target identification is enough to package the canonical compiler
+context without exposing any generated route or compiler witness. -/
+structure SpliceResult
+    {source : State arity} (normalized : Splice.Input.SourceNormalized source)
+    (layout : Splice.Input.PlugLayout normalized.toInput)
+    (admissible : normalized.toInput.Admissible)
+    (host : CompiledSite source normalized.site)
+    (material : CompiledSite normalized.toInput.patternState
+      normalized.binderSpine.bodyContainer)
+    (receipt : Receipt source) where
+  target_iso : OpenDiagramIso
+    (receipt.target.checked.elaborate.castArity
+      (receipt.target.boundary_length.trans source.boundary_length.symm))
+    (source.checked.elaborate.withBody
+      (host.siteOccurrence.context.fill
+        (host.spliceBody normalized layout admissible material)))
+
+/-- The neutral contextual replacement before the state-arity cast.  Its
+local fields reduce exactly to the canonical compiled host and splice body. -/
+noncomputable def SpliceResult.rawReplacement
+    {source : State arity} {normalized : Splice.Input.SourceNormalized source}
+    {layout : Splice.Input.PlugLayout normalized.toInput}
+    {admissible : normalized.toInput.Admissible}
+    {host : CompiledSite source normalized.site}
+    {material : CompiledSite normalized.toInput.patternState
+      normalized.binderSpine.bodyContainer}
+    {receipt : Receipt source}
+    (result : SpliceResult normalized layout admissible host material receipt) :
+    Diagram.ContextReplacement source.checked.elaborate
+      (receipt.target.checked.elaborate.castArity
+        (receipt.target.boundary_length.trans source.boundary_length.symm)) :=
+  Diagram.ContextReplacement.ofSourceContext source.checked.elaborate _
+    host.siteOccurrence.context host.siteBody
+    (host.spliceBody normalized layout admissible material)
+    host.siteOccurrence_rebuild result.target_iso
+
+@[simp] theorem SpliceResult.rawReplacement_context
+    {source : State arity} {normalized : Splice.Input.SourceNormalized source}
+    {layout : Splice.Input.PlugLayout normalized.toInput}
+    {admissible : normalized.toInput.Admissible}
+    {host : CompiledSite source normalized.site}
+    {material : CompiledSite normalized.toInput.patternState
+      normalized.binderSpine.bodyContainer}
+    {receipt : Receipt source}
+    (result : SpliceResult normalized layout admissible host material receipt) :
+    result.rawReplacement.context = host.siteOccurrence.context := rfl
+
+@[simp] theorem SpliceResult.rawReplacement_before
+    {source : State arity} {normalized : Splice.Input.SourceNormalized source}
+    {layout : Splice.Input.PlugLayout normalized.toInput}
+    {admissible : normalized.toInput.Admissible}
+    {host : CompiledSite source normalized.site}
+    {material : CompiledSite normalized.toInput.patternState
+      normalized.binderSpine.bodyContainer}
+    {receipt : Receipt source}
+    (result : SpliceResult normalized layout admissible host material receipt) :
+    result.rawReplacement.before = host.siteBody := rfl
+
+@[simp] theorem SpliceResult.rawReplacement_after
+    {source : State arity} {normalized : Splice.Input.SourceNormalized source}
+    {layout : Splice.Input.PlugLayout normalized.toInput}
+    {admissible : normalized.toInput.Admissible}
+    {host : CompiledSite source normalized.site}
+    {material : CompiledSite normalized.toInput.patternState
+      normalized.binderSpine.bodyContainer}
+    {receipt : Receipt source}
+    (result : SpliceResult normalized layout admissible host material receipt) :
+    result.rawReplacement.after =
+      host.spliceBody normalized layout admissible material := rfl
+
+@[simp] theorem SpliceResult.rawReplacement_targetIso
+    {source : State arity} {normalized : Splice.Input.SourceNormalized source}
+    {layout : Splice.Input.PlugLayout normalized.toInput}
+    {admissible : normalized.toInput.Admissible}
+    {host : CompiledSite source normalized.site}
+    {material : CompiledSite normalized.toInput.patternState
+      normalized.binderSpine.bodyContainer}
+    {receipt : Receipt source}
+    (result : SpliceResult normalized layout admissible host material receipt) :
+    result.rawReplacement.target_iso = result.target_iso := rfl
+
+/-- Cast an exact splice result to the shared execution-state arity without
+changing its local context or either local body. -/
+noncomputable def SpliceResult.replacement
+    {source : State arity} {normalized : Splice.Input.SourceNormalized source}
+    {layout : Splice.Input.PlugLayout normalized.toInput}
+    {admissible : normalized.toInput.Admissible}
+    {host : CompiledSite source normalized.site}
+    {material : CompiledSite normalized.toInput.patternState
+      normalized.binderSpine.bodyContainer}
+    {receipt : Receipt source}
+    (result : SpliceResult normalized layout admissible host material receipt) :
+    Diagram.ContextReplacement
+      (source.checked.elaborate.castArity source.boundary_length)
+      (receipt.target.checked.elaborate.castArity
+        receipt.target.boundary_length) := by
+  let casted := result.rawReplacement.castArity source.boundary_length
+  let targetNormalization : OpenDiagramIso
+      ((receipt.target.checked.elaborate.castArity
+        (receipt.target.boundary_length.trans source.boundary_length.symm)
+          ).castArity source.boundary_length)
+      (receipt.target.checked.elaborate.castArity
+        receipt.target.boundary_length) :=
+    normalizeCastIso receipt.target.checked.elaborate
+      (receipt.target.boundary_length.trans source.boundary_length.symm)
+      source.boundary_length receipt.target.boundary_length
+  exact casted.iso (OpenDiagramIso.refl _) targetNormalization
+
+@[simp] theorem SpliceResult.replacement_context
+    {source : State arity} {normalized : Splice.Input.SourceNormalized source}
+    {layout : Splice.Input.PlugLayout normalized.toInput}
+    {admissible : normalized.toInput.Admissible}
+    {host : CompiledSite source normalized.site}
+    {material : CompiledSite normalized.toInput.patternState
+      normalized.binderSpine.bodyContainer}
+    {receipt : Receipt source}
+    (result : SpliceResult normalized layout admissible host material receipt) :
+    HEq result.replacement.context host.siteOccurrence.context := by
+  change HEq
+    (result.rawReplacement.castArity source.boundary_length).context
+    host.siteOccurrence.context
+  exact (Diagram.ContextReplacement.castArity_context_heq
+    result.rawReplacement source.boundary_length).trans HEq.rfl
+
+@[simp] theorem SpliceResult.replacement_before
+    {source : State arity} {normalized : Splice.Input.SourceNormalized source}
+    {layout : Splice.Input.PlugLayout normalized.toInput}
+    {admissible : normalized.toInput.Admissible}
+    {host : CompiledSite source normalized.site}
+    {material : CompiledSite normalized.toInput.patternState
+      normalized.binderSpine.bodyContainer}
+    {receipt : Receipt source}
+    (result : SpliceResult normalized layout admissible host material receipt) :
+    HEq result.replacement.before host.siteBody := by
+  change HEq
+    (result.rawReplacement.castArity source.boundary_length).before
+    host.siteBody
+  exact (Diagram.ContextReplacement.castArity_before_heq
+    result.rawReplacement source.boundary_length).trans HEq.rfl
+
+@[simp] theorem SpliceResult.replacement_after
+    {source : State arity} {normalized : Splice.Input.SourceNormalized source}
+    {layout : Splice.Input.PlugLayout normalized.toInput}
+    {admissible : normalized.toInput.Admissible}
+    {host : CompiledSite source normalized.site}
+    {material : CompiledSite normalized.toInput.patternState
+      normalized.binderSpine.bodyContainer}
+    {receipt : Receipt source}
+    (result : SpliceResult normalized layout admissible host material receipt) :
+    HEq result.replacement.after
+      (host.spliceBody normalized layout admissible material) := by
+  change HEq
+    (result.rawReplacement.castArity source.boundary_length).after
+    (host.spliceBody normalized layout admissible material)
+  exact (Diagram.ContextReplacement.castArity_after_heq
+    result.rawReplacement source.boundary_length).trans HEq.rfl
+
+/-- Construct the exact canonical splice replacement result from the one
+source compiler route and the primitive's exact packed receipt. -/
+noncomputable def spliceResult
+    (source : State arity)
+    (normalized : Splice.Input.SourceNormalized source)
+    (consistent : normalized.toInput.AttachmentConsistent)
+    (operation : OperationReceipt normalized.toInput.frame)
+    (receipt : Receipt source)
+    (success : spliceRaw normalized.toInput = .ok operation)
+    (packed : operation.toReceipt source = some receipt)
+    (host : CompiledSite source normalized.site)
+    (material : CompiledSite normalized.toInput.patternState
+      normalized.binderSpine.bodyContainer) :
+    SpliceResult normalized ({} : Splice.Input.PlugLayout normalized.toInput)
+      (spliceRaw_admissible normalized.toInput operation success)
+      host material receipt := by
+  let layout : Splice.Input.PlugLayout normalized.toInput := {}
+  let admissible : normalized.toInput.Admissible :=
+    spliceRaw_admissible normalized.toInput operation success
+  have packedCast :
+      (operation.castInput rfl).toReceipt source = some receipt := by
+    simpa using packed
+  have generatedWellFormed := spliceRaw_receipt_output_wellFormed
+    normalized.toInput source rfl operation receipt success packedCast
+  have normalizedBoundary :
+      normalized.toInput.sourceBoundary source rfl =
+        source.checked.val.boundary := by
+    simp [Splice.Input.sourceBoundary, Splice.Input.SourceNormalized.toInput]
+  have targetWellFormed : (layout.outputOpenRoot normalized.toInput
+      source.checked.val.boundary).WellFormed := by
+    rw [← normalizedBoundary]
+    exact generatedWellFormed
+  let routeResult := layout.compileSpliceMappedOpenRoute normalized consistent
+    admissible host material targetWellFormed
+  let generated := mappedOutputState normalized layout targetWellFormed
+  let boundaryEq := mappedOutputBoundaryLength normalized layout
+  let generatedSourceIso : OpenDiagramIso
+      (generated.checked.elaborate.castArity boundaryEq)
+      (source.checked.elaborate.withBody
+        (host.siteOccurrence.context.fill
+          (host.spliceBody normalized layout admissible material))) :=
+    routeResult.sourceContextIso normalized layout consistent admissible host
+      material targetWellFormed
+  let receiptIso := spliceRaw_receipt_outputStateIso normalized.toInput source
+    rfl operation receipt success packedCast
+  have generatedCheckedEq :
+      (({} : Splice.Input.PlugLayout normalized.toInput).outputState source rfl
+        generatedWellFormed).checked.val = generated.checked.val := by
+    change ({} : Splice.Input.PlugLayout normalized.toInput).outputOpenRoot
+        normalized.toInput
+          (normalized.toInput.sourceBoundary source rfl) =
+      layout.outputOpenRoot normalized.toInput source.checked.val.boundary
+    rw [normalizedBoundary]
+  let outputIso := State.elaborationIsoOfCheckedValEq
+    (({} : Splice.Input.PlugLayout normalized.toInput).outputState source rfl
+      generatedWellFormed) generated generatedCheckedEq
+  let receiptToGenerated := receiptIso.trans outputIso
+  let receiptToGeneratedAtSource :=
+    receiptToGenerated.castArity source.boundary_length.symm
+  let receiptNormalization : OpenDiagramIso
+      (((receipt.target.checked.elaborate.castArity
+        receipt.target.boundary_length).castArity
+          source.boundary_length.symm))
+      (receipt.target.checked.elaborate.castArity
+        (receipt.target.boundary_length.trans source.boundary_length.symm)) :=
+    normalizeCastIso receipt.target.checked.elaborate
+      receipt.target.boundary_length source.boundary_length.symm
+      (receipt.target.boundary_length.trans source.boundary_length.symm)
+  let generatedNormalization : OpenDiagramIso
+      ((generated.checked.elaborate.castArity generated.boundary_length
+        ).castArity source.boundary_length.symm)
+      (generated.checked.elaborate.castArity boundaryEq) :=
+    normalizeCastIso generated.checked.elaborate generated.boundary_length
+      source.boundary_length.symm boundaryEq
+  exact {
+    target_iso := receiptNormalization.symm
+      |>.trans receiptToGeneratedAtSource
+      |>.trans generatedNormalization
+      |>.trans generatedSourceIso
+  }
+
 /-- Generic splice elaboration is the neutral replacement of the retained
 source compiler site by the material compiler body, at the exact primitive
 receipt target. -/
@@ -318,63 +557,10 @@ noncomputable def splice
     binderSpine := binderSpine
     binderTarget := binderTarget
   }
-  let layout : Splice.Input.PlugLayout normalized.toInput := {}
-  have admissible : normalized.toInput.Admissible :=
-    spliceRaw_admissible normalized.toInput operation success
-  have generatedWellFormed := spliceRaw_receipt_output_wellFormed
-    normalized.toInput source rfl operation receipt success packed
-  have normalizedBoundary :
-      normalized.toInput.sourceBoundary source rfl =
-        source.checked.val.boundary := by
-    simp [Splice.Input.sourceBoundary, Splice.Input.SourceNormalized.toInput]
-  have targetWellFormed : (layout.outputOpenRoot normalized.toInput
-      source.checked.val.boundary).WellFormed := by
-    rw [← normalizedBoundary]
-    exact generatedWellFormed
-  let result := layout.compileSpliceMappedOpenRoute normalized consistent
-    admissible host material targetWellFormed
-  let after := host.spliceBody normalized layout admissible material
-  let generated := mappedOutputState normalized layout targetWellFormed
-  let boundaryEq := mappedOutputBoundaryLength normalized layout
-  let generatedAtSource := generated.checked.elaborate.castArity boundaryEq
-  let generatedSourceIso : OpenDiagramIso generatedAtSource
-      (source.checked.elaborate.withBody
-        (host.siteOccurrence.context.fill after)) :=
-    result.sourceContextIso normalized layout consistent admissible host
-      material targetWellFormed
-  let rawReplacement : Diagram.ContextReplacement
-      source.checked.elaborate generatedAtSource :=
-    Diagram.ContextReplacement.ofSourceContext source.checked.elaborate
-      generatedAtSource host.siteOccurrence.context host.siteBody after
-      host.siteOccurrence_rebuild generatedSourceIso
-  let stateReplacement := rawReplacement.castArity source.boundary_length
-  let generatedNormalization : OpenDiagramIso
-      ((generated.checked.elaborate.castArity boundaryEq).castArity
-        source.boundary_length)
-      (generated.checked.elaborate.castArity generated.boundary_length) :=
-    normalizeCastIso generated.checked.elaborate boundaryEq
-      source.boundary_length generated.boundary_length
-  let generatedReplacement : Diagram.ContextReplacement
-      (source.checked.elaborate.castArity source.boundary_length)
-      (generated.checked.elaborate.castArity generated.boundary_length) :=
-    stateReplacement.iso (OpenDiagramIso.refl _)
-      generatedNormalization
-  let receiptIso := spliceRaw_receipt_outputStateIso normalized.toInput source
-    rfl operation receipt success packed
-  have generatedCheckedEq :
-      (({} : Splice.Input.PlugLayout normalized.toInput).outputState source rfl
-        generatedWellFormed).checked.val = generated.checked.val := by
-    change ({} : Splice.Input.PlugLayout normalized.toInput).outputOpenRoot
-        normalized.toInput
-          (normalized.toInput.sourceBoundary source rfl) =
-      layout.outputOpenRoot normalized.toInput source.checked.val.boundary
-    rw [normalizedBoundary]
-  let outputIso := State.elaborationIsoOfCheckedValEq
-    (({} : Splice.Input.PlugLayout normalized.toInput).outputState source rfl
-      generatedWellFormed) generated generatedCheckedEq
-  let receiptToGenerated := receiptIso.trans outputIso
-  exact generatedReplacement.iso (OpenDiagramIso.refl _)
-    receiptToGenerated.symm
+  have packed' : operation.toReceipt source = some receipt := by
+    simpa using packed
+  exact (CompiledSite.spliceResult source normalized consistent operation
+    receipt success packed' host material).replacement
 
 end CompiledSite
 
