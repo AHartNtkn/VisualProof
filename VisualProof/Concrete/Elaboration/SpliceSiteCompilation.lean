@@ -231,6 +231,135 @@ private theorem materialRegion_not_encloses_frame
       exact layout.frameRegion_ne_materialRegion sourceRegion material
         (Option.some.inj climbed)
 
+private theorem frameWireMap_scope
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (wire : Fin input.frame.val.wireCount) :
+    (layout.plugRaw.wires (layout.frameWireMap wire)).scope =
+      layout.frameRegion (input.frame.val.wires wire).scope := by
+  have scope := coalescedScope_quotientWire input consistent wire
+  unfold PlugLayout.frameWireMap
+  rw [layout.plugRaw_wires_frame, scope]
+
+private theorem frameWireMap_mem_full
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (sourceFull : WireContext input.frame.val)
+    (targetFull : WireContext layout.plugRaw)
+    (sourceExact : sourceFull.Exact input.site)
+    (targetExact : targetFull.Exact (layout.frameRegion input.site))
+    (wire : Fin input.frame.val.wireCount) (member : wire ∈ sourceFull) :
+    layout.frameWireMap wire ∈ targetFull := by
+  apply (targetExact.mem_iff _).mpr
+  rw [layout.frameWireMap_scope consistent]
+  exact (layout.encloses_frameRegion_iff _ _).2
+    ((sourceExact.mem_iff wire).mp member)
+
+private noncomputable def frameFullMap
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (sourceFull : WireContext input.frame.val)
+    (targetFull : WireContext layout.plugRaw)
+    (sourceExact : sourceFull.Exact input.site)
+    (targetExact : targetFull.Exact (layout.frameRegion input.site)) :
+    Fin sourceFull.length → Fin targetFull.length :=
+  fun index => contextPosition targetFull
+    (layout.frameWireMap (sourceFull.get index))
+    (layout.frameWireMap_mem_full consistent sourceFull targetFull sourceExact
+      targetExact _ (List.get_mem _ _))
+
+private theorem frameFullMap_get
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (sourceFull : WireContext input.frame.val)
+    (targetFull : WireContext layout.plugRaw)
+    (sourceExact : sourceFull.Exact input.site)
+    (targetExact : targetFull.Exact (layout.frameRegion input.site))
+    (index : Fin sourceFull.length) :
+    targetFull.get (layout.frameFullMap consistent sourceFull targetFull
+      sourceExact targetExact index) =
+        layout.frameWireMap (sourceFull.get index) :=
+  contextPosition_get _ _ _
+
+private theorem patternWireMap_mem_full
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (admissible : input.Admissible)
+    (sourceFull : WireContext input.frame.val)
+    (targetFull : WireContext layout.plugRaw)
+    (sourceExact : sourceFull.Exact input.site)
+    (targetExact : targetFull.Exact (layout.frameRegion input.site))
+    (patternExact : (CompiledSite.endpointCall (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).fullContext.Exact
+        input.binderSpine.bodyContainer)
+    (wire : Fin input.pattern.val.diagram.wireCount)
+    (member : wire ∈ (CompiledSite.endpointCall
+      (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).fullContext) :
+    layout.patternWireMap wire ∈ targetFull := by
+  by_cases exposed : wire ∈ input.pattern.val.exposedWires
+  · rw [layout.patternWireMap_of_exposed wire exposed]
+    let external := layout.exposedWireIndex wire exposed
+    let attachment := input.attachment (layout.exposedPosition external)
+    exact layout.frameWireMap_mem_full consistent sourceFull targetFull
+      sourceExact targetExact attachment
+      ((sourceExact.mem_iff attachment).mpr
+        (admissible.attachments_visible (layout.exposedPosition external)))
+  · let internal := layout.internalWires.index wire (by
+      rw [layout.internalWires_exact]
+      exact decide_eq_true_iff.mpr exposed)
+    have origin : layout.internalWires.origin internal = wire :=
+      layout.internalWires.origin_index wire _
+    rw [← origin, layout.patternWireMap_internal]
+    apply (targetExact.mem_iff _).mpr
+    rw [layout.plugRaw_wires_internal]
+    simp only [PlugLayout.mapPatternWire]
+    have sourceEncloses := (patternExact.mem_iff wire).mp member
+    change input.pattern.val.diagram.Encloses
+      (input.pattern.val.diagram.wires wire).scope
+        input.binderSpine.bodyContainer at sourceEncloses
+    have originEncloses : input.pattern.val.diagram.Encloses
+        (input.pattern.val.diagram.wires
+          (layout.internalWires.origin internal)).scope
+        input.binderSpine.bodyContainer := by
+      simpa only [origin] using sourceEncloses
+    rw [layout.bodyRegion_enclosing_terminal _ originEncloses]
+    exact Diagram.Encloses.refl _ _
+
+private noncomputable def patternFullMap
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (admissible : input.Admissible)
+    (sourceFull : WireContext input.frame.val)
+    (targetFull : WireContext layout.plugRaw)
+    (sourceExact : sourceFull.Exact input.site)
+    (targetExact : targetFull.Exact (layout.frameRegion input.site))
+    (patternExact : (CompiledSite.endpointCall (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).fullContext.Exact
+        input.binderSpine.bodyContainer) :
+    Fin (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).fullContext.length →
+      Fin targetFull.length :=
+  fun index => contextPosition targetFull
+    (layout.patternWireMap ((CompiledSite.endpointCall
+      (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).fullContext.get index))
+    (layout.patternWireMap_mem_full consistent admissible sourceFull targetFull
+      sourceExact targetExact patternExact _ (List.get_mem _ _))
+
+private theorem patternFullMap_get
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (admissible : input.Admissible)
+    (sourceFull : WireContext input.frame.val)
+    (targetFull : WireContext layout.plugRaw)
+    (sourceExact : sourceFull.Exact input.site)
+    (targetExact : targetFull.Exact (layout.frameRegion input.site))
+    (patternExact : (CompiledSite.endpointCall (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).fullContext.Exact
+        input.binderSpine.bodyContainer)
+    (index : Fin (CompiledSite.endpointCall (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).fullContext.length) :
+    targetFull.get (layout.patternFullMap consistent admissible sourceFull
+      targetFull sourceExact targetExact patternExact index) =
+      layout.patternWireMap ((CompiledSite.endpointCall
+        (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).fullContext.get index) :=
+  contextPosition_get _ _ _
+
 private theorem siteTargetFull_exact
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
     (terminal : input.TerminalBody)
@@ -376,32 +505,49 @@ private theorem terminalBinderMapped
 /-- Compile the splice endpoint in its actual target occurrence order. The
 result is constructed from the retained frame blocks and the terminal pattern
 blocks; no target focus or target compiler search is involved. -/
-private theorem compileSpliceSiteParts
+private theorem compileSpliceSiteItems
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
     (admissible : input.Admissible) (targetWf : layout.plugRaw.WellFormed)
-    (sourceOuter : WireContext input.frame.val)
+    (sourceFull : WireContext input.frame.val)
     (sourceBinders : BinderContext input.frame.val sourceRels)
+    (targetFull : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw sourceRels)
+    (frameMap : Fin sourceFull.length → Fin targetFull.length)
+    (patternMap : Fin (CompiledSite.endpointCall
+      (State.ofOpen input.pattern) input.binderSpine.bodyContainer
+        ).fullContext.length → Fin targetFull.length)
     (relationMap : RelationRenaming
       (CompiledSite.endpointCall (State.ofOpen input.pattern)
         input.binderSpine.bodyContainer).rels sourceRels)
-    (hostLookup : ∀ {arity}
-      (relation : RelVar
-        (CompiledSite.endpointCall (State.ofOpen input.pattern)
-          input.binderSpine.bodyContainer).rels arity),
-      sourceBinders (input.binderTarget
-          (terminalRelationProxyEquiv input relation.index)) =
+    (patternBindersMapped : ∀ binder {arity relation},
+      (CompiledSite.endpointCall (State.ofOpen input.pattern)
+          input.binderSpine.bodyContainer).binders binder =
+        some ⟨arity, relation⟩ →
+      targetBinders (layout.binderRegion binder) =
         some ⟨arity, relationMap relation⟩)
-    (sourceExact : (sourceOuter.extend input.site).Exact input.site)
-    {sourceBody : CompiledRegion input.frame.val
-      (.nested input.site sourceOuter sourceRels sourceBinders)}
-    (sourceCompiled : compileRegion? input.frame.val input.frame.property
-      input.site sourceOuter sourceBinders = some sourceBody) :
-    ∃ (targetBody : CompiledRegion layout.plugRaw
-          (.nested (layout.frameRegion input.site)
-            (layout.mapFrameContext sourceOuter) sourceRels
-            (layout.mapFrameBinders sourceBinders)))
+    (frameBindersMapped : ∀ binder,
+      targetBinders (layout.frameRegion binder) =
+        (sourceBinders binder).map fun relation =>
+          ⟨relation.1, relation.2⟩)
+    (sourceExact : sourceFull.Exact input.site)
+    (targetExact : targetFull.Exact (layout.frameRegion input.site))
+    (frameGet : ∀ index,
+      targetFull.get (frameMap index) =
+        layout.frameWireMap (sourceFull.get index))
+    (patternGet : ∀ index,
+      targetFull.get (patternMap index) = layout.patternWireMap
+        ((CompiledSite.endpointCall (State.ofOpen input.pattern)
+          input.binderSpine.bodyContainer).fullContext.get index))
+    {sourceItems : CompiledItems input.frame.val
+      sourceFull sourceRels sourceBinders}
+    (sourceCompiled : compileItems? input.frame.val input.frame.property
+      input.site sourceFull sourceBinders
+      (localOccurrences input.frame.val input.site) (fun _ member => member) =
+        some sourceItems) :
+    ∃ (targetItems : CompiledItems layout.plugRaw
+          targetFull sourceRels targetBinders)
         (sourceNodes sourceChildren : CompiledItems input.frame.val
-          (sourceOuter.extend input.site) sourceRels sourceBinders)
+          sourceFull sourceRels sourceBinders)
         (patternNodesSource patternChildrenSource : CompiledItems
           input.pattern.val.diagram
           (CompiledSite.endpointCall (State.ofOpen input.pattern)
@@ -412,84 +558,43 @@ private theorem compileSpliceSiteParts
             input.binderSpine.bodyContainer).binders)
         (frameNodes patternNodes frameChildren patternChildren : CompiledItems
           layout.plugRaw
-          ((layout.mapFrameContext sourceOuter).extend
-            (layout.frameRegion input.site)) sourceRels
-          (layout.mapFrameBinders sourceBinders)),
-      compileRegion? layout.plugRaw targetWf
-          (layout.frameRegion input.site) (layout.mapFrameContext sourceOuter)
-          (layout.mapFrameBinders sourceBinders) = some targetBody ∧
-      sourceBody.items = sourceNodes.append sourceChildren ∧
+          targetFull sourceRels targetBinders),
+      compileItems? layout.plugRaw targetWf (layout.frameRegion input.site)
+          targetFull
+          targetBinders
+          (localOccurrences layout.plugRaw (layout.frameRegion input.site))
+          (fun _ member => member) = some targetItems ∧
+      sourceItems = sourceNodes.append sourceChildren ∧
       (CompiledSite.endpoint (State.ofOpen input.pattern)
           input.binderSpine.bodyContainer).items =
         patternNodesSource.append patternChildrenSource ∧
-      targetBody.items = (frameNodes.append patternNodes).append
+      targetItems = (frameNodes.append patternNodes).append
         (frameChildren.append patternChildren) ∧
       frameNodes.erase = (sourceNodes.erase.renameWires
-        (frameSiteFullMap layout consistent admissible.terminal_body
-          sourceOuter)).renameRelations (fun relation => relation) ∧
+        frameMap).renameRelations (fun relation => relation) ∧
       patternNodes.erase =
         (patternNodesSource.erase.renameWires
-          (patternSiteFullMap layout consistent admissible sourceOuter sourceExact
-            (CompiledSite.endpoint_fullContext_exact
-              (State.ofOpen input.pattern) input.binderSpine.bodyContainer))).renameRelations
+          patternMap).renameRelations
             relationMap ∧
       frameChildren.erase = (sourceChildren.erase.renameWires
-        (frameSiteFullMap layout consistent admissible.terminal_body
-          sourceOuter)).renameRelations (fun relation => relation) ∧
+        frameMap).renameRelations (fun relation => relation) ∧
       patternChildren.erase =
         (patternChildrenSource.erase.renameWires
-          (patternSiteFullMap layout consistent admissible sourceOuter sourceExact
-            (CompiledSite.endpoint_fullContext_exact
-              (State.ofOpen input.pattern) input.binderSpine.bodyContainer))).renameRelations
+          patternMap).renameRelations
             relationMap := by
   let patternState := State.ofOpen input.pattern
   let patternCall := CompiledSite.endpointCall patternState
     input.binderSpine.bodyContainer
-  let sourceFull := sourceOuter.extend input.site
-  let targetOuter := layout.mapFrameContext sourceOuter
-  let targetBinders := layout.mapFrameBinders sourceBinders
-  let targetFull := targetOuter.extend (layout.frameRegion input.site)
-  let frameMap := frameSiteFullMap layout consistent
-    admissible.terminal_body sourceOuter
   have patternExact : patternCall.fullContext.Exact
       input.binderSpine.bodyContainer := by
     exact CompiledSite.endpoint_fullContext_exact patternState
       input.binderSpine.bodyContainer
-  let patternMap := patternSiteFullMap layout consistent admissible sourceOuter
-    sourceExact patternExact
-  have targetExact : targetFull.Exact (layout.frameRegion input.site) := by
-    exact layout.siteTargetFull_exact consistent admissible.terminal_body
-      sourceOuter sourceExact
-  have frameGet : ∀ index,
-      targetFull.get (frameMap index) =
-        layout.frameWireMap (sourceFull.get index) := by
-    exact layout.frameSiteFullMap_get consistent admissible.terminal_body
-      sourceOuter
-  have patternGet : ∀ index,
-      targetFull.get (patternMap index) =
-        layout.patternWireMap (patternCall.fullContext.get index) := by
-    exact layout.patternSiteFullMap_get consistent admissible sourceOuter
-      sourceExact patternExact
-  have frameBindersMapped : ∀ binder,
-      targetBinders (layout.frameRegion binder) =
-        (sourceBinders binder).map fun relation =>
-          ⟨relation.1, relation.2⟩ := by
-    intro binder
-    dsimp only [targetBinders]
-    rw [layout.mapFrameBinders_frameRegion]
-    cases sourceBinders binder with
-    | none => rfl
-    | some relation =>
-        cases relation
-        rfl
-  have sourceItemsCompiled := compileRegion?_items_of_success
-    input.frame.property input.site sourceOuter sourceBinders sourceCompiled
   obtain ⟨sourceNodes, sourceChildren, sourceNodesCompiled,
       sourceChildrenCompiled, sourceItemsEq⟩ :=
     compileItems?_append_inv input.frame.property input.site sourceFull
       sourceBinders (localNodeOccurrences input.frame.val input.site)
       (localChildOccurrences input.frame.val input.site)
-      (fun _ member => member) sourceItemsCompiled
+      (fun _ member => member) sourceCompiled
   have patternCompiled : patternCall.compile?
       input.pattern.val.diagram input.pattern.property.diagram_well_formed =
         some (CompiledSite.endpoint patternState
@@ -539,8 +644,7 @@ private theorem compileSpliceSiteParts
       patternCall.binders targetBinders patternMap relationMap
       patternExactAtOrigin targetExact.nodup patternGet
       (fun _ _ binder _ _ _ sourceLookup =>
-        layout.terminalBinderMapped sourceBinders relationMap hostLookup binder
-          sourceLookup)
+        patternBindersMapped binder sourceLookup)
       patternNodesCompiled
   have nodeDirect : ∀ occurrence,
       occurrence ∈ layout.frameNodeOccurrences input.site ++
@@ -555,7 +659,7 @@ private theorem compileSpliceSiteParts
           targetFull targetBinders (layout.frameNodeOccurrences input.site)
           (fun occurrence member => nodeDirect occurrence
             (List.mem_append_left _ member)) = some frameNodes := by
-    simpa only [targetFull, targetBinders] using frameNodesCompiled
+    exact frameNodesCompiled
   have patternNodesCanonical :
       compileItems? layout.plugRaw targetWf (layout.frameRegion input.site)
           targetFull targetBinders layout.bodyNodeOccurrences
@@ -570,8 +674,7 @@ private theorem compileSpliceSiteParts
       exact occurrences
     exact (compileItems?_congr_occurrences targetWf
       (layout.frameRegion input.site) targetFull targetBinders
-      mappedOccurrences.symm _ _).trans (by
-        simpa only [targetFull, targetBinders] using patternNodesCompiled)
+      mappedOccurrences.symm _ _).trans patternNodesCompiled
   have targetNodesCompiled := compileItems?_append targetWf
     (layout.frameRegion input.site) targetFull targetBinders
     (layout.frameNodeOccurrences input.site) layout.bodyNodeOccurrences
@@ -679,26 +782,9 @@ private theorem compileSpliceSiteParts
                     (sourceFrameChildrenDirect _ member) sourceRegion
                     sourceItemCompiled
                 subst sourceItem
-                have pushedBinders :
-                    targetBinders.push (layout.frameRegion child) arity =
-                      layout.mapFrameBinders
-                        (sourceBinders.push child arity) := by
-                  dsimp only [targetBinders]
-                  exact layout.mapFrameBinders_push sourceBinders child arity
-                have pushedMapped : ∀ binder,
-                    (targetBinders.push (layout.frameRegion child) arity)
-                        (layout.frameRegion binder) =
-                      (sourceBinders.push child arity binder).map
-                        fun relation => ⟨relation.1,
-                          RelationRenaming.lift
-                            (fun relation => relation) arity relation.2⟩ := by
-                  intro binder
-                  rw [pushedBinders, layout.mapFrameBinders_frameRegion]
-                  cases lookup : sourceBinders.push child arity binder with
-                  | none => rfl
-                  | some relation =>
-                      simp only [Option.map_some,
-                        RelationRenaming.lift_id]
+                have pushedMapped := layout.frameBindersMapped_push
+                  sourceBinders targetBinders (fun relation => relation)
+                  frameBindersMapped child arity
                 obtain ⟨targetChild, targetChildCompiled,
                     targetChildErase⟩ :=
                   layout.compileFrameRegionAway consistent
@@ -822,8 +908,7 @@ private theorem compileSpliceSiteParts
                     targetBinders patternMap relationMap sourceChildExact
                     targetChildExact patternGet
                     (fun binder _ _ sourceLookup =>
-                      layout.terminalBinderMapped sourceBinders relationMap
-                        hostLookup binder sourceLookup)
+                      patternBindersMapped binder sourceLookup)
                     sourceChildCompiled
                 refine ⟨CompiledItem.cut targetChild, ?_, ?_⟩
                 · have targetRegion : layout.plugRaw.regions
@@ -862,8 +947,7 @@ private theorem compileSpliceSiteParts
                 have pushedMapped := layout.patternBindersMapped_push
                   patternCall.binders targetBinders relationMap
                   (fun binder _ _ sourceLookup =>
-                    layout.terminalBinderMapped sourceBinders relationMap
-                      hostLookup binder sourceLookup)
+                    patternBindersMapped binder sourceLookup)
                   child childMaterial arity
                 obtain ⟨targetChild, targetChildCompiled,
                     targetChildErase⟩ :=
@@ -905,8 +989,7 @@ private theorem compileSpliceSiteParts
     have occurrences := layout.map_localChildOccurrences_frame input.site
     exact (compileItems?_congr_occurrences targetWf
       (layout.frameRegion input.site) targetFull targetBinders
-      occurrences.symm _ _).trans (by
-        simpa only [targetFull, targetBinders] using frameChildrenCompiled)
+      occurrences.symm _ _).trans frameChildrenCompiled
   have patternChildrenCanonical :
       compileItems? layout.plugRaw targetWf (layout.frameRegion input.site)
           targetFull targetBinders layout.bodyChildOccurrences
@@ -920,8 +1003,7 @@ private theorem compileSpliceSiteParts
       exact layout.map_localChildOccurrences_body
     exact (compileItems?_congr_occurrences targetWf
       (layout.frameRegion input.site) targetFull targetBinders
-      mappedOccurrences.symm _ _).trans (by
-        simpa only [targetFull, targetBinders] using patternChildrenCompiled)
+      mappedOccurrences.symm _ _).trans patternChildrenCompiled
   have targetChildrenCompiled := compileItems?_append targetWf
     (layout.frameRegion input.site) targetFull targetBinders
     (layout.frameChildOccurrences input.site) layout.bodyChildOccurrences
@@ -979,26 +1061,229 @@ private theorem compileSpliceSiteParts
         targetItemsCompiled
   let targetItems := (frameNodes.append patternNodes).append
     (frameChildren.append patternChildren)
-  let targetBody : CompiledRegion layout.plugRaw
-      (.nested (layout.frameRegion input.site) targetOuter sourceRels
-        targetBinders) :=
-    .mk targetItems
-  refine ⟨targetBody, sourceNodes, sourceChildren, patternNodesSource,
+  refine ⟨targetItems, sourceNodes, sourceChildren, patternNodesSource,
     patternChildrenSource, frameNodes, patternNodes, frameChildren,
-    patternChildren, ?_, sourceItemsEq, patternItemsEq, rfl,
+    patternChildren, targetItemsCanonical, sourceItemsEq, patternItemsEq, rfl,
     frameNodesErase, patternNodesErase, frameChildrenErase,
     patternChildrenErase⟩
-  rw [compileRegion?_eq_compileItems?]
-  change Option.map
-    (fun items => (CompiledRegion.mk items : CompiledRegion layout.plugRaw
-      (.nested (layout.frameRegion input.site) targetOuter sourceRels
-        targetBinders)))
-    (compileItems? layout.plugRaw targetWf
-      (layout.frameRegion input.site) targetFull targetBinders
-      (localOccurrences layout.plugRaw (layout.frameRegion input.site)) _) =
-        some targetBody
-  rw [targetItemsCanonical]
-  rfl
+
+private noncomputable def mappedFrameCall
+    (layout : PlugLayout input)
+    (boundary : List (Fin input.frame.val.wireCount)) :
+    CompilerCall input.frame.val →
+      CompilerCall layout.plugRaw
+  | .root _ _ =>
+      .root (layout.outputOpenRoot input boundary).exposedWires
+        (layout.outputOpenRoot input boundary).hiddenWires
+  | .nested origin outer rels binders =>
+      .nested (layout.frameRegion origin) (layout.mapFrameContext outer) rels
+        (layout.mapFrameBinders binders)
+
+private theorem mappedFrameCall_origin
+    (layout : PlugLayout input) (boundary)
+    (call : CompilerCall input.frame.val) :
+    (layout.mappedFrameCall boundary call).origin =
+      layout.frameRegion call.origin := by
+  cases call with
+  | root ambient locals => rfl
+  | nested origin outer rels binders => rfl
+
+private theorem mappedFrameCall_fullContext_exact
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (admissible : input.Admissible)
+    (boundary : List (Fin input.frame.val.wireCount))
+    (targetWf : (layout.outputOpenRoot input boundary).WellFormed)
+    (call : CompilerCall input.frame.val)
+    (atSite : call.origin = input.site)
+    (sourceExact : call.fullContext.Exact input.site) :
+    (layout.mappedFrameCall boundary call).fullContext.Exact
+      (layout.frameRegion input.site) := by
+  cases call with
+  | root ambient locals =>
+      have rootEq : input.frame.val.root = input.site := atSite
+      have outputRoot : (layout.outputOpenRoot input boundary).diagram.root =
+            layout.frameRegion input.frame.val.root := rfl
+      rw [← rootEq, ← outputRoot]
+      simpa [mappedFrameCall, CompilerCall.fullContext,
+        OpenDiagram.rootWires] using
+          (openRootWires_exact targetWf)
+  | nested origin outer rels binders =>
+      change origin = input.site at atSite
+      subst origin
+      exact layout.siteTargetFull_exact consistent admissible.terminal_body
+        outer sourceExact
+
+/-- Compile the actual target call at the splice endpoint, independently of
+whether that endpoint is the open root or a nested region. -/
+theorem compileSpliceSite
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (boundary : List (Fin input.frame.val.wireCount))
+    (admissible : input.Admissible)
+    (targetOpenWf : (layout.outputOpenRoot input boundary).WellFormed)
+    (sourceCall : CompilerCall input.frame.val)
+    (atSite : sourceCall.origin = input.site)
+    (sourceExact : sourceCall.fullContext.Exact input.site)
+    (relationMap : RelationRenaming
+      (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels sourceCall.rels)
+    (hostLookup : ∀ {arity}
+      (relation : RelVar
+        (CompiledSite.endpointCall (State.ofOpen input.pattern)
+          input.binderSpine.bodyContainer).rels arity),
+      sourceCall.binders (input.binderTarget
+          (terminalRelationProxyEquiv input relation.index)) =
+        some ⟨arity, relationMap relation⟩)
+    {sourceBody : CompiledRegion input.frame.val sourceCall}
+    (sourceCompiled : sourceCall.compile? input.frame.val
+      input.frame.property = some sourceBody) :
+    ∃ targetBody : CompiledRegion layout.plugRaw
+        (layout.mappedFrameCall boundary sourceCall),
+      (layout.mappedFrameCall boundary sourceCall).compile? layout.plugRaw
+        targetOpenWf.diagram_well_formed =
+        some targetBody := by
+  cases sourceCall with
+  | root ambient locals =>
+      let targetCall : CompilerCall layout.plugRaw :=
+        layout.mappedFrameCall boundary (CompilerCall.root ambient locals)
+      have targetOrigin : targetCall.origin =
+          layout.frameRegion input.site := by
+        exact (layout.mappedFrameCall_origin boundary
+          (CompilerCall.root ambient locals)).trans
+            (congrArg layout.frameRegion atSite)
+      have targetExact : targetCall.fullContext.Exact
+          (layout.frameRegion input.site) :=
+        layout.mappedFrameCall_fullContext_exact consistent admissible boundary
+          targetOpenWf (CompilerCall.root ambient locals) atSite sourceExact
+      let frameMap := layout.frameFullMap consistent
+        (CompilerCall.root ambient locals).fullContext targetCall.fullContext
+        sourceExact targetExact
+      let patternExact := CompiledSite.endpoint_fullContext_exact
+        (State.ofOpen input.pattern) input.binderSpine.bodyContainer
+      let patternMap := layout.patternFullMap consistent admissible
+        (CompilerCall.root ambient locals).fullContext targetCall.fullContext
+        sourceExact targetExact patternExact
+      have patternBindersMapped : ∀ binder {arity relation},
+          (CompiledSite.endpointCall (State.ofOpen input.pattern)
+              input.binderSpine.bodyContainer).binders binder =
+            some ⟨arity, relation⟩ →
+          targetCall.binders (layout.binderRegion binder) =
+            some ⟨arity, relationMap relation⟩ := by
+        intro binder arity relation sourceLookup
+        have impossible := hostLookup relation
+        simp [CompilerCall.binders, BinderContext.empty] at impossible
+      cases sourceBody with
+      | mk sourceItems =>
+          have sourceItemsCompiled :=
+            CompilerCall.compile?_items_of_success input.frame.property
+              (CompilerCall.root ambient locals) sourceCompiled
+          have sourceItemsAtSite :
+              compileItems? input.frame.val input.frame.property input.site
+                  (CompilerCall.root ambient locals).fullContext
+                  (CompilerCall.root ambient locals).binders
+                  (localOccurrences input.frame.val input.site)
+                  (fun _ member => member) = some sourceItems := by
+            simpa only [atSite] using sourceItemsCompiled
+          obtain ⟨targetItems, _, _, _, _, _, _, _, _, targetItemsCompiled,
+              _, _, _, _, _, _, _⟩ :=
+            layout.compileSpliceSiteItems consistent admissible
+              targetOpenWf.diagram_well_formed
+              (CompilerCall.root ambient locals).fullContext
+              (CompilerCall.root ambient locals).binders
+              targetCall.fullContext targetCall.binders frameMap patternMap
+              relationMap patternBindersMapped (fun _ => rfl) sourceExact
+              targetExact
+              (layout.frameFullMap_get consistent _ _ sourceExact targetExact)
+              (layout.patternFullMap_get consistent admissible _ _ sourceExact
+                targetExact patternExact) sourceItemsAtSite
+          let targetBody : CompiledRegion layout.plugRaw targetCall :=
+            .mk targetItems
+          refine ⟨targetBody, ?_⟩
+          rw [CompilerCall.compile?_eq_compileItems?]
+          have canonical :
+              compileItems? layout.plugRaw targetOpenWf.diagram_well_formed
+                  targetCall.origin
+                  targetCall.fullContext targetCall.binders
+                  (localOccurrences layout.plugRaw targetCall.origin)
+                  (fun _ member => member) = some targetItems := by
+            simpa only [targetOrigin] using targetItemsCompiled
+          rw [canonical]
+          rfl
+  | nested origin outer rels binders =>
+      let targetCall : CompilerCall layout.plugRaw :=
+        layout.mappedFrameCall boundary
+          (CompilerCall.nested origin outer rels binders)
+      have targetOrigin : targetCall.origin =
+          layout.frameRegion input.site := by
+        exact (layout.mappedFrameCall_origin boundary
+          (CompilerCall.nested origin outer rels binders)).trans
+            (congrArg layout.frameRegion atSite)
+      have targetExact : targetCall.fullContext.Exact
+          (layout.frameRegion input.site) :=
+        layout.mappedFrameCall_fullContext_exact consistent admissible boundary
+          targetOpenWf (CompilerCall.nested origin outer rels binders) atSite
+          sourceExact
+      let frameMap := layout.frameFullMap consistent
+        (CompilerCall.nested origin outer rels binders).fullContext
+        targetCall.fullContext
+        sourceExact targetExact
+      let patternExact := CompiledSite.endpoint_fullContext_exact
+        (State.ofOpen input.pattern) input.binderSpine.bodyContainer
+      let patternMap := layout.patternFullMap consistent admissible
+        (CompilerCall.nested origin outer rels binders).fullContext
+        targetCall.fullContext
+        sourceExact targetExact patternExact
+      have patternBindersMapped : ∀ binder {arity relation},
+          (CompiledSite.endpointCall (State.ofOpen input.pattern)
+              input.binderSpine.bodyContainer).binders binder =
+            some ⟨arity, relation⟩ →
+          targetCall.binders (layout.binderRegion binder) =
+            some ⟨arity, relationMap relation⟩ := by
+        intro binder arity relation sourceLookup
+        exact layout.terminalBinderMapped binders relationMap hostLookup binder
+          sourceLookup
+      cases sourceBody with
+      | mk sourceItems =>
+          have sourceItemsCompiled :=
+            CompilerCall.compile?_items_of_success input.frame.property
+              (CompilerCall.nested origin outer rels binders) sourceCompiled
+          have sourceItemsAtSite :
+              compileItems? input.frame.val input.frame.property input.site
+                  (CompilerCall.nested origin outer rels binders).fullContext
+                  (CompilerCall.nested origin outer rels binders).binders
+                  (localOccurrences input.frame.val input.site)
+                  (fun _ member => member) = some sourceItems := by
+            simpa only [atSite] using sourceItemsCompiled
+          obtain ⟨targetItems, _, _, _, _, _, _, _, _, targetItemsCompiled,
+              _, _, _, _, _, _, _⟩ :=
+            layout.compileSpliceSiteItems consistent admissible
+              targetOpenWf.diagram_well_formed
+              (CompilerCall.nested origin outer rels binders).fullContext
+              (CompilerCall.nested origin outer rels binders).binders
+              targetCall.fullContext
+              targetCall.binders frameMap patternMap relationMap
+              patternBindersMapped
+              (fun binder => by
+                dsimp only [targetCall, mappedFrameCall,
+                  CompilerCall.binders]
+                rw [layout.mapFrameBinders_frameRegion]
+                cases binders binder <;> rfl)
+              sourceExact targetExact
+              (layout.frameFullMap_get consistent _ _ sourceExact targetExact)
+              (layout.patternFullMap_get consistent admissible _ _ sourceExact
+                targetExact patternExact) sourceItemsAtSite
+          let targetBody : CompiledRegion layout.plugRaw targetCall :=
+            .mk targetItems
+          refine ⟨targetBody, ?_⟩
+          rw [CompilerCall.compile?_eq_compileItems?]
+          have canonical :
+              compileItems? layout.plugRaw targetOpenWf.diagram_well_formed
+                  targetCall.origin
+                  targetCall.fullContext targetCall.binders
+                  (localOccurrences layout.plugRaw targetCall.origin)
+                  (fun _ member => member) = some targetItems := by
+            simpa only [targetOrigin] using targetItemsCompiled
+          rw [canonical]
+          rfl
 
 end Splice.Input.PlugLayout
 

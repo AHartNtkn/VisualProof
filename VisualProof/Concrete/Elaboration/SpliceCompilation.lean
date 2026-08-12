@@ -141,7 +141,7 @@ theorem patternBindersMapped_push
             cases baseRelation
             rfl
 
-private theorem frameBindersMapped_push
+theorem frameBindersMapped_push
     (layout : PlugLayout input)
     (sourceBinders : BinderContext input.frame.val sourceRels)
     (targetBinders : BinderContext layout.plugRaw targetRels)
