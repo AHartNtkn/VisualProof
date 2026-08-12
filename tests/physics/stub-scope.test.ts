@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import { mkEngine } from '../../src/view/engine'
+import { END_PORT_KEY, mkEngine } from '../../src/view/engine'
 import { settle, recomputeRegions } from '../../src/view/relax'
 import { existentialStubs } from '../../src/view/wires'
 import { UNARY } from '../fixtures/zero-signature'
@@ -44,7 +44,8 @@ describe('existential stubs honor wire scope after settling', () => {
     expect(x!.region).toBe(c1)
     const wv = e.wires.get(w)!
     expect(wv.binds).toHaveLength(2)
-    expect(wv.endBodyId, 'the ∀ via is the wire-owned end body').toBe(`x:${w}`)
+    expect(wv.end, 'the ∀ via is the wire-owned end body')
+      .toEqual({ body: `x:${w}`, key: END_PORT_KEY })
     // ruling A: the via is an ordinary free-end LEAF terminal of the Steiner tree over
     // {bind0, bind1, via} — a triple junction with the via as one tributary, not a star
     // hub. Two binds + one via = three terminals → exactly one branch vertex.

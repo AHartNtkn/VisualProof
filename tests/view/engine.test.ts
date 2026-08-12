@@ -116,7 +116,7 @@ describe('mkEngine', () => {
     const e = mkEngine(h.build(), [external])
 
     expect(e.bodies.has(`j:${external}`), 'a formal port must not float as an existential body').toBe(false)
-    expect(e.wires.get(external)).toMatchObject({ binds: [], slots: [0], endBodyId: null })
+    expect(e.wires.get(external)).toMatchObject({ binds: [], slots: [0], end: null })
     expect(e.wires.get(external)!.net.edges).toEqual([])
     expect(e.bodies.has(`j:${internal}`), 'an internal bare wire remains a semantic existential body').toBe(true)
     expect(e.wires.has(internal)).toBe(false)

@@ -4,7 +4,8 @@ import { deepestCommonAncestor } from '../kernel/diagram/regions'
 import type { Vec2 } from './vec'
 import { add } from './vec'
 import type { NodeGeometry } from './bend'
-import { atomGeometry, identityGeometry, refGeometry } from './bend'
+import { atomGeometry, END_PORT_KEY, endGeometry, identityGeometry, refGeometry } from './bend'
+export { END_PORT_KEY } from './bend'
 import type { Disc, FreeSpace } from './route/freespace'
 import { mkFreeSpace } from './route/freespace'
 import type { CurveBC } from './route/curve'
@@ -57,7 +58,7 @@ export type Body = {
   theta: number
 }
 
-/** key null = the body's centre (end bodies have no ports). */
+/** key null = a synthetic vertex at the body's centre; real body terminals are keyed. */
 export type LegEnd = { readonly body: string; readonly key: string | null }
 export type Leg = { readonly wid: WireId; readonly from: LegEnd; readonly to: LegEnd }
 
@@ -74,9 +75,8 @@ export type WireBind = { readonly body: string; readonly key: string }
     `net`; nothing else writes it. */
 export type WireView = {
   readonly binds: WireBind[]
-  /** The wire's single wire-owned END body id (the ∃ tip, the ∀ via, or a bare
-      ∃ dot), or null. A terminal of the network. */
-  readonly endBodyId: string | null
+  /** The wire's single wire-owned END bind (the ∃ tip or ∀ via), or null. */
+  readonly end: WireBind | null
   readonly slots: readonly number[]
   readonly net: WireNet
 }
@@ -150,8 +150,10 @@ export function ascaleOf(kind: BodyKind): number {
   return kind === 'atom' ? 2 : 1
 }
 
-/** Shared layout clearance for point nodes: dangling quantifiers and equality. */
-export const POINT_NODE_DISC_R = 4.5
+/** Shared layout clearance derived from a small body's circular anatomy. */
+function smallBodyDiscR(geometry: NodeGeometry): number {
+  return geometry.outerRadius + 2
+}
 
 export function pkey(p: Port): string {
   return portKey(p)
@@ -211,7 +213,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     const discR = n.kind === 'ref'
       ? DISC_R + 1.5
       : n.kind === 'identity'
-        ? POINT_NODE_DISC_R
+        ? smallBodyDiscR(g)
         : anatomyR + 2
     const ang = i * 2.399963, rad = 6 + 5 * i
     bodies.set(id, {
@@ -284,9 +286,12 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       ? { x: near.x + 4 + (i % 3), y: near.y - 3 - (i % 2) }
       : { x: (i++) * 3, y: -(i * 2) }
     i++
+    const geometry = endGeometry()
+    const local = geometry.portAnchors[END_PORT_KEY]!
+    const localAnchor = new Map([[END_PORT_KEY, local]])
     const b: Body = {
-      id, kind: 'end', node: null, geometry: null,
-      localAnchor: new Map(), discR: POINT_NODE_DISC_R, region,
+      id, kind: 'end', node: null, geometry,
+      localAnchor, discR: smallBodyDiscR(geometry), region,
       pos: seed, theta: 0,
     }
     bodies.set(id, b)
@@ -311,23 +316,23 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
           y: anchorPos.reduce((s, p) => s + p.y, 0) / anchorPos.length,
         }
 
-    let endBodyId: string | null = null
+    let end: WireBind | null = null
     if (isBoundary) {
       // port binds + boundary incidences are the terminals; the line exits to the frame.
     } else if (binds.length === 1) {
-      endBodyId = mkWireBody(`j:${wid}`, w.scope, anchorPos[0]!).id
+      end = { body: mkWireBody(`j:${wid}`, w.scope, anchorPos[0]!).id, key: END_PORT_KEY }
     } else if (w.scope !== w.endpoints
       .map((ep) => d.nodes[ep.node]!.region)
       .reduce((a, b) => deepestCommonAncestor(d, a, b))) {
       // the ∀ via-body: a scope-homed END body, an ordinary terminal of the network.
-      endBodyId = mkWireBody(`x:${wid}`, w.scope, centroid()).id
+      end = { body: mkWireBody(`x:${wid}`, w.scope, centroid()).id, key: END_PORT_KEY }
     }
     // Initial topology: <2 terminals → no edges; 2 → one direct edge; ≥3 → a
     // STAR on one junction at the terminal centroid. The split rule (the
     // tangent-cone derivative of routed length) refines the star into the
     // proper Steiner topology on the first advanceNetwork frames — no
     // topology seeder exists.
-    const nT = binds.length + slots.length + (endBodyId !== null ? 1 : 0)
+    const nT = binds.length + slots.length + (end !== null ? 1 : 0)
     const net: WireNet = { junctions: [], edges: [] }
     if (nT === 2) net.edges = [[0, 1]]
     else if (nT >= 3) {
@@ -335,7 +340,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       net.junctions = [{ x: c.x, y: c.y }]
       net.edges = Array.from({ length: nT }, (_, t) => [t, nT] as const)
     }
-    wires.set(wid, { binds, endBodyId, slots, net })
+    wires.set(wid, { binds, end, slots, net })
   }
 
   return engine
@@ -403,13 +408,13 @@ export function carryOver(
   // keyed on wire IDENTITY (the terminal set), exactly as node positions are
   // carried. The router re-solves from the carried state; nothing re-derives.
   const sig = (v: WireView): string =>
-    [...v.binds.map((b) => `${b.body}:${b.key}`), v.endBodyId === null ? '-' : 'end', `slots:${v.slots.join(',')}`].join('|')
+    [...v.binds.map((b) => `${b.body}:${b.key}`), v.end === null ? '-' : `end:${v.end.key}`, `slots:${v.slots.join(',')}`].join('|')
   const terminalImage = (
     from: WireView,
     to: WireView,
   ): readonly number[] | null => {
-    const fromHasEnd = from.endBodyId !== null
-    const toHasEnd = to.endBodyId !== null
+    const fromHasEnd = from.end !== null
+    const toHasEnd = to.end !== null
     if (
       fromHasEnd !== toHasEnd
       || from.slots.length !== to.slots.length
@@ -461,7 +466,7 @@ export function carryOver(
     if (terminalMap === null) continue
     const fromTerminalCount = terminalMap.length
     const toTerminalCount = nv.binds.length + nv.slots.length
-      + (nv.endBodyId === null ? 0 : 1)
+      + (nv.end === null ? 0 : 1)
     const vertexImage = (vertex: number): number =>
       vertex < fromTerminalCount
         ? terminalMap[vertex]!
@@ -501,10 +506,9 @@ export function worldAnchor(e: Engine, b: Body, key: string | null): Vec2 {
     the wire a pad-width off the rendered rim (USER report: floating attachments).
 
     A ref uses a readable labelled disc drawn at DISC_R, so its wire meets that
-    drawn rim at DISC_R along the port direction. Atom ports sit on their rail
-    rim. Identity ports share the body centre, exactly like an end dot. */
+    drawn rim at DISC_R along the port direction. Every other keyed bind sits
+    on its anatomy rail rim. */
 export function worldBindAnchor(e: Engine, b: Body, key: string): Vec2 {
-  if (b.kind === 'identity') return b.pos
   const a0 = b.localAnchor.get(key)!
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
   if (b.kind === 'ref') {
@@ -517,10 +521,9 @@ export function worldBindAnchor(e: Engine, b: Body, key: string): Vec2 {
   return { x: b.pos.x + a.x * c - a.y * s, y: b.pos.y + a.x * s + a.y * c }
 }
 
-/** The outward normal at (body, port key), in world radians. End bodies have no
-    ports, so their "normal" is the direction toward the far endpoint. */
+/** The outward normal at (body, port key), in world radians. */
 export function portNormal(b: Body, key: string | null, toward: Vec2): number {
-  if (key === null || b.kind === 'identity') {
+  if (key === null) {
     return Math.atan2(toward.y - b.pos.y, toward.x - b.pos.x)
   }
   const a = b.localAnchor.get(key)!
@@ -681,7 +684,7 @@ export function wireRouteSpaces(e: Engine): WireSpaces {
     const allowed = new Set<RegionId>()
     chainInto(e.d.wires[wid]!.scope, allowed)
     for (const bd of w.binds) chainInto(e.bodies.get(bd.body)!.region, allowed)
-    if (w.endBodyId !== null) chainInto(e.bodies.get(w.endBodyId)!.region, allowed)
+    if (w.end !== null) chainInto(e.bodies.get(w.end.body)!.region, allowed)
     const forb = nonSheet.filter((rid) => !allowed.has(rid))
     const key = JSON.stringify(forb)
     let entry = bySig.get(key)
@@ -724,13 +727,11 @@ export function wireRouteSpaces(e: Engine): WireSpaces {
   }
 }
 
-/** The fixed escape stub of a rail/disc port bind: from the rim anchor outward
+/** The fixed escape stub of a keyed bind: from the rim anchor outward
     along the port normal to just past the inflated obstacle disc. The optimized
-    network begins at the escape point; the stub itself is fixed geometry.
-    Identity point nodes instead share the free centered terminal used by ends. */
+    network begins at the escape point; the stub itself is fixed geometry. */
 export function escapePoint(e: Engine, bd: WireBind): { anchor: Vec2; escape: Vec2 } {
   const b = e.bodies.get(bd.body)!
-  if (b.kind === 'identity') return { anchor: b.pos, escape: b.pos }
   const anchor = worldBindAnchor(e, b, bd.key)
   const la = b.localAnchor.get(bd.key)!
   const n = Math.atan2(la.y, la.x) + b.theta
@@ -757,27 +758,28 @@ export function slotEscape(e: Engine, position: number): { point: Vec2; inner: V
   }
 }
 
+function bindBC(e: Engine, body: Body, key: string): CurveBC {
+  const angle = portNormal(body, key, body.pos)
+  return {
+    p: worldBindAnchor(e, body, key),
+    n: { x: Math.cos(angle), y: Math.sin(angle) },
+  }
+}
+
 /** Curve boundary condition per terminal, in network vertex order: the fixed
     anchor point and the unit direction the drawn curve LEAVES it (a port's
-    outward normal; a frame slot's inward normal), or null for a free point node
-    (identity or ∃/∀ end, with a natural end at the dot). The drawn curve of a terminal-incident edge
+    outward normal; a frame slot's inward normal). The drawn curve of a terminal-incident edge
     is CLAMPED here — perpendicular port/frame meetings by energy. */
 export function wireTerminalBCs(e: Engine, w: WireView): CurveBC[] {
-  const out: CurveBC[] = w.binds.map((bd) => {
-    const b = e.bodies.get(bd.body)!
-    if (b.kind === 'identity') return null
-    const la = b.localAnchor.get(bd.key)!
-    const a = Math.atan2(la.y, la.x) + b.theta
-    return {
-      p: worldBindAnchor(e, b, bd.key),
-      n: { x: Math.cos(a), y: Math.sin(a) },
-    }
-  })
+  const out: CurveBC[] = w.binds.map((bd) => bindBC(e, e.bodies.get(bd.body)!, bd.key))
   for (const position of w.slots) {
     const s = resolvedFrameSlot(e, position)
     out.push(s === null ? null : { p: s.point, n: { x: -Math.cos(s.normal), y: -Math.sin(s.normal) } })
   }
-  if (w.endBodyId !== null) out.push(null)
+  if (w.end !== null) {
+    const body = e.bodies.get(w.end.body)!
+    out.push(bindBC(e, body, w.end.key))
+  }
   return out
 }
 
@@ -796,6 +798,6 @@ export function wireTerminalPoints(e: Engine, w: WireView): Vec2[] {
       pts.push({ x: c.x + 30 * Math.cos(angle), y: c.y + 30 * Math.sin(angle) })
     }
   }
-  if (w.endBodyId !== null) pts.push(e.bodies.get(w.endBodyId)!.pos)
+  if (w.end !== null) pts.push(escapePoint(e, w.end).escape)
   return pts
 }

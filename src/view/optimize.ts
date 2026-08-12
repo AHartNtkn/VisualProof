@@ -99,14 +99,14 @@ export type MovableUnit =
   | { readonly kind: 'junction'; readonly wid: WireId; readonly j: number }
 
 /** Every movable unit of an engine: each body (by kind), each region subtree
-    (via childrenOf), each wire-owned end dot (via endBodyId), and each wire
+    (via childrenOf), each wire-owned end dot (via end), and each wire
     junction (a routed Steiner point — a positional DOF the local walk can only
     settle within its basin, so crossing a junction cusp is a search-layer move). */
 export function movableUnits(e: Engine): MovableUnit[] {
   const units: MovableUnit[] = []
   for (const [id, b] of e.bodies) units.push({ kind: 'carrier', carrierKind: b.kind, id })
   for (const rid of e.childrenOf.keys()) units.push({ kind: 'region', id: rid })
-  for (const [, w] of e.wires) if (w.endBodyId !== null) units.push({ kind: 'endDot', id: w.endBodyId })
+  for (const [, w] of e.wires) if (w.end !== null) units.push({ kind: 'endDot', id: w.end.body })
   for (const [wid, w] of e.wires) for (let j = 0; j < w.net.junctions.length; j++) units.push({ kind: 'junction', wid, j })
   return units
 }
@@ -142,9 +142,6 @@ export type MoveKind = {
     resolve from noise). */
 const rangeAmp = (D: number, unit: number): number => Math.max(FD_PROBE, D * unit)
 
-const isPortBearing = (kind: BodyKind): boolean =>
-  kind === 'ref' || kind === 'atom' || kind === 'identity'
-
 /** The wire's bounding-circle radius: the greatest distance from the terminals'
     centroid to any terminal — the wire's own spatial extent. A junction lives
     within its wire's reach, so this is the natural scale for a junction hop (the
@@ -176,7 +173,9 @@ const nonPinnedIds = (e: Engine, pinned: ReadonlySet<string>): string[] => {
 }
 const portBearingIds = (e: Engine, pinned: ReadonlySet<string>): string[] => {
   const out: string[] = []
-  for (const [id, b] of e.bodies) if (!pinned.has(id) && isPortBearing(b.kind)) out.push(id)
+  for (const [id, body] of e.bodies) {
+    if (!pinned.has(id) && body.localAnchor.size > 0) out.push(id)
+  }
   return out
 }
 const subtreeHasPinned = (e: Engine, rid: RegionId, pinned: ReadonlySet<string>): boolean => {
@@ -223,7 +222,7 @@ export const MOVE_REGISTRY: readonly MoveKind[] = [
   },
   {
     name: 'rotateBody',
-    covers: (u) => u.kind === 'carrier' && isPortBearing(u.carrierKind),
+    covers: (u) => u.kind === 'carrier' && u.carrierKind !== 'anchor',
     applicable: (e, pinned) => portBearingIds(e, pinned).length >= 1,
     propose: (e, pinned, rng, D) => {
       const ids = portBearingIds(e, pinned)

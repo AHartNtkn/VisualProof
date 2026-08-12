@@ -27,8 +27,8 @@ function endId(wid: WireId, w: WireView, v: number): LegEnd {
   const nS = w.slots.length
   if (v < nB) return { body: w.binds[v]!.body, key: w.binds[v]!.key }
   if (v < nB + nS) return { body: `w:${wid}:slot:${w.slots[v - nB]!}`, key: null }
-  if (w.endBodyId !== null && v === nB + nS) return { body: w.endBodyId, key: null }
-  return { body: `w:${wid}:j${v - nB - nS - (w.endBodyId !== null ? 1 : 0)}`, key: null }
+  if (w.end !== null && v === nB + nS) return w.end
+  return { body: `w:${wid}:j${v - nB - nS - (w.end !== null ? 1 : 0)}`, key: null }
 }
 
 /** Exact rendering-state key: legs depend on body poses (obstacles +
@@ -95,8 +95,8 @@ export function legPaths(e: Engine): { wid: WireId; pts: Vec2[]; cubics: Cubic[]
 export function existentialStubs(e: Engine): ExStub[] {
   const out: ExStub[] = []
   for (const [wid, w] of e.wires) {
-    if (w.endBodyId === null) continue
-    const b = e.bodies.get(w.endBodyId)!
+    if (w.end === null) continue
+    const b = e.bodies.get(w.end.body)!
     out.push({ wid, from: b.pos, to: b.pos, dot: b.pos })
   }
   // bare (0-endpoint) wires carry no edges — just a scope-homed body (its dot

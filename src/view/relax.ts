@@ -932,7 +932,7 @@ export function mkFrozenState(e: Engine): FrozenState {
     wires.push({ wid, edges, segStart: start, segEnd: segs.length, rod })
     rodTotal += rod
     for (const bd of w.binds) push(termWires, bd.body, wi)
-    if (w.endBodyId !== null) push(termWires, w.endBodyId, wi)
+    if (w.end !== null) push(termWires, w.end.body, wi)
   }
   const obstacle = new Map<string, RouteDisc>()
   for (const b of e.bodies.values()) {
@@ -1442,7 +1442,7 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   const wiredBodies = new Set<string>()
   for (const [, w] of e.wires) {
     for (const bd of w.binds) wiredBodies.add(bd.body)
-    if (w.endBodyId !== null) wiredBodies.add(w.endBodyId)
+    if (w.end !== null) wiredBodies.add(w.end.body)
   }
 
   // ONE exact routed eval captures the frozen state (paths + per-wire/segment

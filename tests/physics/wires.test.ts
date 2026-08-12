@@ -21,7 +21,7 @@ describe('a single boundary wire is ONE bodyless leg to the fixed frame slot (pl
     // no exit body anywhere (the reset's "there's an edge node for some reason") —
     // e:<wid> exit hubs are abolished; the boundary wire has no hub of its own
     expect([...e.bodies.keys()].some((id) => id.startsWith('e:')), 'no exit body exists').toBe(false)
-    expect(e.wires.get(w)!.endBodyId, 'a 1-port boundary wire has no end body').toBeNull()
+    expect(e.wires.get(w)!.end, 'a 1-port boundary wire has no end body').toBeNull()
     const legs = computeLegs(e).filter((g) => g.leg.wid === w)
     expect(legs, 'exactly one leg').toHaveLength(1)
     const pts = legs[0]!.pts

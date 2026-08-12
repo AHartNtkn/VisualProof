@@ -77,7 +77,7 @@ describe('wire energy is the rod energy of the DRAWN curve', () => {
     recomputeRegions(e)
     const w = [...e.wires.values()][0]!
     const { anchor, escape } = escapePoint(e, w.binds[0]!)
-    const dot = e.bodies.get(w.endBodyId!)!
+    const dot = e.bodies.get(w.end!.body)!
     dot.pos = { x: (anchor.x + escape.x) / 2, y: (anchor.y + escape.y) / 2 }
     recomputeRegions(e)
     const drawn = drawnWireCost(e)

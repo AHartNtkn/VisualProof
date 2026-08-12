@@ -193,7 +193,7 @@ export function applyMove(e: Engine, st: ScoreState, moved: ReadonlySet<string>,
   const affected = new Set<WireId>()
   if (movedWires !== null) for (const wid of movedWires) affected.add(wid)
   for (const [wid, w] of e.wires) {
-    let hit = w.endBodyId !== null && moved.has(w.endBodyId)
+    let hit = w.end !== null && moved.has(w.end.body)
     if (!hit) for (const bd of w.binds) { if (moved.has(bd.body)) { hit = true; break } }
     if (hit) affected.add(wid)
   }

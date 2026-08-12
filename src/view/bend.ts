@@ -25,13 +25,13 @@ export type NodeGeometry = {
 const RAIL_R = 2
 const RAIL_ARC: NodeArc = { r: RAIL_R, a0: 0, a1: 2 * Math.PI }
 
-/** Storage anchors are evenly spaced around the rim. */
-function rimAnchors(prefix: 'a', arity: number): Record<string, Vec2> {
+/** Storage/view anchors are evenly spaced around the rim. */
+function rimAnchors(keys: readonly string[]): Record<string, Vec2> {
   const anchors: Record<string, Vec2> = {}
-  for (let index = 0; index < arity; index++) {
-    const angle = Math.PI / 2 + index * 2 * Math.PI / Math.max(arity, 1)
+  for (let index = 0; index < keys.length; index++) {
+    const angle = Math.PI / 2 + index * 2 * Math.PI / Math.max(keys.length, 1)
     const point = polar(angle, RAIL_R)
-    anchors[`${prefix}:${index}`] = {
+    anchors[keys[index]!] = {
       x: Math.abs(point.x) < 1e-12 ? 0 : point.x,
       y: Math.abs(point.y) < 1e-12 ? 0 : point.y,
     }
@@ -44,37 +44,35 @@ function headAngle(arity: number): number {
   return arity === 0 ? Math.PI / 2 : Math.PI / 2 - Math.PI / arity
 }
 
-function sealedGeometry(
-  portAnchors: Readonly<Record<string, Vec2>>,
-  headAnchor: Vec2 | null,
-): NodeGeometry {
+function circularGeometry(keys: readonly string[]): NodeGeometry {
   return {
     outerRadius: RAIL_R + 0.5,
     arcs: [RAIL_ARC],
-    headAnchor,
-    portAnchors,
+    headAnchor: null,
+    portAnchors: rimAnchors(keys),
   }
 }
 
 /** A relation atom retains its argument rail and distinct relation-head port. */
 export function atomGeometry(arity: number): NodeGeometry {
-  return sealedGeometry(rimAnchors('a', arity), polar(headAngle(arity), RAIL_R))
+  const geometry = circularGeometry(Array.from({ length: arity }, (_, index) => `a:${index}`))
+  return { ...geometry, headAnchor: polar(headAngle(arity), RAIL_R) }
 }
 
 /** A named relation ref retains its argument rail and has no relation-head port. */
 export function refGeometry(arity: number): NodeGeometry {
-  return sealedGeometry(rimAnchors('a', arity), null)
+  return circularGeometry(Array.from({ length: arity }, (_, index) => `a:${index}`))
 }
 
-/**
- * Equality uses the same point-node geometry as a dangling existential. Every
- * storage port is co-located at that point; port indices remain incidence
- * locators, never visible geometry or an ordering around the node.
- */
+/** Equality uses the same circular geometry as a dangling existential. */
 export function identityGeometry(arity: number): NodeGeometry {
-  const portAnchors: Record<string, Vec2> = {}
-  for (let index = 0; index < arity; index++) {
-    portAnchors[`i:${index}`] = { x: 0, y: 0 }
-  }
-  return { outerRadius: 0, arcs: [], headAnchor: null, portAnchors }
+  return circularGeometry(Array.from({ length: arity }, (_, index) => `i:${index}`))
+}
+
+/** Private view key for a wire-owned terminal body. */
+export const END_PORT_KEY = 'end'
+
+/** A wire-owned terminal uses the same circular geometry as equality. */
+export function endGeometry(): NodeGeometry {
+  return circularGeometry([END_PORT_KEY])
 }

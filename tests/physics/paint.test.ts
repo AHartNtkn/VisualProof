@@ -253,7 +253,7 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
     // (USER 2026-07-30).
     const { d, e, head } = wireAtom()
     const hue = relationWireHues(d, LIGHT.relationHueLightness).get(head)!
-    const at = e.bodies.get(e.wires.get(head)!.endBodyId!)!.pos
+    const at = e.bodies.get(e.wires.get(head)!.end!.body)!.pos
     const shapes = paint(e, LIGHT)
     const inner = shapes.find((s) =>
       s.kind === 'dot' && s.center.x === at.x && s.center.y === at.y && s.fill !== LIGHT.paper)

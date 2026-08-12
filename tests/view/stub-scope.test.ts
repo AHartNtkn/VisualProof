@@ -52,12 +52,23 @@ describe('existential stubs honor wire scope', () => {
   it('a same-region singleton carries its loose end as a circular body with identity scale', () => {
     const b = new DiagramBuilder()
     const n = b.ref(b.root, 'Unary', UNARY)
-    const identity = b.identity(b.root, IOTA, 2)
+    const identityRegion = b.cut(b.root)
+    const identity = b.identity(identityRegion, IOTA, 2)
+    const lhs = b.ref(b.root, 'Lhs', UNARY)
+    const rhs = b.ref(b.root, 'Rhs', UNARY)
+    b.wire(b.root, [
+      { node: identity, port: { kind: 'identity', index: 0 } },
+      { node: lhs, port: { kind: 'arg', index: 0 } },
+    ])
+    b.wire(b.root, [
+      { node: identity, port: { kind: 'identity', index: 1 } },
+      { node: rhs, port: { kind: 'arg', index: 0 } },
+    ])
     const w = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
     const d = b.build()
     const e = mkEngine(d, [])
     const loose = e.bodies.get(`j:${w}`)
-    const identityBody = e.bodies.get(identity)!
+    const identityBody = [...e.bodies.values()].find((body) => body.kind === 'identity')!
     expect(loose).toBeDefined()
     expect(loose!.region).toBe(d.root)
     expect(loose!.geometry).not.toBeNull()
@@ -74,7 +85,7 @@ describe('existential stubs honor wire scope', () => {
     const w = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
     const e = mkEngine(b.build(), [])
     const wire = e.wires.get(w)!
-    const end = wire.end
+    const end = wire.end!
     expect(end, 'the singleton endpoint is an explicit wire bind').toBeDefined()
     const body = e.bodies.get(end.body)!
     body.pos = { x: 21, y: -8 }

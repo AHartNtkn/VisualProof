@@ -219,7 +219,7 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   // homogeneous wire colour, including relation-signature identities.
   const pointWire = new Map<string, WireId>()
   for (const [wid, w] of e.wires) {
-    if (w.endBodyId !== null) pointWire.set(w.endBodyId, wid)
+    if (w.end !== null) pointWire.set(w.end.body, wid)
     for (const bind of w.binds) {
       if (e.bodies.get(bind.body)?.kind === 'identity' && !pointWire.has(bind.body)) {
         pointWire.set(bind.body, wid)

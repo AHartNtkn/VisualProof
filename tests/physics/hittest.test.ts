@@ -13,7 +13,7 @@ describe('settled hit targets', () => {
     const w = h.wire(h.root, [{ node: a, port: { kind: 'arg', index: 0 } }])
     const e = mkEngine(h.build(), [])
     settle(e, 2600)
-    const j = e.bodies.get(e.wires.get(w)!.endBodyId!)!
+    const j = e.bodies.get(e.wires.get(w)!.end!.body)!
     expect(hitTest(e, j.pos, viewport())).toEqual({ kind: 'wire', id: w })
     expect(dragTarget(e, j.pos, viewport())).toEqual({ kind: 'carrier', id: j.id })
   })

@@ -46,7 +46,7 @@ describe('identity paint ownership', () => {
     const engine = mkEngine(builder.build(), [])
     settle(engine, 200)
     const identityBody = engine.bodies.get(identity)!
-    const endBody = engine.bodies.get(engine.wires.get(danglingWire)!.endBodyId!)!
+    const endBody = engine.bodies.get(engine.wires.get(danglingWire)!.end!.body)!
     const shapes = paint(engine, LIGHT)
     const ownedAt = (center: { readonly x: number; readonly y: number }) => shapes
       .filter((shape) =>
