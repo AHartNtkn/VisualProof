@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { exploreForm, IOTA, relSig } from '../../src/kernel/diagram'
 import { identityGeometry } from '../../src/view/bend'
-import { mkEngine } from '../../src/view/engine'
+import { mkEngine, pkey, worldBindAnchor } from '../../src/view/engine'
 import {
   atom,
   emptyGraph,
@@ -88,13 +88,10 @@ describe('formulaToDiagram', () => {
       sig: IOTA,
       arity: 2,
     })
-    const body = mkEngine(diagram, []).bodies.get(entry![0])
+    const engine = mkEngine(diagram, [])
+    const body = engine.bodies.get(entry![0])
     expect(body?.kind).toBe('identity')
     expect(body?.geometry).toEqual(identityGeometry(2))
-    expect([...body!.localAnchor.values()]).toEqual([
-      { x: 0, y: 0 },
-      { x: 0, y: 0 },
-    ])
     const incidences = Object.entries(diagram.wires).flatMap(([wire, value]) =>
       value.endpoints
         .filter((endpoint) => endpoint.node === entry![0])
@@ -103,7 +100,21 @@ describe('formulaToDiagram', () => {
       { kind: 'identity', index: 0 },
       { kind: 'identity', index: 1 },
     ])
-    expect(new Set(incidences.map(({ wire }) => wire))).toHaveProperty('size', 2)
+    expect(new Set(incidences.map(({ wire }) => wire)).size).toBe(2)
+    const identityBinds = incidences.map(({ wire, port }) =>
+      engine.wires.get(wire)!.binds.find((bind) => bind.body === entry![0] && bind.key === pkey(port))!)
+    expect(new Set(identityBinds.map((bind) => bind.key)).size).toBe(identityBinds.length)
+    body!.pos = { x: 13, y: -7 }
+    body!.theta = Math.PI / 4
+    engine.scale = 1.5
+    for (const bind of identityBinds) {
+      const local = body!.localAnchor.get(bind.key)!
+      const c = Math.cos(body!.theta), s = Math.sin(body!.theta)
+      const world = worldBindAnchor(engine, body!, bind.key)
+      expect(Math.hypot(local.x, local.y)).toBeGreaterThan(0)
+      expect(world.x).toBeCloseTo(body!.pos.x + engine.scale * (local.x * c - local.y * s), 9)
+      expect(world.y).toBeCloseTo(body!.pos.y + engine.scale * (local.x * s + local.y * c), 9)
+    }
   })
 
   it('draws equality between relation variables with their shared signature', () => {
@@ -131,14 +142,10 @@ describe('formulaToDiagram', () => {
       sig: IOTA,
       arity: 3,
     })
-    const body = mkEngine(diagram, []).bodies.get(entries[0]![0])
+    const engine = mkEngine(diagram, [])
+    const body = engine.bodies.get(entries[0]![0])
     expect(body?.kind).toBe('identity')
     expect(body?.geometry).toEqual(identityGeometry(3))
-    expect([...body!.localAnchor.values()]).toEqual([
-      { x: 0, y: 0 },
-      { x: 0, y: 0 },
-      { x: 0, y: 0 },
-    ])
     const incidences = Object.entries(diagram.wires).flatMap(([wire, value]) =>
       value.endpoints
         .filter((endpoint) => endpoint.node === entries[0]![0])
@@ -148,7 +155,21 @@ describe('formulaToDiagram', () => {
       { kind: 'identity', index: 1 },
       { kind: 'identity', index: 2 },
     ])
-    expect(new Set(incidences.map(({ wire }) => wire))).toHaveProperty('size', 3)
+    expect(new Set(incidences.map(({ wire }) => wire)).size).toBe(3)
+    const identityBinds = incidences.map(({ wire, port }) =>
+      engine.wires.get(wire)!.binds.find((bind) => bind.body === entries[0]![0] && bind.key === pkey(port))!)
+    expect(new Set(identityBinds.map((bind) => bind.key)).size).toBe(identityBinds.length)
+    body!.pos = { x: -9, y: 5 }
+    body!.theta = -Math.PI / 6
+    engine.scale = 2
+    for (const bind of identityBinds) {
+      const local = body!.localAnchor.get(bind.key)!
+      const c = Math.cos(body!.theta), s = Math.sin(body!.theta)
+      const world = worldBindAnchor(engine, body!, bind.key)
+      expect(Math.hypot(local.x, local.y)).toBeGreaterThan(0)
+      expect(world.x).toBeCloseTo(body!.pos.x + engine.scale * (local.x * c - local.y * s), 9)
+      expect(world.y).toBeCloseTo(body!.pos.y + engine.scale * (local.x * s + local.y * c), 9)
+    }
   })
 
   it('draws negation as one cut around its body', () => {

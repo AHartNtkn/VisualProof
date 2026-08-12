@@ -5,7 +5,7 @@ import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
 const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
-import { mkEngine, carryOver, worldAnchor, worldBindAnchor, portNormal, pkey, DISC_R, frameSlots, FRAME_CORNER_W, wireTerminalBCs, wireTerminalPoints, type FrameBounds } from '../../src/view/engine'
+import { mkEngine, carryOver, worldAnchor, worldBindAnchor, portNormal, pkey, DISC_R, escapePoint, frameSlots, FRAME_CORNER_W, wireTerminalBCs, wireTerminalPoints, type FrameBounds } from '../../src/view/engine'
 import { emptyDiagram } from '../../src/app/edit'
 import { unaryDefinition, UNARY } from '../fixtures/zero-signature'
 
@@ -65,7 +65,7 @@ describe('mkEngine', () => {
     }
   })
 
-  it('routes every multi-port identity incidence to one free centered terminal', () => {
+  it('clamps every rotated identity incidence at its rim and escapes along its radial normal', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
     const identity = h.identity(cut, IOTA, 3)
@@ -79,14 +79,33 @@ describe('mkEngine', () => {
     const e = mkEngine(h.build(), [])
     const body = e.bodies.get(identity)!
     body.pos = { x: 17, y: -11 }
+    body.theta = Math.PI / 3
 
     for (const wid of wires) {
       const wire = e.wires.get(wid)!
       const terminal = wire.binds.findIndex((bind) => bind.body === identity)
       expect(terminal).toBeGreaterThanOrEqual(0)
-      expect(worldBindAnchor(e, body, wire.binds[terminal]!.key)).toEqual(body.pos)
-      expect(wireTerminalPoints(e, wire)[terminal]).toEqual(body.pos)
-      expect(wireTerminalBCs(e, wire)[terminal]).toBeNull()
+      const bind = wire.binds[terminal]!
+      const local = body.localAnchor.get(bind.key)!
+      const anchor = worldBindAnchor(e, body, bind.key)
+      const terminalPoint = wireTerminalPoints(e, wire)[terminal]!
+      const bc = wireTerminalBCs(e, wire)[terminal]
+      const escaped = escapePoint(e, bind)
+      const radial = Math.atan2(local.y, local.x) + body.theta
+
+      expect(body.geometry!.arcs).toHaveLength(1)
+      expect(Math.hypot(local.x, local.y)).toBeCloseTo(body.geometry!.arcs[0]!.r, 9)
+      expect(Math.hypot(anchor.x - body.pos.x, anchor.y - body.pos.y))
+        .toBeCloseTo(Math.hypot(local.x, local.y) * e.scale, 9)
+      expect(Math.hypot(anchor.x - body.pos.x, anchor.y - body.pos.y)).toBeGreaterThan(0)
+      expect(escaped.anchor).toEqual(anchor)
+      expect(terminalPoint).toEqual(escaped.escape)
+      expect(Math.hypot(terminalPoint.x - body.pos.x, terminalPoint.y - body.pos.y))
+        .toBeGreaterThan(Math.hypot(anchor.x - body.pos.x, anchor.y - body.pos.y))
+      expect(bc).not.toBeNull()
+      expect(bc!.p).toEqual(anchor)
+      expect(bc!.n.x).toBeCloseTo(Math.cos(radial), 9)
+      expect(bc!.n.y).toBeCloseTo(Math.sin(radial), 9)
     }
   })
 

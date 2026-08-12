@@ -48,7 +48,7 @@ describe('worldBindAnchor — wires attach to the DRAWN node rim, not the padded
     }
   })
 
-  it('an atom/identity binds on its exact rim anchor inside the padded clearance disc', () => {
+  it('an atom/identity bind reaches its rotated and scaled nonzero local rim anchor', () => {
     const h = new DiagramBuilder()
     const cut = h.cut(h.root)
     const identity = h.identity(cut, IOTA, 2)
@@ -65,14 +65,21 @@ describe('worldBindAnchor — wires attach to the DRAWN node rim, not the padded
     const at = h.atom(h.root, rel(2))
     for (let i = 0; i < 2; i++) h.wire(h.root, [{ node: at, port: { kind: 'arg', index: i } }])
     const e = mkEngine(h.build(), [])
+    e.scale = 1.75
     for (const id of [identity, at]) {
       const b = e.bodies.get(id)!
+      b.theta = Math.PI / 3
       for (const [key, la] of b.localAnchor) {
         const a = worldBindAnchor(e, b, key)
         const c = Math.cos(b.theta), s = Math.sin(b.theta)
-        const want = { x: b.pos.x + la.x * c - la.y * s, y: b.pos.y + la.x * s + la.y * c }
+        const want = {
+          x: b.pos.x + e.scale * (la.x * c - la.y * s),
+          y: b.pos.y + e.scale * (la.x * s + la.y * c),
+        }
+        expect(Math.hypot(la.x, la.y), `${b.kind} local bind anchor lies on its rim`).toBeGreaterThan(0)
         expect(Math.hypot(a.x - want.x, a.y - want.y), `${b.kind} wire starts at its drawn port anchor`).toBeLessThan(1e-6)
-        expect(Math.hypot(a.x - b.pos.x, a.y - b.pos.y), 'and strictly inside the padded clearance disc (no float)').toBeLessThan(b.discR - 1e-6)
+        expect(Math.hypot(a.x - b.pos.x, a.y - b.pos.y), `${b.kind} bind is not centered`).toBeGreaterThan(0)
+        expect(Math.hypot(a.x - b.pos.x, a.y - b.pos.y), 'and strictly inside the padded clearance disc (no float)').toBeLessThan(b.discR * e.scale - 1e-6)
       }
     }
   })

@@ -20,16 +20,18 @@ describe('atom/ref/identity geometry', () => {
     const geometry = refGeometry(2)
 
     expect(geometry.arcs).toHaveLength(1)
+    expect(geometry.arcs[0]!.a1 - geometry.arcs[0]!.a0).toBeCloseTo(2 * Math.PI, 10)
     expect(geometry.headAnchor).toBeNull()
     expect(Object.keys(geometry.portAnchors)).toEqual(['a:0', 'a:1'])
     expect(geometry.portAnchors['a:0']).toEqual({ x: 0, y: 2 })
   })
 
-  it('gives every n-ary identity port the same centered dangling-node anchor', () => {
+  it('gives every n-ary identity port an evenly spaced circular rim anchor', () => {
     const geometry = identityGeometry(5)
+    const anchors = Array.from({ length: 5 }, (_, index) => geometry.portAnchors[`i:${index}`]!)
 
-    expect(geometry.outerRadius).toBe(0)
-    expect(geometry.arcs).toEqual([])
+    expect(geometry.arcs).toHaveLength(1)
+    expect(geometry.outerRadius).toBeGreaterThan(0)
     expect(geometry.headAnchor).toBeNull()
     expect(Object.keys(geometry.portAnchors)).toEqual([
       'i:0',
@@ -38,8 +40,16 @@ describe('atom/ref/identity geometry', () => {
       'i:3',
       'i:4',
     ])
-    for (let index = 0; index < 5; index++) {
-      expect(geometry.portAnchors[`i:${index}`]).toEqual({ x: 0, y: 0 })
+    expect(anchors.every((anchor) => Math.hypot(anchor.x, anchor.y) > 0)).toBe(true)
+    const radius = Math.hypot(anchors[0]!.x, anchors[0]!.y)
+    for (const anchor of anchors) {
+      expect(Math.hypot(anchor.x, anchor.y)).toBeCloseTo(radius, 10)
+    }
+    for (let index = 1; index < anchors.length; index++) {
+      const previous = Math.atan2(anchors[index - 1]!.y, anchors[index - 1]!.x)
+      const current = Math.atan2(anchors[index]!.y, anchors[index]!.x)
+      const turn = (current - previous + 2 * Math.PI) % (2 * Math.PI)
+      expect(turn).toBeCloseTo(2 * Math.PI / anchors.length, 10)
     }
   })
 
