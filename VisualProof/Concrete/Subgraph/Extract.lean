@@ -501,6 +501,117 @@ theorem materialRegions_length (spine : BinderSpine diagram) :
     Nat.le_antisymm forward backward
   simpa [partition, proxies, allFin_eq_finRange, Nat.add_assoc] using lengths.symm
 
+private theorem proxy_climb_root_aux (spine : BinderSpine diagram)
+    (value : Nat) :
+    ∀ proxy : Fin spine.proxyCount, proxy.val = value →
+      diagram.climb (value + 1) (spine.proxy proxy) = some diagram.root := by
+  induction value with
+  | zero =>
+      intro proxy hvalue
+      simp only [Diagram.climb]
+      rw [spine.proxy_region proxy]
+      simp [CRegion.parent?, hvalue]
+  | succ value ih =>
+      intro proxy hvalue
+      let previous : Fin spine.proxyCount := ⟨proxy.val - 1, by omega⟩
+      have hproxyPositive : proxy.val ≠ 0 := by omega
+      have hparent :
+          (diagram.regions (spine.proxy proxy)).parent? =
+            some (spine.proxy previous) := by
+        rw [spine.proxy_region proxy]
+        simp only [CRegion.parent?]
+        simp [hproxyPositive, previous]
+      have hpreviousValue : previous.val = value := by
+        simp [previous]
+        omega
+      simpa only [Nat.succ_eq_add_one, Nat.add_assoc,
+        Diagram.climb, hparent] using ih previous hpreviousValue
+
+theorem proxy_climb_root (spine : BinderSpine diagram)
+    (proxy : Fin spine.proxyCount) :
+    diagram.climb (proxy.val + 1) (spine.proxy proxy) = some diagram.root :=
+  spine.proxy_climb_root_aux proxy.val proxy rfl
+
+private theorem proxy_climb_between_aux (spine : BinderSpine diagram)
+    (value : Nat) :
+    ∀ source target : Fin spine.proxyCount, source.val = value →
+      target.val ≤ source.val →
+      diagram.climb (source.val - target.val) (spine.proxy source) =
+        some (spine.proxy target) := by
+  induction value with
+  | zero =>
+      intro source target hsource hle
+      have heq : source = target := by
+        apply Fin.ext
+        omega
+      subst target
+      simp
+  | succ value ih =>
+      intro source target hsource hle
+      by_cases hequal : target.val = source.val
+      · have heq : target = source := Fin.ext hequal
+        subst target
+        simp
+      · let previous : Fin spine.proxyCount := ⟨source.val - 1, by omega⟩
+        have hsourcePositive : source.val ≠ 0 := by omega
+        have hpreviousValue : previous.val = value := by
+          simp [previous]
+          omega
+        have htargetPrevious : target.val ≤ previous.val := by
+          simp [previous]
+          omega
+        have hparent :
+            (diagram.regions (spine.proxy source)).parent? =
+              some (spine.proxy previous) := by
+          rw [spine.proxy_region source]
+          simp only [CRegion.parent?]
+          simp [hsourcePositive, previous]
+        have hsteps : source.val - target.val =
+            (previous.val - target.val) + 1 := by
+          simp [previous]
+          omega
+        rw [hsteps]
+        simp only [Diagram.climb, hparent]
+        exact ih previous target hpreviousValue htargetPrevious
+
+theorem proxy_climb_between (spine : BinderSpine diagram)
+    (source target : Fin spine.proxyCount) (hle : target.val ≤ source.val) :
+    diagram.climb (source.val - target.val) (spine.proxy source) =
+      some (spine.proxy target) :=
+  spine.proxy_climb_between_aux source.val source target rfl hle
+
+theorem bodyContainer_climb_proxy (spine : BinderSpine diagram)
+    (proxy : Fin spine.proxyCount) :
+  diagram.climb (spine.proxyCount - 1 - proxy.val) spine.bodyContainer =
+      some (spine.proxy proxy) := by
+  have hnonzero : spine.proxyCount ≠ 0 := by
+    have := proxy.isLt
+    omega
+  let terminal : Fin spine.proxyCount :=
+    ⟨spine.proxyCount - 1, by omega⟩
+  rw [spine.body_eq_terminal_of_nonempty hnonzero]
+  simpa [terminal] using spine.proxy_climb_between terminal proxy (by
+    simp [terminal]
+    omega)
+
+theorem bodyContainer_climb_root (spine : BinderSpine diagram) :
+    diagram.climb spine.proxyCount spine.bodyContainer = some diagram.root := by
+  by_cases hzero : spine.proxyCount = 0
+  · rw [spine.body_eq_root_of_empty hzero, hzero]
+    rfl
+  · let terminal : Fin spine.proxyCount :=
+      ⟨spine.proxyCount - 1, by omega⟩
+    have hbody : spine.bodyContainer = spine.proxy terminal :=
+      spine.body_eq_terminal_of_nonempty hzero
+    have hclimb := spine.proxy_climb_root terminal
+    have hsteps : terminal.val + 1 = spine.proxyCount := by
+      simp [terminal]
+      omega
+    rw [hbody]
+    exact congrArg
+      (fun steps => diagram.climb steps (spine.proxy terminal))
+      hsteps.symm |>.trans hclimb
+
 /--
 The semantic side conditions that make a designated spine a terminal-body
 interface rather than an arbitrary list of bubbles.
