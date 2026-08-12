@@ -248,6 +248,70 @@ theorem compileItems?_cons
           exact direct candidate (by simp [member]))
         pure (.cons head rest)) := rfl
 
+theorem compileItems?_length
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
+    {direct : ∀ occurrence, occurrence ∈ occurrences →
+      occurrence ∈ localOccurrences d parent}
+    {items : CompiledItems d context rels binders}
+    (compiled : compileItems? d hwf parent context binders occurrences direct =
+      some items) :
+    items.length = occurrences.length := by
+  induction occurrences generalizing items with
+  | nil =>
+      simp only [compileItems?_nil] at compiled
+      cases compiled
+      rfl
+  | cons occurrence tail ih =>
+      rw [compileItems?_cons] at compiled
+      cases hhead : compileOccurrence? d hwf parent context binders occurrence
+          (direct occurrence (by simp)) with
+      | none => simp [hhead] at compiled
+      | some head =>
+          cases htail : compileItems? d hwf parent context binders tail (by
+              intro candidate member
+              exact direct candidate (by simp [member])) with
+          | none => simp [hhead, htail] at compiled
+          | some rest =>
+              simp [hhead, htail] at compiled
+              cases compiled
+              exact congrArg Nat.succ (ih htail)
+
+theorem compileItems?_get
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
+    {direct : ∀ occurrence, occurrence ∈ occurrences →
+      occurrence ∈ localOccurrences d parent}
+    {items : CompiledItems d context rels binders}
+    (compiled : compileItems? d hwf parent context binders occurrences direct =
+      some items)
+    (index : Fin occurrences.length) :
+    compileOccurrence? d hwf parent context binders (occurrences.get index)
+        (direct _ (List.get_mem occurrences index)) =
+      some (items.get (Fin.cast (compileItems?_length hwf parent context
+        binders compiled).symm index)) := by
+  induction occurrences generalizing items with
+  | nil => exact Fin.elim0 index
+  | cons occurrence tail ih =>
+      rw [compileItems?_cons] at compiled
+      cases hhead : compileOccurrence? d hwf parent context binders occurrence
+          (direct occurrence (by simp)) with
+      | none => simp [hhead] at compiled
+      | some head =>
+          cases htail : compileItems? d hwf parent context binders tail (by
+              intro candidate member
+              exact direct candidate (by simp [member])) with
+          | none => simp [hhead, htail] at compiled
+          | some rest =>
+              simp [hhead, htail] at compiled
+              cases compiled
+              refine Fin.cases ?_ (fun tailIndex => ?_) index
+              · simpa only [List.get, CompiledItems.get] using hhead
+              · have result := ih htail tailIndex
+                simpa only [List.get, CompiledItems.get] using result
+
 theorem CompilerCall.compile?_eq_compileItems?
     (hwf : d.WellFormed) (call : CompilerCall d) :
     call.compile? d hwf = (do
