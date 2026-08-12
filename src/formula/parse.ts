@@ -72,8 +72,17 @@ function frozenAtom(name: string, args: readonly string[], start: number, end: n
   return Object.freeze({ kind: 'atom', name, args: Object.freeze([...args]), span: frozenSpan(start, end) })
 }
 
-function frozenEquality(left: string, right: string, start: number, end: number): Formula {
-  return Object.freeze({ kind: 'equality', left, right, span: frozenSpan(start, end) })
+function frozenEquality(
+  operands: readonly [string, string, ...string[]],
+  start: number,
+  end: number,
+): Formula {
+  const frozenOperands: readonly [string, string, ...string[]] = Object.freeze([
+    operands[0],
+    operands[1],
+    ...operands.slice(2),
+  ])
+  return Object.freeze({ kind: 'equality', operands: frozenOperands, span: frozenSpan(start, end) })
 }
 
 function frozenBinary(kind: 'and' | 'implies', left: Formula, right: Formula): Formula {
@@ -147,7 +156,15 @@ export function parseFormula(source: string): Formula {
     if (peek().kind === '=') {
       take()
       const right = expect('identifier', 'an equality operand')
-      return frozenEquality(head.text, right.text, head.start, right.end)
+      const operands: [string, string, ...string[]] = [head.text, right.text]
+      let end = right.end
+      while (peek().kind === '=') {
+        take()
+        const operand = expect('identifier', 'an equality operand')
+        operands.push(operand.text)
+        end = operand.end
+      }
+      return frozenEquality(operands, head.start, end)
     }
     const args: string[] = []
     let end = head.end
@@ -234,16 +251,19 @@ export function parseFormula(source: string): Formula {
         return
       }
       case 'equality': {
-        const left = environment.get(formula.left)
-        if (left === undefined) {
-          throw new FormulaError(source, formula.span.start, `unbound equality operand '${formula.left}'`)
+        const [firstName, ...remainingNames] = formula.operands
+        const first = environment.get(firstName)
+        if (first === undefined) {
+          throw new FormulaError(source, formula.span.start, `unbound equality operand '${firstName}'`)
         }
-        const right = environment.get(formula.right)
-        if (right === undefined) {
-          throw new FormulaError(source, formula.span.start, `unbound equality operand '${formula.right}'`)
-        }
-        if (!sigEquals(left, right)) {
-          throw new FormulaError(source, formula.span.start, 'equality operands must have the same signature')
+        for (const name of remainingNames) {
+          const candidate = environment.get(name)
+          if (candidate === undefined) {
+            throw new FormulaError(source, formula.span.start, `unbound equality operand '${name}'`)
+          }
+          if (!sigEquals(first, candidate)) {
+            throw new FormulaError(source, formula.span.start, 'equality operands must have the same signature')
+          }
         }
         return
       }

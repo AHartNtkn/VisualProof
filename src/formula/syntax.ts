@@ -10,7 +10,7 @@ export type FormulaBinder = {
 
 export type Formula =
   | { readonly kind: 'atom'; readonly name: string; readonly args: readonly string[]; readonly span: SourceSpan }
-  | { readonly kind: 'equality'; readonly left: string; readonly right: string; readonly span: SourceSpan }
+  | { readonly kind: 'equality'; readonly operands: readonly [string, string, ...string[]]; readonly span: SourceSpan }
   | { readonly kind: 'and'; readonly left: Formula; readonly right: Formula; readonly span: SourceSpan }
   | { readonly kind: 'implies'; readonly left: Formula; readonly right: Formula; readonly span: SourceSpan }
   | { readonly kind: 'quantifier'; readonly quantifier: 'exists' | 'forall'; readonly binders: readonly FormulaBinder[]; readonly body: Formula; readonly span: SourceSpan }

@@ -34,9 +34,8 @@ function drawFormula(
       return { ...state, graph: atom(state.graph, region, relation, args).graph }
     }
     case 'equality': {
-      const left = boundWire(state.bindings, formula.left)
-      const right = boundWire(state.bindings, formula.right)
-      return { ...state, graph: identity(state.graph, region, [left, right]).graph }
+      const wires = formula.operands.map((name) => boundWire(state.bindings, name))
+      return { ...state, graph: identity(state.graph, region, wires).graph }
     }
     case 'and':
       return drawFormula(formula.right, drawFormula(formula.left, state, region), region)

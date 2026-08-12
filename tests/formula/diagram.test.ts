@@ -105,4 +105,21 @@ describe('formulaToDiagram', () => {
       arity: 2,
     })
   })
+
+  it('draws an equality chain as one compact multi-port identity node', () => {
+    const diagram = formulaToDiagram('∀ x y z. x = y = z')
+    const entries = Object.entries(diagram.nodes)
+      .filter(([, node]) => node.kind === 'identity')
+
+    expect(entries).toHaveLength(1)
+    expect(entries[0]![1]).toEqual({
+      kind: 'identity',
+      region: 'r2',
+      sig: IOTA,
+      arity: 3,
+    })
+    const body = mkEngine(diagram, []).bodies.get(entries[0]![0])
+    expect(body?.kind).toBe('identity')
+    expect(body?.geometry).toEqual(identityGeometry(3))
+  })
 })

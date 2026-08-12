@@ -28,11 +28,11 @@ function expectAtom(formula: Formula, name: string, args: readonly string[]): vo
   expect(formula.args).toEqual(args)
 }
 
-function expectEquality(formula: Formula, left: string, right: string): void {
+function expectEquality(formula: Formula, operands: readonly string[]): void {
   expect(formula.kind).toBe('equality')
   if (formula.kind !== 'equality') throw new Error('expected equality')
-  expect(formula.left).toBe(left)
-  expect(formula.right).toBe(right)
+  expect(formula.operands).toEqual(operands)
+  expect(Object.isFrozen(formula.operands)).toBe(true)
 }
 
 describe('parseFormula', () => {
@@ -101,16 +101,28 @@ describe('parseFormula', () => {
     const formula = parseFormula('∀ x y. x = y')
     expect(formula.kind).toBe('quantifier')
     if (formula.kind !== 'quantifier') throw new Error('expected quantifier')
-    expectEquality(formula.body, 'x', 'y')
+    expectEquality(formula.body, ['x', 'y'])
+  })
+
+  it('parses chained equality into one immutable operand list', () => {
+    const formula = parseFormula('∀ x y z. x = y = z')
+    expect(formula.kind).toBe('quantifier')
+    if (formula.kind !== 'quantifier') throw new Error('expected quantifier')
+    expectEquality(formula.body, ['x', 'y', 'z'])
   })
 
   it('accepts equality at relation signatures and rejects mismatched signatures', () => {
     const formula = parseFormula('∀ P Q : i → o. P = Q')
     expect(formula.kind).toBe('quantifier')
     if (formula.kind !== 'quantifier') throw new Error('expected quantifier')
-    expectEquality(formula.body, 'P', 'Q')
+    expectEquality(formula.body, ['P', 'Q'])
 
     expect(() => parseFormula('∀ P : i → o. ∀ x. P = x'))
+      .toThrow(/equality operands must have the same signature/i)
+  })
+
+  it('rejects a signature mismatch anywhere in an equality chain', () => {
+    expect(() => parseFormula('∀ P Q : i → o. ∀ x. P = Q = x'))
       .toThrow(/equality operands must have the same signature/i)
   })
 
