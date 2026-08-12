@@ -83,6 +83,15 @@ private theorem finish_extendContextMap
   apply Fin.ext
   rfl
 
+private theorem get_cast_eq_map
+    (source : List α) (target : List β) (valueMap : α → β)
+    (targetEq : target = source.map valueMap)
+    (index : Fin source.length) :
+    target.get (Fin.cast (by rw [targetEq]; simp) index) =
+      valueMap (source.get index) := by
+  subst target
+  simp
+
 private theorem patternBindersMapped_push
     (layout : PlugLayout input)
     (sourceBinders : BinderContext input.pattern.val.diagram sourceRels)
@@ -112,6 +121,42 @@ private theorem patternBindersMapped_push
       exact same (((layout.binderRegion_eq_materialRegion_iff binder
         (layout.materialCarrier region material)).1 equality).trans
           (layout.materialCarrier_origin region material))
+    rw [BinderContext.push_other _ arity targetDifferent,
+      BinderContext.push_other _ arity same, mapped]
+    cases sourceLookup : sourceBinders binder with
+    | none => rfl
+    | some relation =>
+        cases relation with
+        | mk relationArity relation =>
+            cases relation with
+            | mk index hasArity =>
+                apply congrArg some
+                congr 1
+
+private theorem frameBindersMapped_push
+    (layout : PlugLayout input)
+    (sourceBinders : BinderContext input.frame.val sourceRels)
+    (targetBinders : BinderContext layout.plugRaw targetRels)
+    (relationMap : RelationRenaming sourceRels targetRels)
+    (mapped : ∀ binder,
+      targetBinders (layout.frameRegion binder) =
+        (sourceBinders binder).map fun relation =>
+          ⟨relation.1, relationMap relation.2⟩)
+    (region : Fin input.frame.val.regionCount) (arity : Nat) :
+    ∀ binder,
+      (targetBinders.push (layout.frameRegion region) arity)
+          (layout.frameRegion binder) =
+        (sourceBinders.push region arity binder).map fun relation =>
+          ⟨relation.1, (RelationRenaming.lift relationMap arity) relation.2⟩ := by
+  intro binder
+  by_cases same : binder = region
+  · subst binder
+    rw [BinderContext.push_self, BinderContext.push_self]
+    rfl
+  · have targetDifferent : layout.frameRegion binder ≠
+        layout.frameRegion region := by
+      exact fun equality =>
+        same ((layout.frameRegion_eq_frameRegion_iff binder region).1 equality)
     rw [BinderContext.push_other _ arity targetDifferent,
       BinderContext.push_other _ arity same, mapped]
     cases sourceLookup : sourceBinders binder with
@@ -689,6 +734,378 @@ theorem compileMaterialRegion
   exact allCalls (.nested sourceParent sourceOuter sourceRels sourceBinders)
     material targetOuter targetBinders wireMap relationMap sourceExact
       targetExact getMapped binderMapped sourceCompiled
+
+/-- Compile a retained frame subtree that does not contain the insertion site.
+The target computation follows the source compiler tree directly; no target
+focus or occurrence discovery is involved. -/
+theorem compileFrameRegionAway
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (terminal : input.TerminalBody)
+    (targetWf : layout.plugRaw.WellFormed)
+    (sourceParent : Fin input.frame.val.regionCount)
+    (away : ¬ input.frame.val.Encloses sourceParent input.site)
+    (sourceOuter : WireContext input.frame.val)
+    (targetOuter : WireContext layout.plugRaw)
+    (sourceBinders : BinderContext input.frame.val sourceRels)
+    (targetBinders : BinderContext layout.plugRaw targetRels)
+    (wireMap : Fin sourceOuter.length → Fin targetOuter.length)
+    (relationMap : RelationRenaming sourceRels targetRels)
+    (sourceExact : (sourceOuter.extend sourceParent).Exact sourceParent)
+    (targetExact : (targetOuter.extend
+      (layout.frameRegion sourceParent)).Exact
+        (layout.frameRegion sourceParent))
+    (getMapped : ∀ index,
+      targetOuter.get (wireMap index) =
+        layout.frameWireMap (sourceOuter.get index))
+    (binderMapped : ∀ binder,
+      targetBinders (layout.frameRegion binder) =
+        (sourceBinders binder).map fun relation =>
+          ⟨relation.1, relationMap relation.2⟩)
+    {sourceBody : CompiledRegion input.frame.val
+      (.nested sourceParent sourceOuter sourceRels sourceBinders)}
+    (sourceCompiled : compileRegion? input.frame.val input.frame.property
+      sourceParent sourceOuter sourceBinders = some sourceBody) :
+    ∃ targetBody : CompiledRegion layout.plugRaw
+        (.nested (layout.frameRegion sourceParent) targetOuter targetRels
+          targetBinders),
+      compileRegion? layout.plugRaw targetWf
+          (layout.frameRegion sourceParent) targetOuter targetBinders =
+        some targetBody ∧
+      targetBody.erase =
+        (sourceBody.erase.renameWires wireMap).renameRelations relationMap := by
+  let source := input.frame.val
+  let sourceWf := input.frame.property
+  let motive : CompilerCall source → Prop := fun call =>
+    match call with
+    | .root _ _ => True
+    | .nested sourceParent sourceOuter sourceRels sourceBinders =>
+        ¬ source.Encloses sourceParent input.site →
+        ∀ {targetRels : RelCtx}
+          (targetOuter : WireContext layout.plugRaw)
+          (targetBinders : BinderContext layout.plugRaw targetRels)
+          (wireMap : Fin sourceOuter.length → Fin targetOuter.length)
+          (relationMap : RelationRenaming sourceRels targetRels),
+          (sourceOuter.extend sourceParent).Exact sourceParent →
+          (targetOuter.extend (layout.frameRegion sourceParent)).Exact
+            (layout.frameRegion sourceParent) →
+          (∀ index, targetOuter.get (wireMap index) =
+            layout.frameWireMap (sourceOuter.get index)) →
+          (∀ binder, targetBinders (layout.frameRegion binder) =
+            (sourceBinders binder).map fun relation =>
+              ⟨relation.1, relationMap relation.2⟩) →
+          ∀ {sourceBody : CompiledRegion source
+              (.nested sourceParent sourceOuter sourceRels sourceBinders)},
+            compileRegion? source sourceWf sourceParent sourceOuter
+                sourceBinders = some sourceBody →
+            ∃ targetBody : CompiledRegion layout.plugRaw
+                (.nested (layout.frameRegion sourceParent) targetOuter
+                  targetRels targetBinders),
+              compileRegion? layout.plugRaw targetWf
+                  (layout.frameRegion sourceParent) targetOuter targetBinders =
+                some targetBody ∧
+              targetBody.erase =
+                (sourceBody.erase.renameWires wireMap).renameRelations
+                  relationMap
+  have allCalls : ∀ call, motive call :=
+    CompilerCall.compile?.induct source sourceWf motive (by
+      intro call
+      dsimp only
+      intro childIH
+      cases call with
+      | root => exact True.intro
+      | nested sourceParent sourceOuter sourceRels sourceBinders =>
+          intro away targetRels targetOuter targetBinders wireMap relationMap
+            sourceExact targetExact getMapped binderMapped sourceBody
+            sourceCompiled
+          have notSite : sourceParent ≠ input.site := by
+            intro equality
+            subst sourceParent
+            exact away (Diagram.Encloses.refl source input.site)
+          let sourceFull := sourceOuter.extend sourceParent
+          let targetFull := targetOuter.extend (layout.frameRegion sourceParent)
+          have localWiresEq :
+              exactScopeWires layout.plugRaw
+                  (layout.frameRegion sourceParent) =
+                (exactScopeWires source sourceParent).map
+                  layout.frameWireMap := by
+            change exactScopeWires layout.plugRaw
+                (layout.frameRegion sourceParent) =
+              (exactScopeWires input.frame.val sourceParent).map
+                layout.frameWireMap
+            rw [layout.exactScopeWires_frameRegion consistent terminal
+              sourceParent, if_neg notSite, List.append_nil]
+            rfl
+          let localLength :
+              (exactScopeWires source sourceParent).length =
+                (exactScopeWires layout.plugRaw
+                  (layout.frameRegion sourceParent)).length := by
+            change (exactScopeWires input.frame.val sourceParent).length =
+              (exactScopeWires layout.plugRaw
+                (layout.frameRegion sourceParent)).length
+            rw [localWiresEq]
+            exact (List.length_map layout.frameWireMap).symm
+          let fullMap : Fin sourceFull.length → Fin targetFull.length :=
+            extendContextMap wireMap localLength
+          have fullGetMapped : ∀ index,
+              targetFull.get (fullMap index) =
+                layout.frameWireMap (sourceFull.get index) := by
+            intro index
+            exact extendContextMap_get wireMap localLength
+              layout.frameWireMap getMapped (by
+                intro localIndex
+                exact get_cast_eq_map
+                  (exactScopeWires source sourceParent)
+                  (exactScopeWires layout.plugRaw
+                    (layout.frameRegion sourceParent))
+                  layout.frameWireMap localWiresEq localIndex) index
+          obtain ⟨sourceNodesCompiled, sourceChildrenCompiled⟩ :=
+            CompilerCall.compile?_blocks sourceWf
+              (.nested sourceParent sourceOuter sourceRels sourceBinders)
+              sourceCompiled
+          obtain ⟨targetNodes, targetNodesCompiled, targetNodesErase⟩ :=
+            layout.compileFrameNodeBlock consistent targetWf sourceParent
+              sourceFull targetFull sourceBinders targetBinders fullMap
+              relationMap sourceExact targetExact fullGetMapped binderMapped
+              sourceNodesCompiled
+          have sourceChildrenDirect : ∀ occurrence,
+              occurrence ∈ localChildOccurrences source sourceParent →
+                occurrence ∈ localOccurrences source sourceParent :=
+            fun _ member => List.mem_append_right _ member
+          have targetChildrenDirect : ∀ occurrence,
+              occurrence ∈
+                  (localChildOccurrences source sourceParent).map
+                    layout.mapFrameOccurrence →
+                occurrence ∈ localOccurrences layout.plugRaw
+                  (layout.frameRegion sourceParent) := by
+            intro occurrence member
+            rw [layout.localOccurrences_frameRegion_of_ne_site sourceParent
+              notSite]
+            obtain ⟨sourceOccurrence, sourceMember, rfl⟩ :=
+              List.mem_map.mp member
+            exact List.mem_map.mpr
+              ⟨sourceOccurrence, sourceChildrenDirect _ sourceMember, rfl⟩
+          obtain ⟨targetChildren, targetChildrenCompiled,
+              targetChildrenErase⟩ :=
+            compileItems?_map_success sourceWf targetWf sourceParent
+              (layout.frameRegion sourceParent) sourceFull targetFull
+              sourceBinders targetBinders
+              (localChildOccurrences source sourceParent)
+              layout.mapFrameOccurrence sourceChildrenDirect
+              targetChildrenDirect fullMap relationMap (by
+                intro occurrence member sourceItem sourceItemCompiled
+                cases occurrence with
+                | node node =>
+                    exact False.elim
+                      ((not_mem_localChildOccurrences_node _ _ _) member)
+                | child child =>
+                    have sourceParentEq :=
+                      (mem_localOccurrences_child source sourceParent child).mp
+                        (sourceChildrenDirect _ member)
+                    have childAway : ¬ source.Encloses child input.site := by
+                      intro childEncloses
+                      have parentChild : source.Encloses sourceParent child := by
+                        refine ⟨⟨1, by have := child.isLt; omega⟩, ?_⟩
+                        simp [Diagram.climb, sourceParentEq]
+                      exact away (checked_encloses_trans sourceWf
+                        parentChild childEncloses)
+                    have targetParentEq :
+                        (layout.plugRaw.regions
+                          (layout.frameRegion child)).parent? =
+                            some (layout.frameRegion sourceParent) := by
+                      rw [layout.plugRaw_regions_frame]
+                      exact (layout.mapFrameRegion_parent_eq_some_iff
+                        child sourceParent).2 sourceParentEq
+                    have sourceChildExact := sourceExact.extend_child sourceWf
+                      sourceParentEq
+                    have targetChildExact := targetExact.extend_child targetWf
+                      targetParentEq
+                    cases sourceRegion : source.regions child with
+                    | sheet =>
+                        rw [compileOccurrence?_child_sheet sourceWf sourceParent
+                          child sourceFull sourceBinders
+                          (sourceChildrenDirect _ member) sourceRegion]
+                          at sourceItemCompiled
+                        contradiction
+                    | cut parent =>
+                        have parentEq : parent = sourceParent := by
+                          simpa [sourceRegion, CRegion.parent?] using
+                            sourceParentEq
+                        subst parent
+                        obtain ⟨sourceChild, sourceChildCompiled,
+                            sourceItemEq⟩ :=
+                          compileOccurrence?_child_cut_success sourceWf
+                            sourceParent child sourceFull sourceBinders
+                            (sourceChildrenDirect _ member) sourceRegion
+                            sourceItemCompiled
+                        subst sourceItem
+                        obtain ⟨targetChild, targetChildCompiled,
+                            targetChildErase⟩ :=
+                          (childIH child sourceParentEq sourceFull
+                            sourceBinders) childAway targetFull targetBinders
+                            fullMap relationMap sourceChildExact
+                            targetChildExact fullGetMapped binderMapped
+                            sourceChildCompiled
+                        refine ⟨CompiledItem.cut targetChild, ?_, ?_⟩
+                        · have targetRegion : layout.plugRaw.regions
+                              (layout.frameRegion child) =
+                                .cut (layout.frameRegion sourceParent) := by
+                            rw [layout.plugRaw_regions_frame, sourceRegion]
+                            rfl
+                          change compileOccurrence? layout.plugRaw targetWf
+                            (layout.frameRegion sourceParent) targetFull
+                            targetBinders (.child (layout.frameRegion child)) _ =
+                              some (CompiledItem.cut targetChild)
+                          rw [compileOccurrence?_child_cut targetWf
+                            (layout.frameRegion sourceParent)
+                            (layout.frameRegion child) targetFull targetBinders
+                            (targetChildrenDirect _ (by
+                              exact List.mem_map.mpr
+                                ⟨LocalOccurrence.child child, member, rfl⟩))
+                            targetRegion, targetChildCompiled]
+                          rfl
+                        · exact congrArg Item.cut targetChildErase
+                    | bubble parent arity =>
+                        have parentEq : parent = sourceParent := by
+                          simpa [sourceRegion, CRegion.parent?] using
+                            sourceParentEq
+                        subst parent
+                        obtain ⟨sourceChild, sourceChildCompiled,
+                            sourceItemEq⟩ :=
+                          compileOccurrence?_child_bubble_success sourceWf
+                            sourceParent child sourceFull sourceBinders arity
+                            (sourceChildrenDirect _ member) sourceRegion
+                            sourceItemCompiled
+                        subst sourceItem
+                        obtain ⟨targetChild, targetChildCompiled,
+                            targetChildErase⟩ :=
+                          (childIH child sourceParentEq sourceFull
+                            (sourceBinders.push child arity)) childAway targetFull
+                            (targetBinders.push
+                              (layout.frameRegion child) arity)
+                            fullMap (RelationRenaming.lift relationMap arity)
+                            sourceChildExact targetChildExact fullGetMapped
+                            (frameBindersMapped_push layout sourceBinders
+                              targetBinders relationMap binderMapped child arity)
+                            sourceChildCompiled
+                        refine ⟨CompiledItem.bubble arity targetChild,
+                          ?_, ?_⟩
+                        · have targetRegion : layout.plugRaw.regions
+                              (layout.frameRegion child) =
+                                .bubble (layout.frameRegion sourceParent)
+                                  arity := by
+                            rw [layout.plugRaw_regions_frame, sourceRegion]
+                            rfl
+                          change compileOccurrence? layout.plugRaw targetWf
+                            (layout.frameRegion sourceParent) targetFull
+                            targetBinders (.child (layout.frameRegion child)) _ =
+                              some (CompiledItem.bubble arity targetChild)
+                          rw [compileOccurrence?_child_bubble targetWf
+                            (layout.frameRegion sourceParent)
+                            (layout.frameRegion child) targetFull targetBinders
+                            arity (targetChildrenDirect _ (by
+                              exact List.mem_map.mpr
+                                ⟨LocalOccurrence.child child, member, rfl⟩))
+                            targetRegion, targetChildCompiled]
+                          rfl
+                        · exact congrArg (Item.bubble arity) targetChildErase)
+              sourceChildrenCompiled
+          have targetNodesCanonical :
+              compileItems? layout.plugRaw targetWf
+                  (layout.frameRegion sourceParent) targetFull targetBinders
+                  (localNodeOccurrences layout.plugRaw
+                    (layout.frameRegion sourceParent))
+                  (fun _ member => List.mem_append_left _ member) =
+                some targetNodes := by
+            calc
+              compileItems? layout.plugRaw targetWf
+                    (layout.frameRegion sourceParent) targetFull targetBinders
+                    (localNodeOccurrences layout.plugRaw
+                      (layout.frameRegion sourceParent)) _ =
+                  compileItems? layout.plugRaw targetWf
+                    (layout.frameRegion sourceParent) targetFull targetBinders
+                    (layout.frameNodeOccurrences sourceParent) _ :=
+                compileItems?_congr_occurrences targetWf
+                  (layout.frameRegion sourceParent) targetFull targetBinders
+                  (by
+                    rw [layout.localNodeOccurrences_frameRegion,
+                      layout.patternNodeOccurrences_eq_nil_of_ne_site
+                        sourceParent notSite,
+                      List.append_nil]) _ _
+              _ = some targetNodes := targetNodesCompiled
+          have targetChildrenCanonical :
+              compileItems? layout.plugRaw targetWf
+                  (layout.frameRegion sourceParent) targetFull targetBinders
+                  (localChildOccurrences layout.plugRaw
+                    (layout.frameRegion sourceParent))
+                  (fun _ member => List.mem_append_right _ member) =
+                some targetChildren := by
+            calc
+              compileItems? layout.plugRaw targetWf
+                    (layout.frameRegion sourceParent) targetFull targetBinders
+                    (localChildOccurrences layout.plugRaw
+                      (layout.frameRegion sourceParent)) _ =
+                  compileItems? layout.plugRaw targetWf
+                    (layout.frameRegion sourceParent) targetFull targetBinders
+                    ((localChildOccurrences input.frame.val sourceParent).map
+                      layout.mapFrameOccurrence) _ :=
+                compileItems?_congr_occurrences targetWf
+                  (layout.frameRegion sourceParent) targetFull targetBinders
+                  (by
+                    rw [layout.localChildOccurrences_frameRegion,
+                      layout.materialChildOccurrences_eq_nil_of_ne_site
+                        sourceParent notSite,
+                      List.append_nil]
+                    change layout.frameChildOccurrences sourceParent =
+                      (localChildOccurrences input.frame.val sourceParent).map
+                        layout.mapFrameOccurrence
+                    exact (layout.map_localChildOccurrences_frame
+                      sourceParent).symm) _ _
+              _ = some targetChildren := targetChildrenCompiled
+          let targetBody : CompiledRegion layout.plugRaw
+              (.nested (layout.frameRegion sourceParent) targetOuter
+                targetRels targetBinders) :=
+            .mk targetNodes targetChildren
+          refine ⟨targetBody, ?_, ?_⟩
+          · rw [compileRegion?_eq_compileBlocks?]
+            change (do
+              let nodes ← compileItems? layout.plugRaw targetWf
+                (layout.frameRegion sourceParent) targetFull targetBinders
+                (localNodeOccurrences layout.plugRaw
+                  (layout.frameRegion sourceParent)) _
+              let children ← compileItems? layout.plugRaw targetWf
+                (layout.frameRegion sourceParent) targetFull targetBinders
+                (localChildOccurrences layout.plugRaw
+                  (layout.frameRegion sourceParent)) _
+              pure (.mk nodes children)) = some targetBody
+            simp only [targetNodesCanonical, targetChildrenCanonical]
+            rfl
+          · simp only [targetBody, CompiledRegion.erase,
+              CompilerCall.finish, CompilerCall.castFullItems]
+            change Region.mk
+                (exactScopeWires layout.plugRaw
+                  (layout.frameRegion sourceParent)).length
+                ((targetNodes.erase.append targetChildren.erase).castWiresEq
+                  (WireContext.length_extend targetOuter
+                    (layout.frameRegion sourceParent))) = _
+            rw [targetNodesErase, targetChildrenErase,
+              ← ItemSeq.renameRelations_append,
+              ← ItemSeq.renameWires_append]
+            have finishMapped := finish_extendContextMap wireMap localLength
+              (sourceBody.nodeItems.erase.append sourceBody.childItems.erase)
+            have renamed := congrArg
+              (fun region => region.renameRelations relationMap) finishMapped
+            cases sourceBody
+            simp only [CompiledRegion.erase, CompilerCall.finish,
+              CompilerCall.castFullItems, Region.renameWires,
+              Region.renameRelations,
+              ItemSeq.castWiresEq_eq_renameWires,
+              ItemSeq.renameWires_renameRelations] at renamed ⊢
+            rw [← ItemSeq.renameWires_renameRelations,
+              ← ItemSeq.renameWires_renameRelations]
+            exact renamed)
+  exact allCalls (.nested sourceParent sourceOuter sourceRels sourceBinders)
+    away targetOuter targetBinders wireMap relationMap sourceExact targetExact
+      getMapped binderMapped sourceCompiled
 
 end Splice.Input.PlugLayout
 
