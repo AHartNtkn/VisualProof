@@ -721,10 +721,10 @@ theorem resolvePort?_map_of_embedding
 
 /-- Compositional node kernel of the sole concrete elaborator. Public so graph
 surgeries can prove that they commute with elaboration. -/
-def compileNode? (d : Diagram) (fuel : Nat)
+def compileNode? (d : Diagram)
     (context : WireContext d) (binders : BinderContext d rels)
     (node : Fin d.nodeCount) :
-    Option (CompiledItem d fuel context rels binders) :=
+    Option (CompiledItem d context rels binders) :=
   match d.nodes node with
   | .atom _ binder => do
       let relation <- binders binder
@@ -738,7 +738,6 @@ def compileNode? (d : Diagram) (fuel : Nat)
 region/binder identities and visible wire context. -/
 theorem compileNode?_map
     {source target : Diagram}
-    (sourceFuel targetFuel : Nat)
     (sourceContext : WireContext source)
     (targetContext : WireContext target)
     (sourceBinders : BinderContext source sourceRels)
@@ -763,9 +762,9 @@ theorem compileNode?_map
         targetBinders (binderMap binder) =
           (sourceBinders binder).map fun relation =>
             ⟨relation.1, relationMap relation.2⟩) :
-    (compileNode? target targetFuel targetContext targetBinders targetNode).map
+    (compileNode? target targetContext targetBinders targetNode).map
         CompiledItem.erase =
-      (compileNode? source sourceFuel sourceContext sourceBinders
+      (compileNode? source sourceContext sourceBinders
         sourceNode).map (fun item =>
           (item.erase.renameWires wireMap).renameRelations relationMap) := by
   cases hsourceNode : source.nodes sourceNode with
@@ -801,7 +800,6 @@ theorem compileNode?_map
 the value returned by the sole target node compiler. -/
 theorem compileNode?_map_success
     {source target : Diagram}
-    (sourceFuel targetFuel : Nat)
     (sourceContext : WireContext source)
     (targetContext : WireContext target)
     (sourceBinders : BinderContext source sourceRels)
@@ -826,21 +824,21 @@ theorem compileNode?_map_success
         targetBinders (binderMap binder) =
           (sourceBinders binder).map fun relation =>
             ⟨relation.1, relationMap relation.2⟩)
-    {sourceItem : CompiledItem source sourceFuel sourceContext sourceRels
+    {sourceItem : CompiledItem source sourceContext sourceRels
       sourceBinders}
-    (hsource : compileNode? source sourceFuel sourceContext sourceBinders
+    (hsource : compileNode? source sourceContext sourceBinders
       sourceNode = some sourceItem) :
-    ∃ targetItem : CompiledItem target targetFuel targetContext targetRels
+    ∃ targetItem : CompiledItem target targetContext targetRels
         targetBinders,
-      compileNode? target targetFuel targetContext targetBinders targetNode =
+      compileNode? target targetContext targetBinders targetNode =
         some targetItem ∧
       targetItem.erase =
         (sourceItem.erase.renameWires wireMap).renameRelations relationMap := by
-  have mapped := compileNode?_map sourceFuel targetFuel sourceContext
+  have mapped := compileNode?_map sourceContext
     targetContext sourceBinders targetBinders sourceNode targetNode regionMap
     binderMap wireMap relationMap hnode hports hbinders
   rw [hsource] at mapped
-  cases htarget : compileNode? target targetFuel targetContext targetBinders
+  cases htarget : compileNode? target targetContext targetBinders
       targetNode with
   | none => simp [htarget] at mapped
   | some targetItem =>
@@ -851,7 +849,6 @@ theorem compileNode?_map_success
 noncomputable def compileNode?_equivariant {source target : Diagram}
     (iso : Iso source target)
     (htarget : target.WellFormed)
-    {sourceFuel targetFuel : Nat}
     {sourceContext : WireContext source} {targetContext : WireContext target}
     {ambient : FiniteEquiv (Fin sourceContext.length)
       (Fin targetContext.length)}
@@ -861,13 +858,13 @@ noncomputable def compileNode?_equivariant {source target : Diagram}
     {targetBinders : BinderContext target rels}
     (hbinders : BinderContextsAgree iso sourceBinders targetBinders)
     (node : Fin source.nodeCount)
-    {sourceItem : CompiledItem source sourceFuel sourceContext rels
+    {sourceItem : CompiledItem source sourceContext rels
       sourceBinders}
-    {targetItem : CompiledItem target targetFuel targetContext rels
+    {targetItem : CompiledItem target targetContext rels
       targetBinders}
-    (hsource : compileNode? source sourceFuel sourceContext sourceBinders node =
+    (hsource : compileNode? source sourceContext sourceBinders node =
       some sourceItem)
-    (htargetResult : compileNode? target targetFuel targetContext targetBinders
+    (htargetResult : compileNode? target targetContext targetBinders
       (iso.nodes node) = some targetItem) :
     ItemIso ambient rels sourceItem.erase targetItem.erase := by
   unfold compileNode? at hsource htargetResult
@@ -920,8 +917,8 @@ noncomputable def compileNode?_equivariant {source target : Diagram}
                 hsourceArguments htargetArguments
 
 theorem compileNode?_origin
-    {item : CompiledItem d fuel context rels binders}
-    (compiled : compileNode? d fuel context binders node = some item) :
+    {item : CompiledItem d context rels binders}
+    (compiled : compileNode? d context binders node = some item) :
     item.origin = .node node := by
   cases hnode : d.nodes node with
   | atom region binder =>
