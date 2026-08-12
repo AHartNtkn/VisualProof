@@ -1,7 +1,7 @@
 import { IOTA, relSig, sigEquals, type Sig } from '../kernel/diagram/sig'
 import { FormulaError, type Formula, type FormulaBinder, type SourceSpan } from './syntax'
 
-type TokenKind = 'identifier' | 'forall' | 'exists' | 'implies' | 'and' | '(' | ')' | ',' | ':' | '.' | 'eof'
+type TokenKind = 'identifier' | 'forall' | 'exists' | 'implies' | 'and' | '(' | ')' | ',' | ':' | '.' | '=' | 'eof'
 
 type Token = { readonly kind: TokenKind; readonly text: string; readonly start: number; readonly end: number }
 
@@ -29,6 +29,13 @@ function tokenize(source: string): readonly Token[] {
       continue
     }
 
+    const pair = source.slice(index, index + 2)
+    if (pair === '->' || pair === '=>') {
+      index += 2
+      tokens.push({ kind: 'implies', text: pair, start, end: index })
+      continue
+    }
+
     const oneCharacterTokens: Readonly<Record<string, TokenKind>> = {
       '∀': 'forall',
       '∃': 'exists',
@@ -41,18 +48,12 @@ function tokenize(source: string): readonly Token[] {
       ',': ',',
       ':': ':',
       '.': '.',
+      '=': '=',
     }
     const kind = oneCharacterTokens[character]
     if (kind !== undefined) {
       index += 1
       tokens.push({ kind, text: character, start, end: index })
-      continue
-    }
-
-    const pair = source.slice(index, index + 2)
-    if (pair === '->' || pair === '=>') {
-      index += 2
-      tokens.push({ kind: 'implies', text: pair, start, end: index })
       continue
     }
 
@@ -69,6 +70,10 @@ function frozenSpan(start: number, end: number): SourceSpan {
 
 function frozenAtom(name: string, args: readonly string[], start: number, end: number): Formula {
   return Object.freeze({ kind: 'atom', name, args: Object.freeze([...args]), span: frozenSpan(start, end) })
+}
+
+function frozenEquality(left: string, right: string, start: number, end: number): Formula {
+  return Object.freeze({ kind: 'equality', left, right, span: frozenSpan(start, end) })
 }
 
 function frozenBinary(kind: 'and' | 'implies', left: Formula, right: Formula): Formula {
@@ -139,6 +144,11 @@ export function parseFormula(source: string): Formula {
     if (token.kind !== 'identifier') throw new FormulaError(source, token.start, 'expected a formula')
 
     const head = take()
+    if (peek().kind === '=') {
+      take()
+      const right = expect('identifier', 'an equality operand')
+      return frozenEquality(head.text, right.text, head.start, right.end)
+    }
     const args: string[] = []
     let end = head.end
     if (peek().kind === '(') {
@@ -221,6 +231,20 @@ export function parseFormula(source: string): Formula {
         const nested = new Map(environment)
         for (const binder of formula.binders) nested.set(binder.name, binder.sig)
         validate(formula.body, nested)
+        return
+      }
+      case 'equality': {
+        const left = environment.get(formula.left)
+        if (left === undefined) {
+          throw new FormulaError(source, formula.span.start, `unbound equality operand '${formula.left}'`)
+        }
+        const right = environment.get(formula.right)
+        if (right === undefined) {
+          throw new FormulaError(source, formula.span.start, `unbound equality operand '${formula.right}'`)
+        }
+        if (!sigEquals(left, right)) {
+          throw new FormulaError(source, formula.span.start, 'equality operands must have the same signature')
+        }
         return
       }
       case 'atom': {

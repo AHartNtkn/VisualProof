@@ -3,6 +3,7 @@ import {
   atom,
   emptyGraph,
   finishDiagram,
+  identity,
   implication,
   quantifierScope,
   type GraphConstruction,
@@ -31,6 +32,11 @@ function drawFormula(
       const relation = boundWire(state.bindings, formula.name)
       const args = formula.args.map((name) => boundWire(state.bindings, name))
       return { ...state, graph: atom(state.graph, region, relation, args).graph }
+    }
+    case 'equality': {
+      const left = boundWire(state.bindings, formula.left)
+      const right = boundWire(state.bindings, formula.right)
+      return { ...state, graph: identity(state.graph, region, [left, right]).graph }
     }
     case 'and':
       return drawFormula(formula.right, drawFormula(formula.left, state, region), region)

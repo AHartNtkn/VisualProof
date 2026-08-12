@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 
 import { exploreForm, IOTA, relSig } from '../../src/kernel/diagram'
+import { identityGeometry } from '../../src/view/bend'
+import { mkEngine } from '../../src/view/engine'
 import {
   atom,
   emptyGraph,
@@ -74,5 +76,33 @@ describe('formulaToDiagram', () => {
 
     expect(diagram.wires.w1!.endpoints.filter((endpoint) => endpoint.port.kind === 'arg')).toHaveLength(1)
     expect(diagram.wires.w2!.endpoints.filter((endpoint) => endpoint.port.kind === 'arg')).toHaveLength(1)
+  })
+
+  it('draws individual equality as a compact identity node', () => {
+    const diagram = formulaToDiagram('∀ x y. x = y')
+    const entry = Object.entries(diagram.nodes).find(([, node]) => node.kind === 'identity')
+
+    expect(entry?.[1]).toEqual({
+      kind: 'identity',
+      region: 'r2',
+      sig: IOTA,
+      arity: 2,
+    })
+    const body = mkEngine(diagram, []).bodies.get(entry![0])
+    expect(body?.kind).toBe('identity')
+    expect(body?.geometry).toEqual(identityGeometry(2))
+  })
+
+  it('draws equality between relation variables with their shared signature', () => {
+    const signature = relSig([IOTA])
+    const diagram = formulaToDiagram('∀ P Q : i → o. P = Q')
+    const node = Object.values(diagram.nodes).find((candidate) => candidate.kind === 'identity')
+
+    expect(node).toEqual({
+      kind: 'identity',
+      region: 'r2',
+      sig: signature,
+      arity: 2,
+    })
   })
 })

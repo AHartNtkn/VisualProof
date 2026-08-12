@@ -28,6 +28,13 @@ function expectAtom(formula: Formula, name: string, args: readonly string[]): vo
   expect(formula.args).toEqual(args)
 }
 
+function expectEquality(formula: Formula, left: string, right: string): void {
+  expect(formula.kind).toBe('equality')
+  if (formula.kind !== 'equality') throw new Error('expected equality')
+  expect(formula.left).toBe(left)
+  expect(formula.right).toBe(right)
+}
+
 describe('parseFormula', () => {
   it('parses the typed Unicode example with grouped individual binders', () => {
     const outer = expectQuantifier(parseFormula(EXAMPLE_SOURCE), 'forall', 'Z')
@@ -88,6 +95,30 @@ describe('parseFormula', () => {
   it('accepts ASCII quantifiers, implications, and Unicode conjunction', () => {
     expect(() => parseFormula('forall P : i -> o. exists x. P(x)')).not.toThrow()
     expect(() => parseFormula('∀ P : i => o. ∃ x. P(x) ∧ P(x)')).not.toThrow()
+  })
+
+  it('parses equality between same-signature bound variables', () => {
+    const formula = parseFormula('∀ x y. x = y')
+    expect(formula.kind).toBe('quantifier')
+    if (formula.kind !== 'quantifier') throw new Error('expected quantifier')
+    expectEquality(formula.body, 'x', 'y')
+  })
+
+  it('accepts equality at relation signatures and rejects mismatched signatures', () => {
+    const formula = parseFormula('∀ P Q : i → o. P = Q')
+    expect(formula.kind).toBe('quantifier')
+    if (formula.kind !== 'quantifier') throw new Error('expected quantifier')
+    expectEquality(formula.body, 'P', 'Q')
+
+    expect(() => parseFormula('∀ P : i → o. ∀ x. P = x'))
+      .toThrow(/equality operands must have the same signature/i)
+  })
+
+  it('requires both equality operands to be bound variables', () => {
+    expect(() => parseFormula('∀ x. x = missing'))
+      .toThrow(/unbound equality operand 'missing'/i)
+    expect(() => parseFormula('missing = missing'))
+      .toThrow(/unbound equality operand 'missing'/i)
   })
 
   it('returns immutable syntax', () => {
