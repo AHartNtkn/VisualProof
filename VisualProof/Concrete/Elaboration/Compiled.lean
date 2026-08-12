@@ -472,10 +472,11 @@ private theorem compileItems?_origins
 private structure CompiledEndpointValidity (d : Diagram)
     (wellFormed : d.WellFormed)
     (call : CompilerCall d)
-    (endpoint : CompiledRegion d call) : Prop where
+    (endpoint : CompiledRegion d call) where
   computation : call.compile? d wellFormed = some endpoint
   fullContext_exact : call.fullContext.Exact call.origin
   binders_covers : call.binders.Covers call.origin
+  binder_enumeration : BinderContext.Enumeration d call.binders call.origin
   origins : endpoint.items.origins = localOccurrences d call.origin
 
 mutual
@@ -488,8 +489,9 @@ mutual
       sourceCall.compile? d hwf = some source →
       sourceCall.fullContext.Exact sourceCall.origin →
       sourceCall.binders.Covers sourceCall.origin →
+      BinderContext.Enumeration d sourceCall.binders sourceCall.origin →
       CompiledEndpointValidity d hwf endpointCall endpoint
-    | .here source, compiled, wires, binders => by
+    | .here source, compiled, wires, binders, enumeration => by
         have origins : source.items.origins =
             localOccurrences d sourceCall.origin := by
           rw [CompilerCall.compile?_eq_compileItems? hwf] at compiled
@@ -503,8 +505,8 @@ mutual
               subst source
               exact compileItems?_origins hwf sourceCall.origin
                 sourceCall.fullContext sourceCall.binders hitems
-        exact ⟨compiled, wires, binders, origins⟩
-    | .child nested, compiled, wires, binders => by
+        exact ⟨compiled, wires, binders, enumeration, origins⟩
+    | .child nested, compiled, wires, binders, enumeration => by
         rw [CompilerCall.compile?_eq_compileItems? hwf] at compiled
         cases hitems : compileItems? d hwf sourceCall.origin
             sourceCall.fullContext sourceCall.binders
@@ -517,6 +519,7 @@ mutual
             have origins := compileItems?_origins hwf sourceCall.origin
               sourceCall.fullContext sourceCall.binders hitems
             refine nested.endpoint_validity hwf sourceCall.origin wires binders
+              enumeration
               ?_ ?_
             · intro occurrence member
               simpa only [origins] using member
@@ -532,13 +535,15 @@ mutual
       (focus : CompiledItemsZipper d items endpointCall endpoint) →
       (parent : Fin d.regionCount) →
       context.Exact parent → binders.Covers parent →
+      BinderContext.Enumeration d binders parent →
       (localOccurrencesValid : ∀ occurrence, occurrence ∈ items.origins →
         occurrence ∈ localOccurrences d parent) →
       compileItems? d hwf parent context binders items.origins
         localOccurrencesValid = some items →
       CompiledEndpointValidity d hwf endpointCall endpoint
     | .cut (origin := origin) (suffix := suffix) nested,
-        parent, wires, bindersCover, localOccurrencesValid, compiled => by
+        parent, wires, bindersCover, enumeration, localOccurrencesValid,
+        compiled => by
         simp only [CompiledItems.origins, CompiledItem.origin] at compiled
         rw [compileItems?_cons] at compiled
         let headDirect :
@@ -583,6 +588,7 @@ mutual
                             wires.extend_child hwf hparent
                         · exact BinderContext.covers_cut_child bindersCover
                             hregion
+                        · exact enumeration.cutChild hwf hregion
                 | bubble childParent arity =>
                     have childParentEq : childParent = parent := by
                       simpa [hregion, CRegion.parent?] using hparent
@@ -594,7 +600,8 @@ mutual
                     | none => simp [hbody] at hhead
                     | some childBody => simp [hbody] at hhead
     | .bubble (origin := origin) (arity := arity) (suffix := suffix) nested,
-        parent, wires, bindersCover, localOccurrencesValid, compiled => by
+        parent, wires, bindersCover, enumeration, localOccurrencesValid,
+        compiled => by
         simp only [CompiledItems.origins, CompiledItem.origin] at compiled
         rw [compileItems?_cons] at compiled
         let headDirect :
@@ -660,8 +667,10 @@ mutual
                             wires.extend_child hwf hparent
                         · exact BinderContext.push_covers_bubble_child
                             bindersCover hregion
+                        · exact enumeration.bubbleChild hwf hregion
     | .tail (head := head) (suffix := suffix) nested,
-        parent, wires, bindersCover, localOccurrencesValid, compiled => by
+        parent, wires, bindersCover, enumeration, localOccurrencesValid,
+        compiled => by
         simp only [CompiledItems.origins] at compiled
         rw [compileItems?_cons] at compiled
         let headDirect : head.origin ∈ localOccurrences d parent :=
@@ -681,7 +690,7 @@ mutual
                 simp [hhead, htail] at compiled
                 obtain ⟨rfl, rfl⟩ := compiled
                 exact nested.endpoint_validity hwf parent wires bindersCover
-                  tailDirect htail
+                  enumeration tailDirect htail
 end
 
 private theorem compileItems?_focus?_isSome_of_child
@@ -883,6 +892,9 @@ private def endpoint_validity (source : State arity)
     (by
       simpa using BinderContext.empty_covers_root
         source.checked.property.diagram_well_formed)
+    (by
+      simpa using BinderContext.Enumeration.empty
+        source.checked.val.diagram)
 
 theorem endpoint_computation (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
@@ -911,6 +923,13 @@ theorem endpoint_binders_covers (source : State arity)
   by
     simpa only [endpoint_origin source site] using
       (endpoint_validity source site).binders_covers
+
+def endpoint_binder_enumeration (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    BinderContext.Enumeration source.checked.val.diagram
+      (endpointCall source site).binders site := by
+  simpa only [endpoint_origin source site] using
+    (endpoint_validity source site).binder_enumeration
 
 def directItems (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
