@@ -147,6 +147,21 @@ end
     source.focus? source.origin = some ⟨source, rfl, .here source⟩ := by
   simp [CompiledRegion.focus?]
 
+/-- Canonical search through one administrative bubble. -/
+theorem CompiledRegion.focus?_singleton_bubble
+    {origin site : Fin d.regionCount} {arity : Nat}
+    (body : CompiledRegion d) (different : origin ≠ site) :
+    (CompiledRegion.mk origin .nil (.cons (.bubble arity body) .nil)).focus?
+        site =
+      (body.focus? site).map fun focused =>
+        ⟨focused.endpoint, focused.endpoint_origin,
+          CompiledZipper.child
+            (CompiledItemsZipper.bubble focused.zipper)⟩ := by
+  rw [CompiledRegion.focus?]
+  simp only [CompiledRegion.origin, different]
+  rw [CompiledItems.focus?]
+  cases body.focus? site <;> simp [CompiledItems.focus?]
+
 mutual
   theorem CompiledRegion.focus?_isSome_of_valid
       (source : CompiledRegion d) (valid : source.Valid)
@@ -396,6 +411,19 @@ noncomputable def focus (source : State arity)
           (show source.diagram.val.Encloses source.diagram.val.root site from
             ⟨steps, reachesRoot⟩))
 
+@[simp] theorem focus_computation (source : State arity)
+    (site : Fin source.diagram.val.regionCount) :
+    source.checked.compilation.focus? site = some (focus source site) :=
+  (Option.some_get <|
+    CompiledRegion.focus?_isSome_of_valid source.checked.compilation
+      source.checked.compilation_valid
+      source.checked.property.diagram_well_formed site (by
+        obtain ⟨steps, reachesRoot⟩ :=
+          source.checked.property.diagram_well_formed.all_regions_reach_root site
+        simpa only [VisualProof.Concrete.CheckedOpen.compilation_origin] using
+          (show source.diagram.val.Encloses source.diagram.val.root site from
+            ⟨steps, reachesRoot⟩))).symm
+
 noncomputable def endpoint (source : State arity)
     (site : Fin source.diagram.val.regionCount) : CompiledRegion source.diagram.val :=
   (focus source site).endpoint
@@ -405,7 +433,8 @@ def endpoint_origin (source : State arity)
     (endpoint source site).origin = site :=
   (focus source site).endpoint_origin
 
-private def rootEnvironment (source : State arity) :
+/-- Canonical lexical environment of the checked open root. -/
+def rootEnvironment (source : State arity) :
     CompiledEnvironment source.checked.compilation where
   outer := source.checked.val.exposedWires
   locals := source.checked.val.hiddenWires
