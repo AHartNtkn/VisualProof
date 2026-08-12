@@ -12,6 +12,21 @@ open Elaboration
 
 namespace Splice.Input.PlugLayout
 
+/-- The canonical position of a known wire in an ordered compiler context. -/
+noncomputable def contextPosition
+    (context : WireContext d) (wire : Fin d.wireCount)
+    (member : wire ∈ context) : Fin context.length :=
+  (context.lookup? wire).get
+    (Option.isSome_iff_exists.mpr (WireContext.lookup?_complete member))
+
+theorem contextPosition_get
+    (context : WireContext d) (wire : Fin d.wireCount)
+    (member : wire ∈ context) :
+    context.get (contextPosition context wire member) = wire := by
+  apply WireContext.lookup?_sound
+  exact (Option.some_get (Option.isSome_iff_exists.mpr
+    (WireContext.lookup?_complete member))).symm
+
 theorem climb_frameRegion (layout : PlugLayout input)
     (steps : Nat) (region : Fin input.frame.val.regionCount) :
     layout.plugRaw.climb steps (layout.frameRegion region) =
@@ -92,6 +107,45 @@ theorem mapFrameContext_get
         (layout.mapFrameContextIndex context index) =
       layout.frameWireMap (context.get index) := by
   exact List.getElem_map (layout.frameWireMap)
+
+theorem frameWireMap_scope
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (wire : Fin input.frame.val.wireCount) :
+    (layout.plugRaw.wires (layout.frameWireMap wire)).scope =
+      layout.frameRegion (input.frame.val.wires wire).scope := by
+  have scope := coalescedScope_quotientWire input consistent wire
+  unfold PlugLayout.frameWireMap
+  rw [layout.plugRaw_wires_frame, scope]
+
+/-- Embed one exact source compiler context into the corresponding exact
+target frame context. -/
+noncomputable def mapFrameExactContext
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (region : Fin input.frame.val.regionCount)
+    (sourceContext : WireContext input.frame.val)
+    (targetContext : WireContext layout.plugRaw)
+    (sourceExact : sourceContext.Exact region)
+    (targetExact : targetContext.Exact (layout.frameRegion region)) :
+    Fin sourceContext.length → Fin targetContext.length :=
+  fun index => contextPosition targetContext
+    (layout.frameWireMap (sourceContext.get index)) (by
+      apply (targetExact.mem_iff _).mpr
+      rw [layout.frameWireMap_scope consistent]
+      exact (layout.encloses_frameRegion_iff _ _).2
+        ((sourceExact.mem_iff _).mp (List.get_mem _ _)))
+
+theorem mapFrameExactContext_get
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (region : Fin input.frame.val.regionCount)
+    (sourceContext : WireContext input.frame.val)
+    (targetContext : WireContext layout.plugRaw)
+    (sourceExact : sourceContext.Exact region)
+    (targetExact : targetContext.Exact (layout.frameRegion region))
+    (index : Fin sourceContext.length) :
+    targetContext.get (layout.mapFrameExactContext consistent region
+      sourceContext targetContext sourceExact targetExact index) =
+        layout.frameWireMap (sourceContext.get index) :=
+  contextPosition_get _ _ _
 
 theorem mapFrameContext_append
     (layout : PlugLayout input)

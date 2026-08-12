@@ -11,20 +11,6 @@ open Elaboration
 
 namespace Splice.Input.PlugLayout
 
-private noncomputable def contextPosition
-    (context : WireContext d) (wire : Fin d.wireCount)
-    (member : wire ∈ context) : Fin context.length :=
-  (context.lookup? wire).get
-    (Option.isSome_iff_exists.mpr (WireContext.lookup?_complete member))
-
-private theorem contextPosition_get
-    (context : WireContext d) (wire : Fin d.wireCount)
-    (member : wire ∈ context) :
-    context.get (contextPosition context wire member) = wire := by
-  apply WireContext.lookup?_sound
-  exact (Option.some_get (Option.isSome_iff_exists.mpr
-    (WireContext.lookup?_complete member))).symm
-
 private theorem frameWireMap_mem_siteFull
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
     (terminal : input.TerminalBody)
@@ -230,15 +216,6 @@ private theorem materialRegion_not_encloses_frame
       simp [sourceClimb] at climbed
       exact layout.frameRegion_ne_materialRegion sourceRegion material
         (Option.some.inj climbed)
-
-private theorem frameWireMap_scope
-    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
-    (wire : Fin input.frame.val.wireCount) :
-    (layout.plugRaw.wires (layout.frameWireMap wire)).scope =
-      layout.frameRegion (input.frame.val.wires wire).scope := by
-  have scope := coalescedScope_quotientWire input consistent wire
-  unfold PlugLayout.frameWireMap
-  rw [layout.plugRaw_wires_frame, scope]
 
 private theorem frameWireMap_mem_full
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
