@@ -321,6 +321,45 @@ theorem CompilerCall.compile?_eq_compileItems?
   rw [CompilerCall.compile?]
   rfl
 
+/-- A successful call with one direct bubble occurrence exposes that exact
+child result. This is the canonical grammar inversion used by source
+consumers following a checked singleton spine. -/
+theorem CompilerCall.compile?_singleton_bubble
+    (hwf : d.WellFormed) (call : CompilerCall d)
+    (child : Fin d.regionCount) (arity : Nat)
+    (occurrences : localOccurrences d call.origin = [.child child])
+    (region : d.regions child = .bubble call.origin arity)
+    {body : CompiledRegion d call}
+    (compiled : call.compile? d hwf = some body) :
+    ∃ childBody : CompiledRegion d
+        (.nested child call.fullContext (arity :: call.rels)
+          (call.binders.push child arity)),
+      compileRegion? d hwf child call.fullContext
+          (call.binders.push child arity) = some childBody ∧
+        body = .mk (.cons (.bubble arity childBody) .nil) := by
+  rw [CompilerCall.compile?_eq_compileItems?] at compiled
+  simp only [occurrences] at compiled
+  rw [compileItems?_cons] at compiled
+  let direct : LocalOccurrence.child child ∈
+      localOccurrences d call.origin := by
+    simp [occurrences]
+  cases hhead : compileOccurrence? d hwf call.origin call.fullContext
+      call.binders (.child child) direct with
+  | none =>
+      simp [hhead] at compiled
+  | some head =>
+      have hsame := compileOccurrence?_child_bubble hwf call.origin child
+        call.fullContext call.binders arity direct region
+      rw [hhead] at hsame
+      cases hchild : compileRegion? d hwf child call.fullContext
+          (call.binders.push child arity) with
+      | none => simp [hchild] at hsame
+      | some childBody =>
+          simp [hchild] at hsame
+          subst head
+          simp [hhead] at compiled
+          exact ⟨childBody, rfl, compiled.symm⟩
+
 theorem compileRegion?_eq_compileItems?
     (hwf : d.WellFormed) (origin : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels) :

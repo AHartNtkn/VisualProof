@@ -140,6 +140,41 @@ end
   unfold CompiledRegion.focus?
   simp
 
+theorem CompiledRegion.focus?_singleton_bubble_eq
+    {d : Diagram} {parentCall : CompilerCall d}
+    {child : Fin d.regionCount} {arity : Nat}
+    {body : CompiledRegion d
+      (.nested child parentCall.fullContext (arity :: parentCall.rels)
+        (parentCall.binders.push child arity))}
+    (site : Fin d.regionCount) (different : parentCall.origin ≠ site) :
+    ((CompiledRegion.mk (.cons (.bubble arity body) .nil) :
+        CompiledRegion d parentCall).focus? site) =
+      (body.focus? site).map fun focus => {
+        endpointCall := focus.endpointCall
+        endpoint := focus.endpoint
+        zipper := .child (.bubble focus.zipper)
+      } := by
+  cases hbody : body.focus? site <;>
+    simp [CompiledRegion.focus?, CompiledItems.focus?, different, hbody]
+
+theorem CompiledRegion.focus?_singleton_bubble
+    {d : Diagram} {parentCall : CompilerCall d}
+    {child : Fin d.regionCount} {arity : Nat}
+    {body : CompiledRegion d
+      (.nested child parentCall.fullContext (arity :: parentCall.rels)
+        (parentCall.binders.push child arity))}
+    {site : Fin d.regionCount} {focus : CompiledFocus body}
+    (different : parentCall.origin ≠ site)
+    (found : body.focus? site = some focus) :
+    ((CompiledRegion.mk (.cons (.bubble arity body) .nil) :
+        CompiledRegion d parentCall).focus? site) = some {
+      endpointCall := focus.endpointCall
+      endpoint := focus.endpoint
+      zipper := .child (.bubble focus.zipper)
+    } := by
+  rw [CompiledRegion.focus?_singleton_bubble_eq site different, found]
+  rfl
+
 mutual
   /-- A successful canonical search identifies the requested region by the
   endpoint call's own origin. -/

@@ -3,3 +3,4 @@ import VisualProof.Concrete.Elaboration.Traversal
 import VisualProof.Concrete.Elaboration.Context
 import VisualProof.Concrete.Elaboration.Compile
 import VisualProof.Concrete.Elaboration.Compiled
+import VisualProof.Concrete.Elaboration.Splice

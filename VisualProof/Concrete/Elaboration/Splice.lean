@@ -1,8 +1,10 @@
+import VisualProof.Concrete.Elaboration.Compiled
 import VisualProof.Concrete.Subgraph.Splice.Input.Quotient
 
 namespace VisualProof.Concrete.Elaboration
 
 open VisualProof.Diagram
+open VisualProof.Theory
 
 private theorem eq_singleton_of_nodup
     {values : List α} {value : α}
@@ -112,5 +114,331 @@ theorem terminal_nonterminal_localOccurrences
           (input.binderSpine.proxy proxy) child).mp hoccurrence
         exact congrArg LocalOccurrence.child
           (terminal.nonterminal_direct_child proxy hnonterminal child hparent)
+
+private def terminalRelationBinders (input : Splice.Input) :
+    List (Fin input.pattern.val.diagram.regionCount) :=
+  let patternState := State.ofOpen input.pattern
+  let enumeration := CompiledSite.endpoint_binder_enumeration patternState
+    input.binderSpine.bodyContainer
+  (VisualProof.Data.Finite.allFin
+    (CompiledSite.endpointCall patternState
+      input.binderSpine.bodyContainer).rels.length).map enumeration.binder
+
+private def terminalProxies (input : Splice.Input) :
+    List (Fin input.pattern.val.diagram.regionCount) :=
+  (VisualProof.Data.Finite.allFin input.binderSpine.proxyCount).map
+    input.binderSpine.proxy
+
+private theorem terminalRelationBinders_nodup (input : Splice.Input) :
+    (terminalRelationBinders input).Nodup := by
+  apply (VisualProof.Data.Finite.allFin_nodup _).map
+  intro left right hne heq
+  exact hne ((CompiledSite.endpoint_binder_enumeration
+    (State.ofOpen input.pattern) input.binderSpine.bodyContainer).binder_injective
+      heq)
+
+private theorem terminalProxies_nodup (input : Splice.Input) :
+    (terminalProxies input).Nodup := by
+  apply (VisualProof.Data.Finite.allFin_nodup _).map
+  intro left right hne heq
+  exact hne (input.binderSpine.proxy_injective heq)
+
+private theorem terminalBinder_mem_iff_proxy_mem
+    (input : Splice.Input)
+    (binder : Fin input.pattern.val.diagram.regionCount) :
+    binder ∈ terminalProxies input ↔
+      binder ∈ terminalRelationBinders input := by
+  let patternState := State.ofOpen input.pattern
+  let call := CompiledSite.endpointCall patternState
+    input.binderSpine.bodyContainer
+  let enumeration := CompiledSite.endpoint_binder_enumeration patternState
+    input.binderSpine.bodyContainer
+  constructor
+  · intro hproxy
+    obtain ⟨proxy, _, hproxy⟩ := List.mem_map.mp hproxy
+    let parent := if _hzero : proxy.val = 0 then
+      input.pattern.val.diagram.root
+    else input.binderSpine.proxy ⟨proxy.val - 1, by omega⟩
+    have hregion := input.binderSpine.proxy_region proxy
+    change input.pattern.val.diagram.regions (input.binderSpine.proxy proxy) =
+      .bubble parent (input.binderSpine.arity proxy) at hregion
+    obtain ⟨relation, hlookup⟩ :=
+      CompiledSite.endpoint_binders_covers patternState
+        input.binderSpine.bodyContainer
+        (input.binderSpine.proxy proxy) parent
+        (input.binderSpine.arity proxy) hregion
+        (input.binderSpine.proxy_encloses_bodyContainer proxy)
+    apply List.mem_map.mpr
+    refine ⟨relation.index,
+      VisualProof.Data.Finite.mem_allFin relation.index, ?_⟩
+    exact (enumeration.lookup_owner relation hlookup).trans hproxy
+  · intro hrelation
+    obtain ⟨relation, _, hrelation⟩ := List.mem_map.mp hrelation
+    obtain ⟨parent, hbubble⟩ := enumeration.bubble relation
+    obtain ⟨proxy, hproxy⟩ :=
+      input.binderSpine.enclosing_bubble_eq_proxy
+        input.pattern.property.diagram_well_formed hbubble
+        (enumeration.encloses relation)
+    apply List.mem_map.mpr
+    refine ⟨proxy, VisualProof.Data.Finite.mem_allFin proxy, ?_⟩
+    exact hproxy.symm.trans hrelation
+
+private def terminalRelationProxyIndexEquiv (input : Splice.Input) :
+    FiniteEquiv (Fin (terminalRelationBinders input).length)
+      (Fin (terminalProxies input).length) :=
+  FiniteEquiv.restrictLists
+    (FiniteEquiv.refl (Fin input.pattern.val.diagram.regionCount))
+    (terminalRelationBinders input) (terminalProxies input)
+    (terminalRelationBinders_nodup input) (terminalProxies_nodup input)
+    (by
+      intro binder
+      simpa only [FiniteEquiv.refl_apply] using
+        terminalBinder_mem_iff_proxy_mem input binder)
+
+private theorem terminalRelationBinders_length (input : Splice.Input) :
+    (terminalRelationBinders input).length =
+      (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels.length := by
+  simp [terminalRelationBinders,
+    VisualProof.Data.Finite.allFin_eq_finRange]
+
+private theorem terminalProxies_length (input : Splice.Input) :
+    (terminalProxies input).length = input.binderSpine.proxyCount := by
+  simp [terminalProxies, VisualProof.Data.Finite.allFin_eq_finRange]
+
+noncomputable def terminalRelationProxyEquiv (input : Splice.Input) :
+    FiniteEquiv
+      (Fin (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels.length)
+      (Fin input.binderSpine.proxyCount) :=
+  (FiniteEquiv.finCast (terminalRelationBinders_length input).symm).trans
+    ((terminalRelationProxyIndexEquiv input).trans
+      (FiniteEquiv.finCast (terminalProxies_length input)))
+
+theorem terminalRelationProxyEquiv_binder (input : Splice.Input)
+    (relation : Fin (CompiledSite.endpointCall (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).rels.length) :
+    input.binderSpine.proxy (terminalRelationProxyEquiv input relation) =
+      (CompiledSite.endpoint_binder_enumeration (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).binder relation := by
+  have hspec := FiniteEquiv.restrictLists_spec
+    (FiniteEquiv.refl (Fin input.pattern.val.diagram.regionCount))
+    (terminalRelationBinders input) (terminalProxies input)
+    (terminalRelationBinders_nodup input) (terminalProxies_nodup input)
+    (by
+      intro binder
+      simpa only [FiniteEquiv.refl_apply] using
+        terminalBinder_mem_iff_proxy_mem input binder)
+    (FiniteEquiv.finCast (terminalRelationBinders_length input).symm relation)
+  simpa [terminalRelationProxyEquiv, terminalRelationProxyIndexEquiv,
+    terminalRelationBinders, terminalProxies, FiniteEquiv.finCast,
+    VisualProof.Data.Finite.allFin_eq_finRange] using hspec
+
+theorem terminalRelationProxyEquiv_arity (input : Splice.Input)
+    (relation : Fin (CompiledSite.endpointCall (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).rels.length) :
+    (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels.get relation =
+      input.binderSpine.arity (terminalRelationProxyEquiv input relation) := by
+  let enumeration := CompiledSite.endpoint_binder_enumeration
+    (State.ofOpen input.pattern) input.binderSpine.bodyContainer
+  obtain ⟨parent, hbubble⟩ := enumeration.bubble relation
+  have hproxy := input.binderSpine.proxy_region
+    (terminalRelationProxyEquiv input relation)
+  rw [terminalRelationProxyEquiv_binder input relation] at hproxy
+  exact (CRegion.bubble.inj (hbubble.symm.trans hproxy)).2
+
+theorem terminalRelationProxyEquiv_lookup (input : Splice.Input)
+    (relation : RelVar
+      (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels arity) :
+    (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).binders
+        (input.binderSpine.proxy
+          (terminalRelationProxyEquiv input relation.index)) =
+      some ⟨arity, relation⟩ := by
+  cases relation with
+  | mk index hasArity =>
+      cases hasArity
+      rw [terminalRelationProxyEquiv_binder input index]
+      simpa using (CompiledSite.endpoint_binder_enumeration
+        (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).lookup index
+
+private theorem terminalProxy_focus_outerContext
+    (input : Splice.Input) (terminal : input.TerminalBody)
+    (proxy : Fin input.binderSpine.proxyCount)
+    (outer : WireContext input.pattern.val.diagram)
+    (rels : RelCtx)
+    (binders : BinderContext input.pattern.val.diagram rels)
+    (body : CompiledRegion input.pattern.val.diagram
+      (.nested (input.binderSpine.proxy proxy) outer rels binders))
+    (compiled : compileRegion? input.pattern.val.diagram
+      input.pattern.property.diagram_well_formed
+      (input.binderSpine.proxy proxy) outer binders = some body)
+    (outerEq : outer = input.pattern.val.exposedWires)
+    {focus : CompiledFocus body}
+    (found : body.focus? input.binderSpine.bodyContainer = some focus) :
+    focus.endpointCall.outerContext = input.pattern.val.exposedWires := by
+  by_cases hterminal : proxy.val + 1 = input.binderSpine.proxyCount
+  · have hnonzero : input.binderSpine.proxyCount ≠ 0 := by
+      have := proxy.isLt
+      omega
+    have hbody : input.binderSpine.bodyContainer =
+        input.binderSpine.proxy proxy := by
+      rw [input.binderSpine.body_eq_terminal_of_nonempty hnonzero]
+      apply congrArg input.binderSpine.proxy
+      apply Fin.ext
+      simp
+      omega
+    rw [hbody] at found
+    have originFound := CompiledRegion.focus?_origin body
+    have focusEq := Option.some.inj (originFound.symm.trans found)
+    subst focus
+    exact outerEq
+  · have hnonterminal :
+        proxy.val + 1 < input.binderSpine.proxyCount := by omega
+    let next : Fin input.binderSpine.proxyCount :=
+      ⟨proxy.val + 1, hnonterminal⟩
+    have nextRegion : input.pattern.val.diagram.regions
+        (input.binderSpine.proxy next) =
+      .bubble (input.binderSpine.proxy proxy)
+        (input.binderSpine.arity next) := by
+      rw [input.binderSpine.proxy_region next]
+      simp only [next]
+      split
+      next hzero => omega
+      next _ =>
+        congr 1
+    obtain ⟨nextBody, nextCompiled, bodyEq⟩ :=
+      CompilerCall.compile?_singleton_bubble
+        input.pattern.property.diagram_well_formed
+        (.nested (input.binderSpine.proxy proxy) outer rels binders)
+        (input.binderSpine.proxy next) (input.binderSpine.arity next)
+        (terminal_nonterminal_localOccurrences input terminal proxy
+          hnonterminal)
+        nextRegion compiled
+    subst body
+    have different : input.binderSpine.proxy proxy ≠
+        input.binderSpine.bodyContainer := by
+      intro heq
+      have hnonzero : input.binderSpine.proxyCount ≠ 0 := by
+        have := proxy.isLt
+        omega
+      rw [input.binderSpine.body_eq_terminal_of_nonempty hnonzero] at heq
+      have hindex := input.binderSpine.proxy_injective heq
+      have := congrArg Fin.val hindex
+      simp at this
+      omega
+    cases nextFound : nextBody.focus? input.binderSpine.bodyContainer with
+    | none =>
+        have parentFound := CompiledRegion.focus?_singleton_bubble_eq
+          (body := nextBody) input.binderSpine.bodyContainer different
+        rw [parentFound, nextFound] at found
+        contradiction
+    | some nextFocus =>
+        have expected := CompiledRegion.focus?_singleton_bubble
+          (body := nextBody) different nextFound
+        have focusEq := Option.some.inj (expected.symm.trans found)
+        subst focus
+        have nextOuterEq :
+            ((CompilerCall.nested (input.binderSpine.proxy proxy) outer rels
+              binders).fullContext) = input.pattern.val.exposedWires := by
+          simp [CompilerCall.fullContext, CompilerCall.localContext,
+            CompilerCall.outerContext,
+            terminal_nonterminal_exactScopeWires_eq_nil input terminal proxy
+              hnonterminal, outerEq]
+        exact terminalProxy_focus_outerContext input terminal next
+          ((CompilerCall.nested (input.binderSpine.proxy proxy) outer rels
+            binders).fullContext)
+          (input.binderSpine.arity next :: rels)
+          (binders.push (input.binderSpine.proxy next)
+            (input.binderSpine.arity next))
+          nextBody nextCompiled nextOuterEq nextFound
+termination_by input.binderSpine.proxyCount - proxy.val
+
+theorem patternTerminal_outerContext
+    (input : Splice.Input) (terminal : input.TerminalBody) :
+    (CompiledSite.endpointCall (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).outerContext =
+        input.pattern.val.exposedWires := by
+  let patternState := State.ofOpen input.pattern
+  by_cases hzero : input.binderSpine.proxyCount = 0
+  · have hbody := input.binderSpine.body_eq_root_of_empty hzero
+    change (CompiledSite.focus patternState
+      input.binderSpine.bodyContainer).endpointCall.outerContext = _
+    rw [hbody]
+    simpa [patternState] using congrArg
+      (fun focus => focus.endpointCall.outerContext)
+      (CompiledSite.focus_root (State.ofOpen input.pattern))
+  · let first : Fin input.binderSpine.proxyCount :=
+      ⟨0, Nat.pos_of_ne_zero hzero⟩
+    have firstRegion : input.pattern.val.diagram.regions
+        (input.binderSpine.proxy first) =
+      .bubble input.pattern.val.diagram.root
+        (input.binderSpine.arity first) := by
+      rw [input.binderSpine.proxy_region first]
+      simp [first]
+    have hiddenEq := terminal_hiddenWires_eq_nil input terminal hzero
+    have firstOuterEq :
+        ((CompilerCall.root input.pattern.val.exposedWires
+          input.pattern.val.hiddenWires).fullContext) =
+            input.pattern.val.exposedWires := by
+      simp [CompilerCall.fullContext, CompilerCall.outerContext,
+        CompilerCall.localContext, hiddenEq]
+    have rootCase :
+        ∀ (rootBody : CompiledRegion input.pattern.val.diagram
+            (.root input.pattern.val.exposedWires
+              input.pattern.val.hiddenWires))
+          (rootCompiled :
+            (CompilerCall.root input.pattern.val.exposedWires
+              input.pattern.val.hiddenWires).compile?
+                input.pattern.val.diagram
+                input.pattern.property.diagram_well_formed = some rootBody)
+          {rootFocus : CompiledFocus rootBody},
+          rootBody.focus? input.binderSpine.bodyContainer = some rootFocus →
+            rootFocus.endpointCall.outerContext =
+              input.pattern.val.exposedWires := by
+      intro rootBody rootCompiled rootFocus rootFound
+      obtain ⟨firstBody, firstCompiled, rootBodyEq⟩ :=
+        CompilerCall.compile?_singleton_bubble
+          input.pattern.property.diagram_well_formed
+          (.root input.pattern.val.exposedWires input.pattern.val.hiddenWires)
+          (input.binderSpine.proxy first) (input.binderSpine.arity first)
+          (terminal_root_localOccurrences input terminal hzero)
+          firstRegion rootCompiled
+      subst rootBody
+      have rootDifferent : input.pattern.val.diagram.root ≠
+          input.binderSpine.bodyContainer := by
+        intro heq
+        rw [input.binderSpine.body_eq_terminal_of_nonempty hzero] at heq
+        exact input.binderSpine.proxy_ne_root _ heq.symm
+      cases firstFound : firstBody.focus? input.binderSpine.bodyContainer with
+      | none =>
+          have parentFound := CompiledRegion.focus?_singleton_bubble_eq
+            (body := firstBody) input.binderSpine.bodyContainer rootDifferent
+          rw [parentFound, firstFound] at rootFound
+          contradiction
+      | some firstFocus =>
+          have expected := CompiledRegion.focus?_singleton_bubble
+            (body := firstBody) rootDifferent firstFound
+          have focusEq := Option.some.inj (expected.symm.trans rootFound)
+          rw [← focusEq]
+          exact terminalProxy_focus_outerContext input terminal first
+            ((CompilerCall.root input.pattern.val.exposedWires
+              input.pattern.val.hiddenWires).fullContext)
+            [input.binderSpine.arity first]
+            (BinderContext.empty.push (input.binderSpine.proxy first)
+              (input.binderSpine.arity first))
+            firstBody firstCompiled firstOuterEq firstFound
+    let result := CompiledSite.focus patternState
+      input.binderSpine.bodyContainer
+    have found : input.pattern.compilation.focus?
+        input.binderSpine.bodyContainer = some result :=
+      (Option.some_get (CheckedOpen.compilation_focus?_isSome input.pattern
+        input.binderSpine.bodyContainer)).symm
+    change result.endpointCall.outerContext = _
+    exact rootCase input.pattern.compilation
+      input.pattern.compilation_computation found
 
 end VisualProof.Concrete.Elaboration

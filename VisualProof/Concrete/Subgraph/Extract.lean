@@ -612,6 +612,63 @@ theorem bodyContainer_climb_root (spine : BinderSpine diagram) :
       (fun steps => diagram.climb steps (spine.proxy terminal))
       hsteps.symm |>.trans hclimb
 
+theorem proxy_encloses_bodyContainer (spine : BinderSpine diagram)
+    (proxy : Fin spine.proxyCount) :
+    diagram.Encloses (spine.proxy proxy) spine.bodyContainer := by
+  refine ⟨⟨spine.proxyCount - 1 - proxy.val, ?_⟩,
+    spine.bodyContainer_climb_proxy proxy⟩
+  have hcardinality := spine.materialRegions_length
+  omega
+
+theorem enclosing_bodyContainer_eq_root_or_proxy
+    (spine : BinderSpine diagram) (hwf : diagram.WellFormed)
+    {ancestor : Fin diagram.regionCount}
+    (hencloses : diagram.Encloses ancestor spine.bodyContainer) :
+    ancestor = diagram.root ∨
+      ∃ proxy : Fin spine.proxyCount, ancestor = spine.proxy proxy := by
+  obtain ⟨steps, hsteps⟩ := hencloses
+  obtain ⟨rootSteps, hroot⟩ := hwf.all_regions_reach_root ancestor
+  have hcomposed :
+      diagram.climb (steps.val + rootSteps.val) spine.bodyContainer =
+        some diagram.root :=
+    Elaboration.climb_add hsteps hroot
+  have htotal : steps.val + rootSteps.val = spine.proxyCount :=
+    Elaboration.ParentTraversal.climb_to_root_steps_unique diagram
+      hwf.root_is_sheet hcomposed spine.bodyContainer_climb_root
+  by_cases heq : steps.val = spine.proxyCount
+  · left
+    have hstepsRoot := hsteps
+    rw [heq] at hstepsRoot
+    exact Option.some.inj
+      (hstepsRoot.symm.trans spine.bodyContainer_climb_root)
+  · have hlt : steps.val < spine.proxyCount := by omega
+    let proxy : Fin spine.proxyCount :=
+      ⟨spine.proxyCount - 1 - steps.val, by omega⟩
+    right
+    refine ⟨proxy, ?_⟩
+    have hproxy := spine.bodyContainer_climb_proxy proxy
+    have hcount :
+        spine.proxyCount - 1 - (spine.proxyCount - 1 - steps.val) =
+          steps.val := by omega
+    have hsame :
+        diagram.climb steps.val spine.bodyContainer =
+          some (spine.proxy proxy) := by
+      simpa only [proxy, hcount] using hproxy
+    exact Option.some.inj (hsteps.symm.trans hsame)
+
+theorem enclosing_bubble_eq_proxy
+    (spine : BinderSpine diagram) (hwf : diagram.WellFormed)
+    {binder parent : Fin diagram.regionCount} {arity : Nat}
+    (hbubble : diagram.regions binder = .bubble parent arity)
+    (hencloses : diagram.Encloses binder spine.bodyContainer) :
+    ∃ proxy : Fin spine.proxyCount, binder = spine.proxy proxy := by
+  rcases spine.enclosing_bodyContainer_eq_root_or_proxy hwf hencloses with
+    hroot | hproxy
+  · subst binder
+    rw [hwf.root_is_sheet] at hbubble
+    contradiction
+  · exact hproxy
+
 /--
 The semantic side conditions that make a designated spine a terminal-body
 interface rather than an arbitrary list of bubbles.
