@@ -585,6 +585,19 @@ theorem exactScopeWires_materialRegion
   simp only [PlugLayout.mapPatternWire,
     bodyRegion_eq_materialRegion_iff]
 
+/-- Dense target identifiers preserve the terminal body's source-local wire
+order. -/
+theorem bodyLocalOrigins (layout : PlugLayout input) :
+    (filterFin fun wire : layout.internalWires.Carrier =>
+      decide ((input.pattern.val.diagram.wires
+        (layout.internalWires.origin wire)).scope =
+          input.binderSpine.bodyContainer)).map
+            layout.internalWires.origin =
+      layout.bodySourceLocalWires := by
+  exact map_origin_filterFin layout.internalWires
+    (fun wire => decide ((input.pattern.val.diagram.wires wire).scope =
+      input.binderSpine.bodyContainer))
+
 end Splice.Input.PlugLayout
 
 end VisualProof.Concrete

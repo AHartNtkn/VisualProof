@@ -511,6 +511,10 @@ private structure CompiledEndpointValidity (d : Diagram)
   fullContext_exact : call.fullContext.Exact call.origin
   binders_covers : call.binders.Covers call.origin
   binder_enumeration : BinderContext.Enumeration d call.binders call.origin
+  node_origins : endpoint.nodeItems.origins =
+    localNodeOccurrences d call.origin
+  child_origins : endpoint.childItems.origins =
+    localChildOccurrences d call.origin
   origins : endpoint.items.origins = localOccurrences d call.origin
 
 mutual
@@ -526,8 +530,10 @@ mutual
       BinderContext.Enumeration d sourceCall.binders sourceCall.origin →
       CompiledEndpointValidity d hwf endpointCall endpoint
     | .here source, compiled, wires, binders, enumeration => by
-        have origins : source.items.origins =
-            localOccurrences d sourceCall.origin := by
+        have blockOrigins :
+            source.nodeItems.origins = localNodeOccurrences d sourceCall.origin ∧
+            source.childItems.origins =
+              localChildOccurrences d sourceCall.origin := by
           rw [CompilerCall.compile?_eq_compileBlocks? hwf] at compiled
           cases hnodes : compileItems? d hwf sourceCall.origin
               sourceCall.fullContext sourceCall.binders
@@ -543,13 +549,18 @@ mutual
               | some children =>
                   simp [hnodes, hchildren] at compiled
                   subst source
-                  simp only [CompiledRegion.items_mk,
-                    CompiledItems.origins_append, localOccurrences]
-                  rw [compileItems?_origins hwf sourceCall.origin
-                    sourceCall.fullContext sourceCall.binders hnodes,
+                  exact ⟨
                     compileItems?_origins hwf sourceCall.origin
-                    sourceCall.fullContext sourceCall.binders hchildren]
-        exact ⟨compiled, wires, binders, enumeration, origins⟩
+                      sourceCall.fullContext sourceCall.binders hnodes,
+                    compileItems?_origins hwf sourceCall.origin
+                      sourceCall.fullContext sourceCall.binders hchildren⟩
+        have origins : source.items.origins =
+            localOccurrences d sourceCall.origin := by
+          simp only [CompiledRegion.items,
+            CompiledItems.origins_append, localOccurrences,
+            blockOrigins.1, blockOrigins.2]
+        exact ⟨compiled, wires, binders, enumeration,
+          blockOrigins.1, blockOrigins.2, origins⟩
     | .child (nodes := nodes) nested, compiled, wires, binders,
         enumeration => by
         rw [CompilerCall.compile?_eq_compileBlocks? hwf] at compiled
@@ -994,6 +1005,34 @@ def directItems (source : State arity)
       (endpointCall source site).fullContext (endpointCall source site).rels
       (endpointCall source site).binders :=
   (endpoint source site).items
+
+def directNodeItems (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    CompiledItems source.checked.val.diagram
+      (endpointCall source site).fullContext (endpointCall source site).rels
+      (endpointCall source site).binders :=
+  (endpoint source site).nodeItems
+
+def directChildItems (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    CompiledItems source.checked.val.diagram
+      (endpointCall source site).fullContext (endpointCall source site).rels
+      (endpointCall source site).binders :=
+  (endpoint source site).childItems
+
+theorem directNodeItems_origins (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    (directNodeItems source site).origins =
+      localNodeOccurrences source.checked.val.diagram site := by
+  simpa only [endpoint_origin source site] using
+    (endpoint_validity source site).node_origins
+
+theorem directChildItems_origins (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    (directChildItems source site).origins =
+      localChildOccurrences source.checked.val.diagram site := by
+  simpa only [endpoint_origin source site] using
+    (endpoint_validity source site).child_origins
 
 theorem directItems_origins (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
