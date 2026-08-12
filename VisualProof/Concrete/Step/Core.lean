@@ -367,6 +367,17 @@ def transportBoundary (transport : WireTransport source target) :
       let mappedRest ← transport.transportBoundary rest
       pure (mapped :: mappedRest)
 
+theorem castTarget_transportBoundary
+    (transport : WireTransport source target)
+    (targetEq : target = replacement)
+    (boundary : List (Fin source.wireCount)) :
+    (transport.castTarget targetEq).transportBoundary boundary =
+      (transport.transportBoundary boundary).map
+        (List.map (Fin.cast
+          (congrArg Concrete.Diagram.wireCount targetEq))) := by
+  cases targetEq
+  simp [castTarget]
+
 theorem transportBoundary_compose
     (first : WireTransport source middle)
     (second : WireTransport middle target)
@@ -472,6 +483,47 @@ theorem transportBoundary_eq_map
       rw [transportBoundary, himage wire (by simp), ih (fun candidate hmem =>
         himage candidate (by simp [hmem]))]
       rfl
+
+/-- A successful root-filtered transport with a total candidate map retains
+that map pointwise; the filter can only reject the whole boundary. -/
+theorem rootFiltered_transportBoundary_eq_map_of_success
+    (image : Fin source.wireCount → Fin target.wireCount)
+    {boundary : List (Fin source.wireCount)}
+    {mapped : List (Fin target.wireCount)}
+    (success : (rootFiltered source target (fun wire => some (image wire))
+      ).transportBoundary boundary = some mapped) :
+    mapped = boundary.map image := by
+  induction boundary generalizing mapped with
+  | nil => simpa [transportBoundary] using Option.some.inj success
+  | cons head tail ih =>
+      by_cases rootScoped :
+          (target.wires (image head)).scope = target.root
+      · simp only [transportBoundary] at success
+        have headImage :
+            (rootFiltered source target (fun wire => some (image wire))
+              ).image? head = some (image head) := by
+          simp [rootFiltered, rootScoped]
+        rw [headImage] at success
+        change
+          (do
+            let mappedRest ←
+              (rootFiltered source target (fun wire => some (image wire))
+                ).transportBoundary tail
+            pure (image head :: mappedRest)) = some mapped at success
+        cases tailResult :
+            (rootFiltered source target (fun wire => some (image wire))
+              ).transportBoundary tail with
+        | none => simp [tailResult] at success
+        | some mappedTail =>
+            have mappedEq : image head :: mappedTail = mapped := by
+              simpa [tailResult] using success
+            cases mappedEq
+            exact congrArg (List.cons (image head)) (ih tailResult)
+      · have headImage :
+            (rootFiltered source target (fun wire => some (image wire))
+              ).image? head = none := by
+          simp [rootFiltered, rootScoped]
+        simp [transportBoundary, headImage] at success
 
 /-- Pointwise form of successful ordered-boundary transport. -/
 theorem transportBoundary_get

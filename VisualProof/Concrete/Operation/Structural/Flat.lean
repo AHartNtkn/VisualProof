@@ -16,6 +16,30 @@ private theorem rootScoped_cast {left right : Concrete.Diagram}
   cases diagramEq
   exact rootScoped
 
+private theorem finList_eq_of_map_val_eq {count : Nat}
+    (left right : List (Fin count))
+    (values : left.map Fin.val = right.map Fin.val) : left = right := by
+  induction left generalizing right with
+  | nil =>
+      cases right with
+      | nil => rfl
+      | cons head tail => simp at values
+  | cons head tail ih =>
+      cases right with
+      | nil => simp at values
+      | cons other rest =>
+          simp only [List.map_cons, List.cons.injEq] at values
+          rcases values with ⟨headEq, tailEq⟩
+          have : head = other := Fin.ext headEq
+          subst other
+          exact congrArg (List.cons head) (ih rest tailEq)
+
+private theorem map_finCast_val {sourceCount targetCount : Nat}
+    (countEq : sourceCount = targetCount) (wires : List (Fin sourceCount)) :
+    (wires.map (Fin.cast countEq)).map (fun wire => wire.val) =
+      wires.map (fun wire => wire.val) := by
+  simp [List.map_map, Function.comp_def]
+
 def spliceError : Splice.Input.Error → Error
   | .nonterminalBinderSpine => .invalidSelection
   | .attachmentNotVisible => .binderEscape
@@ -104,6 +128,80 @@ theorem spliceRaw_packed_target
     ((congrArg (fun checked : Concrete.Checked => checked.val)
       (OperationReceipt.castInput_result operation frameEq)).trans
         (spliceRaw_result_plugRaw success))
+
+/-- Packing preserves the source boundary order while applying the canonical
+frame-wire embedding computed by the plug layout. -/
+theorem spliceRaw_packed_boundary
+    {arity : Nat} {source : State arity} {input : Splice.Input}
+    (frameEq : input.frame = source.diagram)
+    {operation : OperationReceipt input.frame}
+    (success : spliceRaw input = .ok operation)
+    {receipt : Receipt source}
+    (packed : (operation.castInput frameEq).toReceipt source = some receipt) :
+    receipt.target.checked.val.boundary =
+      source.checked.val.boundary.map fun wire =>
+        Fin.cast (congrArg Concrete.Diagram.wireCount
+          (spliceRaw_packed_target frameEq success packed).symm)
+          (({} : Splice.Input.PlugLayout input).frameWireMap
+            (Fin.cast (congrArg (fun checked : Checked =>
+              checked.val.wireCount) frameEq).symm wire)) := by
+  rcases input with ⟨frame, pattern, site, attachment, binderSpine,
+    binderTarget⟩
+  dsimp only at frameEq
+  subst frame
+  unfold spliceRaw at success
+  split at success <;> try contradiction
+  split at success <;> try contradiction
+  rename_i checked hcheck
+  cases success
+  let canonicalInput : Splice.Input := {
+      frame := source.diagram
+      pattern := pattern
+      site := site
+      attachment := attachment
+      binderSpine := binderSpine
+      binderTarget := binderTarget
+    }
+  have packedBoundary := OperationReceipt.toReceipt_boundary packed
+  change
+    ((spliceRawTransport canonicalInput).castTarget
+      (Concrete.checkWellFormed_preserves_input hcheck).symm
+      ).transportBoundary source.checked.val.boundary = _ at packedBoundary
+  rw [WireTransport.castTarget_transportBoundary] at packedBoundary
+  cases rawMappedEq :
+      (spliceRawTransport canonicalInput).transportBoundary
+        source.checked.val.boundary with
+  | none => simp [rawMappedEq] at packedBoundary
+  | some rawMapped =>
+      have rawMapped_spec : rawMapped = source.checked.val.boundary.map
+          (({} : Splice.Input.PlugLayout canonicalInput).frameWireMap) := by
+        apply WireTransport.rootFiltered_transportBoundary_eq_map_of_success
+        simpa [spliceRawTransport, spliceLayout] using rawMappedEq
+      rw [rawMappedEq] at packedBoundary
+      simp only [Option.map_some] at packedBoundary
+      have mappedEq := Option.some.inj packedBoundary
+      subst rawMapped
+      have recovered := congrArg
+        (List.map (fun wire => wire.val)) mappedEq
+      rw [map_finCast_val] at recovered
+      have targetValues := map_finCast_val
+        (congrArg Concrete.Diagram.wireCount
+          (OperationReceipt.toReceipt_result packed))
+        receipt.target.checked.val.boundary
+      have recoveredFinal := recovered.trans targetValues
+      have sourceValues :
+          List.map (fun wire => wire.val)
+              (List.map
+                (({} : Splice.Input.PlugLayout canonicalInput).frameWireMap)
+                source.checked.val.boundary) =
+            source.checked.val.boundary.map fun wire =>
+              (({} : Splice.Input.PlugLayout canonicalInput).frameWireMap
+                wire).val := by
+        exact List.map_map
+      have normalized := sourceValues.symm.trans recoveredFinal
+      apply finList_eq_of_map_val_eq
+      simpa [canonicalInput, List.map_map, Function.comp_def] using
+        normalized.symm
 
 
 private def quotientWireDomain (input : Concrete.Diagram)
