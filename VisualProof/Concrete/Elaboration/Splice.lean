@@ -1,4 +1,5 @@
 import VisualProof.Concrete.Elaboration.Compiled
+import VisualProof.Concrete.Elaboration.SpliceWireLayout
 import VisualProof.Concrete.Subgraph.Splice.Input.Quotient
 
 namespace VisualProof.Concrete.Elaboration
@@ -451,5 +452,283 @@ theorem terminalRelationProxyEquiv_lookup (input : Splice.Input)
       simpa using (CompiledSite.endpoint_binders_enumeration
         (State.ofOpen input.pattern)
         input.binderSpine.bodyContainer).lookup index
+
+private theorem list_get_cast_of_eq {first second : List α}
+    (equality : first = second) (index : Fin first.length) :
+    first.get index = second.get
+      (Fin.cast (congrArg List.length equality) index) := by
+  subst second
+  rfl
+
+/-- Every local wire of the canonical terminal compiler call is an internal
+wire scoped exactly at the terminal body. -/
+theorem patternTerminal_localWire
+    (input : Splice.Input)
+    (index : Fin (CompiledSite.endpointCall (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).localContext.length) :
+    let wire := (CompiledSite.endpointCall (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).localContext.get index
+    wire ∉ input.pattern.val.exposedWires ∧
+      (input.pattern.val.diagram.wires wire).scope =
+        input.binderSpine.bodyContainer := by
+  let patternState := State.ofOpen input.pattern
+  let call := CompiledSite.endpointCall patternState
+    input.binderSpine.bodyContainer
+  let wire := call.localContext.get index
+  change wire ∉ input.pattern.val.exposedWires ∧
+    (input.pattern.val.diagram.wires wire).scope =
+      input.binderSpine.bodyContainer
+  by_cases empty : input.binderSpine.proxyCount = 0
+  · have bodyEq := input.binderSpine.body_eq_root_of_empty empty
+    have focusEq := CompiledSite.focus_root patternState
+    have callEq : call = .root input.pattern.val.exposedWires
+        input.pattern.val.hiddenWires := by
+      simpa [call, patternState, bodyEq] using
+        congrArg CompiledFocus.endpointCall focusEq
+    have localEq : call.localContext = input.pattern.val.hiddenWires := by
+      rw [callEq]
+      rfl
+    let index' : Fin input.pattern.val.hiddenWires.length :=
+      Fin.cast (congrArg List.length localEq) index
+    have wireEq : wire = input.pattern.val.hiddenWires.get index' := by
+      exact list_get_cast_of_eq localEq index
+    rw [wireEq]
+    have hidden := (OpenDiagram.mem_hiddenWires input.pattern.val
+      (input.pattern.val.hiddenWires.get index')).mp (List.get_mem _ _)
+    exact ⟨hidden.2, hidden.1.trans bodyEq.symm⟩
+  · have bodyNeRoot : input.binderSpine.bodyContainer ≠
+        input.pattern.val.diagram.root := by
+      rw [input.binderSpine.body_eq_terminal_of_nonempty empty]
+      exact input.binderSpine.proxy_ne_root _
+    cases callEq : call with
+    | root ambient locals =>
+        have originEq := CompiledSite.endpoint_origin patternState
+          input.binderSpine.bodyContainer
+        simp [call, callEq, CompilerCall.origin] at originEq
+        exact (bodyNeRoot originEq.symm).elim
+    | nested origin context rels binders =>
+        have originEq : origin = input.binderSpine.bodyContainer := by
+          simpa [call, callEq, CompilerCall.origin] using
+            CompiledSite.endpoint_origin patternState
+              input.binderSpine.bodyContainer
+        have localEq : call.localContext =
+            exactScopeWires input.pattern.val.diagram origin := by
+          rw [callEq]
+          rfl
+        let index' : Fin (exactScopeWires input.pattern.val.diagram
+            origin).length :=
+          Fin.cast (congrArg List.length localEq) index
+        have wireEq : wire =
+            (exactScopeWires input.pattern.val.diagram origin).get index' := by
+          exact list_get_cast_of_eq localEq index
+        have scopeEq : (input.pattern.val.diagram.wires wire).scope =
+            input.binderSpine.bodyContainer := by
+          rw [wireEq, (mem_exactScopeWires input.pattern.val.diagram origin
+            ((exactScopeWires input.pattern.val.diagram origin).get
+              index')).mp (List.get_mem _ _), originEq]
+        refine ⟨?_, scopeEq⟩
+        intro exposed
+        have rootScope := input.pattern.property.exposed_root_scoped exposed
+        exact bodyNeRoot (scopeEq.symm.trans rootScope)
+
+namespace CompiledSite
+
+private theorem castWire_scope
+    {source target : Diagram} (equality : source = target)
+    (wire : Fin source.wireCount) :
+    (target.wires (Fin.cast (congrArg Diagram.wireCount equality) wire)).scope =
+      Fin.cast (congrArg Diagram.regionCount equality)
+        (source.wires wire).scope := by
+  cases equality
+  rfl
+
+private theorem encloses_cast
+    {source target : Diagram} (equality : source = target)
+    {ancestor descendant : Fin source.regionCount}
+    (encloses : source.Encloses ancestor descendant) :
+    target.Encloses
+      (Fin.cast (congrArg Diagram.regionCount equality) ancestor)
+      (Fin.cast (congrArg Diagram.regionCount equality) descendant) := by
+  cases equality
+  exact encloses
+
+private def sourceSite {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram) :
+    Fin source.checked.val.diagram.regionCount :=
+  Fin.cast (congrArg (fun frame : Checked => frame.val.regionCount) frameEq)
+    input.site
+
+private def sourceWire {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    (wire : Fin input.frame.val.wireCount) :
+    Fin source.checked.val.diagram.wireCount :=
+  Fin.cast (congrArg (fun frame : Checked => frame.val.wireCount) frameEq) wire
+
+private def sourceRegion {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    (region : Fin input.frame.val.regionCount) :
+    Fin source.checked.val.diagram.regionCount :=
+  Fin.cast (congrArg (fun frame : Checked => frame.val.regionCount) frameEq)
+    region
+
+private theorem spliceAttachment_mem
+    {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    (admissible : input.Admissible)
+    (layout : input.PlugLayout)
+    (external : Fin input.pattern.val.exposedWires.length) :
+    sourceWire input frameEq
+        (input.attachment (layout.exposedPosition external)) ∈
+      (endpointCall source (sourceSite input frameEq)).fullContext := by
+  apply ((endpoint_fullContext_exact source
+    (sourceSite input frameEq)).mem_iff _).mpr
+  let diagramEq : input.frame.val = source.checked.val.diagram :=
+    congrArg (fun frame : Checked => frame.val) frameEq
+  have visible := admissible.attachments_visible
+    (layout.exposedPosition external)
+  have castVisible := encloses_cast diagramEq visible
+  rw [← castWire_scope diagramEq] at castVisible
+  simpa [sourceSite, sourceWire, diagramEq] using castVisible
+
+noncomputable def spliceAttachmentPosition
+    {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    (admissible : input.Admissible)
+    (layout : input.PlugLayout)
+    (external : Fin input.pattern.val.exposedWires.length) :
+    Fin (endpointCall source (sourceSite input frameEq)).fullContext.length :=
+  ((endpointCall source (sourceSite input frameEq)).fullContext.lookup?
+    (sourceWire input frameEq
+      (input.attachment (layout.exposedPosition external)))).get
+        (Option.isSome_iff_exists.mpr
+          (WireContext.lookup?_complete
+            (spliceAttachment_mem input frameEq admissible layout external)))
+
+theorem spliceAttachmentPosition_get
+    {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    (admissible : input.Admissible)
+    (layout : input.PlugLayout)
+    (external : Fin input.pattern.val.exposedWires.length) :
+    (endpointCall source (sourceSite input frameEq)).fullContext.get
+        (spliceAttachmentPosition input frameEq admissible layout external) =
+      sourceWire input frameEq
+        (input.attachment (layout.exposedPosition external)) := by
+  apply WireContext.lookup?_sound
+  exact (Option.some_get (Option.isSome_iff_exists.mpr
+    (WireContext.lookup?_complete
+      (spliceAttachment_mem input frameEq admissible layout external)))).symm
+
+noncomputable def spliceWireMap
+    {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    (admissible : input.Admissible)
+    (layout : input.PlugLayout) :
+    Fin (endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).outerContext.length →
+      Fin (endpointCall source (sourceSite input frameEq)).fullContext.length :=
+  fun wire => spliceAttachmentPosition input frameEq admissible layout
+    (Fin.cast (congrArg List.length
+      (patternTerminal_outerContext input admissible.terminal_body)) wire)
+
+theorem spliceWireMap_get
+    {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    (admissible : input.Admissible)
+    (layout : input.PlugLayout)
+    (wire : Fin (endpointCall (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).outerContext.length) :
+    (endpointCall source (sourceSite input frameEq)).fullContext.get
+        (spliceWireMap input frameEq admissible layout wire) =
+      sourceWire input frameEq (input.attachment
+        (layout.exposedPosition (Fin.cast (congrArg List.length
+          (patternTerminal_outerContext input admissible.terminal_body))
+            wire))) :=
+  spliceAttachmentPosition_get input frameEq admissible layout _
+
+private theorem castBubble
+    {source target : Diagram} (equality : source = target)
+    {binder parent : Fin source.regionCount} {arity : Nat}
+    (bubble : source.regions binder = .bubble parent arity) :
+    target.regions
+        (Fin.cast (congrArg Diagram.regionCount equality) binder) =
+      .bubble (Fin.cast (congrArg Diagram.regionCount equality) parent) arity := by
+  cases equality
+  exact bubble
+
+private theorem spliceRelation_exists
+    {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    (admissible : input.Admissible)
+    (relation : RelVar
+      (endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels relationArity) :
+    ∃ targetRelation : RelVar
+        (endpointCall source (sourceSite input frameEq)).rels relationArity,
+      (endpointCall source (sourceSite input frameEq)).binders
+          (sourceRegion input frameEq (input.binderTarget
+            (terminalRelationProxyEquiv input relation.index))) =
+        some ⟨relationArity, targetRelation⟩ := by
+  let proxy := terminalRelationProxyEquiv input relation.index
+  have proxyArity : input.binderSpine.arity proxy = relationArity :=
+    (terminalRelationProxyEquiv_arity input relation.index).symm.trans
+      relation.hasArity
+  obtain ⟨parent, bubble⟩ := admissible.binder_targets_match proxy
+  rw [proxyArity] at bubble
+  let diagramEq : input.frame.val = source.checked.val.diagram :=
+    congrArg (fun frame : Checked => frame.val) frameEq
+  have castedBubble := castBubble diagramEq bubble
+  have castedEncloses := encloses_cast diagramEq
+    (admissible.binder_targets_enclose proxy)
+  simpa [sourceRegion, sourceSite, diagramEq] using
+    (endpoint_binders_covers source (sourceSite input frameEq)
+      (sourceRegion input frameEq (input.binderTarget proxy))
+      (Fin.cast (congrArg Diagram.regionCount diagramEq) parent)
+      relationArity castedBubble castedEncloses)
+
+noncomputable def spliceRelationMap
+    {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    (admissible : input.Admissible) :
+    RelationRenaming
+      (endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels
+      (endpointCall source (sourceSite input frameEq)).rels :=
+  fun relation => Classical.choose
+    (spliceRelation_exists input frameEq admissible relation)
+
+theorem spliceRelationMap_lookup
+    {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    (admissible : input.Admissible)
+    (relation : RelVar
+      (endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels relationArity) :
+    (endpointCall source (sourceSite input frameEq)).binders
+        (sourceRegion input frameEq (input.binderTarget
+          (terminalRelationProxyEquiv input relation.index))) =
+      some ⟨relationArity,
+        spliceRelationMap input frameEq admissible relation⟩ :=
+  Classical.choose_spec (spliceRelation_exists input frameEq admissible relation)
+
+noncomputable def spliceAfter
+    {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    (admissible : input.Admissible)
+    (layout : input.PlugLayout) :
+    Region (endpointCall source (sourceSite input frameEq)).outerContext.length
+      (endpointCall source (sourceSite input frameEq)).rels :=
+  Region.spliceAt
+    (endpointCall source (sourceSite input frameEq)).localContext.length
+    ((endpointCall source (sourceSite input frameEq)).castFullItems
+      (directItems source (sourceSite input frameEq)).erase)
+    (body (State.ofOpen input.pattern) input.binderSpine.bodyContainer)
+    (fun wire => Fin.cast
+      (endpointCall source (sourceSite input frameEq)).fullContext_length
+        (spliceWireMap input frameEq admissible layout wire))
+    (spliceRelationMap input frameEq admissible)
+
+end CompiledSite
+
 
 end VisualProof.Concrete.Elaboration
