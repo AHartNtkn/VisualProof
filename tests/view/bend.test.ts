@@ -5,14 +5,6 @@ import {
   refGeometry,
 } from '../../src/view/bend'
 
-const angle = (point: { readonly x: number; readonly y: number }): number =>
-  Math.atan2(point.y, point.x)
-
-const positiveTurn = (from: number, to: number): number => {
-  const turn = to - from
-  return turn < 0 ? turn + 2 * Math.PI : turn
-}
-
 describe('atom/ref/identity geometry', () => {
   it('retains atom head and argument geometry', () => {
     const geometry = atomGeometry(3)
@@ -33,13 +25,12 @@ describe('atom/ref/identity geometry', () => {
     expect(geometry.portAnchors['a:0']).toEqual({ x: 0, y: 2 })
   })
 
-  it('gives an n-ary identity n evenly spaced rim anchors keyed by storage index', () => {
+  it('gives every n-ary identity port the same centered dangling-node anchor', () => {
     const geometry = identityGeometry(5)
-    const anchors = Array.from(
-      { length: 5 },
-      (_, index) => geometry.portAnchors[`i:${index}`],
-    )
 
+    expect(geometry.outerRadius).toBe(0)
+    expect(geometry.arcs).toEqual([])
+    expect(geometry.headAnchor).toBeNull()
     expect(Object.keys(geometry.portAnchors)).toEqual([
       'i:0',
       'i:1',
@@ -47,13 +38,8 @@ describe('atom/ref/identity geometry', () => {
       'i:3',
       'i:4',
     ])
-    expect(anchors.every((anchor) => anchor !== undefined)).toBe(true)
-    const radii = anchors.map((anchor) => Math.hypot(anchor!.x, anchor!.y))
-    expect(new Set(radii.map((radius) => radius.toFixed(10)))).toHaveProperty('size', 1)
-    const angles = anchors.map((anchor) => angle(anchor!))
-    for (let index = 0; index < angles.length; index++) {
-      const turn = positiveTurn(angles[index]!, angles[(index + 1) % angles.length]!)
-      expect(turn).toBeCloseTo(2 * Math.PI / angles.length, 10)
+    for (let index = 0; index < 5; index++) {
+      expect(geometry.portAnchors[`i:${index}`]).toEqual({ x: 0, y: 0 })
     }
   })
 

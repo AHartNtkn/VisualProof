@@ -80,7 +80,7 @@ export type ScoreState = {
 const f2 = (a: Vec2, c: Vec2, b: Vec2): number =>
   Math.hypot(a.x - c.x, a.y - c.y) + Math.hypot(c.x - b.x, c.y - b.y)
 
-const isObstacle = (kind: string): boolean => kind === 'ref' || kind === 'atom' || kind === 'identity'
+const isObstacle = (kind: string): boolean => kind === 'ref' || kind === 'atom'
 
 /** The engine's current DRAWN forbidden circles, one per non-sheet region
     (the nearness energy measures against drawn geometry; the reach margin in

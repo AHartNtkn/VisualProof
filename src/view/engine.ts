@@ -147,8 +147,11 @@ export type StoredFrame = { readonly center: Vec2; readonly half: number }
 
 /** Local anatomy scale per node kind. */
 export function ascaleOf(kind: BodyKind): number {
-  return kind === 'atom' ? 2 : kind === 'identity' ? 1.4 : 1
+  return kind === 'atom' ? 2 : 1
 }
+
+/** Shared layout clearance for point nodes: dangling quantifiers and equality. */
+export const POINT_NODE_DISC_R = 4.5
 
 export function pkey(p: Port): string {
   return portKey(p)
@@ -205,7 +208,11 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       anatomyR = Math.max(anatomyR, Math.hypot(a.x, a.y))
     }
     for (const arc of g.arcs) anatomyR = Math.max(anatomyR, arc.r)
-    const discR = n.kind === 'ref' ? DISC_R + 1.5 : anatomyR + 2
+    const discR = n.kind === 'ref'
+      ? DISC_R + 1.5
+      : n.kind === 'identity'
+        ? POINT_NODE_DISC_R
+        : anatomyR + 2
     const ang = i * 2.399963, rad = 6 + 5 * i
     bodies.set(id, {
       id, kind: n.kind, node: n, geometry: g, localAnchor, discR,
@@ -279,7 +286,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     i++
     const b: Body = {
       id, kind: 'end', node: null, geometry: null,
-      localAnchor: new Map(), discR: 4.5, region,
+      localAnchor: new Map(), discR: POINT_NODE_DISC_R, region,
       pos: seed, theta: 0,
     }
     bodies.set(id, b)
@@ -494,9 +501,10 @@ export function worldAnchor(e: Engine, b: Body, key: string | null): Vec2 {
     the wire a pad-width off the rendered rim (USER report: floating attachments).
 
     A ref uses a readable labelled disc drawn at DISC_R, so its wire meets that
-    drawn rim at DISC_R along the port direction. Atom and identity ports sit
-    on their rail rims, so their anchors already lie on the drawing. */
+    drawn rim at DISC_R along the port direction. Atom ports sit on their rail
+    rim. Identity ports share the body centre, exactly like an end dot. */
 export function worldBindAnchor(e: Engine, b: Body, key: string): Vec2 {
+  if (b.kind === 'identity') return b.pos
   const a0 = b.localAnchor.get(key)!
   const c = Math.cos(b.theta), s = Math.sin(b.theta)
   if (b.kind === 'ref') {
@@ -512,7 +520,9 @@ export function worldBindAnchor(e: Engine, b: Body, key: string): Vec2 {
 /** The outward normal at (body, port key), in world radians. End bodies have no
     ports, so their "normal" is the direction toward the far endpoint. */
 export function portNormal(b: Body, key: string | null, toward: Vec2): number {
-  if (key === null) return Math.atan2(toward.y - b.pos.y, toward.x - b.pos.x)
+  if (key === null || b.kind === 'identity') {
+    return Math.atan2(toward.y - b.pos.y, toward.x - b.pos.x)
+  }
   const a = b.localAnchor.get(key)!
   return Math.atan2(a.y, a.x) + b.theta
 }
@@ -604,23 +614,24 @@ export function routeBounds(e: Engine): { minX: number; maxX: number; minY: numb
   return { minX: fb.minX, maxX: fb.maxX, minY: fb.minY, maxY: fb.maxY }
 }
 
-/** The inflated hard-obstacle discs for wire routing. */
+/** The inflated hard-obstacle discs for rendered rails and labelled discs.
+    Point nodes are wire terminals, like dangling ends, rather than obstacles. */
 export function routeObstacles(e: Engine): Disc[] {
   const out: Disc[] = []
   for (const b of e.bodies.values()) {
-    if (b.kind !== 'ref' && b.kind !== 'atom' && b.kind !== 'identity') continue
+    if (b.kind !== 'ref' && b.kind !== 'atom') continue
     out.push({ c: b.pos, r: (b.discR + ROUTE_CLEAR) * e.scale })
   }
   return out
 }
 
-/** The DRAWN obstacle discs for the nearness energy (energy-drawn wires,
+/** The DRAWN rail/disc obstacles for the nearness energy (energy-drawn wires,
     2026-07-31): node discs at their drawn radii — no routing clearance folded
     in, because the standoff is the energy's job, not an inflation's. */
 export function drawnObstacles(e: Engine): Disc[] {
   const out: Disc[] = []
   for (const b of e.bodies.values()) {
-    if (b.kind !== 'ref' && b.kind !== 'atom' && b.kind !== 'identity') continue
+    if (b.kind !== 'ref' && b.kind !== 'atom') continue
     out.push({ c: b.pos, r: b.discR * e.scale })
   }
   return out
@@ -713,13 +724,13 @@ export function wireRouteSpaces(e: Engine): WireSpaces {
   }
 }
 
-/** The fixed escape stub of a port bind: from the rim anchor outward along
-    the port normal to just past the inflated obstacle disc. The optimized
-    network begins at the escape point; the stub itself is fixed geometry
-    (perpendicular exit BY CONSTRUCTION — the connected node is never a
-    special case in the router). */
+/** The fixed escape stub of a rail/disc port bind: from the rim anchor outward
+    along the port normal to just past the inflated obstacle disc. The optimized
+    network begins at the escape point; the stub itself is fixed geometry.
+    Identity point nodes instead share the free centered terminal used by ends. */
 export function escapePoint(e: Engine, bd: WireBind): { anchor: Vec2; escape: Vec2 } {
   const b = e.bodies.get(bd.body)!
+  if (b.kind === 'identity') return { anchor: b.pos, escape: b.pos }
   const anchor = worldBindAnchor(e, b, bd.key)
   const la = b.localAnchor.get(bd.key)!
   const n = Math.atan2(la.y, la.x) + b.theta
@@ -748,12 +759,13 @@ export function slotEscape(e: Engine, position: number): { point: Vec2; inner: V
 
 /** Curve boundary condition per terminal, in network vertex order: the fixed
     anchor point and the unit direction the drawn curve LEAVES it (a port's
-    outward normal; a frame slot's inward normal), or null for a free ∃/∀ end
-    dot (natural end at the dot). The drawn curve of a terminal-incident edge
+    outward normal; a frame slot's inward normal), or null for a free point node
+    (identity or ∃/∀ end, with a natural end at the dot). The drawn curve of a terminal-incident edge
     is CLAMPED here — perpendicular port/frame meetings by energy. */
 export function wireTerminalBCs(e: Engine, w: WireView): CurveBC[] {
   const out: CurveBC[] = w.binds.map((bd) => {
     const b = e.bodies.get(bd.body)!
+    if (b.kind === 'identity') return null
     const la = b.localAnchor.get(bd.key)!
     const a = Math.atan2(la.y, la.x) + b.theta
     return {

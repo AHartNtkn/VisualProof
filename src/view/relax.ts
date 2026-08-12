@@ -936,7 +936,7 @@ export function mkFrozenState(e: Engine): FrozenState {
   }
   const obstacle = new Map<string, RouteDisc>()
   for (const b of e.bodies.values()) {
-    if (b.kind === 'ref' || b.kind === 'atom' || b.kind === 'identity') {
+    if (b.kind === 'ref' || b.kind === 'atom') {
       obstacle.set(b.id, {
         c: { x: b.pos.x, y: b.pos.y },
         r: b.discR * sc,

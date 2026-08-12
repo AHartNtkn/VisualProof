@@ -9,26 +9,6 @@ import { paint, nextTheme, LIGHT, DARK, THEMES } from '../../src/view/paint'
 import { drawShapes } from '../../src/view/canvas'
 import { computeLegs } from '../../src/view/wires'
 
-const identityScene = (identityPortByRef: readonly number[]) => {
-  const builder = new DiagramBuilder()
-  const cut = builder.cut(builder.root)
-  const identity = builder.identity(cut, IOTA, identityPortByRef.length)
-  const refs = identityPortByRef.map((_, index) =>
-    builder.ref(builder.root, `R${index}`, rel(1)))
-  refs.forEach((ref, index) => {
-    builder.wire(builder.root, [
-      { node: ref, port: { kind: 'arg', index: 0 } },
-      {
-        node: identity,
-        port: { kind: 'identity', index: identityPortByRef[index]! },
-      },
-    ])
-  })
-  const engine = mkEngine(builder.build(), [])
-  settle(engine, 200)
-  return { engine, identity }
-}
-
 describe('authoritative content scale', () => {
   it('paint derives node size directly from Engine.scale', () => {
     const h = new DiagramBuilder()
@@ -48,35 +28,41 @@ describe('authoritative content scale', () => {
 })
 
 describe('identity paint ownership', () => {
-  it('keeps radius and canonical paint class invariant under wire permutation', () => {
-    const paintedIdentity = (permutation: readonly number[]) => {
-      const { engine, identity } = identityScene(permutation)
-      const body = engine.bodies.get(identity)!
-      const owned = paint(engine, LIGHT).filter((shape) =>
-        (shape.kind === 'arc' || shape.kind === 'label' || shape.kind === 'dot')
-        && 'center' in shape
-        && shape.center.x === body.pos.x
-        && shape.center.y === body.pos.y)
-      return {
-        radius: body.discR,
-        classes: owned.map((shape) => shape.kind),
-        rail: owned.find((shape) => shape.kind === 'arc'),
-      }
+  it('uses the exact two-dot dangling-existential node for a multi-port identity', () => {
+    const builder = new DiagramBuilder()
+    const cut = builder.cut(builder.root)
+    const identity = builder.identity(cut, IOTA, 3)
+    for (let index = 0; index < 3; index++) {
+      const ref = builder.ref(builder.root, `R${index}`, rel(1))
+      builder.wire(builder.root, [
+        { node: ref, port: { kind: 'arg', index: 0 } },
+        { node: identity, port: { kind: 'identity', index } },
+      ])
     }
+    const danglingRef = builder.ref(builder.root, 'D', rel(1))
+    const danglingWire = builder.wire(builder.root, [
+      { node: danglingRef, port: { kind: 'arg', index: 0 } },
+    ])
+    const engine = mkEngine(builder.build(), [])
+    settle(engine, 200)
+    const identityBody = engine.bodies.get(identity)!
+    const endBody = engine.bodies.get(engine.wires.get(danglingWire)!.endBodyId!)!
+    const shapes = paint(engine, LIGHT)
+    const ownedAt = (center: { readonly x: number; readonly y: number }) => shapes
+      .filter((shape) =>
+        (shape.kind === 'arc' || shape.kind === 'dot')
+        && shape.center.x === center.x
+        && shape.center.y === center.y)
+      .map((shape) => shape.kind === 'dot'
+        ? { kind: shape.kind, rPx: shape.rPx, fill: shape.fill }
+        : { kind: shape.kind })
 
-    const canonical = paintedIdentity([0, 1, 2, 3])
-    const permuted = paintedIdentity([2, 0, 3, 1])
-
-    expect(permuted.radius).toBe(canonical.radius)
-    expect(permuted.classes).toEqual(canonical.classes)
-    expect(canonical.classes).toEqual(['arc'])
-    expect(permuted.rail?.kind).toBe('arc')
-    if (canonical.rail?.kind !== 'arc' || permuted.rail?.kind !== 'arc') {
-      throw new Error('identity must paint as one neutral rail')
-    }
-    expect(permuted.rail.r).toBe(canonical.rail.r)
-    expect(permuted.rail.stroke).toBe(canonical.rail.stroke)
-    expect(permuted.rail.width).toBe(canonical.rail.width)
+    const danglingNode = ownedAt(endBody.pos)
+    expect(danglingNode).toEqual([
+      { kind: 'dot', rPx: 3.6, fill: LIGHT.paper },
+      { kind: 'dot', rPx: 2.6, fill: LIGHT.wire },
+    ])
+    expect(ownedAt(identityBody.pos)).toEqual(danglingNode)
   })
 })
 

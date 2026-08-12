@@ -78,7 +78,7 @@ describe('formulaToDiagram', () => {
     expect(diagram.wires.w2!.endpoints.filter((endpoint) => endpoint.port.kind === 'arg')).toHaveLength(1)
   })
 
-  it('draws individual equality as a compact identity node', () => {
+  it('draws individual equality as one dangling-existential-style identity node', () => {
     const diagram = formulaToDiagram('∀ x y. x = y')
     const entry = Object.entries(diagram.nodes).find(([, node]) => node.kind === 'identity')
 
@@ -91,6 +91,19 @@ describe('formulaToDiagram', () => {
     const body = mkEngine(diagram, []).bodies.get(entry![0])
     expect(body?.kind).toBe('identity')
     expect(body?.geometry).toEqual(identityGeometry(2))
+    expect([...body!.localAnchor.values()]).toEqual([
+      { x: 0, y: 0 },
+      { x: 0, y: 0 },
+    ])
+    const incidences = Object.entries(diagram.wires).flatMap(([wire, value]) =>
+      value.endpoints
+        .filter((endpoint) => endpoint.node === entry![0])
+        .map((endpoint) => ({ wire, port: endpoint.port })))
+    expect(incidences.map(({ port }) => port)).toEqual([
+      { kind: 'identity', index: 0 },
+      { kind: 'identity', index: 1 },
+    ])
+    expect(new Set(incidences.map(({ wire }) => wire))).toHaveProperty('size', 2)
   })
 
   it('draws equality between relation variables with their shared signature', () => {
@@ -106,7 +119,7 @@ describe('formulaToDiagram', () => {
     })
   })
 
-  it('draws an equality chain as one compact multi-port identity node', () => {
+  it('draws an equality chain as one multi-port dangling-existential-style identity node', () => {
     const diagram = formulaToDiagram('∀ x y z. x = y = z')
     const entries = Object.entries(diagram.nodes)
       .filter(([, node]) => node.kind === 'identity')
@@ -121,6 +134,21 @@ describe('formulaToDiagram', () => {
     const body = mkEngine(diagram, []).bodies.get(entries[0]![0])
     expect(body?.kind).toBe('identity')
     expect(body?.geometry).toEqual(identityGeometry(3))
+    expect([...body!.localAnchor.values()]).toEqual([
+      { x: 0, y: 0 },
+      { x: 0, y: 0 },
+      { x: 0, y: 0 },
+    ])
+    const incidences = Object.entries(diagram.wires).flatMap(([wire, value]) =>
+      value.endpoints
+        .filter((endpoint) => endpoint.node === entries[0]![0])
+        .map((endpoint) => ({ wire, port: endpoint.port })))
+    expect(incidences.map(({ port }) => port)).toEqual([
+      { kind: 'identity', index: 0 },
+      { kind: 'identity', index: 1 },
+      { kind: 'identity', index: 2 },
+    ])
+    expect(new Set(incidences.map(({ wire }) => wire))).toHaveProperty('size', 3)
   })
 
   it('draws negation as one cut around its body', () => {

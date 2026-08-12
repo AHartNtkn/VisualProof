@@ -102,6 +102,14 @@ const FRAME_ORIGIN_R = 5.2
 const HL_BRIGHT = 18
 const HL_WIDTH = 0.8
 
+/** The shared point-node glyph used by dangling quantifiers and equality. */
+function pointNode(center: Vec2, fill: string, paper: string): Shape[] {
+  return [
+    { kind: 'dot', center, rPx: JUNCTION_OUTER_R, fill: paper },
+    { kind: 'dot', center, rPx: JUNCTION_INNER_R, fill },
+  ]
+}
+
 /** Full user-facing name of a reference. Namespace qualification identifies the
     definition semantically; the disc displays its complete final path segment. */
 export function referenceDisplayLabel(defId: string): string {
@@ -205,26 +213,26 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
     const origin = resolvedFrameSlot(e, 0)
     if (origin !== null) shapes.push({ kind: 'dot', center: origin.point, rPx: FRAME_ORIGIN_R, fill: st.ink })
   }
-  // Wire-owned END-body dots: the outermost quantifier point of a line of identity —
-  // an ∃ tip, a ∀ via (ruling A: now a leaf terminal, dotted like an ∃ tip pending the
-  // Task 5 gallery ruling on the ∀ glyph), or a bare wire. Wire-owned Steiner branch
-  // vertices are not bodies and are never dotted (USER 2026-07-07: branch points are
-  // unmarked; where legs meet is downstream of the tree).
-  // The dot is a point OF the wire (the outermost quantifier point of the line
-  // of identity), so it carries the wire's colour like every stroke — a
-  // propositional ∃ dot in the base iota colour reads as the wrong sort.
-  const endWire = new Map<string, WireId>()
+  // Point nodes use one glyph: semantic identities and the outermost quantifier
+  // point of a line of identity (an ∃ tip, a ∀ via, or a bare wire). Steiner
+  // branch vertices are not bodies and remain unmarked. A point carries its
+  // homogeneous wire colour, including relation-signature identities.
+  const pointWire = new Map<string, WireId>()
   for (const [wid, w] of e.wires) {
-    if (w.endBodyId !== null) endWire.set(w.endBodyId, wid)
+    if (w.endBodyId !== null) pointWire.set(w.endBodyId, wid)
+    for (const bind of w.binds) {
+      if (e.bodies.get(bind.body)?.kind === 'identity' && !pointWire.has(bind.body)) {
+        pointWire.set(bind.body, wid)
+      }
+    }
   }
   for (const [wid, w] of Object.entries(e.d.wires)) {
-    if (w.endpoints.length === 0) endWire.set(`j:${wid}`, wid) // bare ∃ — the dot IS the wire
+    if (w.endpoints.length === 0) pointWire.set(`j:${wid}`, wid) // bare ∃ — the dot IS the wire
   }
   for (const b of e.bodies.values()) {
-    if (b.kind !== 'end') continue
-    const owner = endWire.get(b.id)
-    shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_OUTER_R, fill: st.paper })
-    shapes.push({ kind: 'dot', center: b.pos, rPx: JUNCTION_INNER_R, fill: owner === undefined ? st.wire : wireStroke(owner) })
+    if (b.kind !== 'end' && b.kind !== 'identity') continue
+    const owner = pointWire.get(b.id)
+    shapes.push(...pointNode(b.pos, owner === undefined ? st.wire : wireStroke(owner), st.paper))
   }
   return shapes
 }
@@ -266,9 +274,10 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     return { kind: 'dot', center: { x: b.pos.x + c * rimR, y: b.pos.y + s * rimR }, rPx: PIP_R, fill }
   }
 
-  // Semantic node bodies: shared-linework atoms/identities plus named refs.
+  // Semantic node bodies: atom rails and named refs. Identity bodies were
+  // painted in the wire pass through the same point-node routine as end dots.
   for (const b of e.bodies.values()) {
-    if (b.kind === 'end' || b.kind === 'anchor') continue
+    if (b.kind === 'identity' || b.kind === 'end' || b.kind === 'anchor') continue
     const node = b.node!
     if (node.kind === 'ref') {
       const discR = DISC_R * e.scale
@@ -279,10 +288,7 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     }
     const g = b.geometry!
     const ascale = ascaleOf(b.kind) * e.scale
-    // An atom strokes in its head wire's order-ladder rung; identity stays
-    // neutral shared linework.
-    const atomHue = node.kind === 'atom' ? (hues.get(headWireOf.get(b.id) ?? '') ?? st.wire) : null
-    const stroke = atomHue ?? st.wire
+    const stroke = hues.get(headWireOf.get(b.id) ?? '') ?? st.wire
     shapes.push(...anatomyOutline(e, b, g, stroke, st.wireW, glow(stroke)))
     if (node.kind === 'atom' && pipArity(b) >= 2) {
       shapes.push(pipAt(b, g.arcs[0]!.r * ascale, stroke))

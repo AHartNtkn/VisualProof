@@ -5,7 +5,7 @@ import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
 const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
-import { mkEngine, carryOver, worldAnchor, portNormal, pkey, DISC_R, frameSlots, FRAME_CORNER_W, type FrameBounds } from '../../src/view/engine'
+import { mkEngine, carryOver, worldAnchor, worldBindAnchor, portNormal, pkey, DISC_R, frameSlots, FRAME_CORNER_W, wireTerminalBCs, wireTerminalPoints, type FrameBounds } from '../../src/view/engine'
 import { emptyDiagram } from '../../src/app/edit'
 import { unaryDefinition, UNARY } from '../fixtures/zero-signature'
 
@@ -62,6 +62,31 @@ describe('mkEngine', () => {
         }
         expect(count, `port ${id}|${pkey(port)}`).toBe(1)
       }
+    }
+  })
+
+  it('routes every multi-port identity incidence to one free centered terminal', () => {
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const identity = h.identity(cut, IOTA, 3)
+    const wires = Array.from({ length: 3 }, (_, index) => {
+      const ref = h.ref(h.root, `R${index}`, rel(1))
+      return h.wire(h.root, [
+        { node: ref, port: { kind: 'arg', index: 0 } },
+        { node: identity, port: { kind: 'identity', index } },
+      ])
+    })
+    const e = mkEngine(h.build(), [])
+    const body = e.bodies.get(identity)!
+    body.pos = { x: 17, y: -11 }
+
+    for (const wid of wires) {
+      const wire = e.wires.get(wid)!
+      const terminal = wire.binds.findIndex((bind) => bind.body === identity)
+      expect(terminal).toBeGreaterThanOrEqual(0)
+      expect(worldBindAnchor(e, body, wire.binds[terminal]!.key)).toEqual(body.pos)
+      expect(wireTerminalPoints(e, wire)[terminal]).toEqual(body.pos)
+      expect(wireTerminalBCs(e, wire)[terminal]).toBeNull()
     }
   })
 
