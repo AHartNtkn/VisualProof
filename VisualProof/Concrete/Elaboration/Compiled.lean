@@ -162,6 +162,18 @@ theorem CompiledRegion.focus?_singleton_bubble
   cases hfocus : body.focus? site <;>
     simp [CompiledItems.focus?, hfocus]
 
+theorem CompiledRegion.focus?_same_outerContext
+    {d : Diagram} {call : CompilerCall d}
+    {region : CompiledRegion d call} {site : Fin d.regionCount}
+    {focus : CompiledFocus region site}
+    (same : call.origin = site)
+    (found : region.focus? site = some focus) :
+    focus.endpointCall.outerContext = call.outerContext := by
+  subst site
+  rw [CompiledRegion.focus?_origin] at found
+  cases found
+  rfl
+
 /-- Intrinsic context and rebuilding obtained directly from one zipper. -/
 structure CompiledIntrinsic (d : Diagram)
     {sourceWires : Nat} {sourceRels : RelCtx}
@@ -703,6 +715,12 @@ def focus (source : State arity)
     CompiledFocus source.checked.compilation site :=
   (source.checked.compilation.focus? site).get
     (CheckedOpen.compilation_focus?_isSome source.checked site)
+
+theorem focus_computation (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    source.checked.compilation.focus? site = some (focus source site) :=
+  (Option.some_get
+    (CheckedOpen.compilation_focus?_isSome source.checked site)).symm
 
 def endpointCall (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :

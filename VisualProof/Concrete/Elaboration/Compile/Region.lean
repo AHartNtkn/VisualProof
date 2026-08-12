@@ -421,6 +421,20 @@ theorem CompilerCall.compile?_eq_compileItems?
   rw [CompilerCall.compile?]
   rfl
 
+theorem compileItems?_congr_occurrences
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    {first second : List (LocalOccurrence d.regionCount d.nodeCount)}
+    (equal : first = second)
+    (firstDirect : ∀ occurrence, occurrence ∈ first →
+      occurrence ∈ localOccurrences d parent)
+    (secondDirect : ∀ occurrence, occurrence ∈ second →
+      occurrence ∈ localOccurrences d parent) :
+    compileItems? d hwf parent context binders first firstDirect =
+      compileItems? d hwf parent context binders second secondDirect := by
+  subst second
+  congr
+
 theorem CompilerCall.compile?_items_of_success
     (hwf : d.WellFormed) (call : CompilerCall d)
     {items : CompiledItems d call.fullContext call.rels call.binders}
