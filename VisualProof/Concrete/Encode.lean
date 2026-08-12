@@ -4942,30 +4942,6 @@ private theorem rawDiagram_wellFormed
     (rawDiagram diagram).WellFormed := by
   simpa only [rawOpen] using (rawOpen_wellFormed diagram).diagram_well_formed
 
-private def castFinEquiv {source source' target target' : Nat}
-    (sourceEq : source = source') (targetEq : target' = target)
-    (equiv : FiniteEquiv (Fin source) (Fin target)) :
-    FiniteEquiv (Fin source') (Fin target') :=
-  (FiniteEquiv.finCast sourceEq.symm).trans
-    (equiv.trans (FiniteEquiv.finCast targetEq.symm))
-
-private noncomputable def regionIso_of_target_cast
-    {sourceOuter targetOuter sourceLocal targetLocal targetFull : Nat}
-    {rels : RelCtx}
-    (targetEq : targetFull = targetOuter + targetLocal)
-    (ambient : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
-    (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
-    (sourceItems : ItemSeq (sourceOuter + sourceLocal) rels)
-    (targetItems : ItemSeq targetFull rels)
-    (items : ItemSeqIso
-      (castFinEquiv rfl targetEq (extendWireEquiv ambient localEquiv)) rels
-      sourceItems targetItems) :
-    RegionIso ambient rels (.mk sourceLocal sourceItems)
-      (.mk targetLocal (targetItems.castWiresEq targetEq)) := by
-  subst targetFull
-  simpa [castFinEquiv, FiniteEquiv.finCast] using
-    RegionIso.mk localEquiv items
-
 private structure WireMap.ContextAgreement
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (wires : WireMap sourceWires)
@@ -4992,7 +4968,7 @@ private theorem WireMap.ContextAgreement.append
           Fin (rawDiagram diagram).wireCount)) :
     WireMap.ContextAgreement diagram
       (outerWires.extend wireBase localWires) (context ++ locals)
-      (castFinEquiv rfl
+      (Elaboration.castFinEquiv rfl
         (List.length_append (as := context) (bs := locals))
         (extendWireEquiv outerEquiv localEquiv)) := by
   exact {
@@ -5008,19 +4984,21 @@ private theorem WireMap.ContextAgreement.append
     lookup := by
       intro source
       refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) source
-      · simp only [castFinEquiv, FiniteEquiv.trans_apply,
-          FiniteEquiv.finCast, Fin.cast_refl, id_eq, extendWireEquiv_outer]
+      · simp only [Elaboration.castFinEquiv, Fin.cast_refl,
+          id_eq, extendWireEquiv_outer]
         have outerBound :
             (Fin.cast (List.length_append (as := context) (bs := locals)).symm
               (Fin.castAdd locals.length (outerEquiv outer))).val <
-              context.length := by simp
+              context.length := by
+          simp
         rw [List.get_eq_getElem, List.getElem_append_left outerBound]
         simpa [WireMap.extend] using agreement.lookup outer
-      · simp only [castFinEquiv, FiniteEquiv.trans_apply,
-          FiniteEquiv.finCast, Fin.cast_refl, id_eq, extendWireEquiv_local]
+      · simp only [Elaboration.castFinEquiv, Fin.cast_refl,
+          id_eq, extendWireEquiv_local]
         have localAfter : context.length ≤
             (Fin.cast (List.length_append (as := context) (bs := locals)).symm
-              (Fin.natAdd context.length (localEquiv localIndex))).val := by simp
+              (Fin.natAdd context.length (localEquiv localIndex))).val := by
+          simp
         rw [List.get_eq_getElem, List.getElem_append_right localAfter]
         simpa [WireMap.extend] using localLookup localIndex
   }
@@ -5060,18 +5038,22 @@ private theorem BinderMap.ContextAgreement.push
   · intro hasArity
     have arityEq : relationArity = binderArity := by simpa using hasArity.symm
     have mapHeadEq : BinderMap.push binders binderBase relationArity
-        ⟨0, hasArity⟩ = binderBase := by simp [BinderMap.push]
+        ⟨0, hasArity⟩ = binderBase := by
+      simp [BinderMap.push]
     have mapHeadBounded : BinderMap.push binders binderBase relationArity
         ⟨0, hasArity⟩ < (rawDiagram diagram).regionCount := by
       rw [mapHeadEq, ← binderValue]
       exact binder.isLt
     refine ⟨mapHeadBounded, ?_⟩
     have candidateEq :
-        (⟨BinderMap.push binders binderBase relationArity ⟨0, hasArity⟩,
-          mapHeadBounded⟩ : Fin (rawDiagram diagram).regionCount) = binder := by
+        (⟨BinderMap.push binders binderBase relationArity
+            ⟨0, hasArity⟩, mapHeadBounded⟩ :
+          Fin (rawDiagram diagram).regionCount) = binder := by
       apply Fin.ext
       exact mapHeadEq.trans binderValue.symm
-    rw [candidateEq, Elaboration.BinderContext.push_self]
+    have pushed :=
+      Elaboration.BinderContext.push_self context binder binderArity
+    rw [candidateEq, pushed]
     cases arityEq
     rfl
   · intro hasArity
@@ -5101,9 +5083,11 @@ private theorem BinderMap.ContextAgreement.push
         (⟨BinderMap.push binders binderBase relationArity
             ⟨tailIndex.succ, hasArity⟩, mapBounded⟩ :
           Fin (rawDiagram diagram).regionCount) =
-        ⟨binders relationArity inherited, inheritedBounded⟩ := Fin.ext mapEq
-    rw [candidateFinEq, Elaboration.BinderContext.push_other _ _ candidateNe,
-      inheritedLookup]
+        ⟨binders relationArity inherited, inheritedBounded⟩ :=
+      Fin.ext mapEq
+    have pushed := Elaboration.BinderContext.push_other context binderArity
+      candidateNe
+    rw [candidateFinEq, pushed, inheritedLookup]
     simp [Elaboration.BinderContext.liftVar, inherited]
 
 private theorem rawDiagram_argument_occurs
@@ -5129,24 +5113,34 @@ private theorem rawDiagram_argument_occurs
   · rename_i unbounded
     exact False.elim (unbounded port.isLt)
 
-private theorem WireMap.ContextAgreement.position
+private theorem WireMap.ContextAgreement.resolvePort
+    {openArity sourceWires : Nat}
     {diagram : VisualProof.Diagram.OpenDiagram openArity}
     {wires : WireMap sourceWires}
     {context : Elaboration.WireContext (rawDiagram diagram)}
     {equiv : FiniteEquiv (Fin sourceWires) (Fin context.length)}
-    {parent : Fin (rawDiagram diagram).regionCount}
     (agreement : WireMap.ContextAgreement diagram wires context equiv)
-    (exact : context.Exact parent) (source : Fin sourceWires)
-    (owner : Fin (rawDiagram diagram).wireCount)
-    (ownerEq : owner = ⟨wires source, agreement.bounded source⟩)
-    (visible : (rawDiagram diagram).Encloses
-      ((rawDiagram diagram).wires owner).scope parent) :
-    context.position exact owner visible = equiv source := by
+    (contextNodup : context.Nodup)
+    (node : Fin (rawDiagram diagram).nodeCount)
+    (source : Fin sourceWires) (port : CPort)
+    (occurs : (rawDiagram diagram).EndpointOccurs
+      ⟨wires source, agreement.bounded source⟩ ⟨node, port⟩)
+    (resolved : Fin context.length)
+    (resolvedEq : Elaboration.resolvePort? (rawDiagram diagram) context
+      node port = some resolved) :
+    resolved = equiv source := by
+  obtain ⟨owner, ownerOccurs, resolvedLookup⟩ :=
+    Elaboration.resolvePort?_sound resolvedEq
+  have ownerEq : owner =
+      (⟨wires source, agreement.bounded source⟩ :
+        Fin (rawDiagram diagram).wireCount) :=
+    Elaboration.endpoint_wire_unique
+      ((rawOpen_wellFormed diagram).diagram_well_formed
+        |>.wire_endpoints_are_disjoint) ownerOccurs occurs
   apply Fin.ext
-  exact (List.getElem_inj exact.nodup).mp (by
-    simpa only [List.get_eq_getElem] using
-      (Elaboration.WireContext.position_get exact owner visible).trans
-        (ownerEq.trans (agreement.lookup source).symm))
+  apply (List.getElem_inj contextNodup).mp
+  simpa only [List.get_eq_getElem] using
+    resolvedLookup.trans (ownerEq.trans (agreement.lookup source).symm)
 
 private def itemOccurrenceDraft
     (regionBase nodeBase : Nat) : Item wires rels → OccurrenceDraft
@@ -5167,7 +5161,8 @@ private theorem realizeOccurrenceDrafts_get
     (bounded : ∀ draft, draft ∈ drafts →
       draft.Bounded d.regionCount d.nodeCount)
     (index : Fin drafts.length) :
-    (realizeOccurrenceDrafts drafts bounded).get ⟨index.val, by simp⟩ =
+    (realizeOccurrenceDrafts drafts bounded).get
+      ⟨index.val, by simp⟩ =
       (drafts.get index).toConcrete
         (bounded (drafts.get index) (List.get_mem drafts index)) := by
   induction drafts with
@@ -5197,7 +5192,8 @@ private theorem NodeDraft.argument_of_atom
     {draft : NodeDraft}
     (draftEq : draft = .atom region binder arity arguments)
     (port : Fin arity) :
-    draft.argument (Fin.cast (congrArg NodeDraft.arity draftEq).symm port) =
+    draft.argument
+        (Fin.cast (congrArg NodeDraft.arity draftEq).symm port) =
       arguments port := by
   subst draft
   rfl
@@ -5207,27 +5203,148 @@ private theorem NodeDraft.argument_of_identity
     {draft : NodeDraft}
     (draftEq : draft = .identity region arity arguments)
     (port : Fin arity) :
-    draft.argument (Fin.cast (congrArg NodeDraft.arity draftEq).symm port) =
+    draft.argument
+        (Fin.cast (congrArg NodeDraft.arity draftEq).symm port) =
       arguments port := by
   subst draft
   rfl
 
-private def RegionEncodingMotive
+private noncomputable def compileEncodedAtom
+    {openArity sourceWires arity : Nat}
+    (diagram : VisualProof.Diagram.OpenDiagram openArity)
+    (current : Fin (rawDiagram diagram).regionCount)
+    (node : Fin (rawDiagram diagram).nodeCount)
+    (wireMap : WireMap sourceWires)
+    (binderMap : BinderMap rels)
+    (relation : RelVar rels arity)
+    (arguments : Fin arity → Fin sourceWires)
+    (draftEq : (flattenOpen diagram).nodes.get node =
+      .atom current.val (binderMap arity relation) arity
+        (wireMap ∘ arguments))
+    (context : Elaboration.WireContext (rawDiagram diagram))
+    (wireEquiv : FiniteEquiv (Fin sourceWires) (Fin context.length))
+    (wireAgreement : WireMap.ContextAgreement diagram wireMap context wireEquiv)
+    (contextNodup : context.Nodup)
+    (binderContext : Elaboration.BinderContext (rawDiagram diagram) rels)
+    (binderAgreement : BinderMap.ContextAgreement diagram binderMap binderContext)
+    (direct : Elaboration.LocalOccurrence.node node ∈
+      Elaboration.localOccurrences (rawDiagram diagram) current)
+    (target : Elaboration.CompiledItem (rawDiagram diagram) context rels
+      binderContext)
+    (compiled : Elaboration.compileOccurrence? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current context
+      binderContext (.node node) direct = some target) :
+    ItemIso  wireEquiv rels (.atom relation arguments) target.erase := by
+  obtain ⟨concreteRegion, concreteBinder, nodeEq, regionValue, binderValue⟩ :=
+    rawDiagram_node_atom_lookup diagram node current.val
+      (binderMap arity relation) arity (wireMap ∘ arguments) draftEq
+  have binderBounded : binderMap arity relation <
+      (rawDiagram diagram).regionCount := by
+    rw [← binderValue]
+    exact concreteBinder.isLt
+  have binderLookup : binderContext
+      ⟨binderMap arity relation, binderBounded⟩ = some ⟨arity, relation⟩ := by
+    obtain ⟨otherBounded, lookup⟩ := binderAgreement arity relation
+    have binderEq :
+        (⟨binderMap arity relation, binderBounded⟩ :
+          Fin (rawDiagram diagram).regionCount) =
+        ⟨binderMap arity relation, otherBounded⟩ := Fin.ext rfl
+    rw [binderEq]
+    exact lookup
+  have concreteBinderEq : concreteBinder =
+      (⟨binderMap arity relation, binderBounded⟩ :
+        Fin (rawDiagram diagram).regionCount) :=
+    Fin.ext binderValue
+  rw [Elaboration.compileOccurrence?_node] at compiled
+  simp only [Elaboration.compileNode?, nodeEq] at compiled
+  rw [concreteBinderEq, binderLookup] at compiled
+  cases resolvedEq : Elaboration.resolvePorts? (rawDiagram diagram) context
+      node arity with
+  | none => simp [resolvedEq] at compiled
+  | some resolved =>
+      simp [resolvedEq] at compiled
+      subst target
+      apply ItemIso.atom relation
+      funext port
+      let draftPort : Fin ((flattenOpen diagram).nodes.get node).arity :=
+        Fin.cast (congrArg NodeDraft.arity draftEq).symm port
+      have occurs : (rawDiagram diagram).EndpointOccurs
+          ⟨wireMap (arguments port), wireAgreement.bounded (arguments port)⟩
+          ⟨node, .arg port.val⟩ := by
+        have result := rawDiagram_argument_occurs diagram node draftPort
+          ⟨wireMap (arguments port), wireAgreement.bounded (arguments port)⟩
+          (by
+            exact (NodeDraft.argument_of_atom draftEq port).symm)
+        simpa [draftPort] using result
+      exact (wireAgreement.resolvePort contextNodup node (arguments port)
+        (.arg port.val) occurs (resolved port)
+        (sequenceFin_sound resolvedEq port)).symm
+
+private noncomputable def compileEncodedIdentity
+    {openArity sourceWires arity : Nat}
+    (diagram : VisualProof.Diagram.OpenDiagram openArity)
+    (current : Fin (rawDiagram diagram).regionCount)
+    (node : Fin (rawDiagram diagram).nodeCount)
+    (wireMap : WireMap sourceWires)
+    (arguments : Fin arity → Fin sourceWires)
+    (draftEq : (flattenOpen diagram).nodes.get node =
+      .identity current.val arity (wireMap ∘ arguments))
+    (context : Elaboration.WireContext (rawDiagram diagram))
+    (wireEquiv : FiniteEquiv (Fin sourceWires) (Fin context.length))
+    (wireAgreement : WireMap.ContextAgreement diagram wireMap context wireEquiv)
+    (contextNodup : context.Nodup)
+    (binderContext : Elaboration.BinderContext (rawDiagram diagram) rels)
+    (direct : Elaboration.LocalOccurrence.node node ∈
+      Elaboration.localOccurrences (rawDiagram diagram) current)
+    (target : Elaboration.CompiledItem (rawDiagram diagram) context rels
+      binderContext)
+    (compiled : Elaboration.compileOccurrence? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current context
+      binderContext (.node node) direct = some target) :
+    ItemIso  wireEquiv rels (.identity arity arguments) target.erase := by
+  obtain ⟨concreteRegion, nodeEq, regionValue⟩ :=
+    rawDiagram_node_identity_lookup diagram node current.val arity
+      (wireMap ∘ arguments) draftEq
+  rw [Elaboration.compileOccurrence?_node] at compiled
+  simp only [Elaboration.compileNode?, nodeEq] at compiled
+  cases resolvedEq : Elaboration.resolvePorts? (rawDiagram diagram) context
+      node arity with
+  | none => simp [resolvedEq] at compiled
+  | some resolved =>
+      simp [resolvedEq] at compiled
+      subst target
+      apply ItemIso.identity
+      funext port
+      let draftPort : Fin ((flattenOpen diagram).nodes.get node).arity :=
+        Fin.cast (congrArg NodeDraft.arity draftEq).symm port
+      have occurs : (rawDiagram diagram).EndpointOccurs
+          ⟨wireMap (arguments port), wireAgreement.bounded (arguments port)⟩
+          ⟨node, .arg port.val⟩ := by
+        have result := rawDiagram_argument_occurs diagram node draftPort
+          ⟨wireMap (arguments port), wireAgreement.bounded (arguments port)⟩
+          (by
+            exact (NodeDraft.argument_of_identity draftEq port).symm)
+        simpa [draftPort] using result
+      exact (wireAgreement.resolvePort contextNodup node (arguments port)
+        (.arg port.val) occurs (resolved port)
+        (sequenceFin_sound resolvedEq port)).symm
+
+private def RegionCompileMotive
     (sourceWires : Nat) (rels : RelCtx)
-    (source : Region sourceWires rels) : Type :=
+    (source : Region  sourceWires rels) : Type :=
   ∀ {openArity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (regionKind : RegionDraft)
     (regionBase nodeBase wireBase : Nat)
     (outerWires : WireMap sourceWires)
-    (sourceBinders : BinderMap rels)
+    (binders : BinderMap rels)
     (_allocated : Flat.SegmentAt (flattenOpen diagram)
       (flattenRegion regionKind regionBase nodeBase wireBase
-        outerWires sourceBinders source) regionBase nodeBase wireBase)
+        outerWires binders source) regionBase nodeBase wireBase)
     (_recordsIncluded : ∀ record,
       record ∈ regionRecords regionBase nodeBase wireBase source →
         record ∈ openRegionRecords diagram)
-    (_bindersBefore : sourceBinders.Bounded (regionBase + 1))
+    (_bindersBefore : binders.Bounded (regionBase + 1))
     (current : Fin (rawDiagram diagram).regionCount)
     (_currentValue : current.val = regionBase)
     (_notRoot : current ≠ (rawDiagram diagram).root)
@@ -5236,249 +5353,142 @@ private def RegionEncodingMotive
     (_wireAgreement : WireMap.ContextAgreement diagram outerWires context
       wireEquiv)
     (binderContext : Elaboration.BinderContext (rawDiagram diagram) rels)
-    (_binderAgreement : BinderMap.ContextAgreement diagram sourceBinders
-      binderContext)
-    (_binderCovers : binderContext.Covers current)
+    (_binderAgreement : BinderMap.ContextAgreement diagram binders binderContext)
     (_extendedExact : (context.extend current).Exact current)
-    (target : Elaboration.CompiledRegion (rawDiagram diagram))
-    (_targetOrigin : target.origin = current)
-    (_targetValid : target.Valid),
-    RegionIso wireEquiv rels source
-      (target.erase _targetValid (rawDiagram_wellFormed diagram)
-        context (Elaboration.exactScopeWires (rawDiagram diagram) current)
-        rels binderContext (by
-          rw [_targetOrigin]
-          simpa [Elaboration.WireContext.extend] using _extendedExact)
-        (by simpa [_targetOrigin] using _binderCovers))
+    (target : Elaboration.CompiledRegion
+      (rawDiagram diagram) (.nested current context rels binderContext)),
+    Elaboration.compileRegion? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current context
+      binderContext = some target →
+    RegionIso  wireEquiv rels source target.erase
 
-private def ItemEncodingMotive
+private def ItemCompileMotive
     (sourceWires : Nat) (rels : RelCtx)
-    (source : Item sourceWires rels) : Type :=
+    (source : Item  sourceWires rels) : Type :=
   ∀ {openArity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (currentRegion regionBase nodeBase wireBase : Nat)
     (wireMap : WireMap sourceWires)
-    (sourceBinders : BinderMap rels)
+    (binders : BinderMap rels)
     (_allocated : Flat.SegmentAt (flattenOpen diagram)
       (flattenItem currentRegion regionBase nodeBase wireBase
-        wireMap sourceBinders source) regionBase nodeBase wireBase)
+        wireMap binders source) regionBase nodeBase wireBase)
     (_recordsIncluded : ∀ record,
       record ∈ itemRecordBlock regionBase nodeBase wireBase source →
         record ∈ openRegionRecords diagram)
-    (_bindersBefore : sourceBinders.Bounded regionBase)
+    (_bindersBefore : binders.Bounded regionBase)
     (current : Fin (rawDiagram diagram).regionCount)
     (_currentValue : current.val = currentRegion)
     (_currentBefore : currentRegion < regionBase)
     (context : Elaboration.WireContext (rawDiagram diagram))
     (wireEquiv : FiniteEquiv (Fin sourceWires) (Fin context.length))
-    (_wireAgreement : WireMap.ContextAgreement diagram wireMap context
-      wireEquiv)
+    (_wireAgreement : WireMap.ContextAgreement diagram wireMap context wireEquiv)
     (_contextExact : context.Exact current)
     (binderContext : Elaboration.BinderContext (rawDiagram diagram) rels)
-    (_binderAgreement : BinderMap.ContextAgreement diagram sourceBinders
-      binderContext)
-    (_binderCovers : binderContext.Covers current)
+    (_binderAgreement : BinderMap.ContextAgreement diagram binders binderContext)
     (draftBounded : (itemOccurrenceDraft regionBase nodeBase source).Bounded
       (rawDiagram diagram).regionCount (rawDiagram diagram).nodeCount)
-    (target : Elaboration.CompiledItem (rawDiagram diagram))
-    (_targetOrigin : target.origin =
-      (itemOccurrenceDraft regionBase nodeBase source).toConcrete draftBounded)
-    (_targetValid : target.ValidAt current),
-    ItemIso wireEquiv rels source
-      (target.erase _targetValid (rawDiagram_wellFormed diagram) context rels
-        binderContext _contextExact _binderCovers)
+    (direct :
+      (itemOccurrenceDraft regionBase nodeBase source).toConcrete draftBounded ∈
+        Elaboration.localOccurrences (rawDiagram diagram) current)
+    (target : Elaboration.CompiledItem
+      (rawDiagram diagram) context rels binderContext),
+    Elaboration.compileOccurrence? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current context
+      binderContext
+      ((itemOccurrenceDraft regionBase nodeBase source).toConcrete draftBounded)
+      direct = some target →
+    ItemIso  wireEquiv rels source target.erase
 
-private def ItemsEncodingMotive
+private def ItemsCompileMotive
     (sourceWires : Nat) (rels : RelCtx)
-    (source : ItemSeq sourceWires rels) : Type :=
+    (source : ItemSeq  sourceWires rels) : Type :=
   ∀ {openArity : Nat}
     (diagram : VisualProof.Diagram.OpenDiagram openArity)
     (currentRegion regionBase nodeBase wireBase : Nat)
     (wireMap : WireMap sourceWires)
-    (sourceBinders : BinderMap rels)
+    (binders : BinderMap rels)
     (allocated : Flat.SegmentAt (flattenOpen diagram)
       (flattenItems currentRegion regionBase nodeBase wireBase
-        wireMap sourceBinders source) regionBase nodeBase wireBase)
+        wireMap binders source) regionBase nodeBase wireBase)
     (_recordsIncluded : ∀ record,
       record ∈ itemRecords regionBase nodeBase wireBase source →
         record ∈ openRegionRecords diagram)
-    (_bindersBefore : sourceBinders.Bounded regionBase)
+    (_bindersBefore : binders.Bounded regionBase)
     (current : Fin (rawDiagram diagram).regionCount)
     (_currentValue : current.val = currentRegion)
     (_currentBefore : currentRegion < regionBase)
     (context : Elaboration.WireContext (rawDiagram diagram))
     (wireEquiv : FiniteEquiv (Fin sourceWires) (Fin context.length))
-    (_wireAgreement : WireMap.ContextAgreement diagram wireMap context
-      wireEquiv)
+    (_wireAgreement : WireMap.ContextAgreement diagram wireMap context wireEquiv)
     (_contextExact : context.Exact current)
     (binderContext : Elaboration.BinderContext (rawDiagram diagram) rels)
-    (_binderAgreement : BinderMap.ContextAgreement diagram sourceBinders
-      binderContext)
-    (_binderCovers : binderContext.Covers current)
+    (_binderAgreement : BinderMap.ContextAgreement diagram binders binderContext)
     (index : Fin (occurrenceDrafts regionBase nodeBase source).length)
-    (target : Elaboration.CompiledItem (rawDiagram diagram))
-    (_targetOrigin : target.origin =
+    (direct :
       ((occurrenceDrafts regionBase nodeBase source).get index |>.toConcrete
         (occurrenceDrafts_bounded diagram currentRegion regionBase nodeBase
-          wireBase wireMap sourceBinders source allocated _
-          (List.get_mem _ index))))
-    (_targetValid : target.ValidAt current),
-    ItemIso wireEquiv rels
-      (source.get (Fin.cast (occurrenceDrafts_length source) index))
-      (target.erase _targetValid (rawDiagram_wellFormed diagram) context rels
-        binderContext _contextExact _binderCovers)
+          wireBase wireMap binders source allocated _
+          (List.get_mem _ index))) ∈
+        Elaboration.localOccurrences (rawDiagram diagram) current)
+    (target : Elaboration.CompiledItem
+      (rawDiagram diagram) context rels binderContext),
+    Elaboration.compileOccurrence? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current context
+      binderContext
+      ((occurrenceDrafts regionBase nodeBase source).get index |>.toConcrete
+        (occurrenceDrafts_bounded diagram currentRegion regionBase nodeBase
+          wireBase wireMap binders source allocated _
+          (List.get_mem _ index))) direct = some target →
+    ItemIso  wireEquiv rels
+      (source.get (Fin.cast (occurrenceDrafts_length source) index)) target.erase
 
-private structure EncodedAtomValidity
-    (diagram : VisualProof.Diagram.OpenDiagram openArity)
-    (node : Fin (rawDiagram diagram).nodeCount) (arity : Nat) where
-  region : Fin (rawDiagram diagram).regionCount
-  binder : Fin (rawDiagram diagram).regionCount
-  parent : Fin (rawDiagram diagram).regionCount
-  node_eq : (rawDiagram diagram).nodes node = .atom region binder
-  binder_eq : (rawDiagram diagram).regions binder = .bubble parent arity
-  binder_encloses : (rawDiagram diagram).Encloses binder region
-
-private noncomputable def encodedAtomValidity
-    (diagram : VisualProof.Diagram.OpenDiagram openArity)
-    (node : Fin (rawDiagram diagram).nodeCount)
-    (region binder arity : Nat) (arguments : Fin arity → Nat)
-    (draftEq : (flattenOpen diagram).nodes.get node =
-      .atom region binder arity arguments) :
-    EncodedAtomValidity diagram node arity := by
-  have existsValidity := (flattenOpen_valid diagram).atom_valid node
-  rw [draftEq] at existsValidity
-  let concreteRegion := Classical.choose existsValidity
-  have regionSpec := Classical.choose_spec existsValidity
-  let concreteBinder := Classical.choose regionSpec
-  have binderSpec := Classical.choose_spec regionSpec
-  let concreteParent := Classical.choose binderSpec
-  have facts := Classical.choose_spec binderSpec
-  exact ⟨concreteRegion, concreteBinder, concreteParent,
-    facts.1, facts.2.1, facts.2.2⟩
-
-private noncomputable def encodeAtomMotive
+private noncomputable def compileEncodedAtomMotive
     (relation : RelVar rels arity)
     (arguments : Fin arity → Fin sourceWires) :
-    ItemEncodingMotive sourceWires rels (.atom relation arguments) := by
+    ItemCompileMotive sourceWires rels (.atom relation arguments) := by
   intro openArity diagram currentRegion regionBase nodeBase wireBase wireMap
-    sourceBinders allocated recordsIncluded bindersBefore current currentValue
-    currentBefore context wireEquiv wireAgreement contextExact binderContext
-    binderAgreement binderCovers draftBounded target targetOrigin targetValid
+    binders allocated recordsIncluded bindersBefore current currentValue
+    currentBefore context wireEquiv wireAgreement contextExact binderContext binderAgreement
+    draftBounded direct target compiled
   let node : Fin (rawDiagram diagram).nodeCount := ⟨nodeBase, draftBounded⟩
+  have nodeDirect : Elaboration.LocalOccurrence.node node ∈
+      Elaboration.localOccurrences (rawDiagram diagram) current := by
+    change Elaboration.LocalOccurrence.node node ∈
+      Elaboration.localOccurrences (rawDiagram diagram) current at direct
+    exact direct
   have nodeAllocation : List.SegmentAt (flattenOpen diagram).nodes
-      [.atom currentRegion (sourceBinders arity relation) arity
+      [.atom currentRegion (binders arity relation) arity
         (wireMap ∘ arguments)] nodeBase := by
     simpa [flattenItem] using allocated.nodes
   have draftEq : (flattenOpen diagram).nodes.get node =
-      .atom current.val (sourceBinders arity relation) arity
+      .atom current.val (binders arity relation) arity
         (wireMap ∘ arguments) := by
     have lookup := nodeAllocation.get (0 : Fin 1)
     rw [currentValue]
     simpa [node] using lookup
-  let expected := encodedAtomValidity diagram node current.val
-    (sourceBinders arity relation) arity (wireMap ∘ arguments) draftEq
-  cases target with
-  | atom targetNode targetBinder targetArity targetPorts =>
-      simp only [Elaboration.CompiledItem.origin,
-        Elaboration.LocalOccurrence.node.injEq,
-        itemOccurrenceDraft, OccurrenceDraft.toConcrete] at targetOrigin
-      subst targetNode
-      have regionEq : expected.region = current := by
-        have shapes := expected.node_eq.symm.trans targetValid.1
-        exact (CNode.atom.inj shapes).1
-      have binderEq : expected.binder = targetBinder := by
-        have shapes := expected.node_eq.symm.trans targetValid.1
-        exact (CNode.atom.inj shapes).2
-      have expectedNode : (rawDiagram diagram).nodes node =
-          .atom current targetBinder := by
-        simpa [regionEq, binderEq] using expected.node_eq
-      have expectedBubble : (rawDiagram diagram).regions targetBinder =
-          .bubble expected.parent arity := by
-        simpa only [binderEq] using expected.binder_eq
-      have arityEq : arity = targetArity := by
-        exact (CRegion.bubble.inj
-          (expectedBubble.symm.trans targetValid.2.1)).2
-      subst targetArity
-      have binderBounded : sourceBinders arity relation <
-          (rawDiagram diagram).regionCount := by
-        obtain ⟨expectedConcreteRegion, expectedConcreteBinder, lookupNode,
-          regionValue, binderValue⟩ := rawDiagram_node_atom_lookup diagram
-            node current.val (sourceBinders arity relation) arity
-              (wireMap ∘ arguments) draftEq
-        rw [← binderValue]
-        exact expectedConcreteBinder.isLt
-      have targetBinderEq : targetBinder =
-          (⟨sourceBinders arity relation, binderBounded⟩ :
-            Fin (rawDiagram diagram).regionCount) := by
-        obtain ⟨expectedConcreteRegion, expectedConcreteBinder, lookupNode,
-          regionValue, binderValue⟩ := rawDiagram_node_atom_lookup diagram
-            node current.val (sourceBinders arity relation) arity
-              (wireMap ∘ arguments) draftEq
-        have expectedEq : targetBinder = expectedConcreteBinder := by
-          have shapes := targetValid.1.symm.trans lookupNode
-          exact (CNode.atom.inj shapes).2
-        exact expectedEq.trans (Fin.ext binderValue)
-      have relationEq : binderContext.relationAt binderCovers targetBinder
-          (Elaboration.bubbleParent (rawDiagram diagram) targetBinder) arity
-          targetValid.2.1 targetValid.2.2.1 = relation := by
-        obtain ⟨otherBounded, sourceLookup⟩ :=
-          binderAgreement arity relation
-        have lookup := Elaboration.BinderContext.relationAt_lookup binderCovers
-          targetBinder (Elaboration.bubbleParent (rawDiagram diagram) targetBinder)
-          arity targetValid.2.1 targetValid.2.2.1
-        have binderFinEq : targetBinder =
-            (⟨sourceBinders arity relation, otherBounded⟩ :
-              Fin (rawDiagram diagram).regionCount) := by
-          exact targetBinderEq.trans (Fin.ext rfl)
-        have sourceLookupAt : binderContext targetBinder =
-            some ⟨arity, relation⟩ := by
-          rw [binderFinEq]
-          exact sourceLookup
-        have pairEq := Option.some.inj (lookup.symm.trans sourceLookupAt)
-        injection pairEq
-      rw [Elaboration.CompiledItem.erase_atom]
-      rw [relationEq]
-      apply ItemIso.atom relation
-      funext port
-      have sourceOccurs : (rawDiagram diagram).EndpointOccurs
-          ⟨wireMap (arguments port), wireAgreement.bounded (arguments port)⟩
-          ⟨node, .arg port.val⟩ := by
-        let draftPort : Fin ((flattenOpen diagram).nodes.get node).arity :=
-          Fin.cast (congrArg NodeDraft.arity draftEq).symm port
-        have result := rawDiagram_argument_occurs diagram node draftPort
-          ⟨wireMap (arguments port), wireAgreement.bounded (arguments port)⟩
-          (NodeDraft.argument_of_atom draftEq port).symm
-        simpa [draftPort] using result
-      have ownerEq : targetPorts port =
-          ⟨wireMap (arguments port), wireAgreement.bounded (arguments port)⟩ :=
-        Elaboration.endpoint_wire_unique
-          (rawDiagram_wellFormed diagram).wire_endpoints_are_disjoint
-          (targetValid.2.2.2 port) sourceOccurs
-      have visible := (rawDiagram_wellFormed diagram).wire_scopes_enclose
-        (targetPorts port) ⟨node, .arg port.val⟩
-          (targetValid.2.2.2 port)
-      rw [targetValid.1] at visible
-      simpa [relationEq, Function.comp_apply] using
-        (wireAgreement.position contextExact (arguments port)
-          (targetPorts port) ownerEq visible).symm
-  | identity targetNode targetArity targetPorts =>
-      simp only [Elaboration.CompiledItem.origin,
-        Elaboration.LocalOccurrence.node.injEq,
-        itemOccurrenceDraft, OccurrenceDraft.toConcrete] at targetOrigin
-      subst targetNode
-      have impossible := expected.node_eq.symm.trans targetValid.1
-      contradiction
-  | cut body => contradiction
-  | bubble targetArity body => contradiction
+  apply compileEncodedAtom diagram current node wireMap binders relation
+    arguments draftEq context wireEquiv wireAgreement contextExact.nodup
+    binderContext binderAgreement nodeDirect target
+  have compiledOccurrence : Elaboration.compileOccurrence? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current context
+      binderContext (.node node) nodeDirect = some target := by
+    simpa [itemOccurrenceDraft, OccurrenceDraft.toConcrete, node] using compiled
+  exact compiledOccurrence
 
-private noncomputable def encodeIdentityMotive
+private noncomputable def compileEncodedIdentityMotive
     (arguments : Fin arity → Fin sourceWires) :
-    ItemEncodingMotive sourceWires rels (.identity arity arguments) := by
+    ItemCompileMotive sourceWires rels (.identity arity arguments) := by
   intro openArity diagram currentRegion regionBase nodeBase wireBase wireMap
-    sourceBinders allocated recordsIncluded bindersBefore current currentValue
-    currentBefore context wireEquiv wireAgreement contextExact binderContext
-    binderAgreement binderCovers draftBounded target targetOrigin targetValid
+    binders allocated recordsIncluded bindersBefore current currentValue
+    currentBefore context wireEquiv wireAgreement contextExact binderContext binderAgreement
+    draftBounded direct target compiled
   let node : Fin (rawDiagram diagram).nodeCount := ⟨nodeBase, draftBounded⟩
+  have nodeDirect : Elaboration.LocalOccurrence.node node ∈
+      Elaboration.localOccurrences (rawDiagram diagram) current := by
+    change Elaboration.LocalOccurrence.node node ∈
+      Elaboration.localOccurrences (rawDiagram diagram) current at direct
+    exact direct
   have nodeAllocation : List.SegmentAt (flattenOpen diagram).nodes
       [.identity currentRegion arity (wireMap ∘ arguments)] nodeBase := by
     simpa [flattenItem] using allocated.nodes
@@ -5487,101 +5497,82 @@ private noncomputable def encodeIdentityMotive
     have lookup := nodeAllocation.get (0 : Fin 1)
     rw [currentValue]
     simpa [node] using lookup
-  obtain ⟨expectedRegion, expectedNode, expectedRegionValue⟩ :=
-    rawDiagram_node_identity_lookup diagram node current.val arity
-      (wireMap ∘ arguments) draftEq
-  cases target with
-  | atom targetNode targetBinder targetArity targetPorts =>
-      simp only [Elaboration.CompiledItem.origin,
-        Elaboration.LocalOccurrence.node.injEq,
-        itemOccurrenceDraft, OccurrenceDraft.toConcrete] at targetOrigin
-      subst targetNode
-      have impossible := expectedNode.symm.trans targetValid.1
-      contradiction
-  | identity targetNode targetArity targetPorts =>
-      simp only [Elaboration.CompiledItem.origin,
-        Elaboration.LocalOccurrence.node.injEq,
-        itemOccurrenceDraft, OccurrenceDraft.toConcrete] at targetOrigin
-      subst targetNode
-      have regionEq : expectedRegion = current := by
-        have shapes := expectedNode.symm.trans targetValid.1
-        exact (CNode.identity.inj shapes).1
-      have arityEq : arity = targetArity := by
-        have shapes := expectedNode.symm.trans targetValid.1
-        exact (CNode.identity.inj shapes).2
-      subst targetArity
-      rw [Elaboration.CompiledItem.erase_identity]
-      apply ItemIso.identity
-      funext port
-      have sourceOccurs : (rawDiagram diagram).EndpointOccurs
-          ⟨wireMap (arguments port), wireAgreement.bounded (arguments port)⟩
-          ⟨node, .arg port.val⟩ := by
-        let draftPort : Fin ((flattenOpen diagram).nodes.get node).arity :=
-          Fin.cast (congrArg NodeDraft.arity draftEq).symm port
-        have result := rawDiagram_argument_occurs diagram node draftPort
-          ⟨wireMap (arguments port), wireAgreement.bounded (arguments port)⟩
-          (NodeDraft.argument_of_identity draftEq port).symm
-        simpa [draftPort] using result
-      have ownerEq : targetPorts port =
-          ⟨wireMap (arguments port), wireAgreement.bounded (arguments port)⟩ :=
-        Elaboration.endpoint_wire_unique
-          (rawDiagram_wellFormed diagram).wire_endpoints_are_disjoint
-          (targetValid.2 port) sourceOccurs
-      have visible := (rawDiagram_wellFormed diagram).wire_scopes_enclose
-        (targetPorts port) ⟨node, .arg port.val⟩ (targetValid.2 port)
-      rw [targetValid.1] at visible
-      simpa [Function.comp_apply] using
-        (wireAgreement.position contextExact (arguments port)
-          (targetPorts port) ownerEq visible).symm
-  | cut body => contradiction
-  | bubble targetArity body => contradiction
+  apply compileEncodedIdentity diagram current node wireMap arguments draftEq
+    context wireEquiv wireAgreement contextExact.nodup binderContext
+    nodeDirect target
+  have compiledOccurrence : Elaboration.compileOccurrence? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current context
+      binderContext (.node node) nodeDirect = some target := by
+    simpa [itemOccurrenceDraft, OccurrenceDraft.toConcrete, node] using compiled
+  exact compiledOccurrence
 
-private noncomputable def encodeCutMotive
-    (body : Region sourceWires rels)
-    (bodyEncoded : RegionEncodingMotive sourceWires rels body) :
-    ItemEncodingMotive sourceWires rels (.cut body) := by
+private noncomputable def compileEncodedCutMotive
+    (body : Region  sourceWires rels)
+    (bodyCompiled : RegionCompileMotive sourceWires rels body) :
+    ItemCompileMotive sourceWires rels (.cut body) := by
   intro openArity diagram currentRegion regionBase nodeBase wireBase wireMap
-    sourceBinders allocated recordsIncluded bindersBefore current currentValue
+    binders allocated recordsIncluded bindersBefore current currentValue
     currentBefore context wireEquiv wireAgreement contextExact binderContext
-    binderAgreement binderCovers draftBounded target targetOrigin targetValid
+    binderAgreement draftBounded direct target compiled
   let child : Fin (rawDiagram diagram).regionCount := ⟨regionBase, draftBounded⟩
   have regionAllocation : List.SegmentAt (flattenOpen diagram).regions
       (flattenRegion (.cut currentRegion) regionBase nodeBase wireBase
-        wireMap sourceBinders body).regions regionBase := by
+        wireMap binders body).regions regionBase := by
     simpa [flattenItem] using allocated.regions
   have childDraftEq : (flattenOpen diagram).regions.get child =
       .cut current.val := by
     have lookup := regionAllocation.get
       ⟨0, flattenRegion_regions_pos (.cut currentRegion) regionBase
-        nodeBase wireBase wireMap sourceBinders body⟩
+        nodeBase wireBase wireMap binders body⟩
     rw [currentValue]
     exact lookup.trans (flattenRegion_regions_get_zero (.cut currentRegion)
-      regionBase nodeBase wireBase wireMap sourceBinders body)
-  obtain ⟨concreteParent, childShape, parentValue⟩ :=
+      regionBase nodeBase wireBase wireMap binders body)
+  obtain ⟨concreteParent, childEq, parentValue⟩ :=
     rawDiagram_region_cut_lookup diagram child current.val childDraftEq
   have concreteParentEq : concreteParent = current := Fin.ext parentValue
-  have childShape' : (rawDiagram diagram).regions child = .cut current := by
-    simpa [concreteParentEq] using childShape
   have parentEq : ((rawDiagram diagram).regions child).parent? = some current := by
-    simp [childShape', CRegion.parent?]
+    rw [childEq, concreteParentEq]
+    rfl
   have childNotRoot : child ≠ (rawDiagram diagram).root := by
     intro equal
     have equalValue := congrArg Fin.val equal
-    change regionBase = 0 at equalValue
+    have rootValue : (rawDiagram diagram).root.val = 0 := rfl
+    change regionBase = (rawDiagram diagram).root.val at equalValue
     omega
-  cases target with
-  | atom targetNode targetBinder targetArity targetPorts => contradiction
-  | identity targetNode targetArity targetPorts => contradiction
-  | cut targetBody =>
-      simp only [Elaboration.CompiledItem.origin,
-        Elaboration.LocalOccurrence.child.injEq,
-        itemOccurrenceDraft, OccurrenceDraft.toConcrete] at targetOrigin
-      have targetShape : (rawDiagram diagram).regions child = .cut current := by
-        simpa [targetOrigin] using targetValid.1
-      rw [Elaboration.CompiledItem.erase_cut]
+  have childExact : (context.extend child).Exact child :=
+    contextExact.extend_child
+      (rawDiagram_wellFormed diagram) parentEq
+  have childDirect : Elaboration.LocalOccurrence.child child ∈
+      Elaboration.localOccurrences (rawDiagram diagram) current :=
+    (Elaboration.mem_localOccurrences_child _ _ _).2 parentEq
+  have compiled' : Elaboration.compileOccurrence? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current context
+      binderContext (.child child) childDirect = some target := by
+    simpa [itemOccurrenceDraft, child] using compiled
+  have childEq' : (rawDiagram diagram).regions child = .cut current := by
+    rw [childEq, concreteParentEq]
+  change Elaboration.compileOccurrence? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current context
+      binderContext (.child child) childDirect = some target at compiled'
+  rw [Elaboration.compileOccurrence?_child_cut
+    (rawDiagram_wellFormed diagram) current child context
+    binderContext childDirect childEq'] at compiled'
+  change Option.bind (Elaboration.compileRegion? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) child context binderContext)
+      (fun body => some (Elaboration.CompiledItem.cut body)) =
+    some target at compiled'
+  cases childResultEq : Elaboration.compileRegion? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) child context binderContext with
+  | none =>
+      rw [childResultEq] at compiled'
+      cases compiled'
+  | some childResult =>
+      rw [childResultEq] at compiled'
+      injection compiled' with targetEq
+      subst target
       apply ItemIso.cut
-      have result := bodyEncoded diagram (.cut currentRegion) regionBase nodeBase
-        wireBase wireMap sourceBinders
+      apply bodyCompiled diagram (.cut currentRegion) regionBase nodeBase
+        wireBase wireMap binders
         (by simpa [flattenItem] using allocated)
         (by
           intro record member
@@ -5592,84 +5583,90 @@ private noncomputable def encodeCutMotive
           have := bindersBefore relationArity relation
           omega)
         child rfl childNotRoot context wireEquiv wireAgreement binderContext
-        binderAgreement
-        (Elaboration.BinderContext.covers_cut_child binderCovers childShape')
-        (contextExact.extend_child (rawDiagram_wellFormed diagram) parentEq)
-        targetBody targetOrigin targetValid.2
-      simpa [targetOrigin] using result
-  | bubble targetArity targetBody =>
-      simp only [Elaboration.CompiledItem.origin,
-        Elaboration.LocalOccurrence.child.injEq,
-        itemOccurrenceDraft, OccurrenceDraft.toConcrete] at targetOrigin
-      have impossible := childShape'.symm.trans (targetOrigin ▸ targetValid.1)
-      contradiction
+        binderAgreement childExact childResult childResultEq
 
-private noncomputable def encodeBubbleMotive
-    (body : Region sourceWires (arity :: rels))
-    (bodyEncoded : RegionEncodingMotive sourceWires (arity :: rels) body) :
-    ItemEncodingMotive sourceWires rels (.bubble arity body) := by
+private noncomputable def compileEncodedBubbleMotive
+    (body : Region  sourceWires (arity :: rels))
+    (bodyCompiled : RegionCompileMotive sourceWires (arity :: rels) body) :
+    ItemCompileMotive sourceWires rels (.bubble arity body) := by
   intro openArity diagram currentRegion regionBase nodeBase wireBase wireMap
-    sourceBinders allocated recordsIncluded bindersBefore current currentValue
+    binders allocated recordsIncluded bindersBefore current currentValue
     currentBefore context wireEquiv wireAgreement contextExact binderContext
-    binderAgreement binderCovers draftBounded target targetOrigin targetValid
+    binderAgreement draftBounded direct target compiled
   let child : Fin (rawDiagram diagram).regionCount := ⟨regionBase, draftBounded⟩
   have regionAllocation : List.SegmentAt (flattenOpen diagram).regions
       (flattenRegion (.bubble currentRegion arity) regionBase nodeBase wireBase
-        wireMap (sourceBinders.push regionBase) body).regions regionBase := by
+        wireMap (binders.push regionBase) body).regions regionBase := by
     simpa [flattenItem] using allocated.regions
   have childDraftEq : (flattenOpen diagram).regions.get child =
       .bubble current.val arity := by
     have lookup := regionAllocation.get
       ⟨0, flattenRegion_regions_pos (.bubble currentRegion arity) regionBase
-        nodeBase wireBase wireMap (sourceBinders.push regionBase) body⟩
+        nodeBase wireBase wireMap (binders.push regionBase) body⟩
     rw [currentValue]
     exact lookup.trans (flattenRegion_regions_get_zero
       (.bubble currentRegion arity) regionBase nodeBase wireBase wireMap
-      (sourceBinders.push regionBase) body)
-  obtain ⟨concreteParent, childShape, parentValue⟩ :=
+      (binders.push regionBase) body)
+  obtain ⟨concreteParent, childEq, parentValue⟩ :=
     rawDiagram_region_bubble_lookup diagram child current.val arity childDraftEq
   have concreteParentEq : concreteParent = current := Fin.ext parentValue
-  have childShape' : (rawDiagram diagram).regions child =
-      .bubble current arity := by simpa [concreteParentEq] using childShape
   have parentEq : ((rawDiagram diagram).regions child).parent? = some current := by
-    simp [childShape', CRegion.parent?]
+    rw [childEq, concreteParentEq]
+    rfl
   have childNotRoot : child ≠ (rawDiagram diagram).root := by
     intro equal
     have equalValue := congrArg Fin.val equal
-    change regionBase = 0 at equalValue
+    have rootValue : (rawDiagram diagram).root.val = 0 := rfl
+    change regionBase = (rawDiagram diagram).root.val at equalValue
     omega
+  have childExact : (context.extend child).Exact child :=
+    contextExact.extend_child
+      (rawDiagram_wellFormed diagram) parentEq
   have childBinderAgreement : BinderMap.ContextAgreement diagram
-      (sourceBinders.push regionBase) (binderContext.push child arity) :=
+      (binders.push regionBase) (binderContext.push child arity) :=
     binderAgreement.push regionBase child rfl bindersBefore
   have childBindersBefore :
-      (sourceBinders.push regionBase : BinderMap (arity :: rels)).Bounded
+      (binders.push regionBase : BinderMap (arity :: rels)).Bounded
         (regionBase + 1) := by
-    apply BinderMap.push_bounded sourceBinders
+    apply BinderMap.push_bounded binders
     · intro relationArity relation
       have := bindersBefore relationArity relation
       omega
     · omega
-  cases target with
-  | atom targetNode targetBinder targetArity targetPorts => contradiction
-  | identity targetNode targetArity targetPorts => contradiction
-  | cut targetBody =>
-      simp only [Elaboration.CompiledItem.origin,
-        Elaboration.LocalOccurrence.child.injEq,
-        itemOccurrenceDraft, OccurrenceDraft.toConcrete] at targetOrigin
-      have impossible := childShape'.symm.trans (targetOrigin ▸ targetValid.1)
-      contradiction
-  | bubble targetArity targetBody =>
-      simp only [Elaboration.CompiledItem.origin,
-        Elaboration.LocalOccurrence.child.injEq,
-        itemOccurrenceDraft, OccurrenceDraft.toConcrete] at targetOrigin
-      have arityEq : targetArity = arity := by
-        exact (CRegion.bubble.inj
-          ((targetOrigin ▸ targetValid.1).symm.trans childShape')).2
-      subst targetArity
-      rw [Elaboration.CompiledItem.erase_bubble]
+  have childDirect : Elaboration.LocalOccurrence.child child ∈
+      Elaboration.localOccurrences (rawDiagram diagram) current :=
+    (Elaboration.mem_localOccurrences_child _ _ _).2 parentEq
+  have compiled' : Elaboration.compileOccurrence? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current context
+      binderContext (.child child) childDirect = some target := by
+    simpa [itemOccurrenceDraft, child] using compiled
+  have childEq' : (rawDiagram diagram).regions child =
+      .bubble current arity := by
+    rw [childEq, concreteParentEq]
+  change Elaboration.compileOccurrence? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current context
+      binderContext (.child child) childDirect = some target at compiled'
+  rw [Elaboration.compileOccurrence?_child_bubble
+    (rawDiagram_wellFormed diagram) current child context
+    binderContext arity childDirect childEq'] at compiled'
+  change Option.bind (Elaboration.compileRegion? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) child context
+      (binderContext.push child arity))
+      (fun body => some (Elaboration.CompiledItem.bubble arity body)) =
+    some target at compiled'
+  cases childResultEq : Elaboration.compileRegion? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) child context
+      (binderContext.push child arity) with
+  | none =>
+      rw [childResultEq] at compiled'
+      cases compiled'
+  | some childResult =>
+      rw [childResultEq] at compiled'
+      injection compiled' with targetEq
+      subst target
       apply ItemIso.bubble
-      have result := bodyEncoded diagram (.bubble currentRegion arity)
-        regionBase nodeBase wireBase wireMap (sourceBinders.push regionBase)
+      apply bodyCompiled diagram (.bubble currentRegion arity) regionBase
+        nodeBase wireBase wireMap (binders.push regionBase)
         (by simpa [flattenItem] using allocated)
         (by
           intro record member
@@ -5677,38 +5674,34 @@ private noncomputable def encodeBubbleMotive
             simpa [itemRecordBlock] using member))
         childBindersBefore child rfl childNotRoot context wireEquiv
         wireAgreement (binderContext.push child arity) childBinderAgreement
-        (Elaboration.BinderContext.push_covers_bubble_child binderCovers
-          childShape')
-        (contextExact.extend_child (rawDiagram_wellFormed diagram) parentEq)
-        targetBody targetOrigin targetValid.2
-      simpa [targetOrigin] using result
+        childExact childResult childResultEq
 
-private noncomputable def encodeNilMotive :
-    ItemsEncodingMotive sourceWires rels
-      (.nil : ItemSeq sourceWires rels) := by
+private noncomputable def compileEncodedNilMotive :
+    ItemsCompileMotive sourceWires rels (.nil : ItemSeq  sourceWires rels) := by
   intro openArity diagram currentRegion regionBase nodeBase wireBase wireMap
-    sourceBinders allocated recordsIncluded bindersBefore current currentValue
+    binders allocated recordsIncluded bindersBefore current currentValue
     currentBefore context wireEquiv wireAgreement contextExact binderContext
-    binderAgreement binderCovers index
+    binderAgreement index direct
   exact Fin.elim0 index
 
-private noncomputable def encodeConsMotive
-    (head : Item sourceWires rels) (tail : ItemSeq sourceWires rels)
-    (headEncoded : ItemEncodingMotive sourceWires rels head)
-    (tailEncoded : ItemsEncodingMotive sourceWires rels tail) :
-    ItemsEncodingMotive sourceWires rels (.cons head tail) := by
+private noncomputable def compileEncodedConsMotive
+    (head : Item  sourceWires rels)
+    (tail : ItemSeq  sourceWires rels)
+    (headCompiled : ItemCompileMotive sourceWires rels head)
+    (tailCompiled : ItemsCompileMotive sourceWires rels tail) :
+    ItemsCompileMotive sourceWires rels (.cons head tail) := by
   intro openArity diagram currentRegion regionBase nodeBase wireBase wireMap
-    sourceBinders allocated recordsIncluded bindersBefore current currentValue
+    binders allocated recordsIncluded bindersBefore current currentValue
     currentBefore context wireEquiv wireAgreement contextExact binderContext
-    binderAgreement binderCovers sourceIndex target targetOrigin targetValid
+    binderAgreement sourceIndex direct target compiled
   let headFlat := flattenItem currentRegion regionBase nodeBase wireBase
-    wireMap sourceBinders head
+    wireMap binders head
   let tailFlat := flattenItems currentRegion
     (regionBase + (itemCounts head).regions)
     (nodeBase + (itemCounts head).nodes)
-    (wireBase + (itemCounts head).wires) wireMap sourceBinders tail
+    (wireBase + (itemCounts head).wires) wireMap binders tail
   have flatEq : flattenItems currentRegion regionBase nodeBase wireBase
-      wireMap sourceBinders (.cons head tail) = headFlat.append tailFlat := by
+      wireMap binders (.cons head tail) = headFlat.append tailFlat := by
     cases head <;> rfl
   have allocated' : Flat.SegmentAt (flattenOpen diagram)
       (headFlat.append tailFlat) regionBase nodeBase wireBase := by
@@ -5717,8 +5710,14 @@ private noncomputable def encodeConsMotive
   have headAllocated := allocated'.left
   have tailAllocated := allocated'.right
   have headLengths := flattenItem_lengths currentRegion regionBase nodeBase
-    wireBase wireMap sourceBinders head
-  rw [headLengths.1, headLengths.2.1, headLengths.2.2] at tailAllocated
+    wireBase wireMap binders head
+  have headRegionsLength : headFlat.regions.length =
+      (itemCounts head).regions := headLengths.1
+  have headNodesLength : headFlat.nodes.length =
+      (itemCounts head).nodes := headLengths.2.1
+  have headWiresLength : headFlat.wireScopes.length =
+      (itemCounts head).wires := headLengths.2.2
+  rw [headRegionsLength, headNodesLength, headWiresLength] at tailAllocated
   have headRecordsIncluded : ∀ record,
       record ∈ itemRecordBlock regionBase nodeBase wireBase head →
         record ∈ openRegionRecords diagram := by
@@ -5736,7 +5735,7 @@ private noncomputable def encodeConsMotive
     apply recordsIncluded record
     rw [itemRecords_cons]
     exact List.mem_append_right _ member
-  have tailBindersBefore : sourceBinders.Bounded
+  have tailBindersBefore : binders.Bounded
       (regionBase + (itemCounts head).regions) := by
     intro relationArity relation
     have := bindersBefore relationArity relation
@@ -5758,10 +5757,9 @@ private noncomputable def encodeConsMotive
     have sourceIndexValue : sourceIndex.val = 0 := by
       simpa [consIndex] using congrArg Fin.val splitIndexEq
     have sourceItemIndex :
-        Fin.cast (occurrenceDrafts_length (.cons head tail)) sourceIndex =
-          (⟨0, by change 0 < tail.length + 1; omega⟩ :
-            Fin (ItemSeq.cons head tail).length) :=
-      Fin.ext sourceIndexValue
+        Fin.cast (occurrenceDrafts_length (ItemSeq.cons head tail)) sourceIndex =
+          (⟨0, by simp [ItemSeq.length]⟩ :
+            Fin (ItemSeq.cons head tail).length) := Fin.ext sourceIndexValue
     have sourceDraftHead :
         (occurrenceDrafts regionBase nodeBase (.cons head tail)).get
             sourceIndex = itemOccurrenceDraft regionBase nodeBase head := by
@@ -5770,21 +5768,47 @@ private noncomputable def encodeConsMotive
       rw [splitIndexEq] at sourceDraftEq
       simpa [consDrafts] using sourceDraftEq
     let headBounded := occurrenceDrafts_bounded diagram currentRegion
-      regionBase nodeBase wireBase wireMap sourceBinders (.cons head tail)
-      allocated (itemOccurrenceDraft regionBase nodeBase head) (by
+      regionBase nodeBase wireBase wireMap binders (.cons head tail) allocated
+      (itemOccurrenceDraft regionBase nodeBase head) (by
         simp [occurrenceDrafts_cons])
-    have concreteEq := OccurrenceDraft.toConcrete_congr sourceDraftHead
-      (occurrenceDrafts_bounded diagram currentRegion regionBase nodeBase
-        wireBase wireMap sourceBinders (.cons head tail) allocated _
-        (List.get_mem _ sourceIndex))
-    have headOrigin : target.origin =
-        (itemOccurrenceDraft regionBase nodeBase head).toConcrete headBounded := by
-      exact targetOrigin.trans concreteEq
-    have result := headEncoded diagram currentRegion regionBase nodeBase wireBase
-      wireMap sourceBinders (by simpa [headFlat] using headAllocated)
+    have headDirect :
+        (itemOccurrenceDraft regionBase nodeBase head).toConcrete headBounded ∈
+          Elaboration.localOccurrences (rawDiagram diagram) current := by
+      have concreteEq := OccurrenceDraft.toConcrete_congr sourceDraftHead
+        (occurrenceDrafts_bounded diagram currentRegion regionBase nodeBase
+          wireBase wireMap binders (.cons head tail) allocated _
+          (List.get_mem _ sourceIndex))
+      rw [← concreteEq]
+      exact direct
+    have compiledHead : Elaboration.compileOccurrence? (rawDiagram diagram)
+        (rawDiagram_wellFormed diagram) current context
+        binderContext
+        ((itemOccurrenceDraft regionBase nodeBase head).toConcrete headBounded)
+        headDirect = some target := by
+      have concreteEq := OccurrenceDraft.toConcrete_congr sourceDraftHead
+        (occurrenceDrafts_bounded diagram currentRegion regionBase nodeBase
+          wireBase wireMap binders (.cons head tail) allocated _
+          (List.get_mem _ sourceIndex))
+      let compilation := fun occurrence => ∀ occurrenceDirect :
+          occurrence ∈ Elaboration.localOccurrences (rawDiagram diagram)
+            current,
+        Elaboration.compileOccurrence? (rawDiagram diagram)
+            (rawDiagram_wellFormed diagram) current context
+            binderContext occurrence occurrenceDirect = some target
+      have sourceCompiled : compilation
+          (((occurrenceDrafts regionBase nodeBase (.cons head tail)).get
+            sourceIndex).toConcrete
+              (occurrenceDrafts_bounded diagram currentRegion regionBase
+                nodeBase wireBase wireMap binders (.cons head tail) allocated _
+                (List.get_mem _ sourceIndex))) := by
+        intro occurrenceDirect
+        simpa only using compiled
+      exact (concreteEq ▸ sourceCompiled) headDirect
+    have result := headCompiled diagram currentRegion regionBase nodeBase
+      wireBase wireMap binders (by simpa [headFlat] using headAllocated)
       headRecordsIncluded bindersBefore current currentValue currentBefore
       context wireEquiv wireAgreement contextExact binderContext
-      binderAgreement binderCovers headBounded target headOrigin targetValid
+      binderAgreement headBounded headDirect target compiledHead
     simpa [sourceItemIndex] using result
   · intro splitIndexEq
     have sourceIndexValue : sourceIndex.val = tailIndex.val + 1 := by
@@ -5806,55 +5830,86 @@ private noncomputable def encodeConsMotive
     let tailBounded := occurrenceDrafts_bounded diagram currentRegion
       (regionBase + (itemCounts head).regions)
       (nodeBase + (itemCounts head).nodes)
-      (wireBase + (itemCounts head).wires) wireMap sourceBinders tail
+      (wireBase + (itemCounts head).wires) wireMap binders tail
       tailAllocated _ (List.get_mem _ tailIndex)
-    have concreteEq := OccurrenceDraft.toConcrete_congr sourceDraftTail
-      (occurrenceDrafts_bounded diagram currentRegion regionBase nodeBase
-        wireBase wireMap sourceBinders (.cons head tail) allocated _
-        (List.get_mem _ sourceIndex))
-    have tailOrigin : target.origin =
-        ((occurrenceDrafts
+    have tailDirect : (((occurrenceDrafts
           (regionBase + (itemCounts head).regions)
           (nodeBase + (itemCounts head).nodes) tail).get tailIndex).toConcrete
-          tailBounded := targetOrigin.trans concreteEq
-    have result := tailEncoded diagram currentRegion
+            tailBounded) ∈
+          Elaboration.localOccurrences (rawDiagram diagram) current := by
+      have concreteEq := OccurrenceDraft.toConcrete_congr sourceDraftTail
+        (occurrenceDrafts_bounded diagram currentRegion regionBase nodeBase
+          wireBase wireMap binders (.cons head tail) allocated _
+          (List.get_mem _ sourceIndex))
+      rw [← concreteEq]
+      exact direct
+    have compiledTail : Elaboration.compileOccurrence? (rawDiagram diagram)
+        (rawDiagram_wellFormed diagram) current context
+        binderContext
+        (((occurrenceDrafts
+          (regionBase + (itemCounts head).regions)
+          (nodeBase + (itemCounts head).nodes) tail).get tailIndex).toConcrete
+            tailBounded) tailDirect = some target := by
+      have concreteEq := OccurrenceDraft.toConcrete_congr sourceDraftTail
+        (occurrenceDrafts_bounded diagram currentRegion regionBase nodeBase
+          wireBase wireMap binders (.cons head tail) allocated _
+          (List.get_mem _ sourceIndex))
+      let compilation := fun occurrence => ∀ occurrenceDirect :
+          occurrence ∈ Elaboration.localOccurrences (rawDiagram diagram)
+            current,
+        Elaboration.compileOccurrence? (rawDiagram diagram)
+            (rawDiagram_wellFormed diagram) current context
+            binderContext occurrence occurrenceDirect = some target
+      have sourceCompiled : compilation
+          (((occurrenceDrafts regionBase nodeBase (.cons head tail)).get
+            sourceIndex).toConcrete
+              (occurrenceDrafts_bounded diagram currentRegion regionBase
+                nodeBase wireBase wireMap binders (.cons head tail) allocated _
+                (List.get_mem _ sourceIndex))) := by
+        intro occurrenceDirect
+        simpa only using compiled
+      exact (concreteEq ▸ sourceCompiled) tailDirect
+    have result := tailCompiled diagram currentRegion
       (regionBase + (itemCounts head).regions)
       (nodeBase + (itemCounts head).nodes)
-      (wireBase + (itemCounts head).wires) wireMap sourceBinders tailAllocated
+      (wireBase + (itemCounts head).wires) wireMap binders tailAllocated
       tailRecordsIncluded tailBindersBefore current currentValue
       tailCurrentBefore context wireEquiv wireAgreement contextExact
-      binderContext binderAgreement binderCovers tailIndex target tailOrigin
-      targetValid
+      binderContext binderAgreement tailIndex tailDirect target
+      compiledTail
     simpa [tailItemIndex] using result
 
-private noncomputable def encodeRegionMotive
+private noncomputable def compileEncodedRegionMotive
     (localWires : Nat) (items : ItemSeq (sourceWires + localWires) rels)
-    (itemsEncoded : ItemsEncodingMotive (sourceWires + localWires) rels items) :
-    RegionEncodingMotive sourceWires rels (.mk localWires items) := by
+    (itemsCompiled : ItemsCompileMotive (sourceWires + localWires) rels items) :
+    RegionCompileMotive sourceWires rels (.mk localWires items) := by
   intro openArity diagram regionKind regionBase nodeBase wireBase outerWires
-    sourceBinders allocated recordsIncluded bindersBefore current currentValue
+    binders allocated recordsIncluded bindersBefore current currentValue
     notRoot context wireEquiv wireAgreement binderContext binderAgreement
-    binderCovers extendedExact target targetOrigin targetValid
-  have regionAllocation : List.SegmentAt (flattenOpen diagram).regions
+    extendedExact target compiled
+  have regionAllocation : List.SegmentAt
+      (flattenOpen diagram).regions
       (regionKind :: (flattenItems regionBase (regionBase + 1)
         nodeBase (wireBase + localWires)
-        (outerWires.extend wireBase localWires) sourceBinders items).regions)
+        (outerWires.extend wireBase localWires) binders items).regions)
       regionBase := by
     simpa only [flattenRegion] using allocated.regions
-  have wireAllocation : List.SegmentAt (flattenOpen diagram).wireScopes
+  have wireAllocation : List.SegmentAt
+      (flattenOpen diagram).wireScopes
       (List.replicate localWires regionBase ++
         (flattenItems regionBase (regionBase + 1)
           nodeBase (wireBase + localWires)
-          (outerWires.extend wireBase localWires) sourceBinders items).wireScopes)
+          (outerWires.extend wireBase localWires) binders items).wireScopes)
       wireBase := by
     simpa only [flattenRegion] using allocated.wireScopes
   let nestedFlat := flattenItems regionBase (regionBase + 1) nodeBase
     (wireBase + localWires) (outerWires.extend wireBase localWires)
-    sourceBinders items
+    binders items
   have nestedAllocated : Flat.SegmentAt (flattenOpen diagram) nestedFlat
       (regionBase + 1) nodeBase (wireBase + localWires) := by
     exact {
-      regions := by simpa only [nestedFlat] using regionAllocation.tail
+      regions := by
+        simpa only [nestedFlat] using regionAllocation.tail
       nodes := by
         simpa only [flattenRegion, nestedFlat] using allocated.nodes
       wireScopes := by
@@ -5893,80 +5948,81 @@ private noncomputable def encodeRegionMotive
     openRegionRecords_occurrences_nodup diagram record recordMember
   let occurrenceEquiv := localOccurrenceDraftEquiv current record.occurrences
     occurrenceBounded occurrenceNodup occurrenceMemIff
-  let targetItems := target.items
-  have targetItemsValid : targetItems.ValidAt target.origin :=
-    target.items_valid targetValid
-  have targetOrigins : targetItems.origins =
-      Elaboration.localOccurrences (rawDiagram diagram) current := by
-    calc
-      targetItems.origins = Elaboration.localOccurrences
-          (rawDiagram diagram) target.origin := target.items_origins targetValid
-      _ = _ := congrArg (Elaboration.localOccurrences (rawDiagram diagram))
-        targetOrigin
-  have targetLength : targetItems.length =
-      (Elaboration.localOccurrences (rawDiagram diagram) current).length := by
-    rw [Elaboration.CompiledItems.length_eq_origins_length, targetOrigins]
-  have targetItemsValidCurrent : targetItems.ValidAt current := by
-    simpa [targetOrigin] using targetItemsValid
-  have itemsIso : ItemSeqIso
-      (castFinEquiv rfl (Elaboration.WireContext.length_extend context current)
-        (extendWireEquiv wireEquiv localEquiv)) rels items
-      (targetItems.erase targetItemsValidCurrent
-        (rawDiagram_wellFormed diagram) (context.extend current) rels
-        binderContext extendedExact binderCovers) := by
-    let targetEraseLength := Elaboration.CompiledItems.erase_length targetItems
-      targetItemsValidCurrent (rawDiagram_wellFormed diagram)
-      (context.extend current) rels binderContext extendedExact binderCovers
-    let positions : FiniteEquiv (Fin items.length)
-        (Fin (targetItems.erase targetItemsValidCurrent
-          (rawDiagram_wellFormed diagram) (context.extend current) rels
-          binderContext extendedExact binderCovers).length) :=
-      (FiniteEquiv.finCast (occurrenceDrafts_length items).symm).trans
-        (occurrenceEquiv.trans ((FiniteEquiv.finCast targetLength.symm).trans
-          (FiniteEquiv.finCast targetEraseLength.symm)))
+  change Elaboration.compileRegion? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current context
+      binderContext = some target at compiled
+  rw [Elaboration.compileRegion?_eq_compileItems?
+    (rawDiagram_wellFormed diagram)] at compiled
+  cases compiledItemsEq : Elaboration.compileItems? (rawDiagram diagram)
+      (rawDiagram_wellFormed diagram) current (context.extend current)
+      binderContext (Elaboration.localOccurrences (rawDiagram diagram) current)
+      (fun _ member => member) with
+  | none =>
+    rw [compiledItemsEq] at compiled
+    cases compiled
+  | some targetItems =>
+    rw [compiledItemsEq] at compiled
+    injection compiled with targetEq
+    subst target
+    simp only [Elaboration.CompiledRegion.erase,
+      Elaboration.CompilerCall.finish, Elaboration.CompilerCall.castFullItems]
+    apply Elaboration.regionIso_of_cast rfl
+      (Elaboration.WireContext.length_extend context current)
+      wireEquiv localEquiv items targetItems.erase
+    let positions : FiniteEquiv (Fin items.length) (Fin targetItems.length) :=
+        (FiniteEquiv.finCast (occurrenceDrafts_length items).symm).trans
+        (occurrenceEquiv.trans (FiniteEquiv.finCast
+          (Elaboration.compileItems?_length
+            (rawDiagram_wellFormed diagram) current
+            (context.extend current) binderContext compiledItemsEq).symm))
     apply ItemSeqIso.permute positions
     intro sourceIndex
     let draftIndex : Fin record.occurrences.length :=
       Fin.cast (occurrenceDrafts_length items).symm sourceIndex
     let localIndex := occurrenceEquiv draftIndex
-    let targetIndex : Fin targetItems.length :=
-      Fin.cast targetLength.symm localIndex
+    let targetIndex : Fin targetItems.length := Fin.cast
+      (Elaboration.compileItems?_length
+        (rawDiagram_wellFormed diagram) current
+        (context.extend current) binderContext compiledItemsEq).symm localIndex
+    have compiledAt := Elaboration.compileItems?_get
+      (rawDiagram_wellFormed diagram) current
+      (context.extend current) binderContext compiledItemsEq localIndex
     have occurrenceLookup := localOccurrenceDraftEquiv_lookup current
       record.occurrences occurrenceBounded occurrenceNodup occurrenceMemIff
       draftIndex
     have realizedLookup := realizeOccurrenceDrafts_get record.occurrences
       occurrenceBounded draftIndex
     have localOccurrenceEq := occurrenceLookup.trans realizedLookup
-    have targetOriginAt : (targetItems.get targetIndex).origin =
+    have draftDirect :
         (record.occurrences.get draftIndex).toConcrete
+            (occurrenceDrafts_bounded diagram regionBase (regionBase + 1)
+              nodeBase (wireBase + localWires)
+              (outerWires.extend wireBase localWires) binders items
+              nestedAllocated _ (List.get_mem _ draftIndex)) ∈
+          Elaboration.localOccurrences (rawDiagram diagram) current := by
+      rw [← localOccurrenceEq]
+      exact List.get_mem _ localIndex
+    let compilation := fun occurrence => ∀ occurrenceDirect :
+        occurrence ∈ Elaboration.localOccurrences (rawDiagram diagram) current,
+      Elaboration.compileOccurrence? (rawDiagram diagram)
+          (rawDiagram_wellFormed diagram) current (context.extend current)
+          binderContext occurrence occurrenceDirect =
+        some (targetItems.get targetIndex)
+    have localCompiled : compilation
+        ((Elaboration.localOccurrences (rawDiagram diagram) current).get
+          localIndex) := by
+      intro occurrenceDirect
+      simpa [targetIndex] using compiledAt
+    have draftCompiled : compilation
+        ((record.occurrences.get draftIndex).toConcrete
           (occurrenceDrafts_bounded diagram regionBase (regionBase + 1)
             nodeBase (wireBase + localWires)
-            (outerWires.extend wireBase localWires) sourceBinders items
-            nestedAllocated _ (List.get_mem _ draftIndex)) := by
-      calc
-        (targetItems.get targetIndex).origin =
-            targetItems.origins.get
-              (Fin.cast
-                (Elaboration.CompiledItems.length_eq_origins_length targetItems)
-                targetIndex) := Elaboration.CompiledItems.origin_get _ _
-        _ = (Elaboration.localOccurrences (rawDiagram diagram) current).get
-              localIndex := by
-            have lookup := List.get_cast targetOrigins
-              (Fin.cast
-                (Elaboration.CompiledItems.length_eq_origins_length targetItems)
-                targetIndex)
-            have indexEq :
-                Fin.cast (congrArg List.length targetOrigins)
-                    (Fin.cast
-                      (Elaboration.CompiledItems.length_eq_origins_length
-                        targetItems) targetIndex) = localIndex := by
-              apply Fin.ext
-              rfl
-            simpa [indexEq] using lookup
-        _ = _ := localOccurrenceEq
-    have itemResult := itemsEncoded diagram regionBase (regionBase + 1)
+            (outerWires.extend wireBase localWires) binders items
+            nestedAllocated _ (List.get_mem _ draftIndex))) :=
+      localOccurrenceEq ▸ localCompiled
+    have itemResult := itemsCompiled diagram regionBase (regionBase + 1)
       nodeBase (wireBase + localWires)
-      (outerWires.extend wireBase localWires) sourceBinders nestedAllocated
+      (outerWires.extend wireBase localWires) binders nestedAllocated
       (by
         intro candidate member
         apply recordsIncluded candidate
@@ -5976,80 +6032,42 @@ private noncomputable def encodeRegionMotive
         have := bindersBefore relationArity relation
         omega)
       current currentValue (by omega) (context.extend current)
-      (castFinEquiv rfl (Elaboration.WireContext.length_extend context current)
+      (Elaboration.castFinEquiv rfl
+        (Elaboration.WireContext.length_extend context current)
         (extendWireEquiv wireEquiv localEquiv))
       (by simpa [Elaboration.WireContext.extend] using extendedAgreement)
-      extendedExact binderContext binderAgreement binderCovers draftIndex
-      (targetItems.get targetIndex) targetOriginAt
-      (targetItems.valid_get targetItemsValidCurrent targetIndex)
-    have sourcePosition :
-        Fin.cast (occurrenceDrafts_length items) draftIndex = sourceIndex := by
-      apply Fin.ext
-      rfl
-    have targetPosition : positions sourceIndex =
-        Fin.cast targetEraseLength.symm targetIndex := by
-      apply Fin.ext
-      rfl
-    rw [sourcePosition] at itemResult
-    rw [targetPosition]
-    exact (Elaboration.CompiledItems.erase_get targetItems
-      targetItemsValidCurrent (rawDiagram_wellFormed diagram)
-      (context.extend current) rels binderContext extendedExact binderCovers
-      targetIndex).symm ▸ itemResult
-  cases target with
-  | mk origin nodes children =>
-      simp only [Elaboration.CompiledRegion.origin] at targetOrigin
-      subst origin
-      have targetEraseItems :
-          (nodes.append children).erase
-              (nodes.valid_append children targetValid.2.2.1 targetValid.2.2.2)
-              (rawDiagram_wellFormed diagram) (context.extend current) rels
-              binderContext extendedExact binderCovers =
-            (nodes.erase targetValid.2.2.1 (rawDiagram_wellFormed diagram)
-              (context.extend current) rels binderContext extendedExact
-              binderCovers).append
-            (children.erase targetValid.2.2.2
-              (rawDiagram_wellFormed diagram) (context.extend current) rels
-              binderContext extendedExact binderCovers) :=
-        Elaboration.CompiledItems.erase_append nodes children
-          targetValid.2.2.1 targetValid.2.2.2
-          (rawDiagram_wellFormed diagram) (context.extend current) rels
-          binderContext extendedExact binderCovers
-      rw [Elaboration.CompiledRegion.erase]
-      apply regionIso_of_target_cast
-        (Elaboration.WireContext.length_extend context current)
-        wireEquiv localEquiv items
-      simpa [targetItems, Elaboration.CompiledRegion.items, targetEraseItems]
-        using itemsIso
+      extendedExact binderContext binderAgreement draftIndex draftDirect
+      (targetItems.get targetIndex) (draftCompiled draftDirect)
+    simpa [positions, draftIndex, targetIndex] using itemResult
 
-private noncomputable def encodeItemsCore
+private noncomputable def compileEncodedItemsCore
     (items : ItemSeq sourceWires rels) :
-    ItemsEncodingMotive sourceWires rels items := by
+    ItemsCompileMotive sourceWires rels items := by
   apply ItemSeq.rec
-      (motive_1 := RegionEncodingMotive)
-      (motive_2 := ItemEncodingMotive)
-      (motive_3 := ItemsEncodingMotive)
+      (motive_1 := RegionCompileMotive)
+      (motive_2 := ItemCompileMotive)
+      (motive_3 := ItemsCompileMotive)
   case mk =>
-      intro sourceWires sourceRels localWires nested nestedEncoded
-      exact encodeRegionMotive localWires nested nestedEncoded
+      intro sourceWires sourceRels localWires nested nestedCompiled
+      exact compileEncodedRegionMotive localWires nested nestedCompiled
   case atom =>
       intro sourceRels arity sourceWires relation arguments
-      exact encodeAtomMotive relation arguments
+      exact compileEncodedAtomMotive relation arguments
   case identity =>
       intro sourceWires sourceRels arity arguments
-      exact encodeIdentityMotive arguments
+      exact compileEncodedIdentityMotive arguments
   case cut =>
-      intro sourceWires sourceRels body bodyEncoded
-      exact encodeCutMotive body bodyEncoded
+      intro sourceWires sourceRels body bodyCompiled
+      exact compileEncodedCutMotive body bodyCompiled
   case bubble =>
-      intro sourceWires sourceRels arity body bodyEncoded
-      exact encodeBubbleMotive body bodyEncoded
+      intro sourceWires sourceRels arity body bodyCompiled
+      exact compileEncodedBubbleMotive body bodyCompiled
   case nil =>
       intro sourceWires sourceRels
-      exact encodeNilMotive
+      exact compileEncodedNilMotive
   case cons =>
-      intro sourceWires sourceRels head tail headEncoded tailEncoded
-      exact encodeConsMotive head tail headEncoded tailEncoded
+      intro sourceWires sourceRels head tail headCompiled tailCompiled
+      exact compileEncodedConsMotive head tail headCompiled tailCompiled
 
 private theorem rawOpen_elaborate_isomorphic
     (diagram : VisualProof.Diagram.OpenDiagram arity) :
@@ -6072,7 +6090,8 @@ private theorem rawOpen_elaborate_isomorphic
           wireScopes := ⟨List.replicate diagram.externalClasses 0, [], by simp,
             by simp [flattenOpen, bodyFlat]⟩
         }
-      have regionAllocation : List.SegmentAt (flattenOpen diagram).regions
+      have regionAllocation : List.SegmentAt
+          (flattenOpen diagram).regions
           (.sheet :: (flattenItems 0 1 0
             (diagram.externalClasses + localWires)
             (WireMap.extend
@@ -6080,7 +6099,8 @@ private theorem rawOpen_elaborate_isomorphic
               diagram.externalClasses localWires)
             BinderMap.empty items).regions) 0 := by
         simpa only [bodyFlat, bodyEq, flattenRegion] using bodyAllocated.regions
-      have wireAllocation : List.SegmentAt (flattenOpen diagram).wireScopes
+      have wireAllocation : List.SegmentAt
+          (flattenOpen diagram).wireScopes
           (List.replicate localWires 0 ++
             (flattenItems 0 1 0 (diagram.externalClasses + localWires)
               (WireMap.extend
@@ -6088,8 +6108,7 @@ private theorem rawOpen_elaborate_isomorphic
                 diagram.externalClasses localWires)
               BinderMap.empty items).wireScopes)
           diagram.externalClasses := by
-        simpa only [bodyFlat, bodyEq, flattenRegion] using
-          bodyAllocated.wireScopes
+        simpa only [bodyFlat, bodyEq, flattenRegion] using bodyAllocated.wireScopes
       let nestedFlat := flattenItems 0 1 0
         (diagram.externalClasses + localWires)
         (WireMap.extend
@@ -6099,7 +6118,8 @@ private theorem rawOpen_elaborate_isomorphic
       have nestedAllocated : Flat.SegmentAt (flattenOpen diagram) nestedFlat
           1 0 (diagram.externalClasses + localWires) := by
         exact {
-          regions := by simpa only [nestedFlat] using regionAllocation.tail
+          regions := by
+            simpa only [nestedFlat] using regionAllocation.tail
           nodes := by
             simpa only [bodyFlat, bodyEq, flattenRegion, nestedFlat] using
               bodyAllocated.nodes
@@ -6169,7 +6189,7 @@ private theorem rawOpen_elaborate_isomorphic
           (Fin (diagram.externalClasses + localWires))
           (Fin ((rawOpen diagram).exposedWires ++
             (rawOpen diagram).hiddenWires).length) :=
-        castFinEquiv rfl
+        Elaboration.castFinEquiv rfl
           (List.length_append (as := (rawOpen diagram).exposedWires)
             (bs := (rawOpen diagram).hiddenWires))
           (extendWireEquiv (externalEquiv diagram) hiddenEquiv)
@@ -6178,17 +6198,13 @@ private theorem rawOpen_elaborate_isomorphic
             (fun external : Fin diagram.externalClasses => external.val)
             diagram.externalClasses localWires)
           ((rawOpen diagram).exposedWires ++ (rawOpen diagram).hiddenWires)
-          rootEquiv := rootAgreement
+          rootEquiv := by
+        exact rootAgreement
       have rootExact : Elaboration.WireContext.Exact
           ((rawOpen diagram).exposedWires ++ (rawOpen diagram).hiddenWires)
           (rawDiagram diagram).root := by
         simpa only [VisualProof.Concrete.OpenDiagram.rootWires] using
           Elaboration.openRootWires_exact (rawOpen_wellFormed diagram)
-      have rootCovers : (Elaboration.BinderContext.empty :
-          Elaboration.BinderContext (rawDiagram diagram) []).Covers
-          (rawDiagram diagram).root :=
-        Elaboration.BinderContext.empty_covers_root
-          (rawDiagram_wellFormed diagram)
       obtain ⟨occurrenceBounded, occurrenceMemIff⟩ :=
         record_localOccurrences diagram record recordMember
           (rawDiagram diagram).root rfl
@@ -6197,93 +6213,128 @@ private theorem rawOpen_elaborate_isomorphic
       let occurrenceEquiv := localOccurrenceDraftEquiv
         (rawDiagram diagram).root record.occurrences occurrenceBounded
         occurrenceNodup occurrenceMemIff
-      let targetBody := checked.compilation
-      have targetValid : targetBody.Valid := checked.compilation_valid
+      obtain ⟨targetBody, compiledRoot, _, elaborateBody⟩ :=
+        Concrete.CheckedOpen.elaborate_body_computation checked
+      have compiledRoot' : Elaboration.compileRoot? (rawDiagram diagram)
+          (rawDiagram_wellFormed diagram)
+          (rawOpen diagram).exposedWires (rawOpen diagram).hiddenWires =
+          some targetBody := by
+        simpa [checked] using compiledRoot
       let targetItems := targetBody.items
-      have targetItemsValid : targetItems.ValidAt targetBody.origin :=
-        targetBody.items_valid targetValid
-      have targetOrigin : targetBody.origin = (rawDiagram diagram).root := by
-        exact Concrete.CheckedOpen.compilation_origin checked
-      have targetItemsValidRoot : targetItems.ValidAt
-          (rawDiagram diagram).root := by simpa [targetOrigin] using targetItemsValid
-      have targetOrigins : targetItems.origins =
-          Elaboration.localOccurrences (rawDiagram diagram)
-            (rawDiagram diagram).root := by
-        calc
-          targetItems.origins = Elaboration.localOccurrences
-              (rawDiagram diagram) targetBody.origin :=
-            targetBody.items_origins targetValid
-          _ = _ := congrArg (Elaboration.localOccurrences (rawDiagram diagram))
-            targetOrigin
-      have targetLength : targetItems.length =
+      have compiledItemsEq : Elaboration.compileItems? (rawDiagram diagram)
+          (rawDiagram_wellFormed diagram)
+          (rawDiagram diagram).root
+          ((rawOpen diagram).exposedWires ++ (rawOpen diagram).hiddenWires)
+          Elaboration.BinderContext.empty
           (Elaboration.localOccurrences (rawDiagram diagram)
-            (rawDiagram diagram).root).length := by
-        exact (Elaboration.CompiledItems.length_eq_origins_length
-          targetItems).trans (congrArg List.length targetOrigins)
-      let targetEraseLength := Elaboration.CompiledItems.erase_length targetItems
-        targetItemsValidRoot (rawDiagram_wellFormed diagram)
-        ((rawOpen diagram).exposedWires ++ (rawOpen diagram).hiddenWires) []
-        Elaboration.BinderContext.empty rootExact rootCovers
-      have itemsIso : ItemSeqIso rootEquiv [] items
-          (targetItems.erase targetItemsValidRoot
+            (rawDiagram diagram).root) (fun _ member => member) =
+          some targetItems := by
+        change Elaboration.compileRoot? (rawDiagram diagram)
             (rawDiagram_wellFormed diagram)
-            ((rawOpen diagram).exposedWires ++ (rawOpen diagram).hiddenWires)
-            [] Elaboration.BinderContext.empty rootExact rootCovers) := by
+            (rawOpen diagram).exposedWires (rawOpen diagram).hiddenWires =
+          some targetBody at compiledRoot'
+        rw [Elaboration.compileRoot?_eq_compileItems?
+          (rawDiagram_wellFormed diagram)] at compiledRoot'
+        change Option.bind (Elaboration.compileItems? (rawDiagram diagram)
+            (rawDiagram_wellFormed diagram) (rawDiagram diagram).root
+            ((rawOpen diagram).exposedWires ++
+              (rawOpen diagram).hiddenWires)
+            Elaboration.BinderContext.empty
+            (Elaboration.localOccurrences (rawDiagram diagram)
+              (rawDiagram diagram).root) (fun _ member => member))
+            (fun items => some (Elaboration.CompiledRegion.mk items)) =
+          some targetBody at compiledRoot'
+        cases hitems : Elaboration.compileItems? (rawDiagram diagram)
+            (rawDiagram_wellFormed diagram) (rawDiagram diagram).root
+            ((rawOpen diagram).exposedWires ++
+              (rawOpen diagram).hiddenWires)
+            Elaboration.BinderContext.empty
+            (Elaboration.localOccurrences (rawDiagram diagram)
+              (rawDiagram diagram).root) (fun _ member => member) with
+        | none =>
+            rw [hitems] at compiledRoot'
+            cases compiledRoot'
+        | some compiledItems =>
+            rw [hitems] at compiledRoot'
+            injection compiledRoot' with targetEq
+            subst targetBody
+            apply congrArg some
+            change compiledItems = checked.compilation.items
+            exact congrArg Elaboration.CompiledRegion.items targetEq
+      have itemsIso : ItemSeqIso rootEquiv [] items targetItems.erase := by
         let positions : FiniteEquiv (Fin items.length)
-            (Fin (targetItems.erase targetItemsValidRoot
-              (rawDiagram_wellFormed diagram)
-              ((rawOpen diagram).exposedWires ++
-                (rawOpen diagram).hiddenWires)
-              [] Elaboration.BinderContext.empty rootExact rootCovers).length) :=
-          (FiniteEquiv.finCast (occurrenceDrafts_length items).symm).trans
-            (occurrenceEquiv.trans
-              ((FiniteEquiv.finCast targetLength.symm).trans
-                (FiniteEquiv.finCast targetEraseLength.symm)))
+            (Fin targetItems.length) :=
+            (FiniteEquiv.finCast (occurrenceDrafts_length items).symm).trans
+            (occurrenceEquiv.trans (FiniteEquiv.finCast
+              (Elaboration.compileItems?_length
+                (rawDiagram_wellFormed diagram)
+                (rawDiagram diagram).root
+                ((rawOpen diagram).exposedWires ++
+                  (rawOpen diagram).hiddenWires)
+                Elaboration.BinderContext.empty compiledItemsEq).symm))
         apply ItemSeqIso.permute positions
         intro sourceIndex
         let draftIndex : Fin record.occurrences.length :=
           Fin.cast (occurrenceDrafts_length items).symm sourceIndex
         let localIndex := occurrenceEquiv draftIndex
-        let targetIndex : Fin targetItems.length :=
-          Fin.cast targetLength.symm localIndex
+        let targetIndex : Fin targetItems.length := Fin.cast
+          (Elaboration.compileItems?_length
+            (rawDiagram_wellFormed diagram)
+            (rawDiagram diagram).root
+            ((rawOpen diagram).exposedWires ++
+              (rawOpen diagram).hiddenWires)
+            Elaboration.BinderContext.empty compiledItemsEq).symm localIndex
+        have compiledAt := Elaboration.compileItems?_get
+          (rawDiagram_wellFormed diagram)
+          (rawDiagram diagram).root
+          ((rawOpen diagram).exposedWires ++
+            (rawOpen diagram).hiddenWires)
+          Elaboration.BinderContext.empty compiledItemsEq localIndex
         have occurrenceLookup := localOccurrenceDraftEquiv_lookup
           (rawDiagram diagram).root record.occurrences occurrenceBounded
           occurrenceNodup occurrenceMemIff draftIndex
         have realizedLookup := realizeOccurrenceDrafts_get
           record.occurrences occurrenceBounded draftIndex
         have localOccurrenceEq := occurrenceLookup.trans realizedLookup
-        have targetOriginAt : (targetItems.get targetIndex).origin =
+        have draftDirect :
             (record.occurrences.get draftIndex).toConcrete
+                (occurrenceDrafts_bounded diagram 0 1 0
+                  (diagram.externalClasses + localWires)
+                  (WireMap.extend
+                    (fun external : Fin diagram.externalClasses => external.val)
+                    diagram.externalClasses localWires)
+                  BinderMap.empty items nestedAllocated _
+                  (List.get_mem _ draftIndex)) ∈
+              Elaboration.localOccurrences (rawDiagram diagram)
+                (rawDiagram diagram).root := by
+          rw [← localOccurrenceEq]
+          exact List.get_mem _ localIndex
+        let compilation := fun occurrence => ∀ occurrenceDirect :
+            occurrence ∈ Elaboration.localOccurrences (rawDiagram diagram)
+              (rawDiagram diagram).root,
+          Elaboration.compileOccurrence? (rawDiagram diagram)
+              (rawDiagram_wellFormed diagram)
+              (rawDiagram diagram).root
+              ((rawOpen diagram).exposedWires ++
+                (rawOpen diagram).hiddenWires)
+              Elaboration.BinderContext.empty occurrence occurrenceDirect =
+            some (targetItems.get targetIndex)
+        have localCompiled : compilation
+            ((Elaboration.localOccurrences (rawDiagram diagram)
+              (rawDiagram diagram).root).get localIndex) := by
+          intro occurrenceDirect
+          simpa [targetIndex] using compiledAt
+        have draftCompiled : compilation
+            ((record.occurrences.get draftIndex).toConcrete
               (occurrenceDrafts_bounded diagram 0 1 0
                 (diagram.externalClasses + localWires)
                 (WireMap.extend
                   (fun external : Fin diagram.externalClasses => external.val)
                   diagram.externalClasses localWires)
                 BinderMap.empty items nestedAllocated _
-                (List.get_mem _ draftIndex)) := by
-          calc
-            (targetItems.get targetIndex).origin =
-                targetItems.origins.get
-                  (Fin.cast
-                    (Elaboration.CompiledItems.length_eq_origins_length
-                      targetItems) targetIndex) :=
-              Elaboration.CompiledItems.origin_get _ _
-            _ = (Elaboration.localOccurrences (rawDiagram diagram)
-                    (rawDiagram diagram).root).get localIndex := by
-              have lookup := List.get_cast targetOrigins
-                (Fin.cast
-                  (Elaboration.CompiledItems.length_eq_origins_length
-                    targetItems) targetIndex)
-              have indexEq :
-                  Fin.cast (congrArg List.length targetOrigins)
-                      (Fin.cast
-                        (Elaboration.CompiledItems.length_eq_origins_length
-                          targetItems) targetIndex) = localIndex := by
-                apply Fin.ext
-                rfl
-              simpa [indexEq] using lookup
-            _ = _ := localOccurrenceEq
-        have itemResult := encodeItemsCore items diagram 0 1 0
+                (List.get_mem _ draftIndex))) :=
+          localOccurrenceEq ▸ localCompiled
+        have itemResult := compileEncodedItemsCore items diagram 0 1 0
           (diagram.externalClasses + localWires)
           (WireMap.extend
             (fun external : Fin diagram.externalClasses => external.val)
@@ -6301,42 +6352,44 @@ private theorem rawOpen_elaborate_isomorphic
             exact Fin.elim0 relation.index)
           (rawDiagram diagram).root rfl (by omega)
           ((rawOpen diagram).exposedWires ++ (rawOpen diagram).hiddenWires)
-          rootEquiv rootAgreement' rootExact Elaboration.BinderContext.empty
-          (BinderMap.empty_contextAgreement diagram) rootCovers draftIndex
-          (targetItems.get targetIndex) targetOriginAt
-          (targetItems.valid_get targetItemsValidRoot targetIndex)
+          rootEquiv rootAgreement' rootExact
+          Elaboration.BinderContext.empty
+          (BinderMap.empty_contextAgreement diagram)
+          draftIndex draftDirect
+          (targetItems.get targetIndex) (draftCompiled draftDirect)
         have sourcePosition :
             Fin.cast (occurrenceDrafts_length items) draftIndex = sourceIndex := by
           apply Fin.ext
           rfl
-        have targetPosition : positions sourceIndex =
-            Fin.cast targetEraseLength.symm targetIndex := by
+        have targetPosition : positions sourceIndex = targetIndex := by
           apply Fin.ext
           rfl
         rw [sourcePosition] at itemResult
         rw [targetPosition]
-        exact (Elaboration.CompiledItems.erase_get targetItems
-          targetItemsValidRoot (rawDiagram_wellFormed diagram)
-          ((rawOpen diagram).exposedWires ++ (rawOpen diagram).hiddenWires)
-          [] Elaboration.BinderContext.empty rootExact rootCovers
-          targetIndex).symm ▸ itemResult
+        have targetErase :=
+          Elaboration.CompiledItems.erase_get targetItems targetIndex
+        exact targetErase.symm ▸ itemResult
       have bodyIso : RegionIso (externalEquiv diagram) []
           (.mk localWires items)
-          (targetBody.erase targetValid (rawDiagram_wellFormed diagram)
-            (rawOpen diagram).exposedWires (rawOpen diagram).hiddenWires []
-            Elaboration.BinderContext.empty (by
-              simpa [targetOrigin] using rootExact) (by
-              simpa [targetOrigin] using rootCovers)) := by
-        rw [Elaboration.CompiledRegion.erase_eq_items]
-        apply regionIso_of_target_cast
+          (@Elaboration.CompiledRegion.mk (rawDiagram diagram)
+            (.root (rawOpen diagram).exposedWires
+              (rawOpen diagram).hiddenWires) targetItems).erase := by
+        simp only [Elaboration.CompiledRegion.erase,
+          Elaboration.CompilerCall.finish, Elaboration.CompilerCall.castFullItems]
+        apply Elaboration.regionIso_of_cast rfl
           (List.length_append (as := (rawOpen diagram).exposedWires)
             (bs := (rawOpen diagram).hiddenWires))
-          (externalEquiv diagram) hiddenEquiv items
-        simpa [rootEquiv, targetItems, targetBody,
-          Concrete.CheckedOpen.compilation_origin] using itemsIso
+          (externalEquiv diagram) hiddenEquiv items targetItems.erase
+        exact itemsIso
       have compiledBodyIso : RegionIso (externalEquiv diagram) []
           diagram.body checked.elaborate.body := by
-        rw [bodyEq]
+        have targetBodyEq : targetBody =
+            @Elaboration.CompiledRegion.mk (rawDiagram diagram)
+              (.root (rawOpen diagram).exposedWires
+                (rawOpen diagram).hiddenWires) targetItems := by
+          cases targetBody
+          rfl
+        rw [bodyEq, elaborateBody, targetBodyEq]
         exact bodyIso
       refine ⟨?_⟩
       apply OpenDiagramIso.ofArityEq (rawOpen_boundary_length diagram)
@@ -6353,6 +6406,8 @@ private theorem rawOpen_elaborate_isomorphic
                 rw [externalEquiv_boundary]
           _ = _ := (externalEquiv diagram).left_inv _
       · exact compiledBodyIso.symm
+
+
 
 end Encoding
 

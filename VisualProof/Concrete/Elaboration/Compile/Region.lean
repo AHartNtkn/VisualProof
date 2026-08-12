@@ -7,6 +7,25 @@ open VisualProof.Data.Finite
 open VisualProof.Theory
 open VisualProof.Diagram
 
+noncomputable def regionIso_of_cast
+    {sourceOuter targetOuter sourceLocal targetLocal
+      sourceExtended targetExtended : Nat}
+    (sourceEq : sourceExtended = sourceOuter + sourceLocal)
+    (targetEq : targetExtended = targetOuter + targetLocal)
+    (ambient : FiniteEquiv (Fin sourceOuter) (Fin targetOuter))
+    (localEquiv : FiniteEquiv (Fin sourceLocal) (Fin targetLocal))
+    (sourceItems : ItemSeq sourceExtended rels)
+    (targetItems : ItemSeq targetExtended rels)
+    (hitems : ItemSeqIso
+      (castFinEquiv sourceEq targetEq (extendWireEquiv ambient localEquiv))
+      rels sourceItems targetItems) :
+    RegionIso ambient rels
+      (.mk sourceLocal (sourceItems.castWiresEq sourceEq))
+      (.mk targetLocal (targetItems.castWiresEq targetEq)) := by
+  subst sourceExtended
+  subst targetExtended
+  simpa using RegionIso.mk localEquiv hitems
+
 private def descendantRegions (d : Diagram)
     (region : Fin d.regionCount) : List (Fin d.regionCount) :=
   filterFin fun candidate => decide (d.Encloses region candidate)
@@ -41,7 +60,8 @@ private theorem descendantRegions_length_lt_of_parent
     intro candidate candidateMember
     simp only [decide_eq_true_eq] at candidateMember ⊢
     exact checked_encloses_trans hwf parentChild candidateMember
-  have distinct : descendantRegions d child ≠ descendantRegions d parent := by
+  have distinct : descendantRegions d child ≠
+      descendantRegions d parent := by
     intro equal
     have parentMember : parent ∈ descendantRegions d parent := by
       simp [descendantRegions, Diagram.Encloses.refl]
@@ -60,201 +80,315 @@ private theorem descendantRegions_length_lt_of_parent
 
 private def compileOccurrenceWith? (d : Diagram)
     (parent : Fin d.regionCount)
-    (recurse : ∀ {nestedRels : RelCtx}
-      (child : Fin d.regionCount),
+    (recurse : ∀ {nestedRels : RelCtx},
+      (child : Fin d.regionCount) →
       (d.regions child).parent? = some parent →
       (context : WireContext d) →
       (binders : BinderContext d nestedRels) →
-      Option (CompiledRegion d
-        (.nested child context nestedRels binders)))
-    (context : WireContext d) (binders : BinderContext d rels) :
-    (occurrence : LocalOccurrence d.regionCount d.nodeCount) →
-    (direct : ∀ child, occurrence = .child child →
-      (d.regions child).parent? = some parent) →
-    Option (CompiledItem d context rels binders)
-  | .node node, _ => compileNode? d context binders node
-  | .child child, direct =>
+      Option (CompiledRegion d (.nested child context nestedRels binders)))
+    (context : WireContext d) (binders : BinderContext d rels)
+    (occurrence : LocalOccurrence d.regionCount d.nodeCount)
+    (direct : occurrence ∈ localOccurrences d parent) :
+    Option (CompiledItem d context rels binders) :=
+  match occurrence with
+  | .node node => compileNode? d context binders node
+  | .child child =>
+      have hparent := (mem_localOccurrences_child d parent child).mp direct
       match d.regions child with
       | .sheet => none
       | .cut _ => do
-          let body ← recurse child (direct child rfl) context binders
+          let body ← recurse child hparent context binders
           pure (.cut body)
       | .bubble _ arity => do
-          let body ← recurse child (direct child rfl) context
-            (binders.push child arity)
+          let body ← recurse child hparent context (binders.push child arity)
           pure (.bubble arity body)
 
 private def compileItemsWith? (d : Diagram)
     (parent : Fin d.regionCount)
-    (recurse : ∀ {nestedRels : RelCtx}
-      (child : Fin d.regionCount),
+    (recurse : ∀ {nestedRels : RelCtx},
+      (child : Fin d.regionCount) →
       (d.regions child).parent? = some parent →
       (context : WireContext d) →
       (binders : BinderContext d nestedRels) →
-      Option (CompiledRegion d
-        (.nested child context nestedRels binders)))
+      Option (CompiledRegion d (.nested child context nestedRels binders)))
     (context : WireContext d) (binders : BinderContext d rels) :
     (occurrences : List (LocalOccurrence d.regionCount d.nodeCount)) →
-    (direct : ∀ child, LocalOccurrence.child child ∈ occurrences →
-      (d.regions child).parent? = some parent) →
+    (∀ occurrence, occurrence ∈ occurrences →
+      occurrence ∈ localOccurrences d parent) →
     Option (CompiledItems d context rels binders)
   | [], _ => some .nil
   | occurrence :: tail, direct => do
       let head ← compileOccurrenceWith? d parent recurse context binders
-        occurrence (fun child equality => direct child (by simp [equality]))
+        occurrence (direct occurrence (by simp))
       let rest ← compileItemsWith? d parent recurse context binders tail
-        (fun child member => direct child (by simp [member]))
+        (by
+          intro candidate member
+          exact direct candidate (by simp [member]))
       pure (.cons head rest)
 
-/-- The sole nested compiler. Termination is justified privately by strict
-direct-child descent in a well-formed diagram; no counter enters its API or
-result type. -/
-def compileRegion? (d : Diagram) (hwf : d.WellFormed) :
-    (origin : Fin d.regionCount) → (context : WireContext d) →
-      (binders : BinderContext d rels) →
-      Option (CompiledRegion d (.nested origin context rels binders))
-  | origin, context, binders => do
-      let items ← compileItemsWith? d origin
-        (fun child direct childContext childBinders => by
-          have _direct := direct
-          exact compileRegion? d hwf child childContext childBinders)
-        (context.extend origin) binders (localOccurrences d origin)
-        (fun child member => (mem_localOccurrences_child d origin child).mp member)
+namespace CompilerCall
+
+/-- Compile exactly one root or nested call. Recursive descent follows only
+direct children in the checked region hierarchy. -/
+def compile? (d : Diagram) (hwf : d.WellFormed) :
+    (call : CompilerCall d) → Option (CompiledRegion d call)
+  | call => do
+      let items ← compileItemsWith? d call.origin
+        (fun child _hparent context binders =>
+          compile? d hwf (.nested child context _ binders))
+        call.fullContext call.binders (localOccurrences d call.origin)
+        (fun _ member => member)
       pure (.mk items)
-termination_by origin => (descendantRegions d origin).length
+termination_by call => (descendantRegions d call.origin).length
 decreasing_by
-  exact descendantRegions_length_lt_of_parent hwf direct
+  exact descendantRegions_length_lt_of_parent hwf _hparent
 
-/-- Compile one occurrence using the fixed well-founded region compiler. -/
+end CompilerCall
+
+/-- Compile one direct occurrence using the sole checked call compiler for
+recursive children. -/
 def compileOccurrence? (d : Diagram) (hwf : d.WellFormed)
-    (context : WireContext d) (binders : BinderContext d rels) :
-    LocalOccurrence d.regionCount d.nodeCount →
-      Option (CompiledItem d context rels binders)
-  | .node node => compileNode? d context binders node
-  | .child child =>
-      match d.regions child with
-      | .sheet => none
-      | .cut _ => do
-          let body ← compileRegion? d hwf child context binders
-          pure (.cut body)
-      | .bubble _ arity => do
-          let body ← compileRegion? d hwf child context
-            (binders.push child arity)
-          pure (.bubble arity body)
+    (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (occurrence : LocalOccurrence d.regionCount d.nodeCount)
+    (direct : occurrence ∈ localOccurrences d parent) :
+    Option (CompiledItem d context rels binders) :=
+  compileOccurrenceWith? d parent
+    (fun child _ context nestedBinders =>
+      CompilerCall.compile? d hwf
+        (.nested child context _ nestedBinders))
+    context binders occurrence direct
 
-/-- Compile an ordinary ordered occurrence list. -/
+/-- Compile a chosen direct-occurrence subsequence using the sole checked call
+compiler for recursive children. -/
 def compileItems? (d : Diagram) (hwf : d.WellFormed)
-    (context : WireContext d) (binders : BinderContext d rels) :
-    List (LocalOccurrence d.regionCount d.nodeCount) →
-      Option (CompiledItems d context rels binders)
-  | [] => some .nil
-  | occurrence :: tail => do
-      let head ← compileOccurrence? d hwf context binders occurrence
-      let rest ← compileItems? d hwf context binders tail
-      pure (.cons head rest)
+    (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (occurrences : List (LocalOccurrence d.regionCount d.nodeCount))
+    (direct : ∀ occurrence, occurrence ∈ occurrences →
+      occurrence ∈ localOccurrences d parent) :
+    Option (CompiledItems d context rels binders) :=
+  compileItemsWith? d parent
+    (fun child _ context nestedBinders =>
+      CompilerCall.compile? d hwf
+        (.nested child context _ nestedBinders))
+    context binders occurrences direct
 
-/-- Compile the exact root call. -/
+/-- Compile an exact nested call. -/
+def compileRegion? (d : Diagram) (hwf : d.WellFormed)
+    (origin : Fin d.regionCount) (context : WireContext d)
+    (binders : BinderContext d rels) :
+    Option (CompiledRegion d (.nested origin context rels binders)) :=
+  CompilerCall.compile? d hwf (.nested origin context rels binders)
+
+/-- Compile an exact root call. -/
 def compileRoot? (d : Diagram) (hwf : d.WellFormed)
     (ambient locals : WireContext d) :
-    Option (CompiledRegion d (.root ambient locals)) := do
-  let items ← compileItems? d hwf (ambient ++ locals) BinderContext.empty
-    (localOccurrences d d.root)
-  pure (.mk items)
+    Option (CompiledRegion d (.root ambient locals)) :=
+  CompilerCall.compile? d hwf (.root ambient locals)
 
-/-- Run the sole compiler at the exact call described by its signature. -/
-def CompilerCall.compile? (hwf : d.WellFormed) :
-    (call : CompilerCall d) → Option (CompiledRegion d call)
-  | .root ambient locals => compileRoot? d hwf ambient locals
-  | .nested origin context _ binders =>
-      compileRegion? d hwf origin context binders
-
-@[simp] theorem CompilerCall.compile?_root (hwf : d.WellFormed)
-    (ambient locals : WireContext d) :
-    (CompilerCall.root ambient locals).compile? hwf =
+theorem CompilerCall.compile?_root
+    (hwf : d.WellFormed) (ambient locals : WireContext d) :
+    (CompilerCall.root ambient locals).compile? d hwf =
       compileRoot? d hwf ambient locals := rfl
 
-@[simp] theorem CompilerCall.compile?_nested (hwf : d.WellFormed)
-    {rels : RelCtx} (origin : Fin d.regionCount)
-    (context : WireContext d) (binders : BinderContext d rels) :
-    (CompilerCall.nested origin context rels binders).compile? hwf =
+theorem CompilerCall.compile?_nested
+    (hwf : d.WellFormed) (origin : Fin d.regionCount)
+    (context : WireContext d)
+    (binders : BinderContext d nestedRels) :
+    (CompilerCall.nested origin context nestedRels binders).compile? d hwf =
       compileRegion? d hwf origin context binders := rfl
 
-@[simp] theorem compileOccurrence?_node (d : Diagram) (hwf : d.WellFormed)
+@[simp] theorem compileOccurrence?_node
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)
-    (node : Fin d.nodeCount) :
-    compileOccurrence? d hwf context binders (.node node) =
+    (node : Fin d.nodeCount)
+    (direct : LocalOccurrence.node node ∈ localOccurrences d parent) :
+    compileOccurrence? d hwf parent context binders (.node node) direct =
       compileNode? d context binders node := rfl
 
-theorem compileOccurrence?_child_sheet (d : Diagram) (hwf : d.WellFormed)
+theorem compileOccurrence?_child_sheet
+    (hwf : d.WellFormed) (parent child : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)
-    (child : Fin d.regionCount) (shape : d.regions child = .sheet) :
-    compileOccurrence? d hwf context binders (.child child) = none := by
-  simp [compileOccurrence?, shape]
+    (direct : LocalOccurrence.child child ∈ localOccurrences d parent)
+    (hchild : d.regions child = .sheet) :
+    compileOccurrence? d hwf parent context binders (.child child) direct =
+      none := by
+  simp [compileOccurrence?, compileOccurrenceWith?, hchild]
 
-theorem compileOccurrence?_child_cut (d : Diagram) (hwf : d.WellFormed)
+theorem compileOccurrence?_child_cut
+    (hwf : d.WellFormed) (parent child : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)
-    (child parent : Fin d.regionCount)
-    (shape : d.regions child = .cut parent) :
-    compileOccurrence? d hwf context binders (.child child) =
+    (direct : LocalOccurrence.child child ∈ localOccurrences d parent)
+    (hchild : d.regions child = .cut parent) :
+    compileOccurrence? d hwf parent context binders (.child child) direct =
       (do
         let body ← compileRegion? d hwf child context binders
         pure (.cut body)) := by
-  simp [compileOccurrence?, shape]
+  simp only [compileOccurrence?, compileOccurrenceWith?]
+  rw [hchild]
+  rfl
 
-theorem compileOccurrence?_child_bubble (d : Diagram) (hwf : d.WellFormed)
+theorem compileOccurrence?_child_bubble
+    (hwf : d.WellFormed) (parent child : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)
-    (child parent : Fin d.regionCount) (arity : Nat)
-    (shape : d.regions child = .bubble parent arity) :
-    compileOccurrence? d hwf context binders (.child child) =
+    (arity : Nat)
+    (direct : LocalOccurrence.child child ∈ localOccurrences d parent)
+    (hchild : d.regions child = .bubble parent arity) :
+    compileOccurrence? d hwf parent context binders (.child child) direct =
       (do
         let body ← compileRegion? d hwf child context
           (binders.push child arity)
         pure (.bubble arity body)) := by
-  simp [compileOccurrence?, shape]
+  simp only [compileOccurrence?, compileOccurrenceWith?]
+  rw [hchild]
+  rfl
 
-@[simp] theorem compileItems?_nil (d : Diagram) (hwf : d.WellFormed)
-    (context : WireContext d) (binders : BinderContext d rels) :
-    compileItems? d hwf context binders [] = some .nil := rfl
-
-@[simp] theorem compileItems?_cons (d : Diagram) (hwf : d.WellFormed)
+@[simp] theorem compileItems?_nil
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)
-    (head : LocalOccurrence d.regionCount d.nodeCount) (tail : List _) :
-    compileItems? d hwf context binders (head :: tail) = (do
-      let compiledHead ← compileOccurrence? d hwf context binders head
-      let compiledTail ← compileItems? d hwf context binders tail
-      pure (.cons compiledHead compiledTail)) := rfl
+    (direct : ∀ occurrence, occurrence ∈ [] →
+      occurrence ∈ localOccurrences d parent) :
+    compileItems? d hwf parent context binders [] direct = some .nil := rfl
+
+theorem compileItems?_cons
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (occurrence : LocalOccurrence d.regionCount d.nodeCount)
+    (tail : List (LocalOccurrence d.regionCount d.nodeCount))
+    (direct : ∀ candidate, candidate ∈ occurrence :: tail →
+      candidate ∈ localOccurrences d parent) :
+    compileItems? d hwf parent context binders (occurrence :: tail) direct =
+      (do
+        let head ← compileOccurrence? d hwf parent context binders occurrence
+          (direct occurrence (by simp))
+        let rest ← compileItems? d hwf parent context binders tail (by
+          intro candidate member
+          exact direct candidate (by simp [member]))
+        pure (.cons head rest)) := rfl
+
+theorem compileItems?_length
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
+    {direct : ∀ occurrence, occurrence ∈ occurrences →
+      occurrence ∈ localOccurrences d parent}
+    {items : CompiledItems d context rels binders}
+    (compiled : compileItems? d hwf parent context binders occurrences direct =
+      some items) :
+    items.length = occurrences.length := by
+  induction occurrences generalizing items with
+  | nil =>
+      simp only [compileItems?_nil] at compiled
+      cases compiled
+      rfl
+  | cons occurrence tail ih =>
+      rw [compileItems?_cons] at compiled
+      cases hhead : compileOccurrence? d hwf parent context binders occurrence
+          (direct occurrence (by simp)) with
+      | none => simp [hhead] at compiled
+      | some head =>
+          cases htail : compileItems? d hwf parent context binders tail (by
+              intro candidate member
+              exact direct candidate (by simp [member])) with
+          | none => simp [hhead, htail] at compiled
+          | some rest =>
+              simp [hhead, htail] at compiled
+              cases compiled
+              exact congrArg Nat.succ (ih htail)
+
+theorem compileItems?_get
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
+    {direct : ∀ occurrence, occurrence ∈ occurrences →
+      occurrence ∈ localOccurrences d parent}
+    {items : CompiledItems d context rels binders}
+    (compiled : compileItems? d hwf parent context binders occurrences direct =
+      some items)
+    (index : Fin occurrences.length) :
+    compileOccurrence? d hwf parent context binders (occurrences.get index)
+        (direct _ (List.get_mem occurrences index)) =
+      some (items.get (Fin.cast (compileItems?_length hwf parent context
+        binders compiled).symm index)) := by
+  induction occurrences generalizing items with
+  | nil => exact Fin.elim0 index
+  | cons occurrence tail ih =>
+      rw [compileItems?_cons] at compiled
+      cases hhead : compileOccurrence? d hwf parent context binders occurrence
+          (direct occurrence (by simp)) with
+      | none => simp [hhead] at compiled
+      | some head =>
+          cases htail : compileItems? d hwf parent context binders tail (by
+              intro candidate member
+              exact direct candidate (by simp [member])) with
+          | none => simp [hhead, htail] at compiled
+          | some rest =>
+              simp [hhead, htail] at compiled
+              cases compiled
+              refine Fin.cases ?_ (fun tailIndex => ?_) index
+              · simpa only [List.get, CompiledItems.get] using hhead
+              · have result := ih htail tailIndex
+                simpa only [List.get, CompiledItems.get] using result
 
 theorem compileOccurrence?_origin
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    {context : WireContext d} {binders : BinderContext d rels}
+    (occurrence : LocalOccurrence d.regionCount d.nodeCount)
+    (direct : occurrence ∈ localOccurrences d parent)
     {item : CompiledItem d context rels binders}
-    (compiled : compileOccurrence? d hwf context binders occurrence =
-      some item) : item.origin = occurrence := by
+    (compiled : compileOccurrence? d hwf parent context binders occurrence
+      direct = some item) :
+    item.origin = occurrence := by
   cases occurrence with
-  | node node => exact compileNode?_origin compiled
+  | node node =>
+      rw [compileOccurrence?_node] at compiled
+      exact compileNode?_origin compiled
   | child child =>
-      cases shape : d.regions child with
-      | sheet => simp [compileOccurrence?, shape] at compiled
-      | cut parent =>
-          simp only [compileOccurrence?, shape] at compiled
-          cases bodyResult : compileRegion? d hwf child context binders with
-          | none => simp [bodyResult] at compiled
+      cases hchild : d.regions child with
+      | sheet =>
+          rw [compileOccurrence?_child_sheet hwf parent child context binders
+            direct hchild] at compiled
+          contradiction
+      | cut childParent =>
+          have childParentEq : childParent = parent := by
+            have parentEq :=
+              (mem_localOccurrences_child d parent child).mp direct
+            simpa [hchild, CRegion.parent?] using parentEq
+          subst childParent
+          rw [compileOccurrence?_child_cut hwf parent child context binders
+            direct hchild] at compiled
+          cases hbody : compileRegion? d hwf child context binders with
+          | none => simp [hbody] at compiled
           | some body =>
-              simp [bodyResult] at compiled
-              cases compiled
+              simp [hbody] at compiled
+              subst item
               rfl
-      | bubble parent arity =>
-          simp only [compileOccurrence?, shape] at compiled
-          cases bodyResult : compileRegion? d hwf child context
+      | bubble childParent arity =>
+          have childParentEq : childParent = parent := by
+            have parentEq :=
+              (mem_localOccurrences_child d parent child).mp direct
+            simpa [hchild, CRegion.parent?] using parentEq
+          subst childParent
+          rw [compileOccurrence?_child_bubble hwf parent child context binders
+            arity direct hchild] at compiled
+          cases hbody : compileRegion? d hwf child context
               (binders.push child arity) with
-          | none => simp [bodyResult] at compiled
+          | none => simp [hbody] at compiled
           | some body =>
-              simp [bodyResult] at compiled
-              cases compiled
+              simp [hbody] at compiled
+              subst item
               rfl
 
 theorem compileItems?_origins
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
     {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
+    {direct : ∀ occurrence, occurrence ∈ occurrences →
+      occurrence ∈ localOccurrences d parent}
     {items : CompiledItems d context rels binders}
-    (compiled : compileItems? d hwf context binders occurrences = some items) :
+    (compiled : compileItems? d hwf parent context binders occurrences direct =
+      some items) :
     items.origins = occurrences := by
   induction occurrences generalizing items with
   | nil =>
@@ -263,293 +397,216 @@ theorem compileItems?_origins
       rfl
   | cons occurrence tail ih =>
       rw [compileItems?_cons] at compiled
-      cases headResult : compileOccurrence? d hwf context binders occurrence with
-      | none => simp [headResult] at compiled
-      | some head =>
-          cases tailResult : compileItems? d hwf context binders tail with
-          | none => simp [headResult, tailResult] at compiled
+      cases hitem : compileOccurrence? d hwf parent context binders occurrence
+          (direct occurrence (by simp)) with
+      | none => simp [hitem] at compiled
+      | some item =>
+          cases htail : compileItems? d hwf parent context binders tail (by
+              intro candidate member
+              exact direct candidate (by simp [member])) with
+          | none => simp [hitem, htail] at compiled
           | some rest =>
-              simp [headResult, tailResult] at compiled
+              simp [hitem, htail] at compiled
               cases compiled
               rw [CompiledItems.origins_cons,
-                compileOccurrence?_origin headResult, ih tailResult]
+                compileOccurrence?_origin hwf parent occurrence _ hitem,
+                ih htail]
 
-theorem compileItems?_length
-    {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
-    {items : CompiledItems d context rels binders}
-    (compiled : compileItems? d hwf context binders occurrences = some items) :
-    items.length = occurrences.length := by
-  rw [CompiledItems.length_eq_origins_length,
-    compileItems?_origins compiled]
+theorem CompilerCall.compile?_eq_compileItems?
+    (hwf : d.WellFormed) (call : CompilerCall d) :
+    call.compile? d hwf = (do
+      let items ← compileItems? d hwf call.origin call.fullContext
+        call.binders (localOccurrences d call.origin) (fun _ member => member)
+      pure (.mk items)) := by
+  rw [CompilerCall.compile?]
+  rfl
 
-theorem compileItems?_get
-    {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
-    {items : CompiledItems d context rels binders}
-    (compiled : compileItems? d hwf context binders occurrences = some items)
-    (index : Fin occurrences.length) :
-    compileOccurrence? d hwf context binders (occurrences.get index) =
-      some (items.get (Fin.cast (compileItems?_length compiled).symm index)) := by
-  induction occurrences generalizing items with
-  | nil => exact Fin.elim0 index
-  | cons occurrence tail ih =>
-      rw [compileItems?_cons] at compiled
-      cases headResult : compileOccurrence? d hwf context binders occurrence with
-      | none => simp [headResult] at compiled
-      | some head =>
-          cases tailResult : compileItems? d hwf context binders tail with
-          | none => simp [headResult, tailResult] at compiled
-          | some rest =>
-              simp [headResult, tailResult] at compiled
-              cases compiled
-              refine Fin.cases ?_ (fun tailIndex => ?_) index
-              · simpa only [List.get, CompiledItems.get] using headResult
-              · simpa only [List.get, CompiledItems.get] using
-                  ih tailResult tailIndex
+theorem compileRegion?_eq_compileItems?
+    (hwf : d.WellFormed) (origin : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels) :
+    compileRegion? d hwf origin context binders =
+      (compileItems? d hwf origin (context.extend origin) binders
+        (localOccurrences d origin) (fun _ member => member)).map
+          (fun items => (CompiledRegion.mk items : CompiledRegion d
+            (.nested origin context rels binders))) := by
+  unfold compileRegion?
+  rw [CompilerCall.compile?_eq_compileItems?]
+  change (do
+    let items ← compileItems? d hwf origin (context.extend origin) binders
+      (localOccurrences d origin) (fun _ member => member)
+    pure (CompiledRegion.mk items : CompiledRegion d
+      (.nested origin context rels binders))) = _
+  cases compileItems? d hwf origin (context.extend origin) binders
+      (localOccurrences d origin) (fun _ member => member) <;> rfl
 
-theorem compileItems?_complete
-    (d : Diagram) (hwf : d.WellFormed) (context : WireContext d)
-    (binders : BinderContext d rels)
-    (occurrences : List (LocalOccurrence d.regionCount d.nodeCount))
-    (success : ∀ occurrence, occurrence ∈ occurrences →
-      ∃ item, compileOccurrence? d hwf context binders occurrence = some item) :
-    ∃ items, compileItems? d hwf context binders occurrences = some items := by
-  induction occurrences with
-  | nil => exact ⟨.nil, rfl⟩
-  | cons occurrence tail ih =>
-      obtain ⟨head, headResult⟩ := success occurrence (by simp)
-      obtain ⟨rest, tailResult⟩ := ih (by
-        intro candidate member
-        exact success candidate (by simp [member]))
-      exact ⟨.cons head rest, by
-        simp [compileItems?, headResult, tailResult]⟩
+theorem compileRoot?_eq_compileItems?
+    (hwf : d.WellFormed) (ambient locals : WireContext d) :
+    compileRoot? d hwf ambient locals = (do
+      let items ← compileItems? d hwf d.root (ambient ++ locals)
+        BinderContext.empty (localOccurrences d d.root) (fun _ member => member)
+      pure (CompiledRegion.mk items : CompiledRegion d
+        (.root ambient locals))) := by
+  unfold compileRoot?
+  simpa only [CompilerCall.origin, CompilerCall.fullContext,
+    CompilerCall.outerContext, CompilerCall.localContext,
+    CompilerCall.rels, CompilerCall.binders] using
+    CompilerCall.compile?_eq_compileItems? hwf
+    (CompilerCall.root ambient locals)
 
-/-- Every well-formed node compiles in an exact wire context covered by its
-lexical binder context. -/
-theorem compileNode?_complete
+theorem compileRoot?_localCount
+    (hwf : d.WellFormed)
+    {body : CompiledRegion d (.root ambient locals)}
+    (_compiled : compileRoot? d hwf ambient locals = some body) :
+    body.localCount = locals.length := rfl
+
+private theorem compileNode?_complete
     (hwf : d.WellFormed)
     {context : WireContext d} {binders : BinderContext d rels}
     {region : Fin d.regionCount}
-    (exact : context.Exact region) (covers : binders.Covers region)
-    {node : Fin d.nodeCount} (nodeRegion : (d.nodes node).region = region) :
+    (hwires : context.Covers region) (hbinders : binders.Covers region)
+    {node : Fin d.nodeCount} (hregion : (d.nodes node).region = region) :
     ∃ item, compileNode? d context binders node = some item := by
-  cases nodeShape : d.nodes node with
-  | atom actualRegion binder =>
-      have actualRegionEq : actualRegion = region := by
-        simpa [nodeShape] using nodeRegion
-      subst actualRegion
-      obtain ⟨parent, arity, bubble⟩ :=
-        BinderContext.checked_atom_binder_is_bubble hwf nodeShape
-      obtain ⟨relation, relationResult⟩ :=
-        BinderContext.checked_atom_binder_available hwf covers nodeShape bubble
-      obtain ⟨arguments, argumentsResult⟩ := checked_resolvePorts?_complete hwf
-        exact.covers (node := node) nodeRegion arity (fun index => .arg index) (by
+  cases hnode : d.nodes node with
+  | atom nodeRegion binder =>
+      have hnodeRegion : nodeRegion = region := by simpa [hnode] using hregion
+      subst nodeRegion
+      obtain ⟨parent, arity, hbubble⟩ :=
+        BinderContext.checked_atom_binder_is_bubble hwf hnode
+      obtain ⟨relation, hrelation⟩ :=
+        BinderContext.checked_atom_binder_available hwf hbinders hnode hbubble
+      obtain ⟨arguments, harguments⟩ := checked_resolvePorts?_complete hwf
+        hwires (node := node) hregion arity (fun index => .arg index) (by
           intro index
-          simp [Diagram.RequiresPort, nodeShape, bubble]
+          simp [Diagram.RequiresPort, hnode, hbubble]
           exact ⟨index, rfl⟩)
       exact ⟨CompiledItem.node node (Item.atom relation arguments), by
-        simp [compileNode?, nodeShape, relationResult, argumentsResult]⟩
-  | identity actualRegion arity =>
-      obtain ⟨arguments, argumentsResult⟩ := checked_resolvePorts?_complete hwf
-        exact.covers (node := node) nodeRegion arity (fun index => .arg index) (by
+        simp [compileNode?, hnode, hrelation, harguments]⟩
+  | identity nodeRegion arity =>
+      obtain ⟨arguments, harguments⟩ := checked_resolvePorts?_complete hwf
+        hwires (node := node) hregion arity (fun index => .arg index) (by
           intro index
-          simp [Diagram.RequiresPort, nodeShape]
+          simp [Diagram.RequiresPort, hnode]
           exact ⟨index, rfl⟩)
       exact ⟨CompiledItem.node node (Item.identity arity arguments), by
-        simp [compileNode?, nodeShape, argumentsResult]⟩
+        simp [compileNode?, hnode, harguments]⟩
 
-private theorem compileItemsWith?_complete
-    (d : Diagram) (parent : Fin d.regionCount)
-    (recurse : ∀ {nestedRels : RelCtx}
-      (child : Fin d.regionCount),
-      (d.regions child).parent? = some parent →
-      (context : WireContext d) →
-      (binders : BinderContext d nestedRels) →
-      Option (CompiledRegion d (.nested child context nestedRels binders)))
-    (context : WireContext d) (binders : BinderContext d rels)
-    (occurrences : List (LocalOccurrence d.regionCount d.nodeCount))
-    (direct : ∀ child, LocalOccurrence.child child ∈ occurrences →
-      (d.regions child).parent? = some parent)
-    (success : ∀ (occurrence) (member : occurrence ∈ occurrences),
-      ∃ item, compileOccurrenceWith? d parent recurse context binders occurrence
-        (fun child equality => direct child (by
-          simpa [← equality] using member)) = some item) :
-    ∃ items, compileItemsWith? d parent recurse context binders occurrences
-      direct = some items := by
-  induction occurrences with
-  | nil => exact ⟨.nil, rfl⟩
-  | cons occurrence tail ih =>
-      obtain ⟨head, headResult⟩ := success occurrence (by simp)
-      obtain ⟨rest, tailResult⟩ := ih
-        (fun child member => direct child (by simp [member])) (by
+/-- Exact wire and binder contexts make the sole checked compiler total. -/
+theorem CompilerCall.compile?_complete
+    (hwf : d.WellFormed) (call : CompilerCall d)
+    (hwires : call.fullContext.Exact call.origin)
+    (hbinders : call.binders.Covers call.origin) :
+    ∃ body, call.compile? d hwf = some body := by
+  have occurrenceComplete : ∀ occurrence
+      (direct : occurrence ∈ localOccurrences d call.origin),
+      ∃ item, compileOccurrence? d hwf call.origin call.fullContext
+        call.binders occurrence direct = some item := by
+    intro occurrence direct
+    cases occurrence with
+    | node node =>
+        have hregion :=
+          (mem_localOccurrences_node d call.origin node).mp direct
+        simpa only [compileOccurrence?_node] using
+          compileNode?_complete hwf hwires.covers hbinders hregion
+    | child child =>
+        have hparent :=
+          (mem_localOccurrences_child d call.origin child).mp direct
+        cases hchild : d.regions child with
+        | sheet =>
+            have hchildRoot : child = d.root :=
+              hwf.only_root_is_sheet child hchild
+            subst child
+            rw [hwf.root_is_sheet] at hparent
+            simp [CRegion.parent?] at hparent
+        | cut parent =>
+            have hparentEq : parent = call.origin := by
+              simpa [hchild, CRegion.parent?] using hparent
+            subst parent
+            have childWires := hwires.extend_child hwf hparent
+            have childBinders :=
+              BinderContext.covers_cut_child hbinders hchild
+            obtain ⟨body, bodyCompiled⟩ :=
+              CompilerCall.compile?_complete hwf
+                (.nested child call.fullContext call.rels call.binders)
+                childWires childBinders
+            change compileRegion? d hwf child call.fullContext call.binders =
+              some body at bodyCompiled
+            refine ⟨CompiledItem.cut body, ?_⟩
+            rw [compileOccurrence?_child_cut hwf call.origin child
+              call.fullContext call.binders direct hchild, bodyCompiled]
+            rfl
+        | bubble parent arity =>
+            have hparentEq : parent = call.origin := by
+              simpa [hchild, CRegion.parent?] using hparent
+            subst parent
+            have childWires := hwires.extend_child hwf hparent
+            have childBinders :=
+              BinderContext.push_covers_bubble_child hbinders hchild
+            obtain ⟨body, bodyCompiled⟩ :=
+              CompilerCall.compile?_complete hwf
+                (.nested child call.fullContext (arity :: call.rels)
+                  (call.binders.push child arity)) childWires childBinders
+            change compileRegion? d hwf child call.fullContext
+              (call.binders.push child arity) = some body at bodyCompiled
+            refine ⟨CompiledItem.bubble arity body, ?_⟩
+            rw [compileOccurrence?_child_bubble hwf call.origin child
+              call.fullContext call.binders arity direct hchild, bodyCompiled]
+            rfl
+  have compileItemsComplete : ∀
+      (occurrences : List (LocalOccurrence d.regionCount d.nodeCount))
+      (direct : ∀ occurrence, occurrence ∈ occurrences →
+        occurrence ∈ localOccurrences d call.origin),
+      ∃ items, compileItems? d hwf call.origin call.fullContext call.binders
+        occurrences direct = some items := by
+    intro occurrences direct
+    induction occurrences with
+    | nil =>
+        exact ⟨.nil, compileItems?_nil hwf call.origin call.fullContext
+          call.binders direct⟩
+    | cons occurrence tail ih =>
+        obtain ⟨head, headCompiled⟩ := occurrenceComplete occurrence
+          (direct occurrence (by simp))
+        have tailDirect : ∀ candidate, candidate ∈ tail →
+            candidate ∈ localOccurrences d call.origin := by
           intro candidate member
-          exact success candidate (by simp [member]))
-      exact ⟨.cons head rest, by
-        simp [compileItemsWith?, headResult, tailResult]⟩
-
-/-- Exact and covering call inputs produce the unique successful result of the
-well-founded nested compiler. -/
-private noncomputable def compileRegionComplete
-    (hwf : d.WellFormed) :
-    ∀ {rels : RelCtx} (region : Fin d.regionCount)
-      (context : WireContext d) (binders : BinderContext d rels),
-      (context.extend region).Exact region → binders.Covers region →
-      {body // compileRegion? d hwf region context binders = some body}
-  | rels, region, context, binders, exact, covers => by
-      let extended := context.extend region
-      have extendedExact : extended.Exact region := by
-        simpa [extended] using exact
-      let recurse := fun {nestedRels : RelCtx}
-          (child : Fin d.regionCount)
-          (_direct : (d.regions child).parent? = some region)
-          (childContext : WireContext d)
-          (childBinders : BinderContext d nestedRels) =>
-        compileRegion? d hwf child childContext childBinders
-      have direct : ∀ child,
-          LocalOccurrence.child child ∈ localOccurrences d region →
-          (d.regions child).parent? = some region := by
-        intro child member
-        exact (mem_localOccurrences_child d region child).mp member
-      have occurrenceSuccess : ∀ (occurrence)
-          (member : occurrence ∈ localOccurrences d region),
-          ∃ item, compileOccurrenceWith? d region recurse extended binders
-            occurrence (fun child equality => direct child (by
-              simpa [← equality] using member)) = some item := by
-        intro occurrence member
-        cases occurrence with
-        | node node =>
-            have nodeRegion := (mem_localOccurrences_node d region node).mp member
-            simpa [compileOccurrenceWith?, recurse] using
-              compileNode?_complete hwf extendedExact covers nodeRegion
-        | child child =>
-            have childDirect := direct child member
-            cases childShape : d.regions child with
-            | sheet =>
-                have childRoot : child = d.root :=
-                  hwf.only_root_is_sheet child childShape
-                subst child
-                rw [hwf.root_is_sheet] at childDirect
-                simp [CRegion.parent?] at childDirect
-            | cut parent =>
-                have parentEq : parent = region := by
-                  simpa [childShape, CRegion.parent?] using childDirect
-                subst parent
-                have childExact := extendedExact.extend_child hwf childDirect
-                have childCovers := BinderContext.covers_cut_child covers childShape
-                obtain ⟨body, bodyResult⟩ := compileRegionComplete hwf child
-                  extended binders childExact childCovers
-                exact ⟨.cut body, by
-                  simp [compileOccurrenceWith?, recurse, childShape, bodyResult]⟩
-            | bubble parent arity =>
-                have parentEq : parent = region := by
-                  simpa [childShape, CRegion.parent?] using childDirect
-                subst parent
-                have childExact := extendedExact.extend_child hwf childDirect
-                have childCovers :=
-                  BinderContext.push_covers_bubble_child covers childShape
-                obtain ⟨body, bodyResult⟩ := compileRegionComplete hwf child
-                  extended (binders.push child arity) childExact childCovers
-                exact ⟨.bubble arity body, by
-                  simp [compileOccurrenceWith?, recurse, childShape, bodyResult]⟩
-      let itemsExist := compileItemsWith?_complete d region recurse
-        extended binders (localOccurrences d region) direct occurrenceSuccess
-      let items := Classical.choose itemsExist
-      have itemsResult := Classical.choose_spec itemsExist
-      refine ⟨.mk items, ?_⟩
-      rw [compileRegion?]
-      change (do
-        let compiledItems ← compileItemsWith? d region recurse extended binders
-          (localOccurrences d region) direct
-        pure (@CompiledRegion.mk d (.nested region context rels binders)
-          compiledItems)) =
-          some (@CompiledRegion.mk d (.nested region context rels binders) items)
-      rw [itemsResult]
-      rfl
-termination_by _ region _ _ _ _ =>
-  (descendantRegions d region).length
+          exact direct candidate (by simp [member])
+        obtain ⟨rest, restCompiled⟩ := ih tailDirect
+        refine ⟨.cons head rest, ?_⟩
+        rw [compileItems?_cons hwf call.origin call.fullContext call.binders
+          occurrence tail direct, headCompiled, restCompiled]
+        rfl
+  obtain ⟨items, itemsCompiled⟩ := compileItemsComplete
+    (localOccurrences d call.origin) (fun _ member => member)
+  refine ⟨.mk items, ?_⟩
+  rw [CompilerCall.compile?_eq_compileItems?, itemsCompiled]
+  rfl
+termination_by (descendantRegions d call.origin).length
 decreasing_by
-  all_goals
-    exact descendantRegions_length_lt_of_parent hwf childDirect
+  all_goals exact descendantRegions_length_lt_of_parent hwf hparent
 
-theorem compileRegion?_complete
-    (hwf : d.WellFormed) {region : Fin d.regionCount}
-    {context : WireContext d} {binders : BinderContext d rels}
-    (exact : (context.extend region).Exact region)
-    (covers : binders.Covers region) :
-    ∃ body, compileRegion? d hwf region context binders = some body :=
-  let result := compileRegionComplete hwf region context binders exact covers
-  ⟨result.1, result.2⟩
-
-theorem openRootWires_exact {d : OpenDiagram} (hwf : d.WellFormed) :
+theorem openRootWires_exact
+    {d : OpenDiagram} (hwf : d.WellFormed) :
     WireContext.Exact d.rootWires d.diagram.root := by
   constructor
   · exact d.rootWires_nodup
   · intro wire
     rw [OpenDiagram.mem_rootWires_iff d hwf]
     constructor
-    · intro scope
-      rw [scope]
+    · intro hscope
+      rw [hscope]
       exact Diagram.Encloses.refl d.diagram d.diagram.root
     · exact encloses_sheet_eq hwf.diagram_well_formed.root_is_sheet
 
 theorem closedRootWires_exact (hwf : d.WellFormed) :
-    WireContext.Exact (([] : WireContext d) ++ exactScopeWires d d.root)
-      d.root := by
+    WireContext.Exact
+      (([] : WireContext d) ++ exactScopeWires d d.root) d.root := by
   simpa [WireContext.extend] using WireContext.root_exact hwf
 
-theorem compileRoot?_complete (hwf : d.WellFormed)
+theorem compileRoot?_complete
+    (hwf : d.WellFormed)
     (ambient locals : WireContext d)
-    (exact : WireContext.Exact (ambient ++ locals) d.root) :
+    (hwires : WireContext.Exact (ambient ++ locals) d.root) :
     ∃ body, compileRoot? d hwf ambient locals = some body := by
-  have covers : (BinderContext.empty : BinderContext d []).Covers d.root :=
-    BinderContext.empty_covers_root hwf
-  obtain ⟨items, itemsResult⟩ := compileItems?_complete d hwf
-    (ambient ++ locals) BinderContext.empty (localOccurrences d d.root) (by
-    intro occurrence member
-    cases occurrence with
-    | node node =>
-        have nodeRegion := (mem_localOccurrences_node d d.root node).mp member
-        simpa using compileNode?_complete hwf exact covers nodeRegion
-    | child child =>
-        have childDirect :=
-          (mem_localOccurrences_child d d.root child).mp member
-        cases childShape : d.regions child with
-        | sheet =>
-            have childRoot : child = d.root :=
-              hwf.only_root_is_sheet child childShape
-            subst child
-            rw [hwf.root_is_sheet] at childDirect
-            simp [CRegion.parent?] at childDirect
-        | cut parent =>
-            have parentEq : parent = d.root := by
-              simpa [childShape, CRegion.parent?] using childDirect
-            subst parent
-            have childExact := exact.extend_child hwf childDirect
-            have childCovers := BinderContext.covers_cut_child covers childShape
-            obtain ⟨body, bodyResult⟩ := compileRegion?_complete hwf
-              (region := child) (context := ambient ++ locals)
-              (binders := BinderContext.empty) childExact childCovers
-            exact ⟨.cut body, by
-              simp [compileOccurrence?, childShape, bodyResult]⟩
-        | bubble parent arity =>
-            have parentEq : parent = d.root := by
-              simpa [childShape, CRegion.parent?] using childDirect
-            subst parent
-            have childExact := exact.extend_child hwf childDirect
-            have childCovers :=
-              BinderContext.push_covers_bubble_child covers childShape
-            obtain ⟨body, bodyResult⟩ := compileRegion?_complete hwf
-              (region := child) (context := ambient ++ locals)
-              (binders := BinderContext.empty.push child arity)
-              childExact childCovers
-            exact ⟨.bubble arity body, by
-              simp [compileOccurrence?, childShape, bodyResult]⟩)
-  refine ⟨.mk items, ?_⟩
-  change (do
-    let compiledItems ← compileItems? d hwf (ambient ++ locals)
-      BinderContext.empty (localOccurrences d d.root)
-    pure (@CompiledRegion.mk d (.root ambient locals) compiledItems)) =
-      some (@CompiledRegion.mk d (.root ambient locals) items)
-  rw [itemsResult]
-  rfl
+  exact CompilerCall.compile?_complete hwf (.root ambient locals) hwires
+    (BinderContext.empty_covers_root hwf)
 
 end VisualProof.Concrete.Elaboration

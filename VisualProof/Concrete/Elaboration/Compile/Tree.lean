@@ -68,14 +68,13 @@ mutual
   /-- The sole successful compiler result, indexed by its exact call. -/
   inductive CompiledRegion (d : Diagram) : CompilerCall d → Type
     | mk {call : CompilerCall d}
-        (items : CompiledItems d call.fullContext
-          call.rels call.binders) :
+        (items : CompiledItems d call.fullContext call.rels call.binders) :
         CompiledRegion d call
 
   /-- One compiled occurrence with an ordinary concrete origin. -/
   inductive CompiledItem (d : Diagram) :
-      (context : WireContext d) →
-      (rels : RelCtx) → BinderContext d rels → Type
+      (context : WireContext d) → (rels : RelCtx) →
+      BinderContext d rels → Type
     | node {context : WireContext d} {rels : RelCtx}
         {binders : BinderContext d rels} (origin : Fin d.nodeCount)
         (item : Item context.length rels) :
@@ -96,8 +95,8 @@ mutual
   /-- An origin-owning ordered result at one exact occurrence compiler
   signature. -/
   inductive CompiledItems (d : Diagram) :
-      (context : WireContext d) →
-      (rels : RelCtx) → BinderContext d rels → Type
+      (context : WireContext d) → (rels : RelCtx) →
+      BinderContext d rels → Type
     | nil {context : WireContext d} {rels : RelCtx}
         {binders : BinderContext d rels} :
         CompiledItems d context rels binders
