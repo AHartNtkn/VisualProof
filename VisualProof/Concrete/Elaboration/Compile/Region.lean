@@ -421,6 +421,20 @@ theorem CompilerCall.compile?_eq_compileItems?
   rw [CompilerCall.compile?]
   rfl
 
+theorem CompilerCall.compile?_items_of_success
+    (hwf : d.WellFormed) (call : CompilerCall d)
+    {items : CompiledItems d call.fullContext call.rels call.binders}
+    (compiled : call.compile? d hwf = some (.mk items)) :
+    compileItems? d hwf call.origin call.fullContext call.binders
+      (localOccurrences d call.origin) (fun _ member => member) = some items := by
+  rw [CompilerCall.compile?_eq_compileItems? hwf] at compiled
+  obtain ⟨resultItems, result, resultEq⟩ :=
+    Option.bind_eq_some_iff.mp compiled
+  have itemsEq : resultItems = items := by
+    cases call <;> cases resultEq <;> rfl
+  subst resultItems
+  exact result
+
 theorem compileRegion?_eq_compileItems?
     (hwf : d.WellFormed) (origin : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels) :
