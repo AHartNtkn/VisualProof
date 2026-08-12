@@ -286,6 +286,46 @@ theorem compileOccurrence?_child_bubble_success
       refine ⟨body, rfl, ?_⟩
       simpa [bodyCompiled] using compiled.symm
 
+theorem compileOccurrence?_child_cut_body
+    (hwf : d.WellFormed) (parent child : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (direct : LocalOccurrence.child child ∈ localOccurrences d parent)
+    (hchild : d.regions child = .cut parent)
+    {body : CompiledRegion d (.nested child context rels binders)}
+    (compiled : compileOccurrence? d hwf parent context binders
+      (.child child) direct = some (.cut body)) :
+    compileRegion? d hwf child context binders = some body := by
+  rw [compileOccurrence?_child_cut hwf parent child context binders direct
+    hchild] at compiled
+  cases result : compileRegion? d hwf child context binders with
+  | none => simp [result] at compiled
+  | some childBody =>
+      simp [result] at compiled
+      cases compiled
+      rfl
+
+theorem compileOccurrence?_child_bubble_body
+    (hwf : d.WellFormed) (parent child : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (arity : Nat)
+    (direct : LocalOccurrence.child child ∈ localOccurrences d parent)
+    (hchild : d.regions child = .bubble parent arity)
+    {body : CompiledRegion d
+      (.nested child context (arity :: rels) (binders.push child arity))}
+    (compiled : compileOccurrence? d hwf parent context binders
+      (.child child) direct = some (.bubble arity body)) :
+    compileRegion? d hwf child context (binders.push child arity) =
+      some body := by
+  rw [compileOccurrence?_child_bubble hwf parent child context binders arity
+    direct hchild] at compiled
+  cases result : compileRegion? d hwf child context
+      (binders.push child arity) with
+  | none => simp [result] at compiled
+  | some childBody =>
+      simp [result] at compiled
+      cases compiled
+      rfl
+
 @[simp] theorem compileItems?_nil
     (hwf : d.WellFormed) (parent : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)
