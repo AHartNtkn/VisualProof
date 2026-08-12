@@ -83,7 +83,7 @@ theorem checkOpen_complete
     rw [checkBoundaryRoot_complete valid.boundary_is_root_scoped 0]
 
 /-- The sole raw concrete-to-recursive translation: validate, then elaborate. -/
-def translate (concrete : Concrete.OpenDiagram) :
+noncomputable def translate (concrete : Concrete.OpenDiagram) :
     Except Concrete.Error
       (VisualProof.Diagram.OpenDiagram concrete.boundary.length) :=
   match Concrete.checkOpen concrete with
