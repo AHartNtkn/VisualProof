@@ -359,11 +359,15 @@ private structure CompiledEndpointValidity (d : Diagram)
   encloses : d.Encloses sourceSite site
 
 private structure CompiledItemsEndpointValidity (d : Diagram)
-    (wellFormed : d.WellFormed)
-    (parent site : Fin d.regionCount) (call : CompilerCall d)
+    (wellFormed : d.WellFormed) (parent : Fin d.regionCount)
+    {context : WireContext d} {rels : RelCtx}
+    {binders : BinderContext d rels}
+    (items : CompiledItems d context rels binders)
+    (site : Fin d.regionCount) (call : CompilerCall d)
     (endpoint : CompiledRegion d call)
     extends CompiledEndpointValidity d wellFormed parent site call endpoint where
   selectedChild : Fin d.regionCount
+  selectedChild_mem : LocalOccurrence.child selectedChild ∈ items.origins
   selectedChild_parent : (d.regions selectedChild).parent? = some parent
   selectedChild_encloses : d.Encloses selectedChild site
 
@@ -412,7 +416,7 @@ mutual
         occurrence ∈ localOccurrences d parent) →
       compileItems? d hwf parent context binders items.origins
         localOccurrencesValid = some items →
-      CompiledItemsEndpointValidity d hwf parent site endpointCall endpoint
+      CompiledItemsEndpointValidity d hwf parent items site endpointCall endpoint
     | .cut (origin := origin) (suffix := suffix) nested,
         parent, wires, bindersCover, enumeration, localOccurrencesValid,
         compiled => by
@@ -473,6 +477,8 @@ mutual
                               rfl)
                             childValidity.encloses }
                           selectedChild := origin
+                          selectedChild_mem := by simp [CompiledItems.origins,
+                            CompiledItem.origin]
                           selectedChild_parent := hparent
                           selectedChild_encloses := childValidity.encloses }
                 | bubble childParent arity =>
@@ -567,6 +573,8 @@ mutual
                               rfl)
                             childValidity.encloses }
                           selectedChild := origin
+                          selectedChild_mem := by simp [CompiledItems.origins,
+                            CompiledItem.origin]
                           selectedChild_parent := hparent
                           selectedChild_encloses := childValidity.encloses }
     | .tail (head := head) (suffix := suffix) nested,
@@ -590,8 +598,17 @@ mutual
             | some rest =>
                 simp [hhead, htail] at compiled
                 obtain ⟨rfl, rfl⟩ := compiled
-                exact nested.endpoint_validity hwf parent wires bindersCover
-                  enumeration tailDirect htail
+                let tailValidity := nested.endpoint_validity hwf parent wires
+                  bindersCover enumeration tailDirect htail
+                exact {
+                  toCompiledEndpointValidity :=
+                    tailValidity.toCompiledEndpointValidity
+                  selectedChild := tailValidity.selectedChild
+                  selectedChild_mem := by
+                    simp only [CompiledItems.origins, List.mem_cons]
+                    exact Or.inr tailValidity.selectedChild_mem
+                  selectedChild_parent := tailValidity.selectedChild_parent
+                  selectedChild_encloses := tailValidity.selectedChild_encloses }
 end
 
 /-- A valid compiled zipper ends at a region enclosed by its source call.
@@ -627,11 +644,13 @@ theorem CompiledItemsZipper.selected_child
       occurrence ∈ localOccurrences d parent)
     (compiled : compileItems? d hwf parent context binders items.origins
       direct = some items) :
-    ∃ child, (d.regions child).parent? = some parent ∧
+    ∃ child, LocalOccurrence.child child ∈ items.origins ∧
+      (d.regions child).parent? = some parent ∧
       d.Encloses child site := by
   let validity := focus.endpoint_validity hwf parent wires covers enumeration
     direct compiled
-  exact ⟨validity.selectedChild, validity.selectedChild_parent,
+  exact ⟨validity.selectedChild, validity.selectedChild_mem,
+    validity.selectedChild_parent,
     validity.selectedChild_encloses⟩
 
 private theorem compileItems?_focus?_isSome_of_child

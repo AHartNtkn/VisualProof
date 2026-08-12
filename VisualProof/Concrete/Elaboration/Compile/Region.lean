@@ -621,6 +621,37 @@ theorem compileItems?_get
               · have result := ih htail tailIndex
                 simpa only [List.get, CompiledItems.get] using result
 
+theorem compileItems?_cons_inv
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (head : CompiledItem d context rels binders)
+    (tail : CompiledItems d context rels binders)
+    (direct : ∀ occurrence,
+      occurrence ∈ (CompiledItems.cons head tail).origins →
+        occurrence ∈ localOccurrences d parent)
+    (compiled : compileItems? d hwf parent context binders
+      (CompiledItems.cons head tail).origins direct =
+        some (CompiledItems.cons head tail)) :
+    compileOccurrence? d hwf parent context binders head.origin
+        (direct head.origin (by simp [CompiledItems.origins])) = some head ∧
+      compileItems? d hwf parent context binders tail.origins
+        (fun occurrence member => direct occurrence (by
+          simp [CompiledItems.origins, member])) = some tail := by
+  simp only [CompiledItems.origins] at compiled
+  rw [compileItems?_cons] at compiled
+  cases headResult : compileOccurrence? d hwf parent context binders head.origin
+      (direct head.origin (by simp [CompiledItems.origins])) with
+  | none => simp [headResult] at compiled
+  | some actualHead =>
+      cases tailResult : compileItems? d hwf parent context binders tail.origins
+          (fun occurrence member => direct occurrence (by
+            simp [CompiledItems.origins, member])) with
+      | none => simp [headResult, tailResult] at compiled
+      | some actualTail =>
+          simp [headResult, tailResult] at compiled
+          obtain ⟨rfl, rfl⟩ := compiled
+          exact ⟨rfl, rfl⟩
+
 theorem compileOccurrence?_origin
     (hwf : d.WellFormed) (parent : Fin d.regionCount)
     {context : WireContext d} {binders : BinderContext d rels}
