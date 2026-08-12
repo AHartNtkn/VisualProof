@@ -197,18 +197,20 @@ private theorem compileFrameNodeBlock
     (layout.frameRegion sourceParent) targetContext targetBinders
     occurrencesEq.symm _ _).trans targetCompiled
 
-/-- Compile the inserted terminal-body node block in the target site context. -/
+/-- Compile one mapped pattern-node block in a target context. -/
 private theorem compilePatternNodeBlock
-    (layout : PlugLayout input) (admissible : input.Admissible)
-    (targetWf : layout.plugRaw.WellFormed)
+    (layout : PlugLayout input) (targetWf : layout.plugRaw.WellFormed)
+    (sourceParent : Fin input.pattern.val.diagram.regionCount)
+    (targetParent : Fin layout.plugRaw.regionCount)
+    (regionMapped : layout.bodyRegion sourceParent = targetParent)
     (sourceContext : WireContext input.pattern.val.diagram)
     (targetContext : WireContext layout.plugRaw)
     (sourceBinders : BinderContext input.pattern.val.diagram sourceRels)
     (targetBinders : BinderContext layout.plugRaw targetRels)
     (wireMap : Fin sourceContext.length → Fin targetContext.length)
     (relationMap : RelationRenaming sourceRels targetRels)
-    (sourceExact : sourceContext.Exact input.binderSpine.bodyContainer)
-    (targetExact : targetContext.Exact (layout.frameRegion input.site))
+    (sourceExact : sourceContext.Exact sourceParent)
+    (targetNodup : targetContext.Nodup)
     (getMapped : ∀ index,
       targetContext.get (wireMap index) =
         layout.patternWireMap (sourceContext.get index))
@@ -219,88 +221,96 @@ private theorem compilePatternNodeBlock
     {sourceItems : CompiledItems input.pattern.val.diagram sourceContext
       sourceRels sourceBinders}
     (sourceCompiled : compileItems? input.pattern.val.diagram
-      input.pattern.property.diagram_well_formed
-      input.binderSpine.bodyContainer sourceContext sourceBinders
-      (localNodeOccurrences input.pattern.val.diagram
-        input.binderSpine.bodyContainer)
+      input.pattern.property.diagram_well_formed sourceParent sourceContext
+      sourceBinders (localNodeOccurrences input.pattern.val.diagram sourceParent)
       (fun _ member => List.mem_append_left _ member) = some sourceItems) :
     ∃ targetItems : CompiledItems layout.plugRaw targetContext targetRels
         targetBinders,
-      compileItems? layout.plugRaw targetWf (layout.frameRegion input.site)
-          targetContext targetBinders layout.bodyNodeOccurrences
+      compileItems? layout.plugRaw targetWf targetParent targetContext
+          targetBinders
+          ((localNodeOccurrences input.pattern.val.diagram sourceParent).map
+            layout.mapPatternOccurrence)
           (fun _ member => by
             apply List.mem_append_left
-            rw [layout.localNodeOccurrences_frameRegion]
-            exact List.mem_append_right _ (by
-              rw [layout.patternNodeOccurrences_site
-                admissible]
-              exact member)) = some targetItems ∧
+            obtain ⟨sourceOccurrence, sourceMember, rfl⟩ := List.mem_map.mp member
+            cases sourceOccurrence with
+            | child child =>
+                exact False.elim
+                  ((not_mem_localNodeOccurrences_child _ _ _) sourceMember)
+            | node node =>
+                have sourceNodeRegion :
+                    (input.pattern.val.diagram.nodes node).region =
+                      sourceParent :=
+                  (mem_localNodeOccurrences_node _ _ _).mp sourceMember
+                apply (mem_localNodeOccurrences_node _ _ _).mpr
+                rw [PlugLayout.plugRaw_nodes_pattern]
+                exact (layout.mapPatternNode_region
+                  (input.pattern.val.diagram.nodes node)).trans
+                    ((congrArg layout.bodyRegion sourceNodeRegion).trans
+                      regionMapped)) =
+        some targetItems ∧
       targetItems.erase =
         (sourceItems.erase.renameWires wireMap).renameRelations relationMap := by
   let sourceDirect : ∀ occurrence,
-      occurrence ∈ localNodeOccurrences input.pattern.val.diagram
-          input.binderSpine.bodyContainer →
-        occurrence ∈ localOccurrences input.pattern.val.diagram
-          input.binderSpine.bodyContainer :=
+      occurrence ∈ localNodeOccurrences input.pattern.val.diagram sourceParent →
+        occurrence ∈ localOccurrences input.pattern.val.diagram sourceParent :=
     fun _ member => List.mem_append_left _ member
   let targetDirect : ∀ occurrence,
       occurrence ∈ (localNodeOccurrences input.pattern.val.diagram
-        input.binderSpine.bodyContainer).map layout.mapPatternOccurrence →
-      occurrence ∈ localOccurrences layout.plugRaw
-        (layout.frameRegion input.site) := by
+        sourceParent).map layout.mapPatternOccurrence →
+      occurrence ∈ localOccurrences layout.plugRaw targetParent := by
     intro occurrence member
     apply List.mem_append_left
-    rw [layout.localNodeOccurrences_frameRegion]
-    apply List.mem_append_right
-    rw [layout.patternNodeOccurrences_site admissible]
-    simpa using member
-  obtain ⟨targetItems, targetCompiled, targetErase⟩ :=
-    compileItems?_map_success input.pattern.property.diagram_well_formed
-      targetWf input.binderSpine.bodyContainer
-      (layout.frameRegion input.site) sourceContext targetContext
-      sourceBinders targetBinders
-      (localNodeOccurrences input.pattern.val.diagram
-        input.binderSpine.bodyContainer)
-      layout.mapPatternOccurrence sourceDirect targetDirect wireMap relationMap
-      (by
-        intro occurrence member sourceItem compiled
-        cases occurrence with
-        | child child =>
-            exact False.elim
-              ((not_mem_localNodeOccurrences_child _ _ _) member)
-        | node node =>
-            have nodeRegion :
-                (input.pattern.val.diagram.nodes node).region =
-                  input.binderSpine.bodyContainer :=
-              (mem_localNodeOccurrences_node _ _ _).mp member
-            rw [compileOccurrence?_node] at compiled
-            obtain ⟨targetItem, targetNodeCompiled, targetItemErase⟩ :=
-              compileNode?_map_success sourceContext targetContext
-                sourceBinders targetBinders node (layout.patternNode node)
-                layout.bodyRegion layout.binderRegion wireMap relationMap
-                (by
-                  cases nodeEq : input.pattern.val.diagram.nodes node <;>
-                    simp [PlugLayout.plugRaw, PlugLayout.plugNode,
-                      PlugLayout.patternNode, PlugLayout.mapPatternNode,
-                      nodeEq])
-                (by
-                  intro port
-                  exact layout.resolvePort?_patternNode_map sourceContext
-                    targetContext wireMap sourceExact targetExact.nodup
-                    getMapped targetWf.wire_endpoints_are_disjoint node
-                    nodeRegion port)
-                (by
-                  intro region binder _
-                  exact binderMapped binder)
-                compiled
-            refine ⟨targetItem, ?_, targetItemErase⟩
-            simpa only [compileOccurrence?_node] using targetNodeCompiled)
-      sourceCompiled
-  refine ⟨targetItems, ?_, targetErase⟩
-  have occurrencesEq := layout.map_localNodeOccurrences_body
-  exact (compileItems?_congr_occurrences targetWf
-    (layout.frameRegion input.site) targetContext targetBinders
-    occurrencesEq.symm _ _).trans targetCompiled
+    obtain ⟨sourceOccurrence, sourceMember, rfl⟩ := List.mem_map.mp member
+    cases sourceOccurrence with
+    | child child =>
+        exact False.elim
+          ((not_mem_localNodeOccurrences_child _ _ _) sourceMember)
+    | node node =>
+        have sourceNodeRegion :
+            (input.pattern.val.diagram.nodes node).region = sourceParent :=
+          (mem_localNodeOccurrences_node _ _ _).mp sourceMember
+        apply (mem_localNodeOccurrences_node _ _ _).mpr
+        rw [PlugLayout.plugRaw_nodes_pattern]
+        exact (layout.mapPatternNode_region
+          (input.pattern.val.diagram.nodes node)).trans
+            ((congrArg layout.bodyRegion sourceNodeRegion).trans regionMapped)
+  exact compileItems?_map_success
+    input.pattern.property.diagram_well_formed targetWf sourceParent
+    targetParent sourceContext targetContext sourceBinders targetBinders
+    (localNodeOccurrences input.pattern.val.diagram sourceParent)
+    layout.mapPatternOccurrence sourceDirect targetDirect wireMap relationMap
+    (by
+      intro occurrence member sourceItem compiled
+      cases occurrence with
+      | child child =>
+          exact False.elim
+            ((not_mem_localNodeOccurrences_child _ _ _) member)
+      | node node =>
+          have nodeRegion : (input.pattern.val.diagram.nodes node).region =
+              sourceParent := (mem_localNodeOccurrences_node _ _ _).mp member
+          rw [compileOccurrence?_node] at compiled
+          obtain ⟨targetItem, targetNodeCompiled, targetItemErase⟩ :=
+            compileNode?_map_success sourceContext targetContext
+              sourceBinders targetBinders node (layout.patternNode node)
+              layout.bodyRegion layout.binderRegion wireMap relationMap
+              (by
+                cases nodeEq : input.pattern.val.diagram.nodes node <;>
+                  simp [PlugLayout.plugRaw, PlugLayout.plugNode,
+                    PlugLayout.patternNode, PlugLayout.mapPatternNode, nodeEq])
+              (by
+                intro port
+                exact layout.resolvePort?_patternNode_map sourceParent
+                  sourceContext targetContext wireMap sourceExact targetNodup
+                  getMapped targetWf.wire_endpoints_are_disjoint node
+                  nodeRegion port)
+              (by
+                intro region binder _
+                exact binderMapped binder)
+              compiled
+          refine ⟨targetItem, ?_, targetItemErase⟩
+          simpa only [compileOccurrence?_node] using targetNodeCompiled)
+    sourceCompiled
 
 end Splice.Input.PlugLayout
 

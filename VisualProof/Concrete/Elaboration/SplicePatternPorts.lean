@@ -216,18 +216,18 @@ theorem endpointOccurs_patternNode_backward (layout : PlugLayout input)
 the concrete pattern-wire map and its position map. Aliased exposed wires are
 allowed; target-context nodup identifies their shared lexical position. -/
 theorem resolvePort?_patternNode_map (layout : PlugLayout input)
+    (sourceParent : Fin input.pattern.val.diagram.regionCount)
     (sourceContext : WireContext input.pattern.val.diagram)
     (targetContext : WireContext layout.plugRaw)
     (indexMap : Fin sourceContext.length → Fin targetContext.length)
-    (sourceExact : sourceContext.Exact input.binderSpine.bodyContainer)
+    (sourceExact : sourceContext.Exact sourceParent)
     (targetNodup : targetContext.Nodup)
     (getMapped : ∀ index,
       targetContext.get (indexMap index) =
         layout.patternWireMap (sourceContext.get index))
     (targetDisjoint : layout.plugRaw.WireEndpointsAreDisjoint)
     (node : Fin input.pattern.val.diagram.nodeCount)
-    (nodeRegion : (input.pattern.val.diagram.nodes node).region =
-      input.binderSpine.bodyContainer)
+    (nodeRegion : (input.pattern.val.diagram.nodes node).region = sourceParent)
     (port : CPort) :
     resolvePort? layout.plugRaw targetContext
         (layout.patternNode node) port =
