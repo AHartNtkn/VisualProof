@@ -358,6 +358,15 @@ private structure CompiledEndpointValidity (d : Diagram)
   origins : endpoint.items.origins = localOccurrences d site
   encloses : d.Encloses sourceSite site
 
+private structure CompiledItemsEndpointValidity (d : Diagram)
+    (wellFormed : d.WellFormed)
+    (parent site : Fin d.regionCount) (call : CompilerCall d)
+    (endpoint : CompiledRegion d call)
+    extends CompiledEndpointValidity d wellFormed parent site call endpoint where
+  selectedChild : Fin d.regionCount
+  selectedChild_parent : (d.regions selectedChild).parent? = some parent
+  selectedChild_encloses : d.Encloses selectedChild site
+
 mutual
   private def CompiledZipper.endpoint_validity
       {d : Diagram} {sourceCall endpointCall : CompilerCall d}
@@ -382,12 +391,11 @@ mutual
         have hitems := sourceCall.compile?_items_of_success hwf compiled
         have origins := compileItems?_origins hwf sourceCall.origin
           sourceCall.fullContext sourceCall.binders hitems
-        refine nested.endpoint_validity hwf sourceCall.origin wires binders
-          enumeration
-          ?_ ?_
-        · intro occurrence member
-          simpa only [origins] using member
-        · simpa only [origins] using hitems
+        let validity := nested.endpoint_validity hwf sourceCall.origin wires
+          binders enumeration
+          (fun occurrence member => by simpa only [origins] using member)
+          (by simpa only [origins] using hitems)
+        exact validity.toCompiledEndpointValidity
 
   private def CompiledItemsZipper.endpoint_validity
       {d : Diagram} {context : WireContext d} {rels : RelCtx}
@@ -404,7 +412,7 @@ mutual
         occurrence ∈ localOccurrences d parent) →
       compileItems? d hwf parent context binders items.origins
         localOccurrencesValid = some items →
-      CompiledEndpointValidity d hwf parent site endpointCall endpoint
+      CompiledItemsEndpointValidity d hwf parent site endpointCall endpoint
     | .cut (origin := origin) (suffix := suffix) nested,
         parent, wires, bindersCover, enumeration, localOccurrencesValid,
         compiled => by
@@ -452,7 +460,8 @@ mutual
                             wires.extend_child hwf hparent)
                           (BinderContext.covers_cut_child bindersCover hregion)
                           (enumeration.cutChild hwf hregion)
-                        exact { childValidity with
+                        exact {
+                          toCompiledEndpointValidity := { childValidity with
                           encloses := checked_encloses_trans hwf
                             (by
                               refine ⟨⟨1, by have := origin.isLt; omega⟩, ?_⟩
@@ -463,6 +472,9 @@ mutual
                               rw [hparent]
                               rfl)
                             childValidity.encloses }
+                          selectedChild := origin
+                          selectedChild_parent := hparent
+                          selectedChild_encloses := childValidity.encloses }
                 | bubble childParent arity =>
                     have childParentEq : childParent = parent := by
                       simpa [hregion, CRegion.parent?] using hparent
@@ -542,7 +554,8 @@ mutual
                           (BinderContext.push_covers_bubble_child bindersCover
                             hregion)
                           (enumeration.bubbleChild hwf hregion)
-                        exact { childValidity with
+                        exact {
+                          toCompiledEndpointValidity := { childValidity with
                           encloses := checked_encloses_trans hwf
                             (by
                               refine ⟨⟨1, by have := origin.isLt; omega⟩, ?_⟩
@@ -553,6 +566,9 @@ mutual
                               rw [hparent]
                               rfl)
                             childValidity.encloses }
+                          selectedChild := origin
+                          selectedChild_parent := hparent
+                          selectedChild_encloses := childValidity.encloses }
     | .tail (head := head) (suffix := suffix) nested,
         parent, wires, bindersCover, enumeration, localOccurrencesValid,
         compiled => by
@@ -594,6 +610,29 @@ theorem CompiledZipper.endpoint_encloses
       sourceCall.origin) :
     d.Encloses sourceCall.origin site :=
   (focus.endpoint_validity hwf compiled wires binders enumeration).encloses
+
+/-- The selected branch of an item zipper starts at one actual direct child
+that encloses its endpoint. -/
+theorem CompiledItemsZipper.selected_child
+    {d : Diagram} {context : WireContext d} {rels : RelCtx}
+    {binders : BinderContext d rels}
+    {items : CompiledItems d context rels binders}
+    {site : Fin d.regionCount} {endpointCall : CompilerCall d}
+    {endpoint : CompiledRegion d endpointCall}
+    (focus : CompiledItemsZipper d items site endpointCall endpoint)
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (wires : context.Exact parent) (covers : binders.Covers parent)
+    (enumeration : BinderContext.Enumeration d binders parent)
+    (direct : ∀ occurrence, occurrence ∈ items.origins →
+      occurrence ∈ localOccurrences d parent)
+    (compiled : compileItems? d hwf parent context binders items.origins
+      direct = some items) :
+    ∃ child, (d.regions child).parent? = some parent ∧
+      d.Encloses child site := by
+  let validity := focus.endpoint_validity hwf parent wires covers enumeration
+    direct compiled
+  exact ⟨validity.selectedChild, validity.selectedChild_parent,
+    validity.selectedChild_encloses⟩
 
 private theorem compileItems?_focus?_isSome_of_child
     (hwf : d.WellFormed) (parent : Fin d.regionCount)
