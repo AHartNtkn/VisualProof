@@ -1046,6 +1046,384 @@ private theorem compileSpliceSiteItems
     frameNodesErase, patternNodesErase, frameChildrenErase,
     patternChildrenErase⟩
 
+/-- The sole presentation change at the endpoint: interchange the pattern-node
+and retained-frame-child blocks. -/
+private noncomputable def braidSpliceSiteBlocks
+    (frameNodes patternNodes frameChildren patternChildren :
+      ItemSeq wires rels) :
+    ItemSeqIso (FiniteEquiv.refl (Fin wires)) rels
+      ((frameNodes.append patternNodes).append
+        (frameChildren.append patternChildren))
+      ((frameNodes.append frameChildren).append
+        (patternNodes.append patternChildren)) := by
+  let middle := ItemSeqIso.appendCommRename patternNodes frameChildren
+    (FiniteEquiv.refl (Fin wires))
+  have middle' : ItemSeqIso (FiniteEquiv.refl (Fin wires)) rels
+      (patternNodes.append frameChildren)
+      (frameChildren.append patternNodes) := by
+    simpa [FiniteEquiv.refl, ItemSeq.renameWires_id] using middle
+  let braidedPrefix := ItemSeqIso.append (ItemSeqIso.refl frameNodes) middle'
+  let all := ItemSeqIso.append braidedPrefix (ItemSeqIso.refl patternChildren)
+  simpa only [ItemSeq.renameWires_id, ItemSeq.append_assoc] using all
+
+/-- Compile one nested splice endpoint and identify its erased body with the
+intrinsic splice kernel. The two factor equations are the complete caller-side
+wire-interface obligation; construction and the sole occurrence-order braid
+remain owned here. -/
+theorem compileSpliceSite_semantic
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (admissible : input.Admissible) (targetWf : layout.plugRaw.WellFormed)
+    (sourceOuter : WireContext input.frame.val)
+    (sourceBinders : BinderContext input.frame.val sourceRels)
+    (targetOuter : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw sourceRels)
+    (frameMap : Fin (sourceOuter.extend input.site).length →
+      Fin (targetOuter.extend (layout.frameRegion input.site)).length)
+    (patternMap : Fin (CompiledSite.endpointCall
+      (State.ofOpen input.pattern) input.binderSpine.bodyContainer
+        ).fullContext.length →
+      Fin (targetOuter.extend (layout.frameRegion input.site)).length)
+    (relationMap : RelationRenaming
+      (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels sourceRels)
+    (patternBindersMapped : ∀ binder {arity relation},
+      (CompiledSite.endpointCall (State.ofOpen input.pattern)
+          input.binderSpine.bodyContainer).binders binder =
+        some ⟨arity, relation⟩ →
+      targetBinders (layout.binderRegion binder) =
+        some ⟨arity, relationMap relation⟩)
+    (frameBindersMapped : ∀ binder,
+      targetBinders (layout.frameRegion binder) =
+        (sourceBinders binder).map fun relation =>
+          ⟨relation.1, relation.2⟩)
+    (sourceExact : (sourceOuter.extend input.site).Exact input.site)
+    (targetExact : (targetOuter.extend
+      (layout.frameRegion input.site)).Exact (layout.frameRegion input.site))
+    (frameGet : ∀ index,
+      (targetOuter.extend (layout.frameRegion input.site)).get
+          (frameMap index) =
+        layout.frameWireMap ((sourceOuter.extend input.site).get index))
+    (patternGet : ∀ index,
+      (targetOuter.extend (layout.frameRegion input.site)).get
+          (patternMap index) = layout.patternWireMap
+        ((CompiledSite.endpointCall (State.ofOpen input.pattern)
+          input.binderSpine.bodyContainer).fullContext.get index))
+    (outerWire : FiniteEquiv (Fin targetOuter.length)
+      (Fin sourceOuter.length))
+    (localWire : FiniteEquiv
+      (Fin (exactScopeWires layout.plugRaw
+        (layout.frameRegion input.site)).length)
+      (Fin ((exactScopeWires input.frame.val input.site).length +
+        (CompiledSite.endpointCall (State.ofOpen input.pattern)
+          input.binderSpine.bodyContainer).localContext.length)))
+    (materialWireMap : Fin (CompiledSite.endpointCall
+      (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).outerContext.length →
+        Fin (sourceOuter.length +
+          (exactScopeWires input.frame.val input.site).length))
+    (frameFactor : ∀ index,
+      extendWireEquiv outerWire localWire
+          (Fin.cast (CompilerCall.fullContext_length
+            (.nested (layout.frameRegion input.site) targetOuter sourceRels
+              targetBinders)) (frameMap index)) =
+        Region.adjoinHostWire sourceOuter.length
+          (exactScopeWires input.frame.val input.site).length
+          (CompiledSite.endpointCall (State.ofOpen input.pattern)
+            input.binderSpine.bodyContainer).localContext.length
+          (Fin.cast (CompilerCall.fullContext_length
+            (.nested input.site sourceOuter sourceRels sourceBinders)) index))
+    (patternFactor : ∀ index,
+      extendWireEquiv outerWire localWire
+          (Fin.cast (CompilerCall.fullContext_length
+            (.nested (layout.frameRegion input.site) targetOuter sourceRels
+              targetBinders)) (patternMap index)) =
+        Region.adjoinMaterialWire sourceOuter.length
+          (exactScopeWires input.frame.val input.site).length
+          (CompiledSite.endpointCall (State.ofOpen input.pattern)
+            input.binderSpine.bodyContainer).localContext.length
+          (extendWireRenaming materialWireMap
+            (CompiledSite.endpointCall (State.ofOpen input.pattern)
+              input.binderSpine.bodyContainer).localContext.length
+            (Fin.cast (CompilerCall.fullContext_length
+              (CompiledSite.endpointCall (State.ofOpen input.pattern)
+                input.binderSpine.bodyContainer)) index)))
+    {sourceItems : CompiledItems input.frame.val
+      (sourceOuter.extend input.site) sourceRels sourceBinders}
+    (sourceCompiled : compileItems? input.frame.val input.frame.property
+      input.site (sourceOuter.extend input.site) sourceBinders
+      (localOccurrences input.frame.val input.site) (fun _ member => member) =
+        some sourceItems) :
+    Nonempty (Σ targetBody : CompiledRegion layout.plugRaw
+        (.nested (layout.frameRegion input.site) targetOuter sourceRels
+          targetBinders),
+      PSigma (fun _ : compileRegion? layout.plugRaw targetWf
+          (layout.frameRegion input.site) targetOuter targetBinders =
+        some targetBody =>
+      RegionIso outerWire sourceRels targetBody.erase
+        (Region.spliceAt
+          (exactScopeWires input.frame.val input.site).length
+          ((CompilerCall.nested input.site sourceOuter sourceRels sourceBinders
+            ).castFullItems sourceItems.erase)
+          (CompiledSite.body (State.ofOpen input.pattern)
+            input.binderSpine.bodyContainer)
+          materialWireMap relationMap))) := by
+  let sourceFull := sourceOuter.extend input.site
+  let targetFull := targetOuter.extend (layout.frameRegion input.site)
+  obtain ⟨targetItems, sourceNodes, sourceChildren, patternNodesSource,
+      patternChildrenSource, frameNodes, patternNodes, frameChildren,
+      patternChildren, targetItemsCompiled, sourceItemsEq, patternItemsEq,
+      targetItemsEq, frameNodesErase, patternNodesErase, frameChildrenErase,
+      patternChildrenErase⟩ :=
+    layout.compileSpliceSiteItems consistent admissible targetWf sourceFull
+      sourceBinders targetFull targetBinders frameMap patternMap relationMap
+      patternBindersMapped frameBindersMapped sourceExact targetExact frameGet
+      patternGet sourceCompiled
+  let targetBody : CompiledRegion layout.plugRaw
+      (.nested (layout.frameRegion input.site) targetOuter sourceRels
+        targetBinders) := .mk targetItems
+  have targetCompiled : compileRegion? layout.plugRaw targetWf
+      (layout.frameRegion input.site) targetOuter targetBinders =
+        some targetBody := by
+    rw [compileRegion?_eq_compileItems?]
+    rw [targetItemsCompiled]
+    rfl
+  let sourceCall : CompilerCall input.frame.val :=
+    .nested input.site sourceOuter sourceRels sourceBinders
+  let patternCall := CompiledSite.endpointCall (State.ofOpen input.pattern)
+    input.binderSpine.bodyContainer
+  let targetCall : CompilerCall layout.plugRaw :=
+    .nested (layout.frameRegion input.site) targetOuter sourceRels targetBinders
+  let sourceHost := sourceCall.castFullItems sourceItems.erase
+  let material := CompiledSite.body (State.ofOpen input.pattern)
+    input.binderSpine.bodyContainer
+  let canonical := Region.spliceAt sourceCall.localContext.length sourceHost
+    material materialWireMap relationMap
+  let outputWire := extendWireEquiv outerWire localWire
+  have makeBlock {sourceWires : Nat}
+      (base : ItemSeq sourceWires sourceRels)
+      (target : ItemSeq targetFull.length sourceRels)
+      (blockMap : Fin sourceWires → Fin targetFull.length)
+      (canonicalMap : Fin sourceWires →
+        Fin (sourceOuter.length +
+          (sourceCall.localContext.length + patternCall.localContext.length)))
+      (targetErase : target = base.renameWires blockMap)
+      (factor : ∀ index,
+        outputWire (Fin.cast targetCall.fullContext_length (blockMap index)) =
+          canonicalMap index) :
+      ItemSeqIso outputWire sourceRels
+        (target.castWiresEq targetCall.fullContext_length)
+        (base.renameWires canonicalMap) := by
+    have renamed := ItemSeqIso.renameWiresEquiv
+      (target.castWiresEq targetCall.fullContext_length) outputWire
+    have targetEq :
+        (target.castWiresEq targetCall.fullContext_length).renameWires
+            outputWire =
+          base.renameWires canonicalMap := by
+      rw [ItemSeq.castWiresEq_eq_renameWires, targetErase]
+      calc
+        ((base.renameWires blockMap).renameWires
+            (Fin.cast targetCall.fullContext_length)).renameWires outputWire =
+            (base.renameWires
+              ((Fin.cast targetCall.fullContext_length) ∘ blockMap)
+              ).renameWires outputWire := by
+                exact congrArg (fun items => items.renameWires outputWire)
+                  (ItemSeq.renameWires_comp base blockMap
+                    (Fin.cast targetCall.fullContext_length))
+        _ =
+            base.renameWires
+              (outputWire ∘ Fin.cast targetCall.fullContext_length ∘
+                blockMap) := by
+              exact ItemSeq.renameWires_comp base
+                ((Fin.cast targetCall.fullContext_length) ∘ blockMap)
+                outputWire
+        _ = _ := by
+          apply congrArg (fun wireMap => base.renameWires wireMap)
+          funext index
+          exact factor index
+    exact targetEq ▸ renamed
+  have frameNodesErase' : frameNodes.erase =
+      sourceNodes.erase.renameWires frameMap := by
+    simpa only [ItemSeq.renameRelations_id] using frameNodesErase
+  have frameChildrenErase' : frameChildren.erase =
+      sourceChildren.erase.renameWires frameMap := by
+    simpa only [ItemSeq.renameRelations_id] using frameChildrenErase
+  have patternNodesErase' : patternNodes.erase =
+      (patternNodesSource.erase.renameRelations relationMap).renameWires
+        patternMap := by
+    exact patternNodesErase.trans
+      (ItemSeq.renameWires_renameRelations patternNodesSource.erase patternMap
+        relationMap)
+  have patternChildrenErase' : patternChildren.erase =
+      (patternChildrenSource.erase.renameRelations relationMap).renameWires
+        patternMap := by
+    exact patternChildrenErase.trans
+      (ItemSeq.renameWires_renameRelations patternChildrenSource.erase patternMap
+        relationMap)
+  let hostMap := Region.adjoinHostWire sourceOuter.length
+    sourceCall.localContext.length patternCall.localContext.length ∘
+      Fin.cast sourceCall.fullContext_length
+  let patternCanonicalMap := Region.adjoinMaterialWire sourceOuter.length
+    sourceCall.localContext.length patternCall.localContext.length ∘
+      extendWireRenaming materialWireMap patternCall.localContext.length ∘
+        Fin.cast patternCall.fullContext_length
+  have frameBlock := makeBlock sourceNodes.erase frameNodes.erase frameMap
+    hostMap frameNodesErase' frameFactor
+  have frameChildrenBlock := makeBlock sourceChildren.erase
+    frameChildren.erase frameMap hostMap frameChildrenErase' frameFactor
+  have patternBlock := makeBlock
+    (patternNodesSource.erase.renameRelations relationMap) patternNodes.erase
+    patternMap patternCanonicalMap patternNodesErase' patternFactor
+  have patternChildrenBlock := makeBlock
+    (patternChildrenSource.erase.renameRelations relationMap)
+    patternChildren.erase patternMap patternCanonicalMap patternChildrenErase'
+    patternFactor
+  have materialEq : material =
+      patternCall.finish
+        ((patternNodesSource.append patternChildrenSource).erase) := by
+    have erase_finish {d : Diagram} {call : CompilerCall d}
+        (body : CompiledRegion d call) :
+        body.erase = call.finish body.items.erase := by
+      cases body
+      rfl
+    simp only [material, CompiledSite.body, patternCall]
+    rw [erase_finish]
+    rw [← patternItemsEq]
+    rfl
+  refine ⟨⟨targetBody, ⟨targetCompiled, ?_⟩⟩⟩
+  rw [show CompiledSite.body (State.ofOpen input.pattern)
+    input.binderSpine.bodyContainer = _ from materialEq]
+  simp only [targetBody, CompiledRegion.erase, CompilerCall.finish,
+    CompilerCall.castFullItems, Region.spliceAt, Region.adjoinAt,
+    Region.renameWires, Region.renameRelations, CompiledItems.erase_append,
+    ItemSeq.renameWires_comp,
+    ItemSeq.renameWires_renameRelations]
+  refine RegionIso.mk localWire ?_
+  let castFrameNodes := frameNodes.erase.castWiresEq
+    targetCall.fullContext_length
+  let castPatternNodes := patternNodes.erase.castWiresEq
+    targetCall.fullContext_length
+  let castFrameChildren := frameChildren.erase.castWiresEq
+    targetCall.fullContext_length
+  let castPatternChildren := patternChildren.erase.castWiresEq
+    targetCall.fullContext_length
+  let braid := braidSpliceSiteBlocks castFrameNodes castPatternNodes
+    castFrameChildren castPatternChildren
+  let frameIso := ItemSeqIso.append frameBlock frameChildrenBlock
+  let patternIso := ItemSeqIso.append patternBlock patternChildrenBlock
+  let blocks := ItemSeqIso.append frameIso patternIso
+  have all := ItemSeqIso.trans braid blocks
+  have targetItemsErase : targetItems.erase =
+      (frameNodes.erase.append patternNodes.erase).append
+        (frameChildren.erase.append patternChildren.erase) := by
+    exact (congrArg CompiledItems.erase targetItemsEq).trans
+      (by simp only [CompiledItems.erase_append])
+  have sourceItemsErase : sourceItems.erase =
+      sourceNodes.erase.append sourceChildren.erase := by
+    exact (congrArg CompiledItems.erase sourceItemsEq).trans
+      (CompiledItems.erase_append sourceNodes sourceChildren)
+  have targetPresentation :
+      targetItems.erase.castWiresEq targetCall.fullContext_length =
+        ((frameNodes.erase.castWiresEq targetCall.fullContext_length).append
+          (patternNodes.erase.castWiresEq targetCall.fullContext_length)).append
+        ((frameChildren.erase.castWiresEq targetCall.fullContext_length).append
+          (patternChildren.erase.castWiresEq
+            targetCall.fullContext_length)) := by
+    rw [targetItemsErase]
+    calc
+      _ = ((frameNodes.erase.append patternNodes.erase).castWiresEq
+            targetCall.fullContext_length).append
+          ((frameChildren.erase.append patternChildren.erase).castWiresEq
+            targetCall.fullContext_length) :=
+        ItemSeq.castWiresEq_append _ _ _
+      _ = _ := by
+        calc
+          _ = ((frameNodes.erase.castWiresEq
+                  targetCall.fullContext_length).append
+                (patternNodes.erase.castWiresEq
+                  targetCall.fullContext_length)).append
+              ((frameChildren.erase.append patternChildren.erase
+                ).castWiresEq targetCall.fullContext_length) :=
+            congrArg (fun items => items.append
+              ((frameChildren.erase.append patternChildren.erase
+                ).castWiresEq targetCall.fullContext_length))
+              (ItemSeq.castWiresEq_append _ _ _)
+          _ = _ := congrArg
+            (fun items => ((frameNodes.erase.castWiresEq
+                targetCall.fullContext_length).append
+              (patternNodes.erase.castWiresEq
+                targetCall.fullContext_length)).append items)
+            (ItemSeq.castWiresEq_append _ _ _)
+  have hostPresentation :
+      ((sourceNodes.erase.append sourceChildren.erase).castWiresEq
+          sourceCall.fullContext_length).renameWires
+          (Region.adjoinHostWire sourceOuter.length
+            sourceCall.localContext.length patternCall.localContext.length) =
+        (sourceNodes.erase.renameWires hostMap).append
+          (sourceChildren.erase.renameWires hostMap) := by
+    rw [ItemSeq.castWiresEq_eq_renameWires]
+    exact (ItemSeq.renameWires_comp
+      (sourceNodes.erase.append sourceChildren.erase)
+      (Fin.cast sourceCall.fullContext_length)
+      (Region.adjoinHostWire sourceOuter.length
+        sourceCall.localContext.length patternCall.localContext.length)).trans
+      (by
+        simpa only [hostMap] using ItemSeq.renameWires_append
+          sourceNodes.erase sourceChildren.erase
+          (Region.adjoinHostWire sourceOuter.length
+              sourceCall.localContext.length patternCall.localContext.length ∘
+            Fin.cast sourceCall.fullContext_length))
+  have patternPresentation :
+      (((patternNodesSource.erase.append patternChildrenSource.erase
+          ).castWiresEq patternCall.fullContext_length).renameRelations
+          relationMap).renameWires
+          (Region.adjoinMaterialWire sourceOuter.length
+              sourceCall.localContext.length patternCall.localContext.length ∘
+            extendWireRenaming materialWireMap
+              patternCall.localContext.length) =
+        ((patternNodesSource.erase.renameRelations relationMap).renameWires
+          patternCanonicalMap).append
+        ((patternChildrenSource.erase.renameRelations relationMap).renameWires
+          patternCanonicalMap) := by
+    rw [ItemSeq.castWiresEq_eq_renameWires,
+      ItemSeq.renameWires_renameRelations]
+    calc
+      _ = ((patternNodesSource.erase.append patternChildrenSource.erase
+            ).renameRelations relationMap).renameWires
+          ((Region.adjoinMaterialWire sourceOuter.length
+                sourceCall.localContext.length patternCall.localContext.length ∘
+              extendWireRenaming materialWireMap
+                patternCall.localContext.length) ∘
+            Fin.cast patternCall.fullContext_length) :=
+        ItemSeq.renameWires_comp
+          ((patternNodesSource.erase.append patternChildrenSource.erase
+            ).renameRelations relationMap)
+          (Fin.cast patternCall.fullContext_length)
+          (Region.adjoinMaterialWire sourceOuter.length
+              sourceCall.localContext.length patternCall.localContext.length ∘
+            extendWireRenaming materialWireMap
+              patternCall.localContext.length)
+      _ = ((patternNodesSource.erase.renameRelations relationMap).append
+            (patternChildrenSource.erase.renameRelations relationMap)
+          ).renameWires patternCanonicalMap := by
+        exact congrArg (fun items => items.renameWires patternCanonicalMap)
+          (ItemSeq.renameRelations_append patternNodesSource.erase
+            patternChildrenSource.erase relationMap)
+      _ = _ := ItemSeq.renameWires_append _ _ _
+  have wirePresentation :
+      (FiniteEquiv.refl (Fin (targetCall.outerContext.length +
+        targetCall.localContext.length))).trans outputWire = outputWire := by
+    apply FiniteEquiv.ext
+    intro index
+    rfl
+  have all' := wirePresentation ▸ all
+  change ItemSeqIso outputWire sourceRels
+    (targetItems.erase.castWiresEq targetCall.fullContext_length) _
+  refine targetPresentation ▸ ?_
+  rw [sourceItemsErase]
+  refine hostPresentation ▸ patternPresentation ▸ ?_
+  simpa only [castFrameNodes, castPatternNodes, castFrameChildren,
+    castPatternChildren] using all'
+
 private noncomputable def mappedFrameCall
     (layout : PlugLayout input)
     (boundary : List (Fin input.frame.val.wireCount)) :
