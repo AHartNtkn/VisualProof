@@ -13,25 +13,31 @@ namespace Checked
 def compilation (checked : Checked ) :
     CompiledRegion checked.val
       (.root [] (exactScopeWires checked.val checked.val.root)) :=
-  (compileRoot?  checked.val []
+  (compileRoot? checked.val checked.property []
     (exactScopeWires checked.val checked.val.root)).get
       (Option.isSome_iff_exists.mpr
         (compileRoot?_complete checked.property [] _
           (closedRootWires_exact checked.property)))
 
+/-- The sole checked root compiler returns the canonical compilation. -/
+theorem compilation_computation (checked : Checked) :
+    compileRoot? checked.val checked.property []
+      (exactScopeWires checked.val checked.val.root) =
+        some checked.compilation := by
+  unfold compilation
+  obtain ⟨body, compiled⟩ := compileRoot?_complete checked.property [] _
+    (closedRootWires_exact checked.property)
+  simp [compiled]
+
 def elaborate (checked : Checked ) : Region  0 [] := checked.compilation.erase
 
 theorem elaborate_computation (checked : Checked ) :
     exists body,
-      compileRoot?  checked.val []
+      compileRoot? checked.val checked.property []
           (exactScopeWires checked.val checked.val.root) = some body /\
         checked.compilation = body ∧
         checked.elaborate = body.erase := by
-  obtain ⟨body, hbody⟩ := compileRoot?_complete checked.property [] _
-    (closedRootWires_exact checked.property)
-  refine ⟨body, hbody, ?_, ?_⟩
-  · simp [compilation, hbody]
-  · simp [elaborate, compilation, hbody]
+  exact ⟨checked.compilation, checked.compilation_computation, rfl, rfl⟩
 
 end Checked
 
@@ -40,12 +46,25 @@ namespace CheckedOpen
 def compilation (checked : CheckedOpen ) :
     CompiledRegion checked.val.diagram
       (.root checked.val.exposedWires checked.val.hiddenWires) :=
-  (compileRoot? checked.val.diagram checked.val.exposedWires
+  (compileRoot? checked.val.diagram checked.property.diagram_well_formed
+    checked.val.exposedWires
     checked.val.hiddenWires).get
       (Option.isSome_iff_exists.mpr
         (compileRoot?_complete checked.property.diagram_well_formed _ _ (by
           simpa [OpenDiagram.rootWires] using
             openRootWires_exact checked.property)))
+
+/-- The sole checked root compiler returns the canonical open compilation. -/
+theorem compilation_computation (checked : CheckedOpen) :
+    compileRoot? checked.val.diagram checked.property.diagram_well_formed
+      checked.val.exposedWires checked.val.hiddenWires =
+        some checked.compilation := by
+  unfold compilation
+  obtain ⟨body, compiled⟩ := compileRoot?_complete
+    checked.property.diagram_well_formed _ _ (by
+      simpa [OpenDiagram.rootWires] using
+        openRootWires_exact checked.property)
+  simp [compiled]
 
 /-- Total elaboration of a checked open concrete diagram. -/
 def elaborate (checked : CheckedOpen ) :
@@ -68,37 +87,24 @@ def elaborate (checked : CheckedOpen ) :
 theorem elaborate_body_computation
     (checked : CheckedOpen ) :
     exists body,
-      compileRoot?  checked.val.diagram checked.val.exposedWires
-          checked.val.hiddenWires = some body ∧
+      compileRoot? checked.val.diagram checked.property.diagram_well_formed
+          checked.val.exposedWires checked.val.hiddenWires = some body ∧
         checked.compilation = body ∧
         checked.elaborate.body = body.erase := by
-  obtain ⟨body, hbody⟩ := compileRoot?_complete
-    checked.property.diagram_well_formed _ _ (by
-      simpa [OpenDiagram.rootWires] using
-        openRootWires_exact checked.property)
-  refine ⟨body, hbody, ?_, ?_⟩
-  · simp [compilation, hbody]
-  · simp [elaborate, compilation, hbody]
-
-/-- The canonical annotated open compilation is returned by the sole root
-compiler call that defines it. -/
-theorem compilation_computation (checked : CheckedOpen) :
-    compileRoot? checked.val.diagram checked.val.exposedWires
-      checked.val.hiddenWires = some checked.compilation := by
-  obtain ⟨body, compiled, compilationEq, _⟩ :=
-    checked.elaborate_body_computation
-  rw [compilationEq]
-  exact compiled
+  exact ⟨checked.compilation, checked.compilation_computation, rfl, rfl⟩
 
 end CheckedOpen
 
 private theorem compiledRootErase_eq_of_locals_eq
     (d : Diagram) (ambient first second : WireContext d)
+    (firstWellFormed secondWellFormed : d.WellFormed)
     (localsEq : first = second)
     {firstBody : CompiledRegion d (.root ambient first)}
     {secondBody : CompiledRegion d (.root ambient second)}
-    (firstCompiled : compileRoot? d ambient first = some firstBody)
-    (secondCompiled : compileRoot? d ambient second = some secondBody) :
+    (firstCompiled : compileRoot? d firstWellFormed ambient first =
+      some firstBody)
+    (secondCompiled : compileRoot? d secondWellFormed ambient second =
+      some secondBody) :
     firstBody.erase = secondBody.erase := by
   subst second
   rw [firstCompiled] at secondCompiled
@@ -123,6 +129,7 @@ namespace Checked
     compiledRootErase_eq_of_locals_eq checked.val []
       checked.val.asOpen.hiddenWires
       (exactScopeWires checked.val checked.val.root)
+      checked.asOpen.property.diagram_well_formed checked.property
       (Diagram.asOpen_hiddenWires checked.val) openCompiled closedCompiled
   exact openErased.trans (erasedEq.trans closedErased.symm)
 
@@ -175,7 +182,7 @@ theorem elaborate_proof_irrelevant (d : Diagram)
 theorem elaborate_computation (d : Diagram)
     (hwf : d.WellFormed ) :
     exists body,
-      compileRoot?  d [] (exactScopeWires d d.root) = some body /\
+      compileRoot? d hwf [] (exactScopeWires d d.root) = some body /\
         d.elaborate hwf = body.erase := by
   obtain ⟨body, compiled, _, erased⟩ :=
     Checked.elaborate_computation ⟨d, hwf⟩
