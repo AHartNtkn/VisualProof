@@ -295,4 +295,154 @@ theorem compileRoot?_localCount
     (_compiled : compileRoot? d hwf ambient locals = some body) :
     body.localCount = locals.length := rfl
 
+private theorem compileNode?_complete
+    (hwf : d.WellFormed)
+    {context : WireContext d} {binders : BinderContext d rels}
+    {region : Fin d.regionCount}
+    (hwires : context.Covers region) (hbinders : binders.Covers region)
+    {node : Fin d.nodeCount} (hregion : (d.nodes node).region = region) :
+    ∃ item, compileNode? d context binders node = some item := by
+  cases hnode : d.nodes node with
+  | atom nodeRegion binder =>
+      have hnodeRegion : nodeRegion = region := by simpa [hnode] using hregion
+      subst nodeRegion
+      obtain ⟨parent, arity, hbubble⟩ :=
+        BinderContext.checked_atom_binder_is_bubble hwf hnode
+      obtain ⟨relation, hrelation⟩ :=
+        BinderContext.checked_atom_binder_available hwf hbinders hnode hbubble
+      obtain ⟨arguments, harguments⟩ := checked_resolvePorts?_complete hwf
+        hwires (node := node) hregion arity (fun index => .arg index) (by
+          intro index
+          simp [Diagram.RequiresPort, hnode, hbubble]
+          exact ⟨index, rfl⟩)
+      exact ⟨CompiledItem.node node (Item.atom relation arguments), by
+        simp [compileNode?, hnode, hrelation, harguments]⟩
+  | identity nodeRegion arity =>
+      obtain ⟨arguments, harguments⟩ := checked_resolvePorts?_complete hwf
+        hwires (node := node) hregion arity (fun index => .arg index) (by
+          intro index
+          simp [Diagram.RequiresPort, hnode]
+          exact ⟨index, rfl⟩)
+      exact ⟨CompiledItem.node node (Item.identity arity arguments), by
+        simp [compileNode?, hnode, harguments]⟩
+
+/-- Exact wire and binder contexts make the sole checked compiler total. -/
+theorem CompilerCall.compile?_complete
+    (hwf : d.WellFormed) (call : CompilerCall d)
+    (hwires : call.fullContext.Exact call.origin)
+    (hbinders : call.binders.Covers call.origin) :
+    ∃ body, call.compile? d hwf = some body := by
+  have occurrenceComplete : ∀ occurrence
+      (direct : occurrence ∈ localOccurrences d call.origin),
+      ∃ item, compileOccurrence? d hwf call.origin call.fullContext
+        call.binders occurrence direct = some item := by
+    intro occurrence direct
+    cases occurrence with
+    | node node =>
+        have hregion :=
+          (mem_localOccurrences_node d call.origin node).mp direct
+        simpa only [compileOccurrence?_node] using
+          compileNode?_complete hwf hwires.covers hbinders hregion
+    | child child =>
+        have hparent :=
+          (mem_localOccurrences_child d call.origin child).mp direct
+        cases hchild : d.regions child with
+        | sheet =>
+            have hchildRoot : child = d.root :=
+              hwf.only_root_is_sheet child hchild
+            subst child
+            rw [hwf.root_is_sheet] at hparent
+            simp [CRegion.parent?] at hparent
+        | cut parent =>
+            have hparentEq : parent = call.origin := by
+              simpa [hchild, CRegion.parent?] using hparent
+            subst parent
+            have childWires := hwires.extend_child hwf hparent
+            have childBinders :=
+              BinderContext.covers_cut_child hbinders hchild
+            obtain ⟨body, bodyCompiled⟩ :=
+              CompilerCall.compile?_complete hwf
+                (.nested child call.fullContext call.rels call.binders)
+                childWires childBinders
+            change compileRegion? d hwf child call.fullContext call.binders =
+              some body at bodyCompiled
+            refine ⟨CompiledItem.cut body, ?_⟩
+            rw [compileOccurrence?_child_cut hwf call.origin child
+              call.fullContext call.binders direct hchild, bodyCompiled]
+            rfl
+        | bubble parent arity =>
+            have hparentEq : parent = call.origin := by
+              simpa [hchild, CRegion.parent?] using hparent
+            subst parent
+            have childWires := hwires.extend_child hwf hparent
+            have childBinders :=
+              BinderContext.push_covers_bubble_child hbinders hchild
+            obtain ⟨body, bodyCompiled⟩ :=
+              CompilerCall.compile?_complete hwf
+                (.nested child call.fullContext (arity :: call.rels)
+                  (call.binders.push child arity)) childWires childBinders
+            change compileRegion? d hwf child call.fullContext
+              (call.binders.push child arity) = some body at bodyCompiled
+            refine ⟨CompiledItem.bubble arity body, ?_⟩
+            rw [compileOccurrence?_child_bubble hwf call.origin child
+              call.fullContext call.binders arity direct hchild, bodyCompiled]
+            rfl
+  have compileItemsComplete : ∀
+      (occurrences : List (LocalOccurrence d.regionCount d.nodeCount))
+      (direct : ∀ occurrence, occurrence ∈ occurrences →
+        occurrence ∈ localOccurrences d call.origin),
+      ∃ items, compileItems? d hwf call.origin call.fullContext call.binders
+        occurrences direct = some items := by
+    intro occurrences direct
+    induction occurrences with
+    | nil =>
+        exact ⟨.nil, compileItems?_nil hwf call.origin call.fullContext
+          call.binders direct⟩
+    | cons occurrence tail ih =>
+        obtain ⟨head, headCompiled⟩ := occurrenceComplete occurrence
+          (direct occurrence (by simp))
+        have tailDirect : ∀ candidate, candidate ∈ tail →
+            candidate ∈ localOccurrences d call.origin := by
+          intro candidate member
+          exact direct candidate (by simp [member])
+        obtain ⟨rest, restCompiled⟩ := ih tailDirect
+        refine ⟨.cons head rest, ?_⟩
+        rw [compileItems?_cons hwf call.origin call.fullContext call.binders
+          occurrence tail direct, headCompiled, restCompiled]
+        rfl
+  obtain ⟨items, itemsCompiled⟩ := compileItemsComplete
+    (localOccurrences d call.origin) (fun _ member => member)
+  refine ⟨.mk items, ?_⟩
+  rw [CompilerCall.compile?_eq_compileItems?, itemsCompiled]
+  rfl
+termination_by (descendantRegions d call.origin).length
+decreasing_by
+  all_goals exact descendantRegions_length_lt_of_parent hwf hparent
+
+theorem openRootWires_exact
+    {d : OpenDiagram} (hwf : d.WellFormed) :
+    WireContext.Exact d.rootWires d.diagram.root := by
+  constructor
+  · exact d.rootWires_nodup
+  · intro wire
+    rw [OpenDiagram.mem_rootWires_iff d hwf]
+    constructor
+    · intro hscope
+      rw [hscope]
+      exact Diagram.Encloses.refl d.diagram d.diagram.root
+    · exact encloses_sheet_eq hwf.diagram_well_formed.root_is_sheet
+
+theorem closedRootWires_exact (hwf : d.WellFormed) :
+    WireContext.Exact
+      (([] : WireContext d) ++ exactScopeWires d d.root) d.root := by
+  simpa [WireContext.extend] using WireContext.root_exact hwf
+
+theorem compileRoot?_complete
+    (hwf : d.WellFormed)
+    (ambient locals : WireContext d)
+    (hwires : WireContext.Exact (ambient ++ locals) d.root) :
+    ∃ body, compileRoot? d hwf ambient locals = some body := by
+  exact CompilerCall.compile?_complete hwf (.root ambient locals) hwires
+    (BinderContext.empty_covers_root hwf)
+
 end VisualProof.Concrete.Elaboration
