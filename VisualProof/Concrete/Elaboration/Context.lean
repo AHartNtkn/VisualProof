@@ -56,6 +56,25 @@ theorem lookup?_unique {context : WireContext d} (hnodup : context.Nodup)
     other = index :=
   indexOf?_unique_of_nodup hnodup hindex hother
 
+/-- The unique lexical position of a concrete wire visible at a region. -/
+noncomputable def position {context : WireContext d}
+    {region : Fin d.regionCount} (exact : context.Exact region)
+    (wire : Fin d.wireCount)
+    (visible : d.Encloses (d.wires wire).scope region) :
+    Fin context.length :=
+  (context.lookup? wire).get <|
+    Option.isSome_iff_exists.mpr <|
+      lookup?_complete ((exact.mem_iff wire).mpr visible)
+
+@[simp] theorem position_get {context : WireContext d}
+    {region : Fin d.regionCount} (exact : context.Exact region)
+    (wire : Fin d.wireCount)
+    (visible : d.Encloses (d.wires wire).scope region) :
+    context[context.position exact wire visible] = wire := by
+  apply lookup?_sound
+  exact (Option.some_get (Option.isSome_iff_exists.mpr
+    (lookup?_complete ((exact.mem_iff wire).mpr visible)))).symm
+
 def outerIndex (context : WireContext d) (region : Fin d.regionCount)
     (index : Fin context.length) : Fin (context.extend region).length :=
   ⟨index.val, by rw [length_extend]; omega⟩
@@ -329,6 +348,23 @@ def Covers (context : BinderContext d rels)
     d.Encloses binder region ->
     exists relation : RelVar rels arity,
       context binder = some ⟨arity, relation⟩
+
+/-- The lexical relation owned by a concrete bubble enclosing a region. -/
+noncomputable def relationAt {context : BinderContext d rels}
+    {region : Fin d.regionCount} (covers : context.Covers region)
+    (binder parent : Fin d.regionCount) (arity : Nat)
+    (bubble : d.regions binder = .bubble parent arity)
+    (encloses : d.Encloses binder region) : RelVar rels arity :=
+  Classical.choose (covers binder parent arity bubble encloses)
+
+@[simp] theorem relationAt_lookup {context : BinderContext d rels}
+    {region : Fin d.regionCount} (covers : context.Covers region)
+    (binder parent : Fin d.regionCount) (arity : Nat)
+    (bubble : d.regions binder = .bubble parent arity)
+    (encloses : d.Encloses binder region) :
+    context binder =
+      some ⟨arity, context.relationAt covers binder parent arity bubble encloses⟩ :=
+  Classical.choose_spec (covers binder parent arity bubble encloses)
 
 @[simp] theorem push_self (context : BinderContext d rels)
     (binder : Fin d.regionCount) (arity : Nat) :
