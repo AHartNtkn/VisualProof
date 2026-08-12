@@ -109,7 +109,7 @@ private def compileItemsWith? (d : Diagram)
 /-- The sole nested compiler. Termination is justified privately by strict
 direct-child descent in a well-formed diagram; no counter enters its API or
 result type. -/
-noncomputable def compileRegion? (d : Diagram) (hwf : d.WellFormed) :
+def compileRegion? (d : Diagram) (hwf : d.WellFormed) :
     (origin : Fin d.regionCount) → (context : WireContext d) →
       (binders : BinderContext d rels) →
       Option (CompiledRegion d (.nested origin context rels binders))
@@ -126,7 +126,7 @@ decreasing_by
   exact descendantRegions_length_lt_of_parent hwf direct
 
 /-- Compile one occurrence using the fixed well-founded region compiler. -/
-noncomputable def compileOccurrence? (d : Diagram) (hwf : d.WellFormed)
+def compileOccurrence? (d : Diagram) (hwf : d.WellFormed)
     (context : WireContext d) (binders : BinderContext d rels) :
     LocalOccurrence d.regionCount d.nodeCount →
       Option (CompiledItem d context rels binders)
@@ -143,7 +143,7 @@ noncomputable def compileOccurrence? (d : Diagram) (hwf : d.WellFormed)
           pure (.bubble arity body)
 
 /-- Compile an ordinary ordered occurrence list. -/
-noncomputable def compileItems? (d : Diagram) (hwf : d.WellFormed)
+def compileItems? (d : Diagram) (hwf : d.WellFormed)
     (context : WireContext d) (binders : BinderContext d rels) :
     List (LocalOccurrence d.regionCount d.nodeCount) →
       Option (CompiledItems d context rels binders)
@@ -154,7 +154,7 @@ noncomputable def compileItems? (d : Diagram) (hwf : d.WellFormed)
       pure (.cons head rest)
 
 /-- Compile the exact root call. -/
-noncomputable def compileRoot? (d : Diagram) (hwf : d.WellFormed)
+def compileRoot? (d : Diagram) (hwf : d.WellFormed)
     (ambient locals : WireContext d) :
     Option (CompiledRegion d (.root ambient locals)) := do
   let items ← compileItems? d hwf (ambient ++ locals) BinderContext.empty
@@ -162,7 +162,7 @@ noncomputable def compileRoot? (d : Diagram) (hwf : d.WellFormed)
   pure (.mk items)
 
 /-- Run the sole compiler at the exact call described by its signature. -/
-noncomputable def CompilerCall.compile? (hwf : d.WellFormed) :
+def CompilerCall.compile? (hwf : d.WellFormed) :
     (call : CompilerCall d) → Option (CompiledRegion d call)
   | .root ambient locals => compileRoot? d hwf ambient locals
   | .nested origin context _ binders =>
