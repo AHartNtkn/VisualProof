@@ -95,6 +95,90 @@ private theorem certifiedLocalOccurrenceEquiv_spec
         ((localOccurrences source region).get index) :=
   FiniteEquiv.restrictLists_spec (certifiedOccurrenceEquiv equiv) _ _ _ _ _ index
 
+private theorem certifiedLocalNodeOccurrences_mem_iff
+    {source target : Diagram} (equiv : OccurrenceEquiv source target)
+    (region : Fin source.regionCount)
+    (occurrence : LocalOccurrence source.regionCount source.nodeCount) :
+    certifiedRenameOccurrence equiv occurrence ∈
+        localNodeOccurrences target (equiv.regions region) ↔
+      occurrence ∈ localNodeOccurrences source region := by
+  cases occurrence with
+  | node node =>
+      simp only [certifiedRenameOccurrence, mem_localNodeOccurrences_node]
+      rw [← equiv.node_region_eq node]
+      constructor
+      · intro equality
+        have := congrArg equiv.regions.invFun equality
+        simpa only [equiv.regions.left_inv] using this
+      · exact congrArg equiv.regions
+  | child child =>
+      simp only [certifiedRenameOccurrence,
+        not_mem_localNodeOccurrences_child]
+
+private theorem certifiedLocalChildOccurrences_mem_iff
+    {source target : Diagram} (equiv : OccurrenceEquiv source target)
+    (region : Fin source.regionCount)
+    (occurrence : LocalOccurrence source.regionCount source.nodeCount) :
+    certifiedRenameOccurrence equiv occurrence ∈
+        localChildOccurrences target (equiv.regions region) ↔
+      occurrence ∈ localChildOccurrences source region := by
+  cases occurrence with
+  | node node =>
+      simp only [certifiedRenameOccurrence,
+        not_mem_localChildOccurrences_node]
+  | child child =>
+      simp only [certifiedRenameOccurrence, mem_localChildOccurrences_child]
+      rw [← equiv.regions_eq child, CRegion.parent?_rename]
+      cases hparent : (source.regions child).parent? with
+      | none => simp
+      | some parent =>
+          simp only [Option.map_some, Option.some.injEq]
+          constructor
+          · intro equality
+            have := congrArg equiv.regions.invFun equality
+            simpa only [equiv.regions.left_inv] using this
+          · exact congrArg equiv.regions
+
+private def certifiedLocalNodeOccurrenceEquiv
+    {source target : Diagram} (equiv : OccurrenceEquiv source target)
+    (region : Fin source.regionCount) :
+    FiniteEquiv (Fin (localNodeOccurrences source region).length)
+      (Fin (localNodeOccurrences target (equiv.regions region)).length) :=
+  FiniteEquiv.restrictLists (certifiedOccurrenceEquiv equiv) _ _
+    (localNodeOccurrences_nodup source region)
+    (localNodeOccurrences_nodup target (equiv.regions region))
+    (certifiedLocalNodeOccurrences_mem_iff equiv region)
+
+private def certifiedLocalChildOccurrenceEquiv
+    {source target : Diagram} (equiv : OccurrenceEquiv source target)
+    (region : Fin source.regionCount) :
+    FiniteEquiv (Fin (localChildOccurrences source region).length)
+      (Fin (localChildOccurrences target (equiv.regions region)).length) :=
+  FiniteEquiv.restrictLists (certifiedOccurrenceEquiv equiv) _ _
+    (localChildOccurrences_nodup source region)
+    (localChildOccurrences_nodup target (equiv.regions region))
+    (certifiedLocalChildOccurrences_mem_iff equiv region)
+
+private theorem certifiedLocalNodeOccurrenceEquiv_spec
+    {source target : Diagram} (equiv : OccurrenceEquiv source target)
+    (region : Fin source.regionCount)
+    (index : Fin (localNodeOccurrences source region).length) :
+    (localNodeOccurrences target (equiv.regions region)).get
+        (certifiedLocalNodeOccurrenceEquiv equiv region index) =
+      certifiedRenameOccurrence equiv
+        ((localNodeOccurrences source region).get index) :=
+  FiniteEquiv.restrictLists_spec (certifiedOccurrenceEquiv equiv) _ _ _ _ _ index
+
+private theorem certifiedLocalChildOccurrenceEquiv_spec
+    {source target : Diagram} (equiv : OccurrenceEquiv source target)
+    (region : Fin source.regionCount)
+    (index : Fin (localChildOccurrences source region).length) :
+    (localChildOccurrences target (equiv.regions region)).get
+        (certifiedLocalChildOccurrenceEquiv equiv region index) =
+      certifiedRenameOccurrence equiv
+        ((localChildOccurrences source region).get index) :=
+  FiniteEquiv.restrictLists_spec (certifiedOccurrenceEquiv equiv) _ _ _ _ _ index
+
 def CertifiedWireContextsAgree {source target : Diagram}
     (equiv : OccurrenceEquiv source target)
     (sourceContext : WireContext source) (targetContext : WireContext target)
@@ -424,6 +508,19 @@ private noncomputable def compileItems?_certifiedEquivariant
       (Fin targetContext.length)}
     {sourceBinders : BinderContext source rels}
     {targetBinders : BinderContext target rels}
+    {sourceOccurrences : List
+      (LocalOccurrence source.regionCount source.nodeCount)}
+    {targetOccurrences : List
+      (LocalOccurrence target.regionCount target.nodeCount)}
+    (occurrencePositions : FiniteEquiv (Fin sourceOccurrences.length)
+      (Fin targetOccurrences.length))
+    (occurrencePositionsSpec : ∀ index,
+      targetOccurrences.get (occurrencePositions index) =
+        certifiedRenameOccurrence equiv (sourceOccurrences.get index))
+    (sourceDirect : ∀ occurrence, occurrence ∈ sourceOccurrences →
+      occurrence ∈ localOccurrences source region)
+    (targetDirect : ∀ occurrence, occurrence ∈ targetOccurrences →
+      occurrence ∈ localOccurrences target (equiv.regions region))
     (occurrenceIso : ∀
       (occurrence : LocalOccurrence source.regionCount source.nodeCount),
       (sourceDirect : occurrence ∈ localOccurrences source region) →
@@ -443,12 +540,10 @@ private noncomputable def compileItems?_certifiedEquivariant
     {sourceItems : CompiledItems source sourceContext rels sourceBinders}
     {targetItems : CompiledItems target targetContext rels targetBinders}
     (hsource : compileItems? source hsourceWellFormed region sourceContext
-      sourceBinders (localOccurrences source region) (fun _ member => member) =
-        some sourceItems)
+      sourceBinders sourceOccurrences sourceDirect = some sourceItems)
     (htarget : compileItems? target htargetWellFormed (equiv.regions region)
-      targetContext targetBinders
-      (localOccurrences target (equiv.regions region))
-      (fun _ member => member) = some targetItems) :
+      targetContext targetBinders targetOccurrences targetDirect =
+        some targetItems) :
     ItemSeqIso ambient rels sourceItems.erase targetItems.erase := by
   have hsourceLength := compileItems?_length hsourceWellFormed region
     sourceContext sourceBinders hsource
@@ -456,14 +551,12 @@ private noncomputable def compileItems?_certifiedEquivariant
     (equiv.regions region) targetContext targetBinders htarget
   let positions : FiniteEquiv (Fin sourceItems.length)
       (Fin targetItems.length) :=
-    castFinEquiv hsourceLength htargetLength
-      (certifiedLocalOccurrenceEquiv equiv region)
+    castFinEquiv hsourceLength htargetLength occurrencePositions
   apply ItemSeqIso.permute positions
   intro sourceIndex
-  let occurrenceIndex : Fin (localOccurrences source region).length :=
+  let occurrenceIndex : Fin sourceOccurrences.length :=
     Fin.cast hsourceLength sourceIndex
-  let targetOccurrenceIndex :=
-    certifiedLocalOccurrenceEquiv equiv region occurrenceIndex
+  let targetOccurrenceIndex := occurrencePositions occurrenceIndex
   have hsourceGet := compileItems?_get hsourceWellFormed region sourceContext
     sourceBinders hsource occurrenceIndex
   have htargetGet := compileItems?_get htargetWellFormed
@@ -480,8 +573,11 @@ private noncomputable def compileItems?_certifiedEquivariant
   rw [hsourcePosition] at hsourceGet
   rw [htargetPosition] at htargetGet
   simpa only [CompiledItems.erase_get] using
-    occurrenceIso _ (List.get_mem _ _) _ (List.get_mem _ _)
-      (certifiedLocalOccurrenceEquiv_spec equiv region occurrenceIndex).symm
+    occurrenceIso _
+      (sourceDirect _ (List.get_mem sourceOccurrences occurrenceIndex)) _
+      (targetDirect _
+        (List.get_mem targetOccurrences targetOccurrenceIndex))
+      (occurrencePositionsSpec occurrenceIndex).symm
       _ _ hsourceGet htargetGet
 
 private noncomputable def compileRegion?_certifiedEquivariant
@@ -682,42 +778,93 @@ private noncomputable def compileRegion?_certifiedEquivariant
                                 hwiresExtended hchildExact hchildBinders
                                 hsourceChild htargetChild
                             exact .bubble (Classical.choice hchildIso)
-          rw [compileRegion?_eq_compileItems? hsourceWellFormed] at hsource
-          rw [compileRegion?_eq_compileItems? htargetWellFormed]
+          rw [compileRegion?_eq_compileBlocks? hsourceWellFormed] at hsource
+          rw [compileRegion?_eq_compileBlocks? htargetWellFormed]
             at htargetResult
-          cases hsourceItems : compileItems? source hsourceWellFormed region
-              sourceExtended sourceBinders (localOccurrences source region)
-              (fun _ member => member) with
-          | none => simp [sourceExtended, hsourceItems] at hsource
-          | some sourceItems =>
-              simp [sourceExtended, hsourceItems] at hsource
-              subst sourceBody
-              cases htargetItems : compileItems? target htargetWellFormed
-                  (equiv.regions region) targetExtended targetBinders
-                  (localOccurrences target (equiv.regions region))
-                  (fun _ member => member) with
+          change (do
+            let nodes ← compileItems? source hsourceWellFormed region
+              sourceExtended sourceBinders (localNodeOccurrences source region)
+              _
+            let children ← compileItems? source hsourceWellFormed region
+              sourceExtended sourceBinders
+              (localChildOccurrences source region) _
+            pure (.mk nodes children)) = some sourceBody at hsource
+          change (do
+            let nodes ← compileItems? target htargetWellFormed
+              (equiv.regions region) targetExtended targetBinders
+              (localNodeOccurrences target (equiv.regions region)) _
+            let children ← compileItems? target htargetWellFormed
+              (equiv.regions region) targetExtended targetBinders
+              (localChildOccurrences target (equiv.regions region)) _
+            pure (.mk nodes children)) = some targetBody at htargetResult
+          cases hsourceNodes : compileItems? source hsourceWellFormed region
+              sourceExtended sourceBinders (localNodeOccurrences source region)
+              (fun _ member => List.mem_append_left _ member) with
+          | none => simp [hsourceNodes] at hsource
+          | some sourceNodes =>
+              cases hsourceChildren : compileItems? source hsourceWellFormed
+                  region sourceExtended sourceBinders
+                  (localChildOccurrences source region)
+                  (fun _ member => List.mem_append_right _ member) with
               | none =>
-                  simp [targetExtended, htargetItems] at htargetResult
-              | some targetItems =>
-                  simp [targetExtended, htargetItems] at htargetResult
-                  subst targetBody
-                  have hitems := compileItems?_certifiedEquivariant equiv
-                    hsourceWellFormed htargetWellFormed (by
-                      intro occurrence sourceDirect targetOccurrence
-                        targetDirect hrename sourceItem targetItem
-                        hsourceItem htargetItem
-                      subst targetOccurrence
-                      exact hoccurrence occurrence sourceDirect sourceItem
-                        targetItem hsourceItem htargetItem)
-                    hsourceItems htargetItems
-                  simpa only [CompiledRegion.erase, CompilerCall.finish,
-                    CompilerCall.castFullItems] using
-                    regionIso_of_cast
-                      (WireContext.length_extend sourceContext region)
-                      (WireContext.length_extend targetContext
-                        (equiv.regions region))
-                      ambient (certifiedLocalWireEquiv equiv region)
-                      sourceItems.erase targetItems.erase hitems)
+                  simp [hsourceNodes, hsourceChildren] at hsource
+              | some sourceChildren =>
+                simp [hsourceNodes, hsourceChildren] at hsource
+                subst sourceBody
+                cases htargetNodes : compileItems? target htargetWellFormed
+                  (equiv.regions region) targetExtended targetBinders
+                  (localNodeOccurrences target (equiv.regions region))
+                  (fun _ member => List.mem_append_left _ member) with
+                | none =>
+                    simp [targetExtended, htargetNodes] at htargetResult
+                | some targetNodes =>
+                  cases htargetChildren : compileItems? target htargetWellFormed
+                      (equiv.regions region) targetExtended targetBinders
+                      (localChildOccurrences target (equiv.regions region))
+                      (fun _ member => List.mem_append_right _ member) with
+                  | none =>
+                      simp [targetExtended, htargetNodes, htargetChildren]
+                        at htargetResult
+                  | some targetChildren =>
+                    simp [targetExtended, htargetNodes, htargetChildren]
+                      at htargetResult
+                    subst targetBody
+                    have hnodes := compileItems?_certifiedEquivariant equiv
+                      hsourceWellFormed htargetWellFormed
+                      (certifiedLocalNodeOccurrenceEquiv equiv region)
+                      (certifiedLocalNodeOccurrenceEquiv_spec equiv region)
+                      (fun _ member => List.mem_append_left _ member)
+                      (fun _ member => List.mem_append_left _ member) (by
+                        intro occurrence sourceDirect targetOccurrence
+                          targetDirect hrename sourceItem targetItem
+                          hsourceItem htargetItem
+                        subst targetOccurrence
+                        exact hoccurrence occurrence sourceDirect sourceItem
+                          targetItem hsourceItem htargetItem)
+                      hsourceNodes htargetNodes
+                    have hchildren := compileItems?_certifiedEquivariant equiv
+                      hsourceWellFormed htargetWellFormed (by
+                        exact certifiedLocalChildOccurrenceEquiv equiv region)
+                      (certifiedLocalChildOccurrenceEquiv_spec equiv region)
+                      (fun _ member => List.mem_append_right _ member)
+                      (fun _ member => List.mem_append_right _ member) (by
+                        intro occurrence sourceDirect targetOccurrence
+                          targetDirect hrename sourceItem targetItem
+                          hsourceItem htargetItem
+                        subst targetOccurrence
+                        exact hoccurrence occurrence sourceDirect sourceItem
+                          targetItem hsourceItem htargetItem)
+                      hsourceChildren htargetChildren
+                    simpa only [CompiledRegion.erase, CompilerCall.finish,
+                      CompilerCall.castFullItems] using
+                      regionIso_of_cast
+                        (WireContext.length_extend sourceContext region)
+                        (WireContext.length_extend targetContext
+                          (equiv.regions region))
+                        ambient (certifiedLocalWireEquiv equiv region)
+                        (sourceNodes.erase.append sourceChildren.erase)
+                        (targetNodes.erase.append targetChildren.erase)
+                        (hnodes.append hchildren))
   exact Classical.choice (allCalls
     (.nested region sourceContext rels sourceBinders)
     hwires htargetExact hbinders hsource htargetResult)
@@ -871,31 +1018,66 @@ private noncomputable def compileRootCertifiedIso
                     exact .bubble (compileRegion?_certifiedEquivariant equiv
                       hsourceWellFormed htargetWellFormed hwires hchildExact
                       hchildBinders hsourceChild htargetChild)
-  rw [compileRoot?_eq_compileItems? hsourceWellFormed] at hsource
-  rw [compileRoot?_eq_compileItems? htargetWellFormed] at htargetResult
-  cases hsourceItems : compileItems? source hsourceWellFormed source.root
-      sourceRoot BinderContext.empty (localOccurrences source source.root)
-      (fun _ member => member) with
-  | none => simp [sourceRoot, hsourceItems] at hsource
-  | some sourceItems =>
-      simp [sourceRoot, hsourceItems] at hsource
+  rw [compileRoot?_eq_compileBlocks? hsourceWellFormed] at hsource
+  rw [compileRoot?_eq_compileBlocks? htargetWellFormed] at htargetResult
+  cases hsourceNodes : compileItems? source hsourceWellFormed source.root
+      sourceRoot BinderContext.empty (localNodeOccurrences source source.root)
+      (fun _ member => List.mem_append_left _ member) with
+  | none => simp [sourceRoot, hsourceNodes] at hsource
+  | some sourceNodes =>
+    cases hsourceChildren : compileItems? source hsourceWellFormed source.root
+        sourceRoot BinderContext.empty
+        (localChildOccurrences source source.root)
+        (fun _ member => List.mem_append_right _ member) with
+    | none => simp [sourceRoot, hsourceNodes, hsourceChildren] at hsource
+    | some sourceChildren =>
+      simp [sourceRoot, hsourceNodes, hsourceChildren] at hsource
       subst sourceBody
-      cases htargetItems : compileItems? target htargetWellFormed target.root
-          targetRoot BinderContext.empty (localOccurrences target target.root)
-          (fun _ member => member) with
-      | none => simp [targetRoot, htargetItems] at htargetResult
-      | some targetItems =>
-          simp [targetRoot, htargetItems] at htargetResult
+      cases htargetNodes : compileItems? target htargetWellFormed target.root
+          targetRoot BinderContext.empty
+          (localNodeOccurrences target target.root)
+          (fun _ member => List.mem_append_left _ member) with
+      | none => simp [targetRoot, htargetNodes] at htargetResult
+      | some targetNodes =>
+        cases htargetChildren : compileItems? target htargetWellFormed target.root
+            targetRoot BinderContext.empty
+            (localChildOccurrences target target.root)
+            (fun _ member => List.mem_append_right _ member) with
+        | none =>
+            simp [targetRoot, htargetNodes, htargetChildren] at htargetResult
+        | some targetChildren =>
+          simp [targetRoot, htargetNodes, htargetChildren] at htargetResult
           subst targetBody
-          have htargetItemsMapped : compileItems? target htargetWellFormed
+          have htargetNodesMapped : compileItems? target htargetWellFormed
               (equiv.regions source.root) targetRoot BinderContext.empty
-              (localOccurrences target (equiv.regions source.root))
-              (fun _ member => member) = some targetItems := by
-            simpa only [equiv.root_eq] using htargetItems
-          have hitems : ItemSeqIso rootEquiv [] sourceItems.erase
-              targetItems.erase :=
-            compileItems?_certifiedEquivariant equiv hsourceWellFormed
-              htargetWellFormed hoccurrence hsourceItems htargetItemsMapped
+              (localNodeOccurrences target (equiv.regions source.root))
+              (fun _ member => List.mem_append_left _ member) =
+                some targetNodes := by
+            simpa only [equiv.root_eq] using htargetNodes
+          have htargetChildrenMapped : compileItems? target htargetWellFormed
+              (equiv.regions source.root) targetRoot BinderContext.empty
+              (localChildOccurrences target (equiv.regions source.root))
+              (fun _ member => List.mem_append_right _ member) =
+                some targetChildren := by
+            simpa only [equiv.root_eq] using htargetChildren
+          have hnodes := compileItems?_certifiedEquivariant equiv
+            hsourceWellFormed htargetWellFormed
+            (certifiedLocalNodeOccurrenceEquiv equiv source.root)
+            (certifiedLocalNodeOccurrenceEquiv_spec equiv source.root)
+            (fun _ member => List.mem_append_left _ member)
+            (fun _ member => List.mem_append_left _ member) hoccurrence
+            hsourceNodes htargetNodesMapped
+          have hchildren := compileItems?_certifiedEquivariant equiv
+            hsourceWellFormed htargetWellFormed
+            (certifiedLocalChildOccurrenceEquiv equiv source.root)
+            (certifiedLocalChildOccurrenceEquiv_spec equiv source.root)
+            (fun _ member => List.mem_append_right _ member)
+            (fun _ member => List.mem_append_right _ member) hoccurrence
+            hsourceChildren htargetChildrenMapped
+          have hitems : ItemSeqIso rootEquiv []
+              (sourceNodes.erase.append sourceChildren.erase)
+              (targetNodes.erase.append targetChildren.erase) :=
+            hnodes.append hchildren
           have sourceWireEq : sourceRoot.length =
               sourceAmbient.length + sourceLocal.length :=
             List.length_append
@@ -904,18 +1086,20 @@ private noncomputable def compileRootCertifiedIso
             List.length_append
           let result : RegionIso ambient []
               (@CompiledRegion.mk source (.root sourceAmbient sourceLocal)
-                sourceItems).erase
+                sourceNodes sourceChildren).erase
               (@CompiledRegion.mk target (.root targetAmbient targetLocal)
-                targetItems).erase := by
+                targetNodes targetChildren).erase := by
             simpa only [CompiledRegion.erase, CompilerCall.finish,
               CompilerCall.castFullItems, sourceRoot, targetRoot,
               rootEquiv] using
               regionIso_of_cast sourceWireEq targetWireEq ambient localEquiv
-                sourceItems.erase targetItems.erase hitems
+                (sourceNodes.erase.append sourceChildren.erase)
+                (targetNodes.erase.append targetChildren.erase) hitems
           refine ⟨result, ?_⟩
           change result.localEquiv = localEquiv
           exact regionIso_of_cast_localEquiv sourceWireEq targetWireEq ambient
-            localEquiv sourceItems.erase targetItems.erase hitems
+            localEquiv (sourceNodes.erase.append sourceChildren.erase)
+              (targetNodes.erase.append targetChildren.erase) hitems
 noncomputable def compileRoot?_certifiedEquivariant
     {source target : Diagram}
     (equiv : OccurrenceEquiv source target)
@@ -1074,6 +1258,46 @@ private theorem openDiagramIso_ofArityEq_localEquivCast
 
 namespace OpenIso
 
+private noncomputable def elaboratedBodyCertifiedIso
+    {source target : OpenDiagram} (iso : OpenIso source target)
+    (hsource : source.WellFormed) (htarget : target.WellFormed) :
+    {body : RegionIso iso.exposedWiresEquiv []
+        (source.elaborate hsource).body (target.elaborate htarget).body //
+      body.localEquivCast (source.elaborate_body_localCount hsource)
+        (target.elaborate_body_localCount htarget) =
+          iso.hiddenWiresEquiv} := by
+  let occurrenceEquiv := OccurrenceEquiv.ofConcreteIso iso.diagram
+  have hwiresCertified : CertifiedWireContextsAgree occurrenceEquiv
+      (source.exposedWires ++ source.hiddenWires)
+      (target.exposedWires ++ target.hiddenWires)
+      (appendContextEquiv iso.exposedWiresEquiv iso.hiddenWiresEquiv) :=
+    appendContextsAgree iso.exposedWiresEquiv_spec iso.hiddenWiresEquiv_spec
+  have htargetExact : WireContext.Exact
+      (target.exposedWires ++ target.hiddenWires) target.diagram.root := by
+    simpa only [OpenDiagram.rootWires] using openRootWires_exact htarget
+  have hsourceKernel := CheckedOpen.compilation_computation ⟨source, hsource⟩
+  have htargetKernel := CheckedOpen.compilation_computation ⟨target, htarget⟩
+  let raw := compileRootCertifiedIso occurrenceEquiv
+    hsource.diagram_well_formed htarget.diagram_well_formed
+    hwiresCertified htargetExact hsourceKernel htargetKernel
+  have sourceEq : (CheckedOpen.compilation ⟨source, hsource⟩).erase =
+      (source.elaborate hsource).body := rfl
+  have targetEq : (CheckedOpen.compilation ⟨target, htarget⟩).erase =
+      (target.elaborate htarget).body := rfl
+  let body := Eq.mp
+    (congrArg (fun value => RegionIso iso.exposedWiresEquiv [] value
+      (CheckedOpen.compilation ⟨target, htarget⟩).erase) sourceEq)
+    raw.val
+  let transported := Eq.mp
+    (congrArg (fun value => RegionIso iso.exposedWiresEquiv []
+      (source.elaborate hsource).body value) targetEq) body
+  refine ⟨transported, ?_⟩
+  exact (RegionIso.localEquivCast_castEndpoints raw.val sourceEq targetEq
+    (CompiledRegion.erase_localCount _)
+    (CompiledRegion.erase_localCount _)
+    (source.elaborate_body_localCount hsource)
+    (target.elaborate_body_localCount htarget)).trans raw.property
+
 /-- Ordered open concrete isomorphism commutes with checked elaboration. -/
 noncomputable def elaborate_isomorphic {source target : OpenDiagram}
     (iso : OpenIso source target)
@@ -1082,44 +1306,12 @@ noncomputable def elaborate_isomorphic {source target : OpenDiagram}
     OpenDiagramIso (source.elaborate hsource)
       ((target.elaborate htarget).castArity
         iso.boundary_length_eq.symm) := by
-  have hambient : Elaboration.WireContextsAgree iso.diagram
-      source.exposedWires target.exposedWires iso.exposedWiresEquiv :=
-    iso.exposedWiresEquiv_spec
-  have hlocal : Elaboration.WireContextsAgree iso.diagram
-      source.hiddenWires target.hiddenWires iso.hiddenWiresEquiv :=
-    iso.hiddenWiresEquiv_spec
-  have hwires := Elaboration.appendContextsAgree hambient hlocal
-  have htargetExact : Elaboration.WireContext.Exact
-      (target.exposedWires ++ target.hiddenWires) target.diagram.root := by
-    simpa only [OpenDiagram.rootWires] using
-      Elaboration.openRootWires_exact htarget
-  let occurrenceEquiv := OccurrenceEquiv.ofConcreteIso iso.diagram
-  have hwiresCertified : CertifiedWireContextsAgree occurrenceEquiv
-      (source.exposedWires ++ source.hiddenWires)
-      (target.exposedWires ++ target.hiddenWires)
-      (Elaboration.appendContextEquiv iso.exposedWiresEquiv
-        iso.hiddenWiresEquiv) := hwires
-  have hbody : RegionIso  iso.exposedWiresEquiv []
-      (source.elaborate hsource).body (target.elaborate htarget).body := by
-    have hsourceKernel : compileRoot? source.diagram
-        hsource.diagram_well_formed source.exposedWires source.hiddenWires =
-          some (CheckedOpen.compilation ⟨source, hsource⟩) :=
-      CheckedOpen.compilation_computation ⟨source, hsource⟩
-    have htargetKernel : compileRoot? target.diagram
-        htarget.diagram_well_formed target.exposedWires target.hiddenWires =
-          some (CheckedOpen.compilation ⟨target, htarget⟩) :=
-      CheckedOpen.compilation_computation ⟨target, htarget⟩
-    simpa [OpenDiagram.elaborate, CheckedOpen.elaborate] using
-      compileRoot?_certifiedEquivariant occurrenceEquiv
-        hsource.diagram_well_formed htarget.diagram_well_formed
-        hwiresCertified htargetExact
-        hsourceKernel htargetKernel
   apply OpenDiagramIso.ofArityEq iso.boundary_length_eq
     iso.exposedWiresEquiv
   · intro position
     simpa only [OpenDiagram.elaborate_boundary] using
       iso.boundaryClass_commute position
-  · exact hbody
+  · exact (elaboratedBodyCertifiedIso iso hsource htarget).val
 
 /-- The body witness stored by ordered-open elaboration uses the hidden-wire
 equivalence supplied by the concrete open isomorphism. -/
@@ -1134,8 +1326,7 @@ theorem elaborate_isomorphic_localEquivCast {source target : OpenDiagram}
       iso.hiddenWiresEquiv := by
   unfold elaborate_isomorphic
   rw [openDiagramIso_ofArityEq_localEquivCast]
-  · apply compileRoot?_certifiedEquivariant_localEquivCast
-  · exact target.elaborate_body_localCount htarget
+  · exact (elaboratedBodyCertifiedIso iso hsource htarget).property
 
 end OpenIso
 

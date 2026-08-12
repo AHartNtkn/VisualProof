@@ -84,6 +84,32 @@ theorem terminal_root_localOccurrences
         exact congrArg LocalOccurrence.child
           (terminal.root_direct_child hnonempty child hparent)
 
+theorem terminal_root_localNodeOccurrences
+    (input : Splice.Input) (terminal : input.TerminalBody)
+    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
+    localNodeOccurrences input.pattern.val.diagram
+      input.pattern.val.diagram.root = [] := by
+  apply List.eq_nil_iff_forall_not_mem.mpr
+  intro occurrence member
+  cases occurrence with
+  | node node =>
+      exact terminal.root_has_no_nodes hnonempty node
+        ((mem_localNodeOccurrences_node input.pattern.val.diagram
+          input.pattern.val.diagram.root node).mp member)
+  | child child => exact (not_mem_localNodeOccurrences_child _ _ _) member
+
+theorem terminal_root_localChildOccurrences
+    (input : Splice.Input) (terminal : input.TerminalBody)
+    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
+    localChildOccurrences input.pattern.val.diagram
+        input.pattern.val.diagram.root =
+      [.child (input.binderSpine.proxy
+        ⟨0, Nat.pos_of_ne_zero hnonempty⟩)] := by
+  have combined := terminal_root_localOccurrences input terminal hnonempty
+  rw [localOccurrences,
+    terminal_root_localNodeOccurrences input terminal hnonempty] at combined
+  simpa using combined
+
 theorem terminal_nonterminal_localOccurrences
     (input : Splice.Input) (terminal : input.TerminalBody)
     (proxy : Fin input.binderSpine.proxyCount)
@@ -114,6 +140,36 @@ theorem terminal_nonterminal_localOccurrences
           (input.binderSpine.proxy proxy) child).mp hoccurrence
         exact congrArg LocalOccurrence.child
           (terminal.nonterminal_direct_child proxy hnonterminal child hparent)
+
+theorem terminal_nonterminal_localNodeOccurrences
+    (input : Splice.Input) (terminal : input.TerminalBody)
+    (proxy : Fin input.binderSpine.proxyCount)
+    (hnonterminal : proxy.val + 1 < input.binderSpine.proxyCount) :
+    localNodeOccurrences input.pattern.val.diagram
+      (input.binderSpine.proxy proxy) = [] := by
+  apply List.eq_nil_iff_forall_not_mem.mpr
+  intro occurrence member
+  cases occurrence with
+  | node node =>
+      exact terminal.nonterminal_has_no_nodes proxy hnonterminal node
+        ((mem_localNodeOccurrences_node input.pattern.val.diagram
+          (input.binderSpine.proxy proxy) node).mp member)
+  | child child => exact (not_mem_localNodeOccurrences_child _ _ _) member
+
+theorem terminal_nonterminal_localChildOccurrences
+    (input : Splice.Input) (terminal : input.TerminalBody)
+    (proxy : Fin input.binderSpine.proxyCount)
+    (hnonterminal : proxy.val + 1 < input.binderSpine.proxyCount) :
+    localChildOccurrences input.pattern.val.diagram
+        (input.binderSpine.proxy proxy) =
+      [.child (input.binderSpine.proxy
+        ⟨proxy.val + 1, hnonterminal⟩)] := by
+  have combined := terminal_nonterminal_localOccurrences input terminal proxy
+    hnonterminal
+  rw [localOccurrences,
+    terminal_nonterminal_localNodeOccurrences input terminal proxy
+      hnonterminal] at combined
+  simpa using combined
 
 private def terminalRelationBinders (input : Splice.Input) :
     List (Fin input.pattern.val.diagram.regionCount) :=
@@ -315,7 +371,9 @@ private theorem terminalProxy_focus_outerContext
         input.pattern.property.diagram_well_formed
         (.nested (input.binderSpine.proxy proxy) outer rels binders)
         (input.binderSpine.proxy next) (input.binderSpine.arity next)
-        (terminal_nonterminal_localOccurrences input terminal proxy
+        (terminal_nonterminal_localNodeOccurrences input terminal proxy
+          hnonterminal)
+        (terminal_nonterminal_localChildOccurrences input terminal proxy
           hnonterminal)
         nextRegion compiled
     subst body
@@ -405,7 +463,8 @@ theorem patternTerminal_outerContext
           input.pattern.property.diagram_well_formed
           (.root input.pattern.val.exposedWires input.pattern.val.hiddenWires)
           (input.binderSpine.proxy first) (input.binderSpine.arity first)
-          (terminal_root_localOccurrences input terminal hzero)
+          (terminal_root_localNodeOccurrences input terminal hzero)
+          (terminal_root_localChildOccurrences input terminal hzero)
           firstRegion rootCompiled
       subst rootBody
       have rootDifferent : input.pattern.val.diagram.root ≠

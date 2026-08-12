@@ -25,11 +25,11 @@ mutual
         (source : CompiledRegion d sourceCall) :
         CompiledZipper d source sourceCall source
     | child {sourceCall endpointCall : CompilerCall d}
-        {items : CompiledItems d sourceCall.fullContext
+        {nodes children : CompiledItems d sourceCall.fullContext
           sourceCall.rels sourceCall.binders}
         {endpoint : CompiledRegion d endpointCall}
-        (nested : CompiledItemsZipper d items endpointCall endpoint) :
-        CompiledZipper d (.mk items) endpointCall endpoint
+        (nested : CompiledItemsZipper d children endpointCall endpoint) :
+        CompiledZipper d (.mk nodes children) endpointCall endpoint
 
   inductive CompiledItemsZipper (d : Diagram) :
       {context : WireContext d} -> {rels : RelCtx} ->
@@ -91,8 +91,8 @@ mutual
       }
     else
       match source with
-      | .mk items =>
-          (items.focus? site).map fun ⟨endpointCall, endpoint, zipper⟩ =>
+      | .mk _nodes children =>
+          (children.focus? site).map fun ⟨endpointCall, endpoint, zipper⟩ =>
             ⟨endpointCall, endpoint, .child zipper⟩
 
   private def CompiledItems.focus?
@@ -147,7 +147,7 @@ theorem CompiledRegion.focus?_singleton_bubble_eq
       (.nested child parentCall.fullContext (arity :: parentCall.rels)
         (parentCall.binders.push child arity))}
     (site : Fin d.regionCount) (different : parentCall.origin ≠ site) :
-    ((CompiledRegion.mk (.cons (.bubble arity body) .nil) :
+    ((CompiledRegion.mk .nil (.cons (.bubble arity body) .nil) :
         CompiledRegion d parentCall).focus? site) =
       (body.focus? site).map fun focus => {
         endpointCall := focus.endpointCall
@@ -166,7 +166,7 @@ theorem CompiledRegion.focus?_singleton_bubble
     {site : Fin d.regionCount} {focus : CompiledFocus body}
     (different : parentCall.origin ≠ site)
     (found : body.focus? site = some focus) :
-    ((CompiledRegion.mk (.cons (.bubble arity body) .nil) :
+    ((CompiledRegion.mk .nil (.cons (.bubble arity body) .nil) :
         CompiledRegion d parentCall).focus? site) = some {
       endpointCall := focus.endpointCall
       endpoint := focus.endpoint
@@ -192,8 +192,8 @@ mutual
       exact same
     next different =>
       cases source with
-      | mk items =>
-          cases itemsFound : items.focus? site with
+      | mk nodes children =>
+          cases itemsFound : children.focus? site with
           | none => simp [itemsFound] at found
           | some packed =>
               obtain ⟨endpointCall, endpoint, zipper⟩ := packed
@@ -283,12 +283,11 @@ mutual
       (focus : CompiledZipper d source endpointCall endpoint) ->
         CompiledIntrinsic d source.erase endpointCall endpoint
     | .here _ => ⟨.hole, rfl⟩
-    | .child nested => by
+    | .child (nodes := nodes) nested => by
         simpa [CompiledRegion.erase, CompilerCall.finish,
-          CompilerCall.castFullItems] using
-            nested.intrinsic .nil sourceCall.outerContext.length
-              sourceCall.localContext.length (by
-                simp [CompilerCall.fullContext])
+          CompilerCall.castFullItems, ItemSeq.castWiresEq_append] using
+            nested.intrinsic nodes.erase sourceCall.outerContext.length
+              sourceCall.localContext.length sourceCall.fullContext_length
 
   def CompiledItemsZipper.intrinsic
       {context : WireContext d} {rels : RelCtx}
@@ -529,36 +528,53 @@ mutual
     | .here source, compiled, wires, binders, enumeration => by
         have origins : source.items.origins =
             localOccurrences d sourceCall.origin := by
-          rw [CompilerCall.compile?_eq_compileItems? hwf] at compiled
-          cases hitems : compileItems? d hwf sourceCall.origin
+          rw [CompilerCall.compile?_eq_compileBlocks? hwf] at compiled
+          cases hnodes : compileItems? d hwf sourceCall.origin
               sourceCall.fullContext sourceCall.binders
-              (localOccurrences d sourceCall.origin)
-              (fun _ member => member) with
-          | none => simp [hitems] at compiled
-          | some items =>
-              simp [hitems] at compiled
-              subst source
-              exact compileItems?_origins hwf sourceCall.origin
-                sourceCall.fullContext sourceCall.binders hitems
+              (localNodeOccurrences d sourceCall.origin)
+              (fun _ member => List.mem_append_left _ member) with
+          | none => simp [hnodes] at compiled
+          | some nodes =>
+              cases hchildren : compileItems? d hwf sourceCall.origin
+                  sourceCall.fullContext sourceCall.binders
+                  (localChildOccurrences d sourceCall.origin)
+                  (fun _ member => List.mem_append_right _ member) with
+              | none => simp [hnodes, hchildren] at compiled
+              | some children =>
+                  simp [hnodes, hchildren] at compiled
+                  subst source
+                  simp only [CompiledRegion.items_mk,
+                    CompiledItems.origins_append, localOccurrences]
+                  rw [compileItems?_origins hwf sourceCall.origin
+                    sourceCall.fullContext sourceCall.binders hnodes,
+                    compileItems?_origins hwf sourceCall.origin
+                    sourceCall.fullContext sourceCall.binders hchildren]
         exact ⟨compiled, wires, binders, enumeration, origins⟩
-    | .child nested, compiled, wires, binders, enumeration => by
-        rw [CompilerCall.compile?_eq_compileItems? hwf] at compiled
-        cases hitems : compileItems? d hwf sourceCall.origin
+    | .child (nodes := nodes) nested, compiled, wires, binders,
+        enumeration => by
+        rw [CompilerCall.compile?_eq_compileBlocks? hwf] at compiled
+        cases hnodes : compileItems? d hwf sourceCall.origin
             sourceCall.fullContext sourceCall.binders
-            (localOccurrences d sourceCall.origin)
-            (fun _ member => member) with
-        | none => simp [hitems] at compiled
-        | some items =>
-            simp [hitems] at compiled
-            subst items
-            have origins := compileItems?_origins hwf sourceCall.origin
-              sourceCall.fullContext sourceCall.binders hitems
-            refine nested.endpoint_validity hwf sourceCall.origin wires binders
-              enumeration
-              ?_ ?_
-            · intro occurrence member
-              simpa only [origins] using member
-            · simpa only [origins] using hitems
+            (localNodeOccurrences d sourceCall.origin)
+            (fun _ member => List.mem_append_left _ member) with
+        | none => simp [hnodes] at compiled
+        | some compiledNodes =>
+            cases hchildren : compileItems? d hwf sourceCall.origin
+                sourceCall.fullContext sourceCall.binders
+                (localChildOccurrences d sourceCall.origin)
+                (fun _ member => List.mem_append_right _ member) with
+            | none => simp [hnodes, hchildren] at compiled
+            | some children =>
+                simp [hnodes, hchildren] at compiled
+                obtain ⟨rfl, rfl⟩ := compiled
+                have origins := compileItems?_origins hwf sourceCall.origin
+                  sourceCall.fullContext sourceCall.binders hchildren
+                refine nested.endpoint_validity hwf sourceCall.origin wires
+                  binders enumeration ?_ ?_
+                · intro occurrence member
+                  exact List.mem_append_right _
+                    (by simpa only [origins] using member)
+                · simpa only [origins] using hchildren
 
   private def CompiledItemsZipper.endpoint_validity
       {d : Diagram} {context : WireContext d} {rels : RelCtx}
@@ -848,26 +864,32 @@ private theorem CompilerCall.compile?_focus?_isSome
         simp
       · obtain ⟨child, childParent, childEncloses⟩ :=
           exists_direct_child_enclosing hwf (Ne.symm same) siteEnclosed
-        rw [CompilerCall.compile?_eq_compileItems? hwf] at bodyCompiled
-        cases hitems : compileItems? d hwf current.origin current.fullContext
-            current.binders (localOccurrences d current.origin)
-            (fun _ member => member) with
-        | none => simp [hitems] at bodyCompiled
-        | some items =>
-            simp [hitems] at bodyCompiled
-            subst body
-            have found := compileItems?_focus?_isSome_of_child hwf
-              current.origin hitems child site
-              ((mem_localOccurrences_child d current.origin child).mpr
-                childParent)
-              (fun childCompiled =>
-                childIH child childParent current.fullContext current.binders
-                  childCompiled site childEncloses)
-              (fun childCompiled =>
-                childIH child childParent current.fullContext _ childCompiled
-                  site childEncloses)
-            unfold CompiledRegion.focus?
-            simpa [same] using found)
+        rw [CompilerCall.compile?_eq_compileBlocks? hwf] at bodyCompiled
+        cases hnodes : compileItems? d hwf current.origin current.fullContext
+            current.binders (localNodeOccurrences d current.origin)
+            (fun _ member => List.mem_append_left _ member) with
+        | none => simp [hnodes] at bodyCompiled
+        | some nodes =>
+            cases hchildren : compileItems? d hwf current.origin
+                current.fullContext current.binders
+                (localChildOccurrences d current.origin)
+                (fun _ member => List.mem_append_right _ member) with
+            | none => simp [hnodes, hchildren] at bodyCompiled
+            | some children =>
+                simp [hnodes, hchildren] at bodyCompiled
+                subst body
+                have found := compileItems?_focus?_isSome_of_child hwf
+                  current.origin hchildren child site
+                  ((mem_localChildOccurrences_child d current.origin child).mpr
+                    childParent)
+                  (fun childCompiled =>
+                    childIH child childParent current.fullContext current.binders
+                      childCompiled site childEncloses)
+                  (fun childCompiled =>
+                    childIH child childParent current.fullContext _ childCompiled
+                      site childEncloses)
+                unfold CompiledRegion.focus?
+                simpa [same] using found)
   exact allCalls call compiled site encloses
 
 private theorem compileRoot?_focus?_isSome
@@ -1163,7 +1185,9 @@ theorem mem_retained_origins
         occurrence ∈ localOccurrences source.checked.val.diagram
           selection.val.anchor := by
   rw [retained_origins_eq_unselected]
-  simp [and_comm]
+  cases occurrence <;>
+    simp [localOccurrences, localNodeOccurrences, localChildOccurrences,
+      and_comm]
 
 theorem mem_material_origins
     (source : State arity)
@@ -1175,7 +1199,9 @@ theorem mem_material_origins
         occurrence ∈ localOccurrences source.checked.val.diagram
           selection.val.anchor := by
   rw [material_origins_eq_selected]
-  simp [and_comm]
+  cases occurrence <;>
+    simp [localOccurrences, localNodeOccurrences, localChildOccurrences,
+      and_comm]
 
 theorem retained_stable (source : State arity)
     (selection : CheckedSelection source.checked.val.diagram) :

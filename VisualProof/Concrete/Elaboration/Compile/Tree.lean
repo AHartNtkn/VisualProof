@@ -68,7 +68,8 @@ mutual
   /-- The sole successful compiler result, indexed by its exact call. -/
   inductive CompiledRegion (d : Diagram) : CompilerCall d → Type
     | mk {call : CompilerCall d}
-        (items : CompiledItems d call.fullContext call.rels call.binders) :
+        (nodes : CompiledItems d call.fullContext call.rels call.binders)
+        (children : CompiledItems d call.fullContext call.rels call.binders) :
         CompiledRegion d call
 
   /-- One compiled occurrence with an ordinary concrete origin. -/
@@ -110,7 +111,7 @@ end
 mutual
   def CompiledRegion.erase : CompiledRegion d call →
       Region call.outerContext.length call.rels
-    | .mk items => call.finish items.erase
+    | .mk nodes children => call.finish (nodes.erase.append children.erase)
 
   def CompiledItem.erase :
       CompiledItem d context rels binders → Item context.length rels
@@ -129,9 +130,13 @@ namespace CompiledRegion
 def localCount (_region : CompiledRegion d call) : Nat :=
   call.localContext.length
 
-def items : (region : CompiledRegion d call) →
+def nodeItems : (region : CompiledRegion d call) →
     CompiledItems d call.fullContext call.rels call.binders
-  | .mk items => items
+  | .mk nodes _ => nodes
+
+def childItems : (region : CompiledRegion d call) →
+    CompiledItems d call.fullContext call.rels call.binders
+  | .mk _ children => children
 
 @[simp] theorem erase_localCount (region : CompiledRegion d call) :
     region.erase.localCount = region.localCount := by
@@ -341,5 +346,26 @@ noncomputable def partitionFactorization
             ItemSeq.renameWires_id] using rotated
 
 end CompiledItems
+
+namespace CompiledRegion
+
+def items (region : CompiledRegion d call) :
+    CompiledItems d call.fullContext call.rels call.binders :=
+  region.nodeItems.append region.childItems
+
+@[simp] theorem items_mk
+    (nodes children : CompiledItems d call.fullContext call.rels call.binders) :
+    items (.mk nodes children : CompiledRegion d call) =
+      nodes.append children := rfl
+
+@[simp] theorem erase_items (region : CompiledRegion d call) :
+    region.erase = call.finish region.items.erase := by
+  cases region with
+  | mk nodes children =>
+      change call.finish (nodes.erase.append children.erase) =
+        call.finish ((nodes.append children).erase)
+      rw [CompiledItems.erase_append]
+
+end CompiledRegion
 
 end VisualProof.Concrete.Elaboration

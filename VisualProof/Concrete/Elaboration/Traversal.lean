@@ -24,37 +24,84 @@ theorem exactScopeWires_nodup (d : Diagram)
     (region : Fin d.regionCount) : (exactScopeWires d region).Nodup :=
   filterFin_nodup _
 
-def localOccurrences (d : Diagram)
+def localNodeOccurrences (d : Diagram)
     (region : Fin d.regionCount) :
     List (LocalOccurrence d.regionCount d.nodeCount) :=
   (filterFin fun node => decide ((d.nodes node).region = region)).map
-      LocalOccurrence.node ++
+    LocalOccurrence.node
+
+def localChildOccurrences (d : Diagram)
+    (region : Fin d.regionCount) :
+    List (LocalOccurrence d.regionCount d.nodeCount) :=
     (filterFin fun child =>
       decide ((d.regions child).parent? = some region)).map
       LocalOccurrence.child
+
+def localOccurrences (d : Diagram)
+    (region : Fin d.regionCount) :
+    List (LocalOccurrence d.regionCount d.nodeCount) :=
+  localNodeOccurrences d region ++ localChildOccurrences d region
+
+@[simp] theorem mem_localNodeOccurrences_node (d : Diagram)
+    (region : Fin d.regionCount) (node : Fin d.nodeCount) :
+    LocalOccurrence.node node ∈ localNodeOccurrences d region ↔
+      (d.nodes node).region = region := by
+  simp [localNodeOccurrences]
+
+@[simp] theorem not_mem_localNodeOccurrences_child (d : Diagram)
+    (region child : Fin d.regionCount) :
+    LocalOccurrence.child child ∉ localNodeOccurrences d region := by
+  simp [localNodeOccurrences]
+
+@[simp] theorem not_mem_localChildOccurrences_node (d : Diagram)
+    (region : Fin d.regionCount) (node : Fin d.nodeCount) :
+    LocalOccurrence.node node ∉ localChildOccurrences d region := by
+  simp [localChildOccurrences]
+
+@[simp] theorem mem_localChildOccurrences_child (d : Diagram)
+    (region child : Fin d.regionCount) :
+    LocalOccurrence.child child ∈ localChildOccurrences d region ↔
+      (d.regions child).parent? = some region := by
+  simp [localChildOccurrences]
+
+theorem localNodeOccurrences_nodup (d : Diagram)
+    (region : Fin d.regionCount) :
+    (localNodeOccurrences d region).Nodup :=
+  (filterFin_nodup _).map LocalOccurrence.node (by
+    intro a b hab h
+    exact hab (LocalOccurrence.node.inj h))
+
+theorem localChildOccurrences_nodup (d : Diagram)
+    (region : Fin d.regionCount) :
+    (localChildOccurrences d region).Nodup :=
+  (filterFin_nodup _).map LocalOccurrence.child (by
+    intro a b hab h
+    exact hab (LocalOccurrence.child.inj h))
+
+@[simp] theorem localOccurrences_eq_blocks (d : Diagram)
+    (region : Fin d.regionCount) :
+    localOccurrences d region =
+      localNodeOccurrences d region ++ localChildOccurrences d region := rfl
 
 @[simp] theorem mem_localOccurrences_node (d : Diagram)
     (region : Fin d.regionCount) (node : Fin d.nodeCount) :
     LocalOccurrence.node node ∈ localOccurrences d region ↔
       (d.nodes node).region = region := by
-  simp [localOccurrences]
+  simp [localOccurrences, localNodeOccurrences, localChildOccurrences]
 
 @[simp] theorem mem_localOccurrences_child (d : Diagram)
     (region child : Fin d.regionCount) :
     LocalOccurrence.child child ∈ localOccurrences d region ↔
       (d.regions child).parent? = some region := by
-  simp [localOccurrences]
+  simp [localOccurrences, localNodeOccurrences, localChildOccurrences]
 
 theorem localOccurrences_nodup (d : Diagram)
     (region : Fin d.regionCount) : (localOccurrences d region).Nodup := by
-  simp only [localOccurrences, List.nodup_append]
+  simp only [localOccurrences, localNodeOccurrences, localChildOccurrences,
+    List.nodup_append]
   refine ⟨?_, ?_, ?_⟩
-  · exact (filterFin_nodup _).map LocalOccurrence.node (by
-      intro a b hab h
-      exact hab (LocalOccurrence.node.inj h))
-  · exact (filterFin_nodup _).map LocalOccurrence.child (by
-      intro a b hab h
-      exact hab (LocalOccurrence.child.inj h))
+  · exact localNodeOccurrences_nodup d region
+  · exact localChildOccurrences_nodup d region
   · intro a ha b hb h
     simp only [List.mem_map] at ha hb
     obtain ⟨node, _, rfl⟩ := ha
