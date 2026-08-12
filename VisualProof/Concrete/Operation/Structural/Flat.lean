@@ -203,6 +203,52 @@ theorem spliceRaw_packed_boundary
       simpa [canonicalInput, List.map_map, Function.comp_def] using
         normalized.symm
 
+/-- The source boundary reindexed into a splice input whose checked frame is
+the source diagram. -/
+def spliceSourceBoundary
+    {arity : Nat} (source : State arity) (input : Splice.Input)
+    (frameEq : input.frame = source.diagram) :
+    List (Fin input.frame.val.wireCount) :=
+  source.checked.val.boundary.map fun wire =>
+    Fin.cast (congrArg (fun checked : Checked => checked.val.wireCount)
+      frameEq).symm wire
+
+private theorem openDiagram_eq_of_values
+    (source target : Concrete.OpenDiagram)
+    (diagramEq : source.diagram = target.diagram)
+    (boundaryValues : source.boundary.map (fun wire => wire.val) =
+      target.boundary.map fun wire => wire.val) : source = target := by
+  cases source with
+  | mk sourceDiagram sourceBoundary =>
+      cases target with
+      | mk targetDiagram targetBoundary =>
+          simp only at diagramEq boundaryValues ⊢
+          subst targetDiagram
+          have boundaryEq := finList_eq_of_map_val_eq sourceBoundary
+            targetBoundary boundaryValues
+          subst targetBoundary
+          rfl
+
+/-- Successful packing identifies the complete target open diagram with the
+canonical plug layout and transported source boundary. -/
+theorem spliceRaw_packed_open
+    {arity : Nat} {source : State arity} {input : Splice.Input}
+    (frameEq : input.frame = source.diagram)
+    {operation : OperationReceipt input.frame}
+    (success : spliceRaw input = .ok operation)
+    {receipt : Receipt source}
+    (packed : (operation.castInput frameEq).toReceipt source = some receipt) :
+    receipt.target.checked.val =
+      (({} : Splice.Input.PlugLayout input).outputOpenRoot input
+        (spliceSourceBoundary source input frameEq)) := by
+  apply openDiagram_eq_of_values
+  · exact spliceRaw_packed_target frameEq success packed
+  · have boundaryEq := congrArg (List.map (fun wire => wire.val))
+        (spliceRaw_packed_boundary frameEq success packed)
+    simpa [spliceSourceBoundary, Splice.Input.PlugLayout.outputOpenRoot,
+      Splice.Input.PlugLayout.frameWireMap, List.map_map,
+      Function.comp_def, Fin.cast] using boundaryEq
+
 
 private def quotientWireDomain (input : Concrete.Diagram)
     (absorbed : Fin input.wireCount) : SurvivorDomain input.wireCount where
