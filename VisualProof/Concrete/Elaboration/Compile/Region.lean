@@ -244,6 +244,174 @@ termination_by origin => (descendantRegions d origin).length
 decreasing_by
   all_goals exact descendantRegions_length_lt_of_parent hwf (childDirect child member)
 
+private theorem CompiledItems.eq_of_validAt
+    (d : Diagram) (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (childCanonical : ∀ (first second : CompiledRegion d),
+      first.origin = second.origin → first.Valid → second.Valid →
+      (d.regions first.origin).parent? = some parent → first = second)
+    (first second : CompiledItems d)
+    (firstValid : first.ValidAt parent) (secondValid : second.ValidAt parent)
+    (origins : first.origins = second.origins) : first = second := by
+  cases first with
+  | nil =>
+      cases second with
+      | nil => rfl
+      | cons head tail => simp at origins
+  | cons firstHead firstTail =>
+      cases second with
+      | nil => simp at origins
+      | cons secondHead secondTail =>
+          have headOrigin := (List.cons.inj origins).1
+          have tailOrigins := (List.cons.inj origins).2
+          have headEq : firstHead = secondHead := by
+            cases firstHead with
+            | atom firstNode firstBinder firstArity firstPorts =>
+                cases secondHead with
+                | atom secondNode secondBinder secondArity secondPorts =>
+                    have nodeEq : firstNode = secondNode :=
+                      LocalOccurrence.node.inj headOrigin
+                    subst secondNode
+                    have firstRegion : (d.nodes firstNode).region = parent := by
+                      simp [firstValid.1.1, CNode.region]
+                    have firstCanonical :=
+                      CompiledItem.eq_compileNode_of_valid d hwf firstNode
+                        (.atom firstNode firstBinder firstArity firstPorts) rfl
+                        (firstRegion ▸ firstValid.1)
+                    have secondCanonical :=
+                      CompiledItem.eq_compileNode_of_valid d hwf firstNode
+                        (.atom firstNode secondBinder secondArity secondPorts) rfl
+                        (firstRegion ▸ secondValid.1)
+                    exact firstCanonical.trans secondCanonical.symm
+                | identity secondNode secondArity secondPorts =>
+                    have nodeEq : firstNode = secondNode :=
+                      LocalOccurrence.node.inj headOrigin
+                    subst secondNode
+                    have firstRegion : (d.nodes firstNode).region = parent := by
+                      simp [firstValid.1.1, CNode.region]
+                    have firstCanonical :=
+                      CompiledItem.eq_compileNode_of_valid d hwf firstNode
+                        (.atom firstNode firstBinder firstArity firstPorts) rfl
+                        (firstRegion ▸ firstValid.1)
+                    have secondCanonical :=
+                      CompiledItem.eq_compileNode_of_valid d hwf firstNode
+                        (.identity firstNode secondArity secondPorts) rfl
+                        (firstRegion ▸ secondValid.1)
+                    exact firstCanonical.trans secondCanonical.symm
+                | cut body => contradiction
+                | bubble arity body => contradiction
+            | identity firstNode firstArity firstPorts =>
+                cases secondHead with
+                | atom secondNode secondBinder secondArity secondPorts =>
+                    have nodeEq : firstNode = secondNode :=
+                      LocalOccurrence.node.inj headOrigin
+                    subst secondNode
+                    have firstRegion : (d.nodes firstNode).region = parent := by
+                      simp [firstValid.1.1, CNode.region]
+                    have firstCanonical :=
+                      CompiledItem.eq_compileNode_of_valid d hwf firstNode
+                        (.identity firstNode firstArity firstPorts) rfl
+                        (firstRegion ▸ firstValid.1)
+                    have secondCanonical :=
+                      CompiledItem.eq_compileNode_of_valid d hwf firstNode
+                        (.atom firstNode secondBinder secondArity secondPorts) rfl
+                        (firstRegion ▸ secondValid.1)
+                    exact firstCanonical.trans secondCanonical.symm
+                | identity secondNode secondArity secondPorts =>
+                    have nodeEq : firstNode = secondNode :=
+                      LocalOccurrence.node.inj headOrigin
+                    subst secondNode
+                    have firstRegion : (d.nodes firstNode).region = parent := by
+                      simp [firstValid.1.1, CNode.region]
+                    have firstCanonical :=
+                      CompiledItem.eq_compileNode_of_valid d hwf firstNode
+                        (.identity firstNode firstArity firstPorts) rfl
+                        (firstRegion ▸ firstValid.1)
+                    have secondCanonical :=
+                      CompiledItem.eq_compileNode_of_valid d hwf firstNode
+                        (.identity firstNode secondArity secondPorts) rfl
+                        (firstRegion ▸ secondValid.1)
+                    exact firstCanonical.trans secondCanonical.symm
+                | cut body => contradiction
+                | bubble arity body => contradiction
+            | cut firstBody =>
+                cases secondHead with
+                | atom => contradiction
+                | identity => contradiction
+                | cut secondBody =>
+                    have bodyOrigin : firstBody.origin = secondBody.origin :=
+                      LocalOccurrence.child.inj headOrigin
+                    exact congrArg CompiledItem.cut
+                      (childCanonical firstBody secondBody bodyOrigin
+                        firstValid.1.2 secondValid.1.2 (by
+                          simp [firstValid.1.1, CRegion.parent?]))
+                | bubble secondArity secondBody =>
+                    have bodyOrigin : firstBody.origin = secondBody.origin :=
+                      LocalOccurrence.child.inj headOrigin
+                    have impossible := firstValid.1.1.symm.trans
+                      (bodyOrigin ▸ secondValid.1.1)
+                    contradiction
+            | bubble firstArity firstBody =>
+                cases secondHead with
+                | atom => contradiction
+                | identity => contradiction
+                | cut secondBody =>
+                    have bodyOrigin : firstBody.origin = secondBody.origin :=
+                      LocalOccurrence.child.inj headOrigin
+                    have impossible := firstValid.1.1.symm.trans
+                      (bodyOrigin ▸ secondValid.1.1)
+                    contradiction
+                | bubble secondArity secondBody =>
+                    have bodyOrigin : firstBody.origin = secondBody.origin :=
+                      LocalOccurrence.child.inj headOrigin
+                    have shapes := firstValid.1.1.symm.trans
+                      (bodyOrigin ▸ secondValid.1.1)
+                    have arityEq := (CRegion.bubble.inj shapes).2
+                    subst secondArity
+                    exact congrArg (CompiledItem.bubble firstArity)
+                      (childCanonical firstBody secondBody bodyOrigin
+                        firstValid.1.2 secondValid.1.2 (by
+                          simp [firstValid.1.1, CRegion.parent?]))
+          subst secondHead
+          exact congrArg (CompiledItems.cons firstHead)
+            (CompiledItems.eq_of_validAt d hwf parent childCanonical
+              firstTail secondTail firstValid.2 secondValid.2 tailOrigins)
+
+/-- The proof-only validity predicate determines one symbolic region exactly. -/
+theorem CompiledRegion.eq_of_valid
+    (d : Diagram) (hwf : d.WellFormed) :
+    (first second : CompiledRegion d) →
+    first.origin = second.origin →
+    first.Valid → second.Valid → first = second
+  | first, second, origin, firstValid, secondValid => by
+    cases first with
+    | mk firstOrigin firstNodes firstChildren =>
+        cases second with
+        | mk secondOrigin secondNodes secondChildren =>
+            change firstOrigin = secondOrigin at origin
+            subst secondOrigin
+            have childCanonical : ∀ (left right : CompiledRegion d),
+                left.origin = right.origin → left.Valid → right.Valid →
+                (d.regions left.origin).parent? = some firstOrigin →
+                left = right := by
+              intro left right same leftValid rightValid direct
+              apply CompiledRegion.eq_of_valid d hwf left right same leftValid
+                rightValid
+            have nodesEq := CompiledItems.eq_of_validAt d hwf firstOrigin
+              childCanonical firstNodes secondNodes firstValid.2.2.1
+              secondValid.2.2.1 (firstValid.1.trans secondValid.1.symm)
+            have childrenEq := CompiledItems.eq_of_validAt d hwf firstOrigin
+              childCanonical firstChildren secondChildren firstValid.2.2.2
+              secondValid.2.2.2 (firstValid.2.1.trans secondValid.2.1.symm)
+            subst secondNodes
+            subst secondChildren
+            rfl
+termination_by first => (descendantRegions d first.origin).length
+decreasing_by
+  all_goals
+    apply descendantRegions_length_lt_of_parent hwf
+    simp_all
+    rfl
+
 theorem openRootWires_exact
     {d : OpenDiagram} (hwf : d.WellFormed) :
     WireContext.Exact d.rootWires d.diagram.root := by

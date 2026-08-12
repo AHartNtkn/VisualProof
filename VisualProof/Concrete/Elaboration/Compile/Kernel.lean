@@ -90,4 +90,69 @@ theorem compileNode_valid (d : Diagram) (hwf : d.WellFormed)
     (compileNode d hwf node).ValidAt (d.nodes node).region :=
   (Classical.choose_spec (compileNode_exists d hwf node)).2
 
+/-- A valid symbolic node with a fixed concrete origin is canonical. -/
+theorem CompiledItem.eq_compileNode_of_valid
+    (d : Diagram) (hwf : d.WellFormed) (node : Fin d.nodeCount)
+    (item : CompiledItem d)
+    (origin : item.origin = .node node)
+    (valid : item.ValidAt (d.nodes node).region) :
+    item = compileNode d hwf node := by
+  have targetOrigin := compileNode_origin d hwf node
+  have targetValid := compileNode_valid d hwf node
+  generalize targetEq : compileNode d hwf node = target at targetOrigin targetValid ⊢
+  cases item with
+  | atom sourceNode sourceBinder sourceArity sourcePorts =>
+      cases target with
+      | atom targetNode targetBinder targetArity targetPorts =>
+          simp only [CompiledItem.origin, LocalOccurrence.node.injEq]
+            at origin targetOrigin
+          subst sourceNode
+          subst targetNode
+          have shapes := valid.1.symm.trans targetValid.1
+          have binderEq := (CNode.atom.inj shapes).2
+          subst targetBinder
+          have bubbleShapes := valid.2.1.symm.trans targetValid.2.1
+          have arityEq := (CRegion.bubble.inj bubbleShapes).2
+          subst targetArity
+          congr
+          funext index
+          exact endpoint_wire_unique hwf.wire_endpoints_are_disjoint
+            (valid.2.2.2 index) (targetValid.2.2.2 index)
+      | identity targetNode targetArity targetPorts =>
+          simp only [CompiledItem.origin, LocalOccurrence.node.injEq]
+            at origin targetOrigin
+          subst sourceNode
+          subst targetNode
+          exact False.elim (by
+            have := valid.1.symm.trans targetValid.1
+            contradiction)
+      | cut body => contradiction
+      | bubble arity body => contradiction
+  | identity sourceNode sourceArity sourcePorts =>
+      cases target with
+      | atom targetNode targetBinder targetArity targetPorts =>
+          simp only [CompiledItem.origin, LocalOccurrence.node.injEq]
+            at origin targetOrigin
+          subst sourceNode
+          subst targetNode
+          exact False.elim (by
+            have := valid.1.symm.trans targetValid.1
+            contradiction)
+      | identity targetNode targetArity targetPorts =>
+          simp only [CompiledItem.origin, LocalOccurrence.node.injEq]
+            at origin targetOrigin
+          subst sourceNode
+          subst targetNode
+          have shapes := valid.1.symm.trans targetValid.1
+          have arityEq := (CNode.identity.inj shapes).2
+          subst targetArity
+          congr
+          funext index
+          exact endpoint_wire_unique hwf.wire_endpoints_are_disjoint
+            (valid.2 index) (targetValid.2 index)
+      | cut body => contradiction
+      | bubble arity body => contradiction
+  | cut body => contradiction
+  | bubble arity body => contradiction
+
 end VisualProof.Concrete.Elaboration
