@@ -28,7 +28,7 @@ describe('authoritative content scale', () => {
 })
 
 describe('identity paint ownership', () => {
-  it('uses the exact two-dot dangling-existential node for a multi-port identity', () => {
+  it('paints identity and existential arcs in the body pass at one scaled radius', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const identity = builder.identity(cut, IOTA, 3)
@@ -47,22 +47,23 @@ describe('identity paint ownership', () => {
     settle(engine, 200)
     const identityBody = engine.bodies.get(identity)!
     const endBody = engine.bodies.get(engine.wires.get(danglingWire)!.end!.body)!
-    const shapes = paint(engine, LIGHT)
-    const ownedAt = (center: { readonly x: number; readonly y: number }) => shapes
-      .filter((shape) =>
-        (shape.kind === 'arc' || shape.kind === 'dot')
+    const bodiesOnly = paint(engine, LIGHT, () => [])
+    const arcsAt = (center: { readonly x: number; readonly y: number }) => bodiesOnly
+      .filter((shape): shape is Extract<(typeof bodiesOnly)[number], { kind: 'arc' }> => shape.kind === 'arc'
         && shape.center.x === center.x
         && shape.center.y === center.y)
-      .map((shape) => shape.kind === 'dot'
-        ? { kind: shape.kind, rPx: shape.rPx, fill: shape.fill }
-        : { kind: shape.kind })
+    const dotsAt = (center: { readonly x: number; readonly y: number }) => bodiesOnly
+      .filter((shape) => shape.kind === 'dot'
+        && shape.center.x === center.x
+        && shape.center.y === center.y)
 
-    const danglingNode = ownedAt(endBody.pos)
-    expect(danglingNode).toEqual([
-      { kind: 'dot', rPx: 3.6, fill: LIGHT.paper },
-      { kind: 'dot', rPx: 2.6, fill: LIGHT.wire },
-    ])
-    expect(ownedAt(identityBody.pos)).toEqual(danglingNode)
+    expect(arcsAt(identityBody.pos)).toHaveLength(1)
+    expect(arcsAt(endBody.pos)).toHaveLength(1)
+    expect(arcsAt(identityBody.pos)[0]!.r).toBe(arcsAt(endBody.pos)[0]!.r)
+    expect(arcsAt(identityBody.pos)[0]!.r)
+      .toBe(identityBody.geometry!.arcs[0]!.r * engine.scale)
+    expect(dotsAt(identityBody.pos)).toHaveLength(0)
+    expect(dotsAt(endBody.pos)).toHaveLength(0)
   })
 })
 

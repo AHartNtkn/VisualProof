@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { END_PORT_KEY, mkEngine } from '../../src/view/engine'
 import { settle, recomputeRegions } from '../../src/view/relax'
-import { existentialStubs } from '../../src/view/wires'
+import { wireOwnedEnds } from '../../src/view/wires'
 import { UNARY } from '../fixtures/zero-signature'
 
 describe('existential stubs honor wire scope after settling', () => {
@@ -20,11 +20,11 @@ describe('existential stubs honor wire scope after settling', () => {
     const e = mkEngine(d, [])
     settle(e, 600)
     recomputeRegions(e)
-    const stub = existentialStubs(e).find((s) => s.wid === w)
-    expect(stub, 'the loose end still renders an ∃ dot').toBeDefined()
+    const end = wireOwnedEnds(e).find((candidate) => candidate.wid === w)
+    expect(end, 'the loose end remains a wire-owned body').toBeDefined()
     const g1 = e.regions.get(c1)!
-    const dist = Math.hypot(stub!.dot.x - g1.center.x, stub!.dot.y - g1.center.y)
-    expect(dist, 'the dot must not sit inside the outer cut — the individual is quantified on the sheet').toBeGreaterThan(g1.radius)
+    const dist = Math.hypot(end!.body.pos.x - g1.center.x, end!.body.pos.y - g1.center.y)
+    expect(dist, 'the end body must not sit inside the outer cut — the individual is quantified on the sheet').toBeGreaterThan(g1.radius)
   })
 
   it('∀-shape: a 2-endpoint wire scoped between the cuts grows a dangling ∃ branch THERE (never contorts)', () => {
@@ -59,8 +59,8 @@ describe('existential stubs honor wire scope after settling', () => {
     // resting exactly ON the ring IS outside — the scope barrier is one-sided,
     // so contact is a legal rest (float slack only)
     expect(dist, 'the ∃ dot sits outside the inner cut — the individual is quantified in the annulus').toBeGreaterThanOrEqual(g2.radius - 1e-6)
-    const stub = existentialStubs(e).find((s) => s.wid === w)
-    expect(stub, 'the dangling branch end draws the ∃ dot').toBeDefined()
-    expect(stub!.dot.x).toBe(x!.pos.x)
+    const end = wireOwnedEnds(e).find((candidate) => candidate.wid === w)
+    expect(end, 'the dangling branch end remains a wire-owned body').toBeDefined()
+    expect(end!.body.pos.x).toBe(x!.pos.x)
   })
 })

@@ -1,7 +1,7 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Body, Engine, StoredFrame, WireSpaces, WireView } from './engine'
-import { DISC_R, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, drawnObstacles, routeBounds, wireRouteSpaces, frameSlots, FRAME_MARGIN } from './engine'
+import { DISC_R, mkEngine, subtreeCarriers, worldBindAnchor, wireTerminalPoints, wireTerminalBCs, drawnObstacles, routeBounds, wireRouteSpaces, frameSlots, FRAME_MARGIN, isBodyObstacle } from './engine'
 import { mkFreeSpace, route } from './route/freespace'
 import type { Disc as RouteDisc, Bounds, FreeSpace } from './route/freespace'
 import { advanceNetwork, netEval, solveTarget, FD_PROBE } from './route/network'
@@ -936,7 +936,7 @@ export function mkFrozenState(e: Engine): FrozenState {
   }
   const obstacle = new Map<string, RouteDisc>()
   for (const b of e.bodies.values()) {
-    if (b.kind === 'ref' || b.kind === 'atom') {
+    if (isBodyObstacle(b)) {
       obstacle.set(b.id, {
         c: { x: b.pos.x, y: b.pos.y },
         r: b.discR * sc,

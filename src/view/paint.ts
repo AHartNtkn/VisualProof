@@ -4,7 +4,7 @@ import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, resolvedFrameSlot } from './engine'
-import { computeLegs, existentialStubs, legPaths } from './wires'
+import { computeLegs, legPaths, wireOwnedEnds } from './wires'
 import type { Leg } from './engine'
 
 /**
@@ -16,7 +16,7 @@ import type { Leg } from './engine'
  *
  * Laws enforced by construction and checked in paint.test.ts: text appears
  * ONLY on named refs; boundary wires exit the frame while internal singletons
- * get an ∃ stub; semantic-node rails share one theme-owned stroke and width;
+ * get a wire-owned end body; semantic-node rails share one theme-owned stroke and width;
  * a relational wire's colour codes the order of its signature and an atom
  * strokes in its head wire's rung.
  */
@@ -83,7 +83,6 @@ export type Shape =
       polyline stroke shape — a wire stroke that is not the painted cubics is
       unrepresentable (the 2026-07-30 highlight-discretization defect). */
   | { readonly kind: 'bezierPath'; readonly cubics: readonly { a: Vec2; c1: Vec2; c2: Vec2; b: Vec2 }[]; readonly pts: readonly Vec2[]; readonly stroke: string; readonly width: number; readonly glow: string | null }
-  | { readonly kind: 'stub'; readonly from: Vec2; readonly to: Vec2; readonly dot: Vec2; readonly dotRpx: number; readonly stroke: string; readonly width: number; readonly glow: string | null }
   /** A filled disc whose radius is fixed DEVICE pixels (junction dots): stays a
       constant size under zoom, unlike world-scaled circles. */
   | { readonly kind: 'dot'; readonly center: Vec2; readonly rPx: number; readonly fill: string }
@@ -91,9 +90,7 @@ export type Shape =
 
 const FRAME_STROKE_W = 2
 const DISC_RIM_W = 1.4
-const JUNCTION_OUTER_R = 3.6
-const JUNCTION_INNER_R = 2.6
-const STUB_DOT_R = 2.6
+const PORT_DOT_R = 2.6
 /** Device-pixel radius of the port-order pip (junction-dot family). */
 const PIP_R = 3.2
 /** The sheet's port-0 origin must dominate ordinary existential-sized ports. */
@@ -101,14 +98,6 @@ const FRAME_ORIGIN_R = 5.2
 /** Hover-group highlight: lightness bump and extra stroke width over the base. */
 const HL_BRIGHT = 18
 const HL_WIDTH = 0.8
-
-/** The shared point-node glyph used by dangling quantifiers and equality. */
-function pointNode(center: Vec2, fill: string, paper: string): Shape[] {
-  return [
-    { kind: 'dot', center, rPx: JUNCTION_OUTER_R, fill: paper },
-    { kind: 'dot', center, rPx: JUNCTION_INNER_R, fill },
-  ]
-}
 
 /** Full user-facing name of a reference. Namespace qualification identifies the
     definition semantically; the disc displays its complete final path segment. */
@@ -167,8 +156,8 @@ function cutDepth(d: Diagram, rid: RegionId): number {
   }
 }
 
-/** The wire pass of the base painter: legs, existential stubs, boundary
-    exits, the frame pip, and junction dots. Exported (and overridable via
+/** The wire pass of the base painter: legs, boundary exits, the frame pip,
+    and junction dots. Exported (and overridable via
     paint's `wires` parameter) so wire-rendering experiments can substitute
     their own pass without duplicating the rest of the painter. */
 export function paintWires(e: Engine, st: Theme): Shape[] {
@@ -190,11 +179,6 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
     const stroke = wireStroke(wid)
     shapes.push({ kind: 'bezierPath', cubics, pts, stroke, width: st.wireW, glow: glow(stroke) })
   }
-  // existential stubs (genuine internal loose ends — the ∃ dot is SEMANTIC, stays)
-  for (const s of existentialStubs(e)) {
-    const stroke = wireStroke(s.wid)
-    shapes.push({ kind: 'stub', from: s.from, to: s.to, dot: s.dot, dotRpx: STUB_DOT_R, stroke, width: st.wireW, glow: glow(stroke) })
-  }
   // An unattached boundary wire is already a formal port: paint it exactly at
   // its canonical frame slot rather than inventing a floating existential body.
   // The origin slot gets only the larger origin marker below, never a stacked
@@ -204,7 +188,7 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
     if (w === undefined || w.binds.length !== 0) continue
     const slot = resolvedFrameSlot(e, position)
     if (slot === null) continue
-    if (position !== 0) shapes.push({ kind: 'dot', center: slot.point, rPx: STUB_DOT_R, fill: wireStroke(wid) })
+    if (position !== 0) shapes.push({ kind: 'dot', center: slot.point, rPx: PORT_DOT_R, fill: wireStroke(wid) })
   }
   // Port 0 is always the single prominent reading origin whenever the sheet has
   // a boundary. All remaining ports are read clockwise from this logical port,
@@ -212,27 +196,6 @@ export function paintWires(e: Engine, st: Theme): Shape[] {
   if (e.boundary.length > 0 && e.wires.has(e.boundary[0]!)) {
     const origin = resolvedFrameSlot(e, 0)
     if (origin !== null) shapes.push({ kind: 'dot', center: origin.point, rPx: FRAME_ORIGIN_R, fill: st.ink })
-  }
-  // Point nodes use one glyph: semantic identities and the outermost quantifier
-  // point of a line of identity (an ∃ tip, a ∀ via, or a bare wire). Steiner
-  // branch vertices are not bodies and remain unmarked. A point carries its
-  // homogeneous wire colour, including relation-signature identities.
-  const pointWire = new Map<string, WireId>()
-  for (const [wid, w] of e.wires) {
-    if (w.end !== null) pointWire.set(w.end.body, wid)
-    for (const bind of w.binds) {
-      if (e.bodies.get(bind.body)?.kind === 'identity' && !pointWire.has(bind.body)) {
-        pointWire.set(bind.body, wid)
-      }
-    }
-  }
-  for (const [wid, w] of Object.entries(e.d.wires)) {
-    if (w.endpoints.length === 0) pointWire.set(`j:${wid}`, wid) // bare ∃ — the dot IS the wire
-  }
-  for (const b of e.bodies.values()) {
-    if (b.kind !== 'end' && b.kind !== 'identity') continue
-    const owner = pointWire.get(b.id)
-    shapes.push(...pointNode(b.pos, owner === undefined ? st.wire : wireStroke(owner), st.paper))
   }
   return shapes
 }
@@ -242,7 +205,20 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
   if (fb === null) throw new Error('paint requires a settled engine: call settleStep/settle first')
   const hues = relationWireHues(e.d, st.relationHueLightness)
   const headWireOf = atomHeadWires(e.d)
+  const ownerWireOf = new Map<string, WireId>()
+  for (const { wid, body } of wireOwnedEnds(e)) ownerWireOf.set(body.id, wid)
+  for (const [wid, wire] of e.wires) {
+    for (const bind of wire.binds) {
+      if (e.bodies.get(bind.body)?.kind === 'identity' && !ownerWireOf.has(bind.body)) {
+        ownerWireOf.set(bind.body, wid)
+      }
+    }
+  }
   const glow = (c: string): string | null => (st.wireGlow ? c : null)
+  const bodyStroke = (body: Body): string => {
+    const owner = body.kind === 'atom' ? headWireOf.get(body.id) : ownerWireOf.get(body.id)
+    return owner === undefined ? st.wire : hues.get(owner) ?? st.wire
+  }
   const shapes: Shape[] = []
 
   // sheet frame
@@ -274,23 +250,24 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
     return { kind: 'dot', center: { x: b.pos.x + c * rimR, y: b.pos.y + s * rimR }, rPx: PIP_R, fill }
   }
 
-  // Semantic node bodies: atom rails and named refs. Identity bodies were
-  // painted in the wire pass through the same point-node routine as end dots.
+  // Every materialized body owns its anatomy here. Wire ownership selects only
+  // stroke hue; the wire pass never synthesizes small-body geometry.
   for (const b of e.bodies.values()) {
-    if (b.kind === 'identity' || b.kind === 'end' || b.kind === 'anchor') continue
-    const node = b.node!
-    if (node.kind === 'ref') {
+    if (b.kind === 'anchor') continue
+    const node = b.node
+    if (node?.kind === 'ref') {
       const discR = DISC_R * e.scale
       shapes.push({ kind: 'circle', center: b.pos, r: discR, fill: st.discFill, stroke: st.ink, width: DISC_RIM_W, insetColor: null, glow: null })
       shapes.push({ kind: 'label', center: b.pos, text: referenceDisplayLabel(node.defId), color: st.discText, r: discR, font: st.font })
       if (pipArity(b) >= 2) shapes.push(pipAt(b, discR, st.ink))
       continue
     }
-    const g = b.geometry!
+    const g = b.geometry
+    if (g === null) continue
     const ascale = ascaleOf(b.kind) * e.scale
-    const stroke = hues.get(headWireOf.get(b.id) ?? '') ?? st.wire
+    const stroke = bodyStroke(b)
     shapes.push(...anatomyOutline(e, b, g, stroke, st.wireW, glow(stroke)))
-    if (node.kind === 'atom' && pipArity(b) >= 2) {
+    if (node?.kind === 'atom' && pipArity(b) >= 2) {
       shapes.push(pipAt(b, g.arcs[0]!.r * ascale, stroke))
     }
   }
@@ -308,9 +285,7 @@ export function nextTheme(t: Theme): Theme {
  * cubic chain the painter draws, restroked in the interaction colour/width.
  * Every overlay producer uses this — a wire stroke that is not the painted
  * cubics is unrepresentable (USER 2026-07-30: the sampled-polyline overlays
- * read as a discretization of the wire). An unfiltered overlay covers the
- * whole wire including its ∃ stub; `legFilter` scopes it to specific legs
- * (endpoint-level drag feedback), where the stub — not a leg — is omitted.
+ * read as a discretization of the wire).
  */
 export function wireOverlayShapes(
   e: Engine, wid: WireId, stroke: string, width: number, glow: string | null = null,
@@ -321,11 +296,6 @@ export function wireOverlayShapes(
     if (leg.wid !== wid) continue
     if (legFilter !== null && !legFilter(leg)) continue
     out.push({ kind: 'bezierPath', cubics, pts, stroke, width, glow })
-  }
-  if (legFilter === null) {
-    for (const s of existentialStubs(e)) {
-      if (s.wid === wid) out.push({ kind: 'segment', from: s.from, to: s.to, stroke, width, glow })
-    }
   }
   return out
 }

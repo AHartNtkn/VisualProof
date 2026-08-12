@@ -617,12 +617,14 @@ export function routeBounds(e: Engine): { minX: number; maxX: number; minY: numb
   return { minX: fb.minX, maxX: fb.maxX, minY: fb.minY, maxY: fb.maxY }
 }
 
-/** The inflated hard-obstacle discs for rendered rails and labelled discs.
-    Point nodes are wire terminals, like dangling ends, rather than obstacles. */
+/** A body is a routing/energy obstacle exactly when it has rendered geometry. */
+export const isBodyObstacle = (body: Body): boolean => body.geometry !== null
+
+/** The inflated hard-obstacle discs for every rendered body. */
 export function routeObstacles(e: Engine): Disc[] {
   const out: Disc[] = []
   for (const b of e.bodies.values()) {
-    if (b.kind !== 'ref' && b.kind !== 'atom') continue
+    if (!isBodyObstacle(b)) continue
     out.push({ c: b.pos, r: (b.discR + ROUTE_CLEAR) * e.scale })
   }
   return out
@@ -634,7 +636,7 @@ export function routeObstacles(e: Engine): Disc[] {
 export function drawnObstacles(e: Engine): Disc[] {
   const out: Disc[] = []
   for (const b of e.bodies.values()) {
-    if (b.kind !== 'ref' && b.kind !== 'atom') continue
+    if (!isBodyObstacle(b)) continue
     out.push({ c: b.pos, r: b.discR * e.scale })
   }
   return out

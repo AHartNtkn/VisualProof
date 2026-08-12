@@ -1,7 +1,7 @@
 import type { RegionId, WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
 import type { Engine, WireView, WireSpaces } from './engine'
-import { wireRouteSpaces, wireTerminalPoints, wireTerminalBCs } from './engine'
+import { isBodyObstacle, wireRouteSpaces, wireTerminalPoints, wireTerminalBCs } from './engine'
 import { route } from './route/freespace'
 import type { Disc } from './route/freespace'
 import { curveEnergy, solveEdgeCurve } from './route/curve'
@@ -79,8 +79,6 @@ export type ScoreState = {
 
 const f2 = (a: Vec2, c: Vec2, b: Vec2): number =>
   Math.hypot(a.x - c.x, a.y - c.y) + Math.hypot(c.x - b.x, c.y - b.y)
-
-const isObstacle = (kind: string): boolean => kind === 'ref' || kind === 'atom'
 
 /** The engine's current DRAWN forbidden circles, one per non-sheet region
     (the nearness energy measures against drawn geometry; the reach margin in
@@ -205,7 +203,7 @@ export function applyMove(e: Engine, st: ScoreState, moved: ReadonlySet<string>,
   const movedObs: MovedDisc[] = []
   for (const id of moved) {
     const b = e.bodies.get(id)
-    if (b === undefined || !isObstacle(b.kind)) continue
+    if (b === undefined || !isBodyObstacle(b)) continue
     const o = st.pos.get(id)!
     if (o.x === b.pos.x && o.y === b.pos.y) continue // rotation-only: disc unmoved
     const r = b.discR * sc

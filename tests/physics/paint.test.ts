@@ -86,15 +86,20 @@ describe('labels belong only to ref-node discs', () => {
 
 })
 
-describe('boundary honesty: boundary wires connect inside the frame and internal singletons get an exists-stub', () => {
-  it('a lone internal ref argument gets one exists-stub and nothing at the frame', () => {
+describe('boundary honesty: boundary wires connect inside the frame and internal singletons own end bodies', () => {
+  it('a lone internal ref argument gets one circular end body and nothing at the frame', () => {
     const h = new DiagramBuilder()
     h.ref(h.root, 'Unary', UNARY)
     const d = h.build()
     const e = mkEngine(d, [])
     settle(e, 400)
-    const shapes = paint(e, LIGHT)
-    expect(shapes.filter((s) => s.kind === 'stub')).toHaveLength(1)
+    const wire = [...e.wires.values()][0]!
+    const body = e.bodies.get(wire.end!.body)!
+    const shapes = paint(e, LIGHT, () => [])
+    expect(shapes.filter((s) => s.kind === 'arc'
+      && s.center.x === body.pos.x && s.center.y === body.pos.y)).toHaveLength(1)
+    expect(shapes.filter((s) => s.kind === 'dot'
+      && s.center.x === body.pos.x && s.center.y === body.pos.y)).toHaveLength(0)
   })
 
   it("a bundled side's boundary wires each reach a slot on the INSIDE of the frame — no shape outside it", () => {
@@ -116,7 +121,7 @@ describe('boundary honesty: boundary wires connect inside the frame and internal
     })
     // NOTHING is drawn outside the frame: every painted point stays within the box
     for (const s of paint(e, LIGHT)) {
-      const pts = s.kind === 'bezierPath' ? s.pts : s.kind === 'stub' ? [s.from, s.to] : []
+      const pts = s.kind === 'bezierPath' ? s.pts : []
       for (const pt of pts) {
         expect(pt.x, 'no painted wire point past the frame').toBeGreaterThanOrEqual(fb.minX - 1)
         expect(pt.x).toBeLessThanOrEqual(fb.maxX + 1)
@@ -246,19 +251,19 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
     expect(new Set([c0, c1, c2]).size).toBe(3) // three distinct ladder entries
   })
 
-  it('a relational wire’s ∃ end dot is filled in the wire’s rung, not the iota colour', () => {
-    // The dot IS a point of the wire (the outermost quantifier point of the
-    // line of identity), so it carries the wire's colour like every stroke —
-    // a propositional ∃ dot in the base iota colour reads as the wrong sort
+  it('a relational wire’s ∃ end rail is stroked in the wire’s rung, not the iota colour', () => {
+    // The end body is a point of the wire (the outermost quantifier point of the
+    // line of identity), so its rail carries the wire's colour like every stroke —
+    // a propositional ∃ rail in the base iota colour reads as the wrong sort
     // (USER 2026-07-30).
     const { d, e, head } = wireAtom()
     const hue = relationWireHues(d, LIGHT.relationHueLightness).get(head)!
     const at = e.bodies.get(e.wires.get(head)!.end!.body)!.pos
     const shapes = paint(e, LIGHT)
-    const inner = shapes.find((s) =>
-      s.kind === 'dot' && s.center.x === at.x && s.center.y === at.y && s.fill !== LIGHT.paper)
-    expect(inner, 'the ∃ end dot is painted').toBeDefined()
-    expect(inner!.kind === 'dot' && inner!.fill, 'the ∃ dot carries its wire’s ladder rung').toBe(hue)
+    const rail = shapes.find((s) =>
+      s.kind === 'arc' && s.center.x === at.x && s.center.y === at.y)
+    expect(rail, 'the ∃ end rail is painted').toBeDefined()
+    expect(rail!.kind === 'arc' && rail!.stroke, 'the ∃ rail carries its wire’s ladder rung').toBe(hue)
   })
 
   it('Dark: the relation wire AND atom anatomy glow in the order hue; Light does not glow', () => {

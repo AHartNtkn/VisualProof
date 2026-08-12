@@ -10,13 +10,12 @@ import type { ProofStep } from '../kernel/proof/step'
 import { singleStepAction, type ProofAction } from '../kernel/proof/action'
 import { checkTheorem } from '../kernel/proof/theorem'
 import type { Vec2 } from '../view/vec'
-import { vec } from '../view/vec'
 import type { Engine } from '../view/engine'
 import { mkEngine, carryOver, wireRouteSpaces, wireTerminalPoints } from '../view/engine'
 import { route } from '../view/route/freespace'
 import { settleStep, establishProofFrame, establishProofSlotShift, seedProject, attachLayoutSearch } from '../view/relax'
 import { mkWorkerSearch } from '../view/optimize-client'
-import { computeLegs, legPaths, existentialStubs } from '../view/wires'
+import { computeLegs, legPaths, wireOwnedEnds } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, wireOverlayShapes, LIGHT, THEMES } from '../view/paint'
 import { adaptCanvas } from '../view/canvas'
@@ -1933,13 +1932,8 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           }
         }
         for (const l of legPaths(engine)) take(l.wid, mids(l.pts))
-        for (const st of existentialStubs(engine)) {
-          const direction = { x: st.to.x - st.from.x, y: st.to.y - st.from.y }
-          take(st.wid, [
-            { point: vec((st.from.x + st.to.x) / 2, (st.from.y + st.to.y) / 2), direction },
-            { point: st.dot, direction },
-            { point: vec(st.from.x * 0.4 + st.to.x * 0.6, st.from.y * 0.4 + st.to.y * 0.6), direction },
-          ])
+        for (const { wid, body } of wireOwnedEnds(engine)) {
+          take(wid, [{ point: body.pos, direction: { x: 0, y: 0 } }])
         }
         return out
       },

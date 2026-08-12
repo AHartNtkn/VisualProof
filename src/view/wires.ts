@@ -1,6 +1,6 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
-import type { Engine, Leg, LegEnd, WireView } from './engine'
+import type { Body, Engine, Leg, LegEnd, WireView } from './engine'
 import { wireRouteSpaces, wireTerminalBCs, wireTerminalPoints } from './engine'
 import { route, type FreeSpace } from './route/freespace'
 import { rodBeta, wireNearSpaces } from './relax'
@@ -17,7 +17,7 @@ import type { Cubic } from './route/curve'
  */
 
 export type LegGeom = { leg: Leg; pts: Vec2[]; cubics: Cubic[] }
-export type ExStub = { wid: WireId; from: Vec2; to: Vec2; dot: Vec2 }
+export type WireOwnedEnd = { readonly wid: WireId; readonly body: Body }
 
 /** The rendering identity of a network vertex: real (body, key) at a port
     bind and the wire-owned END body; a wire-local id for a boundary slot or a
@@ -88,23 +88,18 @@ export function legPaths(e: Engine): { wid: WireId; pts: Vec2[]; cubics: Cubic[]
   return computeLegs(e).map((g) => ({ wid: g.leg.wid, pts: g.pts, cubics: g.cubics }))
 }
 
-/** Quantifier dots: a dangling wire end is its own body (USER LAW — the loose
-    end IS the first-order ∃, homed at the wire's scope); the ∀ via body is the
-    outermost point of that line of identity; a bare wire (no endpoints) is a dot
-    alone. Every wire-owned END body is dotted at its position. */
-export function existentialStubs(e: Engine): ExStub[] {
-  const out: ExStub[] = []
+/** Wire-owned terminal bodies, including body-only bare existential wires. */
+export function wireOwnedEnds(e: Engine): WireOwnedEnd[] {
+  const out: WireOwnedEnd[] = []
   for (const [wid, w] of e.wires) {
     if (w.end === null) continue
-    const b = e.bodies.get(w.end.body)!
-    out.push({ wid, from: b.pos, to: b.pos, dot: b.pos })
+    out.push({ wid, body: e.bodies.get(w.end.body)! })
   }
-  // bare (0-endpoint) wires carry no edges — just a scope-homed body (its dot
-  // IS the whole rendering)
+  // Bare internal existentials have no WireView because they carry no network.
   for (const [wid, w] of Object.entries(e.d.wires)) {
     if (w.endpoints.length !== 0) continue
-    const b = e.bodies.get(`j:${wid}`)
-    if (b !== undefined) out.push({ wid, from: b.pos, to: b.pos, dot: b.pos })
+    const body = e.bodies.get(`j:${wid}`)
+    if (body !== undefined) out.push({ wid, body })
   }
   return out
 }

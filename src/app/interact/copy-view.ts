@@ -2,7 +2,7 @@ import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
-import { existentialStubs, legPaths } from '../../view/wires'
+import { legPaths, wireOwnedEnds } from '../../view/wires'
 
 export function copyRegionAt(
   engine: Engine,
@@ -67,13 +67,9 @@ export function copySelectionPreview(
       for (const point of path.pts) discs.push({ center: point, r: 2 })
     }
   }
-  for (const stub of existentialStubs(engine)) {
-    if (wires.has(stub.wid)) {
-      discs.push(
-        { center: stub.from, r: 2 },
-        { center: stub.to, r: 2 },
-        { center: stub.dot, r: 2 },
-      )
+  for (const { wid, body } of wireOwnedEnds(engine)) {
+    if (wires.has(wid)) {
+      discs.push({ center: body.pos, r: body.discR * engine.scale + 2 })
     }
   }
   if (discs.length === 0) return []

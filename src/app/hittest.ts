@@ -1,6 +1,6 @@
 import type { Diagram, Endpoint, RegionId, WireId } from '../kernel/diagram/diagram'
 import { pkey, resolvedFrameSlot, type Engine, type LegEnd } from '../view/engine'
-import { computeLegs, legPaths, existentialStubs } from '../view/wires'
+import { computeLegs, legPaths, wireOwnedEnds } from '../view/wires'
 import type { Vec2 } from '../view/vec'
 import { length, sub } from '../view/vec'
 import type { Hit } from './hit-selection'
@@ -41,7 +41,7 @@ function polylineDistance(p: Vec2, pts: readonly Vec2[]): number {
 
 /**
  * Topmost engine item under the point: semantic wire markers, then a node disc,
- * then a wire stroke (leg spline, frame exit, or ∃ stub), then the smallest
+ * then a routed wire stroke, then the smallest
  * containing region. Junction dots sit on their wires' legs, so a click on one
  * resolves to the wire — junctions are not kernel entities and are never selected.
  */
@@ -75,12 +75,10 @@ function boundaryOrDotCandidates(e: Engine, point: Vec2): WireCandidate[] {
     if (slot === null) continue
     out.push({ id: wid, distance: length(sub(point, slot.point)) })
   }
-  // ∃ dots first: they are drawn ON TOP of node discs and may rest within
-  // a disc's margin ring (paint/hit parity — the topmost target wins)
-  for (const b of e.bodies.values()) {
-    if (b.kind !== 'end') continue
-    const wid = b.id.startsWith('j:') || b.id.startsWith('x:') ? b.id.slice(2) : null
-    if (wid !== null && e.d.wires[wid] !== undefined) out.push({ id: wid, distance: length(sub(point, b.pos)) })
+  // Wire-owned bodies resolve to their semantic wire over their rendered disc.
+  for (const { wid, body } of wireOwnedEnds(e)) {
+    const centerDistance = length(sub(point, body.pos))
+    out.push({ id: wid, distance: Math.max(0, centerDistance - body.discR * e.scale) })
   }
   return out
 }
@@ -91,9 +89,6 @@ function wireStrokeCandidates(e: Engine, point: Vec2): WireCandidate[] {
   // is a tree of legs), so hit-test those same legs (paint and this share legPaths).
   for (const { wid, pts } of legPaths(e)) {
     out.push({ id: wid, distance: polylineDistance(point, pts) })
-  }
-  for (const s of existentialStubs(e)) {
-    out.push({ id: s.wid, distance: segmentDistance(point, s.from, s.to) })
   }
   return out
 }
@@ -292,14 +287,7 @@ export type DragTarget =
  * subtree), else nothing. Wires are derived geometry and the sheet is the
  * fixed background — neither is draggable.
  */
-export function dragTarget(e: Engine, point: Vec2, viewport: HitViewport): DragTarget | null {
-  const radius = wireHitRadius(viewport)
-  // ∃ dots first (paint/hit parity, same as hitTest): a dot resting inside
-  // a disc's margin ring must stay independently grabbable (loose-ends law)
-  for (const b of e.bodies.values()) {
-    if (b.kind !== 'end') continue
-    if (length(sub(point, b.pos)) <= radius) return { kind: 'carrier', id: b.id }
-  }
+export function dragTarget(e: Engine, point: Vec2, _viewport: HitViewport): DragTarget | null {
   for (const b of e.bodies.values()) {
     if (b.kind === 'anchor') continue // an empty cut is grabbed by its region circle
     if (length(sub(point, b.pos)) <= b.discR * e.scale) return { kind: 'carrier', id: b.id }

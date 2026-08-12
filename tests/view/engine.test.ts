@@ -5,7 +5,7 @@ import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
 const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
-import { mkEngine, carryOver, worldAnchor, worldBindAnchor, portNormal, pkey, DISC_R, escapePoint, frameSlots, FRAME_CORNER_W, wireTerminalBCs, wireTerminalPoints, type FrameBounds } from '../../src/view/engine'
+import { mkEngine, carryOver, worldAnchor, worldBindAnchor, portNormal, pkey, DISC_R, escapePoint, frameSlots, FRAME_CORNER_W, wireTerminalBCs, wireTerminalPoints, isBodyObstacle, routeObstacles, drawnObstacles, ROUTE_CLEAR, type FrameBounds } from '../../src/view/engine'
 import { emptyDiagram } from '../../src/app/edit'
 import { unaryDefinition, UNARY } from '../fixtures/zero-signature'
 
@@ -106,6 +106,49 @@ describe('mkEngine', () => {
       expect(bc!.p).toEqual(anchor)
       expect(bc!.n.x).toBeCloseTo(Math.cos(radial), 9)
       expect(bc!.n.y).toBeCloseTo(Math.sin(radial), 9)
+    }
+  })
+
+  it('derives every rendered small body as a routing and drawn obstacle', () => {
+    const h = new DiagramBuilder()
+    const cut = h.cut(h.root)
+    const identity = h.identity(cut, IOTA, 2)
+    const left = h.ref(h.root, 'Left', UNARY)
+    const right = h.ref(h.root, 'Right', UNARY)
+    h.wire(h.root, [
+      { node: identity, port: { kind: 'identity', index: 0 } },
+      { node: left, port: { kind: 'arg', index: 0 } },
+    ])
+    h.wire(h.root, [
+      { node: identity, port: { kind: 'identity', index: 1 } },
+      { node: right, port: { kind: 'arg', index: 0 } },
+    ])
+    const danglingRef = h.ref(h.root, 'Dangling', UNARY)
+    const danglingWire = h.wire(h.root, [
+      { node: danglingRef, port: { kind: 'arg', index: 0 } },
+    ])
+    const bareWire = h.wire(h.root, [])
+    const e = mkEngine(h.build(), [])
+    e.scale = 1.75
+
+    const smallBodies = [
+      e.bodies.get(identity)!,
+      e.bodies.get(e.wires.get(danglingWire)!.end!.body)!,
+      e.bodies.get(`j:${bareWire}`)!,
+    ]
+    const routed = routeObstacles(e)
+    const drawn = drawnObstacles(e)
+    const renderedBodies = [...e.bodies.values()].filter(isBodyObstacle)
+
+    expect(smallBodies.every(isBodyObstacle)).toBe(true)
+    expect(routed).toHaveLength(renderedBodies.length)
+    expect(drawn).toHaveLength(renderedBodies.length)
+    for (const body of smallBodies) {
+      expect(routed).toContainEqual({
+        c: body.pos,
+        r: (body.discR + ROUTE_CLEAR) * e.scale,
+      })
+      expect(drawn).toContainEqual({ c: body.pos, r: body.discR * e.scale })
     }
   })
 

@@ -167,23 +167,6 @@ export function drawShapes(
         ctx.shadowBlur = 0
         break
       }
-      case 'stub': {
-        setGlow(s.glow)
-        const a = P(s.from), b = P(s.to)
-        ctx.strokeStyle = s.stroke
-        ctx.lineWidth = s.width
-        ctx.beginPath()
-        ctx.moveTo(a.x, a.y)
-        ctx.lineTo(b.x, b.y)
-        ctx.stroke()
-        ctx.shadowBlur = 0
-        const d = P(s.dot)
-        ctx.beginPath()
-        ctx.arc(d.x, d.y, s.dotRpx, 0, 2 * Math.PI)
-        ctx.fillStyle = s.stroke
-        ctx.fill()
-        break
-      }
       case 'dot': {
         ctx.beginPath()
         ctx.arc(X(s.center.x), Y(s.center.y), s.rPx, 0, 2 * Math.PI)
