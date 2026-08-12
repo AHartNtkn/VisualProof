@@ -212,6 +212,76 @@ theorem endpointOccurs_patternNode_backward (layout : PlugLayout input)
       layout.patternWireMap_internal internal, ?_⟩
     simpa [endpointEq] using sourceOccurs
 
+/-- Resolve one transported pattern-node port in an exact target context from
+the concrete pattern-wire map and its position map. Aliased exposed wires are
+allowed; target-context nodup identifies their shared lexical position. -/
+theorem resolvePort?_patternNode_map (layout : PlugLayout input)
+    (sourceContext : WireContext input.pattern.val.diagram)
+    (targetContext : WireContext layout.plugRaw)
+    (indexMap : Fin sourceContext.length → Fin targetContext.length)
+    (sourceExact : sourceContext.Exact input.binderSpine.bodyContainer)
+    (targetNodup : targetContext.Nodup)
+    (getMapped : ∀ index,
+      targetContext.get (indexMap index) =
+        layout.patternWireMap (sourceContext.get index))
+    (targetDisjoint : layout.plugRaw.WireEndpointsAreDisjoint)
+    (node : Fin input.pattern.val.diagram.nodeCount)
+    (nodeRegion : (input.pattern.val.diagram.nodes node).region =
+      input.binderSpine.bodyContainer)
+    (port : CPort) :
+    resolvePort? layout.plugRaw targetContext
+        (layout.patternNode node) port =
+      (resolvePort? input.pattern.val.diagram sourceContext node port).map
+        indexMap := by
+  unfold resolvePort?
+  rw [endpointOwner?_map node (layout.patternNode node)
+    layout.patternWireMap port
+    (fun wire occurs =>
+      layout.endpointOccurs_patternNode_forward wire node port occurs)
+    (fun targetWire occurs =>
+      layout.endpointOccurs_patternNode_backward targetWire node port occurs)
+    targetDisjoint]
+  cases sourceOwner : endpointOwner? input.pattern.val.diagram
+      ⟨node, port⟩ with
+  | none => rfl
+  | some sourceWire =>
+      simp only [Option.map_some]
+      have sourceOccurs : input.pattern.val.diagram.EndpointOccurs sourceWire
+          ⟨node, port⟩ := endpointOwner?_sound sourceOwner
+      have sourceEncloses :=
+        input.pattern.property.diagram_well_formed.wire_scopes_enclose
+          sourceWire ⟨node, port⟩ sourceOccurs
+      have sourceMember : sourceWire ∈ sourceContext :=
+        (sourceExact.mem_iff sourceWire).2 (by
+          simpa only [nodeRegion] using sourceEncloses)
+      obtain ⟨sourceIndex, sourceLookup⟩ :=
+        WireContext.lookup?_complete sourceMember
+      have sourceGet : sourceContext.get sourceIndex = sourceWire := by
+        simpa only [List.get_eq_getElem] using
+          WireContext.lookup?_sound sourceLookup
+      have mappedGet : targetContext.get (indexMap sourceIndex) =
+          layout.patternWireMap sourceWire :=
+        (getMapped sourceIndex).trans
+          (congrArg layout.patternWireMap sourceGet)
+      have targetMember : layout.patternWireMap sourceWire ∈ targetContext := by
+        rw [← mappedGet]
+        exact List.get_mem _ _
+      obtain ⟨targetIndex, targetLookup⟩ :=
+        WireContext.lookup?_complete targetMember
+      have targetGet : targetContext.get targetIndex =
+          layout.patternWireMap sourceWire := by
+        simpa only [List.get_eq_getElem] using
+          WireContext.lookup?_sound targetLookup
+      have indexEq : targetIndex = indexMap sourceIndex := by
+        apply Fin.ext
+        exact (List.getElem_inj targetNodup).mp (by
+          simpa only [List.get_eq_getElem] using
+            targetGet.trans mappedGet.symm)
+      change targetContext.lookup? (layout.patternWireMap sourceWire) =
+        (sourceContext.lookup? sourceWire).map indexMap
+      rw [sourceLookup, targetLookup, indexEq]
+      rfl
+
 end Splice.Input.PlugLayout
 
 end VisualProof.Concrete

@@ -598,6 +598,104 @@ theorem bodyLocalOrigins (layout : PlugLayout input) :
     (fun wire => decide ((input.pattern.val.diagram.wires wire).scope =
       input.binderSpine.bodyContainer))
 
+theorem materialLocalOrigins (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    (filterFin fun wire : layout.internalWires.Carrier =>
+      decide ((input.pattern.val.diagram.wires
+        (layout.internalWires.origin wire)).scope =
+          layout.materialRegions.origin material)).map
+            layout.internalWires.origin =
+      exactScopeWires input.pattern.val.diagram
+        (layout.materialRegions.origin material) := by
+  let predicate : Fin input.pattern.val.diagram.wireCount → Bool :=
+    fun wire => decide ((input.pattern.val.diagram.wires wire).scope =
+      layout.materialRegions.origin material)
+  have survives : ∀ wire, predicate wire = true →
+      layout.internalWires.survives wire = true := by
+    intro wire accepted
+    rw [layout.internalWires_exact]
+    apply decide_eq_true
+    intro exposed
+    have rootScope := input.pattern.property.exposed_root_scoped exposed
+    have materialScope := of_decide_eq_true accepted
+    exact (layout.materialRegion_origin_isMaterial material).1
+      (materialScope.symm.trans rootScope)
+  have filtered := filterFin_eq_enumeration_filter
+    layout.internalWires predicate survives
+  have origins := map_origin_filterFin layout.internalWires predicate
+  exact origins.trans filtered.symm
+
+theorem materialLocalWires_length (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    (exactScopeWires input.pattern.val.diagram
+      (layout.materialRegions.origin material)).length =
+        (layout.materialLocalWires material).length := by
+  rw [← layout.materialLocalOrigins material]
+  unfold materialLocalWires
+  simp
+
+def materialLocalIndex (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    Fin (exactScopeWires input.pattern.val.diagram
+      (layout.materialRegions.origin material)).length →
+      Fin (layout.materialLocalWires material).length :=
+  Fin.cast (layout.materialLocalWires_length material)
+
+theorem materialLocalIndex_get (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier)
+    (index : Fin (exactScopeWires input.pattern.val.diagram
+      (layout.materialRegions.origin material)).length) :
+    (layout.materialLocalWires material).get
+        (layout.materialLocalIndex material index) =
+      layout.patternWireMap
+        ((exactScopeWires input.pattern.val.diagram
+          (layout.materialRegions.origin material)).get index) := by
+  let positions := filterFin fun wire : layout.internalWires.Carrier =>
+    decide ((input.pattern.val.diagram.wires
+      (layout.internalWires.origin wire)).scope =
+        layout.materialRegions.origin material)
+  have sourceEq : positions.map layout.internalWires.origin =
+      exactScopeWires input.pattern.val.diagram
+        (layout.materialRegions.origin material) :=
+    layout.materialLocalOrigins material
+  have targetEq : positions.map layout.internalWire =
+      layout.materialLocalWires material := rfl
+  let position : Fin positions.length :=
+    ⟨index.val, by
+      rw [← List.length_map layout.internalWires.origin, sourceEq]
+      exact index.isLt⟩
+  let internal := positions.get position
+  have sourceGet :
+      (exactScopeWires input.pattern.val.diagram
+        (layout.materialRegions.origin material)).get index =
+          layout.internalWires.origin internal := by
+    have value := List.get_of_eq sourceEq.symm index
+    have mapped := List.getElem_map layout.internalWires.origin
+      (l := positions) (i := index.val) (h := by
+        exact Eq.mp (congrArg (fun length => index.val < length)
+          (List.length_map layout.internalWires.origin).symm)
+            position.isLt)
+    exact value.trans (by
+      simpa only [List.get_eq_getElem, position, internal] using mapped)
+  have targetGet :
+      (layout.materialLocalWires material).get
+          (layout.materialLocalIndex material index) =
+        layout.internalWire internal := by
+    have value := List.get_of_eq targetEq.symm
+      (layout.materialLocalIndex material index)
+    have mapped := List.getElem_map layout.internalWire
+      (l := positions)
+      (i := (layout.materialLocalIndex material index).val)
+      (h := by
+        change index.val < (positions.map layout.internalWire).length
+        exact Eq.mp (congrArg (fun length => index.val < length)
+          (List.length_map layout.internalWire).symm) position.isLt)
+    exact value.trans (by
+      simpa only [List.get_eq_getElem, materialLocalIndex, Fin.cast,
+        position, internal] using mapped)
+  rw [sourceGet, layout.patternWireMap_internal]
+  exact targetGet
+
 end Splice.Input.PlugLayout
 
 end VisualProof.Concrete

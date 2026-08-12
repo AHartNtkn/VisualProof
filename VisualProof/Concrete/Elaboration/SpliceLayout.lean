@@ -177,6 +177,50 @@ theorem materialRegion_origin_isMaterial (layout : PlugLayout input)
   rw [layout.materialRegions_exact] at survives
   exact of_decide_eq_true survives
 
+@[simp] theorem proxyIndex?_materialOrigin (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    layout.proxyIndex? (layout.materialRegions.origin material) = none := by
+  unfold PlugLayout.proxyIndex?
+  cases found : indexOf? layout.proxies
+      (layout.materialRegions.origin material) with
+  | none => rfl
+  | some position =>
+      have member : layout.materialRegions.origin material ∈
+          layout.proxies := by
+        rw [← indexOf?_sound found]
+        exact List.get_mem _ _
+      unfold PlugLayout.proxies at member
+      obtain ⟨proxy, _, equality⟩ := List.mem_map.mp member
+      exact False.elim ((layout.materialRegion_origin_isMaterial material).2
+        proxy equality.symm)
+
+@[simp] theorem binderRegion_materialOrigin (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    layout.binderRegion (layout.materialRegions.origin material) =
+      layout.materialRegion material := by
+  unfold PlugLayout.binderRegion
+  rw [layout.proxyIndex?_materialOrigin,
+    layout.bodyRegion_material]
+
+@[simp] theorem binderRegion_eq_materialRegion_iff
+    (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : layout.materialRegions.Carrier) :
+    layout.binderRegion region = layout.materialRegion material ↔
+      region = layout.materialRegions.origin material := by
+  unfold PlugLayout.binderRegion
+  cases found : layout.proxyIndex? region with
+  | none => exact layout.bodyRegion_eq_materialRegion_iff region material
+  | some proxy =>
+      constructor
+      · intro equality
+        exact False.elim (layout.frameRegion_ne_materialRegion
+          (input.binderTarget proxy) material equality)
+      · intro regionEq
+        subst region
+        rw [layout.proxyIndex?_materialOrigin] at found
+        contradiction
+
 @[simp] theorem bodyRegion_materialOrigin (layout : PlugLayout input)
     (material : layout.materialRegions.Carrier) :
     layout.bodyRegion (layout.materialRegions.origin material) =
@@ -494,6 +538,24 @@ def mapPatternOccurrence (layout : PlugLayout input) :
   | .node node => .node (layout.patternNode node)
   | .child child => .child (layout.bodyRegion child)
 
+@[simp] theorem map_localNodeOccurrences_frame (layout : PlugLayout input)
+    (region : Fin input.frame.val.regionCount) :
+    (localNodeOccurrences input.frame.val region).map
+        layout.mapFrameOccurrence =
+      layout.frameNodeOccurrences region := by
+  unfold localNodeOccurrences frameNodeOccurrences mapFrameOccurrence
+  simp only [List.map_map]
+  rfl
+
+@[simp] theorem map_localChildOccurrences_frame (layout : PlugLayout input)
+    (region : Fin input.frame.val.regionCount) :
+    (localChildOccurrences input.frame.val region).map
+        layout.mapFrameOccurrence =
+      layout.frameChildOccurrences region := by
+  unfold localChildOccurrences frameChildOccurrences mapFrameOccurrence
+  simp only [List.map_map]
+  rfl
+
 /-- Mapping the source frame's local occurrence stream produces exactly the
 retained node and child blocks. -/
 theorem map_localOccurrences_frame (layout : PlugLayout input)
@@ -612,6 +674,22 @@ theorem map_localOccurrences_body (layout : PlugLayout input) :
           (LocalOccurrence.child (layout.bodyRegion child) :
             LocalOccurrence layout.regionCount layout.nodeCount)) = _
   rw [layout.map_directBodyChildren]
+
+@[simp] theorem map_localNodeOccurrences_body (layout : PlugLayout input) :
+    (localNodeOccurrences input.pattern.val.diagram
+      input.binderSpine.bodyContainer).map layout.mapPatternOccurrence =
+        layout.bodyNodeOccurrences := by
+  unfold localNodeOccurrences bodyNodeOccurrences mapPatternOccurrence
+  simp only [List.map_map]
+  rfl
+
+@[simp] theorem map_localChildOccurrences_body (layout : PlugLayout input) :
+    (localChildOccurrences input.pattern.val.diagram
+      input.binderSpine.bodyContainer).map layout.mapPatternOccurrence =
+        layout.bodyChildOccurrences := by
+  unfold localChildOccurrences mapPatternOccurrence
+  simp only [List.map_map]
+  exact layout.map_directBodyChildren
 
 theorem patternNodeOccurrences_eq_nil_of_ne_site
     (layout : PlugLayout input)
