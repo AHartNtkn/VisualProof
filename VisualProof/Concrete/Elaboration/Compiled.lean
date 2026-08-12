@@ -45,6 +45,7 @@ structure CompiledEnvironment (region : CompiledRegion d) where
   valid : region.Valid
   exact : (outer ++ locals).Exact region.origin
   covers : binders.Covers region.origin
+  enumeration : BinderContext.Enumeration d binders region.origin
 
 namespace CompiledEnvironment
 
@@ -230,7 +231,8 @@ mutual
         let selected := nested.intrinsic sourceEnvironment.valid.2.2.2 hwf
           sourceEnvironment.fullContext sourceEnvironment.rels
           sourceEnvironment.binders sourceEnvironment.exact
-          sourceEnvironment.covers nodesErased sourceEnvironment.outer.length
+          sourceEnvironment.covers sourceEnvironment.enumeration nodesErased
+          sourceEnvironment.outer.length
           sourceEnvironment.locals.length (by
             simp [CompiledEnvironment.fullContext])
         exact {
@@ -249,6 +251,7 @@ mutual
       (context : WireContext d) → (rels : RelCtx) →
       (binders : BinderContext d rels) →
       (exact : context.Exact parent) → (covers : binders.Covers parent) →
+      (enumeration : BinderContext.Enumeration d binders parent) →
       (before : ItemSeq context.length rels) →
       (outerWires localWires : Nat) →
       (split : context.length = outerWires + localWires) →
@@ -257,7 +260,7 @@ mutual
           ((before.append (items.erase valid hwf context rels binders exact
             covers)).castWiresEq split)) endpoint hwf
     | .cut (body := body) (suffix := suffix) nested, valid, hwf, context,
-        rels, binders, exact, covers, before, outerWires, localWires,
+        rels, binders, exact, covers, enumeration, before, outerWires, localWires,
         split => by
         have parentShape : (d.regions body.origin).parent? = some parent := by
           simp [valid.1.1, CRegion.parent?]
@@ -269,6 +272,7 @@ mutual
           valid := valid.1.2
           exact := exact.extend_child hwf parentShape
           covers := BinderContext.covers_cut_child covers valid.1.1
+          enumeration := enumeration.cutChild hwf valid.1.1
         }
         let selected := nested.intrinsic bodyEnvironment hwf
         let suffixErased := suffix.erase valid.2 hwf context rels binders exact
@@ -306,7 +310,7 @@ mutual
                 rfl
         }
     | .bubble (arity := arity) (body := body) (suffix := suffix) nested,
-        valid, hwf, context, rels, binders, exact, covers, before,
+        valid, hwf, context, rels, binders, exact, covers, enumeration, before,
         outerWires, localWires, split => by
         have parentShape : (d.regions body.origin).parent? = some parent := by
           simp [valid.1.1, CRegion.parent?]
@@ -318,6 +322,7 @@ mutual
           valid := valid.1.2
           exact := exact.extend_child hwf parentShape
           covers := BinderContext.push_covers_bubble_child covers valid.1.1
+          enumeration := enumeration.bubbleChild hwf valid.1.1
         }
         let selected := nested.intrinsic bodyEnvironment hwf
         let suffixErased := suffix.erase valid.2 hwf context rels binders exact
@@ -356,12 +361,13 @@ mutual
                 rfl
         }
     | .tail (head := head) nested, valid, hwf, context, rels, binders,
-        exact, covers, before, outerWires, localWires, split => by
+        exact, covers, enumeration, before, outerWires, localWires, split => by
         let headErased := head.erase valid.1 hwf context rels binders exact
           covers
         rw [CompiledItems.erase]
         simpa only [ItemSeq.append_assoc, ItemSeq.append] using
           nested.intrinsic valid.2 hwf context rels binders exact covers
+            enumeration
             (before.append (.cons headErased .nil)) outerWires localWires split
 end
 
@@ -414,6 +420,9 @@ private def rootEnvironment (source : State arity) :
     simpa only [VisualProof.Concrete.CheckedOpen.compilation_origin] using
       BinderContext.empty_covers_root
         source.checked.property.diagram_well_formed
+  enumeration := by
+    simpa only [VisualProof.Concrete.CheckedOpen.compilation_origin] using
+      BinderContext.Enumeration.empty source.diagram.val
 
 noncomputable def intrinsic (source : State arity)
     (site : Fin source.diagram.val.regionCount) :
@@ -497,6 +506,15 @@ theorem binders_covers (source : State arity)
   have covers := (environment source site).covers
   rw [endpoint_origin source site] at covers
   simpa [binders] using covers
+
+/-- The inverse lexical interface derived by the same structural focus fold:
+each relation position names its unique concrete bubble owner. -/
+noncomputable def binders_enumeration (source : State arity)
+    (site : Fin source.diagram.val.regionCount) :
+    BinderContext.Enumeration source.diagram.val (binders source site) site := by
+  have enumeration := (environment source site).enumeration
+  rw [endpoint_origin source site] at enumeration
+  simpa [binders] using enumeration
 
 @[simp] theorem body_localCount (source : State arity)
     (site : Fin source.diagram.val.regionCount) :
