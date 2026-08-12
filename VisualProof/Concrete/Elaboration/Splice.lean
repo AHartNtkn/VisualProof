@@ -1,781 +1,557 @@
 import VisualProof.Concrete.Elaboration.Compiled
 import VisualProof.Concrete.Elaboration.SpliceWireLayout
 
-namespace VisualProof.Concrete.Elaboration
+namespace VisualProof.Concrete
 
-open VisualProof.Diagram
+open VisualProof
+open VisualProof.Data.Finite
 open VisualProof.Theory
+open VisualProof.Diagram
+open Elaboration
 
-private theorem eq_singleton_of_nodup
-    {values : List α} {value : α}
-    (hnodup : values.Nodup) (hmember : value ∈ values)
-    (honly : ∀ other, other ∈ values → other = value) :
-    values = [value] := by
-  cases values with
-  | nil => simp at hmember
-  | cons head tail =>
-      have hhead : head = value := honly head (by simp)
-      subst head
-      have htail : tail = [] := by
-        apply List.eq_nil_iff_forall_not_mem.mpr
-        intro other hother
-        have hotherEq : other = value := honly other (by simp [hother])
-        subst other
-        exact (List.nodup_cons.mp hnodup).1 hother
-      subst tail
+/-!
+Concrete splice refinement is proved over the symbolic compiler tree.  This
+module owns only splice-specific identity maps and the graft transformation;
+lexical positions are introduced by `CompiledRegion.erase`.
+-/
+
+namespace Splice.Input.PlugLayout
+
+/-- A frame endpoint remains on the image of its source wire. -/
+theorem endpointOccurs_frame (layout : PlugLayout input)
+    {wire : Fin input.frame.val.wireCount}
+    {endpoint : CEndpoint input.frame.val.nodeCount}
+    (occurs : input.frame.val.EndpointOccurs wire endpoint) :
+    layout.plugRaw.EndpointOccurs (layout.frameWireMap wire)
+      (layout.mapFrameEndpoint endpoint) := by
+  change layout.mapFrameEndpoint endpoint ∈
+    (layout.plugRaw.wires (layout.frameWireMap wire)).endpoints
+  rw [show layout.frameWireMap wire =
+      layout.frameWire (input.quotientWire wire) from rfl,
+    layout.plugRaw_wires_frame]
+  apply List.mem_append_left
+  exact List.mem_map.mpr ⟨endpoint,
+    input.endpointOccurs_quotient wire endpoint occurs, rfl⟩
+
+private theorem boundaryWires_contains_exposed
+    (layout : PlugLayout input)
+    (external : Fin input.pattern.val.exposedWires.length) :
+    input.pattern.val.exposedWires.get external ∈
+      layout.boundaryWires (layout.exposedAttachment external) := by
+  unfold PlugLayout.boundaryWires
+  apply List.mem_map.mpr
+  refine ⟨external, ?_, rfl⟩
+  simp
+
+/-- A pattern endpoint remains on the image of its source wire.  Boundary
+wire aliases are routed through the concrete attachment quotient; internal
+wires use their dense material allocation. -/
+theorem endpointOccurs_pattern (layout : PlugLayout input)
+    {wire : Fin input.pattern.val.diagram.wireCount}
+    {endpoint : CEndpoint input.pattern.val.diagram.nodeCount}
+    (occurs : input.pattern.val.diagram.EndpointOccurs wire endpoint) :
+    layout.plugRaw.EndpointOccurs (layout.patternWireMap wire)
+      (layout.mapPatternEndpoint endpoint) := by
+  by_cases exposed : wire ∈ input.pattern.val.exposedWires
+  · let found := (indexOf? input.pattern.val.exposedWires wire).get
+      ((indexOf?_isSome_iff).2 exposed)
+    have foundEq : input.pattern.val.exposedWires.get found = wire := by
+      exact indexOf?_sound (Option.some_get
+        ((indexOf?_isSome_iff).2 exposed)).symm
+    rw [← foundEq, layout.patternWireMap_exposed]
+    change layout.mapPatternEndpoint endpoint ∈
+      (layout.plugRaw.wires
+        (layout.frameWire (layout.exposedAttachment found))).endpoints
+    rw [layout.plugRaw_wires_frame]
+    apply List.mem_append_right
+    unfold PlugLayout.boundaryEndpoints
+    apply List.mem_map.mpr
+    refine ⟨endpoint, ?_, rfl⟩
+    rw [List.mem_flatMap]
+    refine ⟨input.pattern.val.exposedWires.get found,
+      layout.boundaryWires_contains_exposed found, ?_⟩
+    rw [foundEq]
+    exact occurs
+  · let internal := layout.internalWires.index wire (by
+      rw [layout.internalWires_exact]
+      exact decide_eq_true exposed)
+    have originEq : layout.internalWires.origin internal = wire :=
+      layout.internalWires.origin_index wire (by
+        rw [layout.internalWires_exact]
+        exact decide_eq_true exposed)
+    rw [← originEq, layout.patternWireMap_internal,
+      show layout.plugRaw.EndpointOccurs
+          (layout.internalWire internal) (layout.mapPatternEndpoint endpoint) ↔
+        layout.mapPatternEndpoint endpoint ∈
+          (layout.plugRaw.wires (layout.internalWire internal)).endpoints
+        from Iff.rfl,
+      layout.plugRaw_wires_internal]
+    change layout.mapPatternEndpoint endpoint ∈
+      (input.pattern.val.diagram.wires
+        (layout.internalWires.origin internal)).endpoints.map
+          layout.mapPatternEndpoint
+    apply List.mem_map.mpr
+    refine ⟨endpoint, ?_, rfl⟩
+    rw [originEq]
+    exact occurs
+
+/-! Source-derived symbolic graft. -/
+
+mutual
+  /-- Map the retained frame tree, inserting the pattern terminal's two
+  canonical blocks exactly at the selected site. -/
+  def graftFrameRegion (layout : PlugLayout input)
+      (material : CompiledRegion input.pattern.val.diagram) :
+      CompiledRegion input.frame.val → CompiledRegion layout.plugRaw
+    | .mk origin nodes children =>
+        if origin = input.site then
+          .mk (layout.frameRegion origin)
+            ((layout.graftFrameItems material nodes).append
+              (layout.graftPatternItems material.nodeItems))
+            ((layout.graftFrameItems material children).append
+              (layout.graftPatternItems material.childItems))
+        else
+          .mk (layout.frameRegion origin)
+            (layout.graftFrameItems material nodes)
+            (layout.graftFrameItems material children)
+
+  def graftFrameItem (layout : PlugLayout input)
+      (material : CompiledRegion input.pattern.val.diagram) :
+      CompiledItem input.frame.val → CompiledItem layout.plugRaw
+    | .atom origin binder arity ports =>
+        .atom (layout.frameNode origin) (layout.frameRegion binder) arity
+          (layout.frameWireMap ∘ ports)
+    | .identity origin arity ports =>
+        .identity (layout.frameNode origin) arity
+          (layout.frameWireMap ∘ ports)
+    | .cut body => .cut (layout.graftFrameRegion material body)
+    | .bubble arity body =>
+        .bubble arity (layout.graftFrameRegion material body)
+
+  def graftFrameItems (layout : PlugLayout input)
+      (material : CompiledRegion input.pattern.val.diagram) :
+      CompiledItems input.frame.val → CompiledItems layout.plugRaw
+    | .nil => .nil
+    | .cons head tail => .cons
+        (layout.graftFrameItem material head)
+        (layout.graftFrameItems material tail)
+
+  /-- Map terminal material identities into their dense target allocations.
+  Administrative spine regions are not copied. -/
+  def graftPatternRegion (layout : PlugLayout input) :
+      CompiledRegion input.pattern.val.diagram → CompiledRegion layout.plugRaw
+    | .mk origin nodes children =>
+        .mk (layout.bodyRegion origin)
+          (layout.graftPatternItems nodes)
+          (layout.graftPatternItems children)
+
+  def graftPatternItem (layout : PlugLayout input) :
+      CompiledItem input.pattern.val.diagram → CompiledItem layout.plugRaw
+    | .atom origin binder arity ports =>
+        .atom (layout.patternNode origin) (layout.binderRegion binder) arity
+          (layout.patternWireMap ∘ ports)
+    | .identity origin arity ports =>
+        .identity (layout.patternNode origin) arity
+          (layout.patternWireMap ∘ ports)
+    | .cut body => .cut (layout.graftPatternRegion body)
+    | .bubble arity body =>
+        .bubble arity (layout.graftPatternRegion body)
+
+  def graftPatternItems (layout : PlugLayout input) :
+      CompiledItems input.pattern.val.diagram → CompiledItems layout.plugRaw
+    | .nil => .nil
+    | .cons head tail => .cons
+        (layout.graftPatternItem head) (layout.graftPatternItems tail)
+end
+
+@[simp] theorem graftFrameRegion_origin (layout : PlugLayout input)
+    (material : CompiledRegion input.pattern.val.diagram)
+    (region : CompiledRegion input.frame.val) :
+    (layout.graftFrameRegion material region).origin =
+      layout.frameRegion region.origin := by
+  cases region with
+  | mk origin nodes children =>
+      by_cases site : origin = input.site <;>
+        simp [graftFrameRegion, site, CompiledRegion.origin]
+
+@[simp] theorem graftFrameItem_origin (layout : PlugLayout input)
+    (material : CompiledRegion input.pattern.val.diagram)
+    (item : CompiledItem input.frame.val) :
+    (layout.graftFrameItem material item).origin =
+      layout.mapFrameOccurrence item.origin := by
+  cases item with
+  | atom => rfl
+  | identity => rfl
+  | cut body =>
+      change LocalOccurrence.child
+        (layout.graftFrameRegion material body).origin =
+          LocalOccurrence.child (layout.frameRegion body.origin)
+      exact congrArg LocalOccurrence.child
+        (layout.graftFrameRegion_origin material body)
+  | bubble arity body =>
+      change LocalOccurrence.child
+        (layout.graftFrameRegion material body).origin =
+          LocalOccurrence.child (layout.frameRegion body.origin)
+      exact congrArg LocalOccurrence.child
+        (layout.graftFrameRegion_origin material body)
+
+@[simp] theorem graftFrameItems_origins (layout : PlugLayout input)
+    (material : CompiledRegion input.pattern.val.diagram)
+    (items : CompiledItems input.frame.val) :
+    (layout.graftFrameItems material items).origins =
+      items.origins.map layout.mapFrameOccurrence :=
+  match items with
+  | .nil => rfl
+  | .cons head tail => by
+      change
+        (layout.graftFrameItem material head).origin ::
+            (layout.graftFrameItems material tail).origins =
+          layout.mapFrameOccurrence head.origin ::
+            tail.origins.map layout.mapFrameOccurrence
+      rw [layout.graftFrameItem_origin material head,
+        layout.graftFrameItems_origins material tail]
       rfl
 
-private theorem List.get_cast_of_eq {source target : List α}
-    (equality : source = target)
-    (index : Fin source.length) :
-    source.get index =
-      target.get (Fin.cast (congrArg List.length equality) index) := by
-  cases equality
+@[simp] theorem graftPatternRegion_origin (layout : PlugLayout input)
+    (region : CompiledRegion input.pattern.val.diagram) :
+    (layout.graftPatternRegion region).origin =
+      layout.bodyRegion region.origin := by
+  cases region
   rfl
 
-theorem terminal_hiddenWires_eq_nil
-    (input : Splice.Input) (terminal : input.TerminalBody)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    input.pattern.val.hiddenWires = [] := by
-  apply List.eq_nil_iff_forall_not_mem.mpr
-  intro wire hhidden
-  have hidden := (OpenDiagram.mem_hiddenWires input.pattern.val wire).mp hhidden
-  have hnotBoundary : wire ∉ input.pattern.val.boundary := by
-    intro hboundary
-    exact hidden.2 ((OpenDiagram.mem_exposedWires input.pattern.val wire).mpr
-      hboundary)
-  exact terminal.root_has_no_nonboundary_wires hnonempty wire
-    hnotBoundary hidden.1
+@[simp] theorem graftPatternItem_origin (layout : PlugLayout input)
+    (item : CompiledItem input.pattern.val.diagram) :
+    (layout.graftPatternItem item).origin =
+      layout.mapPatternOccurrence item.origin := by
+  cases item with
+  | atom => rfl
+  | identity => rfl
+  | cut body =>
+      change LocalOccurrence.child (layout.graftPatternRegion body).origin =
+        LocalOccurrence.child (layout.bodyRegion body.origin)
+      exact congrArg LocalOccurrence.child
+        (layout.graftPatternRegion_origin body)
+  | bubble arity body =>
+      change LocalOccurrence.child (layout.graftPatternRegion body).origin =
+        LocalOccurrence.child (layout.bodyRegion body.origin)
+      exact congrArg LocalOccurrence.child
+        (layout.graftPatternRegion_origin body)
 
-theorem terminal_nonterminal_exactScopeWires_eq_nil
-    (input : Splice.Input) (terminal : input.TerminalBody)
-    (proxy : Fin input.binderSpine.proxyCount)
-    (hnonterminal : proxy.val + 1 < input.binderSpine.proxyCount) :
-    exactScopeWires input.pattern.val.diagram
-      (input.binderSpine.proxy proxy) = [] := by
-  apply List.eq_nil_iff_forall_not_mem.mpr
-  intro wire hwire
-  have hscope := (mem_exactScopeWires input.pattern.val.diagram
-    (input.binderSpine.proxy proxy) wire).mp hwire
-  by_cases hboundary : wire ∈ input.pattern.val.boundary
-  · have hrootScope := terminal.boundary_is_root_scoped wire hboundary
-    exact input.binderSpine.proxy_ne_root proxy (hscope.symm.trans hrootScope)
-  · exact terminal.nonterminal_has_no_nonboundary_wires proxy
-      hnonterminal wire hboundary hscope
-
-theorem terminal_root_localOccurrences
-    (input : Splice.Input) (terminal : input.TerminalBody)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    localOccurrences input.pattern.val.diagram input.pattern.val.diagram.root =
-      [.child (input.binderSpine.proxy
-        ⟨0, Nat.pos_of_ne_zero hnonempty⟩)] := by
-  let first : Fin input.binderSpine.proxyCount :=
-    ⟨0, Nat.pos_of_ne_zero hnonempty⟩
-  apply eq_singleton_of_nodup
-    (localOccurrences_nodup input.pattern.val.diagram
-      input.pattern.val.diagram.root)
-  · apply (mem_localOccurrences_child input.pattern.val.diagram
-      input.pattern.val.diagram.root
-      (input.binderSpine.proxy first)).mpr
-    rw [input.binderSpine.proxy_region first]
-    rfl
-  · intro occurrence hoccurrence
-    cases occurrence with
-    | node node =>
-        have hregion := (mem_localOccurrences_node input.pattern.val.diagram
-          input.pattern.val.diagram.root node).mp hoccurrence
-        exact False.elim
-          (terminal.root_has_no_nodes hnonempty node hregion)
-    | child child =>
-        have hparent := (mem_localOccurrences_child input.pattern.val.diagram
-          input.pattern.val.diagram.root child).mp hoccurrence
-        exact congrArg LocalOccurrence.child
-          (terminal.root_direct_child hnonempty child hparent)
-
-theorem terminal_root_localNodeOccurrences
-    (input : Splice.Input) (terminal : input.TerminalBody)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    localNodeOccurrences input.pattern.val.diagram
-      input.pattern.val.diagram.root = [] := by
-  apply List.eq_nil_iff_forall_not_mem.mpr
-  intro occurrence member
-  cases occurrence with
-  | node node =>
-      exact terminal.root_has_no_nodes hnonempty node
-        ((mem_localNodeOccurrences_node input.pattern.val.diagram
-          input.pattern.val.diagram.root node).mp member)
-  | child child => exact (not_mem_localNodeOccurrences_child _ _ _) member
-
-theorem terminal_root_localChildOccurrences
-    (input : Splice.Input) (terminal : input.TerminalBody)
-    (hnonempty : input.binderSpine.proxyCount ≠ 0) :
-    localChildOccurrences input.pattern.val.diagram
-        input.pattern.val.diagram.root =
-      [.child (input.binderSpine.proxy
-        ⟨0, Nat.pos_of_ne_zero hnonempty⟩)] := by
-  have combined := terminal_root_localOccurrences input terminal hnonempty
-  rw [localOccurrences,
-    terminal_root_localNodeOccurrences input terminal hnonempty] at combined
-  simpa using combined
-
-theorem terminal_nonterminal_localOccurrences
-    (input : Splice.Input) (terminal : input.TerminalBody)
-    (proxy : Fin input.binderSpine.proxyCount)
-    (hnonterminal : proxy.val + 1 < input.binderSpine.proxyCount) :
-    localOccurrences input.pattern.val.diagram
-        (input.binderSpine.proxy proxy) =
-      [.child (input.binderSpine.proxy
-        ⟨proxy.val + 1, hnonterminal⟩)] := by
-  let next : Fin input.binderSpine.proxyCount :=
-    ⟨proxy.val + 1, hnonterminal⟩
-  apply eq_singleton_of_nodup
-    (localOccurrences_nodup input.pattern.val.diagram
-      (input.binderSpine.proxy proxy))
-  · apply (mem_localOccurrences_child input.pattern.val.diagram
-      (input.binderSpine.proxy proxy)
-      (input.binderSpine.proxy next)).mpr
-    rw [input.binderSpine.proxy_region next]
-    rfl
-  · intro occurrence hoccurrence
-    cases occurrence with
-    | node node =>
-        have hregion := (mem_localOccurrences_node input.pattern.val.diagram
-          (input.binderSpine.proxy proxy) node).mp hoccurrence
-        exact False.elim
-          (terminal.nonterminal_has_no_nodes proxy hnonterminal node hregion)
-    | child child =>
-        have hparent := (mem_localOccurrences_child input.pattern.val.diagram
-          (input.binderSpine.proxy proxy) child).mp hoccurrence
-        exact congrArg LocalOccurrence.child
-          (terminal.nonterminal_direct_child proxy hnonterminal child hparent)
-
-theorem terminal_nonterminal_localNodeOccurrences
-    (input : Splice.Input) (terminal : input.TerminalBody)
-    (proxy : Fin input.binderSpine.proxyCount)
-    (hnonterminal : proxy.val + 1 < input.binderSpine.proxyCount) :
-    localNodeOccurrences input.pattern.val.diagram
-      (input.binderSpine.proxy proxy) = [] := by
-  apply List.eq_nil_iff_forall_not_mem.mpr
-  intro occurrence member
-  cases occurrence with
-  | node node =>
-      exact terminal.nonterminal_has_no_nodes proxy hnonterminal node
-        ((mem_localNodeOccurrences_node input.pattern.val.diagram
-          (input.binderSpine.proxy proxy) node).mp member)
-  | child child => exact (not_mem_localNodeOccurrences_child _ _ _) member
-
-theorem terminal_nonterminal_localChildOccurrences
-    (input : Splice.Input) (terminal : input.TerminalBody)
-    (proxy : Fin input.binderSpine.proxyCount)
-    (hnonterminal : proxy.val + 1 < input.binderSpine.proxyCount) :
-    localChildOccurrences input.pattern.val.diagram
-        (input.binderSpine.proxy proxy) =
-      [.child (input.binderSpine.proxy
-        ⟨proxy.val + 1, hnonterminal⟩)] := by
-  have combined := terminal_nonterminal_localOccurrences input terminal proxy
-    hnonterminal
-  rw [localOccurrences,
-    terminal_nonterminal_localNodeOccurrences input terminal proxy
-      hnonterminal] at combined
-  simpa using combined
-
-private def terminalRelationBinders (input : Splice.Input) :
-    List (Fin input.pattern.val.diagram.regionCount) :=
-  let patternState := State.ofOpen input.pattern
-  let enumeration := CompiledSite.endpoint_binder_enumeration patternState
-    input.binderSpine.bodyContainer
-  (VisualProof.Data.Finite.allFin
-    (CompiledSite.endpointCall patternState
-      input.binderSpine.bodyContainer).rels.length).map enumeration.binder
-
-private def terminalProxies (input : Splice.Input) :
-    List (Fin input.pattern.val.diagram.regionCount) :=
-  (VisualProof.Data.Finite.allFin input.binderSpine.proxyCount).map
-    input.binderSpine.proxy
-
-private theorem terminalRelationBinders_nodup (input : Splice.Input) :
-    (terminalRelationBinders input).Nodup := by
-  apply (VisualProof.Data.Finite.allFin_nodup _).map
-  intro left right hne heq
-  exact hne ((CompiledSite.endpoint_binder_enumeration
-    (State.ofOpen input.pattern) input.binderSpine.bodyContainer).binder_injective
-      heq)
-
-private theorem terminalProxies_nodup (input : Splice.Input) :
-    (terminalProxies input).Nodup := by
-  apply (VisualProof.Data.Finite.allFin_nodup _).map
-  intro left right hne heq
-  exact hne (input.binderSpine.proxy_injective heq)
-
-private theorem terminalBinder_mem_iff_proxy_mem
-    (input : Splice.Input)
-    (binder : Fin input.pattern.val.diagram.regionCount) :
-    binder ∈ terminalProxies input ↔
-      binder ∈ terminalRelationBinders input := by
-  let patternState := State.ofOpen input.pattern
-  let call := CompiledSite.endpointCall patternState
-    input.binderSpine.bodyContainer
-  let enumeration := CompiledSite.endpoint_binder_enumeration patternState
-    input.binderSpine.bodyContainer
-  constructor
-  · intro hproxy
-    obtain ⟨proxy, _, hproxy⟩ := List.mem_map.mp hproxy
-    let parent := if _hzero : proxy.val = 0 then
-      input.pattern.val.diagram.root
-    else input.binderSpine.proxy ⟨proxy.val - 1, by omega⟩
-    have hregion := input.binderSpine.proxy_region proxy
-    change input.pattern.val.diagram.regions (input.binderSpine.proxy proxy) =
-      .bubble parent (input.binderSpine.arity proxy) at hregion
-    obtain ⟨relation, hlookup⟩ :=
-      CompiledSite.endpoint_binders_covers patternState
-        input.binderSpine.bodyContainer
-        (input.binderSpine.proxy proxy) parent
-        (input.binderSpine.arity proxy) hregion
-        (input.binderSpine.proxy_encloses_bodyContainer proxy)
-    apply List.mem_map.mpr
-    refine ⟨relation.index,
-      VisualProof.Data.Finite.mem_allFin relation.index, ?_⟩
-    exact (enumeration.lookup_owner relation hlookup).trans hproxy
-  · intro hrelation
-    obtain ⟨relation, _, hrelation⟩ := List.mem_map.mp hrelation
-    obtain ⟨parent, hbubble⟩ := enumeration.bubble relation
-    obtain ⟨proxy, hproxy⟩ :=
-      input.binderSpine.enclosing_bubble_eq_proxy
-        input.pattern.property.diagram_well_formed hbubble
-        (enumeration.encloses relation)
-    apply List.mem_map.mpr
-    refine ⟨proxy, VisualProof.Data.Finite.mem_allFin proxy, ?_⟩
-    exact hproxy.symm.trans hrelation
-
-private def terminalRelationProxyIndexEquiv (input : Splice.Input) :
-    FiniteEquiv (Fin (terminalRelationBinders input).length)
-      (Fin (terminalProxies input).length) :=
-  FiniteEquiv.restrictLists
-    (FiniteEquiv.refl (Fin input.pattern.val.diagram.regionCount))
-    (terminalRelationBinders input) (terminalProxies input)
-    (terminalRelationBinders_nodup input) (terminalProxies_nodup input)
-    (by
-      intro binder
-      simpa only [FiniteEquiv.refl_apply] using
-        terminalBinder_mem_iff_proxy_mem input binder)
-
-private theorem terminalRelationBinders_length (input : Splice.Input) :
-    (terminalRelationBinders input).length =
-      (CompiledSite.endpointCall (State.ofOpen input.pattern)
-        input.binderSpine.bodyContainer).rels.length := by
-  simp [terminalRelationBinders,
-    VisualProof.Data.Finite.allFin_eq_finRange]
-
-private theorem terminalProxies_length (input : Splice.Input) :
-    (terminalProxies input).length = input.binderSpine.proxyCount := by
-  simp [terminalProxies, VisualProof.Data.Finite.allFin_eq_finRange]
-
-noncomputable def terminalRelationProxyEquiv (input : Splice.Input) :
-    FiniteEquiv
-      (Fin (CompiledSite.endpointCall (State.ofOpen input.pattern)
-        input.binderSpine.bodyContainer).rels.length)
-      (Fin input.binderSpine.proxyCount) :=
-  (FiniteEquiv.finCast (terminalRelationBinders_length input).symm).trans
-    ((terminalRelationProxyIndexEquiv input).trans
-      (FiniteEquiv.finCast (terminalProxies_length input)))
-
-theorem terminalRelationProxyEquiv_binder (input : Splice.Input)
-    (relation : Fin (CompiledSite.endpointCall (State.ofOpen input.pattern)
-      input.binderSpine.bodyContainer).rels.length) :
-    input.binderSpine.proxy (terminalRelationProxyEquiv input relation) =
-      (CompiledSite.endpoint_binder_enumeration (State.ofOpen input.pattern)
-        input.binderSpine.bodyContainer).binder relation := by
-  have hspec := FiniteEquiv.restrictLists_spec
-    (FiniteEquiv.refl (Fin input.pattern.val.diagram.regionCount))
-    (terminalRelationBinders input) (terminalProxies input)
-    (terminalRelationBinders_nodup input) (terminalProxies_nodup input)
-    (by
-      intro binder
-      simpa only [FiniteEquiv.refl_apply] using
-        terminalBinder_mem_iff_proxy_mem input binder)
-    (FiniteEquiv.finCast (terminalRelationBinders_length input).symm relation)
-  simpa [terminalRelationProxyEquiv, terminalRelationProxyIndexEquiv,
-    terminalRelationBinders, terminalProxies, FiniteEquiv.finCast,
-    VisualProof.Data.Finite.allFin_eq_finRange] using hspec
-
-theorem terminalRelationProxyEquiv_arity (input : Splice.Input)
-    (relation : Fin (CompiledSite.endpointCall (State.ofOpen input.pattern)
-      input.binderSpine.bodyContainer).rels.length) :
-    (CompiledSite.endpointCall (State.ofOpen input.pattern)
-        input.binderSpine.bodyContainer).rels.get relation =
-      input.binderSpine.arity (terminalRelationProxyEquiv input relation) := by
-  let enumeration := CompiledSite.endpoint_binder_enumeration
-    (State.ofOpen input.pattern) input.binderSpine.bodyContainer
-  obtain ⟨parent, hbubble⟩ := enumeration.bubble relation
-  have hproxy := input.binderSpine.proxy_region
-    (terminalRelationProxyEquiv input relation)
-  rw [terminalRelationProxyEquiv_binder input relation] at hproxy
-  exact (CRegion.bubble.inj (hbubble.symm.trans hproxy)).2
-
-theorem terminalRelationProxyEquiv_lookup (input : Splice.Input)
-    (relation : RelVar
-      (CompiledSite.endpointCall (State.ofOpen input.pattern)
-        input.binderSpine.bodyContainer).rels arity) :
-    (CompiledSite.endpointCall (State.ofOpen input.pattern)
-        input.binderSpine.bodyContainer).binders
-        (input.binderSpine.proxy
-          (terminalRelationProxyEquiv input relation.index)) =
-      some ⟨arity, relation⟩ := by
-  cases relation with
-  | mk index hasArity =>
-      cases hasArity
-      rw [terminalRelationProxyEquiv_binder input index]
-      simpa using (CompiledSite.endpoint_binder_enumeration
-        (State.ofOpen input.pattern)
-        input.binderSpine.bodyContainer).lookup index
-
-private theorem terminalProxy_focus_outerContext
-    (input : Splice.Input) (terminal : input.TerminalBody)
-    (proxy : Fin input.binderSpine.proxyCount)
-    (outer : WireContext input.pattern.val.diagram)
-    (rels : RelCtx)
-    (binders : BinderContext input.pattern.val.diagram rels)
-    (body : CompiledRegion input.pattern.val.diagram
-      (.nested (input.binderSpine.proxy proxy) outer rels binders))
-    (compiled : compileRegion? input.pattern.val.diagram
-      input.pattern.property.diagram_well_formed
-      (input.binderSpine.proxy proxy) outer binders = some body)
-    (outerEq : outer = input.pattern.val.exposedWires)
-    {focus : CompiledFocus body}
-    (found : body.focus? input.binderSpine.bodyContainer = some focus) :
-    focus.endpointCall.outerContext = input.pattern.val.exposedWires := by
-  by_cases hterminal : proxy.val + 1 = input.binderSpine.proxyCount
-  · have hnonzero : input.binderSpine.proxyCount ≠ 0 := by
-      have := proxy.isLt
-      omega
-    have hbody : input.binderSpine.bodyContainer =
-        input.binderSpine.proxy proxy := by
-      rw [input.binderSpine.body_eq_terminal_of_nonempty hnonzero]
-      apply congrArg input.binderSpine.proxy
-      apply Fin.ext
-      simp
-      omega
-    rw [hbody] at found
-    have originFound := CompiledRegion.focus?_origin body
-    have focusEq := Option.some.inj (originFound.symm.trans found)
-    subst focus
-    exact outerEq
-  · have hnonterminal :
-        proxy.val + 1 < input.binderSpine.proxyCount := by omega
-    let next : Fin input.binderSpine.proxyCount :=
-      ⟨proxy.val + 1, hnonterminal⟩
-    have nextRegion : input.pattern.val.diagram.regions
-        (input.binderSpine.proxy next) =
-      .bubble (input.binderSpine.proxy proxy)
-        (input.binderSpine.arity next) := by
-      rw [input.binderSpine.proxy_region next]
-      simp only [next]
-      split
-      next hzero => omega
-      next _ =>
-        congr 1
-    obtain ⟨nextBody, nextCompiled, bodyEq⟩ :=
-      CompilerCall.compile?_singleton_bubble
-        input.pattern.property.diagram_well_formed
-        (.nested (input.binderSpine.proxy proxy) outer rels binders)
-        (input.binderSpine.proxy next) (input.binderSpine.arity next)
-        (terminal_nonterminal_localNodeOccurrences input terminal proxy
-          hnonterminal)
-        (terminal_nonterminal_localChildOccurrences input terminal proxy
-          hnonterminal)
-        nextRegion compiled
-    subst body
-    have different : input.binderSpine.proxy proxy ≠
-        input.binderSpine.bodyContainer := by
-      intro heq
-      have hnonzero : input.binderSpine.proxyCount ≠ 0 := by
-        have := proxy.isLt
-        omega
-      rw [input.binderSpine.body_eq_terminal_of_nonempty hnonzero] at heq
-      have hindex := input.binderSpine.proxy_injective heq
-      have := congrArg Fin.val hindex
-      simp at this
-      omega
-    cases nextFound : nextBody.focus? input.binderSpine.bodyContainer with
-    | none =>
-        have parentFound := CompiledRegion.focus?_singleton_bubble_eq
-          (body := nextBody) input.binderSpine.bodyContainer different
-        rw [parentFound, nextFound] at found
-        contradiction
-    | some nextFocus =>
-        have expected := CompiledRegion.focus?_singleton_bubble
-          (body := nextBody) different nextFound
-        have focusEq := Option.some.inj (expected.symm.trans found)
-        subst focus
-        have nextOuterEq :
-            ((CompilerCall.nested (input.binderSpine.proxy proxy) outer rels
-              binders).fullContext) = input.pattern.val.exposedWires := by
-          simp [CompilerCall.fullContext, CompilerCall.localContext,
-            CompilerCall.outerContext,
-            terminal_nonterminal_exactScopeWires_eq_nil input terminal proxy
-              hnonterminal, outerEq]
-        exact terminalProxy_focus_outerContext input terminal next
-          ((CompilerCall.nested (input.binderSpine.proxy proxy) outer rels
-            binders).fullContext)
-          (input.binderSpine.arity next :: rels)
-          (binders.push (input.binderSpine.proxy next)
-            (input.binderSpine.arity next))
-          nextBody nextCompiled nextOuterEq nextFound
-termination_by input.binderSpine.proxyCount - proxy.val
-
-theorem patternTerminal_outerContext
-    (input : Splice.Input) (terminal : input.TerminalBody) :
-    (CompiledSite.endpointCall (State.ofOpen input.pattern)
-      input.binderSpine.bodyContainer).outerContext =
-        input.pattern.val.exposedWires := by
-  let patternState := State.ofOpen input.pattern
-  by_cases hzero : input.binderSpine.proxyCount = 0
-  · have hbody := input.binderSpine.body_eq_root_of_empty hzero
-    change (CompiledSite.focus patternState
-      input.binderSpine.bodyContainer).endpointCall.outerContext = _
-    rw [hbody]
-    simpa [patternState] using congrArg
-      (fun focus => focus.endpointCall.outerContext)
-      (CompiledSite.focus_root (State.ofOpen input.pattern))
-  · let first : Fin input.binderSpine.proxyCount :=
-      ⟨0, Nat.pos_of_ne_zero hzero⟩
-    have firstRegion : input.pattern.val.diagram.regions
-        (input.binderSpine.proxy first) =
-      .bubble input.pattern.val.diagram.root
-        (input.binderSpine.arity first) := by
-      rw [input.binderSpine.proxy_region first]
-      simp [first]
-    have hiddenEq := terminal_hiddenWires_eq_nil input terminal hzero
-    have firstOuterEq :
-        ((CompilerCall.root input.pattern.val.exposedWires
-          input.pattern.val.hiddenWires).fullContext) =
-            input.pattern.val.exposedWires := by
-      simp [CompilerCall.fullContext, CompilerCall.outerContext,
-        CompilerCall.localContext, hiddenEq]
-    have rootCase :
-        ∀ (rootBody : CompiledRegion input.pattern.val.diagram
-            (.root input.pattern.val.exposedWires
-              input.pattern.val.hiddenWires))
-          (rootCompiled :
-            (CompilerCall.root input.pattern.val.exposedWires
-              input.pattern.val.hiddenWires).compile?
-                input.pattern.val.diagram
-                input.pattern.property.diagram_well_formed = some rootBody)
-          {rootFocus : CompiledFocus rootBody},
-          rootBody.focus? input.binderSpine.bodyContainer = some rootFocus →
-            rootFocus.endpointCall.outerContext =
-              input.pattern.val.exposedWires := by
-      intro rootBody rootCompiled rootFocus rootFound
-      obtain ⟨firstBody, firstCompiled, rootBodyEq⟩ :=
-        CompilerCall.compile?_singleton_bubble
-          input.pattern.property.diagram_well_formed
-          (.root input.pattern.val.exposedWires input.pattern.val.hiddenWires)
-          (input.binderSpine.proxy first) (input.binderSpine.arity first)
-          (terminal_root_localNodeOccurrences input terminal hzero)
-          (terminal_root_localChildOccurrences input terminal hzero)
-          firstRegion rootCompiled
-      subst rootBody
-      have rootDifferent : input.pattern.val.diagram.root ≠
-          input.binderSpine.bodyContainer := by
-        intro heq
-        rw [input.binderSpine.body_eq_terminal_of_nonempty hzero] at heq
-        exact input.binderSpine.proxy_ne_root _ heq.symm
-      cases firstFound : firstBody.focus? input.binderSpine.bodyContainer with
-      | none =>
-          have parentFound := CompiledRegion.focus?_singleton_bubble_eq
-            (body := firstBody) input.binderSpine.bodyContainer rootDifferent
-          rw [parentFound, firstFound] at rootFound
-          contradiction
-      | some firstFocus =>
-          have expected := CompiledRegion.focus?_singleton_bubble
-            (body := firstBody) rootDifferent firstFound
-          have focusEq := Option.some.inj (expected.symm.trans rootFound)
-          rw [← focusEq]
-          exact terminalProxy_focus_outerContext input terminal first
-            ((CompilerCall.root input.pattern.val.exposedWires
-              input.pattern.val.hiddenWires).fullContext)
-            [input.binderSpine.arity first]
-            (BinderContext.empty.push (input.binderSpine.proxy first)
-              (input.binderSpine.arity first))
-            firstBody firstCompiled firstOuterEq firstFound
-    let result := CompiledSite.focus patternState
-      input.binderSpine.bodyContainer
-    have found : input.pattern.compilation.focus?
-        input.binderSpine.bodyContainer = some result :=
-      (Option.some_get (CheckedOpen.compilation_focus?_isSome input.pattern
-        input.binderSpine.bodyContainer)).symm
-    change result.endpointCall.outerContext = _
-    exact rootCase input.pattern.compilation
-      input.pattern.compilation_computation found
-
-/-- Every local wire of the canonical terminal compiler call is an internal
-wire scoped exactly at the terminal body. -/
-theorem patternTerminal_localWire
-    (input : Splice.Input)
-    (index : Fin (CompiledSite.endpointCall (State.ofOpen input.pattern)
-      input.binderSpine.bodyContainer).localContext.length) :
-    let wire := (CompiledSite.endpointCall (State.ofOpen input.pattern)
-      input.binderSpine.bodyContainer).localContext.get index
-    wire ∉ input.pattern.val.exposedWires ∧
-      (input.pattern.val.diagram.wires wire).scope =
-        input.binderSpine.bodyContainer := by
-  let patternState := State.ofOpen input.pattern
-  let call := CompiledSite.endpointCall patternState
-    input.binderSpine.bodyContainer
-  let wire := call.localContext.get index
-  change wire ∉ input.pattern.val.exposedWires ∧
-    (input.pattern.val.diagram.wires wire).scope =
-      input.binderSpine.bodyContainer
-  by_cases empty : input.binderSpine.proxyCount = 0
-  · have bodyEq := input.binderSpine.body_eq_root_of_empty empty
-    have focusEq := CompiledSite.focus_root patternState
-    have callEq : call = .root input.pattern.val.exposedWires
-        input.pattern.val.hiddenWires := by
-      simpa [call, patternState, bodyEq] using
-        congrArg CompiledFocus.endpointCall focusEq
-    have localEq : call.localContext = input.pattern.val.hiddenWires := by
-      rw [callEq]
+@[simp] theorem graftPatternItems_origins (layout : PlugLayout input)
+    (items : CompiledItems input.pattern.val.diagram) :
+    (layout.graftPatternItems items).origins =
+      items.origins.map layout.mapPatternOccurrence :=
+  match items with
+  | .nil => rfl
+  | .cons head tail => by
+      change
+        (layout.graftPatternItem head).origin ::
+            (layout.graftPatternItems tail).origins =
+          layout.mapPatternOccurrence head.origin ::
+            tail.origins.map layout.mapPatternOccurrence
+      rw [layout.graftPatternItem_origin head,
+        layout.graftPatternItems_origins tail]
       rfl
-    let index' : Fin input.pattern.val.hiddenWires.length :=
-      Fin.cast (congrArg List.length localEq) index
-    have wireEq : wire = input.pattern.val.hiddenWires.get index' := by
-      exact List.get_cast_of_eq localEq index
-    rw [wireEq]
-    have hidden := (OpenDiagram.mem_hiddenWires input.pattern.val
-      (input.pattern.val.hiddenWires.get index')).mp (List.get_mem _ _)
-    exact ⟨hidden.2, hidden.1.trans bodyEq.symm⟩
-  · have bodyNeRoot : input.binderSpine.bodyContainer ≠
-        input.pattern.val.diagram.root := by
-      rw [input.binderSpine.body_eq_terminal_of_nonempty empty]
-      exact input.binderSpine.proxy_ne_root _
-    cases callEq : call with
-    | root ambient locals =>
-        have originEq := CompiledSite.endpoint_origin patternState
-          input.binderSpine.bodyContainer
-        simp [call, callEq, CompilerCall.origin] at originEq
-        exact (bodyNeRoot originEq.symm).elim
-    | nested origin context rels binders =>
-        have originEq : origin = input.binderSpine.bodyContainer := by
-          simpa [call, callEq, CompilerCall.origin] using
-            CompiledSite.endpoint_origin patternState
-              input.binderSpine.bodyContainer
-        have localEq : call.localContext =
-            exactScopeWires input.pattern.val.diagram origin := by
-          rw [callEq]
+
+/-- Pattern binders keep their arity.  Material binders use their dense
+region image; lexical proxy binders use the caller-supplied frame target. -/
+theorem plugRaw_binder_bubble (layout : PlugLayout input)
+    (admissible : input.Admissible)
+    {binder parent : Fin input.pattern.val.diagram.regionCount}
+    {arity : Nat}
+    (shape : input.pattern.val.diagram.regions binder =
+      .bubble parent arity) :
+    ∃ targetParent,
+      layout.plugRaw.regions (layout.binderRegion binder) =
+        .bubble targetParent arity := by
+  by_cases material : input.binderSpine.IsMaterialRegion binder
+  · let carrier := layout.materialCarrier binder material
+    have origin : layout.materialRegions.origin carrier = binder :=
+      layout.materialCarrier_origin binder material
+    refine ⟨layout.bodyRegion parent, ?_⟩
+    rw [← origin, layout.binderRegion_materialOrigin,
+      layout.plugRaw_regions_material, origin, shape]
+    rfl
+  · have binderNeRoot : binder ≠ input.pattern.val.diagram.root := by
+      intro equality
+      rw [equality, input.pattern.property.diagram_well_formed.root_is_sheet]
+        at shape
+      contradiction
+    have notEveryProxy : ¬∀ index, binder ≠ input.binderSpine.proxy index :=
+      fun noProxy => material ⟨binderNeRoot, noProxy⟩
+    obtain ⟨index, notNe⟩ := Classical.not_forall.mp notEveryProxy
+    have binderEq : binder = input.binderSpine.proxy index :=
+      Classical.not_not.mp notNe
+    subst binder
+    have proxyShape := input.binderSpine.proxy_region index
+    have arityEq : input.binderSpine.arity index = arity := by
+      exact (CRegion.bubble.inj (proxyShape.symm.trans shape)).2
+    obtain ⟨targetParent, targetShape⟩ :=
+      admissible.binder_targets_match index
+    refine ⟨layout.frameRegion targetParent, ?_⟩
+    rw [layout.binderRegion_proxy, layout.plugRaw_regions_frame, targetShape]
+    simp [PlugLayout.mapFrameRegion, arityEq]
+    rfl
+
+private theorem patternChild_isMaterial
+    {input : Splice.Input} {parent child : Fin input.pattern.val.diagram.regionCount}
+    (parentSource : parent = input.binderSpine.bodyContainer ∨
+      input.binderSpine.IsMaterialRegion parent)
+    (parentEq : (input.pattern.val.diagram.regions child).parent? =
+      some parent) :
+    input.binderSpine.IsMaterialRegion child := by
+  rcases parentSource with rfl | material
+  · exact directBodyChild_isMaterial input child parentEq
+  · exact directMaterialChild_isMaterial input parent child material parentEq
+
+mutual
+  theorem graftPatternRegion_valid (layout : PlugLayout input)
+      (admissible : input.Admissible) (targetWf : layout.plugRaw.WellFormed)
+      (region : CompiledRegion input.pattern.val.diagram)
+      (valid : region.Valid)
+      (material : input.binderSpine.IsMaterialRegion region.origin) :
+      (layout.graftPatternRegion region).Valid := by
+    cases region with
+    | mk origin nodes children =>
+        change _ ∧ _ ∧ _ ∧ _
+        refine ⟨?_, ?_, ?_, ?_⟩
+        · rw [layout.graftPatternItems_origins, valid.1,
+            layout.map_localNodeOccurrences_materialSource origin material]
+          exact (layout.localNodeOccurrences_materialSource origin material).symm
+        · rw [layout.graftPatternItems_origins, valid.2.1,
+            layout.map_localChildOccurrences_materialSource origin material]
+          exact (layout.localChildOccurrences_materialSource origin material).symm
+        · exact layout.graftPatternItems_validAt admissible targetWf origin
+            (Or.inr material) nodes valid.2.2.1
+        · exact layout.graftPatternItems_validAt admissible targetWf origin
+            (Or.inr material) children valid.2.2.2
+
+  theorem graftPatternItem_validAt (layout : PlugLayout input)
+      (admissible : input.Admissible) (targetWf : layout.plugRaw.WellFormed)
+      (parent : Fin input.pattern.val.diagram.regionCount)
+      (parentSource : parent = input.binderSpine.bodyContainer ∨
+        input.binderSpine.IsMaterialRegion parent)
+      (item : CompiledItem input.pattern.val.diagram)
+      (valid : item.ValidAt parent) :
+      (layout.graftPatternItem item).ValidAt (layout.bodyRegion parent) := by
+    cases item with
+    | atom origin binder arity ports =>
+        have targetNode : layout.plugRaw.nodes (layout.patternNode origin) =
+            .atom (layout.bodyRegion parent) (layout.binderRegion binder) := by
+          rw [layout.plugRaw_nodes_pattern, valid.1]
           rfl
-        let index' : Fin (exactScopeWires input.pattern.val.diagram
-            origin).length :=
-          Fin.cast (congrArg List.length localEq) index
-        have wireEq : wire =
-            (exactScopeWires input.pattern.val.diagram origin).get index' := by
-          exact List.get_cast_of_eq localEq index
-        have scopeEq : (input.pattern.val.diagram.wires wire).scope =
-            input.binderSpine.bodyContainer := by
-          rw [wireEq, (mem_exactScopeWires input.pattern.val.diagram origin
-            ((exactScopeWires input.pattern.val.diagram origin).get
-              index')).mp (List.get_mem _ _), originEq]
-        refine ⟨?_, scopeEq⟩
-        intro exposed
-        have rootScope := input.pattern.property.exposed_root_scoped exposed
-        exact bodyNeRoot (scopeEq.symm.trans rootScope)
+        obtain ⟨targetParent, targetBinder⟩ :=
+          layout.plugRaw_binder_bubble admissible valid.2.1
+        refine ⟨targetNode, ?_, ?_, ?_⟩
+        · rw [bubbleParent_of_bubble targetBinder]
+          exact targetBinder
+        · have encloses := targetWf.atom_binders_enclose
+              (layout.patternNode origin)
+          rw [targetNode] at encloses
+          exact encloses
+        · intro index
+          exact layout.endpointOccurs_pattern (valid.2.2.2 index)
+    | identity origin arity ports =>
+        refine ⟨?_, ?_⟩
+        · rw [layout.plugRaw_nodes_pattern, valid.1]
+          rfl
+        · intro index
+          exact layout.endpointOccurs_pattern (valid.2 index)
+    | cut body =>
+        have parentEq : (input.pattern.val.diagram.regions body.origin).parent? =
+            some parent := by simp [valid.1, CRegion.parent?]
+        have childMaterial := patternChild_isMaterial parentSource parentEq
+        refine ⟨?_, layout.graftPatternRegion_valid admissible targetWf body
+          valid.2 childMaterial⟩
+        rw [layout.graftPatternRegion_origin body,
+          layout.plugRaw_regions_materialSource body.origin childMaterial,
+          valid.1]
+        rfl
+    | bubble arity body =>
+        have parentEq : (input.pattern.val.diagram.regions body.origin).parent? =
+            some parent := by simp [valid.1, CRegion.parent?]
+        have childMaterial := patternChild_isMaterial parentSource parentEq
+        refine ⟨?_, layout.graftPatternRegion_valid admissible targetWf body
+          valid.2 childMaterial⟩
+        rw [layout.graftPatternRegion_origin body,
+          layout.plugRaw_regions_materialSource body.origin childMaterial,
+          valid.1]
+        rfl
 
-namespace CompiledSite
+  theorem graftPatternItems_validAt (layout : PlugLayout input)
+      (admissible : input.Admissible) (targetWf : layout.plugRaw.WellFormed)
+      (parent : Fin input.pattern.val.diagram.regionCount)
+      (parentSource : parent = input.binderSpine.bodyContainer ∨
+        input.binderSpine.IsMaterialRegion parent)
+      (items : CompiledItems input.pattern.val.diagram)
+      (valid : items.ValidAt parent) :
+      (layout.graftPatternItems items).ValidAt (layout.bodyRegion parent) := by
+    cases items with
+    | nil => trivial
+    | cons head tail =>
+        exact ⟨layout.graftPatternItem_validAt admissible targetWf parent
+          parentSource head valid.1,
+          layout.graftPatternItems_validAt admissible targetWf parent
+            parentSource tail valid.2⟩
+end
 
-private theorem castWire_scope
-    {source target : Diagram} (equality : source = target)
-    (wire : Fin source.wireCount) :
-    (target.wires (Fin.cast (congrArg Diagram.wireCount equality) wire)).scope =
-      Fin.cast (congrArg Diagram.regionCount equality)
-        (source.wires wire).scope := by
-  cases equality
-  rfl
+private theorem region_node_origins (region : CompiledRegion d)
+    (valid : region.Valid) :
+    region.nodeItems.origins = localNodeOccurrences d region.origin := by
+  cases region
+  exact valid.1
 
-private theorem encloses_cast
-    {source target : Diagram} (equality : source = target)
-    {ancestor descendant : Fin source.regionCount}
-    (encloses : source.Encloses ancestor descendant) :
-    target.Encloses
-      (Fin.cast (congrArg Diagram.regionCount equality) ancestor)
-      (Fin.cast (congrArg Diagram.regionCount equality) descendant) := by
-  cases equality
-  exact encloses
+private theorem region_child_origins (region : CompiledRegion d)
+    (valid : region.Valid) :
+    region.childItems.origins = localChildOccurrences d region.origin := by
+  cases region
+  exact valid.2.1
 
-private def sourceSite {source : State arity} (input : Splice.Input)
-    (frameEq : input.frame = source.diagram) :
-    Fin source.checked.val.diagram.regionCount :=
-  Fin.cast (congrArg (fun frame : Checked => frame.val.regionCount) frameEq)
-    input.site
+private theorem region_nodes_valid (region : CompiledRegion d)
+    (valid : region.Valid) : region.nodeItems.ValidAt region.origin := by
+  cases region
+  exact valid.2.2.1
 
-private def sourceWire {source : State arity} (input : Splice.Input)
-    (frameEq : input.frame = source.diagram)
-    (wire : Fin input.frame.val.wireCount) :
-    Fin source.checked.val.diagram.wireCount :=
-  Fin.cast (congrArg (fun frame : Checked => frame.val.wireCount) frameEq) wire
+private theorem region_children_valid (region : CompiledRegion d)
+    (valid : region.Valid) : region.childItems.ValidAt region.origin := by
+  cases region
+  exact valid.2.2.2
 
-private def sourceRegion {source : State arity} (input : Splice.Input)
-    (frameEq : input.frame = source.diagram)
-    (region : Fin input.frame.val.regionCount) :
-    Fin source.checked.val.diagram.regionCount :=
-  Fin.cast (congrArg (fun frame : Checked => frame.val.regionCount) frameEq)
-    region
+mutual
+  theorem graftFrameRegion_valid (layout : PlugLayout input)
+      (admissible : input.Admissible) (targetWf : layout.plugRaw.WellFormed)
+      (material : CompiledRegion input.pattern.val.diagram)
+      (materialValid : material.Valid)
+      (materialOrigin : material.origin = input.binderSpine.bodyContainer)
+      (region : CompiledRegion input.frame.val) (valid : region.Valid) :
+      (layout.graftFrameRegion material region).Valid := by
+    cases region with
+    | mk origin nodes children =>
+        by_cases site : origin = input.site
+        · subst origin
+          simp only [graftFrameRegion]
+          change _ ∧ _ ∧ _ ∧ _
+          refine ⟨?_, ?_, ?_, ?_⟩
+          · rw [CompiledItems.origins_append,
+              layout.graftFrameItems_origins,
+              layout.graftPatternItems_origins, valid.1,
+              region_node_origins material materialValid,
+              materialOrigin, layout.map_localNodeOccurrences_frame,
+              layout.map_localNodeOccurrences_body,
+              layout.localNodeOccurrences_frameRegion,
+              layout.patternNodeOccurrences_site admissible]
+            rfl
+          · rw [CompiledItems.origins_append,
+              layout.graftFrameItems_origins,
+              layout.graftPatternItems_origins, valid.2.1,
+              region_child_origins material materialValid, materialOrigin,
+              layout.map_localChildOccurrences_frame,
+              layout.map_localChildOccurrences_body,
+              layout.localChildOccurrences_frameRegion,
+              layout.materialChildOccurrences_site admissible]
+            rfl
+          · exact CompiledItems.valid_append _ _
+              (layout.graftFrameItems_validAt admissible targetWf material
+                materialValid materialOrigin input.site nodes valid.2.2.1)
+              (by simpa using
+                (layout.graftPatternItems_validAt admissible targetWf
+                  input.binderSpine.bodyContainer (Or.inl rfl)
+                  material.nodeItems
+                    (materialOrigin ▸ region_nodes_valid material materialValid)))
+          · exact CompiledItems.valid_append _ _
+              (layout.graftFrameItems_validAt admissible targetWf material
+                materialValid materialOrigin input.site children valid.2.2.2)
+              (by simpa using
+                (layout.graftPatternItems_validAt admissible targetWf
+                  input.binderSpine.bodyContainer (Or.inl rfl)
+                  material.childItems
+                    (materialOrigin ▸ region_children_valid material materialValid)))
+        · simp only [graftFrameRegion, if_neg site]
+          change _ ∧ _ ∧ _ ∧ _
+          refine ⟨?_, ?_, ?_, ?_⟩
+          · rw [layout.graftFrameItems_origins, valid.1,
+              layout.map_localNodeOccurrences_frame,
+              layout.localNodeOccurrences_frameRegion,
+              layout.patternNodeOccurrences_eq_nil_of_ne_site origin site]
+            simp
+          · rw [layout.graftFrameItems_origins, valid.2.1,
+              layout.map_localChildOccurrences_frame,
+              layout.localChildOccurrences_frameRegion,
+              layout.materialChildOccurrences_eq_nil_of_ne_site origin site]
+            simp
+          · exact layout.graftFrameItems_validAt admissible targetWf material
+              materialValid materialOrigin origin nodes valid.2.2.1
+          · exact layout.graftFrameItems_validAt admissible targetWf material
+              materialValid materialOrigin origin children valid.2.2.2
 
-private theorem spliceAttachment_mem
-    {source : State arity} (input : Splice.Input)
-    (frameEq : input.frame = source.diagram)
-    (admissible : input.Admissible)
-    (layout : input.PlugLayout)
-    (external : Fin input.pattern.val.exposedWires.length) :
-    sourceWire input frameEq
-        (input.attachment (layout.exposedPosition external)) ∈
-      (endpointCall source (sourceSite input frameEq)).fullContext := by
-  apply ((endpoint_fullContext_exact source
-    (sourceSite input frameEq)).mem_iff _).mpr
-  let diagramEq : input.frame.val = source.checked.val.diagram :=
-    congrArg (fun frame : Checked => frame.val) frameEq
-  have visible := admissible.attachments_visible
-    (layout.exposedPosition external)
-  have castVisible := encloses_cast diagramEq visible
-  rw [← castWire_scope diagramEq] at castVisible
-  simpa [sourceSite, sourceWire, diagramEq] using castVisible
+  theorem graftFrameItem_validAt (layout : PlugLayout input)
+      (admissible : input.Admissible) (targetWf : layout.plugRaw.WellFormed)
+      (material : CompiledRegion input.pattern.val.diagram)
+      (materialValid : material.Valid)
+      (materialOrigin : material.origin = input.binderSpine.bodyContainer)
+      (parent : Fin input.frame.val.regionCount)
+      (item : CompiledItem input.frame.val) (valid : item.ValidAt parent) :
+      (layout.graftFrameItem material item).ValidAt
+        (layout.frameRegion parent) := by
+    cases item with
+    | atom origin binder arity ports =>
+        have targetNode : layout.plugRaw.nodes (layout.frameNode origin) =
+            .atom (layout.frameRegion parent) (layout.frameRegion binder) := by
+          rw [layout.plugRaw_nodes_frame, valid.1]
+          rfl
+        have targetBinder : layout.plugRaw.regions
+            (layout.frameRegion binder) =
+            .bubble (layout.frameRegion (bubbleParent input.frame.val binder))
+              arity := by
+          rw [layout.plugRaw_regions_frame, valid.2.1]
+          simp [PlugLayout.mapFrameRegion]
+          rfl
+        refine ⟨targetNode, ?_, ?_, ?_⟩
+        · rw [bubbleParent_of_bubble targetBinder]
+          exact targetBinder
+        · have encloses := targetWf.atom_binders_enclose
+              (layout.frameNode origin)
+          rw [targetNode] at encloses
+          exact encloses
+        · intro index
+          exact layout.endpointOccurs_frame (valid.2.2.2 index)
+    | identity origin arity ports =>
+        refine ⟨?_, ?_⟩
+        · rw [layout.plugRaw_nodes_frame, valid.1]
+          rfl
+        · intro index
+          exact layout.endpointOccurs_frame (valid.2 index)
+    | cut body =>
+        refine ⟨?_, layout.graftFrameRegion_valid admissible targetWf material
+          materialValid materialOrigin body valid.2⟩
+        rw [layout.graftFrameRegion_origin,
+          layout.plugRaw_regions_frame, valid.1]
+        rfl
+    | bubble arity body =>
+        refine ⟨?_, layout.graftFrameRegion_valid admissible targetWf material
+          materialValid materialOrigin body valid.2⟩
+        rw [layout.graftFrameRegion_origin,
+          layout.plugRaw_regions_frame, valid.1]
+        rfl
 
-noncomputable def spliceAttachmentPosition
-    {source : State arity} (input : Splice.Input)
-    (frameEq : input.frame = source.diagram)
-    (admissible : input.Admissible)
-    (layout : input.PlugLayout)
-    (external : Fin input.pattern.val.exposedWires.length) :
-    Fin (endpointCall source (sourceSite input frameEq)).fullContext.length :=
-  ((endpointCall source (sourceSite input frameEq)).fullContext.lookup?
-    (sourceWire input frameEq
-      (input.attachment (layout.exposedPosition external)))).get
-        (Option.isSome_iff_exists.mpr
-          (WireContext.lookup?_complete
-            (spliceAttachment_mem input frameEq admissible layout external)))
+  theorem graftFrameItems_validAt (layout : PlugLayout input)
+      (admissible : input.Admissible) (targetWf : layout.plugRaw.WellFormed)
+      (material : CompiledRegion input.pattern.val.diagram)
+      (materialValid : material.Valid)
+      (materialOrigin : material.origin = input.binderSpine.bodyContainer)
+      (parent : Fin input.frame.val.regionCount)
+      (items : CompiledItems input.frame.val) (valid : items.ValidAt parent) :
+      (layout.graftFrameItems material items).ValidAt
+        (layout.frameRegion parent) := by
+    cases items with
+    | nil => trivial
+    | cons head tail =>
+        exact ⟨layout.graftFrameItem_validAt admissible targetWf material
+          materialValid materialOrigin parent head valid.1,
+          layout.graftFrameItems_validAt admissible targetWf material
+            materialValid materialOrigin parent tail valid.2⟩
+end
 
-theorem spliceAttachmentPosition_get
-    {source : State arity} (input : Splice.Input)
-    (frameEq : input.frame = source.diagram)
-    (admissible : input.Admissible)
-    (layout : input.PlugLayout)
-    (external : Fin input.pattern.val.exposedWires.length) :
-    (endpointCall source (sourceSite input frameEq)).fullContext.get
-        (spliceAttachmentPosition input frameEq admissible layout external) =
-      sourceWire input frameEq
-        (input.attachment (layout.exposedPosition external)) := by
-  apply WireContext.lookup?_sound
-  exact (Option.some_get (Option.isSome_iff_exists.mpr
-    (WireContext.lookup?_complete
-      (spliceAttachment_mem input frameEq admissible layout external)))).symm
+end Splice.Input.PlugLayout
 
-noncomputable def spliceWireMap
-    {source : State arity} (input : Splice.Input)
-    (frameEq : input.frame = source.diagram)
-    (admissible : input.Admissible)
-    (layout : input.PlugLayout) :
-    Fin (endpointCall (State.ofOpen input.pattern)
-        input.binderSpine.bodyContainer).outerContext.length →
-      Fin (endpointCall source (sourceSite input frameEq)).fullContext.length :=
-  fun wire => spliceAttachmentPosition input frameEq admissible layout
-    (Fin.cast (congrArg List.length
-      (patternTerminal_outerContext input admissible.terminal_body)) wire)
-
-theorem spliceWireMap_get
-    {source : State arity} (input : Splice.Input)
-    (frameEq : input.frame = source.diagram)
-    (admissible : input.Admissible)
-    (layout : input.PlugLayout)
-    (wire : Fin (endpointCall (State.ofOpen input.pattern)
-      input.binderSpine.bodyContainer).outerContext.length) :
-    (endpointCall source (sourceSite input frameEq)).fullContext.get
-        (spliceWireMap input frameEq admissible layout wire) =
-      sourceWire input frameEq (input.attachment
-        (layout.exposedPosition (Fin.cast (congrArg List.length
-          (patternTerminal_outerContext input admissible.terminal_body))
-            wire))) :=
-  spliceAttachmentPosition_get input frameEq admissible layout _
-
-private theorem castBubble
-    {source target : Diagram} (equality : source = target)
-    {binder parent : Fin source.regionCount} {arity : Nat}
-    (bubble : source.regions binder = .bubble parent arity) :
-    target.regions
-        (Fin.cast (congrArg Diagram.regionCount equality) binder) =
-      .bubble (Fin.cast (congrArg Diagram.regionCount equality) parent) arity := by
-  cases equality
-  exact bubble
-
-private theorem spliceRelation_exists
-    {source : State arity} (input : Splice.Input)
-    (frameEq : input.frame = source.diagram)
-    (admissible : input.Admissible)
-    (relation : RelVar
-      (endpointCall (State.ofOpen input.pattern)
-        input.binderSpine.bodyContainer).rels relationArity) :
-    ∃ targetRelation : RelVar
-        (endpointCall source (sourceSite input frameEq)).rels relationArity,
-      (endpointCall source (sourceSite input frameEq)).binders
-          (sourceRegion input frameEq (input.binderTarget
-            (terminalRelationProxyEquiv input relation.index))) =
-        some ⟨relationArity, targetRelation⟩ := by
-  let proxy := terminalRelationProxyEquiv input relation.index
-  have proxyArity : input.binderSpine.arity proxy = relationArity :=
-    (terminalRelationProxyEquiv_arity input relation.index).symm.trans
-      relation.hasArity
-  obtain ⟨parent, bubble⟩ := admissible.binder_targets_match proxy
-  rw [proxyArity] at bubble
-  let diagramEq : input.frame.val = source.checked.val.diagram :=
-    congrArg (fun frame : Checked => frame.val) frameEq
-  have castedBubble := castBubble diagramEq bubble
-  have castedEncloses := encloses_cast diagramEq
-    (admissible.binder_targets_enclose proxy)
-  simpa [sourceRegion, sourceSite, diagramEq] using
-    (endpoint_binders_covers source (sourceSite input frameEq)
-      (sourceRegion input frameEq (input.binderTarget proxy))
-      (Fin.cast (congrArg Diagram.regionCount diagramEq) parent)
-      relationArity castedBubble castedEncloses)
-
-noncomputable def spliceRelationMap
-    {source : State arity} (input : Splice.Input)
-    (frameEq : input.frame = source.diagram)
-    (admissible : input.Admissible) :
-    RelationRenaming
-      (endpointCall (State.ofOpen input.pattern)
-        input.binderSpine.bodyContainer).rels
-      (endpointCall source (sourceSite input frameEq)).rels :=
-  fun relation => Classical.choose
-    (spliceRelation_exists input frameEq admissible relation)
-
-theorem spliceRelationMap_lookup
-    {source : State arity} (input : Splice.Input)
-    (frameEq : input.frame = source.diagram)
-    (admissible : input.Admissible)
-    (relation : RelVar
-      (endpointCall (State.ofOpen input.pattern)
-        input.binderSpine.bodyContainer).rels relationArity) :
-    (endpointCall source (sourceSite input frameEq)).binders
-        (sourceRegion input frameEq (input.binderTarget
-          (terminalRelationProxyEquiv input relation.index))) =
-      some ⟨relationArity,
-        spliceRelationMap input frameEq admissible relation⟩ :=
-  Classical.choose_spec (spliceRelation_exists input frameEq admissible relation)
-
-noncomputable def spliceAfter
-    {source : State arity} (input : Splice.Input)
-    (frameEq : input.frame = source.diagram)
-    (admissible : input.Admissible)
-    (layout : input.PlugLayout) :
-    Region (endpointCall source (sourceSite input frameEq)).outerContext.length
-      (endpointCall source (sourceSite input frameEq)).rels :=
-  Region.spliceAt
-    (endpointCall source (sourceSite input frameEq)).localContext.length
-    ((endpointCall source (sourceSite input frameEq)).castFullItems
-      (directItems source (sourceSite input frameEq)).erase)
-    (body (State.ofOpen input.pattern) input.binderSpine.bodyContainer)
-    (fun wire => Fin.cast
-      (endpointCall source (sourceSite input frameEq)).fullContext_length
-        (spliceWireMap input frameEq admissible layout wire))
-    (spliceRelationMap input frameEq admissible)
-
-end CompiledSite
-
-end VisualProof.Concrete.Elaboration
+end VisualProof.Concrete
