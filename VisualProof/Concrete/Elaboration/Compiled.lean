@@ -19,25 +19,22 @@ mutual
   inductive CompiledZipper (d : Diagram) :
       {sourceCall : CompilerCall d} ->
       CompiledRegion d sourceCall ->
-      (site : Fin d.regionCount) ->
       (endpointCall : CompilerCall d) ->
       CompiledRegion d endpointCall -> Type
     | here {sourceCall : CompilerCall d}
         (source : CompiledRegion d sourceCall) :
-        CompiledZipper d source sourceCall.origin sourceCall source
+        CompiledZipper d source sourceCall source
     | child {sourceCall endpointCall : CompilerCall d}
         {items : CompiledItems d sourceCall.fullContext
           sourceCall.rels sourceCall.binders}
-        {site : Fin d.regionCount}
         {endpoint : CompiledRegion d endpointCall}
-        (nested : CompiledItemsZipper d items site endpointCall endpoint) :
-        CompiledZipper d (.mk items) site endpointCall endpoint
+        (nested : CompiledItemsZipper d items endpointCall endpoint) :
+        CompiledZipper d (.mk items) endpointCall endpoint
 
   inductive CompiledItemsZipper (d : Diagram) :
       {context : WireContext d} -> {rels : RelCtx} ->
       {binders : BinderContext d rels} ->
       CompiledItems d context rels binders ->
-      (site : Fin d.regionCount) ->
       (endpointCall : CompilerCall d) ->
       CompiledRegion d endpointCall -> Type
     | cut {context : WireContext d} {rels : RelCtx}
@@ -45,10 +42,10 @@ mutual
         {body : CompiledRegion d
           (.nested origin context rels binders)}
         {suffix : CompiledItems d context rels binders}
-        {site : Fin d.regionCount} {endpointCall : CompilerCall d}
+        {endpointCall : CompilerCall d}
         {endpoint : CompiledRegion d endpointCall}
-        (nested : CompiledZipper d body site endpointCall endpoint) :
-        CompiledItemsZipper d (.cons (.cut body) suffix) site endpointCall
+        (nested : CompiledZipper d body endpointCall endpoint) :
+        CompiledItemsZipper d (.cons (.cut body) suffix) endpointCall
           endpoint
     | bubble {context : WireContext d} {rels : RelCtx}
         {binders : BinderContext d rels} {origin : Fin d.regionCount}
@@ -57,41 +54,41 @@ mutual
           (.nested origin context (arity :: rels)
             (binders.push origin arity))}
         {suffix : CompiledItems d context rels binders}
-        {site : Fin d.regionCount} {endpointCall : CompilerCall d}
+        {endpointCall : CompilerCall d}
         {endpoint : CompiledRegion d endpointCall}
-        (nested : CompiledZipper d body site endpointCall endpoint) :
-        CompiledItemsZipper d (.cons (.bubble arity body) suffix) site
+        (nested : CompiledZipper d body endpointCall endpoint) :
+        CompiledItemsZipper d (.cons (.bubble arity body) suffix)
           endpointCall endpoint
     | tail {context : WireContext d} {rels : RelCtx}
         {binders : BinderContext d rels}
         {head : CompiledItem d context rels binders}
         {suffix : CompiledItems d context rels binders}
-        {site : Fin d.regionCount} {endpointCall : CompilerCall d}
+        {endpointCall : CompilerCall d}
         {endpoint : CompiledRegion d endpointCall}
-        (nested : CompiledItemsZipper d suffix site endpointCall endpoint) :
-        CompiledItemsZipper d (.cons head suffix) site endpointCall endpoint
+        (nested : CompiledItemsZipper d suffix endpointCall endpoint) :
+        CompiledItemsZipper d (.cons head suffix) endpointCall endpoint
 end
 
 /-- The result of finding an exact endpoint and its structural selection in a
 compiled region. -/
 structure CompiledFocus {d : Diagram} {sourceCall : CompilerCall d}
-    (source : CompiledRegion d sourceCall) (site : Fin d.regionCount) where
+    (source : CompiledRegion d sourceCall) where
   endpointCall : CompilerCall d
   endpoint : CompiledRegion d endpointCall
-  zipper : CompiledZipper d source site endpointCall endpoint
+  zipper : CompiledZipper d source endpointCall endpoint
 
 mutual
   /-- Canonically search the sole compiled region tree for a site. -/
   def CompiledRegion.focus?
       {d : Diagram} {sourceCall : CompilerCall d}
       (source : CompiledRegion d sourceCall) (site : Fin d.regionCount) :
-      Option (CompiledFocus source site) :=
-    if same : sourceCall.origin = site then
-      some (same ▸ {
+      Option (CompiledFocus source) :=
+    if _same : sourceCall.origin = site then
+      some {
         endpointCall := sourceCall
         endpoint := source
         zipper := .here source
-      })
+      }
     else
       match source with
       | .mk items =>
@@ -104,7 +101,7 @@ mutual
       (items : CompiledItems d context rels binders)
       (site : Fin d.regionCount) :
       Option (Σ endpointCall, Σ endpoint : CompiledRegion d endpointCall,
-        CompiledItemsZipper d items site endpointCall endpoint) :=
+        CompiledItemsZipper d items endpointCall endpoint) :=
     match items with
     | .nil => none
     | .cons (.node _ _) tail =>
@@ -143,6 +140,86 @@ end
   unfold CompiledRegion.focus?
   simp
 
+mutual
+  /-- A successful canonical search identifies the requested region by the
+  endpoint call's own origin. -/
+  theorem CompiledRegion.focus?_endpoint_origin
+      {d : Diagram} {sourceCall : CompilerCall d}
+      {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
+      {result : CompiledFocus source}
+      (found : source.focus? site = some result) :
+      result.endpointCall.origin = site := by
+    unfold CompiledRegion.focus? at found
+    split at found
+    next same =>
+      simp only [Option.some.injEq] at found
+      subst result
+      exact same
+    next different =>
+      cases source with
+      | mk items =>
+          cases itemsFound : items.focus? site with
+          | none => simp [itemsFound] at found
+          | some packed =>
+              obtain ⟨endpointCall, endpoint, zipper⟩ := packed
+              simp [itemsFound] at found
+              subst result
+              exact CompiledItems.focus?_endpoint_origin itemsFound
+
+  private theorem CompiledItems.focus?_endpoint_origin
+      {d : Diagram} {context : WireContext d} {rels : RelCtx}
+      {binders : BinderContext d rels}
+      {items : CompiledItems d context rels binders}
+      {site : Fin d.regionCount} {endpointCall : CompilerCall d}
+      {endpoint : CompiledRegion d endpointCall}
+      {zipper : CompiledItemsZipper d items endpointCall endpoint}
+      (found : items.focus? site = some ⟨endpointCall, endpoint, zipper⟩) :
+      endpointCall.origin = site := by
+    cases items with
+    | nil => simp [CompiledItems.focus?] at found
+    | cons item tail =>
+        cases item with
+        | node origin item =>
+            unfold CompiledItems.focus? at found
+            cases tailFound : tail.focus? site with
+            | none => simp [tailFound] at found
+            | some packed =>
+                obtain ⟨tailCall, tailEndpoint, tailZipper⟩ := packed
+                simp [tailFound] at found
+                obtain ⟨rfl, rfl, rfl⟩ := found
+                exact CompiledItems.focus?_endpoint_origin tailFound
+        | cut body =>
+            unfold CompiledItems.focus? at found
+            cases bodyFound : body.focus? site with
+            | some bodyFocus =>
+                simp [bodyFound] at found
+                obtain ⟨rfl, rfl, rfl⟩ := found
+                exact CompiledRegion.focus?_endpoint_origin bodyFound
+            | none =>
+                cases tailFound : tail.focus? site with
+                | none => simp [bodyFound, tailFound] at found
+                | some packed =>
+                    obtain ⟨tailCall, tailEndpoint, tailZipper⟩ := packed
+                    simp [bodyFound, tailFound] at found
+                    obtain ⟨rfl, rfl, rfl⟩ := found
+                    exact CompiledItems.focus?_endpoint_origin tailFound
+        | bubble arity body =>
+            unfold CompiledItems.focus? at found
+            cases bodyFound : body.focus? site with
+            | some bodyFocus =>
+                simp [bodyFound] at found
+                obtain ⟨rfl, rfl, rfl⟩ := found
+                exact CompiledRegion.focus?_endpoint_origin bodyFound
+            | none =>
+                cases tailFound : tail.focus? site with
+                | none => simp [bodyFound, tailFound] at found
+                | some packed =>
+                    obtain ⟨tailCall, tailEndpoint, tailZipper⟩ := packed
+                    simp [bodyFound, tailFound] at found
+                    obtain ⟨rfl, rfl, rfl⟩ := found
+                    exact CompiledItems.focus?_endpoint_origin tailFound
+end
+
 /-- Intrinsic context and rebuilding obtained directly from one zipper. -/
 structure CompiledIntrinsic (d : Diagram)
     {sourceWires : Nat} {sourceRels : RelCtx}
@@ -167,9 +244,8 @@ mutual
   def CompiledZipper.intrinsic
       {sourceCall endpointCall : CompilerCall d}
       {source : CompiledRegion d sourceCall}
-      {site : Fin d.regionCount}
       {endpoint : CompiledRegion d endpointCall} :
-      (focus : CompiledZipper d source site endpointCall endpoint) ->
+      (focus : CompiledZipper d source endpointCall endpoint) ->
         CompiledIntrinsic d source.erase endpointCall endpoint
     | .here _ => ⟨.hole, rfl⟩
     | .child nested => by
@@ -183,9 +259,9 @@ mutual
       {context : WireContext d} {rels : RelCtx}
       {binders : BinderContext d rels}
       {items : CompiledItems d context rels binders}
-      {site : Fin d.regionCount} {endpointCall : CompilerCall d}
+      {endpointCall : CompilerCall d}
       {endpoint : CompiledRegion d endpointCall}
-      (focus : CompiledItemsZipper d items site endpointCall endpoint)
+      (focus : CompiledItemsZipper d items endpointCall endpoint)
       (before : ItemSeq context.length rels)
       (outerWires localWires : Nat)
       (split : context.length = outerWires + localWires) :
@@ -263,17 +339,17 @@ mutual
 end
 
 def CompiledZipper.body {d : Diagram} {sourceCall endpointCall : CompilerCall d}
-    {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
+    {source : CompiledRegion d sourceCall}
     {endpoint : CompiledRegion d endpointCall}
-    (_focus : CompiledZipper d source site endpointCall endpoint) :
+    (_focus : CompiledZipper d source endpointCall endpoint) :
     Region endpointCall.outerContext.length endpointCall.rels :=
   endpoint.erase
 
 def CompiledZipper.context {d : Diagram}
     {sourceCall endpointCall : CompilerCall d}
-    {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
+    {source : CompiledRegion d sourceCall}
     {endpoint : CompiledRegion d endpointCall}
-    (focus : CompiledZipper d source site endpointCall endpoint) :
+    (focus : CompiledZipper d source endpointCall endpoint) :
     DiagramContext sourceCall.outerContext.length
       endpointCall.outerContext.length sourceCall.rels endpointCall.rels :=
   focus.intrinsic.context
@@ -281,9 +357,9 @@ def CompiledZipper.context {d : Diagram}
 /-- Ordinary intrinsic focus projected from the compiler zipper. -/
 def CompiledZipper.toContextFocus
     {d : Diagram} {sourceCall endpointCall : CompilerCall d}
-    {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
+    {source : CompiledRegion d sourceCall}
     {endpoint : CompiledRegion d endpointCall}
-    (focus : CompiledZipper d source site endpointCall endpoint) :
+    (focus : CompiledZipper d source endpointCall endpoint) :
     Region.ContextFocus source.erase where
   holeWires := endpointCall.outerContext.length
   holeRels := endpointCall.rels
@@ -293,23 +369,23 @@ def CompiledZipper.toContextFocus
 
 @[simp] theorem CompiledZipper.toContextFocus_holeWires
     {d : Diagram} {sourceCall endpointCall : CompilerCall d}
-    {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
+    {source : CompiledRegion d sourceCall}
     {endpoint : CompiledRegion d endpointCall}
-    (focus : CompiledZipper d source site endpointCall endpoint) :
+    (focus : CompiledZipper d source endpointCall endpoint) :
     focus.toContextFocus.holeWires = endpointCall.outerContext.length := rfl
 
 @[simp] theorem CompiledZipper.toContextFocus_holeRels
     {d : Diagram} {sourceCall endpointCall : CompilerCall d}
-    {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
+    {source : CompiledRegion d sourceCall}
     {endpoint : CompiledRegion d endpointCall}
-    (focus : CompiledZipper d source site endpointCall endpoint) :
+    (focus : CompiledZipper d source endpointCall endpoint) :
     focus.toContextFocus.holeRels = endpointCall.rels := rfl
 
 @[simp] theorem CompiledZipper.toContextFocus_body
     {d : Diagram} {sourceCall endpointCall : CompilerCall d}
-    {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
+    {source : CompiledRegion d sourceCall}
     {endpoint : CompiledRegion d endpointCall}
-    (focus : CompiledZipper d source site endpointCall endpoint) :
+    (focus : CompiledZipper d source endpointCall endpoint) :
     focus.toContextFocus.body = endpoint.erase := rfl
 
 private theorem compileOccurrence?_origin
@@ -395,25 +471,24 @@ private theorem compileItems?_origins
 
 private structure CompiledEndpointValidity (d : Diagram)
     (wellFormed : d.WellFormed)
-    (site : Fin d.regionCount) (call : CompilerCall d)
+    (call : CompilerCall d)
     (endpoint : CompiledRegion d call) : Prop where
   computation : call.compile? d wellFormed = some endpoint
-  origin : call.origin = site
-  fullContext_exact : call.fullContext.Exact site
-  binders_covers : call.binders.Covers site
-  origins : endpoint.items.origins = localOccurrences d site
+  fullContext_exact : call.fullContext.Exact call.origin
+  binders_covers : call.binders.Covers call.origin
+  origins : endpoint.items.origins = localOccurrences d call.origin
 
 mutual
   private def CompiledZipper.endpoint_validity
       {d : Diagram} {sourceCall endpointCall : CompilerCall d}
-      {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
+      {source : CompiledRegion d sourceCall}
       {endpoint : CompiledRegion d endpointCall}
       (hwf : d.WellFormed) :
-      (focus : CompiledZipper d source site endpointCall endpoint) →
+      (focus : CompiledZipper d source endpointCall endpoint) →
       sourceCall.compile? d hwf = some source →
       sourceCall.fullContext.Exact sourceCall.origin →
       sourceCall.binders.Covers sourceCall.origin →
-      CompiledEndpointValidity d hwf site endpointCall endpoint
+      CompiledEndpointValidity d hwf endpointCall endpoint
     | .here source, compiled, wires, binders => by
         have origins : source.items.origins =
             localOccurrences d sourceCall.origin := by
@@ -428,7 +503,7 @@ mutual
               subst source
               exact compileItems?_origins hwf sourceCall.origin
                 sourceCall.fullContext sourceCall.binders hitems
-        exact ⟨compiled, rfl, wires, binders, origins⟩
+        exact ⟨compiled, wires, binders, origins⟩
     | .child nested, compiled, wires, binders => by
         rw [CompilerCall.compile?_eq_compileItems? hwf] at compiled
         cases hitems : compileItems? d hwf sourceCall.origin
@@ -451,17 +526,17 @@ mutual
       {d : Diagram} {context : WireContext d} {rels : RelCtx}
       {binders : BinderContext d rels}
       {items : CompiledItems d context rels binders}
-      {site : Fin d.regionCount} {endpointCall : CompilerCall d}
+      {endpointCall : CompilerCall d}
       {endpoint : CompiledRegion d endpointCall}
       (hwf : d.WellFormed) :
-      (focus : CompiledItemsZipper d items site endpointCall endpoint) →
+      (focus : CompiledItemsZipper d items endpointCall endpoint) →
       (parent : Fin d.regionCount) →
       context.Exact parent → binders.Covers parent →
       (localOccurrencesValid : ∀ occurrence, occurrence ∈ items.origins →
         occurrence ∈ localOccurrences d parent) →
       compileItems? d hwf parent context binders items.origins
         localOccurrencesValid = some items →
-      CompiledEndpointValidity d hwf site endpointCall endpoint
+      CompiledEndpointValidity d hwf endpointCall endpoint
     | .cut (origin := origin) (suffix := suffix) nested,
         parent, wires, bindersCover, localOccurrencesValid, compiled => by
         simp only [CompiledItems.origins, CompiledItem.origin] at compiled
@@ -774,7 +849,7 @@ namespace CompiledSite
 
 def focus (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
-    CompiledFocus source.checked.compilation site :=
+    CompiledFocus source.checked.compilation :=
   (source.checked.compilation.focus? site).get
     (CheckedOpen.compilation_focus?_isSome source.checked site)
 
@@ -790,14 +865,14 @@ def endpoint (source : State arity)
 
 def zipper (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
-    CompiledZipper source.checked.val.diagram source.checked.compilation site
+    CompiledZipper source.checked.val.diagram source.checked.compilation
       (endpointCall source site) (endpoint source site) :=
   (focus source site).zipper
 
 private def endpoint_validity (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
     CompiledEndpointValidity source.checked.val.diagram
-      source.checked.property.diagram_well_formed site
+      source.checked.property.diagram_well_formed
       (endpointCall source site) (endpoint source site) :=
   (zipper source site).endpoint_validity
     source.checked.property.diagram_well_formed
@@ -819,17 +894,23 @@ theorem endpoint_computation (source : State arity)
 theorem endpoint_origin (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
     (endpointCall source site).origin = site :=
-  (endpoint_validity source site).origin
+  CompiledRegion.focus?_endpoint_origin
+    (Option.some_get
+      (CheckedOpen.compilation_focus?_isSome source.checked site)).symm
 
 theorem endpoint_fullContext_exact (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
     (endpointCall source site).fullContext.Exact site :=
-  (endpoint_validity source site).fullContext_exact
+  by
+    simpa only [endpoint_origin source site] using
+      (endpoint_validity source site).fullContext_exact
 
 theorem endpoint_binders_covers (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
     (endpointCall source site).binders.Covers site :=
-  (endpoint_validity source site).binders_covers
+  by
+    simpa only [endpoint_origin source site] using
+      (endpoint_validity source site).binders_covers
 
 def directItems (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
@@ -842,7 +923,9 @@ theorem directItems_origins (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
     (directItems source site).origins =
       localOccurrences source.checked.val.diagram site :=
-  (endpoint_validity source site).origins
+  by
+    simpa only [endpoint_origin source site] using
+      (endpoint_validity source site).origins
 
 def intrinsic (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
