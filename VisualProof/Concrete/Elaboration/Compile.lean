@@ -1,1 +1,1 @@
-import VisualProof.Concrete.Elaboration.Compile.Occurrence
+import VisualProof.Concrete.Elaboration.Compile.Elaborate
