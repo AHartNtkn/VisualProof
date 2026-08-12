@@ -62,6 +62,24 @@ def finish (call : CompilerCall d)
     Region call.outerContext.length call.rels := by
   exact .mk call.localContext.length (call.castFullItems items)
 
+/-- Finishing a nested compiler call commutes with relation renaming; binder
+contexts do not affect the intrinsic region produced by `finish`. -/
+theorem finishNested_renameRelations {d : Diagram}
+    {sourceRels targetRels : RelCtx} (origin : Fin d.regionCount)
+    (context : WireContext d)
+    (sourceBinders : BinderContext d sourceRels)
+    (targetBinders : BinderContext d targetRels)
+    (items : ItemSeq (context.extend origin).length sourceRels)
+    (relationMap : RelationRenaming sourceRels targetRels) :
+    (CompilerCall.nested origin context targetRels targetBinders).finish
+        (items.renameRelations relationMap) =
+      ((CompilerCall.nested origin context sourceRels sourceBinders).finish
+        items).renameRelations relationMap := by
+  simp only [finish, castFullItems, Region.renameRelations,
+    ItemSeq.castWiresEq_eq_renameWires]
+  apply congrArg (Region.mk (exactScopeWires d origin).length)
+  exact (ItemSeq.renameWires_renameRelations items _ relationMap).symm
+
 end CompilerCall
 
 mutual

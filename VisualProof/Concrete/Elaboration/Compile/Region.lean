@@ -244,6 +244,48 @@ theorem compileOccurrence?_child_bubble
   rw [hchild]
   rfl
 
+theorem compileOccurrence?_child_cut_success
+    (hwf : d.WellFormed) (parent child : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (direct : LocalOccurrence.child child ∈ localOccurrences d parent)
+    (hchild : d.regions child = .cut parent)
+    {item : CompiledItem d context rels binders}
+    (compiled : compileOccurrence? d hwf parent context binders
+      (.child child) direct = some item) :
+    ∃ body : CompiledRegion d (.nested child context rels binders),
+      compileRegion? d hwf child context binders = some body ∧
+        item = .cut body := by
+  rw [compileOccurrence?_child_cut hwf parent child context binders direct
+    hchild] at compiled
+  cases bodyCompiled : compileRegion? d hwf child context binders with
+  | none => simp [bodyCompiled] at compiled
+  | some body =>
+      refine ⟨body, rfl, ?_⟩
+      simpa [bodyCompiled] using compiled.symm
+
+theorem compileOccurrence?_child_bubble_success
+    (hwf : d.WellFormed) (parent child : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (arity : Nat)
+    (direct : LocalOccurrence.child child ∈ localOccurrences d parent)
+    (hchild : d.regions child = .bubble parent arity)
+    {item : CompiledItem d context rels binders}
+    (compiled : compileOccurrence? d hwf parent context binders
+      (.child child) direct = some item) :
+    ∃ body : CompiledRegion d
+        (.nested child context (arity :: rels) (binders.push child arity)),
+      compileRegion? d hwf child context (binders.push child arity) =
+        some body ∧
+      item = .bubble arity body := by
+  rw [compileOccurrence?_child_bubble hwf parent child context binders arity
+    direct hchild] at compiled
+  cases bodyCompiled : compileRegion? d hwf child context
+      (binders.push child arity) with
+  | none => simp [bodyCompiled] at compiled
+  | some body =>
+      refine ⟨body, rfl, ?_⟩
+      simpa [bodyCompiled] using compiled.symm
+
 @[simp] theorem compileItems?_nil
     (hwf : d.WellFormed) (parent : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)
@@ -322,6 +364,158 @@ theorem compileItems?_append
                 pure (CompiledItems.cons head rest)) = _
               rw [combined]
               rfl
+
+/-- A successful concatenated occurrence compilation uniquely factors into
+the successful compiler results of its two blocks. -/
+theorem compileItems?_append_inv
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (initial suffix : List (LocalOccurrence d.regionCount d.nodeCount))
+    (direct : ∀ occurrence, occurrence ∈ initial ++ suffix →
+      occurrence ∈ localOccurrences d parent)
+    {items : CompiledItems d context rels binders}
+    (compiled : compileItems? d hwf parent context binders
+      (initial ++ suffix) direct = some items) :
+    ∃ initialItems suffixItems,
+      compileItems? d hwf parent context binders initial
+          (fun occurrence member => direct occurrence
+            (List.mem_append_left suffix member)) = some initialItems ∧
+      compileItems? d hwf parent context binders suffix
+          (fun occurrence member => direct occurrence
+            (List.mem_append_right initial member)) = some suffixItems ∧
+      items = initialItems.append suffixItems := by
+  induction initial generalizing items with
+  | nil =>
+      refine ⟨.nil, items, rfl, ?_, rfl⟩
+      simpa using compiled
+  | cons occurrence tail ih =>
+      change (do
+        let head ← compileOccurrence? d hwf parent context binders occurrence
+          (direct occurrence (by simp))
+        let rest ← compileItems? d hwf parent context binders
+          (tail ++ suffix) (by
+            intro candidate member
+            exact direct candidate (by simp [member]))
+        pure (CompiledItems.cons head rest)) = some items at compiled
+      cases headCompiled : compileOccurrence? d hwf parent context binders
+          occurrence (direct occurrence (by simp)) with
+      | none => simp [headCompiled] at compiled
+      | some head =>
+          cases restCompiled : compileItems? d hwf parent context binders
+              (tail ++ suffix) (by
+                intro candidate member
+                exact direct candidate (by simp [member])) with
+          | none => simp [headCompiled, restCompiled] at compiled
+          | some rest =>
+              simp [headCompiled, restCompiled] at compiled
+              subst items
+              let tailDirect : ∀ candidate, candidate ∈ tail ++ suffix →
+                  candidate ∈ localOccurrences d parent := by
+                intro candidate member
+                exact direct candidate (by simp [member])
+              obtain ⟨tailItems, suffixItems, tailCompiled,
+                  suffixCompiled, restEq⟩ := ih tailDirect restCompiled
+              subst rest
+              refine ⟨.cons head tailItems, suffixItems, ?_, ?_, rfl⟩
+              · rw [compileItems?_cons]
+                simp only [headCompiled]
+                rw [tailCompiled]
+                rfl
+              · exact suffixCompiled
+
+/-- Constructively transport one finite occurrence block when each head
+compiler call transports. Recursive region transport remains the operation's
+responsibility. -/
+theorem compileItems?_map_success
+    {source target : Diagram}
+    (sourceWf : source.WellFormed) (targetWf : target.WellFormed)
+    (sourceParent : Fin source.regionCount)
+    (targetParent : Fin target.regionCount)
+    (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (sourceBinders : BinderContext source sourceRels)
+    (targetBinders : BinderContext target targetRels)
+    (sourceOccurrences :
+      List (LocalOccurrence source.regionCount source.nodeCount))
+    (mapOccurrence : LocalOccurrence source.regionCount source.nodeCount →
+      LocalOccurrence target.regionCount target.nodeCount)
+    (sourceDirect : ∀ occurrence, occurrence ∈ sourceOccurrences →
+      occurrence ∈ localOccurrences source sourceParent)
+    (targetDirect : ∀ occurrence,
+      occurrence ∈ sourceOccurrences.map mapOccurrence →
+        occurrence ∈ localOccurrences target targetParent)
+    (wireMap : Fin sourceContext.length → Fin targetContext.length)
+    (relationMap : RelationRenaming sourceRels targetRels)
+    (mapHead : ∀ occurrence (member : occurrence ∈ sourceOccurrences)
+        {sourceItem : CompiledItem source sourceContext sourceRels
+          sourceBinders},
+      compileOccurrence? source sourceWf sourceParent sourceContext
+          sourceBinders occurrence (sourceDirect occurrence member) =
+        some sourceItem →
+      ∃ targetItem : CompiledItem target targetContext targetRels
+          targetBinders,
+        compileOccurrence? target targetWf targetParent targetContext
+            targetBinders (mapOccurrence occurrence)
+            (targetDirect _ (List.mem_map.mpr ⟨occurrence, member, rfl⟩)) =
+          some targetItem ∧
+        targetItem.erase =
+          (sourceItem.erase.renameWires wireMap).renameRelations relationMap)
+    {sourceItems : CompiledItems source sourceContext sourceRels
+      sourceBinders}
+    (sourceCompiled : compileItems? source sourceWf sourceParent
+      sourceContext sourceBinders sourceOccurrences sourceDirect =
+        some sourceItems) :
+    ∃ targetItems : CompiledItems target targetContext targetRels
+        targetBinders,
+      compileItems? target targetWf targetParent targetContext targetBinders
+          (sourceOccurrences.map mapOccurrence) targetDirect =
+        some targetItems ∧
+      targetItems.erase =
+        (sourceItems.erase.renameWires wireMap).renameRelations relationMap := by
+  induction sourceOccurrences generalizing sourceItems with
+  | nil =>
+      simp only [compileItems?_nil] at sourceCompiled ⊢
+      cases sourceCompiled
+      exact ⟨.nil, rfl, rfl⟩
+  | cons occurrence tail ih =>
+      rw [compileItems?_cons] at sourceCompiled
+      cases headCompiled : compileOccurrence? source sourceWf sourceParent
+          sourceContext sourceBinders occurrence
+          (sourceDirect occurrence (by simp)) with
+      | none => simp [headCompiled] at sourceCompiled
+      | some sourceHead =>
+          cases tailCompiled : compileItems? source sourceWf sourceParent
+              sourceContext sourceBinders tail (by
+                intro candidate member
+                exact sourceDirect candidate (by simp [member])) with
+          | none => simp [headCompiled, tailCompiled] at sourceCompiled
+          | some sourceTail =>
+              simp [headCompiled, tailCompiled] at sourceCompiled
+              subst sourceItems
+              obtain ⟨targetHead, targetHeadCompiled, targetHeadErase⟩ :=
+                mapHead occurrence (by simp) headCompiled
+              obtain ⟨targetTail, targetTailCompiled, targetTailErase⟩ :=
+                ih (sourceDirect := by
+                    intro candidate member
+                    exact sourceDirect candidate (by simp [member]))
+                  (targetDirect := by
+                    intro candidate member
+                    exact targetDirect candidate (by
+                      rw [List.map_cons]
+                      exact List.mem_cons_of_mem _ member))
+                  (mapHead := by
+                    intro candidate member sourceItem compiled
+                    exact mapHead candidate (by simp [member]) compiled)
+                  tailCompiled
+              refine ⟨.cons targetHead targetTail, ?_, ?_⟩
+              · change compileItems? target targetWf targetParent
+                  targetContext targetBinders
+                    (mapOccurrence occurrence :: tail.map mapOccurrence) _ = _
+                rw [compileItems?_cons]
+                simp only [targetHeadCompiled, targetTailCompiled]
+                rfl
+              · simp [CompiledItems.erase, ItemSeq.renameWires,
+                  ItemSeq.renameRelations, targetHeadErase, targetTailErase]
 
 theorem compileItems?_length
     (hwf : d.WellFormed) (parent : Fin d.regionCount)
@@ -504,6 +698,25 @@ theorem CompilerCall.compile?_items_of_success
     cases call <;> cases resultEq <;> rfl
   subst resultItems
   exact result
+
+/-- A successful nested-region call exposes the exact ordered item sequence
+produced by that call. -/
+theorem compileRegion?_items_of_success
+    {d : Diagram} {rels : RelCtx}
+    (hwf : d.WellFormed) (origin : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    {body : CompiledRegion d
+      (@CompilerCall.nested d origin context rels binders)}
+    (compiled : compileRegion? d hwf origin context binders = some body) :
+    compileItems? d hwf origin (@WireContext.extend d context origin) binders
+      (localOccurrences d origin) (fun _ member => member) =
+        some (@CompiledRegion.items d
+          (@CompilerCall.nested d origin context rels binders) body :
+            CompiledItems d (@WireContext.extend d context origin) rels binders) := by
+  cases body with
+  | mk items =>
+      exact CompilerCall.compile?_items_of_success hwf
+        (.nested origin context rels binders) compiled
 
 theorem compileRegion?_eq_compileItems?
     (hwf : d.WellFormed) (origin : Fin d.regionCount)
