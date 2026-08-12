@@ -92,6 +92,51 @@ private theorem get_cast_eq_map
   subst target
   simp
 
+theorem frameLocalWires_eq_of_ne
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (terminal : input.TerminalBody)
+    (region : Fin input.frame.val.regionCount) (away : region ≠ input.site) :
+    exactScopeWires layout.plugRaw (layout.frameRegion region) =
+      (exactScopeWires input.frame.val region).map layout.frameWireMap := by
+  rw [layout.exactScopeWires_frameRegion consistent terminal region,
+    if_neg away, List.append_nil]
+  rfl
+
+/-- Extend an inherited retained-frame position map through one non-site local
+wire block. -/
+noncomputable def extendFrameContextMap
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (terminal : input.TerminalBody)
+    (region : Fin input.frame.val.regionCount) (away : region ≠ input.site)
+    (sourceOuter : WireContext input.frame.val)
+    (targetOuter : WireContext layout.plugRaw)
+    (outer : Fin sourceOuter.length → Fin targetOuter.length) :
+    Fin (sourceOuter.extend region).length →
+      Fin (targetOuter.extend (layout.frameRegion region)).length :=
+  extendContextMap outer (by
+    have localEq := congrArg List.length
+      (layout.frameLocalWires_eq_of_ne consistent terminal region away)
+    exact (List.length_map layout.frameWireMap).symm.trans localEq.symm)
+
+theorem extendFrameContextMap_get
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (terminal : input.TerminalBody)
+    (region : Fin input.frame.val.regionCount) (away : region ≠ input.site)
+    (sourceOuter : WireContext input.frame.val)
+    (targetOuter : WireContext layout.plugRaw)
+    (outer : Fin sourceOuter.length → Fin targetOuter.length)
+    (outerGet : ∀ index, targetOuter.get (outer index) =
+      layout.frameWireMap (sourceOuter.get index))
+    (index : Fin (sourceOuter.extend region).length) :
+    (targetOuter.extend (layout.frameRegion region)).get
+        (layout.extendFrameContextMap consistent terminal region away
+          sourceOuter targetOuter outer index) =
+      layout.frameWireMap ((sourceOuter.extend region).get index) := by
+  apply extendContextMap_get outer _ layout.frameWireMap outerGet
+  intro localIndex
+  exact get_cast_eq_map _ _ layout.frameWireMap
+    (layout.frameLocalWires_eq_of_ne consistent terminal region away) localIndex
+
 theorem patternBindersMapped_push
     (layout : PlugLayout input)
     (sourceBinders : BinderContext input.pattern.val.diagram sourceRels)
