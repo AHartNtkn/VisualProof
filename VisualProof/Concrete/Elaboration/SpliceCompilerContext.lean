@@ -12,6 +12,62 @@ open Elaboration
 
 namespace Splice.Input.PlugLayout
 
+theorem climb_frameRegion (layout : PlugLayout input)
+    (steps : Nat) (region : Fin input.frame.val.regionCount) :
+    layout.plugRaw.climb steps (layout.frameRegion region) =
+      (input.frame.val.climb steps region).map layout.frameRegion := by
+  induction steps generalizing region with
+  | zero => rfl
+  | succ steps ih =>
+      simp only [Diagram.climb]
+      cases sourceRegion : input.frame.val.regions region with
+      | sheet =>
+          rw [layout.plugRaw_regions_frame, sourceRegion]
+          simp [PlugLayout.mapFrameRegion, CRegion.parent?]
+          rfl
+      | cut parent =>
+          rw [layout.plugRaw_regions_frame, sourceRegion]
+          simpa [PlugLayout.mapFrameRegion, CRegion.parent?, sourceRegion]
+            using ih parent
+      | bubble parent arity =>
+          rw [layout.plugRaw_regions_frame, sourceRegion]
+          simpa [PlugLayout.mapFrameRegion, CRegion.parent?, sourceRegion]
+            using ih parent
+
+theorem encloses_frameRegion_iff
+    (layout : PlugLayout input)
+    (ancestor descendant : Fin input.frame.val.regionCount) :
+    layout.plugRaw.Encloses (layout.frameRegion ancestor)
+        (layout.frameRegion descendant) ↔
+      input.frame.val.Encloses ancestor descendant := by
+  constructor
+  · rintro ⟨steps, targetClimb⟩
+    rw [layout.climb_frameRegion] at targetClimb
+    obtain ⟨sourceFinish, sourceClimb, mapped⟩ :=
+      Option.map_eq_some_iff.mp targetClimb
+    have finishEq : sourceFinish = ancestor :=
+      (layout.frameRegion_eq_frameRegion_iff _ _).1 mapped
+    subst sourceFinish
+    obtain ⟨rootSteps, ancestorRoot⟩ :=
+      input.frame.property.all_regions_reach_root ancestor
+    obtain ⟨totalSteps, descendantRoot⟩ :=
+      input.frame.property.all_regions_reach_root descendant
+    have composed : input.frame.val.climb
+        (steps.val + rootSteps.val) descendant =
+          some input.frame.val.root :=
+      climb_add sourceClimb ancestorRoot
+    have totalEq : steps.val + rootSteps.val = totalSteps.val :=
+      ParentTraversal.climb_to_root_steps_unique input.frame.val
+        input.frame.property.root_is_sheet composed descendantRoot
+    refine ⟨⟨steps.val, by omega⟩, sourceClimb⟩
+  · rintro ⟨steps, sourceClimb⟩
+    refine ⟨⟨steps.val, by
+      have := steps.isLt
+      simp only [PlugLayout.plugRaw, PlugLayout.regionCount]
+      omega⟩, ?_⟩
+    rw [layout.climb_frameRegion, sourceClimb]
+    rfl
+
 /-- Embed an ordered source frame wire context into the retained target
 carrier without changing its order. -/
 noncomputable def mapFrameContext (layout : PlugLayout input)

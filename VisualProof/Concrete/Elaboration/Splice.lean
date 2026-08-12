@@ -25,6 +25,14 @@ private theorem eq_singleton_of_nodup
       subst tail
       rfl
 
+private theorem List.get_cast_of_eq {source target : List α}
+    (equality : source = target)
+    (index : Fin source.length) :
+    source.get index =
+      target.get (Fin.cast (congrArg List.length equality) index) := by
+  cases equality
+  rfl
+
 theorem terminal_hiddenWires_eq_nil
     (input : Splice.Input) (terminal : input.TerminalBody)
     (hnonempty : input.binderSpine.proxyCount ≠ 0) :
@@ -499,6 +507,77 @@ theorem patternTerminal_outerContext
     change result.endpointCall.outerContext = _
     exact rootCase input.pattern.compilation
       input.pattern.compilation_computation found
+
+/-- Every local wire of the canonical terminal compiler call is an internal
+wire scoped exactly at the terminal body. -/
+theorem patternTerminal_localWire
+    (input : Splice.Input)
+    (index : Fin (CompiledSite.endpointCall (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).localContext.length) :
+    let wire := (CompiledSite.endpointCall (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer).localContext.get index
+    wire ∉ input.pattern.val.exposedWires ∧
+      (input.pattern.val.diagram.wires wire).scope =
+        input.binderSpine.bodyContainer := by
+  let patternState := State.ofOpen input.pattern
+  let call := CompiledSite.endpointCall patternState
+    input.binderSpine.bodyContainer
+  let wire := call.localContext.get index
+  change wire ∉ input.pattern.val.exposedWires ∧
+    (input.pattern.val.diagram.wires wire).scope =
+      input.binderSpine.bodyContainer
+  by_cases empty : input.binderSpine.proxyCount = 0
+  · have bodyEq := input.binderSpine.body_eq_root_of_empty empty
+    have focusEq := CompiledSite.focus_root patternState
+    have callEq : call = .root input.pattern.val.exposedWires
+        input.pattern.val.hiddenWires := by
+      simpa [call, patternState, bodyEq] using
+        congrArg CompiledFocus.endpointCall focusEq
+    have localEq : call.localContext = input.pattern.val.hiddenWires := by
+      rw [callEq]
+      rfl
+    let index' : Fin input.pattern.val.hiddenWires.length :=
+      Fin.cast (congrArg List.length localEq) index
+    have wireEq : wire = input.pattern.val.hiddenWires.get index' := by
+      exact List.get_cast_of_eq localEq index
+    rw [wireEq]
+    have hidden := (OpenDiagram.mem_hiddenWires input.pattern.val
+      (input.pattern.val.hiddenWires.get index')).mp (List.get_mem _ _)
+    exact ⟨hidden.2, hidden.1.trans bodyEq.symm⟩
+  · have bodyNeRoot : input.binderSpine.bodyContainer ≠
+        input.pattern.val.diagram.root := by
+      rw [input.binderSpine.body_eq_terminal_of_nonempty empty]
+      exact input.binderSpine.proxy_ne_root _
+    cases callEq : call with
+    | root ambient locals =>
+        have originEq := CompiledSite.endpoint_origin patternState
+          input.binderSpine.bodyContainer
+        simp [call, callEq, CompilerCall.origin] at originEq
+        exact (bodyNeRoot originEq.symm).elim
+    | nested origin context rels binders =>
+        have originEq : origin = input.binderSpine.bodyContainer := by
+          simpa [call, callEq, CompilerCall.origin] using
+            CompiledSite.endpoint_origin patternState
+              input.binderSpine.bodyContainer
+        have localEq : call.localContext =
+            exactScopeWires input.pattern.val.diagram origin := by
+          rw [callEq]
+          rfl
+        let index' : Fin (exactScopeWires input.pattern.val.diagram
+            origin).length :=
+          Fin.cast (congrArg List.length localEq) index
+        have wireEq : wire =
+            (exactScopeWires input.pattern.val.diagram origin).get index' := by
+          exact List.get_cast_of_eq localEq index
+        have scopeEq : (input.pattern.val.diagram.wires wire).scope =
+            input.binderSpine.bodyContainer := by
+          rw [wireEq, (mem_exactScopeWires input.pattern.val.diagram origin
+            ((exactScopeWires input.pattern.val.diagram origin).get
+              index')).mp (List.get_mem _ _), originEq]
+        refine ⟨?_, scopeEq⟩
+        intro exposed
+        have rootScope := input.pattern.property.exposed_root_scoped exposed
+        exact bodyNeRoot (scopeEq.symm.trans rootScope)
 
 namespace CompiledSite
 

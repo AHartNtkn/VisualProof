@@ -821,9 +821,10 @@ theorem compileNode?_map_success
         (resolvePort? source sourceContext sourceNode port).map wireMap)
     (hbinders : ∀ region binder,
       source.nodes sourceNode = .atom region binder →
+      ∀ {arity relation},
+        sourceBinders binder = some ⟨arity, relation⟩ →
         targetBinders (binderMap binder) =
-          (sourceBinders binder).map fun relation =>
-            ⟨relation.1, relationMap relation.2⟩)
+          some ⟨arity, relationMap relation⟩)
     {sourceItem : CompiledItem source sourceContext sourceRels
       sourceBinders}
     (hsource : compileNode? source sourceContext sourceBinders
@@ -834,9 +835,25 @@ theorem compileNode?_map_success
         some targetItem ∧
       targetItem.erase =
         (sourceItem.erase.renameWires wireMap).renameRelations relationMap := by
+  have completeBinders : ∀ region binder,
+      source.nodes sourceNode = .atom region binder →
+        targetBinders (binderMap binder) =
+          (sourceBinders binder).map fun relation =>
+            ⟨relation.1, relationMap relation.2⟩ := by
+    intro region binder nodeEq
+    have sourceAtom := hsource
+    rw [compileNode?, nodeEq] at sourceAtom
+    dsimp only at sourceAtom
+    cases sourceLookup : sourceBinders binder with
+    | none =>
+        rw [sourceLookup] at sourceAtom
+        contradiction
+    | some relation =>
+        obtain ⟨arity, relation⟩ := relation
+        simpa [sourceLookup] using hbinders region binder nodeEq sourceLookup
   have mapped := compileNode?_map sourceContext
     targetContext sourceBinders targetBinders sourceNode targetNode regionMap
-    binderMap wireMap relationMap hnode hports hbinders
+    binderMap wireMap relationMap hnode hports completeBinders
   rw [hsource] at mapped
   cases htarget : compileNode? target targetContext targetBinders
       targetNode with

@@ -92,27 +92,32 @@ private theorem get_cast_eq_map
   subst target
   simp
 
-private theorem patternBindersMapped_push
+theorem patternBindersMapped_push
     (layout : PlugLayout input)
     (sourceBinders : BinderContext input.pattern.val.diagram sourceRels)
     (targetBinders : BinderContext layout.plugRaw targetRels)
     (relationMap : RelationRenaming sourceRels targetRels)
-    (mapped : ∀ binder,
+    (mapped : ∀ binder {relationArity relation},
+      sourceBinders binder = some ⟨relationArity, relation⟩ →
       targetBinders (layout.binderRegion binder) =
-        (sourceBinders binder).map fun relation =>
-          ⟨relation.1, relationMap relation.2⟩)
+        some ⟨relationArity, relationMap relation⟩)
     (region : Fin input.pattern.val.diagram.regionCount)
     (material : input.binderSpine.IsMaterialRegion region) (arity : Nat) :
-    ∀ binder,
-      (targetBinders.push (layout.bodyRegion region) arity)
-          (layout.binderRegion binder) =
-        (sourceBinders.push region arity binder).map fun relation =>
-            ⟨relation.1, (RelationRenaming.lift relationMap arity) relation.2⟩ := by
-  intro binder
+    ∀ binder {relationArity relation},
+      sourceBinders.push region arity binder =
+          some ⟨relationArity, relation⟩ →
+        (targetBinders.push (layout.bodyRegion region) arity)
+            (layout.binderRegion binder) =
+          some ⟨relationArity,
+            RelationRenaming.lift relationMap arity relation⟩ := by
+  intro binder relationArity relation sourceLookup
   by_cases same : binder = region
   · subst binder
+    rw [BinderContext.push_self] at sourceLookup
+    have entryEq := Option.some.inj sourceLookup
+    cases entryEq
     rw [layout.binderRegion_material region material,
-      BinderContext.push_self, BinderContext.push_self]
+      BinderContext.push_self]
     rfl
   · have targetDifferent : layout.binderRegion binder ≠
         layout.bodyRegion region := by
@@ -121,17 +126,20 @@ private theorem patternBindersMapped_push
       exact same (((layout.binderRegion_eq_materialRegion_iff binder
         (layout.materialCarrier region material)).1 equality).trans
           (layout.materialCarrier_origin region material))
-    rw [BinderContext.push_other _ arity targetDifferent,
-      BinderContext.push_other _ arity same, mapped]
-    cases sourceLookup : sourceBinders binder with
-    | none => rfl
-    | some relation =>
-        cases relation with
-        | mk relationArity relation =>
-            cases relation with
-            | mk index hasArity =>
-                apply congrArg some
-                congr 1
+    rw [BinderContext.push_other _ arity same] at sourceLookup
+    rw [BinderContext.push_other _ arity targetDifferent]
+    cases baseLookup : sourceBinders binder with
+    | none => simp [baseLookup] at sourceLookup
+    | some baseRelation =>
+        rw [baseLookup] at sourceLookup
+        simp only [Option.map_some] at sourceLookup
+        have entryEq := Option.some.inj sourceLookup
+        cases entryEq
+        rw [mapped binder baseLookup]
+        cases baseRelation with
+        | mk baseArity baseRelation =>
+            cases baseRelation
+            rfl
 
 private theorem frameBindersMapped_push
     (layout : PlugLayout input)
@@ -172,7 +180,7 @@ private theorem frameBindersMapped_push
 /-- Compile the retained frame-node block in a target context. The target
 context may contain additional splice-local wires; exactness guarantees that
 retained node ports still resolve through the supplied source positions. -/
-private theorem compileFrameNodeBlock
+theorem compileFrameNodeBlock
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
     (targetWf : layout.plugRaw.WellFormed)
     (sourceParent : Fin input.frame.val.regionCount)
@@ -183,7 +191,7 @@ private theorem compileFrameNodeBlock
     (wireMap : Fin sourceContext.length → Fin targetContext.length)
     (relationMap : RelationRenaming sourceRels targetRels)
     (sourceExact : sourceContext.Exact sourceParent)
-    (targetExact : targetContext.Exact (layout.frameRegion sourceParent))
+    (targetNodup : targetContext.Nodup)
     (getMapped : ∀ index,
       targetContext.get (wireMap index) =
         layout.frameWireMap (sourceContext.get index))
@@ -248,7 +256,7 @@ private theorem compileFrameNodeBlock
                 (by
                   intro port
                   exact layout.resolvePort?_frameNode_map consistent
-                    sourceContext targetContext node wireMap targetExact.nodup
+                    sourceContext targetContext node wireMap targetNodup
                     getMapped (by
                       intro wire nodePort occurs _
                       exact (sourceExact.mem_iff wire).2 (by
@@ -257,8 +265,9 @@ private theorem compileFrameNodeBlock
                         simpa [nodeRegion] using encloses))
                     targetWf.wire_endpoints_are_disjoint port)
                 (by
-                  intro region binder _
-                  exact binderMapped binder)
+                  intro region binder _ arity relation sourceLookup
+                  rw [binderMapped binder, sourceLookup]
+                  rfl)
                 compiled
             refine ⟨targetItem, ?_, targetItemErase⟩
             simpa only [compileOccurrence?_node] using targetNodeCompiled)
@@ -270,7 +279,7 @@ private theorem compileFrameNodeBlock
     occurrencesEq.symm _ _).trans targetCompiled
 
 /-- Compile one mapped pattern-node block in a target context. -/
-private theorem compilePatternNodeBlock
+theorem compilePatternNodeBlock
     (layout : PlugLayout input) (targetWf : layout.plugRaw.WellFormed)
     (sourceParent : Fin input.pattern.val.diagram.regionCount)
     (targetParent : Fin layout.plugRaw.regionCount)
@@ -286,10 +295,12 @@ private theorem compilePatternNodeBlock
     (getMapped : ∀ index,
       targetContext.get (wireMap index) =
         layout.patternWireMap (sourceContext.get index))
-    (binderMapped : ∀ binder : Fin input.pattern.val.diagram.regionCount,
+    (binderMapped : ∀ (node : Fin input.pattern.val.diagram.nodeCount)
+      (region binder : Fin input.pattern.val.diagram.regionCount),
+      input.pattern.val.diagram.nodes node = .atom region binder →
+      ∀ {arity relation}, sourceBinders binder = some ⟨arity, relation⟩ →
       targetBinders (layout.binderRegion binder) =
-        (sourceBinders binder).map fun relation =>
-          ⟨relation.1, relationMap relation.2⟩)
+        some ⟨arity, relationMap relation⟩)
     {sourceItems : CompiledItems input.pattern.val.diagram sourceContext
       sourceRels sourceBinders}
     (sourceCompiled : compileItems? input.pattern.val.diagram
@@ -377,8 +388,8 @@ private theorem compilePatternNodeBlock
                   getMapped targetWf.wire_endpoints_are_disjoint node
                   nodeRegion port)
               (by
-                intro region binder _
-                exact binderMapped binder)
+                intro region binder nodeEq arity relation sourceLookup
+                exact binderMapped node region binder nodeEq sourceLookup)
               compiled
           refine ⟨targetItem, ?_, targetItemErase⟩
           simpa only [compileOccurrence?_node] using targetNodeCompiled)
@@ -404,10 +415,10 @@ theorem compileMaterialRegion
     (getMapped : ∀ index,
       targetOuter.get (wireMap index) =
         layout.patternWireMap (sourceOuter.get index))
-    (binderMapped : ∀ binder,
+    (binderMapped : ∀ binder {relationArity relation},
+      sourceBinders binder = some ⟨relationArity, relation⟩ →
       targetBinders (layout.binderRegion binder) =
-        (sourceBinders binder).map fun relation =>
-          ⟨relation.1, relationMap relation.2⟩)
+        some ⟨relationArity, relationMap relation⟩)
     {sourceBody : CompiledRegion input.pattern.val.diagram
       (.nested sourceParent sourceOuter sourceRels sourceBinders)}
     (sourceCompiled : compileRegion? input.pattern.val.diagram
@@ -438,9 +449,10 @@ theorem compileMaterialRegion
             (layout.bodyRegion sourceParent) →
           (∀ index, targetOuter.get (wireMap index) =
             layout.patternWireMap (sourceOuter.get index)) →
-          (∀ binder, targetBinders (layout.binderRegion binder) =
-            (sourceBinders binder).map fun relation =>
-              ⟨relation.1, relationMap relation.2⟩) →
+          (∀ binder {relationArity relation},
+            sourceBinders binder = some ⟨relationArity, relation⟩ →
+            targetBinders (layout.binderRegion binder) =
+              some ⟨relationArity, relationMap relation⟩) →
           ∀ {sourceBody : CompiledRegion source
               (.nested sourceParent sourceOuter sourceRels sourceBinders)},
             compileRegion? source sourceWf sourceParent sourceOuter
@@ -490,7 +502,9 @@ theorem compileMaterialRegion
             layout.compilePatternNodeBlock targetWf sourceParent
               (layout.bodyRegion sourceParent) rfl sourceFull targetFull
               sourceBinders targetBinders fullMap relationMap sourceExact
-              targetExact.nodup fullGetMapped binderMapped sourceNodesCompiled
+              targetExact.nodup fullGetMapped
+              (fun _ _ binder _ _ _ sourceLookup =>
+                binderMapped binder sourceLookup) sourceNodesCompiled
           have sourceChildrenDirect : ∀ occurrence,
               occurrence ∈ localChildOccurrences source sourceParent →
                 occurrence ∈ localOccurrences source sourceParent :=
@@ -865,7 +879,7 @@ theorem compileFrameRegionAway
           obtain ⟨targetNodes, targetNodesCompiled, targetNodesErase⟩ :=
             layout.compileFrameNodeBlock consistent targetWf sourceParent
               sourceFull targetFull sourceBinders targetBinders fullMap
-              relationMap sourceExact targetExact fullGetMapped binderMapped
+              relationMap sourceExact targetExact.nodup fullGetMapped binderMapped
               sourceNodesCompiled
           have sourceChildrenDirect : ∀ occurrence,
               occurrence ∈ localChildOccurrences source sourceParent →
