@@ -79,6 +79,7 @@ describe('existential stubs honor wire scope', () => {
     const body = e.bodies.get(end.body)!
     body.pos = { x: 21, y: -8 }
     body.theta = -Math.PI / 4
+    e.scale = 1.75
     const terminalIndex = wire.binds.length + wire.slots.length
     const local = body.localAnchor.get(end.key)!
     const anchor = worldBindAnchor(e, body, end.key)

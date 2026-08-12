@@ -31,6 +31,7 @@ describe('atom/ref/identity geometry', () => {
     const anchors = Array.from({ length: 5 }, (_, index) => geometry.portAnchors[`i:${index}`]!)
 
     expect(geometry.arcs).toHaveLength(1)
+    expect(geometry.arcs[0]!.a1 - geometry.arcs[0]!.a0).toBeCloseTo(2 * Math.PI, 10)
     expect(geometry.outerRadius).toBeGreaterThan(0)
     expect(geometry.headAnchor).toBeNull()
     expect(Object.keys(geometry.portAnchors)).toEqual([
