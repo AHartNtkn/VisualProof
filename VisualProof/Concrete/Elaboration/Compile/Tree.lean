@@ -183,11 +183,16 @@ end CompiledRegion
 
 /-! Source validity is proof-only and is derived by the sole compiler. -/
 
-private def binderParent (d : Diagram) (binder : Fin d.regionCount) :
+def bubbleParent (d : Diagram) (binder : Fin d.regionCount) :
     Fin d.regionCount :=
   match d.regions binder with
   | .bubble parent _ => parent
   | _ => d.root
+
+@[simp] theorem bubbleParent_of_bubble
+    (shape : d.regions binder = .bubble parent arity) :
+    bubbleParent d binder = parent := by
+  simp [bubbleParent, shape]
 
 mutual
   def CompiledRegion.Valid : (region : CompiledRegion d) → Prop
@@ -200,7 +205,7 @@ mutual
       CompiledItem d → Prop
     | .atom origin binder arity ports =>
         d.nodes origin = .atom parent binder ∧
-        d.regions binder = .bubble (binderParent d binder) arity ∧
+        d.regions binder = .bubble (bubbleParent d binder) arity ∧
         d.Encloses binder parent ∧
         ∀ index, d.EndpointOccurs (ports index) ⟨origin, .arg index⟩
     | .identity origin arity ports =>
@@ -248,15 +253,17 @@ mutual
     cases item with
     | atom origin binder arity ports =>
         exact .atom
-          (binders.relationAt covers binder (binderParent d binder) arity
+          (binders.relationAt covers binder (bubbleParent d binder) arity
             valid.2.1 valid.2.2.1)
           (fun index => context.position exact _ (by
             have visible := hwf.wire_scopes_enclose _ _ (valid.2.2.2 index)
-            simpa [valid.1] using visible))
+            rw [valid.1] at visible
+            exact visible))
     | identity origin arity ports =>
         exact .identity arity (fun index => context.position exact _ (by
           have visible := hwf.wire_scopes_enclose _ _ (valid.2 index)
-          simpa [valid.1] using visible))
+          rw [valid.1] at visible
+          exact visible))
     | cut body =>
         have parentShape : (d.regions body.origin).parent? = some parent := by
           simp [valid.1, CRegion.parent?]
