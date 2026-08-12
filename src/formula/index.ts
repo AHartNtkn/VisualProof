@@ -1,4 +1,10 @@
 export { formulaToDiagram } from './diagram'
 export { parseFormula } from './parse'
-export { FormulaError } from './syntax'
-export type { Formula, FormulaBinder, SourceSpan } from './syntax'
+export { FORMULA_UNICODE_SYMBOLS, FormulaError } from './syntax'
+export type {
+  Formula,
+  FormulaBinder,
+  FormulaUnicodeSymbol,
+  FormulaUnicodeTokenKind,
+  SourceSpan,
+} from './syntax'

@@ -122,4 +122,27 @@ describe('formulaToDiagram', () => {
     expect(body?.kind).toBe('identity')
     expect(body?.geometry).toEqual(identityGeometry(3))
   })
+
+  it('draws negation as one cut around its body', () => {
+    const diagram = formulaToDiagram('∀ A : o. ¬A')
+
+    expect(diagram.regions.r3).toEqual({ kind: 'cut', parent: 'r2' })
+    expect(diagram.nodes.n0).toMatchObject({ kind: 'atom', region: 'r3' })
+  })
+
+  it('draws disjunction as a cut containing one negated branch per operand', () => {
+    const diagram = formulaToDiagram('∀ A B : o. A ∨ B')
+
+    expect(diagram.regions.r3).toEqual({ kind: 'cut', parent: 'r2' })
+    expect(diagram.regions.r4).toEqual({ kind: 'cut', parent: 'r3' })
+    expect(diagram.regions.r5).toEqual({ kind: 'cut', parent: 'r3' })
+    expect(Object.values(diagram.nodes).map((node) => node.region)).toEqual(['r4', 'r5'])
+  })
+
+  it('draws biconditional as both directed implications', () => {
+    const diagram = formulaToDiagram('∀ A B : o. A ↔ B')
+
+    expect(Object.values(diagram.regions).filter((region) => region.kind === 'cut')).toHaveLength(6)
+    expect(Object.values(diagram.nodes).filter((node) => node.kind === 'atom')).toHaveLength(4)
+  })
 })

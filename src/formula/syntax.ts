@@ -8,11 +8,40 @@ export type FormulaBinder = {
   readonly span: SourceSpan
 }
 
+export type FormulaUnicodeTokenKind =
+  | 'forall'
+  | 'exists'
+  | 'not'
+  | 'and'
+  | 'or'
+  | 'implies'
+  | 'iff'
+
+export type FormulaUnicodeSymbol = {
+  readonly symbol: string
+  readonly label: string
+  readonly token: FormulaUnicodeTokenKind
+}
+
+export const FORMULA_UNICODE_SYMBOLS = Object.freeze([
+  { symbol: '∀', label: 'Universal quantifier', token: 'forall' },
+  { symbol: '∃', label: 'Existential quantifier', token: 'exists' },
+  { symbol: '¬', label: 'Negation', token: 'not' },
+  { symbol: '∧', label: 'Conjunction', token: 'and' },
+  { symbol: '∨', label: 'Disjunction', token: 'or' },
+  { symbol: '→', label: 'Implication', token: 'implies' },
+  { symbol: '⇒', label: 'Alternative implication', token: 'implies' },
+  { symbol: '↔', label: 'Biconditional', token: 'iff' },
+] as const satisfies readonly FormulaUnicodeSymbol[])
+
 export type Formula =
   | { readonly kind: 'atom'; readonly name: string; readonly args: readonly string[]; readonly span: SourceSpan }
   | { readonly kind: 'equality'; readonly operands: readonly [string, string, ...string[]]; readonly span: SourceSpan }
+  | { readonly kind: 'not'; readonly body: Formula; readonly span: SourceSpan }
   | { readonly kind: 'and'; readonly left: Formula; readonly right: Formula; readonly span: SourceSpan }
+  | { readonly kind: 'or'; readonly left: Formula; readonly right: Formula; readonly span: SourceSpan }
   | { readonly kind: 'implies'; readonly left: Formula; readonly right: Formula; readonly span: SourceSpan }
+  | { readonly kind: 'iff'; readonly left: Formula; readonly right: Formula; readonly span: SourceSpan }
   | { readonly kind: 'quantifier'; readonly quantifier: 'exists' | 'forall'; readonly binders: readonly FormulaBinder[]; readonly body: Formula; readonly span: SourceSpan }
 
 export class FormulaError extends Error {

@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import { IOTA, relSig } from '../../src/kernel/diagram/sig'
 import { parseFormula } from '../../src/formula/parse'
-import { FormulaError, type Formula } from '../../src/formula/syntax'
+import {
+  FORMULA_UNICODE_SYMBOLS,
+  FormulaError,
+  type Formula,
+} from '../../src/formula/syntax'
 
 const EXAMPLE_SOURCE = '∀ Z : i → o. ∀ S : i → i → o. (∃ z. Z(z)) ⇒ (∀ z. Z(z) ⇒ (∀ P : i → o. ((∀ n. Z(n) ⇒ P(n)) & (∀ n m. (P(n) & S(n, m)) ⇒ P(m))) ⇒ P(z)))'
 
@@ -36,6 +40,11 @@ function expectEquality(formula: Formula, operands: readonly string[]): void {
 }
 
 describe('parseFormula', () => {
+  it('publishes every accepted Unicode formula symbol in reading order', () => {
+    expect(FORMULA_UNICODE_SYMBOLS.map(({ symbol }) => symbol))
+      .toEqual(['∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔'])
+  })
+
   it('parses the typed Unicode example with grouped individual binders', () => {
     const outer = expectQuantifier(parseFormula(EXAMPLE_SOURCE), 'forall', 'Z')
     expect(outer.binders[0]!.sig).toEqual(relSig([IOTA]))
@@ -90,6 +99,21 @@ describe('parseFormula', () => {
     expect(formula.body.right.kind).toBe('implies')
     if (formula.body.right.kind !== 'implies') throw new Error('expected nested implication')
     expect(formula.body.right.left.kind).toBe('and')
+  })
+
+  it('applies standard precedence across negation, conjunction, disjunction, implication, and biconditional', () => {
+    const formula = parseFormula('∀ A B C D : o. ¬A ∧ B ∨ C → D ↔ A')
+    expect(formula.kind).toBe('quantifier')
+    if (formula.kind !== 'quantifier') throw new Error('expected quantifier')
+    expect(formula.body.kind).toBe('iff')
+    if (formula.body.kind !== 'iff') throw new Error('expected biconditional')
+    expect(formula.body.left.kind).toBe('implies')
+    if (formula.body.left.kind !== 'implies') throw new Error('expected implication')
+    expect(formula.body.left.left.kind).toBe('or')
+    if (formula.body.left.left.kind !== 'or') throw new Error('expected disjunction')
+    expect(formula.body.left.left.left.kind).toBe('and')
+    if (formula.body.left.left.left.kind !== 'and') throw new Error('expected conjunction')
+    expect(formula.body.left.left.left.left.kind).toBe('not')
   })
 
   it('accepts ASCII quantifiers, implications, and Unicode conjunction', () => {

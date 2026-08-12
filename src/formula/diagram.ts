@@ -1,10 +1,13 @@
 import type { Diagram, RegionId, WireId } from '../kernel/diagram/diagram'
 import {
   atom,
+  biconditional,
+  disjunction,
   emptyGraph,
   finishDiagram,
   identity,
   implication,
+  negation,
   quantifierScope,
   type GraphConstruction,
 } from '../theories/graph'
@@ -39,10 +42,38 @@ function drawFormula(
     }
     case 'and':
       return drawFormula(formula.right, drawFormula(formula.left, state, region), region)
+    case 'not': {
+      const scope = negation(state.graph, region)
+      return drawFormula(formula.body, { ...state, graph: scope.graph }, scope.value)
+    }
+    case 'or': {
+      const scope = disjunction(state.graph, region)
+      const left = drawFormula(formula.left, { ...state, graph: scope.graph }, scope.value.left)
+      return drawFormula(formula.right, left, scope.value.right)
+    }
     case 'implies': {
       const scope = implication(state.graph, region)
       const antecedent = drawFormula(formula.left, { ...state, graph: scope.graph }, scope.value.antecedent)
       return drawFormula(formula.right, antecedent, scope.value.consequent)
+    }
+    case 'iff': {
+      const scope = biconditional(state.graph, region)
+      const forwardLeft = drawFormula(
+        formula.left,
+        { ...state, graph: scope.graph },
+        scope.value.forward.antecedent,
+      )
+      const forwardRight = drawFormula(
+        formula.right,
+        forwardLeft,
+        scope.value.forward.consequent,
+      )
+      const reverseRight = drawFormula(
+        formula.right,
+        forwardRight,
+        scope.value.reverse.antecedent,
+      )
+      return drawFormula(formula.left, reverseRight, scope.value.reverse.consequent)
     }
     case 'quantifier': {
       const scope = quantifierScope(

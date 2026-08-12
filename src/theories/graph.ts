@@ -48,6 +48,11 @@ export type BiconditionalScope = {
   readonly reverse: ImplicationScope
 }
 
+export type DisjunctionScope = {
+  readonly left: RegionId
+  readonly right: RegionId
+}
+
 export type QuantifierScope = {
   readonly variables: readonly WireId[]
   readonly body: RegionId
@@ -219,6 +224,26 @@ export function implication(
   return result(inner.graph, Object.freeze({
     antecedent: outer.value,
     consequent: inner.value,
+  }))
+}
+
+export function negation(
+  graph: GraphConstruction,
+  region: RegionId,
+): GraphResult<RegionId> {
+  return addCut(graph, region)
+}
+
+export function disjunction(
+  graph: GraphConstruction,
+  region: RegionId,
+): GraphResult<DisjunctionScope> {
+  const outer = addCut(graph, region)
+  const left = addCut(outer.graph, outer.value)
+  const right = addCut(left.graph, outer.value)
+  return result(right.graph, Object.freeze({
+    left: left.value,
+    right: right.value,
   }))
 }
 

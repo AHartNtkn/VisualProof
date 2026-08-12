@@ -107,6 +107,11 @@ button:disabled {
 .vpa-formula-entry textarea { box-sizing: border-box; min-height: 132px; width: 100%; resize: vertical; border: 1px solid var(--vpa-control-border); border-radius: 7px; padding: 8px; background: var(--vpa-control-surface); color: var(--vpa-control-foreground); font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
 .vpa-formula-entry textarea:focus-visible { outline: 2px solid var(--vpa-control-focus-ring); outline-offset: 2px; }
 .vpa-formula-entry textarea[aria-invalid="true"] { border-color: var(--vpa-formula-error); outline-color: var(--vpa-formula-error); }
+.vpa-formula-symbols { display: flex; flex-wrap: wrap; gap: 6px; }
+.vpa-formula-symbols button { min-width: 34px; border: 1px solid var(--vpa-control-border); border-radius: 7px; padding: 3px 8px; background: var(--vpa-control-surface); color: var(--vpa-control-foreground); font-size: 17px; cursor: pointer; }
+.vpa-formula-symbols button:hover { background: var(--vpa-control-hover-surface); }
+.vpa-formula-symbols button:active { background: var(--vpa-control-active-surface); }
+.vpa-formula-symbols button:focus-visible { outline: 2px solid var(--vpa-control-focus-ring); outline-offset: 2px; }
 .vpa-formula-error { min-height: 1.25em; color: var(--vpa-formula-error); font-size: 12px; }
 .vpa-formula-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .vpa-formula-actions button { border: 1px solid var(--vpa-control-border); border-radius: 7px; padding: 5px 9px; background: var(--vpa-control-surface); color: var(--vpa-control-foreground); cursor: pointer; }

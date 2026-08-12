@@ -1,4 +1,4 @@
-import { formulaToDiagram } from '../formula'
+import { FORMULA_UNICODE_SYMBOLS, formulaToDiagram } from '../formula'
 import type { Diagram } from '../kernel/diagram/diagram'
 
 export type MountedFormulaEntry = {
@@ -28,6 +28,19 @@ export function mountFormulaEntry(host: HTMLElement, commit: (diagram: Diagram) 
   const textarea = document.createElement('textarea')
   textarea.id = 'formula-entry-source'
   textarea.setAttribute('aria-label', 'Formula to diagram')
+  const symbols = document.createElement('div')
+  symbols.className = 'vpa-formula-symbols'
+  symbols.setAttribute('role', 'group')
+  symbols.setAttribute('aria-label', 'Formula symbols')
+  const symbolButtons = FORMULA_UNICODE_SYMBOLS.map(({ symbol, label }) => {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.textContent = symbol
+    button.setAttribute('aria-label', label)
+    button.setAttribute('title', label)
+    symbols.append(button)
+    return { button, symbol }
+  })
   const error = document.createElement('output')
   error.className = 'vpa-formula-error'
   error.setAttribute('role', 'alert')
@@ -41,7 +54,7 @@ export function mountFormulaEntry(host: HTMLElement, commit: (diagram: Diagram) 
   cancel.type = 'button'
   cancel.textContent = 'Cancel'
   actions.append(create, cancel)
-  form.append(title, label, textarea, error, actions)
+  form.append(title, label, textarea, symbols, error, actions)
   root.append(form)
   host.append(root)
 
@@ -49,6 +62,19 @@ export function mountFormulaEntry(host: HTMLElement, commit: (diagram: Diagram) 
     error.textContent = ''
     textarea.removeAttribute('aria-invalid')
   }
+  const symbolHandlers = symbolButtons.map(({ button, symbol }) => {
+    const handler = (): void => {
+      const start = textarea.selectionStart
+      const end = textarea.selectionEnd
+      textarea.value = textarea.value.slice(0, start) + symbol + textarea.value.slice(end)
+      const caret = start + symbol.length
+      textarea.setSelectionRange(caret, caret)
+      textarea.dispatchEvent(new Event('input', { bubbles: true }))
+      textarea.focus()
+    }
+    button.addEventListener('click', handler)
+    return { button, handler }
+  })
   let opener: HTMLElement | null = null
   const hide = (restoreFocus: boolean): void => {
     root.hidden = true
@@ -105,6 +131,9 @@ export function mountFormulaEntry(host: HTMLElement, commit: (diagram: Diagram) 
       disposed = true
       textarea.removeEventListener('input', onInput)
       cancel.removeEventListener('click', onCancel)
+      for (const { button, handler } of symbolHandlers) {
+        button.removeEventListener('click', handler)
+      }
       root.removeEventListener('keydown', onKeyDown)
       form.removeEventListener('submit', onSubmit)
       opener = null

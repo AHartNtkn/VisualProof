@@ -153,6 +153,36 @@ test('formula entry creates a diagram, rejects malformed source, and preserves E
   })
 })
 
+test('formula symbol palette sits below the source and inserts at the caret', async ({ page }) => {
+  await page.goto('/?debug')
+  await page.waitForFunction(() => window.__vpaDebug !== undefined)
+
+  await page.getByRole('button', { name: /Mode: Edit/u }).click()
+  await page.getByRole('button', { name: 'Formula…', exact: true }).click()
+  const dialog = page.getByRole('dialog')
+  const source = dialog.getByLabel('Formula to diagram')
+  const palette = dialog.getByRole('group', { name: 'Formula symbols' })
+  await expect(palette.getByRole('button')).toHaveText([
+    '∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔',
+  ])
+
+  const sourceBox = await source.boundingBox()
+  const paletteBox = await palette.boundingBox()
+  if (sourceBox === null || paletteBox === null) {
+    throw new Error('formula controls must have layout boxes')
+  }
+  expect(paletteBox.y).toBeGreaterThanOrEqual(sourceBox.y + sourceBox.height)
+
+  await source.fill('AB')
+  await source.evaluate((element) => {
+    (element as HTMLTextAreaElement).setSelectionRange(1, 1)
+  })
+  await palette.getByRole('button', { name: 'Disjunction' }).click()
+
+  await expect(source).toHaveValue('A∨B')
+  await expect(source).toBeFocused()
+})
+
 test('formula entry uses explicit readable Dark control colors', async ({ page }) => {
   await page.goto('/?debug')
   await page.waitForFunction(() => window.__vpaDebug !== undefined)

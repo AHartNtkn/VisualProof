@@ -17,6 +17,8 @@ class TestElement extends EventTarget {
   required = false
   isConnected = true
   focusCalls = 0
+  selectionStart = 0
+  selectionEnd = 0
 
   constructor(ownerDocument: TestDocument, readonly tagName: string) {
     super()
@@ -40,6 +42,11 @@ class TestElement extends EventTarget {
   focus(): void {
     this.focusCalls += 1
     this.ownerDocument.activeElement = this
+  }
+
+  setSelectionRange(start: number, end: number): void {
+    this.selectionStart = start
+    this.selectionEnd = end
   }
 
   matches(selector: string): boolean { return selector === ':disabled' && this.required }
@@ -84,12 +91,53 @@ function mounted(commit: (diagram: Diagram) => void) {
   const textarea = entry.root.querySelector('textarea') as unknown as TestElement
   const form = entry.root.querySelector('form') as unknown as TestElement
   const error = entry.root.querySelector('.vpa-formula-error') as unknown as TestElement
+  const symbols = entry.root.querySelector('.vpa-formula-symbols') as unknown as TestElement
   const actions = entry.root.querySelector('.vpa-formula-actions') as unknown as TestElement
   const cancel = actions.children[1] as TestElement
-  return { entry, opener, textarea, form, error, cancel }
+  return { entry, opener, textarea, form, error, symbols, cancel }
 }
 
 describe('mountFormulaEntry', () => {
+  it('renders every supported Unicode symbol immediately below the source', () => {
+    const { form, textarea, symbols } = mounted(vi.fn<(diagram: Diagram) => void>())
+
+    expect(symbols.getAttribute('role')).toBe('group')
+    expect(symbols.getAttribute('aria-label')).toBe('Formula symbols')
+    expect(symbols.children.map((button) => button.textContent))
+      .toEqual(['∀', '∃', '¬', '∧', '∨', '→', '⇒', '↔'])
+    expect(symbols.children.every((button) => button.type === 'button')).toBe(true)
+    expect(symbols.children.map((button) => button.getAttribute('aria-label'))).toEqual([
+      'Universal quantifier',
+      'Existential quantifier',
+      'Negation',
+      'Conjunction',
+      'Disjunction',
+      'Implication',
+      'Alternative implication',
+      'Biconditional',
+    ])
+    expect(form.children.indexOf(symbols)).toBe(form.children.indexOf(textarea) + 1)
+  })
+
+  it('replaces the textarea selection, advances the caret, restores focus, and clears errors', () => {
+    const commit = vi.fn<(diagram: Diagram) => void>()
+    const { entry, opener, textarea, form, error, symbols } = mounted(commit)
+    entry.open(opener as unknown as HTMLElement)
+    textarea.value = 'AB'
+    form.dispatchEvent(new Event('submit', { cancelable: true }))
+    expect(textarea.getAttribute('aria-invalid')).toBe('true')
+
+    textarea.setSelectionRange(1, 1)
+    symbols.children[4]!.dispatchEvent(new Event('click'))
+
+    expect(textarea.value).toBe('A∨B')
+    expect(textarea.selectionStart).toBe(2)
+    expect(textarea.selectionEnd).toBe(2)
+    expect(documentDouble.activeElement).toBe(textarea)
+    expect(error.textContent).toBe('')
+    expect(textarea.getAttribute('aria-invalid')).toBeNull()
+  })
+
   it('commits a validated diagram and closes after a successful formula submission', () => {
     const commits: Diagram[] = []
     const { entry, opener, textarea, form } = mounted((diagram) => { commits.push(diagram) })

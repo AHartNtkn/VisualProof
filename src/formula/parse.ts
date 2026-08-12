@@ -1,7 +1,14 @@
 import { IOTA, relSig, sigEquals, type Sig } from '../kernel/diagram/sig'
-import { FormulaError, type Formula, type FormulaBinder, type SourceSpan } from './syntax'
+import {
+  FORMULA_UNICODE_SYMBOLS,
+  FormulaError,
+  type Formula,
+  type FormulaBinder,
+  type FormulaUnicodeTokenKind,
+  type SourceSpan,
+} from './syntax'
 
-type TokenKind = 'identifier' | 'forall' | 'exists' | 'implies' | 'and' | '(' | ')' | ',' | ':' | '.' | '=' | 'eof'
+type TokenKind = FormulaUnicodeTokenKind | 'identifier' | '(' | ')' | ',' | ':' | '.' | '=' | 'eof'
 
 type Token = { readonly kind: TokenKind; readonly text: string; readonly start: number; readonly end: number }
 
@@ -36,13 +43,15 @@ function tokenize(source: string): readonly Token[] {
       continue
     }
 
+    const unicode = FORMULA_UNICODE_SYMBOLS.find(({ symbol }) => symbol === character)
+    if (unicode !== undefined) {
+      index += 1
+      tokens.push({ kind: unicode.token, text: character, start, end: index })
+      continue
+    }
+
     const oneCharacterTokens: Readonly<Record<string, TokenKind>> = {
-      '∀': 'forall',
-      '∃': 'exists',
-      '→': 'implies',
-      '⇒': 'implies',
       '&': 'and',
-      '∧': 'and',
       '(': '(',
       ')': ')',
       ',': ',',
@@ -85,7 +94,11 @@ function frozenEquality(
   return Object.freeze({ kind: 'equality', operands: frozenOperands, span: frozenSpan(start, end) })
 }
 
-function frozenBinary(kind: 'and' | 'implies', left: Formula, right: Formula): Formula {
+function frozenNot(start: number, body: Formula): Formula {
+  return Object.freeze({ kind: 'not', body, span: frozenSpan(start, body.span.end) })
+}
+
+function frozenBinary(kind: 'and' | 'or' | 'implies' | 'iff', left: Formula, right: Formula): Formula {
   return Object.freeze({ kind, left, right, span: frozenSpan(left.span.start, right.span.end) })
 }
 
@@ -125,20 +138,43 @@ export function parseFormula(source: string): Formula {
     return take()
   }
 
+  function parseBiconditional(): Formula {
+    const left = parseImplication()
+    if (peek().kind !== 'iff') return left
+    take()
+    return frozenBinary('iff', left, parseBiconditional())
+  }
+
   function parseImplication(): Formula {
-    const left = parseConjunction()
+    const left = parseDisjunction()
     if (peek().kind !== 'implies') return left
     take()
     return frozenBinary('implies', left, parseImplication())
   }
 
-  function parseConjunction(): Formula {
-    let formula = parsePrimary()
-    while (peek().kind === 'and') {
+  function parseDisjunction(): Formula {
+    let formula = parseConjunction()
+    while (peek().kind === 'or') {
       take()
-      formula = frozenBinary('and', formula, parsePrimary())
+      formula = frozenBinary('or', formula, parseConjunction())
     }
     return formula
+  }
+
+  function parseConjunction(): Formula {
+    let formula = parseUnary()
+    while (peek().kind === 'and') {
+      take()
+      formula = frozenBinary('and', formula, parseUnary())
+    }
+    return formula
+  }
+
+  function parseUnary(): Formula {
+    const token = peek()
+    if (token.kind !== 'not') return parsePrimary()
+    take()
+    return frozenNot(token.start, parseUnary())
   }
 
   function parsePrimary(): Formula {
@@ -146,7 +182,7 @@ export function parseFormula(source: string): Formula {
     if (token.kind === 'forall' || token.kind === 'exists') return parseQuantifier()
     if (token.kind === '(') {
       take()
-      const formula = parseImplication()
+      const formula = parseBiconditional()
       expect(')', "')'")
       return formula
     }
@@ -206,7 +242,7 @@ export function parseFormula(source: string): Formula {
     }
 
     expect('.', "'.' after quantifier binders")
-    const body = parseImplication()
+    const body = parseBiconditional()
     return frozenQuantifier(quantifier, binders, quantifierToken.start, body)
   }
 
@@ -240,9 +276,14 @@ export function parseFormula(source: string): Formula {
   function validate(formula: Formula, environment: ReadonlyMap<string, Sig>): void {
     switch (formula.kind) {
       case 'and':
+      case 'or':
       case 'implies':
+      case 'iff':
         validate(formula.left, environment)
         validate(formula.right, environment)
+        return
+      case 'not':
+        validate(formula.body, environment)
         return
       case 'quantifier': {
         const nested = new Map(environment)
@@ -286,7 +327,7 @@ export function parseFormula(source: string): Formula {
     }
   }
 
-  const formula = parseImplication()
+  const formula = parseBiconditional()
   const trailing = peek()
   if (trailing.kind !== 'eof') throw new FormulaError(source, trailing.start, `unexpected token '${trailing.text}'`)
   validate(formula, new Map())
