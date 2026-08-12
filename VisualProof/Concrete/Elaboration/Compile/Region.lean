@@ -267,6 +267,62 @@ theorem compileItems?_cons
           exact direct candidate (by simp [member]))
         pure (.cons head rest)) := rfl
 
+/-- Compile two direct occurrence blocks independently, then concatenate their
+sole compiler results. -/
+theorem compileItems?_append
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (initial suffix : List (LocalOccurrence d.regionCount d.nodeCount))
+    (direct : ∀ occurrence, occurrence ∈ initial ++ suffix →
+      occurrence ∈ localOccurrences d parent)
+    {initialItems suffixItems : CompiledItems d context rels binders}
+    (initialCompiled : compileItems? d hwf parent context binders initial
+      (fun occurrence member => direct occurrence
+        (List.mem_append_left suffix member)) = some initialItems)
+    (suffixCompiled : compileItems? d hwf parent context binders suffix
+      (fun occurrence member => direct occurrence
+        (List.mem_append_right initial member)) = some suffixItems) :
+    compileItems? d hwf parent context binders (initial ++ suffix) direct =
+      some (initialItems.append suffixItems) := by
+  induction initial generalizing initialItems with
+  | nil =>
+      simp only [compileItems?_nil] at initialCompiled
+      cases initialCompiled
+      simpa using suffixCompiled
+  | cons occurrence tail ih =>
+      rw [compileItems?_cons] at initialCompiled
+      change (do
+        let head ← compileOccurrence? d hwf parent context binders occurrence
+          (direct occurrence (by simp))
+        let rest ← compileItems? d hwf parent context binders
+          (tail ++ suffix) (by
+            intro candidate member
+            exact direct candidate (by simp [member]))
+        pure (.cons head rest)) = some (initialItems.append suffixItems)
+      let headDirect : occurrence ∈ localOccurrences d parent :=
+        direct occurrence (by simp)
+      let tailDirect : ∀ candidate, candidate ∈ tail ++ suffix →
+          candidate ∈ localOccurrences d parent := by
+        intro candidate member
+        exact direct candidate (by simp [member])
+      cases headCompiled : compileOccurrence? d hwf parent context binders
+          occurrence headDirect with
+      | none => simp [headCompiled] at initialCompiled
+      | some head =>
+          cases tailCompiled : compileItems? d hwf parent context binders tail
+              (fun candidate member => direct candidate (by simp [member])) with
+          | none => simp [headCompiled, tailCompiled] at initialCompiled
+          | some tailItems =>
+              simp [headCompiled, tailCompiled] at initialCompiled
+              cases initialCompiled
+              have combined := ih tailDirect tailCompiled suffixCompiled
+              change (do
+                let rest ← compileItems? d hwf parent context binders
+                  (tail ++ suffix) _
+                pure (CompiledItems.cons head rest)) = _
+              rw [combined]
+              rfl
+
 theorem compileItems?_length
     (hwf : d.WellFormed) (parent : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)

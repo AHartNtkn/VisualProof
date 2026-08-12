@@ -531,6 +531,266 @@ theorem patternTerminal_localWire
         have rootScope := input.pattern.property.exposed_root_scoped exposed
         exact bodyNeRoot (scopeEq.symm.trans rootScope)
 
+private theorem frameNode_ne_patternNode (layout : Splice.Input.PlugLayout input)
+    (frame : Fin input.frame.val.nodeCount)
+    (pattern : Fin input.pattern.val.diagram.nodeCount) :
+    layout.frameNode frame ≠ layout.patternNode pattern := by
+  intro equality
+  have values := congrArg Fin.val equality
+  simp [Splice.Input.PlugLayout.frameNode,
+    Splice.Input.PlugLayout.patternNode] at values
+  omega
+
+private theorem patternNode_ne_frameNode (layout : Splice.Input.PlugLayout input)
+    (pattern : Fin input.pattern.val.diagram.nodeCount)
+    (frame : Fin input.frame.val.nodeCount) :
+    layout.patternNode pattern ≠ layout.frameNode frame :=
+  fun equality => frameNode_ne_patternNode layout frame pattern equality.symm
+
+private theorem mapPatternEndpoint_injective
+    (layout : Splice.Input.PlugLayout input) :
+    Function.Injective layout.mapPatternEndpoint := by
+  intro left right equality
+  have nodeEq : left.node = right.node := by
+    apply Fin.ext
+    simpa [Splice.Input.PlugLayout.mapPatternEndpoint,
+      Splice.Input.PlugLayout.patternNode] using
+        congrArg (fun value => value.node.val) equality
+  have portEq : left.port = right.port :=
+    congrArg (fun value : CEndpoint layout.nodeCount => value.port) equality
+  cases left
+  cases right
+  cases nodeEq
+  cases portEq
+  rfl
+
+/-- Exact endpoint fiber for a retained frame endpoint in the concrete plug. -/
+theorem endpointOccurs_frame_iff
+    (layout : Splice.Input.PlugLayout input)
+    (consistent : input.AttachmentConsistent)
+    (targetWire : Fin layout.plugRaw.wireCount)
+    (endpoint : CEndpoint input.frame.val.nodeCount) :
+    layout.plugRaw.EndpointOccurs targetWire
+        (layout.mapFrameEndpoint endpoint) ↔
+      ∃ sourceWire,
+        targetWire = layout.frameWireMap sourceWire ∧
+          input.frame.val.EndpointOccurs sourceWire endpoint := by
+  apply Fin.addCases (m := input.wireQuotient.count)
+      (n := layout.internalWires.count)
+      (motive := fun targetWire =>
+        layout.plugRaw.EndpointOccurs targetWire
+            (layout.mapFrameEndpoint endpoint) ↔
+          ∃ sourceWire,
+            targetWire = layout.frameWireMap sourceWire ∧
+              input.frame.val.EndpointOccurs sourceWire endpoint)
+  · intro quotient
+    rw [show Fin.castAdd layout.internalWires.count quotient =
+        layout.frameWire quotient from rfl,
+      show layout.plugRaw.EndpointOccurs (layout.frameWire quotient)
+          (layout.mapFrameEndpoint endpoint) ↔
+        layout.mapFrameEndpoint endpoint ∈
+          (layout.plugRaw.wires (layout.frameWire quotient)).endpoints
+        from Iff.rfl,
+      layout.plugRaw_wires_frame]
+    constructor
+    · intro member
+      rcases List.mem_append.mp member with frameMember | patternMember
+      · obtain ⟨frameEndpoint, endpointMember, mappedEq⟩ :=
+          List.mem_map.mp frameMember
+        have endpointEq : frameEndpoint = endpoint := by
+          have nodeEq : frameEndpoint.node = endpoint.node := by
+            apply Fin.ext
+            simpa [Splice.Input.PlugLayout.mapFrameEndpoint,
+              Splice.Input.PlugLayout.frameNode] using
+                congrArg (fun value => value.node.val) mappedEq
+          have portEq : frameEndpoint.port = endpoint.port := by
+            exact congrArg (fun value : CEndpoint layout.nodeCount =>
+              value.port) mappedEq
+          cases frameEndpoint
+          cases endpoint
+          cases nodeEq
+          cases portEq
+          rfl
+        subst frameEndpoint
+        obtain ⟨sourceWire, classMember, sourceOccurs⟩ :=
+          (input.mem_coalescedEndpoints quotient endpoint).mp endpointMember
+        refine ⟨sourceWire, ?_, sourceOccurs⟩
+        apply Fin.ext
+        simpa [Splice.Input.PlugLayout.frameWireMap,
+          Splice.Input.PlugLayout.frameWire] using congrArg Fin.val
+            ((input.mem_classWires quotient sourceWire).mp classMember).symm
+      · obtain ⟨patternEndpoint, _, mappedEq⟩ :=
+          List.mem_map.mp patternMember
+        exact False.elim (frameNode_ne_patternNode layout endpoint.node
+          patternEndpoint.node (congrArg CEndpoint.node mappedEq).symm)
+    · rintro ⟨sourceWire, targetEq, sourceOccurs⟩
+      have quotientEq : quotient = input.quotientWire sourceWire := by
+        apply Fin.ext
+        simpa [Splice.Input.PlugLayout.frameWireMap,
+          Splice.Input.PlugLayout.frameWire] using congrArg Fin.val targetEq
+      subst quotient
+      apply List.mem_append_left
+      apply List.mem_map.mpr
+      rw [input.coalescedEndpoints_quotientWire consistent]
+      exact ⟨endpoint, sourceOccurs, rfl⟩
+  · intro internal
+    rw [show Fin.natAdd input.wireQuotient.count internal =
+        layout.internalWire internal from rfl,
+      show layout.plugRaw.EndpointOccurs (layout.internalWire internal)
+          (layout.mapFrameEndpoint endpoint) ↔
+        layout.mapFrameEndpoint endpoint ∈
+          (layout.plugRaw.wires (layout.internalWire internal)).endpoints
+        from Iff.rfl,
+      layout.plugRaw_wires_internal]
+    constructor
+    · intro member
+      obtain ⟨patternEndpoint, _, mappedEq⟩ := List.mem_map.mp member
+      exact False.elim (frameNode_ne_patternNode layout endpoint.node
+        patternEndpoint.node (congrArg CEndpoint.node mappedEq).symm)
+    · rintro ⟨sourceWire, targetEq, _⟩
+      exact False.elim (layout.internalWire_ne_frameWireMap internal sourceWire
+        (by simpa [Splice.Input.PlugLayout.frameWireMap] using targetEq))
+
+/-- Exact endpoint fiber for a pattern endpoint in the concrete plug. -/
+theorem endpointOccurs_pattern_iff
+    (layout : Splice.Input.PlugLayout input)
+    (targetWire : Fin layout.plugRaw.wireCount)
+    (endpoint : CEndpoint input.pattern.val.diagram.nodeCount) :
+    layout.plugRaw.EndpointOccurs targetWire
+        (layout.mapPatternEndpoint endpoint) ↔
+      ∃ sourceWire,
+        targetWire = layout.patternWireMap sourceWire ∧
+          input.pattern.val.diagram.EndpointOccurs sourceWire endpoint := by
+  apply Fin.addCases (m := input.wireQuotient.count)
+      (n := layout.internalWires.count)
+      (motive := fun targetWire =>
+        layout.plugRaw.EndpointOccurs targetWire
+            (layout.mapPatternEndpoint endpoint) ↔
+          ∃ sourceWire,
+            targetWire = layout.patternWireMap sourceWire ∧
+              input.pattern.val.diagram.EndpointOccurs sourceWire endpoint)
+  · intro quotient
+    rw [show Fin.castAdd layout.internalWires.count quotient =
+        layout.frameWire quotient from rfl,
+      show layout.plugRaw.EndpointOccurs (layout.frameWire quotient)
+          (layout.mapPatternEndpoint endpoint) ↔
+        layout.mapPatternEndpoint endpoint ∈
+          (layout.plugRaw.wires (layout.frameWire quotient)).endpoints
+        from Iff.rfl,
+      layout.plugRaw_wires_frame]
+    constructor
+    · intro member
+      rcases List.mem_append.mp member with frameMember | patternMember
+      · obtain ⟨frameEndpoint, _, mappedEq⟩ :=
+          List.mem_map.mp frameMember
+        exact False.elim (patternNode_ne_frameNode layout endpoint.node
+          frameEndpoint.node (congrArg CEndpoint.node mappedEq).symm)
+      · unfold Splice.Input.PlugLayout.boundaryEndpoints at patternMember
+        obtain ⟨patternEndpoint, sourceMember, mappedEq⟩ :=
+          List.mem_map.mp patternMember
+        have endpointEq : patternEndpoint = endpoint :=
+          mapPatternEndpoint_injective layout mappedEq
+        subst patternEndpoint
+        rw [List.mem_flatMap] at sourceMember
+        obtain ⟨sourceWire, boundaryMember, sourceOccurs⟩ := sourceMember
+        refine ⟨sourceWire, ?_, sourceOccurs⟩
+        unfold Splice.Input.PlugLayout.boundaryWires at boundaryMember
+        obtain ⟨external, filtered, sourceEq⟩ :=
+          List.mem_map.mp boundaryMember
+        subst sourceWire
+        rw [layout.patternWireMap_exposed]
+        apply congrArg layout.frameWire
+        simpa using (of_decide_eq_true (List.mem_filter.mp filtered).2).symm
+    · rintro ⟨sourceWire, targetEq, sourceOccurs⟩
+      by_cases exposed : sourceWire ∈ input.pattern.val.exposedWires
+      · let external := (indexOf? input.pattern.val.exposedWires
+            sourceWire).get ((indexOf?_isSome_iff).2 exposed)
+        have sourceEq : input.pattern.val.exposedWires.get external =
+            sourceWire := indexOf?_sound
+          (Option.some_get ((indexOf?_isSome_iff).2 exposed)).symm
+        rw [← sourceEq, layout.patternWireMap_exposed] at targetEq
+        have quotientEq : quotient = layout.exposedAttachment external := by
+          apply Fin.ext
+          simpa [Splice.Input.PlugLayout.frameWire] using
+            congrArg Fin.val targetEq
+        subst quotient
+        apply List.mem_append_right
+        unfold Splice.Input.PlugLayout.boundaryEndpoints
+        apply List.mem_map.mpr
+        refine ⟨endpoint, ?_, rfl⟩
+        rw [List.mem_flatMap]
+        refine ⟨input.pattern.val.exposedWires.get external, ?_, ?_⟩
+        unfold Splice.Input.PlugLayout.boundaryWires
+        apply List.mem_map.mpr
+        refine ⟨external, ?_, rfl⟩
+        apply List.mem_filter.mpr
+        exact ⟨mem_allFin external, decide_eq_true rfl⟩
+        rw [sourceEq]
+        exact sourceOccurs
+      · have internalSurvives : layout.internalWires.survives sourceWire =
+            true := by
+          rw [layout.internalWires_exact]
+          exact decide_eq_true exposed
+        let internal := layout.internalWires.index sourceWire internalSurvives
+        have internalEq : layout.internalWires.origin internal = sourceWire :=
+          layout.internalWires.origin_index sourceWire internalSurvives
+        rw [← internalEq, layout.patternWireMap_internal] at targetEq
+        have frameEq : layout.frameWireMap
+            (input.wireQuotient.origin quotient) = layout.frameWire quotient :=
+          congrArg layout.frameWire
+            (input.quotientWire_wireQuotient_origin quotient)
+        exact False.elim (layout.internalWire_ne_frameWireMap internal
+          (input.wireQuotient.origin quotient)
+          (targetEq.symm.trans frameEq.symm))
+  · intro internal
+    rw [show Fin.natAdd input.wireQuotient.count internal =
+        layout.internalWire internal from rfl,
+      show layout.plugRaw.EndpointOccurs (layout.internalWire internal)
+          (layout.mapPatternEndpoint endpoint) ↔
+        layout.mapPatternEndpoint endpoint ∈
+          (layout.plugRaw.wires (layout.internalWire internal)).endpoints
+        from Iff.rfl,
+      layout.plugRaw_wires_internal]
+    constructor
+    · intro member
+      obtain ⟨patternEndpoint, sourceOccurs, mappedEq⟩ :=
+        List.mem_map.mp member
+      have endpointEq : patternEndpoint = endpoint :=
+        mapPatternEndpoint_injective layout mappedEq
+      subst patternEndpoint
+      refine ⟨layout.internalWires.origin internal, ?_, sourceOccurs⟩
+      exact (layout.patternWireMap_internal internal).symm
+    · rintro ⟨sourceWire, targetEq, sourceOccurs⟩
+      by_cases exposed : sourceWire ∈ input.pattern.val.exposedWires
+      · let external := (indexOf? input.pattern.val.exposedWires
+            sourceWire).get ((indexOf?_isSome_iff).2 exposed)
+        have sourceEq : input.pattern.val.exposedWires.get external =
+            sourceWire := indexOf?_sound
+          (Option.some_get ((indexOf?_isSome_iff).2 exposed)).symm
+        rw [← sourceEq, layout.patternWireMap_exposed] at targetEq
+        exact False.elim (layout.internalWire_ne_frameWireMap internal
+          (input.attachment (layout.exposedPosition external)) (by
+            simpa [Splice.Input.PlugLayout.exposedAttachment,
+              Splice.Input.PlugLayout.frameWireMap] using targetEq))
+      · have internalSurvives : layout.internalWires.survives sourceWire =
+            true := by
+          rw [layout.internalWires_exact]
+          exact decide_eq_true exposed
+        let sourceInternal := layout.internalWires.index sourceWire
+          internalSurvives
+        have sourceInternalEq : layout.internalWires.origin sourceInternal =
+            sourceWire := layout.internalWires.origin_index sourceWire
+          internalSurvives
+        rw [← sourceInternalEq, layout.patternWireMap_internal] at targetEq
+        have internalEq : sourceInternal = internal := by
+          apply Fin.ext
+          simpa [Splice.Input.PlugLayout.internalWire] using
+            congrArg Fin.val targetEq.symm
+        rw [← sourceInternalEq] at sourceOccurs
+        rw [internalEq] at sourceOccurs
+        apply List.mem_map.mpr
+        exact ⟨endpoint, sourceOccurs, rfl⟩
+
 namespace CompiledSite
 
 private theorem castWire_scope
