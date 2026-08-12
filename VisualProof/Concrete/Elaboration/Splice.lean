@@ -1,5 +1,5 @@
 import VisualProof.Concrete.Elaboration.Compiled
-import VisualProof.Concrete.Subgraph.Splice.Input.Layout.Core
+import VisualProof.Concrete.Elaboration.SpliceWireLayout
 
 namespace VisualProof.Concrete.Elaboration
 
