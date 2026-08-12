@@ -97,6 +97,16 @@ def get : (items : CompiledItems d) → Fin items.length → CompiledItem d
   | .nil => rfl
   | .cons _ tail => by simp [length, length_eq_origins_length tail]
 
+theorem origin_get : (items : CompiledItems d) →
+    (index : Fin items.length) →
+    (items.get index).origin =
+      items.origins.get (Fin.cast (length_eq_origins_length items) index)
+  | .nil, index => Fin.elim0 index
+  | .cons head tail, index => by
+      refine Fin.cases ?_ (fun rest => ?_) index
+      · rfl
+      · simpa [get, origins, length] using origin_get tail rest
+
 /-- The two stable subsequences determined by one origin classifier. -/
 structure Partition (items : CompiledItems d) where
   retained : CompiledItems d
@@ -221,6 +231,15 @@ mutual
     | .nil => True
     | .cons head tail => head.ValidAt parent ∧ tail.ValidAt parent
 end
+
+theorem CompiledItems.valid_get {items : CompiledItems d}
+    (valid : items.ValidAt parent) (index : Fin items.length) :
+    (items.get index).ValidAt parent := by
+  cases items with
+  | nil => exact Fin.elim0 index
+  | cons head tail =>
+      refine Fin.cases valid.1 (fun rest => ?_) index
+      exact CompiledItems.valid_get valid.2 rest
 
 /-! Intrinsic erasure is the sole concrete-identity-to-position boundary. -/
 
