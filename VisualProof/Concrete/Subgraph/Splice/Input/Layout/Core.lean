@@ -50,6 +50,10 @@ def internalWire (layout : PlugLayout input)
     (wire : layout.internalWires.Carrier) : Fin layout.wireCount :=
   Fin.natAdd input.wireQuotient.count wire
 
+def frameWireMap (layout : PlugLayout input)
+    (wire : Fin input.frame.val.wireCount) : Fin layout.wireCount :=
+  layout.frameWire (input.quotientWire wire)
+
 def bodyRegion (layout : PlugLayout input)
     (region : Fin input.pattern.val.diagram.regionCount) :
     Fin layout.regionCount :=
@@ -73,6 +77,60 @@ def binderRegion (layout : PlugLayout input)
   match layout.proxyIndex? region with
   | some proxy => layout.frameRegion (input.binderTarget proxy)
   | none => layout.bodyRegion region
+
+theorem frameWireMap_injective (layout : PlugLayout input)
+    (consistent : input.AttachmentConsistent) :
+    Function.Injective layout.frameWireMap := by
+  intro left right heq
+  apply input.quotientWire_injective consistent
+  unfold frameWireMap frameWire at heq
+  apply Fin.ext
+  simpa using congrArg Fin.val heq
+
+@[simp] theorem bodyRegion_bodyContainer (layout : PlugLayout input) :
+    layout.bodyRegion input.binderSpine.bodyContainer =
+      layout.frameRegion input.site := by
+  unfold bodyRegion
+  have hdeleted : layout.materialRegions.survives
+      input.binderSpine.bodyContainer = false := by
+    rw [layout.materialRegions_exact]
+    simp [input.binderSpine.bodyContainer_not_material]
+  rw [(layout.materialRegions.index?_eq_none_iff _).2 hdeleted]
+
+@[simp] theorem bodyRegion_material (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    layout.bodyRegion (layout.materialRegions.origin material) =
+      layout.materialRegion material := by
+  unfold bodyRegion
+  rw [layout.materialRegions.index?_origin]
+
+private theorem proxies_nodup (layout : PlugLayout input) :
+    layout.proxies.Nodup := by
+  apply (allFin_nodup _).map
+  intro left right hne heq
+  exact hne (input.binderSpine.proxy_injective heq)
+
+@[simp] theorem proxyIndex?_proxy (layout : PlugLayout input)
+    (proxy : Fin input.binderSpine.proxyCount) :
+    layout.proxyIndex? (input.binderSpine.proxy proxy) = some proxy := by
+  let lengthEq : layout.proxies.length = input.binderSpine.proxyCount := by
+    simp [proxies, allFin_eq_finRange]
+  let position : Fin layout.proxies.length := Fin.cast lengthEq.symm proxy
+  have hget : layout.proxies.get position = input.binderSpine.proxy proxy := by
+    simp [position, proxies, allFin_eq_finRange]
+  have hindex := indexOf?_get_eq_some_of_nodup layout.proxies_nodup position
+  unfold proxyIndex?
+  rw [hget] at hindex
+  rw [hindex]
+  apply congrArg some
+  apply Fin.ext
+  rfl
+
+@[simp] theorem binderRegion_proxy (layout : PlugLayout input)
+    (proxy : Fin input.binderSpine.proxyCount) :
+    layout.binderRegion (input.binderSpine.proxy proxy) =
+      layout.frameRegion (input.binderTarget proxy) := by
+  simp [binderRegion]
 
 def mapPatternRegion (layout : PlugLayout input)
     (region : CRegion input.pattern.val.diagram.regionCount) :
@@ -120,6 +178,47 @@ def exposedAttachment (layout : PlugLayout input)
     (external : Fin input.pattern.val.exposedWires.length) :
     input.wireQuotient.Carrier :=
   input.quotientWire (input.attachment (layout.exposedPosition external))
+
+def patternWireMap (layout : PlugLayout input)
+    (wire : Fin input.pattern.val.diagram.wireCount) : Fin layout.wireCount :=
+  if exposed : wire ∈ input.pattern.val.exposedWires then
+    let position := (indexOf? input.pattern.val.exposedWires wire).get
+      ((indexOf?_isSome_iff).2 exposed)
+    layout.frameWire (layout.exposedAttachment position)
+  else
+    layout.internalWire (layout.internalWires.index wire (by
+      rw [layout.internalWires_exact]
+      simp [exposed]))
+
+@[simp] theorem patternWireMap_exposed (layout : PlugLayout input)
+    (external : Fin input.pattern.val.exposedWires.length) :
+    layout.patternWireMap (input.pattern.val.exposedWires.get external) =
+      layout.frameWire (layout.exposedAttachment external) := by
+  unfold patternWireMap
+  split
+  next exposed =>
+    have hindex := indexOf?_get_eq_some_of_nodup
+      input.pattern.val.exposedWires_nodup external
+    have hsome : (indexOf? input.pattern.val.exposedWires
+        (input.pattern.val.exposedWires.get external)).isSome = true :=
+      Option.isSome_iff_exists.mpr ⟨external, hindex⟩
+    rw [Option.get_of_eq_some hsome hindex]
+  next notExposed =>
+    exact False.elim (notExposed (List.get_mem _ _))
+
+@[simp] theorem patternWireMap_internal (layout : PlugLayout input)
+    (internal : layout.internalWires.Carrier) :
+    layout.patternWireMap (layout.internalWires.origin internal) =
+      layout.internalWire internal := by
+  unfold patternWireMap
+  split
+  next exposed =>
+    have survives := layout.internalWires.origin_survives internal
+    rw [layout.internalWires_exact] at survives
+    exact False.elim ((of_decide_eq_true survives) exposed)
+  next notExposed =>
+    exact congrArg layout.internalWire
+      (layout.internalWires.index_origin internal)
 
 def boundaryWires (layout : PlugLayout input)
     (quotient : input.wireQuotient.Carrier) :

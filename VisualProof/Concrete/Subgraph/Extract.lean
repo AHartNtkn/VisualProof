@@ -501,6 +501,15 @@ theorem materialRegions_length (spine : BinderSpine diagram) :
     Nat.le_antisymm forward backward
   simpa [partition, proxies, allFin_eq_finRange, Nat.add_assoc] using lengths.symm
 
+theorem bodyContainer_not_material (spine : BinderSpine diagram) :
+    ¬ spine.IsMaterialRegion spine.bodyContainer := by
+  by_cases hzero : spine.proxyCount = 0
+  · rw [spine.body_eq_root_of_empty hzero]
+    exact fun material => material.1 rfl
+  · rw [spine.body_eq_terminal_of_nonempty hzero]
+    intro material
+    exact material.2 _ rfl
+
 private theorem proxy_climb_root_aux (spine : BinderSpine diagram)
     (value : Nat) :
     ∀ proxy : Fin spine.proxyCount, proxy.val = value →

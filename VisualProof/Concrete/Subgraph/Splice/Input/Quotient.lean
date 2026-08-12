@@ -546,8 +546,37 @@ def classWires (input : Input ) (quotient : input.wireQuotient.Carrier) :
 
 theorem classWires_nodup (input : Input )
     (quotient : input.wireQuotient.Carrier) :
-    (input.classWires quotient).Nodup :=
+  (input.classWires quotient).Nodup :=
   filterFin_nodup _
+
+theorem classWires_quotientWire_eq_singleton (input : Input)
+    (consistent : input.AttachmentConsistent)
+    (wire : Fin input.frame.val.wireCount) :
+    input.classWires (input.quotientWire wire) = [wire] := by
+  have hmember : wire ∈ input.classWires (input.quotientWire wire) :=
+    (input.mem_classWires _ wire).2 rfl
+  have honly : ∀ candidate,
+      candidate ∈ input.classWires (input.quotientWire wire) →
+        candidate = wire := by
+    intro candidate candidateMember
+    exact input.quotientWire_injective consistent
+      ((input.mem_classWires _ candidate).1 candidateMember)
+  cases hclass : input.classWires (input.quotientWire wire) with
+  | nil => simp [hclass] at hmember
+  | cons head tail =>
+      have hhead : head = wire := honly head (by simp [hclass])
+      subst head
+      have htail : tail = [] := by
+        apply List.eq_nil_iff_forall_not_mem.mpr
+        intro candidate candidateMember
+        have hcandidate := honly candidate (by simp [hclass, candidateMember])
+        subst candidate
+        have hnodup : (wire :: tail).Nodup := by
+          rw [← hclass]
+          exact input.classWires_nodup (input.quotientWire wire)
+        exact (List.nodup_cons.mp hnodup).1 candidateMember
+      subst tail
+      rfl
 
 theorem classWires_nonempty (input : Input )
     (quotient : input.wireQuotient.Carrier) :
@@ -661,6 +690,15 @@ def coalescedScope (input : Input )
   else
     (input.frame.val.wires first).scope
 
+@[simp] theorem coalescedScope_quotientWire (input : Input)
+    (consistent : input.AttachmentConsistent)
+    (wire : Fin input.frame.val.wireCount) :
+    input.coalescedScope (input.quotientWire wire) =
+      (input.frame.val.wires wire).scope := by
+  have hclass := input.classWires_quotientWire_eq_singleton consistent wire
+  unfold coalescedScope firstClassWire
+  simp [hclass, outermostFrom, chooseOuter, Diagram.Encloses.refl]
+
 private theorem outermostFrom_mem_cons (diagram : Diagram)
     (current : Fin diagram.regionCount)
     (tail : List (Fin diagram.regionCount)) :
@@ -771,6 +809,14 @@ def coalescedEndpoints (input : Input )
     List (CEndpoint input.frame.val.nodeCount) :=
   (input.classWires quotient).flatMap fun wire =>
     (input.frame.val.wires wire).endpoints
+
+@[simp] theorem coalescedEndpoints_quotientWire (input : Input)
+    (consistent : input.AttachmentConsistent)
+    (wire : Fin input.frame.val.wireCount) :
+    input.coalescedEndpoints (input.quotientWire wire) =
+      (input.frame.val.wires wire).endpoints := by
+  simp [coalescedEndpoints,
+    input.classWires_quotientWire_eq_singleton consistent wire]
 
 def coalesceFrameRaw (input : Input ) : Diagram where
   regionCount := input.frame.val.regionCount
