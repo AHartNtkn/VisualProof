@@ -177,6 +177,42 @@ theorem materialRegion_origin_isMaterial (layout : PlugLayout input)
   rw [layout.materialRegions_exact] at survives
   exact of_decide_eq_true survives
 
+/-- The dense material identifier canonically derived from a source region
+whose material provenance is already known. -/
+def materialCarrier (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : input.binderSpine.IsMaterialRegion region) :
+    layout.materialRegions.Carrier :=
+  layout.materialRegions.index region (by
+    rw [layout.materialRegions_exact]
+    exact decide_eq_true material)
+
+@[simp] theorem materialCarrier_origin (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : input.binderSpine.IsMaterialRegion region) :
+    layout.materialRegions.origin (layout.materialCarrier region material) =
+      region := by
+  apply layout.materialRegions.origin_index
+
+@[simp] theorem materialRegion_materialCarrier (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : input.binderSpine.IsMaterialRegion region) :
+    layout.materialRegion (layout.materialCarrier region material) =
+      layout.bodyRegion region := by
+  symm
+  exact (layout.bodyRegion_eq_materialRegion_iff region
+    (layout.materialCarrier region material)).2
+      (layout.materialCarrier_origin region material).symm
+
+@[simp] theorem plugRaw_regions_materialSource (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : input.binderSpine.IsMaterialRegion region) :
+    layout.plugRaw.regions (layout.bodyRegion region) =
+      layout.mapPatternRegion (input.pattern.val.diagram.regions region) := by
+  rw [← layout.materialRegion_materialCarrier region material,
+    layout.plugRaw_regions_material,
+    layout.materialCarrier_origin]
+
 @[simp] theorem proxyIndex?_materialOrigin (layout : PlugLayout input)
     (material : layout.materialRegions.Carrier) :
     layout.proxyIndex? (layout.materialRegions.origin material) = none := by
@@ -201,6 +237,22 @@ theorem materialRegion_origin_isMaterial (layout : PlugLayout input)
   unfold PlugLayout.binderRegion
   rw [layout.proxyIndex?_materialOrigin,
     layout.bodyRegion_material]
+
+@[simp] theorem binderRegion_material (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : input.binderSpine.IsMaterialRegion region) :
+    layout.binderRegion region = layout.bodyRegion region := by
+  let carrier := layout.materialCarrier region material
+  have origin : layout.materialRegions.origin carrier = region :=
+    layout.materialCarrier_origin region material
+  calc
+    layout.binderRegion region =
+        layout.binderRegion (layout.materialRegions.origin carrier) :=
+      congrArg layout.binderRegion origin.symm
+    _ = layout.materialRegion carrier :=
+      layout.binderRegion_materialOrigin carrier
+    _ = layout.bodyRegion region :=
+      layout.materialRegion_materialCarrier region material
 
 @[simp] theorem binderRegion_eq_materialRegion_iff
     (layout : PlugLayout input)
@@ -262,6 +314,28 @@ theorem directBodyChild_isMaterial (input : Input)
       have values := congrArg Fin.val proxyEq
       simp only at values
       omega
+
+/-- Material provenance is closed under direct children in the checked
+pattern hierarchy. -/
+theorem directMaterialChild_isMaterial (input : Input)
+    (parent child : Fin input.pattern.val.diagram.regionCount)
+    (parentMaterial : input.binderSpine.IsMaterialRegion parent)
+    (parentEq : (input.pattern.val.diagram.regions child).parent? =
+      some parent) :
+    input.binderSpine.IsMaterialRegion child := by
+  constructor
+  · intro childRoot
+    have rootSheet := input.pattern.property.diagram_well_formed.root_is_sheet
+    unfold Diagram.RootIsSheet at rootSheet
+    subst child
+    rw [rootSheet] at parentEq
+    contradiction
+  · intro proxy childProxy
+    rw [childProxy, input.binderSpine.proxy_region proxy] at parentEq
+    simp only [CRegion.parent?, Option.some.injEq] at parentEq
+    split at parentEq
+    · exact parentMaterial.1 parentEq.symm
+    · exact parentMaterial.2 _ parentEq.symm
 
 /-- Under the terminal-body contract, a pattern node can lie outside the
 material-region domain only at the designated body container. -/
@@ -653,6 +727,105 @@ theorem map_directBodyChildren (layout : PlugLayout input) :
   simpa only [predicate, List.map_map, Function.comp_def,
     bodyRegion_materialOrigin] using occurrences
 
+/-- Direct children of a material source region and their dense target
+identifiers are the same stable stream. -/
+theorem map_directMaterialChildren (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    (localChildOccurrences input.pattern.val.diagram
+        (layout.materialRegions.origin material)).map
+          layout.mapPatternOccurrence =
+      layout.materialRegionChildOccurrences material := by
+  let parent := layout.materialRegions.origin material
+  let predicate : Fin input.pattern.val.diagram.regionCount → Bool :=
+    fun child => decide ((input.pattern.val.diagram.regions child).parent? =
+      some parent)
+  have survives : ∀ child, predicate child = true →
+      layout.materialRegions.survives child = true := by
+    intro child accepted
+    rw [layout.materialRegions_exact]
+    apply decide_eq_true
+    exact directMaterialChild_isMaterial input parent child
+      (layout.materialRegion_origin_isMaterial material)
+      (of_decide_eq_true accepted)
+  have sourceFilter := filterFin_eq_enumeration_filter
+    layout.materialRegions predicate survives
+  have mappedOrigins := map_origin_filterFin
+    layout.materialRegions predicate
+  have origins :
+      filterFin predicate =
+        (filterFin fun child : layout.materialRegions.Carrier =>
+          predicate (layout.materialRegions.origin child)).map
+            layout.materialRegions.origin :=
+    sourceFilter.trans mappedOrigins.symm
+  have occurrences := congrArg
+    (List.map fun child =>
+      (LocalOccurrence.child (layout.bodyRegion child) :
+        LocalOccurrence layout.regionCount layout.nodeCount)) origins
+  unfold localChildOccurrences materialRegionChildOccurrences
+    mapPatternOccurrence
+  simpa only [parent, predicate, List.map_map, Function.comp_def,
+    bodyRegion_materialOrigin] using occurrences
+
+@[simp] theorem map_localNodeOccurrences_material
+    (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    (localNodeOccurrences input.pattern.val.diagram
+      (layout.materialRegions.origin material)).map
+        layout.mapPatternOccurrence =
+      layout.materialNodeOccurrences material := by
+  unfold localNodeOccurrences materialNodeOccurrences mapPatternOccurrence
+  simp only [List.map_map]
+  rfl
+
+@[simp] theorem map_localChildOccurrences_material
+    (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    (localChildOccurrences input.pattern.val.diagram
+      (layout.materialRegions.origin material)).map
+        layout.mapPatternOccurrence =
+      layout.materialRegionChildOccurrences material :=
+  layout.map_directMaterialChildren material
+
+@[simp] theorem map_localNodeOccurrences_materialSource
+    (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : input.binderSpine.IsMaterialRegion region) :
+    (localNodeOccurrences input.pattern.val.diagram region).map
+        layout.mapPatternOccurrence =
+      layout.materialNodeOccurrences
+        (layout.materialCarrier region material) := by
+  let carrier := layout.materialCarrier region material
+  have origin : layout.materialRegions.origin carrier = region :=
+    layout.materialCarrier_origin region material
+  calc
+    (localNodeOccurrences input.pattern.val.diagram region).map
+        layout.mapPatternOccurrence =
+      (localNodeOccurrences input.pattern.val.diagram
+        (layout.materialRegions.origin carrier)).map
+          layout.mapPatternOccurrence := by rw [origin]
+    _ = layout.materialNodeOccurrences carrier :=
+      layout.map_localNodeOccurrences_material carrier
+
+@[simp] theorem map_localChildOccurrences_materialSource
+    (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : input.binderSpine.IsMaterialRegion region) :
+    (localChildOccurrences input.pattern.val.diagram region).map
+        layout.mapPatternOccurrence =
+      layout.materialRegionChildOccurrences
+        (layout.materialCarrier region material) := by
+  let carrier := layout.materialCarrier region material
+  have origin : layout.materialRegions.origin carrier = region :=
+    layout.materialCarrier_origin region material
+  calc
+    (localChildOccurrences input.pattern.val.diagram region).map
+        layout.mapPatternOccurrence =
+      (localChildOccurrences input.pattern.val.diagram
+        (layout.materialRegions.origin carrier)).map
+          layout.mapPatternOccurrence := by rw [origin]
+    _ = layout.materialRegionChildOccurrences carrier :=
+      layout.map_localChildOccurrences_material carrier
+
 /-- Mapping the source terminal body's direct occurrence stream gives exactly
 the inserted node and material-child blocks. -/
 theorem map_localOccurrences_body (layout : PlugLayout input) :
@@ -960,17 +1133,14 @@ theorem localOccurrences_site (layout : PlugLayout input)
     layout.patternNodeOccurrences_site admissible,
     layout.materialChildOccurrences_site admissible]
 
-/-- Every material target region has exactly the source pattern occurrences
-owned directly by its source region, in compiler order. -/
-theorem localOccurrences_materialRegion (layout : PlugLayout input)
+/-- Every material target region has exactly the source pattern node block. -/
+theorem localNodeOccurrences_materialRegion (layout : PlugLayout input)
     (material : layout.materialRegions.Carrier) :
-    localOccurrences layout.plugRaw (layout.materialRegion material) =
-      layout.materialNodeOccurrences material ++
-        layout.materialRegionChildOccurrences material := by
-  unfold localOccurrences localNodeOccurrences localChildOccurrences
-    materialNodeOccurrences materialRegionChildOccurrences
-  simp only [PlugLayout.plugRaw, PlugLayout.nodeCount, PlugLayout.regionCount]
-  rw [filterFin_add, filterFin_add]
+    localNodeOccurrences layout.plugRaw (layout.materialRegion material) =
+      layout.materialNodeOccurrences material := by
+  unfold localNodeOccurrences materialNodeOccurrences
+  simp only [PlugLayout.plugRaw, PlugLayout.nodeCount]
+  rw [filterFin_add]
   simp only [List.map_append, List.map_map]
   have noFrameNodes :
       (filterFin fun index : Fin input.frame.val.nodeCount =>
@@ -996,6 +1166,26 @@ theorem localOccurrences_materialRegion (layout : PlugLayout input)
     intro node _
     simp only [PlugLayout.plugNode, Fin.addCases_right,
       mapPatternNode_region, bodyRegion_eq_materialRegion_iff]
+  have noFrameNodeBlock := congrArg
+    (List.map (fun node =>
+      (LocalOccurrence.node (layout.frameNode node) :
+        LocalOccurrence layout.regionCount layout.nodeCount))) noFrameNodes
+  have patternNodeBlock := congrArg
+    (List.map (fun node =>
+      (LocalOccurrence.node (layout.patternNode node) :
+        LocalOccurrence layout.regionCount layout.nodeCount))) patternNodes
+  simpa only [PlugLayout.frameNode, PlugLayout.patternNode, List.map_nil,
+    List.nil_append] using append_congr noFrameNodeBlock patternNodeBlock
+
+/-- Every material target region has exactly the source pattern child block. -/
+theorem localChildOccurrences_materialRegion (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    localChildOccurrences layout.plugRaw (layout.materialRegion material) =
+      layout.materialRegionChildOccurrences material := by
+  unfold localChildOccurrences materialRegionChildOccurrences
+  simp only [PlugLayout.plugRaw, PlugLayout.regionCount]
+  rw [filterFin_add]
+  simp only [List.map_append, List.map_map]
   have noFrameChildren :
       (filterFin fun index : Fin input.frame.val.regionCount =>
         decide ((layout.plugRegion
@@ -1021,14 +1211,6 @@ theorem localOccurrences_materialRegion (layout : PlugLayout input)
     intro child _
     simp only [PlugLayout.plugRegion, Fin.addCases_right,
       mapPatternRegion_parent_eq_some_material_iff]
-  have noFrameNodeBlock := congrArg
-    (List.map (fun node =>
-      (LocalOccurrence.node (layout.frameNode node) :
-        LocalOccurrence layout.regionCount layout.nodeCount))) noFrameNodes
-  have patternNodeBlock := congrArg
-    (List.map (fun node =>
-      (LocalOccurrence.node (layout.patternNode node) :
-        LocalOccurrence layout.regionCount layout.nodeCount))) patternNodes
   have noFrameChildBlock := congrArg
     (List.map (fun child =>
       (LocalOccurrence.child (layout.frameRegion child) :
@@ -1037,12 +1219,41 @@ theorem localOccurrences_materialRegion (layout : PlugLayout input)
     (List.map (fun child =>
       (LocalOccurrence.child (layout.materialRegion child) :
         LocalOccurrence layout.regionCount layout.nodeCount))) materialChildren
-  have blocks := append_congr
-    (append_congr noFrameNodeBlock patternNodeBlock)
-    (append_congr noFrameChildBlock materialChildBlock)
-  simpa only [PlugLayout.frameNode, PlugLayout.patternNode,
-    PlugLayout.frameRegion, PlugLayout.materialRegion, List.map_nil,
-    List.nil_append] using blocks
+  simpa only [PlugLayout.frameRegion, PlugLayout.materialRegion,
+    List.map_nil, List.nil_append] using
+      append_congr noFrameChildBlock materialChildBlock
+
+theorem localNodeOccurrences_materialSource (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : input.binderSpine.IsMaterialRegion region) :
+    localNodeOccurrences layout.plugRaw (layout.bodyRegion region) =
+      layout.materialNodeOccurrences
+        (layout.materialCarrier region material) := by
+  rw [← layout.materialRegion_materialCarrier region material]
+  exact layout.localNodeOccurrences_materialRegion
+    (layout.materialCarrier region material)
+
+theorem localChildOccurrences_materialSource (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : input.binderSpine.IsMaterialRegion region) :
+    localChildOccurrences layout.plugRaw (layout.bodyRegion region) =
+      layout.materialRegionChildOccurrences
+        (layout.materialCarrier region material) := by
+  rw [← layout.materialRegion_materialCarrier region material]
+  exact layout.localChildOccurrences_materialRegion
+    (layout.materialCarrier region material)
+
+/-- Every material target region has exactly the source pattern occurrences
+owned directly by its source region, in compiler order. -/
+theorem localOccurrences_materialRegion (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    localOccurrences layout.plugRaw (layout.materialRegion material) =
+      layout.materialNodeOccurrences material ++
+        layout.materialRegionChildOccurrences material := by
+  unfold localOccurrences
+  rw [layout.localNodeOccurrences_materialRegion,
+    layout.localChildOccurrences_materialRegion]
+  rfl
 
 end Splice.Input.PlugLayout
 

@@ -696,6 +696,118 @@ theorem materialLocalIndex_get (layout : PlugLayout input)
   rw [sourceGet, layout.patternWireMap_internal]
   exact targetGet
 
+theorem materialExactScope_length (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    (exactScopeWires input.pattern.val.diagram
+      (layout.materialRegions.origin material)).length =
+      (exactScopeWires layout.plugRaw
+        (layout.materialRegion material)).length := by
+  rw [layout.exactScopeWires_materialRegion]
+  exact layout.materialLocalWires_length material
+
+def materialExactScopeIndex (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier) :
+    Fin (exactScopeWires input.pattern.val.diagram
+      (layout.materialRegions.origin material)).length →
+      Fin (exactScopeWires layout.plugRaw
+        (layout.materialRegion material)).length :=
+  Fin.cast (layout.materialExactScope_length material)
+
+theorem materialExactScopeIndex_get (layout : PlugLayout input)
+    (material : layout.materialRegions.Carrier)
+    (index : Fin (exactScopeWires input.pattern.val.diagram
+      (layout.materialRegions.origin material)).length) :
+    (exactScopeWires layout.plugRaw
+      (layout.materialRegion material)).get
+        (layout.materialExactScopeIndex material index) =
+      layout.patternWireMap
+        ((exactScopeWires input.pattern.val.diagram
+          (layout.materialRegions.origin material)).get index) := by
+  have targetEq := layout.exactScopeWires_materialRegion material
+  have value := List.get_of_eq targetEq
+    (layout.materialExactScopeIndex material index)
+  exact value.trans (by
+    simpa only [materialExactScopeIndex, materialExactScope_length,
+      materialLocalIndex, Fin.cast] using
+        layout.materialLocalIndex_get material index)
+
+theorem materialSourceExactScope_length (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : input.binderSpine.IsMaterialRegion region) :
+    (exactScopeWires input.pattern.val.diagram region).length =
+      (exactScopeWires layout.plugRaw
+        (layout.bodyRegion region)).length := by
+  let carrier := layout.materialCarrier region material
+  have origin : layout.materialRegions.origin carrier = region :=
+    layout.materialCarrier_origin region material
+  calc
+    (exactScopeWires input.pattern.val.diagram region).length =
+        (exactScopeWires input.pattern.val.diagram
+          (layout.materialRegions.origin carrier)).length := by rw [origin]
+    _ = (exactScopeWires layout.plugRaw
+          (layout.materialRegion carrier)).length :=
+      layout.materialExactScope_length carrier
+    _ = (exactScopeWires layout.plugRaw
+          (layout.bodyRegion region)).length := by
+      rw [layout.materialRegion_materialCarrier region material]
+
+def materialSourceExactScopeIndex (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : input.binderSpine.IsMaterialRegion region) :
+    Fin (exactScopeWires input.pattern.val.diagram region).length →
+      Fin (exactScopeWires layout.plugRaw
+        (layout.bodyRegion region)).length :=
+  Fin.cast (layout.materialSourceExactScope_length region material)
+
+theorem materialSourceExactScopeIndex_get (layout : PlugLayout input)
+    (region : Fin input.pattern.val.diagram.regionCount)
+    (material : input.binderSpine.IsMaterialRegion region)
+    (index : Fin (exactScopeWires input.pattern.val.diagram region).length) :
+    (exactScopeWires layout.plugRaw (layout.bodyRegion region)).get
+        (layout.materialSourceExactScopeIndex region material index) =
+      layout.patternWireMap
+        ((exactScopeWires input.pattern.val.diagram region).get index) := by
+  let carrier := layout.materialCarrier region material
+  have origin : layout.materialRegions.origin carrier = region :=
+    layout.materialCarrier_origin region material
+  let sourceIndex : Fin (exactScopeWires input.pattern.val.diagram
+      (layout.materialRegions.origin carrier)).length :=
+    Fin.cast (by rw [origin]) index
+  let targetIndex : Fin (exactScopeWires layout.plugRaw
+      (layout.materialRegion carrier)).length :=
+    layout.materialExactScopeIndex carrier sourceIndex
+  have targetIndexEq : targetIndex.val =
+      (layout.materialSourceExactScopeIndex region material index).val := rfl
+  have sourceGet :
+      (exactScopeWires input.pattern.val.diagram
+        (layout.materialRegions.origin carrier)).get sourceIndex =
+      (exactScopeWires input.pattern.val.diagram region).get index := by
+    simpa only [sourceIndex, Fin.cast] using
+      List.get_of_eq (congrArg
+        (exactScopeWires input.pattern.val.diagram) origin) sourceIndex
+  have targetGet :
+      (exactScopeWires layout.plugRaw (layout.materialRegion carrier)).get
+          targetIndex =
+      (exactScopeWires layout.plugRaw (layout.bodyRegion region)).get
+          (layout.materialSourceExactScopeIndex region material index) := by
+    have values := List.get_of_eq (congrArg
+      (exactScopeWires layout.plugRaw)
+      (layout.materialRegion_materialCarrier region material)) targetIndex
+    simpa only [targetIndex, materialSourceExactScopeIndex, Fin.cast]
+      using values
+  calc
+    (exactScopeWires layout.plugRaw (layout.bodyRegion region)).get
+        (layout.materialSourceExactScopeIndex region material index) =
+      (exactScopeWires layout.plugRaw
+        (layout.materialRegion carrier)).get targetIndex := targetGet.symm
+    _ = layout.patternWireMap
+        ((exactScopeWires input.pattern.val.diagram
+          (layout.materialRegions.origin carrier)).get sourceIndex) := by
+      exact layout.materialExactScopeIndex_get carrier sourceIndex
+    _ = layout.patternWireMap
+        ((exactScopeWires input.pattern.val.diagram region).get index) :=
+      congrArg layout.patternWireMap sourceGet
+
 end Splice.Input.PlugLayout
 
 end VisualProof.Concrete

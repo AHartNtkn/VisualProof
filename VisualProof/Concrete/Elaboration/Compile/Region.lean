@@ -230,6 +230,48 @@ theorem compileOccurrence?_child_bubble
   rw [hchild]
   rfl
 
+theorem compileOccurrence?_child_cut_success
+    (hwf : d.WellFormed) (parent child : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (direct : LocalOccurrence.child child ∈ localOccurrences d parent)
+    (hchild : d.regions child = .cut parent)
+    {item : CompiledItem d context rels binders}
+    (compiled : compileOccurrence? d hwf parent context binders
+      (.child child) direct = some item) :
+    ∃ body : CompiledRegion d (.nested child context rels binders),
+      compileRegion? d hwf child context binders = some body ∧
+        item = .cut body := by
+  rw [compileOccurrence?_child_cut hwf parent child context binders direct
+    hchild] at compiled
+  cases bodyCompiled : compileRegion? d hwf child context binders with
+  | none => simp [bodyCompiled] at compiled
+  | some body =>
+      refine ⟨body, rfl, ?_⟩
+      simpa [bodyCompiled] using compiled.symm
+
+theorem compileOccurrence?_child_bubble_success
+    (hwf : d.WellFormed) (parent child : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (arity : Nat)
+    (direct : LocalOccurrence.child child ∈ localOccurrences d parent)
+    (hchild : d.regions child = .bubble parent arity)
+    {item : CompiledItem d context rels binders}
+    (compiled : compileOccurrence? d hwf parent context binders
+      (.child child) direct = some item) :
+    ∃ body : CompiledRegion d
+        (.nested child context (arity :: rels) (binders.push child arity)),
+      compileRegion? d hwf child context (binders.push child arity) =
+        some body ∧
+      item = .bubble arity body := by
+  rw [compileOccurrence?_child_bubble hwf parent child context binders arity
+    direct hchild] at compiled
+  cases bodyCompiled : compileRegion? d hwf child context
+      (binders.push child arity) with
+  | none => simp [bodyCompiled] at compiled
+  | some body =>
+      refine ⟨body, rfl, ?_⟩
+      simpa [bodyCompiled] using compiled.symm
+
 @[simp] theorem compileItems?_nil
     (hwf : d.WellFormed) (parent : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)
@@ -478,6 +520,37 @@ theorem CompilerCall.compile?_eq_compileBlocks?
       pure (.mk nodes children)) := by
   rw [CompilerCall.compile?]
   rfl
+
+/-- A successful call exposes the exact node and child block computations
+stored by its sole result. -/
+theorem CompilerCall.compile?_blocks
+    (hwf : d.WellFormed) (call : CompilerCall d)
+    {body : CompiledRegion d call}
+    (compiled : call.compile? d hwf = some body) :
+    compileItems? d hwf call.origin call.fullContext call.binders
+        (localNodeOccurrences d call.origin)
+        (fun _ member => List.mem_append_left _ member) =
+      some body.nodeItems ∧
+    compileItems? d hwf call.origin call.fullContext call.binders
+        (localChildOccurrences d call.origin)
+        (fun _ member => List.mem_append_right _ member) =
+      some body.childItems := by
+  rw [CompilerCall.compile?_eq_compileBlocks?] at compiled
+  cases hnodes : compileItems? d hwf call.origin call.fullContext call.binders
+      (localNodeOccurrences d call.origin)
+      (fun _ member => List.mem_append_left _ member) with
+  | none => simp [hnodes] at compiled
+  | some nodes =>
+      cases hchildren : compileItems? d hwf call.origin call.fullContext
+          call.binders (localChildOccurrences d call.origin)
+          (fun _ member => List.mem_append_right _ member) with
+      | none => simp [hnodes, hchildren] at compiled
+      | some children =>
+          simp [hnodes, hchildren] at compiled
+          subst body
+          constructor
+          · congr 1
+          · congr 1
 
 /-- A successful call with one direct bubble occurrence exposes that exact
 child result. This is the canonical grammar inversion used by source
