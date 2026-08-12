@@ -1,5 +1,6 @@
 import VisualProof.Concrete.Elaboration.Context
 import VisualProof.Diagram.Algebra
+import VisualProof.Diagram.RenamingIsomorphism
 
 namespace VisualProof.Concrete.Elaboration
 
@@ -8,113 +9,158 @@ open VisualProof.Theory
 open VisualProof.Diagram
 
 /-!
-The compiler owns concrete identities.  Lexical wire and relation positions are
-derived only when a checked symbolic tree is erased to intrinsic diagram syntax.
+The sole compiler result is indexed by the exact root or nested compiler call.
+Concrete occurrence origins remain ordinary owned data, while recursive child
+results carry the exact wire context, relation context, and binder context used
+by their compiler invocation.
 -/
 
+/-- The exact inputs of one successful root or nested region compilation. -/
+inductive CompilerCall (d : Diagram) where
+  | root (ambient locals : WireContext d)
+  | nested (origin : Fin d.regionCount)
+      (context : WireContext d) (rels : RelCtx)
+      (binders : BinderContext d rels)
+
+namespace CompilerCall
+
+def origin : CompilerCall d → Fin d.regionCount
+  | .root _ _ => d.root
+  | .nested origin _ _ _ => origin
+
+def outerContext : CompilerCall d → WireContext d
+  | .root ambient _ => ambient
+  | .nested _ context _ _ => context
+
+def localContext : CompilerCall d → WireContext d
+  | .root _ locals => locals
+  | .nested origin _ _ _ => exactScopeWires d origin
+
+def fullContext (call : CompilerCall d) : WireContext d :=
+  call.outerContext ++ call.localContext
+
+def rels : CompilerCall d → RelCtx
+  | .root _ _ => []
+  | .nested _ _ rels _ => rels
+
+def binders : (call : CompilerCall d) → BinderContext d call.rels
+  | .root _ _ => BinderContext.empty
+  | .nested _ _ _ binders => binders
+
+theorem fullContext_length (call : CompilerCall d) :
+    call.fullContext.length =
+      call.outerContext.length + call.localContext.length := by
+  simp [fullContext]
+
+def castFullItems {rels : RelCtx} (call : CompilerCall d)
+    (items : ItemSeq call.fullContext.length rels) :
+    ItemSeq (call.outerContext.length + call.localContext.length) rels :=
+  items.castWiresEq call.fullContext_length
+
+def finish (call : CompilerCall d)
+    (items : ItemSeq call.fullContext.length call.rels) :
+    Region call.outerContext.length call.rels := by
+  exact .mk call.localContext.length (call.castFullItems items)
+
+end CompilerCall
+
 mutual
-  /-- One source-owned symbolic region.  Direct nodes and child regions remain
-  separate because that is the concrete compiler's canonical block order. -/
-  inductive CompiledRegion (d : Diagram) where
-    | mk (origin : Fin d.regionCount)
-        (nodes children : CompiledItems d) : CompiledRegion d
+  /-- The sole successful compiler result, indexed by its exact call. -/
+  inductive CompiledRegion (d : Diagram) : CompilerCall d → Type
+    | mk {call : CompilerCall d}
+        (items : CompiledItems d call.fullContext
+          call.rels call.binders) :
+        CompiledRegion d call
 
-  /-- One symbolic item containing concrete source identities only. -/
-  inductive CompiledItem (d : Diagram) where
-    | atom (origin : Fin d.nodeCount) (binder : Fin d.regionCount)
-        (arity : Nat) (ports : Fin arity → Fin d.wireCount) : CompiledItem d
-    | identity (origin : Fin d.nodeCount) (arity : Nat)
-        (ports : Fin arity → Fin d.wireCount) : CompiledItem d
-    | cut (body : CompiledRegion d) : CompiledItem d
-    | bubble (arity : Nat) (body : CompiledRegion d) : CompiledItem d
+  /-- One compiled occurrence with an ordinary concrete origin. -/
+  inductive CompiledItem (d : Diagram) :
+      (context : WireContext d) →
+      (rels : RelCtx) → BinderContext d rels → Type
+    | node {context : WireContext d} {rels : RelCtx}
+        {binders : BinderContext d rels} (origin : Fin d.nodeCount)
+        (item : Item context.length rels) :
+        CompiledItem d context rels binders
+    | cut {context : WireContext d} {rels : RelCtx}
+        {binders : BinderContext d rels} {origin : Fin d.regionCount}
+        (body : CompiledRegion d
+          (.nested origin context rels binders)) :
+        CompiledItem d context rels binders
+    | bubble {context : WireContext d} {rels : RelCtx}
+        {binders : BinderContext d rels} {origin : Fin d.regionCount}
+        (arity : Nat)
+        (body : CompiledRegion d
+          (.nested origin context (arity :: rels)
+            (binders.push origin arity))) :
+        CompiledItem d context rels binders
 
-  /-- An ordered symbolic item sequence. -/
-  inductive CompiledItems (d : Diagram) where
-    | nil : CompiledItems d
-    | cons (head : CompiledItem d) (tail : CompiledItems d) : CompiledItems d
+  /-- An origin-owning ordered result at one exact occurrence compiler
+  signature. -/
+  inductive CompiledItems (d : Diagram) :
+      (context : WireContext d) →
+      (rels : RelCtx) → BinderContext d rels → Type
+    | nil {context : WireContext d} {rels : RelCtx}
+        {binders : BinderContext d rels} :
+        CompiledItems d context rels binders
+    | cons {context : WireContext d} {rels : RelCtx}
+        {binders : BinderContext d rels}
+        (head : CompiledItem d context rels binders)
+        (tail : CompiledItems d context rels binders) :
+        CompiledItems d context rels binders
+end
+
+mutual
+  def CompiledRegion.erase : CompiledRegion d call →
+      Region call.outerContext.length call.rels
+    | .mk items => call.finish items.erase
+
+  def CompiledItem.erase :
+      CompiledItem d context rels binders → Item context.length rels
+    | .node _ item => item
+    | .cut body => .cut body.erase
+    | .bubble arity body => .bubble arity body.erase
+
+  def CompiledItems.erase :
+      CompiledItems d context rels binders → ItemSeq context.length rels
+    | .nil => .nil
+    | .cons head tail => .cons head.erase tail.erase
 end
 
 namespace CompiledRegion
 
-def origin : CompiledRegion d → Fin d.regionCount
-  | .mk origin _ _ => origin
+def localCount (_region : CompiledRegion d call) : Nat :=
+  call.localContext.length
 
-def nodeItems : CompiledRegion d → CompiledItems d
-  | .mk _ nodes _ => nodes
+def items : (region : CompiledRegion d call) →
+    CompiledItems d call.fullContext call.rels call.binders
+  | .mk items => items
 
-def childItems : CompiledRegion d → CompiledItems d
-  | .mk _ _ children => children
+@[simp] theorem erase_localCount (region : CompiledRegion d call) :
+    region.erase.localCount = region.localCount := by
+  cases region
+  cases call <;> rfl
 
 end CompiledRegion
 
-def CompiledItem.origin : CompiledItem d →
-    LocalOccurrence d.regionCount d.nodeCount
-  | .atom node _ _ _ => .node node
-  | .identity node _ _ => .node node
-  | .cut body => .child body.origin
-  | .bubble _ body => .child body.origin
+def CompiledItem.origin
+    (item : CompiledItem d context rels binders) :
+    LocalOccurrence d.regionCount d.nodeCount := by
+  cases item with
+  | node node _ => exact .node node
+  | @cut _ _ _ origin _ => exact .child origin
+  | @bubble _ _ _ origin _ _ => exact .child origin
 
 namespace CompiledItems
 
-def origins : CompiledItems d →
-    List (LocalOccurrence d.regionCount d.nodeCount)
-  | .nil => []
-  | .cons head tail => head.origin :: tail.origins
-
-def length : CompiledItems d → Nat
-  | .nil => 0
-  | .cons _ tail => tail.length + 1
-
-def append : CompiledItems d → CompiledItems d → CompiledItems d
-  | .nil, suffix => suffix
-  | .cons head tail, suffix => .cons head (tail.append suffix)
-
-def get : (items : CompiledItems d) → Fin items.length → CompiledItem d
-  | .nil, index => Fin.elim0 index
-  | .cons head tail, index => Fin.cases head tail.get index
-
-@[simp] theorem origins_nil :
-    origins (CompiledItems.nil : CompiledItems d) = [] := rfl
-
-@[simp] theorem origins_cons (head : CompiledItem d) (tail : CompiledItems d) :
-    origins (.cons head tail) = head.origin :: tail.origins := rfl
-
-@[simp] theorem length_nil :
-    length (CompiledItems.nil : CompiledItems d) = 0 := rfl
-
-@[simp] theorem length_cons (head : CompiledItem d) (tail : CompiledItems d) :
-    length (.cons head tail) = tail.length + 1 := rfl
-
-@[simp] theorem origins_append (initial suffix : CompiledItems d) :
-    (initial.append suffix).origins = initial.origins ++ suffix.origins :=
-  match initial with
-  | .nil => rfl
-  | .cons _ tail => congrArg (List.cons _) (origins_append tail suffix)
-
-@[simp] theorem length_eq_origins_length (items : CompiledItems d) :
-    items.length = items.origins.length :=
-  match items with
-  | .nil => rfl
-  | .cons _ tail => by simp [length, length_eq_origins_length tail]
-
-theorem origin_get : (items : CompiledItems d) →
-    (index : Fin items.length) →
-    (items.get index).origin =
-      items.origins.get (Fin.cast (length_eq_origins_length items) index)
-  | .nil, index => Fin.elim0 index
-  | .cons head tail, index => by
-      refine Fin.cases ?_ (fun rest => ?_) index
-      · rfl
-      · simpa [get, origins, length] using origin_get tail rest
-
 /-- The two stable subsequences determined by one origin classifier. -/
-structure Partition (items : CompiledItems d) where
-  retained : CompiledItems d
-  material : CompiledItems d
+structure Partition
+    (items : CompiledItems d context rels binders) where
+  retained : CompiledItems d context rels binders
+  material : CompiledItems d context rels binders
 
+/-- Stably partition annotated items without descending into child bodies. -/
 def partition (classifier :
     LocalOccurrence d.regionCount d.nodeCount → Bool) :
-    (items : CompiledItems d) → Partition items
+    (items : CompiledItems d context rels binders) → Partition items
   | .nil => ⟨.nil, .nil⟩
   | .cons head tail =>
       let divided := tail.partition classifier
@@ -123,9 +169,79 @@ def partition (classifier :
       else
         ⟨.cons head divided.retained, divided.material⟩
 
+def origins : CompiledItems d context rels binders →
+    List (LocalOccurrence d.regionCount d.nodeCount)
+  | .nil => []
+  | .cons head tail => head.origin :: tail.origins
+
+def length (items : CompiledItems d context rels binders) : Nat :=
+  items.erase.length
+
+def append : CompiledItems d context rels binders →
+    CompiledItems d context rels binders →
+      CompiledItems d context rels binders
+  | .nil, suffix => suffix
+  | .cons head tail, suffix => .cons head (tail.append suffix)
+
+def get : (items : CompiledItems d context rels binders) →
+    Fin items.length → CompiledItem d context rels binders
+  | .nil, index => Fin.elim0 index
+  | .cons head tail, index => Fin.cases head tail.get index
+
+@[simp] theorem erase_nil :
+    erase (CompiledItems.nil : CompiledItems d context rels binders) =
+      .nil := rfl
+
+@[simp] theorem erase_cons
+    (head : CompiledItem d context rels binders)
+    (tail : CompiledItems d context rels binders) :
+    erase (.cons head tail) = .cons head.erase tail.erase := rfl
+
+@[simp] theorem origins_nil :
+    origins (CompiledItems.nil : CompiledItems d context rels binders) =
+      [] := rfl
+
+@[simp] theorem origins_cons
+    (head : CompiledItem d context rels binders)
+    (tail : CompiledItems d context rels binders) :
+    origins (.cons head tail) = head.origin :: tail.origins := rfl
+
+@[simp] theorem erase_length
+    (items : CompiledItems d context rels binders) :
+    items.erase.length = items.length := rfl
+
+@[simp] theorem length_eq_origins_length
+    (items : CompiledItems d context rels binders) :
+    items.length = items.origins.length :=
+  match items with
+  | .nil => rfl
+  | .cons _ tail => congrArg Nat.succ (length_eq_origins_length tail)
+
+@[simp] theorem erase_append
+    (initial suffix : CompiledItems d context rels binders) :
+    (initial.append suffix).erase = initial.erase.append suffix.erase :=
+  match initial with
+  | .nil => rfl
+  | .cons _ tail => congrArg (ItemSeq.cons _) (erase_append tail suffix)
+
+@[simp] theorem origins_append
+    (initial suffix : CompiledItems d context rels binders) :
+    (initial.append suffix).origins = initial.origins ++ suffix.origins :=
+  match initial with
+  | .nil => rfl
+  | .cons _ tail => congrArg (List.cons _) (origins_append tail suffix)
+
+@[simp] theorem erase_get
+    (items : CompiledItems d context rels binders)
+    (index : Fin items.length) :
+    items.erase.get index = (items.get index).erase :=
+  match items with
+  | .nil => Fin.elim0 index
+  | .cons _ tail => Fin.cases rfl (fun tailIndex => erase_get tail tailIndex) index
+
 @[simp] theorem partition_retained_origins
     (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool)
-    (items : CompiledItems d) :
+    (items : CompiledItems d context rels binders) :
     (items.partition classifier).retained.origins =
       items.origins.filter fun origin => !classifier origin :=
   match items with
@@ -136,7 +252,7 @@ def partition (classifier :
 
 @[simp] theorem partition_material_origins
     (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool)
-    (items : CompiledItems d) :
+    (items : CompiledItems d context rels binders) :
     (items.partition classifier).material.origins =
       items.origins.filter classifier :=
   match items with
@@ -147,21 +263,21 @@ def partition (classifier :
 
 theorem partition_retained_stable
     (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool)
-    (items : CompiledItems d) :
+    (items : CompiledItems d context rels binders) :
     List.Sublist (items.partition classifier).retained.origins items.origins := by
   rw [partition_retained_origins]
   exact List.filter_sublist
 
 theorem partition_material_stable
     (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool)
-    (items : CompiledItems d) :
+    (items : CompiledItems d context rels binders) :
     List.Sublist (items.partition classifier).material.origins items.origins := by
   rw [partition_material_origins]
   exact List.filter_sublist
 
 theorem partition_origins_perm
     (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool)
-    (items : CompiledItems d) :
+    (items : CompiledItems d context rels binders) :
     items.origins.Perm
       ((items.partition classifier).retained.origins ++
         (items.partition classifier).material.origins) :=
@@ -177,352 +293,54 @@ theorem partition_origins_perm
               simpa [partition, hclassifier] using
                 (List.perm_middle (a := head.origin)).symm)
 
+private noncomputable def intrinsicTrans
+    {d : Diagram} {context : WireContext d} {rels : RelCtx}
+    {source middle target : ItemSeq context.length rels}
+    (first : ItemSeqIso (FiniteEquiv.refl (Fin context.length)) rels
+      source middle)
+    (second : ItemSeqIso (FiniteEquiv.refl (Fin context.length)) rels
+      middle target) :
+    ItemSeqIso (FiniteEquiv.refl (Fin context.length)) rels source target := by
+  have composed := first.trans second
+  have wireEquality :
+      (FiniteEquiv.refl (Fin context.length)).trans
+          (FiniteEquiv.refl (Fin context.length)) =
+        FiniteEquiv.refl (Fin context.length) := by
+    apply FiniteEquiv.ext
+    intro index
+    rfl
+  rw [wireEquality] at composed
+  exact composed
+
+/-- The canonical intrinsic braid from compiler order to the stable retained
+block followed by the stable material block. -/
+noncomputable def partitionFactorization
+    (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool) :
+    (items : CompiledItems d context rels binders) →
+      ItemSeqIso (FiniteEquiv.refl (Fin context.length)) rels items.erase
+        (((items.partition classifier).retained.append
+          (items.partition classifier).material).erase)
+  | .nil => ItemSeqIso.refl .nil
+  | .cons head tail => by
+      let tailFactorization := tail.partitionFactorization classifier
+      let headItems : ItemSeq context.length rels := .cons head.erase .nil
+      let lifted := (ItemSeqIso.refl headItems).append tailFactorization
+      cases hclassifier : classifier head.origin with
+      | false =>
+          simpa [partition, hclassifier, headItems, erase_append,
+            ItemSeq.append_assoc] using lifted
+      | true =>
+          let retained := (tail.partition classifier).retained.erase
+          let material := (tail.partition classifier).material.erase
+          let rotated :=
+            (ItemSeqIso.appendCommRename headItems retained
+              (FiniteEquiv.refl (Fin context.length))).append
+                (ItemSeqIso.refl material)
+          apply intrinsicTrans lifted
+          simpa [partition, hclassifier, headItems, retained, material,
+            erase_append, ItemSeq.append_assoc, FiniteEquiv.refl,
+            ItemSeq.renameWires_id] using rotated
+
 end CompiledItems
-
-namespace CompiledRegion
-
-def items (region : CompiledRegion d) : CompiledItems d :=
-  region.nodeItems.append region.childItems
-
-@[simp] theorem items_mk (origin : Fin d.regionCount)
-    (nodes children : CompiledItems d) :
-    items (.mk origin nodes children : CompiledRegion d) =
-      nodes.append children := rfl
-
-end CompiledRegion
-
-/-! Source validity is proof-only and is derived by the sole compiler. -/
-
-def bubbleParent (d : Diagram) (binder : Fin d.regionCount) :
-    Fin d.regionCount :=
-  match d.regions binder with
-  | .bubble parent _ => parent
-  | _ => d.root
-
-@[simp] theorem bubbleParent_of_bubble
-    (shape : d.regions binder = .bubble parent arity) :
-    bubbleParent d binder = parent := by
-  simp [bubbleParent, shape]
-
-mutual
-  def CompiledRegion.Valid : (region : CompiledRegion d) → Prop
-    | .mk origin nodes children =>
-        nodes.origins = localNodeOccurrences d origin ∧
-        children.origins = localChildOccurrences d origin ∧
-        nodes.ValidAt origin ∧ children.ValidAt origin
-
-  def CompiledItem.ValidAt (parent : Fin d.regionCount) :
-      CompiledItem d → Prop
-    | .atom origin binder arity ports =>
-        d.nodes origin = .atom parent binder ∧
-        d.regions binder = .bubble (bubbleParent d binder) arity ∧
-        d.Encloses binder parent ∧
-        ∀ index, d.EndpointOccurs (ports index) ⟨origin, .arg index⟩
-    | .identity origin arity ports =>
-        d.nodes origin = .identity parent arity ∧
-        ∀ index, d.EndpointOccurs (ports index) ⟨origin, .arg index⟩
-    | .cut body =>
-        d.regions body.origin = .cut parent ∧ body.Valid
-    | .bubble arity body =>
-        d.regions body.origin = .bubble parent arity ∧ body.Valid
-
-  def CompiledItems.ValidAt (parent : Fin d.regionCount) :
-      CompiledItems d → Prop
-    | .nil => True
-    | .cons head tail => head.ValidAt parent ∧ tail.ValidAt parent
-end
-
-theorem CompiledItems.valid_get {items : CompiledItems d}
-    (valid : items.ValidAt parent) (index : Fin items.length) :
-    (items.get index).ValidAt parent := by
-  cases items with
-  | nil => exact Fin.elim0 index
-  | cons head tail =>
-      refine Fin.cases valid.1 (fun rest => ?_) index
-      exact CompiledItems.valid_get valid.2 rest
-
-theorem CompiledItems.valid_append
-    (initial suffix : CompiledItems d) {parent : Fin d.regionCount}
-    (initialValid : initial.ValidAt parent)
-    (suffixValid : suffix.ValidAt parent) :
-    (initial.append suffix).ValidAt parent := by
-  cases initial with
-  | nil => exact suffixValid
-  | cons head tail =>
-      exact ⟨initialValid.1,
-        valid_append tail suffix initialValid.2 suffixValid⟩
-termination_by initial.length
-decreasing_by simp_all
-
-theorem CompiledRegion.items_valid (region : CompiledRegion d)
-    (valid : region.Valid) : region.items.ValidAt region.origin := by
-  cases region with
-  | mk origin nodes children =>
-      exact nodes.valid_append children valid.2.2.1 valid.2.2.2
-
-theorem CompiledRegion.items_origins (region : CompiledRegion d)
-    (valid : region.Valid) :
-    region.items.origins = localOccurrences d region.origin := by
-  cases region with
-  | mk origin nodes children =>
-      change nodes.origins = localNodeOccurrences d origin ∧
-        children.origins = localChildOccurrences d origin ∧ _ at valid
-      simp [CompiledRegion.items, CompiledRegion.nodeItems,
-        CompiledRegion.childItems, CompiledRegion.origin, localOccurrences,
-        valid.1, valid.2.1]
-
-/-! Intrinsic erasure is the sole concrete-identity-to-position boundary. -/
-
-mutual
-  noncomputable def CompiledRegion.erase
-      (region : CompiledRegion d) (valid : region.Valid)
-      (hwf : d.WellFormed )
-      (outer locals : WireContext d) (rels : RelCtx)
-      (binders : BinderContext d rels)
-      (exact : (outer ++ locals).Exact region.origin)
-      (covers : binders.Covers region.origin) :
-      Region outer.length rels := by
-    cases region with
-    | mk origin nodes children =>
-        let erased :=
-          (CompiledItems.erase _ valid.2.2.1 hwf (outer ++ locals) rels
-            binders exact covers).append
-          (CompiledItems.erase _ valid.2.2.2 hwf (outer ++ locals) rels
-            binders exact covers)
-        exact .mk locals.length
-          (erased.castWiresEq (by simp only [List.length_append]))
-
-  noncomputable def CompiledItem.erase
-      (item : CompiledItem d) {parent : Fin d.regionCount}
-      (valid : item.ValidAt parent) (hwf : d.WellFormed )
-      (context : WireContext d) (rels : RelCtx)
-      (binders : BinderContext d rels)
-      (exact : context.Exact parent) (covers : binders.Covers parent) :
-      Item context.length rels := by
-    cases item with
-    | atom origin binder arity ports =>
-        exact .atom
-          (binders.relationAt covers binder (bubbleParent d binder) arity
-            valid.2.1 valid.2.2.1)
-          (fun index => context.position exact _ (by
-            have visible := hwf.wire_scopes_enclose _ _ (valid.2.2.2 index)
-            rw [valid.1] at visible
-            exact visible))
-    | identity origin arity ports =>
-        exact .identity arity (fun index => context.position exact _ (by
-          have visible := hwf.wire_scopes_enclose _ _ (valid.2 index)
-          rw [valid.1] at visible
-          exact visible))
-    | cut body =>
-        have parentShape : (d.regions body.origin).parent? = some parent := by
-          simp [valid.1, CRegion.parent?]
-        exact .cut (CompiledRegion.erase _ valid.2 hwf context
-          (exactScopeWires d body.origin) rels binders
-          (exact.extend_child hwf parentShape)
-          (BinderContext.covers_cut_child covers valid.1))
-    | bubble arity body =>
-        have parentShape : (d.regions body.origin).parent? = some parent := by
-          simp [valid.1, CRegion.parent?]
-        exact .bubble arity (CompiledRegion.erase _ valid.2 hwf context
-          (exactScopeWires d body.origin) (arity :: rels)
-          (binders.push body.origin arity)
-          (exact.extend_child hwf parentShape)
-          (BinderContext.push_covers_bubble_child covers valid.1))
-
-  noncomputable def CompiledItems.erase
-      (items : CompiledItems d) {parent : Fin d.regionCount}
-      (valid : items.ValidAt parent) (hwf : d.WellFormed )
-      (context : WireContext d) (rels : RelCtx)
-      (binders : BinderContext d rels)
-      (exact : context.Exact parent) (covers : binders.Covers parent) :
-      ItemSeq context.length rels := by
-    cases items with
-    | nil => exact .nil
-    | cons head tail =>
-        exact .cons
-          (CompiledItem.erase _ valid.1 hwf context rels binders exact covers)
-          (CompiledItems.erase _ valid.2 hwf context rels binders exact covers)
-end
-
-@[simp] theorem CompiledItem.erase_atom
-    (origin : Fin d.nodeCount) (binder : Fin d.regionCount) (arity : Nat)
-    (ports : Fin arity → Fin d.wireCount) {parent : Fin d.regionCount}
-    (valid : (CompiledItem.atom origin binder arity ports).ValidAt parent)
-    (hwf : d.WellFormed) (context : WireContext d) (rels : RelCtx)
-    (binders : BinderContext d rels) (exact : context.Exact parent)
-    (covers : binders.Covers parent) :
-    (CompiledItem.atom origin binder arity ports).erase valid hwf context rels
-        binders exact covers =
-      .atom
-        (binders.relationAt covers binder (bubbleParent d binder) arity
-          valid.2.1 valid.2.2.1)
-        (fun index => context.position exact _ (by
-          have visible := hwf.wire_scopes_enclose _ _ (valid.2.2.2 index)
-          rw [valid.1] at visible
-          exact visible)) := rfl
-
-@[simp] theorem CompiledItem.erase_identity
-    (origin : Fin d.nodeCount) (arity : Nat)
-    (ports : Fin arity → Fin d.wireCount) {parent : Fin d.regionCount}
-    (valid : (CompiledItem.identity origin arity ports).ValidAt parent)
-    (hwf : d.WellFormed) (context : WireContext d) (rels : RelCtx)
-    (binders : BinderContext d rels) (exact : context.Exact parent)
-    (covers : binders.Covers parent) :
-    (CompiledItem.identity origin arity ports).erase valid hwf context rels
-        binders exact covers =
-      .identity arity (fun index => context.position exact _ (by
-        have visible := hwf.wire_scopes_enclose _ _ (valid.2 index)
-        rw [valid.1] at visible
-        exact visible)) := rfl
-
-@[simp] theorem CompiledItem.erase_cut
-    (body : CompiledRegion d) {parent : Fin d.regionCount}
-    (valid : (CompiledItem.cut body).ValidAt parent)
-    (hwf : d.WellFormed) (context : WireContext d) (rels : RelCtx)
-    (binders : BinderContext d rels) (exact : context.Exact parent)
-    (covers : binders.Covers parent) :
-    (CompiledItem.cut body).erase valid hwf context rels binders exact covers =
-      .cut (body.erase valid.2 hwf context (exactScopeWires d body.origin)
-        rels binders (exact.extend_child hwf (by
-          simp [valid.1, CRegion.parent?]))
-        (BinderContext.covers_cut_child covers valid.1)) := rfl
-
-@[simp] theorem CompiledItem.erase_bubble
-    (arity : Nat) (body : CompiledRegion d) {parent : Fin d.regionCount}
-    (valid : (CompiledItem.bubble arity body).ValidAt parent)
-    (hwf : d.WellFormed) (context : WireContext d) (rels : RelCtx)
-    (binders : BinderContext d rels) (exact : context.Exact parent)
-    (covers : binders.Covers parent) :
-    (CompiledItem.bubble arity body).erase valid hwf context rels binders exact
-        covers =
-      .bubble arity
-        (body.erase valid.2 hwf context (exactScopeWires d body.origin)
-          (arity :: rels) (binders.push body.origin arity)
-          (exact.extend_child hwf (by simp [valid.1, CRegion.parent?]))
-          (BinderContext.push_covers_bubble_child covers valid.1)) := rfl
-
-@[simp] theorem CompiledItems.erase_length
-    (items : CompiledItems d) {parent : Fin d.regionCount}
-    (valid : items.ValidAt parent) (hwf : d.WellFormed)
-    (context : WireContext d) (rels : RelCtx)
-    (binders : BinderContext d rels)
-    (exact : context.Exact parent) (covers : binders.Covers parent) :
-    (items.erase valid hwf context rels binders exact covers).length =
-      items.length := by
-  cases items with
-  | nil => rfl
-  | cons head tail =>
-      change
-        (tail.erase valid.2 hwf context rels binders exact covers).length + 1 =
-          tail.length + 1
-      rw [erase_length tail valid.2 hwf context rels binders exact covers]
-termination_by items.length
-decreasing_by simp_all
-
-theorem CompiledItems.erase_get
-    (items : CompiledItems d) {parent : Fin d.regionCount}
-    (valid : items.ValidAt parent) (hwf : d.WellFormed)
-    (context : WireContext d) (rels : RelCtx)
-    (binders : BinderContext d rels)
-    (exact : context.Exact parent) (covers : binders.Covers parent)
-    (index : Fin items.length) :
-    (items.erase valid hwf context rels binders exact covers).get
-        (Fin.cast
-          (items.erase_length valid hwf context rels binders exact covers).symm
-          index) =
-      (items.get index).erase (items.valid_get valid index) hwf context rels
-        binders exact covers := by
-  cases items with
-  | nil => exact Fin.elim0 index
-  | cons head tail =>
-      refine Fin.cases ?_ (fun rest => ?_) index
-      · rfl
-      · have castEq :
-            Fin.cast
-                (erase_length (.cons head tail) valid hwf context rels binders
-                  exact covers).symm
-                (Fin.succ rest) =
-              Fin.succ (Fin.cast
-                (erase_length tail valid.2 hwf context rels binders exact
-                  covers).symm rest) := by
-            apply Fin.ext
-            rfl
-        rw [castEq]
-        exact erase_get tail valid.2 hwf context rels binders exact covers rest
-termination_by items.length
-decreasing_by simp_all
-
-theorem CompiledItems.erase_append
-    (initial suffix : CompiledItems d) {parent : Fin d.regionCount}
-    (initialValid : initial.ValidAt parent)
-    (suffixValid : suffix.ValidAt parent)
-    (hwf : d.WellFormed) (context : WireContext d) (rels : RelCtx)
-    (binders : BinderContext d rels)
-    (exact : context.Exact parent) (covers : binders.Covers parent) :
-    (initial.append suffix).erase
-        (initial.valid_append suffix initialValid suffixValid)
-        hwf context rels binders exact covers =
-      (initial.erase initialValid hwf context rels binders exact covers).append
-        (suffix.erase suffixValid hwf context rels binders exact covers) := by
-  cases initial with
-  | nil => rfl
-  | cons head tail =>
-      change ItemSeq.cons _
-          ((tail.append suffix).erase
-            (tail.valid_append suffix initialValid.2 suffixValid)
-            hwf context rels binders exact covers) =
-        ItemSeq.cons _
-          ((tail.erase initialValid.2 hwf context rels binders exact covers).append
-            (suffix.erase suffixValid hwf context rels binders exact covers))
-      exact congrArg (ItemSeq.cons _)
-        (erase_append tail suffix initialValid.2 suffixValid hwf context rels
-          binders exact covers)
-termination_by initial.length
-decreasing_by simp_all
-
-@[simp] theorem CompiledRegion.erase_mk
-    (origin : Fin d.regionCount) (nodes children : CompiledItems d)
-    (valid : (CompiledRegion.mk origin nodes children).Valid)
-    (hwf : d.WellFormed) (outer locals : WireContext d) (rels : RelCtx)
-    (binders : BinderContext d rels)
-    (exact : (outer ++ locals).Exact origin)
-    (covers : binders.Covers origin) :
-    (CompiledRegion.mk origin nodes children).erase valid hwf outer locals rels
-        binders exact covers =
-      .mk locals.length
-        (((nodes.erase valid.2.2.1 hwf (outer ++ locals) rels binders exact
-          covers).append
-          (children.erase valid.2.2.2 hwf (outer ++ locals) rels binders exact
-            covers)).castWiresEq (by simp only [List.length_append])) := rfl
-
-theorem CompiledRegion.erase_eq_items
-    (region : CompiledRegion d) (valid : region.Valid)
-    (hwf : d.WellFormed) (outer locals : WireContext d) (rels : RelCtx)
-    (binders : BinderContext d rels)
-    (exact : (outer ++ locals).Exact region.origin)
-    (covers : binders.Covers region.origin) :
-    region.erase valid hwf outer locals rels binders exact covers =
-      .mk locals.length
-        ((region.items.erase (region.items_valid valid) hwf (outer ++ locals)
-          rels binders exact covers).castWiresEq (by
-            simp only [List.length_append])) := by
-  cases region with
-  | mk origin nodes children =>
-      rw [CompiledRegion.erase_mk]
-      congr 1
-      exact congrArg (ItemSeq.castWiresEq _)
-        (CompiledItems.erase_append nodes children valid.2.2.1
-          valid.2.2.2 hwf (outer ++ locals) rels binders exact covers).symm
-
-@[simp] theorem CompiledRegion.erase_localCount
-    (region : CompiledRegion d) (valid : region.Valid)
-    (hwf : d.WellFormed ) (outer locals : WireContext d) (rels : RelCtx)
-    (binders : BinderContext d rels)
-    (exact : (outer ++ locals).Exact region.origin)
-    (covers : binders.Covers region.origin) :
-    (region.erase valid hwf outer locals rels binders exact covers).localCount =
-      locals.length := by
-  cases region
-  rfl
 
 end VisualProof.Concrete.Elaboration

@@ -1,158 +1,946 @@
 import VisualProof.Concrete.Elaboration.Compile.Tree
+import VisualProof.Concrete.Open
+import VisualProof.Concrete.OpenIsomorphism
+import VisualProof.Concrete.Occurrence
+import VisualProof.Diagram.OpenIsomorphism
+import VisualProof.Diagram.Algebra
 
 namespace VisualProof.Concrete.Elaboration
 
 open VisualProof
+open VisualProof.Data.Finite
+open VisualProof.Theory
 open VisualProof.Diagram
 
-/-- The canonical concrete wire owning a required node port. -/
-private noncomputable def requiredOwner (d : Diagram) (hwf : d.WellFormed)
-    (node : Fin d.nodeCount) (port : CPort)
-    (required : d.RequiresPort node port) : Fin d.wireCount :=
-  (endpointOwner? d ⟨node, port⟩).get <|
-    Option.isSome_iff_exists.mpr <|
-      let ⟨_, occurs⟩ :=
-        required_port_is_covered hwf.required_ports_are_covered required
-      endpointOwner?_complete occurs
+def renameOccurrence {source target : Diagram}
+    (iso : Iso source target) :
+    LocalOccurrence source.regionCount source.nodeCount →
+      LocalOccurrence target.regionCount target.nodeCount
+  | .node node => .node (iso.nodes node)
+  | .child region => .child (iso.regions region)
 
-private theorem requiredOwner_occurs (d : Diagram) (hwf : d.WellFormed)
-    (node : Fin d.nodeCount) (port : CPort)
-    (required : d.RequiresPort node port) :
-    d.EndpointOccurs (requiredOwner d hwf node port required) ⟨node, port⟩ := by
-  apply endpointOwner?_sound
-  exact (Option.some_get (Option.isSome_iff_exists.mpr (by
-    let ⟨wire, occurs⟩ :=
-      required_port_is_covered hwf.required_ports_are_covered required
-    exact endpointOwner?_complete occurs))).symm
+private def occurrenceEquiv {source target : Diagram}
+    (iso : Iso source target) :
+    FiniteEquiv
+      (LocalOccurrence source.regionCount source.nodeCount)
+      (LocalOccurrence target.regionCount target.nodeCount) where
+  toFun := renameOccurrence iso
+  invFun := renameOccurrence iso.symm
+  left_inv := by
+    intro occurrence
+    cases occurrence with
+    | node node => exact congrArg LocalOccurrence.node (iso.nodes.left_inv node)
+    | child region => exact congrArg LocalOccurrence.child (iso.regions.left_inv region)
+  right_inv := by
+    intro occurrence
+    cases occurrence with
+    | node node => exact congrArg LocalOccurrence.node (iso.nodes.right_inv node)
+    | child region => exact congrArg LocalOccurrence.child (iso.regions.right_inv region)
 
-private theorem atom_arg_required (d : Diagram) (node : Fin d.nodeCount)
-    (region binder binderParent : Fin d.regionCount) (arity : Nat)
-    (hnode : d.nodes node = .atom region binder)
-    (hbinder : d.regions binder = .bubble binderParent arity)
-    (index : Fin arity) : d.RequiresPort node (.arg index) := by
-  simpa [Diagram.RequiresPort, hnode, hbinder] using
-    (show ∃ candidate : Fin arity, index.val = candidate.val from
-      ⟨index, rfl⟩)
+private theorem exactScopeWires_mem_iff {source target : Diagram}
+    (iso : Iso source target) (region : Fin source.regionCount)
+    (wire : Fin source.wireCount) :
+    iso.wires wire ∈ exactScopeWires target (iso.regions region) ↔
+      wire ∈ exactScopeWires source region := by
+  simp only [mem_exactScopeWires]
+  rw [<- iso.wire_scope_eq wire]
+  constructor
+  · intro h
+    have := congrArg iso.regions.invFun h
+    simpa only [iso.regions.left_inv] using this
+  · exact congrArg iso.regions
 
-private theorem identity_arg_required (d : Diagram) (node : Fin d.nodeCount)
-    (region : Fin d.regionCount) (arity : Nat)
-    (hnode : d.nodes node = .identity region arity)
-    (index : Fin arity) : d.RequiresPort node (.arg index) := by
-  simpa [Diagram.RequiresPort, hnode] using
-    (show ∃ candidate : Fin arity, index.val = candidate.val from
-      ⟨index, rfl⟩)
+def localWireEquiv {source target : Diagram}
+    (iso : Iso source target) (region : Fin source.regionCount) :
+    FiniteEquiv
+      (Fin (exactScopeWires source region).length)
+      (Fin (exactScopeWires target (iso.regions region)).length) :=
+  FiniteEquiv.restrictLists iso.wires _ _
+    (exactScopeWires_nodup source region)
+    (exactScopeWires_nodup target (iso.regions region))
+    (exactScopeWires_mem_iff iso region)
 
-private theorem compileNode_exists (d : Diagram) (hwf : d.WellFormed)
+theorem localWireEquiv_spec {source target : Diagram}
+    (iso : Iso source target) (region : Fin source.regionCount)
+    (index : Fin (exactScopeWires source region).length) :
+    (exactScopeWires target (iso.regions region)).get
+        (localWireEquiv iso region index) =
+      iso.wires ((exactScopeWires source region).get index) :=
+  FiniteEquiv.restrictLists_spec iso.wires _ _ _ _ _ index
+
+private theorem localOccurrences_mem_iff {source target : Diagram}
+    (iso : Iso source target) (region : Fin source.regionCount)
+    (occurrence : LocalOccurrence source.regionCount source.nodeCount) :
+    renameOccurrence iso occurrence ∈
+        localOccurrences target (iso.regions region) ↔
+      occurrence ∈ localOccurrences source region := by
+  cases occurrence with
+  | node node =>
+      simp only [renameOccurrence, mem_localOccurrences_node]
+      rw [<- iso.nodes_eq node, CNode.region_rename]
+      constructor
+      · intro h
+        have := congrArg iso.regions.invFun h
+        simpa only [iso.regions.left_inv] using this
+      · exact congrArg iso.regions
+  | child child =>
+      simp only [renameOccurrence, mem_localOccurrences_child]
+      rw [<- iso.regions_eq child, CRegion.parent?_rename]
+      cases hparent : (source.regions child).parent? with
+      | none => simp
+      | some parent =>
+          simp only [Option.map_some, Option.some.injEq]
+          constructor
+          · intro h
+            have := congrArg iso.regions.invFun h
+            simpa only [iso.regions.left_inv] using this
+          · exact congrArg iso.regions
+
+def localOccurrenceEquiv {source target : Diagram}
+    (iso : Iso source target) (region : Fin source.regionCount) :
+    FiniteEquiv
+      (Fin (localOccurrences source region).length)
+      (Fin (localOccurrences target (iso.regions region)).length) :=
+  FiniteEquiv.restrictLists (occurrenceEquiv iso) _ _
+    (localOccurrences_nodup source region)
+    (localOccurrences_nodup target (iso.regions region))
+    (localOccurrences_mem_iff iso region)
+
+theorem localOccurrenceEquiv_spec {source target : Diagram}
+    (iso : Iso source target) (region : Fin source.regionCount)
+    (index : Fin (localOccurrences source region).length) :
+    (localOccurrences target (iso.regions region)).get
+        (localOccurrenceEquiv iso region index) =
+      renameOccurrence iso ((localOccurrences source region).get index) :=
+  FiniteEquiv.restrictLists_spec (occurrenceEquiv iso) _ _ _ _ _ index
+
+def WireContextsAgree {source target : Diagram}
+    (iso : Iso source target)
+    (sourceContext : WireContext source) (targetContext : WireContext target)
+    (ambient : FiniteEquiv (Fin sourceContext.length) (Fin targetContext.length)) : Prop :=
+  forall index, targetContext.get (ambient index) =
+    iso.wires (sourceContext.get index)
+
+/-- Transport an exact lexical wire context through a concrete isomorphism. -/
+theorem WireContext.Exact.mapIso
+    {source target : Diagram}
+    (iso : Iso source target)
+    {context : WireContext source} {region : Fin source.regionCount}
+    (exact : context.Exact region) :
+    WireContext.Exact (context.map iso.wires) (iso.regions region) := by
+  constructor
+  · exact exact.nodup.map iso.wires (fun _ _ distinct equality =>
+      distinct (iso.wires.injective equality))
+  · intro targetWire
+    rw [List.mem_map]
+    constructor
+    · rintro ⟨sourceWire, sourceMember, rfl⟩
+      rw [exact.mem_iff] at sourceMember
+      simpa only [iso.wire_scope_eq] using iso.encloses_transport sourceMember
+    · intro targetVisible
+      let sourceWire := iso.symm.wires targetWire
+      refine ⟨sourceWire, (exact.mem_iff sourceWire).2 ?_,
+        iso.wires.right_inv targetWire⟩
+      have transported := iso.symm.encloses_transport targetVisible
+      rw [iso.symm.wire_scope_eq targetWire] at transported
+      rw [show iso.symm.regions (iso.regions region) = region by
+        exact iso.regions.left_inv region] at transported
+      exact transported
+
+def BinderContextsAgree {source target : Diagram}
+    (iso : Iso source target)
+    (sourceContext : BinderContext source rels)
+    (targetContext : BinderContext target rels) : Prop :=
+  forall binder, targetContext (iso.regions binder) = sourceContext binder
+
+/-- Binder coverage is invariant under a concrete isomorphism when lookup
+contexts agree along the region equivalence. -/
+theorem BinderContext.Covers.mapIso
+    {source target : Diagram}
+    (iso : Iso source target)
+    {sourceContext : BinderContext source rels}
+    {targetContext : BinderContext target rels}
+    (agrees : BinderContextsAgree iso sourceContext targetContext)
+    {region : Fin source.regionCount}
+    (covers : sourceContext.Covers region) :
+    targetContext.Covers (iso.regions region) := by
+  intro targetBinder targetParent arity targetBubble targetEncloses
+  let sourceBinder := iso.symm.regions targetBinder
+  let sourceParent := iso.symm.regions targetParent
+  have sourceBubble : source.regions sourceBinder =
+      .bubble sourceParent arity := by
+    have renamed := iso.symm.regions_eq targetBinder
+    rw [targetBubble] at renamed
+    simpa only [sourceBinder, sourceParent, CRegion.rename] using renamed.symm
+  have sourceEncloses : source.Encloses sourceBinder region := by
+    have transported := iso.symm.encloses_transport targetEncloses
+    rw [show iso.symm.regions (iso.regions region) = region by
+      exact iso.regions.left_inv region] at transported
+    exact transported
+  obtain ⟨relation, sourceLookup⟩ :=
+    covers sourceBinder sourceParent arity sourceBubble sourceEncloses
+  refine ⟨relation, ?_⟩
+  have lookup := agrees sourceBinder
+  rw [show iso.regions sourceBinder = targetBinder by
+    exact iso.regions.right_inv targetBinder] at lookup
+  exact lookup.trans sourceLookup
+
+/-- Exact binder enumeration transported through a concrete isomorphism. -/
+def BinderContext.Enumeration.mapIso
+    {source target : Diagram}
+    (iso : Iso source target)
+    {sourceContext : BinderContext source rels}
+    {targetContext : BinderContext target rels}
+    (agrees : BinderContextsAgree iso sourceContext targetContext)
+    {region : Fin source.regionCount}
+    (enumeration : BinderContext.Enumeration source sourceContext region) :
+    BinderContext.Enumeration target targetContext (iso.regions region) where
+  binder := fun index => iso.regions (enumeration.binder index)
+  binder_injective := fun _ _ equality =>
+    enumeration.binder_injective (iso.regions.injective equality)
+  bubble := by
+    intro index
+    obtain ⟨parent, sourceBubble⟩ := enumeration.bubble index
+    refine ⟨iso.regions parent, ?_⟩
+    rw [← iso.regions_eq (enumeration.binder index), sourceBubble]
+    rfl
+  encloses := fun index => iso.encloses_transport (enumeration.encloses index)
+  lookup := fun index => agrees (enumeration.binder index) |>.trans
+    (enumeration.lookup index)
+  lookup_owner := by
+    intro candidate arity relation targetLookup
+    let sourceCandidate := iso.symm.regions candidate
+    have agreement := agrees sourceCandidate
+    rw [show iso.regions sourceCandidate = candidate by
+      exact iso.regions.right_inv candidate] at agreement
+    have sourceOwner := enumeration.lookup_owner relation
+      (agreement.symm.trans targetLookup)
+    rw [sourceOwner]
+    exact iso.regions.right_inv candidate
+
+theorem BinderContextsAgree.push {source target : Diagram}
+    {iso : Iso source target}
+    {sourceContext : BinderContext source rels}
+    {targetContext : BinderContext target rels}
+    (hagrees : BinderContextsAgree iso sourceContext targetContext)
+    (binder : Fin source.regionCount) (arity : Nat) :
+    BinderContextsAgree iso (sourceContext.push binder arity)
+      (targetContext.push (iso.regions binder) arity) := by
+  intro candidate
+  by_cases heq : candidate = binder
+  · subst candidate
+    simp
+  · have hmapped : iso.regions candidate ≠ iso.regions binder :=
+      fun h => heq (by
+        have := congrArg iso.regions.invFun h
+        simpa only [iso.regions.left_inv] using this)
+    rw [BinderContext.push_other _ arity hmapped,
+      BinderContext.push_other _ arity heq, hagrees]
+
+def castFinEquiv {source target source' target' : Nat}
+    (sourceEq : source = source') (targetEq : target = target')
+    (equivalence : FiniteEquiv (Fin source') (Fin target')) :
+    FiniteEquiv (Fin source) (Fin target) where
+  toFun index := Fin.cast targetEq.symm (equivalence (Fin.cast sourceEq index))
+  invFun index := Fin.cast sourceEq.symm
+    (equivalence.symm (Fin.cast targetEq index))
+  left_inv := by
+    intro index
+    apply Fin.ext
+    change (equivalence.symm (equivalence (Fin.cast sourceEq index))).val =
+      index.val
+    exact (congrArg Fin.val (equivalence.left_inv (Fin.cast sourceEq index))).trans
+      rfl
+  right_inv := by
+    intro index
+    apply Fin.ext
+    change (equivalence (equivalence.symm (Fin.cast targetEq index))).val =
+      index.val
+    exact (congrArg Fin.val (equivalence.right_inv (Fin.cast targetEq index))).trans
+      rfl
+
+@[simp] private theorem castFinEquiv_rfl
+    (equivalence : FiniteEquiv (Fin source) (Fin target)) :
+    castFinEquiv rfl rfl equivalence = equivalence := by
+  apply FiniteEquiv.ext
+  intro index
+  rfl
+
+def extendedContextEquiv {source target : Diagram}
+    (iso : Iso source target)
+    (sourceContext : WireContext source) (targetContext : WireContext target)
+    (ambient : FiniteEquiv (Fin sourceContext.length) (Fin targetContext.length))
+    (region : Fin source.regionCount) :
+    FiniteEquiv
+      (Fin (sourceContext.extend region).length)
+      (Fin (targetContext.extend (iso.regions region)).length) :=
+  castFinEquiv (WireContext.length_extend sourceContext region)
+    (WireContext.length_extend targetContext (iso.regions region))
+    (extendWireEquiv ambient (localWireEquiv iso region))
+
+theorem get_append_castAdd (initial : List alpha) (suffix : List alpha)
+    (index : Fin initial.length) :
+    (initial ++ suffix).get
+        (Fin.cast (by simp) (Fin.castAdd suffix.length index)) =
+      initial.get index := by
+  simp only [List.get_eq_getElem]
+  exact List.getElem_append_left index.isLt
+
+theorem get_append_natAdd (initial : List alpha) (suffix : List alpha)
+    (index : Fin suffix.length) :
+    (initial ++ suffix).get
+        (Fin.cast (by simp) (Fin.natAdd initial.length index)) =
+      suffix.get index := by
+  simp [List.get_eq_getElem]
+
+def appendContextEquiv
+    {sourceWire targetWire : Type}
+    {sourceAmbient sourceLocal : List sourceWire}
+    {targetAmbient targetLocal : List targetWire}
+    (ambient : FiniteEquiv (Fin sourceAmbient.length)
+      (Fin targetAmbient.length))
+    (localEquiv : FiniteEquiv (Fin sourceLocal.length) (Fin targetLocal.length)) :
+    FiniteEquiv (Fin (sourceAmbient ++ sourceLocal).length)
+      (Fin (targetAmbient ++ targetLocal).length) :=
+  castFinEquiv (by simp) (by simp)
+    (extendWireEquiv ambient localEquiv)
+
+theorem appendContextsAgree {source target : Diagram}
+    {iso : Iso source target}
+    {sourceAmbient : WireContext source} {targetAmbient : WireContext target}
+    {sourceLocal : WireContext source} {targetLocal : WireContext target}
+    {ambient : FiniteEquiv (Fin sourceAmbient.length)
+      (Fin targetAmbient.length)}
+    {localEquiv : FiniteEquiv (Fin sourceLocal.length) (Fin targetLocal.length)}
+    (hambient : WireContextsAgree iso sourceAmbient targetAmbient ambient)
+    (hlocal : WireContextsAgree iso sourceLocal targetLocal localEquiv) :
+    WireContextsAgree iso (sourceAmbient ++ sourceLocal)
+      (targetAmbient ++ targetLocal)
+      (appendContextEquiv ambient localEquiv) := by
+  intro index
+  let sumIndex : Fin (sourceAmbient.length + sourceLocal.length) :=
+    Fin.cast (by simp) index
+  have hindex : Fin.cast (by simp) sumIndex = index := by
+    apply Fin.ext
+    rfl
+  rw [← hindex]
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) sumIndex
+  · simp only [get_append_castAdd]
+    calc
+      _ = (targetAmbient ++ targetLocal).get
+          (Fin.cast (by simp)
+            (Fin.castAdd targetLocal.length (ambient outer))) := by
+        congr 1
+        apply Fin.ext
+        simp [appendContextEquiv, castFinEquiv, extendWireEquiv]
+      _ = targetAmbient.get (ambient outer) :=
+        get_append_castAdd targetAmbient targetLocal (ambient outer)
+      _ = iso.wires (sourceAmbient.get outer) := hambient outer
+  · simp only [get_append_natAdd]
+    calc
+      _ = (targetAmbient ++ targetLocal).get
+          (Fin.cast (by simp)
+            (Fin.natAdd targetAmbient.length (localEquiv localIndex))) := by
+        congr 1
+        apply Fin.ext
+        simp [appendContextEquiv, castFinEquiv, extendWireEquiv]
+      _ = targetLocal.get (localEquiv localIndex) :=
+        get_append_natAdd targetAmbient targetLocal (localEquiv localIndex)
+      _ = iso.wires (sourceLocal.get localIndex) := hlocal localIndex
+
+private theorem appendWireContextsAgree {source target : Diagram}
+    {iso : Iso source target}
+    {sourceContext : WireContext source} {targetContext : WireContext target}
+    {ambient : FiniteEquiv (Fin sourceContext.length) (Fin targetContext.length)}
+    (hagrees : WireContextsAgree iso sourceContext targetContext ambient)
+    (region : Fin source.regionCount) :
+    forall index : Fin
+        (sourceContext.length + (exactScopeWires source region).length),
+      (targetContext ++ exactScopeWires target (iso.regions region)).get
+          (Fin.cast (by simp)
+            (extendWireEquiv ambient (localWireEquiv iso region) index)) =
+        iso.wires
+          ((sourceContext ++ exactScopeWires source region).get
+            (Fin.cast (by simp) index)) := by
+  intro index
+  refine Fin.addCases (fun outer => ?_) (fun localIndex => ?_) index
+  · rw [extendWireEquiv_outer, get_append_castAdd, get_append_castAdd]
+    exact hagrees outer
+  · rw [extendWireEquiv_local, get_append_natAdd, get_append_natAdd]
+    exact localWireEquiv_spec iso region localIndex
+
+theorem WireContextsAgree.extend {source target : Diagram}
+    {iso : Iso source target}
+    {sourceContext : WireContext source} {targetContext : WireContext target}
+    {ambient : FiniteEquiv (Fin sourceContext.length) (Fin targetContext.length)}
+    (hagrees : WireContextsAgree iso sourceContext targetContext ambient)
+    (region : Fin source.regionCount) :
+    WireContextsAgree iso
+      (sourceContext.extend region)
+      (targetContext.extend (iso.regions region))
+      (extendedContextEquiv iso sourceContext targetContext ambient region) := by
+  intro index
+  let sourceIndex : Fin
+      (sourceContext.length + (exactScopeWires source region).length) :=
+    Fin.cast (WireContext.length_extend sourceContext region) index
+  have h := appendWireContextsAgree hagrees region sourceIndex
+  change (targetContext ++ exactScopeWires target (iso.regions region)).get
+      (Fin.cast (WireContext.length_extend targetContext (iso.regions region)).symm
+        (extendWireEquiv ambient (localWireEquiv iso region) sourceIndex)) =
+    iso.wires ((sourceContext ++ exactScopeWires source region).get index)
+  have hsource : Fin.cast (by simp) sourceIndex = index := by
+    apply Fin.ext
+    rfl
+  calc
+    _ = iso.wires ((sourceContext ++ exactScopeWires source region).get
+          (Fin.cast (by simp) sourceIndex)) := h
+    _ = _ := congrArg iso.wires (congrArg
+      (sourceContext ++ exactScopeWires source region).get hsource)
+
+private theorem resolvePort?_equivariant {source target : Diagram}
+    (iso : Iso source target)
+    (htarget : target.WellFormed )
+    {sourceContext : WireContext source} {targetContext : WireContext target}
+    {ambient : FiniteEquiv (Fin sourceContext.length) (Fin targetContext.length)}
+    (hagrees : WireContextsAgree iso sourceContext targetContext ambient)
+    (htargetNodup : targetContext.Nodup)
+    (node : Fin source.nodeCount) (port : CPort)
+    {sourceIndex : Fin sourceContext.length}
+    {targetIndex : Fin targetContext.length}
+    (hsource : resolvePort? source sourceContext node port = some sourceIndex)
+    (htargetResult : resolvePort? target targetContext (iso.nodes node) port =
+      some targetIndex) :
+    ambient sourceIndex = targetIndex := by
+  obtain ⟨sourceWire, hsourceOccurs, hsourceValue⟩ := resolvePort?_sound hsource
+  obtain ⟨targetWire, htargetOccurs, htargetValue⟩ :=
+    resolvePort?_sound htargetResult
+  have hmappedOccurs : target.EndpointOccurs (iso.wires sourceWire)
+      ⟨iso.nodes node, port⟩ := by
+    simpa only [CEndpoint.rename] using
+      iso.endpointOccurs_transport hsourceOccurs
+  have hwire : iso.wires sourceWire = targetWire :=
+    endpoint_wire_unique htarget.wire_endpoints_are_disjoint
+      hmappedOccurs htargetOccurs
+  have hvalues : targetContext.get (ambient sourceIndex) =
+      targetContext.get targetIndex := by
+    rw [hagrees]
+    have hsourceGet : sourceContext.get sourceIndex = sourceWire := by
+      simpa only [List.get_eq_getElem] using hsourceValue
+    have htargetGet : targetContext.get targetIndex = targetWire := by
+      simpa only [List.get_eq_getElem] using htargetValue
+    rw [hsourceGet, hwire, htargetGet]
+  apply Fin.ext
+  exact (List.getElem_inj htargetNodup).mp (by
+    simpa only [List.get_eq_getElem] using hvalues)
+
+private theorem resolvePorts?_equivariant {source target : Diagram}
+    (iso : Iso source target)
+    (htarget : target.WellFormed )
+    {sourceContext : WireContext source} {targetContext : WireContext target}
+    {ambient : FiniteEquiv (Fin sourceContext.length) (Fin targetContext.length)}
+    (hagrees : WireContextsAgree iso sourceContext targetContext ambient)
+    (htargetNodup : targetContext.Nodup)
+    (node : Fin source.nodeCount) (arity : Nat) (port : Fin arity → CPort)
+    {sourceResult : Fin arity → Fin sourceContext.length}
+    {targetResult : Fin arity → Fin targetContext.length}
+    (hsource : resolvePorts? source sourceContext node arity port =
+      some sourceResult)
+    (htargetResult : resolvePorts? target targetContext (iso.nodes node) arity port =
+      some targetResult) :
+    ambient.toFun ∘ sourceResult = targetResult := by
+  funext index
+  exact resolvePort?_equivariant iso htarget hagrees htargetNodup node (port index)
+    (sequenceFin_sound hsource index) (sequenceFin_sound htargetResult index)
+
+theorem sequenceFin_map
+    (map : α → β) (values : Fin arity → Option α) :
+    sequenceFin (fun index => (values index).map map) =
+      (sequenceFin values).map (fun result index => map (result index)) := by
+  induction arity with
+  | zero =>
+      simp only [sequenceFin, Option.map_some]
+      apply congrArg some
+      funext index
+      exact Fin.elim0 index
+  | succ arity ih =>
+      simp only [sequenceFin]
+      cases hhead : values 0 with
+      | none => simp
+      | some head =>
+          cases htail : sequenceFin (fun index => values index.succ) with
+          | none =>
+              have hmappedTail := ih (fun index => values index.succ)
+              rw [htail] at hmappedTail
+              simp [hmappedTail]
+          | some tail =>
+              have hmappedTail := ih (fun index => values index.succ)
+              rw [htail] at hmappedTail
+              simp [hmappedTail]
+              funext index
+              refine Fin.cases ?_ (fun tailIndex => ?_) index <;> rfl
+
+theorem resolvePorts?_map
+    {source target : Diagram}
+    (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (sourceNode : Fin source.nodeCount)
+    (targetNode : Fin target.nodeCount)
+    (wireMap : Fin sourceContext.length → Fin targetContext.length)
+    (arity : Nat) (port : Fin arity → CPort)
+    (hport : ∀ requested,
+      resolvePort? target targetContext targetNode requested =
+        (resolvePort? source sourceContext sourceNode requested).map wireMap) :
+    resolvePorts? target targetContext targetNode arity port =
+      (resolvePorts? source sourceContext sourceNode arity port).map
+        (fun result => wireMap ∘ result) := by
+  unfold resolvePorts?
+  rw [show (fun index => resolvePort? target targetContext targetNode
+      (port index)) =
+      (fun index => (resolvePort? source sourceContext sourceNode
+        (port index)).map wireMap) by
+    funext index
+    exact hport (port index)]
+  rw [sequenceFin_map]
+  congr 2
+
+/-- Transport lexical lookup through an exact index map for one concrete wire.
+The map may embed the source context into a larger target context; the
+membership equivalence rules out an accidental second authority for the
+mapped wire. -/
+theorem WireContext.lookup?_map
+    {source target : Diagram}
+    (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (concreteWireMap : Fin source.wireCount → Fin target.wireCount)
+    (indexMap : Fin sourceContext.length → Fin targetContext.length)
+    (targetNodup : targetContext.Nodup)
+    (hget : ∀ index,
+      targetContext.get (indexMap index) =
+        concreteWireMap (sourceContext.get index))
+    (hmem : ∀ wire,
+      concreteWireMap wire ∈ targetContext ↔ wire ∈ sourceContext)
+    (wire : Fin source.wireCount) :
+    targetContext.lookup? (concreteWireMap wire) =
+      (sourceContext.lookup? wire).map indexMap := by
+  cases hsource : sourceContext.lookup? wire with
+  | none =>
+      have hnotSource : wire ∉ sourceContext := by
+        intro hmember
+        obtain ⟨index, hindex⟩ := sourceContext.lookup?_complete hmember
+        rw [hsource] at hindex
+        contradiction
+      have hnotTarget : concreteWireMap wire ∉ targetContext :=
+        fun htarget => hnotSource ((hmem wire).1 htarget)
+      cases htarget : targetContext.lookup? (concreteWireMap wire) with
+      | none => simp
+      | some index =>
+          have hfound := WireContext.lookup?_sound htarget
+          have hindexMember : targetContext.get index ∈ targetContext :=
+            List.get_mem targetContext index
+          have hvalue : targetContext.get index = concreteWireMap wire := by
+            simpa only [List.get_eq_getElem] using hfound
+          rw [hvalue] at hindexMember
+          exact False.elim (hnotTarget hindexMember)
+  | some sourceIndex =>
+      have hsourceGet : sourceContext.get sourceIndex = wire := by
+        simpa only [List.get_eq_getElem] using WireContext.lookup?_sound hsource
+      have htargetMember : concreteWireMap wire ∈ targetContext :=
+        (hmem wire).2 (by
+          rw [← hsourceGet]
+          exact List.get_mem sourceContext sourceIndex)
+      obtain ⟨targetIndex, htarget⟩ :=
+        targetContext.lookup?_complete htargetMember
+      have htargetGet : targetContext.get targetIndex = concreteWireMap wire := by
+        simpa only [List.get_eq_getElem] using WireContext.lookup?_sound htarget
+      have hindices : targetIndex = indexMap sourceIndex := by
+        apply Fin.ext
+        exact (List.getElem_inj targetNodup).mp (by
+          simpa only [List.get_eq_getElem] using
+            htargetGet.trans ((hget sourceIndex).trans
+              (congrArg concreteWireMap hsourceGet)).symm)
+      simp only [Option.map_some]
+      rw [htarget, hindices]
+
+/-- Transport endpoint ownership through an exact occurrence correspondence.
+This is independent of storage order and therefore remains valid when splice
+adds endpoints to other wires. -/
+theorem endpointOwner?_map
+    {source target : Diagram}
+    (sourceNode : Fin source.nodeCount)
+    (targetNode : Fin target.nodeCount)
+    (concreteWireMap : Fin source.wireCount → Fin target.wireCount)
+    (port : CPort)
+    (hforward : ∀ wire,
+      source.EndpointOccurs wire ⟨sourceNode, port⟩ →
+        target.EndpointOccurs (concreteWireMap wire) ⟨targetNode, port⟩)
+    (hbackward : ∀ targetWire,
+      target.EndpointOccurs targetWire ⟨targetNode, port⟩ →
+        ∃ sourceWire,
+          concreteWireMap sourceWire = targetWire ∧
+            source.EndpointOccurs sourceWire ⟨sourceNode, port⟩)
+    (targetDisjoint : target.WireEndpointsAreDisjoint) :
+    endpointOwner? target ⟨targetNode, port⟩ =
+      (endpointOwner? source ⟨sourceNode, port⟩).map concreteWireMap := by
+  cases hsource : endpointOwner? source ⟨sourceNode, port⟩ with
+  | none =>
+      cases htarget : endpointOwner? target ⟨targetNode, port⟩ with
+      | none => simp
+      | some targetWire =>
+          obtain ⟨sourceWire, _, hsourceOccurs⟩ :=
+            hbackward targetWire (endpointOwner?_sound htarget)
+          obtain ⟨owner, howner⟩ := endpointOwner?_complete hsourceOccurs
+          rw [hsource] at howner
+          contradiction
+  | some sourceWire =>
+      have hmappedOccurs := hforward sourceWire
+        (endpointOwner?_sound hsource)
+      obtain ⟨targetWire, htarget⟩ := endpointOwner?_complete hmappedOccurs
+      have heq : targetWire = concreteWireMap sourceWire :=
+        endpoint_wire_unique targetDisjoint
+          (endpointOwner?_sound htarget) hmappedOccurs
+      simp only [Option.map_some]
+      rw [htarget, heq]
+
+/-- Port resolution is the composition of transported endpoint ownership and
+transported lexical lookup. -/
+theorem resolvePort?_map_of_occurrence
+    {source target : Diagram}
+    (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (sourceNode : Fin source.nodeCount)
+    (targetNode : Fin target.nodeCount)
+    (concreteWireMap : Fin source.wireCount → Fin target.wireCount)
+    (indexMap : Fin sourceContext.length → Fin targetContext.length)
+    (targetNodup : targetContext.Nodup)
+    (hget : ∀ index,
+      targetContext.get (indexMap index) =
+        concreteWireMap (sourceContext.get index))
+    (hmem : ∀ wire,
+      concreteWireMap wire ∈ targetContext ↔ wire ∈ sourceContext)
+    (hforward : ∀ wire port,
+      source.EndpointOccurs wire ⟨sourceNode, port⟩ →
+        target.EndpointOccurs (concreteWireMap wire) ⟨targetNode, port⟩)
+    (hbackward : ∀ targetWire port,
+      target.EndpointOccurs targetWire ⟨targetNode, port⟩ →
+        ∃ sourceWire,
+          concreteWireMap sourceWire = targetWire ∧
+            source.EndpointOccurs sourceWire ⟨sourceNode, port⟩)
+    (targetDisjoint : target.WireEndpointsAreDisjoint)
+    (port : CPort) :
+    resolvePort? target targetContext targetNode port =
+      (resolvePort? source sourceContext sourceNode port).map indexMap := by
+  unfold resolvePort?
+  rw [endpointOwner?_map sourceNode targetNode concreteWireMap port
+    (fun wire => hforward wire port) (fun wire => hbackward wire port)
+    targetDisjoint]
+  cases howner : endpointOwner? source ⟨sourceNode, port⟩ with
+  | none => simp
+  | some wire =>
+      simp only [Option.map_some]
+      exact WireContext.lookup?_map sourceContext targetContext concreteWireMap
+        indexMap targetNodup hget hmem wire
+
+/-- Transport one port lookup through an injective embedding of its lexical
+wire context.  Target-only context entries are permitted, provided no such
+entry owns the requested endpoint. -/
+theorem resolvePort?_map_of_embedding
+    {source target : Diagram}
+    (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (sourceNode : Fin source.nodeCount)
+    (targetNode : Fin target.nodeCount)
+    (concreteWireMap : Fin source.wireCount → Fin target.wireCount)
+    (_concreteInjective : Function.Injective concreteWireMap)
+    (indexMap : Fin sourceContext.length → Fin targetContext.length)
+    (targetNodup : targetContext.Nodup)
+    (hget : ∀ index,
+      targetContext.get (indexMap index) =
+        concreteWireMap (sourceContext.get index))
+    {port : CPort}
+    (hforward : ∀ wire,
+      source.EndpointOccurs wire ⟨sourceNode, port⟩ →
+        target.EndpointOccurs (concreteWireMap wire) ⟨targetNode, port⟩)
+    (hbackward : ∀ targetWire,
+      target.EndpointOccurs targetWire ⟨targetNode, port⟩ →
+        ∃ sourceWire,
+          concreteWireMap sourceWire = targetWire ∧
+            source.EndpointOccurs sourceWire ⟨sourceNode, port⟩)
+    (visibleReflection : ∀ wire,
+      source.EndpointOccurs wire ⟨sourceNode, port⟩ →
+        concreteWireMap wire ∈ targetContext → wire ∈ sourceContext)
+    (targetDisjoint : target.WireEndpointsAreDisjoint) :
+    resolvePort? target targetContext targetNode port =
+      (resolvePort? source sourceContext sourceNode port).map indexMap := by
+  unfold resolvePort?
+  rw [endpointOwner?_map sourceNode targetNode concreteWireMap port
+    hforward hbackward targetDisjoint]
+  cases howner : endpointOwner? source ⟨sourceNode, port⟩ with
+  | none => rfl
+  | some wire =>
+      simp only [Option.map_some]
+      cases hsource : sourceContext.lookup? wire with
+      | none =>
+          have sourceOccurs :
+              source.EndpointOccurs wire ⟨sourceNode, port⟩ :=
+            endpointOwner?_sound howner
+          have targetAbsent : concreteWireMap wire ∉ targetContext := by
+            intro targetMember
+            have sourceMember := visibleReflection wire sourceOccurs targetMember
+            obtain ⟨index, found⟩ := sourceContext.lookup?_complete sourceMember
+            rw [hsource] at found
+            contradiction
+          cases htarget : targetContext.lookup? (concreteWireMap wire) with
+          | none => simp [hsource, htarget]
+          | some index =>
+              have found := WireContext.lookup?_sound htarget
+              have member : concreteWireMap wire ∈ targetContext := by
+                rw [← show targetContext.get index = concreteWireMap wire by
+                  simpa only [List.get_eq_getElem] using found]
+                exact List.get_mem targetContext index
+              exact False.elim (targetAbsent member)
+      | some sourceIndex =>
+          have sourceGet : sourceContext.get sourceIndex = wire := by
+            simpa only [List.get_eq_getElem] using
+              WireContext.lookup?_sound hsource
+          have targetMember : concreteWireMap wire ∈ targetContext := by
+            rw [← sourceGet, ← hget sourceIndex]
+            exact List.get_mem targetContext (indexMap sourceIndex)
+          obtain ⟨targetIndex, htarget⟩ :=
+            targetContext.lookup?_complete targetMember
+          have targetGet :
+              targetContext.get targetIndex = concreteWireMap wire := by
+            simpa only [List.get_eq_getElem] using
+              WireContext.lookup?_sound htarget
+          have indices : targetIndex = indexMap sourceIndex := by
+            apply Fin.ext
+            exact (List.getElem_inj targetNodup).mp (by
+              simpa only [List.get_eq_getElem] using
+                targetGet.trans ((hget sourceIndex).trans
+                  (congrArg concreteWireMap sourceGet)).symm)
+          simp [hsource, htarget, indices]
+
+/-- Compositional node kernel of the sole concrete elaborator. Public so graph
+surgeries can prove that they commute with elaboration. -/
+def compileNode? (d : Diagram)
+    (context : WireContext d) (binders : BinderContext d rels)
     (node : Fin d.nodeCount) :
-    ∃ item : CompiledItem d,
-      item.origin = .node node ∧ item.ValidAt (d.nodes node).region := by
+    Option (CompiledItem d context rels binders) :=
+  match d.nodes node with
+  | .atom _ binder => do
+      let relation <- binders binder
+      let arguments <- resolvePorts? d context node relation.1
+      pure (.node node (.atom relation.2 arguments))
+  | .identity _ arity => do
+      let arguments <- resolvePorts? d context node arity
+      pure (.node node (.identity arity arguments))
+
+/-- Transport one node compilation through an embedding of its concrete
+region/binder identities and visible wire context. -/
+theorem compileNode?_map
+    {source target : Diagram}
+    (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (sourceBinders : BinderContext source sourceRels)
+    (targetBinders : BinderContext target targetRels)
+    (sourceNode : Fin source.nodeCount)
+    (targetNode : Fin target.nodeCount)
+    (regionMap : Fin source.regionCount → Fin target.regionCount)
+    (binderMap : Fin source.regionCount → Fin target.regionCount)
+    (wireMap : Fin sourceContext.length → Fin targetContext.length)
+    (relationMap : RelationRenaming sourceRels targetRels)
+    (hnode : target.nodes targetNode =
+      match source.nodes sourceNode with
+      | .atom region binder =>
+          .atom (regionMap region) (binderMap binder)
+      | .identity region arity =>
+          .identity (regionMap region) arity)
+    (hports : ∀ port,
+      resolvePort? target targetContext targetNode port =
+        (resolvePort? source sourceContext sourceNode port).map wireMap)
+    (hbinders : ∀ region binder,
+      source.nodes sourceNode = .atom region binder →
+        targetBinders (binderMap binder) =
+          (sourceBinders binder).map fun relation =>
+            ⟨relation.1, relationMap relation.2⟩) :
+    (compileNode? target targetContext targetBinders targetNode).map
+        CompiledItem.erase =
+      (compileNode? source sourceContext sourceBinders
+        sourceNode).map (fun item =>
+          (item.erase.renameWires wireMap).renameRelations relationMap) := by
+  cases hsourceNode : source.nodes sourceNode with
+  | atom region binder =>
+      simp only [compileNode?, hsourceNode, hnode]
+      rw [hbinders region binder hsourceNode]
+      cases hrelation : sourceBinders binder with
+      | none => simp
+      | some relation =>
+          cases relation with
+          | mk arity relation =>
+              simp only [Option.map_some]
+              dsimp
+              have harguments := resolvePorts?_map sourceContext targetContext
+                sourceNode targetNode wireMap arity
+                (fun index => .arg index) hports
+              rw [harguments]
+              cases hsourceArguments : resolvePorts? source sourceContext
+                  sourceNode arity (fun index => .arg index) <;>
+                simp [CompiledItem.erase, Item.renameWires,
+                  Item.renameRelations, Function.comp_def]
+  | identity region arity =>
+      simp only [compileNode?, hsourceNode, hnode]
+      have harguments := resolvePorts?_map sourceContext targetContext
+        sourceNode targetNode wireMap arity (fun index => .arg index) hports
+      rw [harguments]
+      cases hsourceArguments : resolvePorts? source sourceContext sourceNode
+          arity (fun index => .arg index) <;>
+        simp [CompiledItem.erase, Item.renameWires, Item.renameRelations,
+          Function.comp_def]
+
+/-- Constructive success form of `compileNode?_map`. The target item remains
+the value returned by the sole target node compiler. -/
+theorem compileNode?_map_success
+    {source target : Diagram}
+    (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (sourceBinders : BinderContext source sourceRels)
+    (targetBinders : BinderContext target targetRels)
+    (sourceNode : Fin source.nodeCount)
+    (targetNode : Fin target.nodeCount)
+    (regionMap : Fin source.regionCount → Fin target.regionCount)
+    (binderMap : Fin source.regionCount → Fin target.regionCount)
+    (wireMap : Fin sourceContext.length → Fin targetContext.length)
+    (relationMap : RelationRenaming sourceRels targetRels)
+    (hnode : target.nodes targetNode =
+      match source.nodes sourceNode with
+      | .atom region binder =>
+          .atom (regionMap region) (binderMap binder)
+      | .identity region arity =>
+          .identity (regionMap region) arity)
+    (hports : ∀ port,
+      resolvePort? target targetContext targetNode port =
+        (resolvePort? source sourceContext sourceNode port).map wireMap)
+    (hbinders : ∀ region binder,
+      source.nodes sourceNode = .atom region binder →
+        targetBinders (binderMap binder) =
+          (sourceBinders binder).map fun relation =>
+            ⟨relation.1, relationMap relation.2⟩)
+    {sourceItem : CompiledItem source sourceContext sourceRels
+      sourceBinders}
+    (hsource : compileNode? source sourceContext sourceBinders
+      sourceNode = some sourceItem) :
+    ∃ targetItem : CompiledItem target targetContext targetRels
+        targetBinders,
+      compileNode? target targetContext targetBinders targetNode =
+        some targetItem ∧
+      targetItem.erase =
+        (sourceItem.erase.renameWires wireMap).renameRelations relationMap := by
+  have mapped := compileNode?_map sourceContext
+    targetContext sourceBinders targetBinders sourceNode targetNode regionMap
+    binderMap wireMap relationMap hnode hports hbinders
+  rw [hsource] at mapped
+  cases htarget : compileNode? target targetContext targetBinders
+      targetNode with
+  | none => simp [htarget] at mapped
+  | some targetItem =>
+      refine ⟨targetItem, rfl, ?_⟩
+      rw [htarget] at mapped
+      exact Option.some.inj mapped
+
+noncomputable def compileNode?_equivariant {source target : Diagram}
+    (iso : Iso source target)
+    (htarget : target.WellFormed)
+    {sourceContext : WireContext source} {targetContext : WireContext target}
+    {ambient : FiniteEquiv (Fin sourceContext.length)
+      (Fin targetContext.length)}
+    (hwires : WireContextsAgree iso sourceContext targetContext ambient)
+    (htargetNodup : targetContext.Nodup)
+    {sourceBinders : BinderContext source rels}
+    {targetBinders : BinderContext target rels}
+    (hbinders : BinderContextsAgree iso sourceBinders targetBinders)
+    (node : Fin source.nodeCount)
+    {sourceItem : CompiledItem source sourceContext rels
+      sourceBinders}
+    {targetItem : CompiledItem target targetContext rels
+      targetBinders}
+    (hsource : compileNode? source sourceContext sourceBinders node =
+      some sourceItem)
+    (htargetResult : compileNode? target targetContext targetBinders
+      (iso.nodes node) = some targetItem) :
+    ItemIso ambient rels sourceItem.erase targetItem.erase := by
+  unfold compileNode? at hsource htargetResult
+  rw [<- iso.nodes_eq node] at htargetResult
+  cases hnode : source.nodes node with
+  | atom region binder =>
+      simp only [hnode, CNode.rename] at hsource htargetResult
+      cases hsourceRelation : sourceBinders binder with
+      | none => simp [hsourceRelation] at hsource
+      | some sourceRelation =>
+          have htargetRelation : targetBinders (iso.regions binder) =
+              some sourceRelation := by
+            rw [hbinders, hsourceRelation]
+          cases sourceRelation with
+          | mk arity relation =>
+              cases hsourceArguments : resolvePorts? source sourceContext node
+                  arity (fun index => .arg index) with
+              | none => simp [hsourceRelation, hsourceArguments] at hsource
+              | some sourceArguments =>
+                  simp [hsourceRelation, hsourceArguments] at hsource
+                  subst sourceItem
+                  cases htargetArguments : resolvePorts? target targetContext
+                      (iso.nodes node) arity (fun index => .arg index) with
+                  | none =>
+                      simp [htargetRelation, htargetArguments] at htargetResult
+                  | some targetArguments =>
+                      simp [htargetRelation, htargetArguments] at htargetResult
+                      subst targetItem
+                      apply ItemIso.atom relation
+                      exact resolvePorts?_equivariant iso htarget hwires
+                        htargetNodup node arity (fun index => .arg index)
+                        hsourceArguments htargetArguments
+  | identity region arity =>
+      simp only [hnode, CNode.rename] at hsource htargetResult
+      cases hsourceArguments : resolvePorts? source sourceContext node arity
+          (fun index => .arg index) with
+      | none => simp [hsourceArguments] at hsource
+      | some sourceArguments =>
+          simp [hsourceArguments] at hsource
+          subst sourceItem
+          cases htargetArguments : resolvePorts? target targetContext
+              (iso.nodes node) arity (fun index => .arg index) with
+          | none => simp [htargetArguments] at htargetResult
+          | some targetArguments =>
+              simp [htargetArguments] at htargetResult
+              subst targetItem
+              apply ItemIso.identity
+              exact resolvePorts?_equivariant iso htarget hwires
+                htargetNodup node arity (fun index => .arg index)
+                hsourceArguments htargetArguments
+
+theorem compileNode?_origin
+    {item : CompiledItem d context rels binders}
+    (compiled : compileNode? d context binders node = some item) :
+    item.origin = .node node := by
   cases hnode : d.nodes node with
   | atom region binder =>
-      have bubbles := hwf.atom_binders_are_bubbles node
-      rw [hnode] at bubbles
-      obtain ⟨binderParent, arity, hbinder⟩ := bubbles
-      let ports := fun index : Fin arity =>
-        requiredOwner d hwf node (.arg index)
-          (atom_arg_required d node region binder binderParent arity
-            hnode hbinder index)
-      refine ⟨.atom node binder arity ports, rfl, ?_⟩
-      refine ⟨hnode, ?_, ?_, ?_⟩
-      · rw [bubbleParent_of_bubble hbinder]
-        exact hbinder
-      · simpa [hnode] using hwf.atom_binders_enclose node
-      · intro index
-        exact requiredOwner_occurs d hwf node (.arg index)
-          (atom_arg_required d node region binder binderParent arity
-            hnode hbinder index)
+      simp only [compileNode?, hnode] at compiled
+      cases hrelation : binders binder with
+      | none => simp [hrelation] at compiled
+      | some relation =>
+          cases relation with
+          | mk arity relation =>
+              cases harguments : resolvePorts? d context node arity with
+              | none => simp [hrelation, harguments] at compiled
+              | some arguments =>
+                  simp [hrelation, harguments] at compiled
+                  subst item
+                  rfl
   | identity region arity =>
-      let ports := fun index : Fin arity =>
-        requiredOwner d hwf node (.arg index)
-          (identity_arg_required d node region arity hnode index)
-      refine ⟨.identity node arity ports, rfl, hnode, ?_⟩
-      intro index
-      exact requiredOwner_occurs d hwf node (.arg index)
-        (identity_arg_required d node region arity hnode index)
-
-/-- Compile one concrete node to its unique valid symbolic item. -/
-noncomputable def compileNode (d : Diagram) (hwf : d.WellFormed)
-    (node : Fin d.nodeCount) : CompiledItem d :=
-  Classical.choose (compileNode_exists d hwf node)
-
-@[simp] theorem compileNode_origin (d : Diagram) (hwf : d.WellFormed)
-    (node : Fin d.nodeCount) :
-    (compileNode d hwf node).origin = .node node :=
-  (Classical.choose_spec (compileNode_exists d hwf node)).1
-
-/-- The symbolic node compiler records exactly the source node and its port
-owners. -/
-theorem compileNode_valid (d : Diagram) (hwf : d.WellFormed)
-    (node : Fin d.nodeCount) :
-    (compileNode d hwf node).ValidAt (d.nodes node).region :=
-  (Classical.choose_spec (compileNode_exists d hwf node)).2
-
-/-- A valid symbolic node with a fixed concrete origin is canonical. -/
-theorem CompiledItem.eq_compileNode_of_valid
-    (d : Diagram) (hwf : d.WellFormed) (node : Fin d.nodeCount)
-    (item : CompiledItem d)
-    (origin : item.origin = .node node)
-    (valid : item.ValidAt (d.nodes node).region) :
-    item = compileNode d hwf node := by
-  have targetOrigin := compileNode_origin d hwf node
-  have targetValid := compileNode_valid d hwf node
-  generalize targetEq : compileNode d hwf node = target at targetOrigin targetValid ⊢
-  cases item with
-  | atom sourceNode sourceBinder sourceArity sourcePorts =>
-      cases target with
-      | atom targetNode targetBinder targetArity targetPorts =>
-          simp only [CompiledItem.origin, LocalOccurrence.node.injEq]
-            at origin targetOrigin
-          subst sourceNode
-          subst targetNode
-          have shapes := valid.1.symm.trans targetValid.1
-          have binderEq := (CNode.atom.inj shapes).2
-          subst targetBinder
-          have bubbleShapes := valid.2.1.symm.trans targetValid.2.1
-          have arityEq := (CRegion.bubble.inj bubbleShapes).2
-          subst targetArity
-          congr
-          funext index
-          exact endpoint_wire_unique hwf.wire_endpoints_are_disjoint
-            (valid.2.2.2 index) (targetValid.2.2.2 index)
-      | identity targetNode targetArity targetPorts =>
-          simp only [CompiledItem.origin, LocalOccurrence.node.injEq]
-            at origin targetOrigin
-          subst sourceNode
-          subst targetNode
-          exact False.elim (by
-            have := valid.1.symm.trans targetValid.1
-            contradiction)
-      | cut body => contradiction
-      | bubble arity body => contradiction
-  | identity sourceNode sourceArity sourcePorts =>
-      cases target with
-      | atom targetNode targetBinder targetArity targetPorts =>
-          simp only [CompiledItem.origin, LocalOccurrence.node.injEq]
-            at origin targetOrigin
-          subst sourceNode
-          subst targetNode
-          exact False.elim (by
-            have := valid.1.symm.trans targetValid.1
-            contradiction)
-      | identity targetNode targetArity targetPorts =>
-          simp only [CompiledItem.origin, LocalOccurrence.node.injEq]
-            at origin targetOrigin
-          subst sourceNode
-          subst targetNode
-          have shapes := valid.1.symm.trans targetValid.1
-          have arityEq := (CNode.identity.inj shapes).2
-          subst targetArity
-          congr
-          funext index
-          exact endpoint_wire_unique hwf.wire_endpoints_are_disjoint
-            (valid.2 index) (targetValid.2 index)
-      | cut body => contradiction
-      | bubble arity body => contradiction
-  | cut body => contradiction
-  | bubble arity body => contradiction
+      simp only [compileNode?, hnode] at compiled
+      cases harguments : resolvePorts? d context node arity with
+      | none => simp [harguments] at compiled
+      | some arguments =>
+          simp [harguments] at compiled
+          subst item
+          rfl
 
 end VisualProof.Concrete.Elaboration
