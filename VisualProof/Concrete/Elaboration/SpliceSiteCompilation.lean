@@ -470,6 +470,9 @@ private theorem siteTargetFull_exact
 private theorem terminalBinderMapped
     (layout : PlugLayout input)
     (sourceBinders : BinderContext input.frame.val targetRels)
+    (targetBinders : BinderContext layout.plugRaw targetRels)
+    (frameBindersMapped : ∀ binder,
+      targetBinders (layout.frameRegion binder) = sourceBinders binder)
     (relationMap : RelationRenaming
       (CompiledSite.endpointCall (State.ofOpen input.pattern)
         input.binderSpine.bodyContainer).rels targetRels)
@@ -488,8 +491,7 @@ private theorem terminalBinderMapped
       (CompiledSite.endpointCall (State.ofOpen input.pattern)
         input.binderSpine.bodyContainer).binders binder =
           some ⟨arity, relation⟩) :
-    (layout.mapFrameBinders sourceBinders)
-        (layout.binderRegion binder) =
+    targetBinders (layout.binderRegion binder) =
       some ⟨arity, relationMap relation⟩ := by
   have binderEq : binder = input.binderSpine.proxy
       (terminalRelationProxyEquiv input relation.index) := by
@@ -499,7 +501,7 @@ private theorem terminalBinderMapped
     exact owner.symm.trans
       (terminalRelationProxyEquiv_binder input relation.index).symm
   subst binder
-  rw [layout.binderRegion_proxy, layout.mapFrameBinders_frameRegion]
+  rw [layout.binderRegion_proxy, frameBindersMapped]
   exact hostLookup relation
 
 /-- Compile the splice endpoint in its actual target occurrence order. The
@@ -1239,8 +1241,11 @@ theorem compileSpliceSite
           targetCall.binders (layout.binderRegion binder) =
             some ⟨arity, relationMap relation⟩ := by
         intro binder arity relation sourceLookup
-        exact layout.terminalBinderMapped binders relationMap hostLookup binder
-          sourceLookup
+        exact layout.terminalBinderMapped binders targetCall.binders
+          (fun binder => by
+            dsimp only [targetCall, mappedFrameCall, CompilerCall.binders]
+            rw [layout.mapFrameBinders_frameRegion]) relationMap hostLookup
+          binder sourceLookup
       cases sourceBody with
       | mk sourceItems =>
           have sourceItemsCompiled :=
@@ -1284,6 +1289,110 @@ theorem compileSpliceSite
             simpa only [targetOrigin] using targetItemsCompiled
           rw [canonical]
           rfl
+
+/-- Compile a nested splice endpoint at the exact target context inherited
+from its already constructed parent. This is the same endpoint construction as
+`compileSpliceSite`, without normalizing that context through a separate call
+presentation. -/
+theorem compileNestedSpliceSite
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (admissible : input.Admissible) (targetWf : layout.plugRaw.WellFormed)
+    (sourceParent : Fin input.frame.val.regionCount)
+    (sourceOuter : WireContext input.frame.val)
+    (sourceBinders : BinderContext input.frame.val sourceRels)
+    (targetOuter : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw sourceRels)
+    (atSite : sourceParent = input.site)
+    (sourceExact : (sourceOuter.extend sourceParent).Exact sourceParent)
+    (targetExact : (targetOuter.extend (layout.frameRegion sourceParent)).Exact
+      (layout.frameRegion sourceParent))
+    (frameBindersMapped : ∀ binder,
+      targetBinders (layout.frameRegion binder) = sourceBinders binder)
+    (relationMap : RelationRenaming
+      (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels sourceRels)
+    (hostLookup : ∀ {arity}
+      (relation : RelVar
+        (CompiledSite.endpointCall (State.ofOpen input.pattern)
+          input.binderSpine.bodyContainer).rels arity),
+      sourceBinders (input.binderTarget
+          (terminalRelationProxyEquiv input relation.index)) =
+        some ⟨arity, relationMap relation⟩)
+    {sourceBody : CompiledRegion input.frame.val
+      (.nested sourceParent sourceOuter sourceRels sourceBinders)}
+    (sourceCompiled : compileRegion? input.frame.val input.frame.property
+      sourceParent sourceOuter sourceBinders = some sourceBody) :
+    ∃ targetBody : CompiledRegion layout.plugRaw
+        (.nested (layout.frameRegion sourceParent) targetOuter sourceRels
+          targetBinders),
+      compileRegion? layout.plugRaw targetWf
+        (layout.frameRegion sourceParent) targetOuter targetBinders =
+          some targetBody := by
+  subst sourceParent
+  let sourceFull := sourceOuter.extend input.site
+  let targetFull := targetOuter.extend (layout.frameRegion input.site)
+  have sourceFullExact : sourceFull.Exact input.site := by
+    simpa [sourceFull] using sourceExact
+  have targetFullExact : targetFull.Exact (layout.frameRegion input.site) := by
+    simpa [targetFull] using targetExact
+  let frameMap := layout.frameFullMap consistent sourceFull targetFull
+    sourceFullExact targetFullExact
+  let patternExact := CompiledSite.endpoint_fullContext_exact
+    (State.ofOpen input.pattern) input.binderSpine.bodyContainer
+  let patternMap := layout.patternFullMap consistent admissible sourceFull
+    targetFull sourceFullExact targetFullExact patternExact
+  have patternBindersMapped : ∀ binder {arity relation},
+      (CompiledSite.endpointCall (State.ofOpen input.pattern)
+          input.binderSpine.bodyContainer).binders binder =
+        some ⟨arity, relation⟩ →
+      targetBinders (layout.binderRegion binder) =
+        some ⟨arity, relationMap relation⟩ := by
+    intro binder arity relation sourceLookup
+    exact layout.terminalBinderMapped sourceBinders targetBinders
+      frameBindersMapped relationMap hostLookup binder sourceLookup
+  have frameBindersMapped' : ∀ binder,
+      targetBinders (layout.frameRegion binder) =
+        (sourceBinders binder).map fun relation =>
+          ⟨relation.1, relation.2⟩ := by
+    intro binder
+    rw [frameBindersMapped]
+    cases sourceBinders binder <;> rfl
+  cases sourceBody with
+  | mk sourceItems =>
+      have sourceItemsCompiled := compileRegion?_items_of_success
+        input.frame.property input.site sourceOuter sourceBinders
+        sourceCompiled
+      have sourceItemsAtSite :
+          compileItems? input.frame.val input.frame.property input.site
+              sourceFull sourceBinders
+              (localOccurrences input.frame.val input.site)
+              (fun _ member => member) = some sourceItems := by
+        simpa only [sourceFull] using sourceItemsCompiled
+      obtain ⟨targetItems, _, _, _, _, _, _, _, _, targetItemsCompiled,
+          _, _, _, _, _, _, _⟩ :=
+        layout.compileSpliceSiteItems consistent admissible targetWf
+          sourceFull sourceBinders targetFull targetBinders frameMap patternMap
+          relationMap patternBindersMapped frameBindersMapped'
+          sourceFullExact targetFullExact
+          (layout.frameFullMap_get consistent _ _
+            sourceFullExact targetFullExact)
+          (layout.patternFullMap_get consistent admissible _ _
+            sourceFullExact targetFullExact patternExact)
+          sourceItemsAtSite
+      let targetBody : CompiledRegion layout.plugRaw
+          (.nested (layout.frameRegion input.site) targetOuter sourceRels
+            targetBinders) := .mk targetItems
+      refine ⟨targetBody, ?_⟩
+      rw [compileRegion?_eq_compileItems?]
+      have canonical :
+          compileItems? layout.plugRaw targetWf
+              (layout.frameRegion input.site) targetFull targetBinders
+              (localOccurrences layout.plugRaw
+                (layout.frameRegion input.site))
+              (fun _ member => member) = some targetItems := by
+        exact targetItemsCompiled
+      rw [canonical]
+      rfl
 
 end Splice.Input.PlugLayout
 
