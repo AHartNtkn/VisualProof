@@ -98,7 +98,10 @@ mutual
           (items.focus? site).map fun ⟨endpointCall, endpoint, zipper⟩ =>
             ⟨endpointCall, endpoint, .child zipper⟩
 
-  private def CompiledItems.focus?
+  /-- Structural worker for the canonical compiled-region focus search. It is
+  exposed only so source-derived transformations can invert the exact search
+  decision while following the one returned zipper. -/
+  def CompiledItems.focus?
       {d : Diagram} {context : WireContext d} {rels : RelCtx}
       {binders : BinderContext d rels}
       (items : CompiledItems d context rels binders)
@@ -688,6 +691,19 @@ private theorem CompilerCall.compile?_focus?_isSome
         unfold CompiledRegion.focus?
         simpa [same] using found)
   exact allCalls call compiled site encloses
+
+/-- Failure of the canonical compiled-tree search rules out enclosure. -/
+theorem CompiledRegion.not_encloses_of_focus?_eq_none
+    (hwf : d.WellFormed) (call : CompilerCall d)
+    {body : CompiledRegion d call}
+    (compiled : call.compile? d hwf = some body)
+    (site : Fin d.regionCount) (absent : body.focus? site = none) :
+    ¬ d.Encloses call.origin site := by
+  intro encloses
+  have found := CompilerCall.compile?_focus?_isSome hwf call compiled site
+    encloses
+  rw [absent] at found
+  contradiction
 
 private theorem compileRoot?_focus?_isSome
     (hwf : d.WellFormed) (ambient locals : WireContext d)
