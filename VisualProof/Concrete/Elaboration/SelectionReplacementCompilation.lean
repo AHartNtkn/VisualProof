@@ -9,6 +9,18 @@ open VisualProof.Data.Finite
 open VisualProof.Diagram
 open Elaboration
 
+private theorem compileOccurrence?_congr_occurrence
+    {d : Diagram} (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    {left right : LocalOccurrence d.regionCount d.nodeCount}
+    (occurrenceEq : left = right)
+    (leftDirect : left ∈ localOccurrences d parent)
+    (rightDirect : right ∈ localOccurrences d parent) :
+    compileOccurrence? d hwf parent context binders left leftDirect =
+      compileOccurrence? d hwf parent context binders right rightDirect := by
+  subst right
+  rfl
+
 private theorem State.eq_of_checked_val_eq
     (left right : State arity)
     (checkedEq : left.checked.val = right.checked.val) : left = right := by
@@ -1736,6 +1748,583 @@ private theorem mappedCallCompilation
   exact CompilerCall.compile?_complete
     (Diagram.removeRaw_wellFormed host selection domains) targetCall
       targetExact targetCovers
+
+/-- Semantic result for one unchanged nested subtree in the actual compact
+parent context supplied by its caller. -/
+private abbrev AwayRegionResult
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (sourceOrigin : Fin host.val.regionCount)
+    (sourceOuter : WireContext host.val)
+    (sourceBinders : BinderContext host.val rels)
+    (originSurvives : domains.regions.survives sourceOrigin = true)
+    (targetOuter : WireContext (host.val.removeRaw selection domains))
+    (outerEq : targetOuter = domains.mapWireContext sourceOuter)
+    (targetBinders : BinderContext
+      (host.val.removeRaw selection domains) rels)
+    (exact : (sourceOuter.extend sourceOrigin).Exact sourceOrigin)
+    (away : ¬ host.val.Encloses sourceOrigin selection.val.anchor)
+    (outside : ¬ host.val.Encloses selection.val.anchor sourceOrigin)
+    (sourceBody : CompiledRegion host.val
+      (.nested sourceOrigin sourceOuter rels sourceBinders)) :=
+  Nonempty (Σ targetBody : CompiledRegion
+      (host.val.removeRaw selection domains)
+      (.nested (domains.regions.index sourceOrigin originSurvives)
+        targetOuter rels targetBinders),
+    PSigma (fun _ : compileRegion? (host.val.removeRaw selection domains)
+        (Diagram.removeRaw_wellFormed host selection domains)
+        (domains.regions.index sourceOrigin originSurvives) targetOuter
+          targetBinders = some targetBody =>
+      RegionIso
+        ((FiniteEquiv.finCast (congrArg List.length outerEq)).trans
+          (domains.mapWireContextEquiv sourceOuter (fun wire member =>
+            domains.visibleWire_survives_away host selection sourceOrigin
+              originSurvives away outside
+              (sourceOuter.extend sourceOrigin) exact wire
+              (List.mem_append_left _ member))))
+        rels targetBody.erase sourceBody.erase))
+
+/-- Compile an unchanged source subtree in the compact frame.  The target
+outer context is supplied by the enclosing fold and normalized only inside
+this theorem. -/
+private theorem compileRegionAway
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (sourceOrigin : Fin host.val.regionCount)
+    (sourceOuter : WireContext host.val)
+    (sourceBinders : BinderContext host.val rels)
+    (originSurvives : domains.regions.survives sourceOrigin = true)
+    (targetOuter : WireContext (host.val.removeRaw selection domains))
+    (outerEq : targetOuter = domains.mapWireContext sourceOuter)
+    (targetBinders : BinderContext
+      (host.val.removeRaw selection domains) rels)
+    (bindersEq : targetBinders = domains.mapBinderContext sourceBinders)
+    (exact : (sourceOuter.extend sourceOrigin).Exact sourceOrigin)
+    (covers : sourceBinders.Covers sourceOrigin)
+    (away : ¬ host.val.Encloses sourceOrigin selection.val.anchor)
+    (outside : ¬ host.val.Encloses selection.val.anchor sourceOrigin)
+    (sourceBody : CompiledRegion host.val
+      (.nested sourceOrigin sourceOuter rels sourceBinders))
+    (sourceCompiled : compileRegion? host.val host.property sourceOrigin
+      sourceOuter sourceBinders = some sourceBody) :
+    AwayRegionResult host selection domains sourceOrigin sourceOuter
+      sourceBinders originSurvives targetOuter outerEq targetBinders exact
+      away outside
+      sourceBody := by
+  let motive : CompilerCall host.val → Prop := fun current =>
+    match current with
+    | .root _ _ => True
+    | .nested currentOrigin currentOuter currentRels currentBinders =>
+        ∀ (currentSurvives :
+              domains.regions.survives currentOrigin = true)
+          (currentTargetOuter : WireContext
+            (host.val.removeRaw selection domains))
+          (currentOuterEq : currentTargetOuter =
+            domains.mapWireContext currentOuter)
+          (currentTargetBinders : BinderContext
+            (host.val.removeRaw selection domains) currentRels)
+          (currentBindersEq : currentTargetBinders =
+            domains.mapBinderContext currentBinders)
+          (currentExact : (currentOuter.extend currentOrigin).Exact
+            currentOrigin)
+          (currentCovers : currentBinders.Covers currentOrigin)
+          (currentAway : ¬ host.val.Encloses currentOrigin
+            selection.val.anchor)
+          (currentOutside : ¬ host.val.Encloses selection.val.anchor
+            currentOrigin)
+          (currentBody : CompiledRegion host.val
+            (.nested currentOrigin currentOuter currentRels
+              currentBinders)),
+        compileRegion? host.val host.property currentOrigin currentOuter
+            currentBinders = some currentBody →
+          AwayRegionResult host selection domains currentOrigin currentOuter
+            currentBinders currentSurvives currentTargetOuter currentOuterEq
+            currentTargetBinders currentExact currentAway currentOutside
+            currentBody
+  have mapped : motive (.nested sourceOrigin sourceOuter rels
+      sourceBinders) := by
+    refine CompilerCall.compile?.induct host.val host.property
+      (motive := motive) (fun current induction => ?_)
+      (.nested sourceOrigin sourceOuter rels sourceBinders)
+    cases current with
+    | root ambient locals => exact True.intro
+    | nested currentOrigin currentOuter currentRels currentBinders =>
+        intro currentSurvives currentTargetOuter currentOuterEq
+          currentTargetBinders currentBindersEq currentExact currentCovers
+          currentAway currentOutside currentBody currentCompiled
+        subst currentTargetOuter
+        subst currentTargetBinders
+        rcases currentBody with ⟨sourceItems⟩
+        let current : CompilerCall host.val := .nested currentOrigin
+          currentOuter currentRels currentBinders
+        have sourceItemsCompiled := compileRegion?_items_of_success
+          host.property currentOrigin currentOuter currentBinders
+          currentCompiled
+        let occurrenceSurvives : ∀ occurrence,
+            occurrence ∈ localOccurrences host.val currentOrigin →
+              domains.occurrenceSurvives occurrence = true := by
+          intro occurrence member
+          exact domains.localOccurrence_survives_away host selection
+            currentOrigin currentSurvives currentAway occurrence member
+        have targetOccurrences :=
+          domains.localOccurrences_removeRaw_eq_map_index host selection
+            currentOrigin currentSurvives occurrenceSurvives
+        let sourceOccurrences := localOccurrences host.val currentOrigin
+        let sourceDirect : ∀ occurrence, occurrence ∈ sourceOccurrences →
+            occurrence ∈ localOccurrences host.val currentOrigin :=
+          fun _ member => member
+        let targetDirect : ∀ occurrence,
+            occurrence ∈ sourceOccurrences.map domains.indexOccurrence →
+              occurrence ∈ localOccurrences
+                (host.val.removeRaw selection domains)
+                (domains.regions.index currentOrigin currentSurvives) := by
+          intro occurrence member
+          rw [targetOccurrences]
+          exact member
+        have targetLocalEq := domains.mapWireContext_exactScope host selection
+          (domains.regions.index currentOrigin currentSurvives)
+        rw [domains.regions.origin_index] at targetLocalEq
+        have targetFullEq :
+            domains.mapWireContext currentOuter ++
+                exactScopeWires (host.val.removeRaw selection domains)
+                  (domains.regions.index currentOrigin currentSurvives) =
+              domains.mapWireContext (currentOuter.extend currentOrigin) := by
+          rw [← targetLocalEq, ← domains.mapWireContext_append]
+          rfl
+        let allWiresSurvive : ∀ wire,
+            wire ∈ currentOuter.extend currentOrigin →
+              domains.wires.survives wire = true := by
+          intro wire member
+          exact domains.visibleWire_survives_away host selection currentOrigin
+            currentSurvives currentAway currentOutside
+            (currentOuter.extend currentOrigin) currentExact wire member
+        let fullBack : FiniteEquiv
+            (Fin (domains.mapWireContext currentOuter ++
+              exactScopeWires (host.val.removeRaw selection domains)
+                (domains.regions.index currentOrigin currentSurvives)).length)
+            (Fin (currentOuter.extend currentOrigin).length) :=
+          (FiniteEquiv.finCast (congrArg List.length targetFullEq)).trans
+            (domains.mapWireContextEquiv
+              (currentOuter.extend currentOrigin) allWiresSurvive)
+        let mappedItems := compileItems?_map_iso_success host.property
+          (Diagram.removeRaw_wellFormed host selection domains)
+          currentOrigin (domains.regions.index currentOrigin currentSurvives)
+          (currentOuter.extend currentOrigin)
+          (domains.mapWireContext currentOuter ++
+            exactScopeWires (host.val.removeRaw selection domains)
+              (domains.regions.index currentOrigin currentSurvives))
+          currentBinders (domains.mapBinderContext currentBinders)
+          sourceOccurrences domains.indexOccurrence sourceDirect targetDirect
+          fullBack.symm (by
+            intro occurrence member sourceItem occurrenceCompiled
+            cases occurrence with
+            | node node =>
+                have nodeSurvives := occurrenceSurvives (.node node)
+                  (sourceDirect (.node node) member)
+                let targetNode := domains.nodes.index node nodeSurvives
+                have mappedNodeEq : domains.indexOccurrence (.node node) =
+                    .node targetNode := by
+                  apply domains.originOccurrence_injective
+                  rw [domains.originOccurrence_indexOccurrence (.node node)
+                    nodeSurvives]
+                  exact congrArg LocalOccurrence.node
+                    (domains.nodes.origin_index node nodeSurvives).symm
+                have sourceNodeCompiled : compileNode? host.val
+                    (currentOuter.extend currentOrigin) currentBinders node =
+                      some sourceItem := by
+                  simpa only [compileOccurrence?_node] using
+                    occurrenceCompiled
+                let nodeResult := Classical.choice
+                  (domains.mapNodeCompilationAt host selection
+                    (currentOuter.extend currentOrigin)
+                    (domains.mapWireContext currentOuter ++
+                      exactScopeWires (host.val.removeRaw selection domains)
+                        (domains.regions.index currentOrigin currentSurvives))
+                    targetFullEq currentExact.nodup currentBinders
+                    (domains.mapBinderContext currentBinders) rfl targetNode
+                    allWiresSurvive (by
+                      have targetNodeOrigin : domains.nodes.origin targetNode =
+                          node := domains.nodes.origin_index node nodeSurvives
+                      rw [targetNodeOrigin]
+                      exact sourceNodeCompiled))
+                have targetNodeDirect : LocalOccurrence.node targetNode ∈
+                    localOccurrences (host.val.removeRaw selection domains)
+                      (domains.regions.index currentOrigin
+                        currentSurvives) :=
+                  Eq.mp (congrArg (fun occurrence => occurrence ∈
+                    localOccurrences (host.val.removeRaw selection domains)
+                      (domains.regions.index currentOrigin currentSurvives))
+                    mappedNodeEq)
+                    (targetDirect (domains.indexOccurrence (.node node))
+                      (List.mem_map.mpr ⟨.node node, member, rfl⟩))
+                refine ⟨⟨nodeResult.fst, ⟨?_, ?_⟩⟩⟩
+                · calc
+                    compileOccurrence?
+                        (host.val.removeRaw selection domains)
+                        (Diagram.removeRaw_wellFormed host selection domains)
+                        (domains.regions.index currentOrigin currentSurvives)
+                        (domains.mapWireContext currentOuter ++
+                          exactScopeWires
+                            (host.val.removeRaw selection domains)
+                            (domains.regions.index currentOrigin
+                              currentSurvives))
+                        (domains.mapBinderContext currentBinders)
+                        (domains.indexOccurrence (.node node)) _ =
+                      compileOccurrence?
+                        (host.val.removeRaw selection domains)
+                        (Diagram.removeRaw_wellFormed host selection domains)
+                        (domains.regions.index currentOrigin currentSurvives)
+                        (domains.mapWireContext currentOuter ++
+                          exactScopeWires
+                            (host.val.removeRaw selection domains)
+                            (domains.regions.index currentOrigin
+                              currentSurvives))
+                        (domains.mapBinderContext currentBinders)
+                        (.node targetNode) targetNodeDirect :=
+                      compileOccurrence?_congr_occurrence _ _ _ _
+                        mappedNodeEq _ targetNodeDirect
+                    _ = some nodeResult.fst := by
+                      simpa only [compileOccurrence?_node] using
+                        nodeResult.snd.fst
+                · simpa [fullBack] using nodeResult.snd.snd.symm
+            | child child =>
+                have childSurvives := occurrenceSurvives (.child child)
+                  (sourceDirect (.child child) member)
+                let targetChild := domains.regions.index child childSurvives
+                have mappedChildEq : domains.indexOccurrence (.child child) =
+                    .child targetChild := by
+                  apply domains.originOccurrence_injective
+                  rw [domains.originOccurrence_indexOccurrence (.child child)
+                    childSurvives]
+                  exact congrArg LocalOccurrence.child
+                    (domains.regions.origin_index child childSurvives).symm
+                have sourceParent := (mem_localOccurrences_child host.val
+                  currentOrigin child).mp (sourceDirect (.child child) member)
+                have parentChild : host.val.Encloses currentOrigin child := by
+                  refine ⟨⟨1, by have := child.isLt; omega⟩, ?_⟩
+                  simp [Diagram.climb, sourceParent]
+                have childAway : ¬ host.val.Encloses child
+                    selection.val.anchor := by
+                  intro childEncloses
+                  exact currentAway (checked_encloses_trans host.property
+                    parentChild childEncloses)
+                have childOutside : ¬ host.val.Encloses selection.val.anchor
+                    child := by
+                  intro anchorEncloses
+                  rcases encloses_direct_child sourceParent anchorEncloses with
+                    anchorEq | anchorEnclosesParent
+                  · subst child
+                    exact currentAway parentChild
+                  · exact currentOutside anchorEnclosesParent
+                have childExact := currentExact.extend_child host.property
+                  sourceParent
+                cases sourceKind : host.val.regions child with
+                | sheet =>
+                    rw [compileOccurrence?_child_sheet host.property
+                      currentOrigin child (currentOuter.extend currentOrigin)
+                      currentBinders (sourceDirect (.child child) member)
+                      sourceKind] at occurrenceCompiled
+                    contradiction
+                | cut sourceKindParent =>
+                    have parentEq : sourceKindParent = currentOrigin := by
+                      simpa [sourceKind, CRegion.parent?] using sourceParent
+                    subst sourceKindParent
+                    obtain ⟨sourceChildBody, sourceChildCompiled,
+                        sourceItemEq⟩ :=
+                      compileOccurrence?_child_cut_success host.property
+                        currentOrigin child (currentOuter.extend currentOrigin)
+                        currentBinders (sourceDirect (.child child) member)
+                        sourceKind occurrenceCompiled
+                    subst sourceItem
+                    have targetKind := domains.removeRaw_cut host selection
+                      currentSurvives childSurvives sourceKind
+                    let childMapped := induction child sourceParent
+                      (currentOuter.extend currentOrigin) currentBinders
+                      childSurvives
+                      (domains.mapWireContext currentOuter ++
+                        exactScopeWires
+                          (host.val.removeRaw selection domains)
+                          (domains.regions.index currentOrigin currentSurvives))
+                      targetFullEq (domains.mapBinderContext currentBinders)
+                      rfl childExact
+                      (BinderContext.covers_cut_child currentCovers sourceKind)
+                      childAway childOutside sourceChildBody
+                      sourceChildCompiled
+                    let childResult := Classical.choice childMapped
+                    let targetItem : CompiledItem
+                        (host.val.removeRaw selection domains)
+                        (domains.mapWireContext currentOuter ++
+                          exactScopeWires
+                            (host.val.removeRaw selection domains)
+                            (domains.regions.index currentOrigin
+                              currentSurvives)) currentRels
+                        (domains.mapBinderContext currentBinders) :=
+                      .cut childResult.fst
+                    have targetChildDirect : LocalOccurrence.child targetChild ∈
+                        localOccurrences (host.val.removeRaw selection domains)
+                          (domains.regions.index currentOrigin
+                            currentSurvives) := by
+                      exact Eq.mp (congrArg (fun occurrence => occurrence ∈
+                        localOccurrences
+                          (host.val.removeRaw selection domains)
+                          (domains.regions.index currentOrigin currentSurvives))
+                        mappedChildEq)
+                        (targetDirect
+                          (domains.indexOccurrence (.child child))
+                          (List.mem_map.mpr ⟨.child child, member, rfl⟩))
+                    refine ⟨⟨targetItem, ⟨?_, ?_⟩⟩⟩
+                    · calc
+                        compileOccurrence?
+                            (host.val.removeRaw selection domains)
+                            (Diagram.removeRaw_wellFormed host selection domains)
+                            (domains.regions.index currentOrigin currentSurvives)
+                            (domains.mapWireContext currentOuter ++
+                              exactScopeWires
+                                (host.val.removeRaw selection domains)
+                                (domains.regions.index currentOrigin
+                                  currentSurvives))
+                            (domains.mapBinderContext currentBinders)
+                            (domains.indexOccurrence (.child child)) _ =
+                          compileOccurrence?
+                            (host.val.removeRaw selection domains)
+                            (Diagram.removeRaw_wellFormed host selection domains)
+                            (domains.regions.index currentOrigin currentSurvives)
+                            (domains.mapWireContext currentOuter ++
+                              exactScopeWires
+                                (host.val.removeRaw selection domains)
+                                (domains.regions.index currentOrigin
+                                  currentSurvives))
+                            (domains.mapBinderContext currentBinders)
+                            (.child targetChild) targetChildDirect :=
+                          compileOccurrence?_congr_occurrence _ _ _ _
+                            mappedChildEq _ targetChildDirect
+                        _ = some targetItem := by
+                          rw [compileOccurrence?_child_cut
+                            (Diagram.removeRaw_wellFormed host selection domains)
+                            (domains.regions.index currentOrigin currentSurvives)
+                            targetChild
+                            (domains.mapWireContext currentOuter ++
+                              exactScopeWires
+                                (host.val.removeRaw selection domains)
+                                (domains.regions.index currentOrigin
+                                  currentSurvives))
+                            (domains.mapBinderContext currentBinders)
+                            targetChildDirect
+                            (by simpa [targetChild,
+                              FrameDomains.indexOccurrence] using targetKind)]
+                          rw [childResult.snd.fst]
+                          rfl
+                    · simpa [targetItem, fullBack] using
+                        (ItemIso.cut childResult.snd.snd).symm
+                | bubble sourceKindParent arity =>
+                    have parentEq : sourceKindParent = currentOrigin := by
+                      simpa [sourceKind, CRegion.parent?] using sourceParent
+                    subst sourceKindParent
+                    obtain ⟨sourceChildBody, sourceChildCompiled,
+                        sourceItemEq⟩ :=
+                      compileOccurrence?_child_bubble_success host.property
+                        currentOrigin child (currentOuter.extend currentOrigin)
+                        currentBinders arity
+                        (sourceDirect (.child child) member) sourceKind
+                        occurrenceCompiled
+                    subst sourceItem
+                    have targetKind := domains.removeRaw_bubble host selection
+                      currentSurvives childSurvives arity sourceKind
+                    let targetPushed :=
+                      (domains.mapBinderContext currentBinders).push
+                        targetChild arity
+                    have targetPushedEq : targetPushed =
+                        domains.mapBinderContext
+                          (currentBinders.push child arity) := by
+                      exact (domains.mapBinderContext_push currentBinders child
+                        childSurvives arity).symm
+                    let childMapped := induction child sourceParent
+                      (currentOuter.extend currentOrigin)
+                      (currentBinders.push child arity) childSurvives
+                      (domains.mapWireContext currentOuter ++
+                        exactScopeWires
+                          (host.val.removeRaw selection domains)
+                          (domains.regions.index currentOrigin currentSurvives))
+                      targetFullEq targetPushed targetPushedEq childExact
+                      (BinderContext.push_covers_bubble_child currentCovers
+                        sourceKind)
+                      childAway childOutside sourceChildBody
+                      sourceChildCompiled
+                    let childResult := Classical.choice childMapped
+                    let targetItem : CompiledItem
+                        (host.val.removeRaw selection domains)
+                        (domains.mapWireContext currentOuter ++
+                          exactScopeWires
+                            (host.val.removeRaw selection domains)
+                            (domains.regions.index currentOrigin
+                              currentSurvives)) currentRels
+                        (domains.mapBinderContext currentBinders) :=
+                      .bubble arity childResult.fst
+                    have targetChildDirect : LocalOccurrence.child targetChild ∈
+                        localOccurrences (host.val.removeRaw selection domains)
+                          (domains.regions.index currentOrigin
+                            currentSurvives) := by
+                      exact Eq.mp (congrArg (fun occurrence => occurrence ∈
+                        localOccurrences
+                          (host.val.removeRaw selection domains)
+                          (domains.regions.index currentOrigin currentSurvives))
+                        mappedChildEq)
+                        (targetDirect
+                          (domains.indexOccurrence (.child child))
+                          (List.mem_map.mpr ⟨.child child, member, rfl⟩))
+                    refine ⟨⟨targetItem, ⟨?_, ?_⟩⟩⟩
+                    · calc
+                        compileOccurrence?
+                            (host.val.removeRaw selection domains)
+                            (Diagram.removeRaw_wellFormed host selection domains)
+                            (domains.regions.index currentOrigin currentSurvives)
+                            (domains.mapWireContext currentOuter ++
+                              exactScopeWires
+                                (host.val.removeRaw selection domains)
+                                (domains.regions.index currentOrigin
+                                  currentSurvives))
+                            (domains.mapBinderContext currentBinders)
+                            (domains.indexOccurrence (.child child)) _ =
+                          compileOccurrence?
+                            (host.val.removeRaw selection domains)
+                            (Diagram.removeRaw_wellFormed host selection domains)
+                            (domains.regions.index currentOrigin currentSurvives)
+                            (domains.mapWireContext currentOuter ++
+                              exactScopeWires
+                                (host.val.removeRaw selection domains)
+                                (domains.regions.index currentOrigin
+                                  currentSurvives))
+                            (domains.mapBinderContext currentBinders)
+                            (.child targetChild) targetChildDirect :=
+                          compileOccurrence?_congr_occurrence _ _ _ _
+                            mappedChildEq _ targetChildDirect
+                        _ = some targetItem := by
+                          rw [compileOccurrence?_child_bubble
+                            (Diagram.removeRaw_wellFormed host selection domains)
+                            (domains.regions.index currentOrigin currentSurvives)
+                            targetChild
+                            (domains.mapWireContext currentOuter ++
+                              exactScopeWires
+                                (host.val.removeRaw selection domains)
+                                (domains.regions.index currentOrigin
+                                  currentSurvives))
+                            (domains.mapBinderContext currentBinders) arity
+                            targetChildDirect
+                            (by simpa [targetChild,
+                              FrameDomains.indexOccurrence] using targetKind)]
+                          rw [childResult.snd.fst]
+                          rfl
+                    · simpa [targetItem, fullBack] using
+                        (ItemIso.bubble childResult.snd.snd).symm)
+          (by simpa [sourceOccurrences, sourceDirect] using sourceItemsCompiled)
+        let result := Classical.choice mappedItems
+        let targetCall : CompilerCall
+            (host.val.removeRaw selection domains) :=
+          .nested (domains.regions.index currentOrigin currentSurvives)
+            (domains.mapWireContext currentOuter) currentRels
+            (domains.mapBinderContext currentBinders)
+        let targetBody : CompiledRegion
+            (host.val.removeRaw selection domains) targetCall := .mk result.fst
+        have canonicalTargetItems : compileItems?
+            (host.val.removeRaw selection domains)
+            (Diagram.removeRaw_wellFormed host selection domains)
+            (domains.regions.index currentOrigin currentSurvives)
+            ((domains.mapWireContext currentOuter).extend
+              (domains.regions.index currentOrigin currentSurvives))
+            (domains.mapBinderContext currentBinders)
+            (localOccurrences (host.val.removeRaw selection domains)
+              (domains.regions.index currentOrigin currentSurvives))
+            (fun _ member => member) = some result.fst := by
+          exact (compileItems?_congr_occurrences
+            (Diagram.removeRaw_wellFormed host selection domains)
+            (domains.regions.index currentOrigin currentSurvives)
+            ((domains.mapWireContext currentOuter).extend
+              (domains.regions.index currentOrigin currentSurvives))
+            (domains.mapBinderContext currentBinders) targetOccurrences
+            (fun _ member => member) targetDirect).trans result.snd.fst
+        have targetCompiled : compileRegion?
+            (host.val.removeRaw selection domains)
+            (Diagram.removeRaw_wellFormed host selection domains)
+            (domains.regions.index currentOrigin currentSurvives)
+            (domains.mapWireContext currentOuter)
+            (domains.mapBinderContext currentBinders) = some targetBody := by
+          rw [compileRegion?_eq_compileItems?]
+          rw [canonicalTargetItems]
+          rfl
+        refine ⟨⟨targetBody, ⟨targetCompiled, ?_⟩⟩⟩
+        have itemsIso := result.snd.snd.symm
+        have outerSurvives : ∀ wire, wire ∈ currentOuter →
+            domains.wires.survives wire = true := by
+          intro wire member
+          exact allWiresSurvive wire (List.mem_append_left _ member)
+        have localSurvives : ∀ wire,
+            wire ∈ exactScopeWires host.val currentOrigin →
+              domains.wires.survives wire = true := by
+          intro wire member
+          exact allWiresSurvive wire (List.mem_append_right _ member)
+        let localBack : FiniteEquiv
+            (Fin (exactScopeWires (host.val.removeRaw selection domains)
+              (domains.regions.index currentOrigin currentSurvives)).length)
+            (Fin (exactScopeWires host.val currentOrigin).length) :=
+          (FiniteEquiv.finCast (congrArg List.length targetLocalEq.symm)).trans
+            (domains.mapWireContextEquiv
+              (exactScopeWires host.val currentOrigin) localSurvives)
+        let targetCast := FiniteEquiv.finCast
+          (CompilerCall.fullContext_length targetCall)
+        let sourceCast := FiniteEquiv.finCast
+          (CompilerCall.fullContext_length current)
+        let castedItemsIso :=
+          (ItemSeqIso.renameWiresEquiv result.fst.erase targetCast).symm |>.trans
+            (itemsIso.trans
+              (ItemSeqIso.renameWiresEquiv sourceItems.erase sourceCast))
+        have fullBackSymm : fullBack.symm.symm = fullBack := by
+          rfl
+        rw [fullBackSymm] at castedItemsIso
+        have outerLength : (domains.mapWireContext currentOuter).length =
+            currentOuter.length := by
+          simpa using congrArg List.length
+            (domains.mapWireContext_origin_eq currentOuter outerSurvives)
+        have castedWireEq : targetCast.symm.trans
+            (fullBack.trans sourceCast) = extendWireEquiv
+              (domains.mapWireContextEquiv currentOuter outerSurvives)
+              localBack := by
+          apply FiniteEquiv.ext
+          intro index
+          apply Fin.ext
+          refine Fin.addCases (m := (domains.mapWireContext currentOuter).length)
+            (n := (exactScopeWires (host.val.removeRaw selection domains)
+              (domains.regions.index currentOrigin currentSurvives)).length)
+            (fun inherited => ?_) (fun localIndex => ?_) index
+          · simp [targetCast, sourceCast, targetCall, current, fullBack,
+              localBack, FiniteEquiv.finCast, extendWireEquiv]
+          · simp [targetCast, sourceCast, targetCall, current, fullBack,
+              localBack, FiniteEquiv.finCast, extendWireEquiv]
+            exact outerLength
+        have alignedItemsIso : ItemSeqIso
+            (extendWireEquiv
+              (domains.mapWireContextEquiv currentOuter outerSurvives)
+              localBack) currentRels
+            (ItemSeq.renameWires targetCast.toFun result.fst.erase)
+            (ItemSeq.renameWires sourceCast.toFun sourceItems.erase) :=
+          castedWireEq ▸ castedItemsIso
+        let expectedOuter :=
+          (FiniteEquiv.finCast (congrArg List.length (Eq.refl
+            (domains.mapWireContext currentOuter)))).trans
+              (domains.mapWireContextEquiv currentOuter outerSurvives)
+        have outerBackEq : expectedOuter =
+            domains.mapWireContextEquiv currentOuter outerSurvives := by
+          apply FiniteEquiv.ext
+          intro index
+          rfl
+        change RegionIso expectedOuter currentRels targetBody.erase
+          (CompiledRegion.mk sourceItems).erase
+        rw [outerBackEq]
+        simpa [targetBody, targetCall, current, CompiledRegion.erase,
+          CompilerCall.finish, CompilerCall.castFullItems,
+          ItemSeq.castWiresEq_eq_renameWires] using
+            (RegionIso.mk localBack alignedItemsIso)
+  exact mapped originSurvives targetOuter outerEq targetBinders bindersEq
+    exact covers away outside sourceBody sourceCompiled
 
 end FrameDomains
 
