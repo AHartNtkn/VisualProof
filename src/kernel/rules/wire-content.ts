@@ -20,6 +20,7 @@ import {
   completeWireEnds,
   pinEndpointsOf,
   relSigOf,
+  requireRemovalScopePreserved,
   transferPins,
   wireAt,
   withoutEndpointsOf,
@@ -329,9 +330,12 @@ export function applyEndsDelete(
     )
   }
 
+  const removed = new Set(ends.map((end) => end.node))
+  // The removed ends' argument wires lose endpoints: class-(b) — their
+  // quantifiers and floors must survive (pin first otherwise).
+  requireRemovalScopePreserved(diagram, removed, new Set([wireId]), "deleting a wire's ends")
   const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes }
   const wires: Record<WireId, Wire> = { ...diagram.wires }
-  const removed = new Set(ends.map((end) => end.node))
   for (const end of ends) delete nodes[end.node]
   withoutEndpointsOf(wires, removed)
 
