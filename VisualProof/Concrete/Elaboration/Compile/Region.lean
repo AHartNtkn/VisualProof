@@ -1128,7 +1128,7 @@ theorem compileRoot?_localCount
     (_compiled : compileRoot? d hwf ambient locals = some body) :
     body.localCount = locals.length := rfl
 
-private theorem compileNode?_complete
+theorem compileNode?_complete
     (hwf : d.WellFormed)
     {context : WireContext d} {binders : BinderContext d rels}
     {region : Fin d.regionCount}

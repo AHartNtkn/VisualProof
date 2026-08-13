@@ -672,6 +672,30 @@ theorem map_localOccurrences_removeRaw
       rw [List.filter_append, List.filter_map, List.filter_map]
       rfl
 
+/-- Dense frame occurrence order is the stable compaction of precisely the
+surviving source occurrences. -/
+theorem localOccurrences_removeRaw_eq_map_filter
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (region : domains.regions.Carrier) :
+    localOccurrences (host.val.removeRaw selection domains) region =
+      ((localOccurrences host.val (domains.regions.origin region)).filter
+        domains.occurrenceSurvives).map domains.indexOccurrence := by
+  apply (List.map_inj_right domains.originOccurrence_injective).mp
+  rw [domains.map_localOccurrences_removeRaw host selection region,
+    List.map_map]
+  symm
+  calc
+    _ = List.map id
+        ((localOccurrences host.val
+          (domains.regions.origin region)).filter
+            domains.occurrenceSurvives) := by
+      apply List.map_congr_left
+      intro occurrence member
+      exact domains.originOccurrence_indexOccurrence occurrence
+        (List.mem_filter.mp member).2
+    _ = _ := List.map_id _
+
 /-- When a complete source block survives, dense frame occurrence order is
 its pointwise compacted order. -/
 theorem localOccurrences_removeRaw_eq_map_index
@@ -1666,88 +1690,6 @@ private theorem mapNodeCompilationAt
   simpa only [Item.renameRelations_id] using
     ItemIso.renameWiresEquiv targetItem.erase
       (domains.mapWireContextEquiv sourceContext allSurvive)
-
-/-- The exact frame compiler call represented by one surviving source call. -/
-private def mappedCall
-    (domains : FrameDomains d selection) (call : CompilerCall d)
-    (originSurvives : domains.regions.survives call.origin = true) :
-    CompilerCall (d.removeRaw selection domains) :=
-  match call with
-  | .root outer locals =>
-      .root (domains.mapWireContext outer) (domains.mapWireContext locals)
-  | .nested origin context rels binders =>
-      .nested (domains.regions.index origin originSurvives)
-        (domains.mapWireContext context) rels
-        (domains.mapBinderContext binders)
-
-@[simp] private theorem mappedCall_origin
-    (domains : FrameDomains d selection) (call : CompilerCall d)
-    (originSurvives : domains.regions.survives call.origin = true) :
-    (domains.mappedCall call originSurvives).origin =
-      domains.regions.index call.origin originSurvives := by
-  cases call with
-  | root outer locals =>
-      change domains.root = domains.regions.index d.root originSurvives
-      apply domains.regions.origin_injective
-      rw [domains.root_origin, domains.regions.origin_index]
-  | nested origin context rels binders => rfl
-
-private theorem mappedCall_fullContext
-    (host : Checked) (selection : CheckedSelection host.val)
-    (domains : FrameDomains host.val selection) (call : CompilerCall host.val)
-    (originSurvives : domains.regions.survives call.origin = true) :
-    (domains.mappedCall call originSurvives).fullContext =
-      domains.mapWireContext call.fullContext := by
-  cases call with
-  | root outer locals =>
-      simpa [mappedCall, CompilerCall.fullContext] using
-        (domains.mapWireContext_append outer locals).symm
-  | nested origin context rels binders =>
-      simp only [mappedCall, CompilerCall.fullContext,
-        CompilerCall.localContext]
-      rw [domains.mapWireContext_append]
-      apply congrArg (domains.mapWireContext context ++ ·)
-      have localEq := domains.mapWireContext_exactScope host selection
-        (domains.regions.index origin originSurvives)
-      rw [domains.regions.origin_index] at localEq
-      exact localEq.symm
-
-/-- The exact compacted call is total from the source lexical certificates;
-no frame compiler result is accepted as input. -/
-private theorem mappedCallCompilation
-    (host : Checked) (selection : CheckedSelection host.val)
-    (domains : FrameDomains host.val selection)
-    (call : CompilerCall host.val)
-    (originSurvives : domains.regions.survives call.origin = true)
-    (exact : call.fullContext.Exact call.origin)
-    (covers : call.binders.Covers call.origin) :
-    ∃ body : CompiledRegion (host.val.removeRaw selection domains)
-        (domains.mappedCall call originSurvives),
-      (domains.mappedCall call originSurvives).compile?
-          (host.val.removeRaw selection domains)
-          (Diagram.removeRaw_wellFormed host selection domains) = some body := by
-  let targetCall := domains.mappedCall call originSurvives
-  have targetExact : targetCall.fullContext.Exact targetCall.origin := by
-    rw [domains.mappedCall_origin call originSurvives,
-      domains.mappedCall_fullContext host selection call originSurvives]
-    exact domains.mapWireContext_exact host selection call.fullContext
-      (domains.regions.index call.origin originSurvives) (by
-        simpa only [domains.regions.origin_index] using exact)
-  have targetCovers : targetCall.binders.Covers targetCall.origin := by
-    rw [domains.mappedCall_origin call originSurvives]
-    cases call with
-    | root outer locals =>
-        exact domains.mapBinderContext_covers host selection
-          BinderContext.empty (domains.regions.index host.val.root
-            originSurvives) (by
-              simpa only [domains.regions.origin_index] using covers)
-    | nested origin context rels binders =>
-        exact domains.mapBinderContext_covers host selection binders
-          (domains.regions.index origin originSurvives) (by
-            simpa only [domains.regions.origin_index] using covers)
-  exact CompilerCall.compile?_complete
-    (Diagram.removeRaw_wellFormed host selection domains) targetCall
-      targetExact targetCovers
 
 /-- Semantic result for one unchanged nested subtree in the actual compact
 parent context supplied by its caller. -/
