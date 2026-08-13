@@ -269,8 +269,12 @@ export function directNodes(
   diagram: Diagram,
   region: RegionId,
 ): readonly NodeId[] {
+  // Points and pins are quantifier apparatus, not the content these
+  // scripts enumerate (they predate both).
   return Object.entries(diagram.nodes)
-    .filter(([, node]) => node.region === region)
+    .filter(([, node]) =>
+      node.region === region
+      && !(node.kind === 'identity' && node.arity <= 1))
     .map(([id]) => id)
 }
 
@@ -398,7 +402,7 @@ export function deiterationStep(
     nodes: [node],
     wires: [],
   } as const
-  const evidence = findDeiterationEvidence(diagram, sel, 4096)
+  const evidence = findDeiterationEvidence(diagram, sel, 65536)
   return {
     rule: 'deiteration',
     sel,
@@ -411,7 +415,7 @@ export function deiterationSelectionStep(
   diagram: Diagram,
   sel: SubgraphSelection,
 ) {
-  const evidence = findDeiterationEvidence(diagram, sel, 4096)
+  const evidence = findDeiterationEvidence(diagram, sel, 65536)
   return {
     rule: 'deiteration',
     sel,

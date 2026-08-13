@@ -14,7 +14,6 @@ describe('atom and vacuous proof steps', () => {
     const diagram = builder.build()
     const introduced = replayProof(diagram, [{
       rule: 'vacuousIntro',
-      scope: cut,
       sig: relSig([]),
     }], EMPTY_PROOF_CONTEXT)
     const relationWire = Object.keys(introduced.wires).find((wire) =>
@@ -46,7 +45,6 @@ describe('atom and vacuous proof steps', () => {
     const source = build(false)
     const intro: ProofStep = {
       rule: 'vacuousIntro',
-      scope: source.cut,
       sig: relSig([]),
     }
     const afterIntro = replayProof(

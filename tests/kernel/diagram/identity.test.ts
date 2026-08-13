@@ -1,14 +1,32 @@
 import { describe, expect, it } from 'vitest'
 import {
   mkDiagram,
-  mkDiagramNormalized,
+  type DiagramNode,
   type DiagramParts,
+  type Endpoint,
 } from '../../../src/kernel/diagram/diagram'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { diagramFromJson, diagramToJson } from '../../../src/kernel/diagram/json'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 
 const sheet = { r0: { kind: 'sheet' as const } }
+
+// NEEDS-ADJUDICATION: most of this file was written against
+// mkDiagramNormalized and its wireImage — the eager identity normalizer,
+// which is deleted. The fixtures below are converted to the new
+// representation (every wire end is a node, so each free end carries a pin),
+// but the claims about identities disappearing at construction time no
+// longer hold: identity nodes persist until an identification or
+// presentation step changes them. Those tests now fail, deliberately.
+
+/** A pin: the node holding a wire's free end, and its quantifier, at `region`. */
+function pin(region: string): DiagramNode {
+  return { kind: 'identity', region, sig: IOTA, arity: 1 }
+}
+
+function pinEnd(node: string): Endpoint {
+  return { node, port: { kind: 'identity', index: 0 } }
+}
 
 function identityParts(
   wireIds: readonly string[],
@@ -24,18 +42,24 @@ function identityParts(
   const regions = region === 'r0'
     ? sheet
     : { ...sheet, [region]: { kind: 'cut' as const, parent: 'r0' } }
+  const nodes: Record<string, DiagramNode> = {
+    eq: { kind: 'identity', region, sig: opts.sig ?? IOTA, arity },
+  }
+  for (const [index, wire] of wireIds.entries()) {
+    nodes[`${wire}_pin`] = pin(opts.wireScopes?.[index] ?? region)
+  }
   return {
     root: 'r0',
     regions,
-    nodes: {
-      eq: { kind: 'identity', region, sig: opts.sig ?? IOTA, arity },
-    },
+    nodes,
     wires: Object.fromEntries(wireIds.map((wire, index) => [
       wire,
       {
-        scope: opts.wireScopes?.[index] ?? region,
         sig: IOTA,
-        endpoints: [{ node: 'eq', port: { kind: 'identity' as const, index } }],
+        endpoints: [
+          { node: 'eq', port: { kind: 'identity' as const, index } },
+          pinEnd(`${wire}_pin`),
+        ],
       },
     ])),
   }
@@ -64,6 +88,8 @@ describe('identity diagram nodes', () => {
     })
   })
 
+  // NEEDS-ADJUDICATION: the first clause requires identity arity ≥ 2. Arity
+  // 1 is now a pin and arity 0 a typed point, both legal.
   it('rejects arity below two, missing incidences, and mixed wire signatures', () => {
     expect(() => mkDiagram(identityParts(['a'], { arity: 1 })))
       .toThrowError(/identity node 'eq' arity.*at least 2/i)
@@ -80,7 +106,7 @@ describe('identity diagram nodes', () => {
   })
 
   it('drops an identity whose incidences all reach one distinct wire', () => {
-    const normalized = mkDiagramNormalized({
+    const normalized = mkDiagram({
       root: 'r0',
       regions: sheet,
       nodes: {
@@ -88,7 +114,6 @@ describe('identity diagram nodes', () => {
       },
       wires: {
         a: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [
             { node: 'eq', port: { kind: 'identity', index: 0 } },
@@ -98,38 +123,38 @@ describe('identity diagram nodes', () => {
       },
     })
 
-    expect(normalized.diagram.nodes).toEqual({})
-    expect(normalized.diagram.wires.a?.endpoints).toEqual([])
-    expect(normalized.wireImage.get('a')).toBe('a')
+    expect(normalized.nodes).toEqual({})
+    expect(normalized.wires.a?.endpoints).toEqual([])
   })
 
   it('collapses a co-scoped identity to the lexicographically first wire', () => {
     const parts = identityParts(['b', 'a'])
-    const normalized = mkDiagramNormalized(parts)
+    const normalized = mkDiagram(parts)
 
-    expect(Object.keys(normalized.diagram.nodes)).not.toContain('eq')
-    expect(Object.keys(normalized.diagram.wires)).toContain('a')
-    expect(Object.keys(normalized.diagram.wires)).not.toContain('b')
-    expect(normalized.wireImage.get('a')).toBe('a')
-    expect(normalized.wireImage.get('b')).toBe('a')
+    expect(Object.keys(normalized.nodes)).not.toContain('eq')
+    expect(Object.keys(normalized.wires)).toContain('a')
+    expect(Object.keys(normalized.wires)).not.toContain('b')
   })
 
   it('composes wire transport across multiple deterministic collapses', () => {
-    const normalized = mkDiagramNormalized({
+    const normalized = mkDiagram({
       root: 'r0',
       regions: sheet,
       nodes: {
         eq1: { kind: 'identity', region: 'r0', sig: IOTA, arity: 2 },
         eq2: { kind: 'identity', region: 'r0', sig: IOTA, arity: 2 },
+        c_pin: pin('r0'),
+        a_pin: pin('r0'),
       },
       wires: {
         c: {
-          scope: 'r0',
           sig: IOTA,
-          endpoints: [{ node: 'eq1', port: { kind: 'identity', index: 1 } }],
+          endpoints: [
+            { node: 'eq1', port: { kind: 'identity', index: 1 } },
+            pinEnd('c_pin'),
+          ],
         },
         b: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [
             { node: 'eq1', port: { kind: 'identity', index: 0 } },
@@ -137,23 +162,22 @@ describe('identity diagram nodes', () => {
           ],
         },
         a: {
-          scope: 'r0',
           sig: IOTA,
-          endpoints: [{ node: 'eq2', port: { kind: 'identity', index: 0 } }],
+          endpoints: [
+            { node: 'eq2', port: { kind: 'identity', index: 0 } },
+            pinEnd('a_pin'),
+          ],
         },
       },
     })
 
-    expect(Object.keys(normalized.diagram.wires)).toEqual(['a'])
-    expect(normalized.wireImage.get('a')).toBe('a')
-    expect(normalized.wireImage.get('b')).toBe('a')
-    expect(normalized.wireImage.get('c')).toBe('a')
+    expect(Object.keys(normalized.wires)).toEqual(['a'])
   })
 
   it('collapses a one-outer identity onto the outer wire (one-point rule)', () => {
     // ∃x@r1 (x = b ∧ P(x)) ≡ P(b): the identity carries one wire scoped
     // above its region; every co-scoped wire's content lands on that wire.
-    const normalized = mkDiagramNormalized({
+    const normalized = mkDiagram({
       root: 'r0',
       regions: {
         ...sheet,
@@ -162,20 +186,25 @@ describe('identity diagram nodes', () => {
       nodes: {
         eq: { kind: 'identity', region: 'r1', sig: IOTA, arity: 2 },
         p: { kind: 'atom', region: 'r1', sig: relSig([IOTA]) },
+        b_pin: pin('r0'),
+        head_pin: { kind: 'identity', region: 'r1', sig: relSig([IOTA]), arity: 1 },
       },
       wires: {
         b: {
-          scope: 'r0',
           sig: IOTA,
-          endpoints: [{ node: 'eq', port: { kind: 'identity', index: 0 } }],
+          endpoints: [
+            { node: 'eq', port: { kind: 'identity', index: 0 } },
+            pinEnd('b_pin'),
+          ],
         },
         head: {
-          scope: 'r1',
           sig: relSig([IOTA]),
-          endpoints: [{ node: 'p', port: { kind: 'head' } }],
+          endpoints: [
+            { node: 'p', port: { kind: 'head' } },
+            pinEnd('head_pin'),
+          ],
         },
         x: {
-          scope: 'r1',
           sig: IOTA,
           endpoints: [
             { node: 'eq', port: { kind: 'identity', index: 1 } },
@@ -185,29 +214,25 @@ describe('identity diagram nodes', () => {
       },
     })
 
-    expect(Object.keys(normalized.diagram.nodes)).not.toContain('eq')
-    expect(Object.keys(normalized.diagram.wires)).not.toContain('x')
-    expect(normalized.diagram.wires.b!.endpoints).toEqual([
+    expect(Object.keys(normalized.nodes)).not.toContain('eq')
+    expect(Object.keys(normalized.wires)).not.toContain('x')
+    expect(normalized.wires.b!.endpoints).toContainEqual(
       { node: 'p', port: { kind: 'arg', index: 0 } },
-    ])
-    expect(normalized.wireImage.get('x')).toBe('b')
-    expect(normalized.wireImage.get('b')).toBe('b')
+    )
   })
 
   it('keeps an identity when two or more attached wires are scoped above its region', () => {
-    const normalized = mkDiagramNormalized(identityParts(['a', 'b'], {
+    const normalized = mkDiagram(identityParts(['a', 'b'], {
       region: 'r1',
       wireScopes: ['r0', 'r0'],
     }))
 
-    expect(normalized.diagram.nodes.eq?.kind).toBe('identity')
-    expect(Object.keys(normalized.diagram.wires).sort()).toEqual(['a', 'b'])
-    expect(normalized.wireImage.get('a')).toBe('a')
-    expect(normalized.wireImage.get('b')).toBe('b')
+    expect(normalized.nodes.eq?.kind).toBe('identity')
+    expect(Object.keys(normalized.wires).sort()).toEqual(['a', 'b'])
   })
 
   it('fuses same-region identities sharing a wire and reaches a fixpoint', () => {
-    const normalized = mkDiagramNormalized({
+    const normalized = mkDiagram({
       root: 'r0',
       regions: {
         r0: { kind: 'sheet' },
@@ -217,15 +242,18 @@ describe('identity diagram nodes', () => {
         eqB: { kind: 'identity', region: 'r1', sig: IOTA, arity: 2 },
         eqA: { kind: 'identity', region: 'r1', sig: IOTA, arity: 2 },
         eqC: { kind: 'identity', region: 'r1', sig: IOTA, arity: 2 },
+        a_pin: pin('r0'),
+        z_pin: pin('r0'),
       },
       wires: {
         a: {
-          scope: 'r0',
           sig: IOTA,
-          endpoints: [{ node: 'eqA', port: { kind: 'identity', index: 0 } }],
+          endpoints: [
+            { node: 'eqA', port: { kind: 'identity', index: 0 } },
+            pinEnd('a_pin'),
+          ],
         },
         sharedAB: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [
             { node: 'eqA', port: { kind: 'identity', index: 1 } },
@@ -233,7 +261,6 @@ describe('identity diagram nodes', () => {
           ],
         },
         sharedBC: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [
             { node: 'eqB', port: { kind: 'identity', index: 1 } },
@@ -241,17 +268,19 @@ describe('identity diagram nodes', () => {
           ],
         },
         z: {
-          scope: 'r0',
           sig: IOTA,
-          endpoints: [{ node: 'eqC', port: { kind: 'identity', index: 1 } }],
+          endpoints: [
+            { node: 'eqC', port: { kind: 'identity', index: 1 } },
+            pinEnd('z_pin'),
+          ],
         },
       },
     })
 
-    expect(Object.keys(normalized.diagram.nodes)).toEqual(['eqA'])
-    expect(normalized.diagram.nodes.eqA).toMatchObject({ kind: 'identity', arity: 4 })
-    expect(Object.keys(normalized.diagram.wires).sort()).toEqual(['a', 'sharedAB', 'sharedBC', 'z'])
-    for (const wire of Object.values(normalized.diagram.wires)) {
+    expect(Object.keys(normalized.nodes)).toEqual(['eqA'])
+    expect(normalized.nodes.eqA).toMatchObject({ kind: 'identity', arity: 4 })
+    expect(Object.keys(normalized.wires).sort()).toEqual(['a', 'sharedAB', 'sharedBC', 'z'])
+    for (const wire of Object.values(normalized.wires)) {
       expect(wire.endpoints).toHaveLength(1)
       expect(wire.endpoints[0]?.node).toBe('eqA')
     }
@@ -268,15 +297,18 @@ describe('identity diagram nodes', () => {
       nodes: {
         eqA: { kind: 'identity', region: 'r1', sig: IOTA, arity: 2 },
         eqB: { kind: 'identity', region: 'r2', sig: IOTA, arity: 2 },
+        a_pin: pin('r0'),
+        b_pin: pin('r0'),
       },
       wires: {
         a: {
-          scope: 'r0',
           sig: IOTA,
-          endpoints: [{ node: 'eqA', port: { kind: 'identity', index: 0 } }],
+          endpoints: [
+            { node: 'eqA', port: { kind: 'identity', index: 0 } },
+            pinEnd('a_pin'),
+          ],
         },
         shared: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [
             { node: 'eqA', port: { kind: 'identity', index: 1 } },
@@ -284,14 +316,17 @@ describe('identity diagram nodes', () => {
           ],
         },
         b: {
-          scope: 'r0',
           sig: IOTA,
-          endpoints: [{ node: 'eqB', port: { kind: 'identity', index: 1 } }],
+          endpoints: [
+            { node: 'eqB', port: { kind: 'identity', index: 1 } },
+            pinEnd('b_pin'),
+          ],
         },
       },
     })
 
-    expect(Object.keys(diagram.nodes).sort()).toEqual(['eqA', 'eqB'])
+    expect(Object.keys(diagram.nodes).sort())
+      .toEqual(['a_pin', 'b_pin', 'eqA', 'eqB'])
   })
 
   it('canonicalizes port permutations to one explore form', () => {
@@ -304,17 +339,23 @@ describe('identity diagram nodes', () => {
       },
       nodes: {
         eq: { kind: 'identity', region: 'r2', sig: IOTA, arity: 2 },
+        outer_pin: pin('r0'),
+        inner_pin: pin('r1'),
       },
       wires: {
         outer: {
-          scope: 'r0',
           sig: IOTA,
-          endpoints: [{ node: 'eq', port: { kind: 'identity', index: swap ? 1 : 0 } }],
+          endpoints: [
+            { node: 'eq', port: { kind: 'identity', index: swap ? 1 : 0 } },
+            pinEnd('outer_pin'),
+          ],
         },
         inner: {
-          scope: 'r1',
           sig: IOTA,
-          endpoints: [{ node: 'eq', port: { kind: 'identity', index: swap ? 0 : 1 } }],
+          endpoints: [
+            { node: 'eq', port: { kind: 'identity', index: swap ? 0 : 1 } },
+            pinEnd('inner_pin'),
+          ],
         },
       },
     })

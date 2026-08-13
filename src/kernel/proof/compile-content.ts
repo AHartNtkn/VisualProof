@@ -12,7 +12,7 @@ import type {
 } from '../diagram/diagram'
 import { exploreForm, exploreIso } from '../diagram/canonical/explore'
 import { mkDiagram } from '../diagram/diagram'
-import { deepestCommonAncestor, derivedScope, derivedScopes, isAncestorOrEqual } from '../diagram/regions'
+import { derivedScope, derivedScopes, isAncestorOrEqual } from '../diagram/regions'
 import type { RelSig, Sig } from '../diagram/sig'
 import { relSig, sigEquals, sigKey } from '../diagram/sig'
 import { extractSubgraph } from '../diagram/subgraph/extract'
@@ -26,7 +26,8 @@ import { freshId } from '../diagram/subgraph/freshId'
 import { polarity } from '../diagram/regions'
 import { RuleError } from '../rules/error'
 import { bareWireDescription } from '../rules/identity-rules'
-import { completeWireEnds } from '../rules/wire-ends'
+import { nextRemovablePinStep } from './pin-sweep'
+import { completeWireEnds, ScopePreservationError } from '../rules/wire-ends'
 import { mapStepIds } from './compose'
 import type { ProofContext } from './context'
 import type { ProofAction } from './action'
@@ -315,9 +316,14 @@ function nodeAttachments(
   return { head: byPort.get('hd'), args }
 }
 
-/** Endpoints of the live wire in the host, as end-node ids. */
+/** Applied ends of the live wire in the host, as end-node ids (pins ride along, they are not sites). */
 function liveEnds(diagram: Diagram, wireId: WireId): NodeId[] {
-  return diagram.wires[wireId]!.endpoints.map((endpoint) => endpoint.node)
+  return diagram.wires[wireId]!.endpoints
+    .filter((endpoint) => {
+      const node = diagram.nodes[endpoint.node]!
+      return !(node.kind === 'identity' && node.arity === 1)
+    })
+    .map((endpoint) => endpoint.node)
 }
 
 /**
@@ -692,57 +698,55 @@ export function compileRelationJoin(
   let current = diagram
   let reservation = options.reservation
   const apply = (step: ProofStep): Diagram => {
-    const before = current
-    const receipt = applyStepWithReceipt(
-      current,
-      step,
-      context,
-      orientation,
-      reservation,
-    )
-    current = receipt.result
-    reservation = extendIdReservation(reservation, receipt.allocation)
-    steps.push(step)
-    options.onStep?.(step, before, current)
-    return current
+    for (let guard = 0; ; guard += 1) {
+      if (guard > 64) throw new RuleError('compiler pinned 64 wires without progress')
+      const before = current
+      try {
+        const receipt = applyStepWithReceipt(
+          current,
+          step,
+          context,
+          orientation,
+          reservation,
+        )
+        current = receipt.result
+        reservation = extendIdReservation(reservation, receipt.allocation)
+        steps.push(step)
+        options.onStep?.(step, before, current)
+        return current
+      } catch (error) {
+        const cause = error instanceof Error && error.cause instanceof ScopePreservationError
+          ? error.cause
+          : error instanceof ScopePreservationError ? error : null
+        if (cause === null) throw error
+        // Pin the named wire where the refusal says, as its own planned
+        // step, then retry — old sequences assumed scope rode invisibly.
+        const wire = current.wires[cause.wireId]!
+        const label = `hold_${cause.wireId}`
+        const pinStep: ProofStep = {
+          rule: 'vacuity',
+          direction: 'insert',
+          assembly: {
+            nodes: { [label]: { region: cause.scope, sig: wire.sig, arity: 1 } },
+            wires: {},
+            attachments: { [cause.wireId]: [{ node: label, port: { kind: 'identity', index: 0 } }] },
+          },
+        }
+        const receipt = applyStepWithReceipt(current, pinStep, context, orientation, reservation)
+        current = receipt.result
+        reservation = extendIdReservation(reservation, receipt.allocation)
+        steps.push(pinStep)
+        options.onStep?.(pinStep, before, current)
+      }
+    }
   }
-  // Completion pins are per-step scaffolding; a pin whose removal changes
-  // neither a scope nor a floor holds nothing, and sweeping it keeps the
-  // compiled shape pin-minimal (the shape the target diagrams state).
+  // Completion pins are per-step scaffolding; sweeping the ⊤-idle ones
+  // keeps the compiled shape pin-minimal (the shape target diagrams state).
   const sweepScaffoldPins = (): void => {
     for (;;) {
-      let swept = false
-      for (const wireId of Object.keys(current.wires).sort()) {
-        const wire = current.wires[wireId]!
-        if (wire.endpoints.length <= 2) continue
-        const scope = derivedScope(current, wireId)
-        for (const endpoint of [...wire.endpoints].sort((a, b) =>
-          a.node < b.node ? -1 : a.node > b.node ? 1 : 0)) {
-          const node = current.nodes[endpoint.node]
-          if (node === undefined || node.kind !== 'identity' || node.arity !== 1) continue
-          const rest = wire.endpoints.filter((candidate) => candidate.node !== endpoint.node)
-          if (rest.length < 2) continue
-          let dca: RegionId | null = null
-          for (const other of rest) {
-            const region = current.nodes[other.node]!.region
-            dca = dca === null ? region : deepestCommonAncestor(current, dca, region)
-          }
-          if (dca !== scope) continue
-          apply({
-            rule: 'vacuity',
-            direction: 'delete',
-            assembly: {
-              nodes: { [endpoint.node]: { region: node.region, sig: node.sig, arity: 1 } },
-              wires: {},
-              attachments: { [wireId]: [endpoint] },
-            },
-          })
-          swept = true
-          break
-        }
-        if (swept) break
-      }
-      if (!swept) return
+      const step = nextRemovablePinStep(current)
+      if (step === null) return
+      apply(step)
     }
   }
   const emitter: Emitter = {
@@ -1086,6 +1090,9 @@ export function compileRelationSever(
   const diffs: Array<{ before: Diagram; after: Diagram }> = []
   let real = diagram
   let reservation = options.reservation
+  if (process.env.SEVER_DEBUG) {
+    console.error('plan:', trace.map((entry, i) => `${i}:${entry.step.rule}`).join(' '))
+  }
   for (let index = trace.length - 1; index >= 0; index -= 1) {
     const { step, pre, post } = trace[index]!
     const iso = exploreIso(post, real)

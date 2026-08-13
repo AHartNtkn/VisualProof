@@ -120,12 +120,10 @@ describe('exact occurrence matching', () => {
       },
       wires: {
         left: {
-          scope: 'p0',
           sig: IOTA,
           endpoints: [{ node: 'eq', port: { kind: 'identity', index: 0 } }],
         },
         right: {
-          scope: 'p0',
           sig: IOTA,
           endpoints: [{ node: 'eq', port: { kind: 'identity', index: 1 } }],
         },
@@ -142,12 +140,10 @@ describe('exact occurrence matching', () => {
       },
       wires: {
         a: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [{ node: 'identity', port: { kind: 'identity', index: 1 } }],
         },
         b: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [{ node: 'identity', port: { kind: 'identity', index: 0 } }],
         },

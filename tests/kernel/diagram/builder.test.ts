@@ -33,12 +33,14 @@ describe('DiagramBuilder', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const identity = builder.identity(cut, IOTA, 2)
-    builder.wire( [
+    const left = builder.wire([
       { node: identity, port: { kind: 'identity', index: 0 } },
     ])
-    builder.wire( [
+    builder.pin(left, builder.root)
+    const right = builder.wire([
       { node: identity, port: { kind: 'identity', index: 1 } },
     ])
+    builder.pin(right, builder.root)
 
     const first = builder.build()
     const second = builder.build()
@@ -51,6 +53,9 @@ describe('DiagramBuilder', () => {
     })
   })
 
+  // NEEDS-ADJUDICATION: auto-created wires are no longer normalized away —
+  // build() completes each of the identity's ports with its own wire and pin,
+  // and nothing collapses them.
   it('auto-created same-scope identity wires normalize away eagerly', () => {
     const builder = new DiagramBuilder()
     builder.identity(builder.root, IOTA, 3)

@@ -367,11 +367,9 @@ describe('mapStepIds', () => {
     })
     expect(mapStepIds({
       rule: 'vacuousIntro',
-      scope: 'r1',
       sig: IOTA,
     }, iso)).toEqual({
       rule: 'vacuousIntro',
-      scope: 'R1',
       sig: IOTA,
     })
     expect(mapStepIds({

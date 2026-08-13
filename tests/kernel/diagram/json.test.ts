@@ -25,12 +25,10 @@ function sample() {
     },
     wires: {
       relation: {
-        scope: 'r0',
         sig: relation,
         endpoints: [{ node: 'atom', port: { kind: 'head' } }],
       },
       value: {
-        scope: 'r0',
         sig: IOTA,
         endpoints: [
           { node: 'atom', port: { kind: 'arg', index: 0 } },
@@ -39,7 +37,6 @@ function sample() {
         ],
       },
       other: {
-        scope: 'r0',
         sig: IOTA,
         endpoints: [{ node: 'eq', port: { kind: 'identity', index: 1 } }],
       },
@@ -124,12 +121,10 @@ describe('diagram JSON', () => {
       },
       wires: {
         left: {
-          scope: 'r0',
           sig: { kind: 'iota' },
           endpoints: [{ node: 'eq', port: 'i:0' }],
         },
         right: {
-          scope: 'r0',
           sig: { kind: 'iota' },
           endpoints: [{ node: 'eq', port: 'i:1' }],
         },

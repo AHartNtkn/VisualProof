@@ -17,6 +17,8 @@ import {
   compileRelationSeverAction,
 } from '../kernel/proof/compile-content'
 import { mapStepIds } from '../kernel/proof/compose'
+import { nextRemovablePinStep } from '../kernel/proof/pin-sweep'
+import { ScopePreservationError } from '../kernel/rules/wire-ends'
 import { pinnedForReplay } from '../kernel/proof/theorem'
 import type { ProofContext } from '../kernel/proof/context'
 import type { ProofStep } from '../kernel/proof/step'
@@ -111,6 +113,32 @@ export class PrimitiveStepRecorder {
     return Object.freeze([...this.#actions])
   }
 
+  #recordPin(wireId: WireId, scope: RegionId): void {
+    const wire = this.#diagram.wires[wireId]
+    if (wire === undefined) throw new Error(`cannot pin unknown wire '${wireId}'`)
+    const label = `hold_${wireId}`
+    const action = singleStepAction(`pin ${wireId}`, {
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: {
+        nodes: { [label]: { region: scope, sig: wire.sig, arity: 1 } },
+        wires: {},
+        attachments: { [wireId]: [{ node: label, port: { kind: 'identity', index: 0 } }] },
+      },
+    })
+    const before = this.#diagram
+    this.#diagram = applyAction(
+      this.#diagram,
+      action,
+      this.#context,
+      this.#orientation,
+      (_, __, receipt) => {
+        this.#absorbTransport(before, receipt.allocation.wires, receipt.transport.image)
+      },
+    )
+    this.#actions.push(action)
+  }
+
   record(label: string, step: ProofStep): void {
     const resolved = mapStepIds(step, {
       regions: identityView,
@@ -185,18 +213,129 @@ export class PrimitiveStepRecorder {
   }
 
   #recordAction(action: ProofAction): void {
-    const before = this.#diagram
-    const next = applyAction(
-      this.#diagram,
-      action,
-      this.#context,
-      this.#orientation,
-      (_, __, receipt) => {
-        this.#absorbTransport(before, receipt.allocation.wires, receipt.transport.image)
-      },
-    )
-    this.#diagram = next
+    // Old scripts assumed scope rode along invisibly; the typed refusal says
+    // exactly which wire to pin where, and the pin is recorded explicitly.
+    for (let guard = 0; ; guard += 1) {
+      if (guard > 64) throw new Error('recorder pinned 64 wires without progress')
+      try {
+        const before = this.#diagram
+        const next = applyAction(
+          this.#diagram,
+          action,
+          this.#context,
+          this.#orientation,
+          (_, __, receipt) => {
+            this.#absorbTransport(before, receipt.allocation.wires, receipt.transport.image)
+          },
+        )
+        this.#diagram = next
+        break
+      } catch (error) {
+        const cause = error instanceof Error && error.cause instanceof ScopePreservationError
+          ? error.cause
+          : error instanceof ScopePreservationError ? error : null
+        if (cause === null) throw error
+        this.#recordPin(cause.wireId, cause.scope)
+      }
+    }
     this.#actions.push(action)
+    this.#tidy()
+  }
+
+  /**
+   * Re-impose, as EXPLICIT recorded steps, the tidying the old eager
+   * normalizer did silently (spec §10.4): contract single-wire identity
+   * nodes, collapse one-point-eligible ones, fuse co-regional sharing
+   * pairs — then sweep ⊤-idle scaffolding pins. Scripts authored against
+   * the eager shapes replay unchanged; the history says everything.
+   */
+  #tidy(): void {
+    for (;;) {
+      const step = this.#nextIdentityStep() ?? nextRemovablePinStep(this.#diagram)
+      if (step === null) return
+      const before = this.#diagram
+      const action = singleStepAction('tidy', step)
+      this.#diagram = applyAction(
+        this.#diagram,
+        action,
+        this.#context,
+        this.#orientation,
+        (_, __, receipt) => {
+          this.#absorbTransport(before, receipt.allocation.wires, receipt.transport.image)
+        },
+      )
+      this.#actions.push(action)
+    }
+  }
+
+  #nextIdentityStep(): ProofStep | null {
+    const d = this.#diagram
+    const identityIds = Object.keys(d.nodes)
+      .filter((id) => {
+        const node = d.nodes[id]!
+        return node.kind === 'identity' && node.arity >= 2
+      })
+      .sort()
+    const incidentOf = (nodeId: NodeId): WireId[] =>
+      Object.keys(d.wires)
+        .filter((wireId) => d.wires[wireId]!.endpoints.some((ep) => ep.node === nodeId))
+        .sort()
+
+    // Old rule 1: a node with all ports on one wire contracts toward unary
+    // (the pin sweep finishes the job when the leftover holds nothing).
+    for (const nodeId of identityIds) {
+      const incident = incidentOf(nodeId)
+      if (incident.length !== 1) continue
+      const wire = d.wires[incident[0]!]!
+      const ports = wire.endpoints.filter((ep) => ep.node === nodeId).length
+      if (wire.endpoints.length - ports + 1 < 2) continue
+      return {
+        rule: 'presentation',
+        input: {
+          region: d.nodes[nodeId]!.region,
+          removeNodes: [nodeId],
+          addNodes: { [nodeId]: [incident[0]!] },
+        },
+      }
+    }
+    // Old rule 2 (one-point): at most one incident wire quantified outside
+    // the node's region — collapse the rest onto it.
+    for (const nodeId of identityIds) {
+      const node = d.nodes[nodeId]!
+      const incident = incidentOf(nodeId)
+      if (incident.length < 2) continue
+      const outer = incident.filter((wireId) =>
+        derivedScope(d, wireId) !== node.region)
+      if (outer.length > 1) continue
+      const survivor = outer[0] ?? incident[0]!
+      const absorbed = incident.filter((wireId) => wireId !== survivor)
+      return {
+        rule: 'identification',
+        input: { kind: 'collapse', node: nodeId, survivor, absorbed },
+      }
+    }
+    // Old rule 3: same-region nodes sharing a wire fuse.
+    for (const leftId of identityIds) {
+      const left = d.nodes[leftId]!
+      const leftWires = new Set(incidentOf(leftId))
+      for (const rightId of identityIds) {
+        if (rightId <= leftId) continue
+        const right = d.nodes[rightId]!
+        if (left.region !== right.region) continue
+        const rightWires = incidentOf(rightId)
+        if (!rightWires.some((wireId) => leftWires.has(wireId))) continue
+        const union = [...new Set([...leftWires, ...rightWires])].sort()
+        return {
+          rule: 'presentation',
+          input: {
+            region: left.region,
+            removeNodes: [leftId, rightId],
+            addNodes: { [leftId]: union },
+          },
+        }
+      }
+    }
+    return null
   }
 
   /**

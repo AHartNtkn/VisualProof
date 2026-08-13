@@ -90,12 +90,10 @@ describe('extractSubgraph', () => {
       },
       wires: {
         a: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [{ node: 'eq', port: { kind: 'identity', index: 0 } }],
         },
         b: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [{ node: 'eq', port: { kind: 'identity', index: 1 } }],
         },

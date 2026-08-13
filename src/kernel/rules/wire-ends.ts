@@ -242,6 +242,18 @@ export function completeWireEnds(
   }
 }
 
+/** A class-(b) refusal, carrying what to pin and where. */
+export class ScopePreservationError extends RuleError {
+  readonly wireId: WireId
+  readonly scope: RegionId
+  constructor(message: string, wireId: WireId, scope: RegionId) {
+    super(message)
+    this.name = 'ScopePreservationError'
+    this.wireId = wireId
+    this.scope = scope
+  }
+}
+
 /**
  * The class-(b) precondition (spec §5): removing `removedNodes` must leave
  * every surviving touched wire with its derived scope unchanged and at
@@ -259,22 +271,26 @@ export function requireRemovalScopePreserved(
     if (onlyWires !== undefined && !onlyWires.has(wireId)) continue
     if (!wire.endpoints.some((ep) => removedNodes.has(ep.node))) continue
     const surviving = wire.endpoints.filter((ep) => !removedNodes.has(ep.node))
+    const before = derivedScope(d, wireId)
     if (surviving.length < 2) {
-      throw new RuleError(
+      throw new ScopePreservationError(
         `${operation} would leave wire '${wireId}' with ${surviving.length} end(s); `
         + `pin it first`,
+        wireId,
+        before,
       )
     }
-    const before = derivedScope(d, wireId)
     let after: RegionId | null = null
     for (const ep of surviving) {
       const region = d.nodes[ep.node]!.region
       after = after === null ? region : deepestCommonAncestor(d, after, region)
     }
     if (after !== before) {
-      throw new RuleError(
+      throw new ScopePreservationError(
         `${operation} would move the quantifier of wire '${wireId}' from `
         + `'${before}' to '${String(after)}'; pin it at '${before}' first`,
+        wireId,
+        before,
       )
     }
   }

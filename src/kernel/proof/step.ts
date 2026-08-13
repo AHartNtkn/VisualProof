@@ -344,6 +344,9 @@ function joinedRepresentative(
   step: ProofStep,
   wire: WireId,
 ): WireId {
+  if (step.rule === 'identification' && step.input.kind === 'collapse') {
+    return step.input.absorbed.includes(wire) ? step.input.survivor : wire
+  }
   if (step.rule !== 'wireJoin') return wire
   const a = diagram.wires[step.input.a]
   const b = diagram.wires[step.input.b]

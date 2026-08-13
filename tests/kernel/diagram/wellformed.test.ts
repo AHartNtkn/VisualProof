@@ -80,31 +80,31 @@ describe('mkDiagram validation', () => {
     })).toThrowError(/identity node 'n0' sig/)
   })
 
+  // NEEDS-ADJUDICATION: the first clause checks that a wire naming a missing
+  // scope region is rejected. Wires no longer store a scope, so there is no
+  // such region to be missing and no such check; what the clause's fixture
+  // now trips is the two-end floor.
   it('rejects missing scopes, nodes, ports, duplicate attachments, and omissions', () => {
     expect(() => oneRef({
       w0: {
-        scope: 'ghost',
         sig: IOTA,
         endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
       },
     })).toThrowError(/missing scope region 'ghost'/)
     expect(() => oneRef({
       w0: {
-        scope: 'r0',
         sig: IOTA,
         endpoints: [{ node: 'ghost', port: { kind: 'arg', index: 0 } }],
       },
     })).toThrowError(/missing node 'ghost'/)
     expect(() => oneRef({
       w0: {
-        scope: 'r0',
         sig: IOTA,
         endpoints: [{ node: 'n0', port: { kind: 'head' } }],
       },
     })).toThrowError(/non-existent port 'hd'/)
     expect(() => oneRef({
       w0: {
-        scope: 'r0',
         sig: IOTA,
         endpoints: [
           { node: 'n0', port: { kind: 'arg', index: 0 } },
@@ -114,12 +114,10 @@ describe('mkDiagram validation', () => {
     })).toThrowError(/appears more than once/)
     expect(() => oneRef({
       w0: {
-        scope: 'r0',
         sig: IOTA,
         endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
       },
       w1: {
-        scope: 'r0',
         sig: IOTA,
         endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
       },
@@ -127,10 +125,12 @@ describe('mkDiagram validation', () => {
     expect(() => oneRef({})).toThrowError(/port 'a:0'.*not attached/)
   })
 
+  // NEEDS-ADJUDICATION: the second clause checks that a stored scope must
+  // enclose every endpoint. Scope is derived from the endpoints now, so it
+  // encloses them by construction and the check is gone.
   it('rejects signature mismatch and a wire scope below its endpoint', () => {
     expect(() => oneRef({
       w0: {
-        scope: 'r0',
         sig: relSig([]),
         endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
       },
@@ -144,7 +144,6 @@ describe('mkDiagram validation', () => {
       nodes: { n0: refNode },
       wires: {
         w0: {
-          scope: 'r1',
           sig: IOTA,
           endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
         },

@@ -30,12 +30,10 @@ function host(): Diagram {
     },
     wires: {
       head: {
-        scope: 'r0',
         sig: relation,
         endpoints: [{ node: 'atom', port: { kind: 'head' } }],
       },
       value: {
-        scope: 'r0',
         sig: IOTA,
         endpoints: [
           { node: 'atom', port: { kind: 'arg', index: 0 } },
@@ -44,7 +42,6 @@ function host(): Diagram {
         ],
       },
       other: {
-        scope: 'r0',
         sig: IOTA,
         endpoints: [
           { node: 'identity', port: { kind: 'identity', index: 1 } },
@@ -93,7 +90,6 @@ function renamed(diagram: Diagram): Diagram {
   const wires: Record<string, Wire> = {}
   for (const [id, wire] of Object.entries(diagram.wires)) {
     wires[rename(id)] = {
-      scope: rename(wire.scope),
       sig: wire.sig,
       endpoints: wire.endpoints.map((endpoint) => ({
         node: rename(endpoint.node),

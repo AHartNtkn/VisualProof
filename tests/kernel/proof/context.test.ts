@@ -82,7 +82,6 @@ describe('verified ProofContext authority', () => {
     const diagram = emptyDiagram()
     const step = {
       rule: 'vacuousIntro',
-      scope: diagram.root,
       sig: IOTA,
     } as const
 

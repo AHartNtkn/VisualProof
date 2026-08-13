@@ -42,7 +42,9 @@ function buildTrap(k: number, pairs: number): { d: Diagram; cut: string; left: s
   const cut = b.cut(b.root)
   const inner: string[] = []
   for (let i = 0; i < k; i++) inner.push(b.ref(cut, `C${i}`, relSig([IOTA])))
-  if (k >= 2) b.wire( IOTA)
+  if (k >= 2) {
+    b.wire(inner.map((n) => ({ node: n, port: { kind: 'arg' as const, index: 0 } })), IOTA)
+  }
   const left: string[] = [], right: string[] = []
   for (let p = 0; p < pairs; p++) {
     const n0 = b.ref(b.root, `L${p}`, relSig([IOTA]))
@@ -151,6 +153,10 @@ describe('the chain is deterministic in its seed (plan Task 6)', () => {
 })
 
 describe('every movable unit has a covering move (plan Task 6 coverage)', () => {
+  // NEEDS-ADJUDICATION: this asserts a scene exercises the `endDot` movable-unit
+  // taxon, which mkEngine can no longer produce — the engine synthesizes no
+  // wire-owned end bodies (`WireView.end` is always null now that every wire end
+  // is a real pin node), so `movableUnits` never emits an endDot for any diagram.
   it('the move registry covers each body, region subtree, end dot, and wire junction', () => {
     // a nested scene: a cut holding an atom (its dangling ports become wire-owned
     // end dots), a root ref, and a THREE-terminal wire (whose routed Steiner point

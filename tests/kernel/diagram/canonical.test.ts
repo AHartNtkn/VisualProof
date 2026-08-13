@@ -118,17 +118,14 @@ describe('exploreForm signature-indexed content', () => {
       nullary: { kind: 'atom', region: 'r0', sig: nullary },
     } as const
     const unaryHead = {
-      scope: 'r0',
       sig: unary,
       endpoints: [{ node: 'unary', port: { kind: 'head' as const } }],
     }
     const nullaryHead = {
-      scope: 'r0',
       sig: nullary,
       endpoints: [{ node: 'nullary', port: { kind: 'head' as const } }],
     }
     const unaryArg = {
-      scope: 'r0',
       sig: IOTA,
       endpoints: [{ node: 'unary', port: { kind: 'arg' as const, index: 0 } }],
     }

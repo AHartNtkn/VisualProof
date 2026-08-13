@@ -108,9 +108,12 @@ export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
   const bwdInterface = carry(thm.rhs.boundary)
   const bwd = replayActions(pinnedForReplay(thm.rhs), backActions, ctx, bwdInterface.afterStep, 'backward')
   if (exploreForm(fwd, fwdInterface.boundary()) !== exploreForm(bwd, bwdInterface.boundary())) {
-    throw new ProofError(backActions.length === 0
+    const detail = process.env.THEOREM_DEBUG
+      ? `\n-- forward:\n${exploreForm(fwd, fwdInterface.boundary())}\n-- stated/backward:\n${exploreForm(bwd, bwdInterface.boundary())}`
+      : ''
+    throw new ProofError((backActions.length === 0
       ? `theorem '${thm.name}': the proof does not arrive at the stated right-hand side`
-      : `theorem '${thm.name}': the forward and backward halves do not meet`)
+      : `theorem '${thm.name}': the forward and backward halves do not meet`) + detail)
   }
 }
 

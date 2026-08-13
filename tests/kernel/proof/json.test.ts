@@ -331,7 +331,6 @@ describe('step JSON', () => {
       })).toThrowError(/unknown field 'termCertificates'/)
     expect(() => stepFromJson({
       rule: 'vacuousIntro',
-      scope: 'r0',
       sig: { kind: 'iota' },
       body: {},
     })).toThrowError(/unknown field 'body'/)

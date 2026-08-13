@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { derivedScope } from '../../../src/kernel/diagram/regions'
+import { contentEndpoints } from '../../fixtures/pins'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import {
   applyAbstractFormal,
@@ -57,7 +58,7 @@ describe('arity shift / unshift', () => {
       diagram.wires[id] === undefined && id !== fresh)
     expect(locals).toHaveLength(1)
     expect(derivedScope(shifted, locals[0]!)).toBe(cut)
-    expect(shifted.wires[locals[0]!]!.endpoints).toHaveLength(1)
+    expect(contentEndpoints(shifted, locals[0]!)).toHaveLength(1)
 
     const restored = applyArityUnshift(shifted, fresh, 2)
     expect(exploreForm(restored)).toEqual(exploreForm(diagram))

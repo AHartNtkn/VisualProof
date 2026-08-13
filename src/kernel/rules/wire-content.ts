@@ -18,6 +18,7 @@ import {
   appliedEnds,
   attachArgs,
   completeWireEnds,
+  deletePins,
   pinEndpointsOf,
   relSigOf,
   requireRemovalScopePreserved,
@@ -244,7 +245,16 @@ export function applyParallelFuse(
   }
   const leftEnds = appliedEnds(diagram, a, 'parallel fuse')
   const rightEnds = appliedEnds(diagram, b, 'parallel fuse')
-  const pins = [...pinEndpointsOf(diagram, a), ...pinEndpointsOf(diagram, b)]
+  // Split duplicates pins onto both halves; fuse MERGES them (spec §5):
+  // same-region pins pair off, one survivor per pair, the twin's node dies.
+  const pinsA = pinEndpointsOf(diagram, a)
+  const spareTips = [...pinEndpointsOf(diagram, b)]
+  const pairedAway: typeof spareTips = []
+  for (const pin of pinsA) {
+    const match = spareTips.findIndex((candidate) => candidate.region === pin.region)
+    if (match >= 0) pairedAway.push(...spareTips.splice(match, 1))
+  }
+  const pins = [...pinsA, ...spareTips]
 
   const siteKey = (end: AppliedEnd): string =>
     JSON.stringify([end.region, ...end.args])
@@ -306,6 +316,7 @@ export function applyParallelFuse(
   wires[fresh] = { sig: left.sig, endpoints: freshEndpoints }
 
   const parts: PartsInProgress = { regions: { ...diagram.regions }, nodes, wires }
+  deletePins(parts.nodes, pairedAway)
   transferPins(parts, pins, fresh)
   completeWireEnds(parts, fresh, scopeA, 'parallel fuse', reservation?.nodes)
   return mkDiagram({ root: diagram.root, ...parts })

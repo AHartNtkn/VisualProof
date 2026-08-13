@@ -28,8 +28,12 @@ export type MappedSplice = {
   readonly wireMap: ReadonlyMap<WireId, WireId>
 }
 
-/** Drop the selection's content; touching wires keep only their outside endpoints. */
-export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
+/** The removal as raw parts, for rules that repair before validating. */
+export function removeSubgraphParts(d: Diagram, sel: SubgraphSelection): {
+  regions: Record<RegionId, Region>
+  nodes: Record<string, DiagramNode>
+  wires: Record<WireId, Wire>
+} {
   const c = selectionContents(d, sel)
   const internal = new Set(c.internalWires)
   const regions: Record<RegionId, Region> = {}
@@ -48,7 +52,12 @@ export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
       endpoints: w.endpoints.filter((ep) => !c.allNodes.has(ep.node)),
     }
   }
-  return mkDiagram({ root: d.root, regions, nodes, wires })
+  return { regions, nodes, wires }
+}
+
+/** Drop the selection's content; touching wires keep only their outside endpoints. */
+export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
+  return mkDiagram({ root: d.root, ...removeSubgraphParts(d, sel) })
 }
 
 /**

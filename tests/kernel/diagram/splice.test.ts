@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagram } from '../../../src/kernel/diagram/diagram'
+import { mkDiagram, type Region } from '../../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
@@ -10,17 +10,21 @@ import {
   removeSubgraph,
   spliceSubgraphMapped,
 } from '../../../src/kernel/diagram/subgraph/splice'
+import { bareWire, bareWireParts, contentEndpoints } from '../../fixtures/pins'
 
 function host() {
   const builder = new DiagramBuilder()
   const outer = builder.ref(builder.root, 'Outer', relSig([IOTA]))
   const cut = builder.cut(builder.root)
   const inner = builder.ref(cut, 'Inner', relSig([IOTA, IOTA]))
-  const shared = builder.wire( [
+  const shared = builder.wire([
     { node: outer, port: { kind: 'arg', index: 0 } },
     { node: inner, port: { kind: 'arg', index: 0 } },
   ])
-  const inside = builder.wire( [
+  // The wire outlives the removal of the cut, so it is pinned at its own
+  // scope first — removal keeps only outside incidences.
+  builder.pin(shared, builder.root)
+  const inside = builder.wire([
     { node: inner, port: { kind: 'arg', index: 1 } },
   ])
   return {
@@ -34,14 +38,27 @@ function host() {
 }
 
 function repeatedBareBoundary() {
-  const diagram = mkDiagram({
+  // Two boundary incidences are the stub's two ends, so it needs no pins.
+  return mkDiagramWithBoundary({
     root: 'p0',
     regions: { p0: { kind: 'sheet' } },
+    nodes: {},
     wires: {
-      stub: { scope: 'p0', sig: IOTA, endpoints: [] },
+      stub: { sig: IOTA, endpoints: [] },
     },
+  }, ['stub', 'stub'])
+}
+
+/** A host holding two bare wires, `a` and `b`, at the root. */
+function bareHost(regions: Record<string, Region> = {}) {
+  const a = bareWireParts('a', 'r0')
+  const b = bareWireParts('b', 'r0')
+  return mkDiagram({
+    root: 'r0',
+    regions: { r0: { kind: 'sheet' }, ...regions },
+    nodes: { ...a.nodes, ...b.nodes },
+    wires: { ...a.wires, ...b.wires },
   })
-  return mkDiagramWithBoundary(diagram, ['stub', 'stub'])
 }
 
 describe('subgraph removal and splice', () => {
@@ -58,7 +75,7 @@ describe('subgraph removal and splice', () => {
     expect(removed.regions[value.cut]).toBeUndefined()
     expect(removed.nodes[value.inner]).toBeUndefined()
     expect(removed.wires[value.inside]).toBeUndefined()
-    expect(removed.wires[value.shared]?.endpoints).toEqual([
+    expect(contentEndpoints(removed, value.shared)).toEqual([
       { node: value.outer, port: { kind: 'arg', index: 0 } },
     ])
   })
@@ -84,15 +101,11 @@ describe('subgraph removal and splice', () => {
     expect(spliced.wireMap.get(extraction.pattern.boundary[0]!)).toBe(value.shared)
   })
 
+  // NEEDS-ADJUDICATION: the identity a repeated boundary creates is no longer
+  // absorbed when the attachments are co-scoped — splice records the equality
+  // and it persists until an identification step absorbs it.
   it('collapses a repeated boundary identity when attachments are co-scoped', () => {
-    const hostDiagram = mkDiagram({
-      root: 'r0',
-      regions: { r0: { kind: 'sheet' } },
-      wires: {
-        b: { scope: 'r0', sig: IOTA, endpoints: [] },
-        a: { scope: 'r0', sig: IOTA, endpoints: [] },
-      },
-    })
+    const hostDiagram = bareHost()
     const spliced = spliceSubgraphMapped(
       hostDiagram,
       hostDiagram.root,
@@ -105,6 +118,9 @@ describe('subgraph removal and splice', () => {
     expect(spliced.wireMap.get('stub')).toBe('a')
   })
 
+  // NEEDS-ADJUDICATION: the closing assertions expect the minted alias
+  // identity to be normalized away. Splice keeps it now, so the receipt and
+  // the surviving nodes coincide.
   it('receipts every pre-normalization mint even when an alias is normalized away', () => {
     const patternBuilder = new DiagramBuilder()
     const patternCut = patternBuilder.cut(patternBuilder.root)
@@ -112,11 +128,11 @@ describe('subgraph removal and splice', () => {
       patternCut,
       relSig([IOTA]),
     )
-    const boundary = patternBuilder.wire( [{
+    const boundary = patternBuilder.wire([{
       node: body,
       port: { kind: 'arg', index: 0 },
     }])
-    patternBuilder.wire( [{
+    patternBuilder.wire([{
       node: body,
       port: { kind: 'head' },
     }], relSig([IOTA]))
@@ -124,14 +140,7 @@ describe('subgraph removal and splice', () => {
       patternBuilder.build(),
       [boundary, boundary],
     )
-    const hostDiagram = mkDiagram({
-      root: 'r0',
-      regions: { r0: { kind: 'sheet' } },
-      wires: {
-        b: { scope: 'r0', sig: IOTA, endpoints: [] },
-        a: { scope: 'r0', sig: IOTA, endpoints: [] },
-      },
-    })
+    const hostDiagram = bareHost()
 
     const spliced = spliceSubgraphMapped(
       hostDiagram,
@@ -151,17 +160,7 @@ describe('subgraph removal and splice', () => {
   })
 
   it('keeps a repeated-boundary identity for outer-scoped attachments', () => {
-    const hostDiagram = mkDiagram({
-      root: 'r0',
-      regions: {
-        r0: { kind: 'sheet' },
-        r1: { kind: 'cut', parent: 'r0' },
-      },
-      wires: {
-        a: { scope: 'r0', sig: IOTA, endpoints: [] },
-        b: { scope: 'r0', sig: IOTA, endpoints: [] },
-      },
-    })
+    const hostDiagram = bareHost({ r1: { kind: 'cut', parent: 'r0' } })
     const spliced = spliceSubgraphMapped(
       hostDiagram,
       'r1',
@@ -169,7 +168,8 @@ describe('subgraph removal and splice', () => {
       ['a', 'b'],
     )
     const identities = Object.entries(spliced.diagram.nodes)
-      .filter(([, node]) => node.kind === 'identity')
+      .filter(([id, node]) =>
+        node.kind === 'identity' && hostDiagram.nodes[id] === undefined)
 
     expect(identities).toHaveLength(1)
     expect(identities[0]?.[1]).toMatchObject({
@@ -185,8 +185,8 @@ describe('subgraph removal and splice', () => {
   it('rejects arity, visibility, and signature mismatches', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const innerWire = builder.wire( [])
-    const relational = builder.relWire( relSig([]))
+    const innerWire = bareWire(builder, cut)
+    const relational = bareWire(builder, builder.root, relSig([]))
     const diagram = builder.build()
     const pattern = repeatedBareBoundary()
 

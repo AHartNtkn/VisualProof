@@ -2,6 +2,7 @@ import type { Diagram, RegionId } from '../diagram/diagram'
 import { isAncestorOrEqual } from '../diagram/regions'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
+import { exploreForm } from '../diagram/canonical/explore'
 import { extractSubgraph } from '../diagram/subgraph/extract'
 import { removeSubgraph, spliceSubgraphMapped } from '../diagram/subgraph/splice'
 import type { IdReservation } from '../diagram/subgraph/freshId'
@@ -164,7 +165,26 @@ export function findDeiterationEvidence(
       && disjoint(occurrence),
   )
   if (justifying === undefined) {
+    if (process.env.DEITERATION_DEBUG) {
+      console.error(`deiteration debug at '${selection.region}': ${result.matches.length} raw matches, expected attachments [${attachments.join(', ')}]`)
+      const selectedNode = selection.nodes[0]
+      const selected = selectedNode === undefined ? undefined : diagram.nodes[selectedNode]
+      if (selected !== undefined) {
+        for (const [nodeId, node] of Object.entries(diagram.nodes)) {
+          if (node.kind !== selected.kind) continue
+          if (JSON.stringify((node as { sig?: unknown }).sig) !== JSON.stringify((selected as { sig?: unknown }).sig)) continue
+          const attached = Object.entries(diagram.wires)
+            .filter(([, wire]) => wire.endpoints.some((ep) => ep.node === nodeId))
+            .map(([wireId]) => wireId)
+          console.error(`  candidate '${nodeId}' at '${node.region}': wires [${attached.join(', ')}]`)
+        }
+      }
+    }
     if (result.status === 'exhausted') {
+      if (process.env.DEITERATION_DEBUG) {
+        console.error('exhausted pattern form:')
+        console.error(exploreForm(pattern.diagram, pattern.boundary))
+      }
       throw new RuleError(
         `graph exploration exhausted before finding an exact justifier `
         + `for deiteration at '${selection.region}'`,

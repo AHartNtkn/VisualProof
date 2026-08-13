@@ -35,7 +35,6 @@ describe('canonical positional and unordered ports', () => {
       ...base,
       wires: {
         invalid: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [{ node: 'ref', port: { kind: 'arg', index: 1 } }],
         },
@@ -45,7 +44,6 @@ describe('canonical positional and unordered ports', () => {
       ...base,
       wires: {
         invalid: {
-          scope: 'r0',
           sig: relSig([IOTA]),
           endpoints: [{ node: 'ref', port: { kind: 'head' } }],
         },
@@ -83,7 +81,6 @@ describe('canonical positional and unordered ports', () => {
       },
       wires: {
         outer: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [{
             node: 'eq',
@@ -91,7 +88,6 @@ describe('canonical positional and unordered ports', () => {
           }],
         },
         inner: {
-          scope: 'r1',
           sig: IOTA,
           endpoints: [{
             node: 'eq',
@@ -135,12 +131,10 @@ describe('canonical positional and unordered ports', () => {
       ...identity,
       wires: {
         a: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [{ node: 'eq', port: { kind: 'identity', index: 0 } }],
         },
         b: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [{ node: 'eq', port: { kind: 'identity', index: 2 } }],
         },
@@ -150,7 +144,6 @@ describe('canonical positional and unordered ports', () => {
       ...identity,
       wires: {
         a: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [{ node: 'eq', port: { kind: 'identity', index: 0 } }],
         },

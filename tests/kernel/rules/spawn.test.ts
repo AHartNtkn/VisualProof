@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { applyAtomSpawn, applyRefSpawn } from '../../../src/kernel/rules/spawn'
+import { bareWire, contentEndpoints } from '../../fixtures/pins'
 
 const ARITY_TWO = relSig([IOTA, IOTA])
 
@@ -10,7 +11,7 @@ function host() {
   const builder = new DiagramBuilder()
   const cut = builder.cut(builder.root)
   const sibling = builder.cut(builder.root)
-  const relationWire = builder.relWire( ARITY_TWO)
+  const relationWire = bareWire(builder, cut, ARITY_TWO)
   const inner = builder.cut(cut)
   const deep = builder.cut(inner)
   return {
@@ -26,12 +27,9 @@ function host() {
 
 function definitions() {
   const body = new DiagramBuilder()
-  const left = body.wire( [], IOTA)
-  const right = body.wire( [], IOTA)
-  return new Map([[
-    'logic/R',
-    mkDiagramWithBoundary(body.build(), [left, right]),
-  ]])
+  const left = body.wire([], IOTA)
+  const right = body.wire([], IOTA)
+  return new Map([['logic/R', body.buildOpen([left, right])]])
 }
 
 function reificationShapedDefinition(complete: boolean) {
@@ -44,13 +42,13 @@ function reificationShapedDefinition(complete: boolean) {
   const reverseWitness = complete
     ? body.atom(reverseConsequent, relSig([]))
     : undefined
-  const witness = body.wire( [
+  const witness = body.wire([
     { node: forwardWitness, port: { kind: 'head' } },
     ...(reverseWitness === undefined
       ? []
       : [{ node: reverseWitness, port: { kind: 'head' } } as const]),
   ], relSig([]))
-  return mkDiagramWithBoundary(body.build(), [witness])
+  return body.buildOpen([witness])
 }
 
 describe('Phase-1 primitive spawning', () => {
@@ -63,7 +61,7 @@ describe('Phase-1 primitive spawning', () => {
       ARITY_TWO,
       definitions(),
     )
-    const ref = Object.values(result.nodes)[0]
+    const ref = Object.values(result.nodes).find((node) => node.kind === 'ref')
     const freshWires = Object.entries(result.wires).filter(([id]) =>
       fixture.diagram.wires[id] === undefined)
 
@@ -74,9 +72,9 @@ describe('Phase-1 primitive spawning', () => {
       sig: ARITY_TWO,
     })
     expect(freshWires).toHaveLength(2)
-    expect(freshWires.every(([, wire]) =>
-      wire.scope === fixture.cut
-      && wire.endpoints.length === 1)).toBe(true)
+    expect(freshWires.every(([id]) =>
+      derivedScope(result, id) === fixture.cut
+      && contentEndpoints(result, id).length === 1)).toBe(true)
   })
 
   it('revalidates definition identity and signature', () => {
@@ -105,18 +103,25 @@ describe('Phase-1 primitive spawning', () => {
       fixture.relationWire,
     )
 
-    expect(Object.values(result.nodes)).toEqual([
-      expect.objectContaining({
-        kind: 'atom',
-        region: fixture.cut,
-        sig: ARITY_TWO,
-      }),
-    ])
-    expect(result.wires[fixture.relationWire]?.endpoints).toEqual([
-      { node: 'n', port: { kind: 'head' } },
+    const spawnedAtoms = Object.entries(result.nodes).filter(([id, node]) =>
+      fixture.diagram.nodes[id] === undefined && node.kind === 'atom')
+    expect(spawnedAtoms).toHaveLength(1)
+    expect(spawnedAtoms[0]![1]).toMatchObject({
+      kind: 'atom',
+      region: fixture.cut,
+      sig: ARITY_TWO,
+    })
+    expect(contentEndpoints(result, fixture.relationWire)).toEqual([
+      { node: spawnedAtoms[0]![0], port: { kind: 'head' } },
     ])
   })
 
+  // NEEDS-ADJUDICATION: the "does not enclose" clause no longer holds. The
+  // old mkDiagram checked a stored scope against every endpoint region, so
+  // spawning an atom outside the wire's scope was rejected; with scope
+  // derived, spawning at a sibling region silently raises the wire's
+  // quantifier to the deepest common ancestor. Either applyAtomSpawn regains
+  // the check (refuse or pin) or this clause goes.
   it('shares the flipped polarity gate and enforces wire scope', () => {
     const fixture = host()
     expect(() => applyRefSpawn(

@@ -14,13 +14,14 @@ import {
 } from '../diagram/diagram'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import { derivedScope } from '../diagram/regions'
+import { completeWireEnds } from './wire-ends'
 import { exploreForm } from '../diagram/canonical/explore'
 import type { RelSig } from '../diagram/sig'
 import { relSig, sigEquals, sigKey } from '../diagram/sig'
 import { extractSubgraph } from '../diagram/subgraph/extract'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { mkSelection, type SubgraphSelection } from '../diagram/subgraph/selection'
-import { removeSubgraph, spliceSubgraphMapped } from '../diagram/subgraph/splice'
+import { removeSubgraph, removeSubgraphParts, spliceSubgraphMapped } from '../diagram/subgraph/splice'
 import { refNodeAt, wireAt } from './access'
 import { RuleError } from './error'
 
@@ -225,7 +226,7 @@ export function applyFold(
     )
   }
 
-  const cleaned = removeSubgraph(diagram, occurrence)
+  const cleaned = { root: diagram.root, ...removeSubgraphParts(diagram, occurrence) }
   const nodeId = freshId(new Set(Object.keys(diagram.nodes)), 'fold', reservation?.nodes)
   const ref: DiagramNode = {
     kind: 'ref',
@@ -243,5 +244,13 @@ export function applyFold(
       ? wire
       : { sig: wire.sig, endpoints: [...wire.endpoints, ...added] }
   }
-  return mkDiagram({ root: cleaned.root, regions, nodes, wires })
+  // An argument wire whose other mentions all lived inside the folded
+  // occurrence keeps its scope through the ref's port, but may be an end
+  // short — complete it there (its derived scope is unchanged: occurrence
+  // content sits at-or-under the fold region).
+  const parts = { regions, nodes, wires }
+  for (const argument of new Set(args)) {
+    completeWireEnds(parts, argument, derivedScope(diagram, argument), 'fold', reservation?.nodes)
+  }
+  return mkDiagram({ root: cleaned.root, ...parts })
 }

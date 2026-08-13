@@ -74,6 +74,7 @@ function replaceEnds(
   argsOf: (end: AppliedEnd) => readonly WireId[],
   freshSuffix: string,
   reservation?: IdReservation,
+  prune?: (parts: PartsInProgress) => void,
 ): Diagram {
   const old = wireAt(diagram, wireId)
   const oldScope = derivedScope(diagram, wireId)
@@ -106,6 +107,7 @@ function replaceEnds(
   // fresh pins of the successor's sig, since these rules change it — and
   // the successor is pinned at the old derived scope until it stands.
   const parts: PartsInProgress = { regions: { ...diagram.regions }, nodes, wires }
+  prune?.(parts)
   replacePins(parts, pins, fresh, reservation?.nodes)
   completeWireEnds(parts, fresh, oldScope, freshSuffix, reservation?.nodes)
   return mkDiagram({ root: diagram.root, ...parts })
@@ -191,31 +193,26 @@ export function applyArityUnshift(
   }
 
   const trimmed = relSig(sig.args.filter((_, index) => index !== position))
-  const result = replaceEnds(
+  return replaceEnds(
     diagram,
     wireId,
     ends,
     trimmed,
     (end) => end.args.filter((_, index) => index !== position),
     'unshift',
-  )
-  const wires: Record<WireId, Wire> = { ...result.wires }
-  const nodes: Record<NodeId, DiagramNode> = { ...result.nodes }
-  for (const local of removedWires) {
-    for (const endpoint of wires[local]!.endpoints) {
-      const node = nodes[endpoint.node]
-      if (node !== undefined && node.kind === 'identity' && node.arity === 1) {
-        delete nodes[endpoint.node]
+    undefined,
+    (parts) => {
+      for (const local of removedWires) {
+        for (const endpoint of parts.wires[local]!.endpoints) {
+          const node = parts.nodes[endpoint.node]
+          if (node !== undefined && node.kind === 'identity' && node.arity === 1) {
+            delete parts.nodes[endpoint.node]
+          }
+        }
+        delete parts.wires[local]
       }
-    }
-    delete wires[local]
-  }
-  return mkDiagram({
-    root: result.root,
-    regions: { ...result.regions },
-    nodes,
-    wires,
-  })
+    },
+  )
 }
 
 /** Equivalence: argument positions reorder by the given permutation. */

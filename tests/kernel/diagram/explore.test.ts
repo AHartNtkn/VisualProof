@@ -31,12 +31,10 @@ function namedGraph(
     },
     wires: {
       [ids.head]: {
-        scope: ids.root,
         sig: relation,
         endpoints: [{ node: ids.atom, port: { kind: 'head' } }],
       },
       [ids.value]: {
-        scope: ids.root,
         sig: IOTA,
         endpoints: [
           { node: ids.ref, port: { kind: 'arg', index: 0 } },

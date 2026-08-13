@@ -38,7 +38,7 @@ function deiterateNode(
   node: NodeId,
 ): void {
   const sel = { region, regions: [], nodes: [node], wires: [] } as const
-  const evidence = findDeiterationEvidence(recorder.diagram, sel, 4096)
+  const evidence = findDeiterationEvidence(recorder.diagram, sel, 65536)
   recorder.record(label, {
     rule: 'deiteration',
     sel,
@@ -199,7 +199,7 @@ function exposeClosedCitation(
       nodes: [],
       wires: [],
     } as const
-    const evidence = findDeiterationEvidence(recorder.diagram, sel, 4096)
+    const evidence = findDeiterationEvidence(recorder.diagram, sel, 65536)
     recorder.record(`discharge ${name} standing hypothesis`, {
       rule: 'deiteration',
       sel,
@@ -967,7 +967,7 @@ export function commutativityCarrierInductive(
       nodes: [],
       wires: [],
     } as const
-    const evidence = findDeiterationEvidence(backward.diagram, sel, 4096)
+    const evidence = findDeiterationEvidence(backward.diagram, sel, 65536)
     backward.record(`discharge support Nat ${label}`, {
       rule: 'deiteration',
       sel,
@@ -1050,7 +1050,7 @@ export function commutativityCarrierInductive(
       nodes: [],
       wires: [],
     } as const
-    const evidence = findDeiterationEvidence(backward.diagram, sel, 4096)
+    const evidence = findDeiterationEvidence(backward.diagram, sel, 65536)
     backward.record(`discharge right-identity Nat ${label}`, {
       rule: 'deiteration',
       sel,
@@ -1320,7 +1320,7 @@ export function commutativityCarrierInductive(
       nodes: [baseTotalityGoal],
       wires: [],
     } as const
-    const evidence = findDeiterationEvidence(backward.diagram, selection, 4096)
+    const evidence = findDeiterationEvidence(backward.diagram, selection, 65536)
     backward.record('discharge commutativity-base totality', {
       rule: 'deiteration',
       sel: selection,
@@ -1600,7 +1600,7 @@ export function commutativityCarrierInductive(
       nodes: [node],
       wires: [],
     } as const
-    const evidence = findDeiterationEvidence(backward.diagram, sel, 4096)
+    const evidence = findDeiterationEvidence(backward.diagram, sel, 65536)
     backward.record('discharge commutativity-base right-unit premise', {
       rule: 'deiteration',
       sel,
@@ -2667,7 +2667,7 @@ export function commutativityCarrierInductive(
       nodes: [],
       wires: [],
     } as const
-    const evidence = findDeiterationEvidence(backward.diagram, sel, 4096)
+    const evidence = findDeiterationEvidence(backward.diagram, sel, 65536)
     backward.record(`discharge retained right-identity ${label}`, {
       rule: 'deiteration',
       sel,
@@ -2690,7 +2690,7 @@ export function commutativityCarrierInductive(
       nodes: [],
       wires: [],
     } as const
-    const evidence = findDeiterationEvidence(backward.diagram, sel, 4096)
+    const evidence = findDeiterationEvidence(backward.diagram, sel, 65536)
     backward.record('remove duplicate right-identity carrier fact', {
       rule: 'deiteration',
       sel,

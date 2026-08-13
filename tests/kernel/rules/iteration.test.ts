@@ -47,10 +47,14 @@ function deiterate(
 describe('applyIteration', () => {
   it('keeps an explicitly selected root wire distinct from the copied atom wire', () => {
     const { diagram, node, wire } = rootAtomWithWire()
+    // The wire is internal to the selection only with the pin holding its
+    // free end, so both ends are selected.
+    const pin = diagram.wires[wire]!.endpoints
+      .find((endpoint) => endpoint.node !== node)!.node
     const selection = mkSelection(diagram, {
       region: diagram.root,
       regions: [],
-      nodes: [node],
+      nodes: [node, pin],
       wires: [wire],
     })
 
@@ -245,10 +249,13 @@ describe('exact applyDeiteration evidence', () => {
     const builder = new DiagramBuilder()
     const first = builder.ref(builder.root, 'P', relSig([IOTA]))
     const second = builder.ref(builder.root, 'P', relSig([IOTA]))
-    builder.wire([
+    const shared = builder.wire([
       { node: first, port: { kind: 'arg', index: 0 } },
       { node: second, port: { kind: 'arg', index: 0 } },
     ])
+    // The shared wire outlives the removed duplicate, so it is pinned above
+    // the two-end floor first.
+    builder.pin(shared, builder.root)
     const diagram = builder.build()
     const selection = mkSelection(diagram, {
       region: diagram.root,

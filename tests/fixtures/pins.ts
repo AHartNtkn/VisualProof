@@ -1,5 +1,13 @@
 import type { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import type { Diagram, Endpoint, RegionId, WireId } from '../../src/kernel/diagram/diagram'
+import type {
+  Diagram,
+  DiagramNode,
+  Endpoint,
+  NodeId,
+  RegionId,
+  Wire,
+  WireId,
+} from '../../src/kernel/diagram/diagram'
 import type { Sig } from '../../src/kernel/diagram/sig'
 import { IOTA } from '../../src/kernel/diagram/sig'
 import { isPinEndpoint } from '../../src/kernel/rules/wire-ends'
@@ -25,4 +33,32 @@ export function contentEndpoints(diagram: Diagram, wireId: WireId): readonly End
   const wire = diagram.wires[wireId]
   if (wire === undefined) throw new Error(`unknown wire '${wireId}'`)
   return wire.endpoints.filter((endpoint) => !isPinEndpoint(diagram, endpoint))
+}
+
+/**
+ * Raw parts for a bare wire at `region` — the wire and the two pins that are
+ * its only incidences — for fixtures written as diagram literals rather than
+ * through the builder. Pin ids derive from the wire id.
+ */
+export function bareWireParts(
+  wireId: WireId,
+  region: RegionId,
+  sig: Sig = IOTA,
+): {
+  readonly nodes: Record<NodeId, DiagramNode>
+  readonly wires: Record<WireId, Wire>
+} {
+  const ends = [`${wireId}_pin0`, `${wireId}_pin1`]
+  return {
+    nodes: Object.fromEntries(ends.map((id) => [
+      id,
+      { kind: 'identity', region, sig, arity: 1 } satisfies DiagramNode,
+    ])),
+    wires: {
+      [wireId]: {
+        sig,
+        endpoints: ends.map((id) => ({ node: id, port: { kind: 'identity', index: 0 } })),
+      },
+    },
+  }
 }

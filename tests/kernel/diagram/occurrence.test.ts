@@ -187,7 +187,6 @@ describe('occurrence certificates', () => {
       },
       wires: {
         left: {
-          scope: 'p0',
           sig: IOTA,
           endpoints: [{
             node: 'eq',
@@ -195,7 +194,6 @@ describe('occurrence certificates', () => {
           }],
         },
         right: {
-          scope: 'p0',
           sig: IOTA,
           endpoints: [{
             node: 'eq',
@@ -215,7 +213,6 @@ describe('occurrence certificates', () => {
       },
       wires: {
         a: {
-          scope: 'h0',
           sig: IOTA,
           endpoints: [{
             node: 'identity',
@@ -223,7 +220,6 @@ describe('occurrence certificates', () => {
           }],
         },
         b: {
-          scope: 'h0',
           sig: IOTA,
           endpoints: [{
             node: 'identity',

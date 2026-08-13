@@ -103,6 +103,7 @@ export function applyActionWithReceipt(
     } catch (error) {
       throw new ProofError(
         `step ${stepIndex} (${step.rule}) failed: ${error instanceof Error ? error.message : String(error)}`,
+        { cause: error },
       )
     }
     afterStep?.(current, stepIndex, receipt)

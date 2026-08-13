@@ -95,7 +95,7 @@ function deiterateNode(
   const evidence = findDeiterationEvidence(
     recorder.diagram,
     sel,
-    4096,
+    65536,
   )
   recorder.record(label, {
     rule: 'deiteration',
@@ -486,7 +486,7 @@ function plusRightUnit(
     const evidence = findDeiterationEvidence(
       backward.diagram,
       sel,
-      4096,
+      65536,
     )
     backward.record('discharge cited primitive hypothesis', {
       rule: 'deiteration',
@@ -573,7 +573,7 @@ function plusRightUnit(
     const evidence = findDeiterationEvidence(
       backward.diagram,
       sel,
-      4096,
+      65536,
     )
     backward.record(`discharge Nat carrier ${label} from support`, {
       rule: 'deiteration',
