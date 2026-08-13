@@ -652,6 +652,60 @@ theorem compileItems?_cons_inv
           obtain ⟨rfl, rfl⟩ := compiled
           exact ⟨rfl, rfl⟩
 
+/-- A successful item sequence with one distinguished element factors into
+the exact prefix, selected occurrence, and suffix computations. -/
+def compileItems?_selected_inv
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (before : CompiledItems d context rels binders)
+    (selected : CompiledItem d context rels binders)
+    (suffix : CompiledItems d context rels binders)
+    (direct : ∀ occurrence,
+      occurrence ∈ (before.append (.cons selected suffix)).origins →
+        occurrence ∈ localOccurrences d parent)
+    (compiled : compileItems? d hwf parent context binders
+      (before.append (.cons selected suffix)).origins direct =
+        some (before.append (.cons selected suffix))) :
+    compileItems? d hwf parent context binders before.origins
+        (fun occurrence member => direct occurrence (by
+          rw [CompiledItems.origins_append]
+          exact List.mem_append_left _ member)) = some before ∧
+      compileOccurrence? d hwf parent context binders selected.origin
+        (direct selected.origin (by
+          rw [CompiledItems.origins_append]
+          exact List.mem_append_right _ (by simp [CompiledItems.origins]))) =
+          some selected ∧
+      compileItems? d hwf parent context binders suffix.origins
+        (fun occurrence member => direct occurrence (by
+          rw [CompiledItems.origins_append]
+          exact List.mem_append_right _ (by
+            simp [CompiledItems.origins, member]))) = some suffix := by
+  cases before with
+  | nil =>
+      have fact := compileItems?_cons_inv hwf parent context binders selected
+        suffix direct compiled
+      exact ⟨rfl, fact.1, fact.2⟩
+  | cons head tail =>
+      obtain ⟨headCompiled, restCompiled⟩ := compileItems?_cons_inv hwf
+        parent context binders head (tail.append (.cons selected suffix))
+        direct compiled
+      let restDirect : ∀ occurrence,
+          occurrence ∈ (tail.append (.cons selected suffix)).origins →
+            occurrence ∈ localOccurrences d parent := by
+        intro occurrence member
+        exact direct occurrence (by
+          change occurrence ∈ head.origin ::
+            (tail.append (.cons selected suffix)).origins
+          exact List.mem_cons_of_mem _ member)
+      obtain ⟨tailCompiled, selectedCompiled, suffixCompiled⟩ :=
+        compileItems?_selected_inv hwf parent context binders tail selected
+          suffix restDirect restCompiled
+      refine ⟨?_, selectedCompiled, suffixCompiled⟩
+      change compileItems? d hwf parent context binders
+        (head.origin :: tail.origins) _ = some (.cons head tail)
+      rw [compileItems?_cons, headCompiled, tailCompiled]
+      rfl
+
 theorem compileOccurrence?_origin
     (hwf : d.WellFormed) (parent : Fin d.regionCount)
     {context : WireContext d} {binders : BinderContext d rels}
