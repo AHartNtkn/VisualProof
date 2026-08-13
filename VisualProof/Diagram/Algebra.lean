@@ -2114,6 +2114,68 @@ theorem DiagramContext.cutDepth_castRels
   subst targetRels
   rfl
 
+/-- Transport the enclosing relation-context index of a diagram context. -/
+def DiagramContext.castOuterWiresEq
+    (equality : sourceWires = targetWires)
+    (context : DiagramContext sourceWires holeWires outerRels holeRels) :
+    DiagramContext targetWires holeWires outerRels holeRels := by
+  cases equality
+  exact context
+
+/-- Transport the enclosing relation-context index of a diagram context. -/
+def DiagramContext.castOuterRelsEq
+    {sourceRels targetRels holeRels : Theory.RelCtx}
+    (equality : sourceRels = targetRels)
+    (context : DiagramContext outerWires holeWires sourceRels holeRels) :
+    DiagramContext outerWires holeWires targetRels holeRels := by
+  cases equality
+  exact context
+
+/-- Transport the hole relation-context index of a diagram context. -/
+def DiagramContext.castHoleRelsEq
+    {outerRels sourceRels targetRels : Theory.RelCtx}
+    (equality : sourceRels = targetRels)
+    (context : DiagramContext outerWires holeWires outerRels sourceRels) :
+    DiagramContext outerWires holeWires outerRels targetRels := by
+  cases equality
+  exact context
+
+@[simp] theorem DiagramContext.castOuterRelsEq_refl
+    (context : DiagramContext outerWires holeWires outerRels holeRels) :
+    context.castOuterRelsEq rfl = context := rfl
+
+@[simp] theorem DiagramContext.castOuterWiresEq_refl
+    (context : DiagramContext outerWires holeWires outerRels holeRels) :
+    context.castOuterWiresEq rfl = context := rfl
+
+@[simp] theorem DiagramContext.castHoleRelsEq_refl
+    (context : DiagramContext outerWires holeWires outerRels holeRels) :
+    context.castHoleRelsEq rfl = context := rfl
+
+theorem DiagramContext.castHoleRelsEq_cut
+    (equality : sourceRels = targetRels)
+    (before after : ItemSeq (outerWires + localWires) outerRels)
+    (child : DiagramContext (outerWires + localWires) holeWires
+      outerRels sourceRels) :
+    (DiagramContext.cut localWires before after child
+      ).castHoleRelsEq equality =
+      DiagramContext.cut localWires before after
+        (child.castHoleRelsEq equality) := by
+  cases equality
+  rfl
+
+theorem DiagramContext.castHoleRelsEq_bubble
+    (equality : sourceRels = targetRels)
+    (before after : ItemSeq (outerWires + localWires) outerRels)
+    (child : DiagramContext (outerWires + localWires) holeWires
+      (arity :: outerRels) sourceRels) :
+    (DiagramContext.bubble localWires before after arity child
+      ).castHoleRelsEq equality =
+      DiagramContext.bubble localWires before after arity
+        (child.castHoleRelsEq equality) := by
+  cases equality
+  rfl
+
 /-- Build one aligned cut-context layer from the recursively aligned child
 and the compiler's permutation of every nonfocused sibling. -/
 def DiagramContextIso.cutFrame

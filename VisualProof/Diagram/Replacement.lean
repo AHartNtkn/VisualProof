@@ -61,6 +61,38 @@ noncomputable def ContextReplacement.ofContextAlignment
       exact alignment.fill endpoint
   }
 
+/-- Pull a replacement target through an aligned source context.  The
+operation-specific fold supplies the target replacement; a preceding
+source-derived fold supplies only the enclosing context alignment. -/
+noncomputable def ContextReplacement.pullTargetAlongAlignment
+    {compact target source' : OpenDiagram arity}
+    (replacement : ContextReplacement compact target compactHole rels)
+    (source : OpenDiagram arity)
+    (sourceContext : DiagramContext source.externalClasses sourceHole [] rels)
+    (before : Region sourceHole rels)
+    (sourceIso : OpenDiagramIso source'
+      (source.withBody (sourceContext.fill before)))
+    (external : FiniteEquiv (Fin replacement.interface.externalClasses)
+      (Fin source.externalClasses))
+    (hole : FiniteEquiv (Fin compactHole) (Fin sourceHole))
+    (alignment : DiagramContextIso external hole [] rels
+      replacement.context sourceContext)
+    (boundary : ∀ position,
+      external (replacement.interface.boundary position) =
+        source.boundary position) :
+    ContextReplacement source' target sourceHole rels where
+  interface := source
+  context := sourceContext
+  before := before
+  after := replacement.after.renameWires hole
+  source_iso := sourceIso
+  target_iso := replacement.target_iso.trans {
+    external := external
+    boundary := boundary
+    body := alignment.fill
+      (RegionIso.renameWiresEquiv replacement.after hole)
+  }
+
 noncomputable def ContextReplacement.castArity
     {source target : OpenDiagram sourceArity}
     (replacement : ContextReplacement source target holeWires holeRels)
