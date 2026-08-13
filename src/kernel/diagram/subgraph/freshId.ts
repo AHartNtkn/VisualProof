@@ -1,6 +1,6 @@
 const MINT_CALLBACK: unique symbol = Symbol('mint-callback')
 
-type IdNamespaceReservation = ReadonlySet<string> & {
+export type IdNamespaceReservation = ReadonlySet<string> & {
   readonly [MINT_CALLBACK]?: (id: string) => void
 }
 

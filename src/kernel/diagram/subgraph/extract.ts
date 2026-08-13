@@ -15,8 +15,9 @@ export type Extraction = {
  * Non-destructive: copies the selection out as a self-contained pattern.
  * Selected items keep their host ids (the pattern is a fresh namespace); only
  * the fresh root and the boundary stub ids dodge collisions deterministically.
- * Touching wires become root-scoped stubs in sorted host-wire-id order,
- * carrying the crossing wire's signature; the original host wire ids form the
+ * Touching wires become boundary stubs in sorted host-wire-id order,
+ * carrying the crossing wire's signature (their derived scope is the pattern
+ * root through the boundary entry); the original host wire ids form the
  * attachment record.
  *
  * There is no old-model binder machinery: an atom whose head wire lies outside the
@@ -59,11 +60,7 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
   const takenWireIds = new Set<string>(c.internalWires)
   for (const id of c.internalWires) {
     const w = d.wires[id]!
-    wires[id] = {
-      scope: w.scope === sel.region ? root : w.scope,
-      sig: w.sig,
-      endpoints: w.endpoints,
-    }
+    wires[id] = { sig: w.sig, endpoints: w.endpoints }
   }
 
   const boundary: WireId[] = []
@@ -73,7 +70,6 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
     const stubId = freshId(takenWireIds, `b${boundary.length}`)
     takenWireIds.add(stubId)
     wires[stubId] = {
-      scope: root,
       sig: w.sig,
       endpoints: w.endpoints.filter((ep) => c.allNodes.has(ep.node)),
     }
@@ -81,13 +77,9 @@ export function extractSubgraph(d: Diagram, sel: SubgraphSelection): Extraction 
     attachments.push(hostWireId)
   }
 
-  /*
-   * A selected conditional identity is moved to the detached pattern root,
-   * where ordinary diagram normalization would mistake its boundary stubs for
-   * locally scoped wires and collapse them. Bounded extraction must retain
-   * that explicit equality evidence: only a later splice knows the host scopes
-   * that decide whether the identity survives or normalizes to a shared wire.
-   */
+  // A stub's boundary entry is its second end, so the two-end floor holds
+  // with no extra apparatus: every touching wire keeps at least one inside
+  // endpoint by definition, plus the entry at the pattern root.
   const pattern = mkDiagramWithBoundary({ root, regions, nodes, wires }, boundary)
   return Object.freeze({
     pattern,

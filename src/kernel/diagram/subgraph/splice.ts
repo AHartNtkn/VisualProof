@@ -1,6 +1,6 @@
 import type { Diagram, DiagramNode, Endpoint, Region, RegionId, Wire, WireId } from '../diagram'
-import { DiagramError, mkDiagram, mkDiagramNormalized } from '../diagram'
-import { isAncestorOrEqual } from '../regions'
+import { DiagramError, mkDiagram } from '../diagram'
+import { derivedScope, wireVisibleAt } from '../regions'
 import type { DiagramWithBoundary } from '../boundary'
 import { sigEquals, sigKey } from '../sig'
 import type { SubgraphSelection } from './selection'
@@ -20,11 +20,11 @@ export type SpliceOptions = {
 
 export type MappedSplice = {
   readonly diagram: Diagram
-  /** Every region, node, and internal wire minted before quotient normalization. */
+  /** Every region, node, and internal wire minted by this splice. */
   readonly allocation: IdMintLog
   readonly regionMap: ReadonlyMap<RegionId, RegionId>
   readonly nodeMap: ReadonlyMap<string, string>
-  /** Internal wires map to fresh wires; boundary stubs map to their surviving host attachment. */
+  /** Internal wires map to fresh wires; boundary stubs map to their host attachment. */
   readonly wireMap: ReadonlyMap<WireId, WireId>
 }
 
@@ -44,7 +44,6 @@ export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
   for (const [id, w] of Object.entries(d.wires)) {
     if (internal.has(id)) continue
     wires[id] = {
-      scope: w.scope,
       sig: w.sig,
       endpoints: w.endpoints.filter((ep) => !c.allNodes.has(ep.node)),
     }
@@ -55,20 +54,18 @@ export function removeSubgraph(d: Diagram, sel: SubgraphSelection): Diagram {
 /**
  * Insert a pattern into a host region. Its ordered boundary incidences are
  * connected to the index-aligned host attachments. When several incidences
- * expose the same pattern wire but land on distinct host wires, splice creates
- * one local identity node at the application region. Canonical normalization
- * then collapses that identity only when its host attachments are co-scoped;
- * otherwise the explicit conditional equality remains. Each boundary stub's
- * endpoints are copied exactly once onto its first ordered attachment.
- * Boundary stubs are intrinsically scoped at the pattern root by
- * DiagramWithBoundary construction. The assertion below is defensive: the
- * connection seam cannot honor any other scope. Pattern content gets
- * fresh host ids deterministically; the result is re-validated by mkDiagram.
+ * expose the same pattern wire but land on distinct host wires, splice
+ * creates one local identity node at the application region; that explicit
+ * equality PERSISTS until a recorded identification step absorbs it —
+ * nothing rewrites it eagerly. Each boundary stub's endpoints are copied
+ * exactly once onto its first ordered attachment. Pattern content gets
+ * fresh host ids deterministically (ids are final: no rule renames a wire
+ * it does not delete); the result is re-validated by mkDiagram.
  *
  * Landing a boundary stub onto a host wire requires their signatures to be
  * equal: the stub is a line of identity of a fixed sort, and it may only be
- * glued to a host line of the same sort. Every copied wire carries its pattern
- * signature.
+ * glued to a host line of the same sort. Every copied wire carries its
+ * pattern signature.
  */
 export function spliceSubgraphMapped(
   host: Diagram,
@@ -87,17 +84,14 @@ export function spliceSubgraphMapped(
   const allocation = createIdMintRecorder()
   const spliceReservation = withIdMintCapture(options.reserved, allocation)
   const boundarySet = new Set(pattern.boundary)
-  for (const b of pattern.boundary) {
-    if (pd.wires[b]!.scope !== pd.root) {
-      throw new DiagramError(`invalid DiagramWithBoundary: boundary wire '${b}' is not scoped at the pattern root`)
-    }
-  }
   pattern.boundary.forEach((stub, i) => {
     const a = attachments[i]!
     const w = host.wires[a]
     if (w === undefined) throw new DiagramError(`attachment wire '${a}' does not exist`)
-    if (!isAncestorOrEqual(host, w.scope, atRegion)) {
-      throw new DiagramError(`attachment wire '${a}' (scope '${w.scope}') does not enclose splice region '${atRegion}'`)
+    if (!wireVisibleAt(host, a, atRegion)) {
+      throw new DiagramError(
+        `attachment wire '${a}' (scope '${derivedScope(host, a)}') does not enclose splice region '${atRegion}'`,
+      )
     }
     const stubSig = pd.wires[stub]!.sig
     if (!sigEquals(stubSig, w.sig)) {
@@ -212,7 +206,6 @@ export function spliceSubgraphMapped(
   for (const [id, w] of Object.entries(pd.wires)) {
     if (boundarySet.has(id)) continue
     wires[wireMap.get(id)!] = {
-      scope: regionMap.get(w.scope)!,
       sig: w.sig,
       endpoints: mapEndpoints(w.endpoints),
     }
@@ -225,7 +218,6 @@ export function spliceSubgraphMapped(
     const stub = pd.wires[stubId]!
     const existing = wires[hostWireId]!
     wires[hostWireId] = {
-      scope: existing.scope,
       sig: existing.sig,
       endpoints: [...existing.endpoints, ...mapEndpoints(stub.endpoints)],
     }
@@ -234,7 +226,6 @@ export function spliceSubgraphMapped(
     alias.attachments.forEach((wireId, index) => {
       const wire = wires[wireId]!
       wires[wireId] = {
-        scope: wire.scope,
         sig: wire.sig,
         endpoints: [
           ...wire.endpoints,
@@ -244,23 +235,12 @@ export function spliceSubgraphMapped(
     })
   }
 
-  const normalized = mkDiagramNormalized({ root: host.root, regions, nodes, wires })
-  const normalizedWireMap = new Map<WireId, WireId>()
-  for (const [patternWire, preNormalizedWire] of wireMap) {
-    const image = normalized.wireImage.get(preNormalizedWire)
-    if (image === undefined) {
-      throw new DiagramError(
-        `normalization removed splice wire '${preNormalizedWire}' without a surviving image`,
-      )
-    }
-    normalizedWireMap.set(patternWire, image)
-  }
   return Object.freeze({
-    diagram: normalized.diagram,
+    diagram: mkDiagram({ root: host.root, regions, nodes, wires }),
     allocation: freezeIdMintLog(allocation),
     regionMap: new Map(regionMap),
     nodeMap: new Map(nodeMap),
-    wireMap: normalizedWireMap,
+    wireMap: new Map(wireMap),
   })
 }
 

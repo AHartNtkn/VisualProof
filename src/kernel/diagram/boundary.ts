@@ -1,5 +1,5 @@
 import type { Diagram, WireId } from './diagram'
-import { DiagramError, validateRawDiagram } from './diagram'
+import { validateRawDiagram } from './diagram'
 
 /**
  * A diagram plus an ordered list of boundary wires. One concept, three roles
@@ -7,7 +7,9 @@ import { DiagramError, validateRawDiagram } from './diagram'
  * relation definition bodies. A relation is exactly a diagram with a boundary;
  * its arity is the boundary length. Boundary entries are ordered PORT
  * INCIDENCES, not a set of wires: repeated ids mean that several boundary
- * positions expose the same line of identity.
+ * positions expose the same line of identity, and each entry counts as one
+ * end of its wire at the root (so a formal exposed once needs one more end —
+ * typically its root pin).
  */
 export type DiagramWithBoundary = {
   readonly diagram: Diagram
@@ -15,22 +17,13 @@ export type DiagramWithBoundary = {
 }
 
 /**
- * Construct the authoritative intrinsically root-open interface. Unlike an
- * ordinary closed Diagram constructor, this validates without normalizing:
- * root-co-scoped identity nodes may encode equality between distinct external
- * attachments whose scopes are unavailable until splice.
+ * Construct the authoritative intrinsically root-open interface. The
+ * boundary participates in validation: entries count toward the two-end
+ * floor, and a boundary wire's derived scope is the root by construction
+ * (its boundary incidence lives there), so no stored-scope check exists.
  */
 export function mkDiagramWithBoundary(diagram: Diagram, boundary: readonly WireId[]): DiagramWithBoundary {
-  const validated = validateRawDiagram(diagram)
-  for (const w of boundary) {
-    const wire = validated.wires[w]
-    if (wire === undefined) throw new DiagramError(`boundary wire '${w}' does not exist`)
-    if (wire.scope !== validated.root) {
-      throw new DiagramError(
-        `boundary wire '${w}' must be scoped at the diagram root '${validated.root}', got '${wire.scope}'`,
-      )
-    }
-  }
+  const validated = validateRawDiagram(diagram, boundary)
   return Object.freeze({
     diagram: validated,
     boundary: Object.freeze([...boundary]),

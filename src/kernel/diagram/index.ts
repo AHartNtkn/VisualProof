@@ -1,12 +1,15 @@
 export type {
   RegionId, NodeId, WireId, Region, IdentityDiagramNode, DiagramNode, Port,
-  Endpoint, Wire, Diagram, DiagramParts, DiagramNormalization,
+  Endpoint, Wire, Diagram, DiagramParts,
 } from './diagram'
 export {
-  mkDiagram, mkDiagramNormalized, portKey, requiredPorts, portSig, DiagramError,
+  mkDiagram, validateRawDiagram, portKey, requiredPorts, portSig, DiagramError,
 } from './diagram'
 export * from './sig'
-export { isAncestorOrEqual, cutDepth, polarity } from './regions'
+export {
+  isAncestorOrEqual, cutDepth, polarity, deepestCommonAncestor,
+  derivedScope, derivedScopes, wireVisibleAt,
+} from './regions'
 export { DiagramBuilder } from './builder'
 export { diagramToJson, diagramFromJson } from './json'
 export type { DiagramWithBoundary } from './boundary'

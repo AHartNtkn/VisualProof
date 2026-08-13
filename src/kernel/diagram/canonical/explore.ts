@@ -9,7 +9,9 @@ import { sigKey } from '../sig'
  * A diagram is a port-hypergraph. Atom/ref argument ports are positional;
  * identity incidences, wire endpoints, and sibling regions are unordered.
  * Identity incidence indices are storage addresses and never enter semantic
- * refinement or serialization.
+ * refinement or serialization. Wires carry no stored scope: where a
+ * quantifier lives is derived from incidences, so it is already determined
+ * by the structure this labeling canonicalizes.
  *
  * Mechanically the exploration is individualization-refinement seeded by the
  * anchor: each pinned boundary wire gets the ordered vector of positions at
@@ -77,13 +79,11 @@ export type ExploreIndex = {
   readonly parentOf: ReadonlyMap<RegionId, RegionId | null>
   readonly childrenOf: ReadonlyMap<RegionId, readonly RegionId[]>
   readonly nodesIn: ReadonlyMap<RegionId, readonly NodeId[]>
-  readonly wiresScoped: ReadonlyMap<RegionId, readonly WireId[]>
   readonly nodeContentKey: ReadonlyMap<NodeId, string>
   readonly nodeRegion: ReadonlyMap<NodeId, RegionId>
   readonly nodePortOrder: ReadonlyMap<NodeId, readonly string[]>
   readonly nodePortWire: ReadonlyMap<NodeId, ReadonlyMap<string, WireId>>
   readonly identityIncidentWires: ReadonlyMap<NodeId, readonly WireId[]>
-  readonly wireScope: ReadonlyMap<WireId, RegionId>
   /** Canonical injective key of each wire's sort (intrinsic wire content). */
   readonly wireSigKey: ReadonlyMap<WireId, string>
   readonly wireEndpoints: ReadonlyMap<WireId, readonly { node: NodeId; pkey: string }[]>
@@ -116,11 +116,9 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
   const parentOf = new Map<RegionId, RegionId | null>()
   const childrenOf = new Map<RegionId, RegionId[]>()
   const nodesIn = new Map<RegionId, NodeId[]>()
-  const wiresScoped = new Map<RegionId, WireId[]>()
   for (const id of regionIds) {
     childrenOf.set(id, [])
     nodesIn.set(id, [])
-    wiresScoped.set(id, [])
   }
   for (const id of regionIds) {
     const r = d.regions[id]!
@@ -168,14 +166,11 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
     nodePortOrder.set(id, canon.portOrder)
   }
 
-  const wireScope = new Map<WireId, RegionId>()
   const wireSigKey = new Map<WireId, string>()
   const wireEndpoints = new Map<WireId, { node: NodeId; pkey: string }[]>()
   for (const id of wireIds) {
     const w = d.wires[id]!
-    wireScope.set(id, w.scope)
     wireSigKey.set(id, sigKey(w.sig))
-    wiresScoped.get(w.scope)!.push(id)
     const eps = w.endpoints.map((ep) => {
       const pkey = endpointKey(d, ep.node, ep.port)
       if (d.nodes[ep.node]!.kind === 'identity') {
@@ -197,9 +192,9 @@ export function buildExploreIndex(d: Diagram, pinned: readonly WireId[]): Explor
 
   return {
     regionIds, nodeIds, wireIds, regionKindKey, parentOf, childrenOf, nodesIn,
-    wiresScoped, nodeContentKey, nodeRegion, nodePortOrder,
+    nodeContentKey, nodeRegion, nodePortOrder,
     nodePortWire, identityIncidentWires,
-    wireScope, wireSigKey, wireEndpoints, pinOf,
+    wireSigKey, wireEndpoints, pinOf,
   }
 }
 
@@ -243,10 +238,9 @@ function refineOnce(idx: ExploreIndex, c: Colors): Colors {
     const parent = idx.parentOf.get(id)
     const children = idx.childrenOf.get(id)!.map((x) => c.region.get(x)!).sort((a, b) => a - b)
     const nodes = idx.nodesIn.get(id)!.map((x) => c.node.get(x)!).sort((a, b) => a - b)
-    const wires = idx.wiresScoped.get(id)!.map((x) => c.wire.get(x)!).sort((a, b) => a - b)
     const parentColor = parent == null ? '-' : String(c.region.get(parent)!)
     entries.push([`R${id}`,
-      `R|${c.region.get(id)!}|p:${parentColor}|c:${children.join(',')}|n:${nodes.join(',')}|w:${wires.join(',')}`])
+      `R|${c.region.get(id)!}|p:${parentColor}|c:${children.join(',')}|n:${nodes.join(',')}`])
   }
   for (const id of idx.nodeIds) {
     const identityWires = idx.identityIncidentWires.get(id)
@@ -268,7 +262,7 @@ function refineOnce(idx: ExploreIndex, c: Colors): Colors {
   for (const id of idx.wireIds) {
     const eps = idx.wireEndpoints.get(id)!.map((ep) => `${c.node.get(ep.node)!}.${ep.pkey}`).sort()
     entries.push([`W${id}`,
-      `W|${c.wire.get(id)!}|s:${c.region.get(idx.wireScope.get(id)!)!}|sig:${idx.wireSigKey.get(id)!}|e:${eps.join(',')}`])
+      `W|${c.wire.get(id)!}|sig:${idx.wireSigKey.get(id)!}|e:${eps.join(',')}`])
   }
   const ranked = rankSignatures(entries)
   return {
@@ -359,7 +353,7 @@ function serializeWith(idx: ExploreIndex, c: Colors): string {
     const pins = idx.pinOf.get(id)
     const eps = idx.wireEndpoints.get(id)!.map((ep) => `n${nodeOrd.get(ep.node)!}.${ep.pkey}`).sort()
     const pinStr = pins === undefined ? '' : `pins${JSON.stringify(pins)}:`
-    lines.push(`w${wireOrd.get(id)!}:${pinStr}s=r${regionOrd.get(idx.wireScope.get(id)!)!}:sig=${idx.wireSigKey.get(id)!}:e=${eps.join(',')}`)
+    lines.push(`w${wireOrd.get(id)!}:${pinStr}sig=${idx.wireSigKey.get(id)!}:e=${eps.join(',')}`)
   }
   return lines.join('\n')
 }

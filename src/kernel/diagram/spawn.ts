@@ -1,7 +1,24 @@
-import type { Diagram, DiagramNode, NodeId, RegionId, Wire, WireId } from './diagram'
+import type { Diagram, DiagramNode, Endpoint, NodeId, RegionId, Wire, WireId } from './diagram'
 import { DiagramError, mkDiagram, portSig, requiredPorts } from './diagram'
-import type { RelSig } from './sig'
-import { freshId, type IdReservation } from './subgraph/freshId'
+import type { RelSig, Sig } from './sig'
+import { freshId, type IdNamespaceReservation, type IdReservation } from './subgraph/freshId'
+
+/**
+ * Every spawned wire is born with its second end: a pin at the spawn
+ * region, which is exactly where the old free tip read its quantifier.
+ */
+function mintPin(
+  nodes: Record<NodeId, DiagramNode>,
+  taken: Set<string>,
+  region: RegionId,
+  sig: Sig,
+  reservation?: IdNamespaceReservation,
+): Endpoint {
+  const node = freshId(taken, 'pin', reservation)
+  taken.add(node)
+  nodes[node] = { kind: 'identity', region, sig, arity: 1 }
+  return { node, port: { kind: 'identity', index: 0 } }
+}
 
 export function spawnRefNode(
   diagram: Diagram,
@@ -10,7 +27,9 @@ export function spawnRefNode(
   sig: RelSig,
   reservation?: IdReservation,
 ): { diagram: Diagram; node: NodeId } {
-  const node = freshId(new Set(Object.keys(diagram.nodes)), 'n', reservation?.nodes)
+  const takenNodes = new Set(Object.keys(diagram.nodes))
+  const node = freshId(takenNodes, 'n', reservation?.nodes)
+  takenNodes.add(node)
   const ref: DiagramNode = { kind: 'ref', region, defId, sig }
   const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes, [node]: ref }
   const wires: Record<WireId, Wire> = { ...diagram.wires }
@@ -18,10 +37,13 @@ export function spawnRefNode(
   for (const port of requiredPorts(ref)) {
     const wire = freshId(takenWires, 'w', reservation?.wires)
     takenWires.add(wire)
+    const wireSig = portSig(ref, port)
     wires[wire] = {
-      scope: region,
-      sig: portSig(ref, port),
-      endpoints: [{ node, port }],
+      sig: wireSig,
+      endpoints: [
+        { node, port },
+        mintPin(nodes, takenNodes, region, wireSig, reservation?.nodes),
+      ],
     }
   }
   return {
@@ -51,23 +73,27 @@ export function spawnAtomNode(
       `spawnAtomNode: wire '${wireId}' has sig 'iota', expected a relation signature`,
     )
   }
-  const node = freshId(new Set(Object.keys(diagram.nodes)), 'n', reservation?.nodes)
+  const takenNodes = new Set(Object.keys(diagram.nodes))
+  const node = freshId(takenNodes, 'n', reservation?.nodes)
+  takenNodes.add(node)
   const atom: DiagramNode = { kind: 'atom', region, sig: target.sig }
   const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes, [node]: atom }
   const wires: Record<WireId, Wire> = { ...diagram.wires }
   const takenWires = new Set(Object.keys(diagram.wires))
   wires[wireId] = {
-    scope: target.scope,
     sig: target.sig,
     endpoints: [...target.endpoints, { node, port: { kind: 'head' } }],
   }
   for (let index = 0; index < target.sig.args.length; index += 1) {
     const wire = freshId(takenWires, 'w', reservation?.wires)
     takenWires.add(wire)
+    const wireSig = target.sig.args[index]!
     wires[wire] = {
-      scope: region,
-      sig: target.sig.args[index]!,
-      endpoints: [{ node, port: { kind: 'arg', index } }],
+      sig: wireSig,
+      endpoints: [
+        { node, port: { kind: 'arg', index } },
+        mintPin(nodes, takenNodes, region, wireSig, reservation?.nodes),
+      ],
     }
   }
   return {

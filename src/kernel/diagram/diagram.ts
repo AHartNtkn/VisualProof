@@ -1,6 +1,5 @@
 import type { Sig, RelSig } from './sig'
 import { assertWellFormedSig, sigEquals, sigKey } from './sig'
-import { normalizeIdentities } from './canonical/identity'
 
 export type RegionId = string
 export type NodeId = string
@@ -14,6 +13,11 @@ export type IdentityDiagramNode = {
   readonly kind: 'identity'
   readonly region: RegionId
   readonly sig: Sig
+  /**
+   * Any natural. 0 is a typed point of existence (∃x:σ.⊤); 1 is a
+   * reflexive end holding an incidence — a pin when that is its whole job;
+   * ≥2 asserts its wires' values all equal.
+   */
   readonly arity: number
 }
 
@@ -30,11 +34,15 @@ export type Port =
 export type Endpoint = { readonly node: NodeId; readonly port: Port }
 
 /**
- * One wire is one existentially scoped value of a fixed signature. Every
- * attached port must accept that signature.
+ * One wire is one existentially scoped value of a fixed signature. Where its
+ * quantifier lives is DERIVED: the deepest common ancestor of its incidence
+ * regions (endpoints, plus boundary entries at the root) — see
+ * `derivedScope`. Every attached port must accept the wire's signature, and
+ * every wire has at least two ends: a wire end is a node, so a one-incidence
+ * wire is a line from a point to nowhere and is unrepresentable (the two-end
+ * floor; derived-scope identity rules spec §1).
  */
 export type Wire = {
-  readonly scope: RegionId
   readonly sig: Sig
   readonly endpoints: readonly Endpoint[]
 }
@@ -52,19 +60,6 @@ export type DiagramParts = {
   readonly nodes?: Record<NodeId, DiagramNode>
   readonly wires?: Record<WireId, Wire>
 }
-
-export type DiagramNormalization = {
-  readonly diagram: Diagram
-  readonly wireImage: ReadonlyMap<WireId, WireId | undefined>
-}
-
-export type DiagramNormalizationCapture<T> = {
-  readonly result: T
-  readonly normalizations: readonly DiagramNormalization[]
-}
-
-const normalizationCaptures: DiagramNormalization[][] = []
-let normalizationCaptureSuppression = 0
 
 export class DiagramError extends Error {
   constructor(message: string) {
@@ -129,31 +124,20 @@ export function portSig(node: DiagramNode, port: Port): Sig {
   throw new DiagramError(`node of kind '${node.kind}' has no port '${portKey(port)}'`)
 }
 
-function ancestorOrEqualRaw(
-  regions: Readonly<Record<RegionId, Region>>,
-  ancestor: RegionId,
-  descendant: RegionId,
-): boolean {
-  let current = descendant
-  for (;;) {
-    if (current === ancestor) return true
-    const region = regions[current]
-    if (region === undefined || region.kind === 'sheet') return false
-    current = region.parent
-  }
-}
-
 function fail(message: string): never {
   throw new DiagramError(message)
 }
 
 /**
- * Validate and freeze a graph without normalizing it. The identity canonicalizer
- * uses this between rewrites, and the DiagramWithBoundary authority uses it to
- * preserve equality evidence whose host scopes are outside the bounded graph.
- * Ordinary public construction goes through mkDiagramNormalized/mkDiagram.
+ * Validate and freeze a graph. `boundary` lists the ordered boundary
+ * incidences of an open diagram (repeats allowed): each entry counts as one
+ * end of its wire at the root, so a closed diagram (no boundary) requires
+ * two endpoints per wire while an open one may expose a wire instead.
  */
-export function validateRawDiagram(raw: Diagram): Diagram {
+export function validateRawDiagram(
+  raw: Diagram,
+  boundary: readonly WireId[] = [],
+): Diagram {
   const rootId = raw.root
   const regions = raw.regions
   const nodes = raw.nodes
@@ -209,14 +193,22 @@ export function validateRawDiagram(raw: Diagram): Diagram {
         break
       case 'identity':
         assertNodeSig(id, node.kind, node.sig)
-        if (!Number.isSafeInteger(node.arity) || node.arity < 2) {
-          fail(`identity node '${id}' arity must be a safe integer at least 2, got '${String(node.arity)}'`)
+        if (!Number.isSafeInteger(node.arity) || node.arity < 0) {
+          fail(`identity node '${id}' arity must be a natural number, got '${String(node.arity)}'`)
         }
         break
       default:
         node satisfies never
         fail(`node '${id}' has an unrecognized kind`)
     }
+  }
+
+  const boundaryEnds = new Map<WireId, number>()
+  for (const wireId of boundary) {
+    if (wires[wireId] === undefined) {
+      fail(`boundary wire '${wireId}' does not exist`)
+    }
+    boundaryEnds.set(wireId, (boundaryEnds.get(wireId) ?? 0) + 1)
   }
 
   const portsByNode = new Map<NodeId, Port[]>()
@@ -230,9 +222,6 @@ export function validateRawDiagram(raw: Diagram): Diagram {
       assertWellFormedSig(wire.sig)
     } catch (error) {
       fail(`wire '${wireId}' sig: ${error instanceof Error ? error.message : String(error)}`)
-    }
-    if (regions[wire.scope] === undefined) {
-      fail(`wire '${wireId}' has missing scope region '${wire.scope}'`)
     }
     for (const endpoint of wire.endpoints) {
       const node = nodes[endpoint.node]
@@ -261,12 +250,13 @@ export function validateRawDiagram(raw: Diagram): Diagram {
           : `port '${key}' of node '${endpoint.node}' is attached to two wires ('${previous}' and '${wireId}')`)
       }
       byPort.set(key, wireId)
-      if (!ancestorOrEqualRaw(regions, wire.scope, node.region)) {
-        fail(
-          `wire '${wireId}' scope '${wire.scope}' does not enclose node `
-          + `'${endpoint.node}' (region '${node.region}')`,
-        )
-      }
+    }
+    const ends = wire.endpoints.length + (boundaryEnds.get(wireId) ?? 0)
+    if (ends < 2) {
+      fail(
+        `wire '${wireId}' has ${ends} end(s); every wire needs at least two — `
+        + `a wire end is a node (attach it, or give it an identity point)`,
+      )
     }
   }
 
@@ -295,52 +285,7 @@ function rawFromParts(parts: DiagramParts): Diagram {
   }
 }
 
-/** Validate, eagerly normalize identities to a fixpoint, and retain transport. */
-export function mkDiagramNormalized(parts: DiagramParts): DiagramNormalization {
-  const normalization = normalizeIdentities(rawFromParts(parts))
-  if (
-    normalizationCaptureSuppression === 0
-    && normalizationCaptures.length > 0
-  ) {
-    normalizationCaptures[normalizationCaptures.length - 1]!.push(
-      normalization,
-    )
-  }
-  return normalization
-}
-
-/** Canonical diagram construction when the caller does not need transport. */
+/** Canonical closed-diagram construction: validate and freeze. */
 export function mkDiagram(parts: DiagramParts): Diagram {
-  return mkDiagramNormalized(parts).diagram
-}
-
-/**
- * Capture the authoritative wire images produced by one synchronous graph
- * mutation. Detached pattern construction may suppress capture explicitly.
- */
-export function captureDiagramNormalizations<T>(
-  operation: () => T,
-): DiagramNormalizationCapture<T> {
-  const normalizations: DiagramNormalization[] = []
-  normalizationCaptures.push(normalizations)
-  try {
-    return {
-      result: operation(),
-      normalizations: Object.freeze([...normalizations]),
-    }
-  } finally {
-    normalizationCaptures.pop()
-  }
-}
-
-/** Exclude self-contained pattern normalization from a host mutation trace. */
-export function withoutDiagramNormalizationCapture<T>(
-  operation: () => T,
-): T {
-  normalizationCaptureSuppression += 1
-  try {
-    return operation()
-  } finally {
-    normalizationCaptureSuppression -= 1
-  }
+  return validateRawDiagram(rawFromParts(parts))
 }

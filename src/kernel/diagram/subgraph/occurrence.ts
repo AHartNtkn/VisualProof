@@ -1,5 +1,6 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../diagram'
 import { DiagramError } from '../diagram'
+import { derivedScope } from '../regions'
 import type { DiagramWithBoundary } from '../boundary'
 import type { Occurrence } from './match'
 import type { SubgraphSelection } from './selection'
@@ -42,8 +43,8 @@ export function occurrenceToSelection(
     nodes.push(img)
   }
   const wires: WireId[] = []
-  for (const [pw, w] of Object.entries(pd.wires)) {
-    if (boundary.has(pw) || w.scope !== root) continue
+  for (const pw of Object.keys(pd.wires)) {
+    if (boundary.has(pw) || derivedScope(pd, pw, pattern.boundary) !== root) continue
     const img = occ.wireMap.get(pw)
     if (img === undefined) throw new DiagramError(`occurrence is missing an image for pattern wire '${pw}'`)
     wires.push(img)

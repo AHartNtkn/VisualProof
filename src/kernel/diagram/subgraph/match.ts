@@ -1,7 +1,7 @@
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram'
 import { DiagramError } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
-import { isAncestorOrEqual } from '../regions'
+import { derivedScope, derivedScopes, isAncestorOrEqual } from '../regions'
 import { sigEquals } from '../sig'
 import {
   checkOccurrenceCertificate,
@@ -27,7 +27,8 @@ type Index = {
   readonly wiresScoped: ReadonlyMap<RegionId, readonly WireId[]>
 }
 
-function buildIndex(diagram: Diagram): Index {
+function buildIndex(diagram: Diagram, boundary: readonly WireId[] = []): Index {
+  const scopes = derivedScopes(diagram, boundary)
   const childrenOf = new Map<RegionId, RegionId[]>()
   const nodesIn = new Map<RegionId, NodeId[]>()
   const wiresScoped = new Map<RegionId, WireId[]>()
@@ -42,8 +43,8 @@ function buildIndex(diagram: Diagram): Index {
   for (const [nodeId, node] of Object.entries(diagram.nodes)) {
     nodesIn.get(node.region)!.push(nodeId)
   }
-  for (const [wireId, wire] of Object.entries(diagram.wires)) {
-    wiresScoped.get(wire.scope)!.push(wireId)
+  for (const wireId of Object.keys(diagram.wires)) {
+    wiresScoped.get(scopes.get(wireId)!)!.push(wireId)
   }
   for (const values of childrenOf.values()) values.sort()
   for (const values of nodesIn.values()) values.sort()
@@ -114,11 +115,6 @@ export function findOccurrences(
   }
   for (const boundaryWire of pattern.boundary) {
     const wire = patternDiagram.wires[boundaryWire]!
-    if (wire.scope !== root) {
-      throw new DiagramError(
-        `boundary wire '${boundaryWire}' is not scoped at the pattern root`,
-      )
-    }
     if (wire.endpoints.length === 0 && opts.attachments === undefined) {
       throw new DiagramError(
         `bare boundary wire '${boundaryWire}' has no endpoints to anchor a search; `
@@ -141,7 +137,8 @@ export function findOccurrences(
   }
 
   const hostIndex = buildIndex(host)
-  const patternIndex = buildIndex(patternDiagram)
+  const patternIndex = buildIndex(patternDiagram, pattern.boundary)
+  const patternScopes = derivedScopes(patternDiagram, pattern.boundary)
   const regionMap = new Map<RegionId, RegionId>()
   const nodeMap = new Map<NodeId, NodeId>()
   const usedRegions = new Set<RegionId>()
@@ -324,12 +321,13 @@ export function findOccurrences(
     if (!sigEquals(source.sig, target.sig)) return false
     const boundary = boundarySet.has(patternWire)
     if (boundary) {
-      if (!isAncestorOrEqual(host, target.scope, hostRoot)) return false
+      if (!isAncestorOrEqual(host, derivedScope(host, hostWire), hostRoot)) return false
     } else {
-      const expectedScope = source.scope === root
+      const sourceScope = patternScopes.get(patternWire)!
+      const expectedScope = sourceScope === root
         ? hostRoot
-        : regionMap.get(source.scope)
-      if (target.scope !== expectedScope) return false
+        : regionMap.get(sourceScope)
+      if (derivedScope(host, hostWire) !== expectedScope) return false
     }
 
     const expected = source.endpoints.map(mappedEndpointKey).sort()

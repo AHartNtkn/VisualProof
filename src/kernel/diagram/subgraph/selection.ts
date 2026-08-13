@@ -1,5 +1,6 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../diagram'
 import { DiagramError } from '../diagram'
+import { derivedScope } from '../regions'
 
 /**
  * A subgraph at a region: whole child subtrees, direct nodes, and explicitly
@@ -53,7 +54,7 @@ export function mkSelection(d: Diagram, sel: SubgraphSelection): SubgraphSelecti
   for (const w of sel.wires) {
     const wire = d.wires[w]
     if (wire === undefined) throw new DiagramError(`unknown wire '${w}'`)
-    if (wire.scope !== sel.region) {
+    if (derivedScope(d, w) !== sel.region) {
       throw new DiagramError(`wire '${w}' is not scoped at selection region '${sel.region}'`)
     }
     if (!wire.endpoints.every((ep) => contents.allNodes.has(ep.node))) {
@@ -104,7 +105,7 @@ export function selectionContents(d: Diagram, sel: SubgraphSelection): Selection
   const internalWires: WireId[] = []
   const touchingWires: WireId[] = []
   for (const [id, w] of Object.entries(d.wires)) {
-    if (allRegions.has(w.scope) || explicit.has(id)) {
+    if (allRegions.has(derivedScope(d, id)) || explicit.has(id)) {
       internalWires.push(id)
       continue
     }

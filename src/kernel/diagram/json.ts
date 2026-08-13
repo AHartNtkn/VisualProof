@@ -40,7 +40,6 @@ export function diagramToJson(diagram: Diagram): unknown {
   const wires: Record<string, unknown> = {}
   for (const [id, wire] of Object.entries(diagram.wires)) {
     wires[id] = {
-      scope: wire.scope,
       sig: sigToJson(wire.sig),
       endpoints: wire.endpoints.map((endpoint) => ({
         node: endpoint.node,
@@ -217,16 +216,11 @@ function rawDiagramFromJson(json: unknown): Diagram {
 
   const wires: Record<string, Wire> = {}
   for (const [id, value] of Object.entries(jsonWires)) {
-    if (
-      !isRecord(value)
-      || typeof value.scope !== 'string'
-      || !Array.isArray(value.endpoints)
-    ) {
+    if (!isRecord(value) || !Array.isArray(value.endpoints)) {
       fail(`wire '${id}' has unrecognized shape`)
     }
-    assertOnlyKeys(value, ['scope', 'sig', 'endpoints'], `wire '${id}'`)
+    assertOnlyKeys(value, ['sig', 'endpoints'], `wire '${id}'`)
     wires[id] = {
-      scope: value.scope,
       sig: sigFromJson(value.sig, `wire '${id}'`),
       endpoints: value.endpoints.map((endpoint, index) => {
         if (
@@ -246,9 +240,8 @@ function rawDiagramFromJson(json: unknown): Diagram {
 }
 
 /**
- * Decode an ordinary diagram through eager identity normalization. Bounded
- * interfaces use dwbFromJson, whose boundary authority validates the same raw
- * graph without collapsing equality that depends on external attachments.
+ * Decode an ordinary closed diagram. Bounded interfaces use dwbFromJson,
+ * whose boundary entries count toward each wire's two-end floor.
  */
 export function diagramFromJson(json: unknown): Diagram {
   const raw = rawDiagramFromJson(json)

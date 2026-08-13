@@ -1,6 +1,6 @@
 import type { Diagram, Endpoint, NodeId, RegionId, WireId } from '../diagram'
 import type { DiagramWithBoundary } from '../boundary'
-import { isAncestorOrEqual } from '../regions'
+import { derivedScope, derivedScopes, isAncestorOrEqual } from '../regions'
 import { sigEquals, sigKey } from '../sig'
 
 /** A complete structural witness that an open pattern occurs in a host. */
@@ -63,6 +63,8 @@ export function checkOccurrenceCertificate(
 ): OccurrenceCertificateCheck {
   const patternDiagram = pattern.diagram
   const root = patternDiagram.root
+  const patternScopes = derivedScopes(patternDiagram, pattern.boundary)
+  const hostScopes = derivedScopes(host)
   if (host.regions[certificate.region] === undefined) {
     return fail(`occurrence region '${certificate.region}' does not exist in the host`)
   }
@@ -173,7 +175,7 @@ export function checkOccurrenceCertificate(
         return fail(`boundary wire '${patternWire}' aliases internal wire '${hostWire}'`)
       }
       boundaryImages.add(hostWire)
-      if (!isAncestorOrEqual(host, target.scope, certificate.region)) {
+      if (!isAncestorOrEqual(host, derivedScope(host, hostWire), certificate.region)) {
         return fail(`attachment wire '${hostWire}' is not visible at '${certificate.region}'`)
       }
     } else {
@@ -184,10 +186,11 @@ export function checkOccurrenceCertificate(
         return fail(`internal wire '${patternWire}' aliases a boundary attachment`)
       }
       internalImages.add(hostWire)
-      const expectedScope = source.scope === root
+      const sourceScope = patternScopes.get(patternWire)!
+      const expectedScope = sourceScope === root
         ? certificate.region
-        : certificate.regionMap.get(source.scope)
-      if (target.scope !== expectedScope) {
+        : certificate.regionMap.get(sourceScope)
+      if (derivedScope(host, hostWire) !== expectedScope) {
         return fail(`wire '${patternWire}' is mapped to the wrong host scope`)
       }
     }
@@ -287,14 +290,14 @@ export function checkOccurrenceCertificate(
     }
 
     const mappedWires = new Set(
-      Object.entries(patternDiagram.wires)
-        .filter(([, wire]) => wire.scope === patternRegion)
-        .map(([id]) => certificate.wireMap.get(id)!),
+      Object.keys(patternDiagram.wires)
+        .filter((id) => patternScopes.get(id) === patternRegion)
+        .map((id) => certificate.wireMap.get(id)!),
     )
     const hostWires = new Set(
-      Object.entries(host.wires)
-        .filter(([, wire]) => wire.scope === hostRegion)
-        .map(([id]) => id),
+      Object.keys(host.wires)
+        .filter((id) => hostScopes.get(id) === hostRegion)
+        .map((id) => id),
     )
     if (
       mappedWires.size !== hostWires.size
