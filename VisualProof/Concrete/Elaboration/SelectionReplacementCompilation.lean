@@ -1604,6 +1604,57 @@ private theorem mapNodeCompilation
       rw [targetCompiled] at mapped
       exact Option.some.inj mapped
 
+/-- Actual-context form of retained node compilation.  The sole context
+presentation equality is eliminated at this boundary, before any compiled
+result escapes. -/
+private theorem mapNodeCompilationAt
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (sourceContext : WireContext host.val)
+    (targetContext : WireContext (host.val.removeRaw selection domains))
+    (targetEq : targetContext = domains.mapWireContext sourceContext)
+    (sourceNodup : sourceContext.Nodup)
+    (sourceBinders : BinderContext host.val rels)
+    (targetBinders : BinderContext
+      (host.val.removeRaw selection domains) rels)
+    (bindersEq : targetBinders =
+      domains.mapBinderContext sourceBinders)
+    (node : domains.nodes.Carrier)
+    (allSurvive : ∀ wire, wire ∈ sourceContext →
+      domains.wires.survives wire = true)
+    {sourceItem : CompiledItem host.val sourceContext rels sourceBinders}
+    (sourceCompiled : compileNode? host.val sourceContext sourceBinders
+      (domains.nodes.origin node) = some sourceItem) :
+    Nonempty (Σ targetItem : CompiledItem
+        (host.val.removeRaw selection domains) targetContext rels
+        targetBinders,
+      PSigma (fun _ : compileNode? (host.val.removeRaw selection domains)
+          targetContext targetBinders node = some targetItem =>
+        ItemIso ((FiniteEquiv.finCast (congrArg List.length targetEq)).trans
+          (domains.mapWireContextEquiv sourceContext allSurvive)) rels
+          targetItem.erase sourceItem.erase)) := by
+  subst targetContext
+  subst targetBinders
+  obtain ⟨targetItem, targetCompiled, erased⟩ :=
+    domains.mapNodeCompilation host selection sourceContext sourceNodup
+      sourceBinders node sourceCompiled
+  rw [domains.mapWireContextOriginIndex_eq_equiv sourceContext sourceNodup
+    allSurvive] at erased
+  refine ⟨⟨targetItem, ⟨targetCompiled, ?_⟩⟩⟩
+  rw [erased]
+  have wireEq :
+      (FiniteEquiv.finCast (congrArg List.length (Eq.refl
+          (domains.mapWireContext sourceContext)))).trans
+          (domains.mapWireContextEquiv sourceContext allSurvive) =
+        domains.mapWireContextEquiv sourceContext allSurvive := by
+    apply FiniteEquiv.ext
+    intro index
+    rfl
+  rw [wireEq]
+  simpa only [Item.renameRelations_id] using
+    ItemIso.renameWiresEquiv targetItem.erase
+      (domains.mapWireContextEquiv sourceContext allSurvive)
+
 /-- The exact frame compiler call represented by one surviving source call. -/
 private def mappedCall
     (domains : FrameDomains d selection) (call : CompilerCall d)
