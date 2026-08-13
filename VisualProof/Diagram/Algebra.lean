@@ -2339,6 +2339,150 @@ def DiagramContextIso.bubbleCompilerFrame
   exact .bubble localWire sourceBefore sourceAfter targetBefore targetAfter
     sourceChild targetChild child frame
 
+/-- The algebraic output of one compiler frame.  Compiler proofs construct
+the enclosing body and sibling blocks; this package owns the dependent
+context reconstruction exactly once. -/
+structure DiagramContextIso.CompilerFrameResult
+    {outerWire : FiniteEquiv (Fin targetOuter) (Fin sourceOuter)}
+    {holeWire : FiniteEquiv (Fin targetHole) (Fin sourceHole)}
+    (sourceContext : DiagramContext sourceOuter sourceHole outerRels holeRels)
+    (targetSite : Region targetHole holeRels)
+    (targetBody : Region targetOuter outerRels) where
+  targetContext : DiagramContext targetOuter targetHole outerRels holeRels
+  alignment : DiagramContextIso outerWire holeWire outerRels holeRels
+    targetContext sourceContext
+  rebuild : targetContext.fill targetSite = targetBody
+
+/-- Assemble the context, alignment, and reconstruction equation for one cut
+compiler frame.  Wire-split transports remain local to this constructor. -/
+noncomputable def DiagramContextIso.cutCompilerFrameResult
+    {outerWire : FiniteEquiv (Fin targetOuter) (Fin sourceOuter)}
+    {holeWire : FiniteEquiv (Fin targetHole) (Fin sourceHole)}
+    (localWire : FiniteEquiv (Fin targetLocal) (Fin sourceLocal))
+    {sourceFull targetFull : Nat}
+    (sourceSplit : sourceFull = sourceOuter + sourceLocal)
+    (targetSplit : targetFull = targetOuter + targetLocal)
+    (sourceBefore sourceAfter : ItemSeq sourceFull outerRels)
+    (targetBefore targetAfter : ItemSeq targetFull outerRels)
+    (sourceChild : DiagramContext sourceFull sourceHole outerRels holeRels)
+    (targetChild : DiagramContext targetFull targetHole outerRels holeRels)
+    (fullWire : FiniteEquiv (Fin targetFull) (Fin sourceFull))
+    (fullWireAgreement : ∀ index,
+      (fullWire index).val =
+        (extendWireEquiv outerWire localWire
+          (Fin.cast targetSplit index)).val)
+    (child : DiagramContextIso fullWire holeWire outerRels holeRels
+      targetChild sourceChild)
+    (frame : ∀ {targetRegion : Region targetFull outerRels}
+        {sourceRegion : Region sourceFull outerRels},
+      ItemIso fullWire outerRels (.cut targetRegion) (.cut sourceRegion) →
+        ItemSeqIso fullWire outerRels
+          (targetBefore.append (.cons (.cut targetRegion) targetAfter))
+          (sourceBefore.append (.cons (.cut sourceRegion) sourceAfter)))
+    (targetSite : Region targetHole holeRels)
+    (targetChildBody : Region targetFull outerRels)
+    (childRebuild : targetChild.fill targetSite = targetChildBody)
+    (targetBody : Region targetOuter outerRels)
+    (targetBodyEq : targetBody = .mk targetLocal
+      ((targetBefore.append (.cons (.cut targetChildBody) targetAfter)
+        ).castWiresEq targetSplit)) :
+    @DiagramContextIso.CompilerFrameResult _ _ _ _ _ _ outerWire holeWire
+      (.cut sourceLocal (sourceBefore.castWiresEq sourceSplit)
+        (sourceAfter.castWiresEq sourceSplit) (sourceSplit ▸ sourceChild))
+      targetSite targetBody := by
+  let targetContext : DiagramContext targetOuter targetHole outerRels holeRels :=
+    .cut targetLocal (targetBefore.castWiresEq targetSplit)
+      (targetAfter.castWiresEq targetSplit) (targetSplit ▸ targetChild)
+  refine {
+    targetContext := targetContext
+    alignment := ?_
+    rebuild := ?_
+  }
+  · exact DiagramContextIso.cutCompilerFrame localWire targetSplit
+      sourceSplit targetBefore targetAfter sourceBefore sourceAfter targetChild
+      sourceChild fullWire fullWireAgreement child frame
+  · have nestedEq : (targetSplit ▸ targetChild).fill targetSite =
+        targetChildBody.castWiresEq targetSplit :=
+      (DiagramContext.castOuterWires_fill targetSplit targetChild targetSite).trans
+        (congrArg (Region.castWiresEq targetSplit) childRebuild)
+    rw [targetBodyEq]
+    dsimp only [targetContext]
+    simp only [DiagramContext.fill]
+    apply congrArg (Region.mk targetLocal)
+    rw [ItemSeq.castWiresEq_append, ItemSeq.castWiresEq_cons]
+    simpa only [Item.castWiresEq_cut] using congrArg
+      (fun body => (targetBefore.castWiresEq targetSplit).append
+        (.cons (.cut body) (targetAfter.castWiresEq targetSplit))) nestedEq
+
+/-- Bubble counterpart of `cutCompilerFrameResult`. -/
+noncomputable def DiagramContextIso.bubbleCompilerFrameResult
+    {outerWire : FiniteEquiv (Fin targetOuter) (Fin sourceOuter)}
+    {holeWire : FiniteEquiv (Fin targetHole) (Fin sourceHole)}
+    (localWire : FiniteEquiv (Fin targetLocal) (Fin sourceLocal))
+    {sourceFull targetFull : Nat}
+    (sourceSplit : sourceFull = sourceOuter + sourceLocal)
+    (targetSplit : targetFull = targetOuter + targetLocal)
+    (sourceBefore sourceAfter : ItemSeq sourceFull outerRels)
+    (targetBefore targetAfter : ItemSeq targetFull outerRels)
+    (sourceChild : DiagramContext sourceFull sourceHole
+      (arity :: outerRels) holeRels)
+    (targetChild : DiagramContext targetFull targetHole
+      (arity :: outerRels) holeRels)
+    (fullWire : FiniteEquiv (Fin targetFull) (Fin sourceFull))
+    (fullWireAgreement : ∀ index,
+      (fullWire index).val =
+        (extendWireEquiv outerWire localWire
+          (Fin.cast targetSplit index)).val)
+    (child : DiagramContextIso fullWire holeWire
+      (arity :: outerRels) holeRels targetChild sourceChild)
+    (frame : ∀
+        {targetRegion : Region targetFull (arity :: outerRels)}
+        {sourceRegion : Region sourceFull (arity :: outerRels)},
+      ItemIso fullWire outerRels
+          (.bubble arity targetRegion) (.bubble arity sourceRegion) →
+        ItemSeqIso fullWire outerRels
+          (targetBefore.append
+            (.cons (.bubble arity targetRegion) targetAfter))
+          (sourceBefore.append
+            (.cons (.bubble arity sourceRegion) sourceAfter)))
+    (targetSite : Region targetHole holeRels)
+    (targetChildBody : Region targetFull (arity :: outerRels))
+    (childRebuild : targetChild.fill targetSite = targetChildBody)
+    (targetBody : Region targetOuter outerRels)
+    (targetBodyEq : targetBody = .mk targetLocal
+      ((targetBefore.append
+        (.cons (.bubble arity targetChildBody) targetAfter)
+        ).castWiresEq targetSplit)) :
+    @DiagramContextIso.CompilerFrameResult _ _ _ _ _ _ outerWire holeWire
+      (.bubble sourceLocal (sourceBefore.castWiresEq sourceSplit)
+        (sourceAfter.castWiresEq sourceSplit) arity
+        (sourceSplit ▸ sourceChild)) targetSite targetBody := by
+  let targetContext : DiagramContext targetOuter targetHole outerRels holeRels :=
+    .bubble targetLocal (targetBefore.castWiresEq targetSplit)
+      (targetAfter.castWiresEq targetSplit) arity
+      (targetSplit ▸ targetChild)
+  refine {
+    targetContext := targetContext
+    alignment := ?_
+    rebuild := ?_
+  }
+  · exact DiagramContextIso.bubbleCompilerFrame localWire targetSplit
+      sourceSplit targetBefore targetAfter sourceBefore sourceAfter targetChild
+      sourceChild fullWire fullWireAgreement child frame
+  · have nestedEq : (targetSplit ▸ targetChild).fill targetSite =
+        targetChildBody.castWiresEq targetSplit :=
+      (DiagramContext.castOuterWires_fill targetSplit targetChild targetSite).trans
+        (congrArg (Region.castWiresEq targetSplit) childRebuild)
+    rw [targetBodyEq]
+    dsimp only [targetContext]
+    simp only [DiagramContext.fill]
+    apply congrArg (Region.mk targetLocal)
+    rw [ItemSeq.castWiresEq_append, ItemSeq.castWiresEq_cons]
+    simpa only [Item.castWiresEq_bubble] using congrArg
+      (fun body => (targetBefore.castWiresEq targetSplit).append
+        (.cons (.bubble arity body) (targetAfter.castWiresEq targetSplit)))
+      nestedEq
+
 /-- A site isomorphism lifts through every aligned compiler frame to the
 complete root. -/
 noncomputable def DiagramContextIso.fill

@@ -703,108 +703,67 @@ theorem compileAlongFocus
     let sourceSplit : sourceCall.fullContext.length =
         sourceCall.outerContext.length + sourceCall.localContext.length :=
       sourceCall.fullContext_length
-    let targetContext : DiagramContext targetOuter.length
-        childResult.holeWires sourceCall.rels endpointCall.rels :=
-      .cut targetLocal.length
-        (targetBefore.erase.castWiresEq targetSplit)
-        (targetSuffix.erase.castWiresEq targetSplit)
-        (targetSplit ▸ childResult.targetContext)
-    have alignment : DiagramContextIso frame.outerWire childResult.holeWire
-        sourceCall.rels endpointCall.rels targetContext
-        (.cut sourceCall.localContext.length
-          (before.erase.castWiresEq sourceSplit)
-          (suffix.erase.castWiresEq sourceSplit)
-          (sourceSplit ▸ nested.intrinsic.context)) := by
-      have childAlignment := childResult.alignment
-      exact DiagramContextIso.cutCompilerFrame localWire targetSplit
-        sourceSplit targetBefore.erase targetSuffix.erase before.erase
-        suffix.erase childResult.targetContext nested.intrinsic.context
-        childFrame.outerWire (by
-          intro index
-          let split := Fin.cast targetSplit index
-          have splitEq : Fin.cast targetSplit.symm split = index := by
-            apply Fin.ext
-            rfl
-          rw [← splitEq]
-          exact Fin.addCases
-            (motive := fun position =>
-              (childFrame.outerWire
-                (Fin.cast targetSplit.symm position)).val =
-              (extendWireEquiv frame.outerWire localWire
-                (Fin.cast targetSplit
-                  (Fin.cast targetSplit.symm position))).val)
-            (fun inherited => by
-              simp [FrameEvidence.outerWire, localWire,
-                FiniteEquiv.finCast, extendWireEquiv])
-            (fun localIndex => by
-              have outerLength : targetOuter.length =
-                  sourceCall.outerContext.length :=
-                (congrArg List.length frame.outerEq).trans (by
-                  simpa using congrArg List.length
-                    (domains.mapWireContext_origin_eq
-                      sourceCall.outerContext frame.outerSurvives))
-              simp [FrameEvidence.outerWire, localWire,
-                FiniteEquiv.finCast, extendWireEquiv]
-              exact outerLength) split)
-        childAlignment blocks.frame
-    have targetRebuild : targetContext.fill childResult.targetSite =
-        domains.targetErase sourceCall frame.originSurvives targetOuter
-          targetLocal targetBinders targetBody := by
-      have childRebuild : childResult.targetContext.fill
-          childResult.targetSite =
-            domains.targetErase
-              (.nested origin sourceCall.fullContext sourceCall.rels
-                sourceCall.binders) childFrame.originSurvives childTargetOuter
-              childTargetLocal targetBinders childResult.targetBody :=
-        childResult.targetRebuild
-      have childErase : domains.targetErase
-          (.nested origin sourceCall.fullContext sourceCall.rels
-            sourceCall.binders) childFrame.originSurvives childTargetOuter
-          childTargetLocal targetBinders childResult.targetBody =
-            childResult.targetBody.erase := rfl
-      rw [childErase] at childRebuild
-      have nestedEq : (targetSplit ▸ childResult.targetContext).fill
-          childResult.targetSite =
-            childResult.targetBody.erase.castWiresEq targetSplit :=
-        (DiagramContext.castOuterWires_fill targetSplit
-          childResult.targetContext childResult.targetSite).trans
-            (congrArg (Region.castWiresEq targetSplit) childRebuild)
-      dsimp only [targetContext]
-      simp only [DiagramContext.fill]
-      calc
-        _ = .mk targetLocal.length
-            ((targetBefore.erase.castWiresEq targetSplit).append
-              (.cons (.cut
-                (childResult.targetBody.erase.castWiresEq targetSplit))
-                (targetSuffix.erase.castWiresEq targetSplit))) := by
-          exact congrArg (fun sequence => Region.mk targetLocal.length
-            ((targetBefore.erase.castWiresEq targetSplit).append
-              (.cons (.cut sequence)
-                (targetSuffix.erase.castWiresEq targetSplit)))) nestedEq
-        _ = _ := by
-          rw [targetErase_targetBody]
-          dsimp only [targetItems, targetSelected]
-          rw [CompiledItems.erase_append]
-          simp only [CompiledItems.erase_cons, ItemSeq.castWiresEq_append,
-            ItemSeq.castWiresEq_cons]
-          apply congrArg (Region.mk targetLocal.length)
-          rw [ItemSeq.castWiresEq_proof_irrel targetSplit _ targetBefore.erase]
-          rw [ItemSeq.castWiresEq_proof_irrel targetSplit _ targetSuffix.erase]
-          change _ = _
-          simp only [CompiledItem.erase, Item.castWiresEq_cut]
-          congr 1
-          all_goals exact targetSplit
+    have fullWireAgreement : ∀ index,
+        (childFrame.outerWire index).val =
+          (extendWireEquiv frame.outerWire localWire
+            (Fin.cast targetSplit index)).val := by
+      intro index
+      let split := Fin.cast targetSplit index
+      have splitEq : Fin.cast targetSplit.symm split = index := by
+        apply Fin.ext
+        rfl
+      rw [← splitEq]
+      exact Fin.addCases
+        (motive := fun position =>
+          (childFrame.outerWire
+            (Fin.cast targetSplit.symm position)).val =
+          (extendWireEquiv frame.outerWire localWire
+            (Fin.cast targetSplit
+              (Fin.cast targetSplit.symm position))).val)
+        (fun inherited => by
+          simp [FrameEvidence.outerWire, localWire,
+            FiniteEquiv.finCast, extendWireEquiv])
+        (fun localIndex => by
+          have outerLength : targetOuter.length =
+              sourceCall.outerContext.length :=
+            (congrArg List.length frame.outerEq).trans (by
+              simpa using congrArg List.length
+                (domains.mapWireContext_origin_eq
+                  sourceCall.outerContext frame.outerSurvives))
+          simp [FrameEvidence.outerWire, localWire,
+            FiniteEquiv.finCast, extendWireEquiv]
+          exact outerLength) split
+    have childRebuild : childResult.targetContext.fill
+        childResult.targetSite = childResult.targetBody.erase := by
+      simpa only using childResult.targetRebuild
+    have targetBodyEq : domains.targetErase sourceCall frame.originSurvives
+        targetOuter targetLocal targetBinders targetBody =
+          .mk targetLocal.length
+            ((targetBefore.erase.append
+              (.cons (.cut childResult.targetBody.erase)
+                targetSuffix.erase)).castWiresEq targetSplit) := by
+      rw [targetErase_targetBody]
+      dsimp only [targetItems, targetSelected]
+      rw [CompiledItems.erase_append]
+      rfl
+    let assembled := DiagramContextIso.cutCompilerFrameResult localWire
+      sourceSplit targetSplit before.erase suffix.erase targetBefore.erase
+      targetSuffix.erase nested.intrinsic.context childResult.targetContext
+      childFrame.outerWire fullWireAgreement childResult.alignment blocks.frame
+      childResult.targetSite childResult.targetBody.erase childRebuild
+      (domains.targetErase sourceCall frame.originSurvives targetOuter
+        targetLocal targetBinders targetBody) targetBodyEq
     exact ⟨{
       targetBody := targetBody
       targetCompiled := targetCompiled
       holeWires := childResult.holeWires
       holeWire := childResult.holeWire
       targetSite := childResult.targetSite
-      targetContext := targetContext
+      targetContext := assembled.targetContext
       alignment := by
         simpa only [CompiledItemsZipper.intrinsic,
-          CompiledZipper.intrinsic] using alignment
-      targetRebuild := targetRebuild
+          CompiledZipper.intrinsic] using assembled.alignment
+      targetRebuild := assembled.rebuild
     }⟩
   · intro sourceCall origin arity body before suffix items site endpointCall
       endpoint nested rebuild induction siteEq targetOuter targetLocal
@@ -1178,110 +1137,67 @@ theorem compileAlongFocus
     let sourceSplit : sourceCall.fullContext.length =
         sourceCall.outerContext.length + sourceCall.localContext.length :=
       sourceCall.fullContext_length
-    let targetContext : DiagramContext targetOuter.length
-        childResult.holeWires sourceCall.rels endpointCall.rels :=
-      .bubble targetLocal.length
-        (targetBefore.erase.castWiresEq targetSplit)
-        (targetSuffix.erase.castWiresEq targetSplit) arity
-        (targetSplit ▸ childResult.targetContext)
-    have alignment : DiagramContextIso frame.outerWire childResult.holeWire
-        sourceCall.rels endpointCall.rels targetContext
-        (.bubble sourceCall.localContext.length
-          (before.erase.castWiresEq sourceSplit)
-          (suffix.erase.castWiresEq sourceSplit) arity
-          (sourceSplit ▸ nested.intrinsic.context)) := by
-      have childAlignment := childResult.alignment
-      exact DiagramContextIso.bubbleCompilerFrame localWire targetSplit
-        sourceSplit targetBefore.erase targetSuffix.erase before.erase
-        suffix.erase childResult.targetContext nested.intrinsic.context
-        childFrame.outerWire (by
-          intro index
-          let split := Fin.cast targetSplit index
-          have splitEq : Fin.cast targetSplit.symm split = index := by
-            apply Fin.ext
-            rfl
-          rw [← splitEq]
-          exact Fin.addCases
-            (motive := fun position =>
-              (childFrame.outerWire
-                (Fin.cast targetSplit.symm position)).val =
-              (extendWireEquiv frame.outerWire localWire
-                (Fin.cast targetSplit
-                  (Fin.cast targetSplit.symm position))).val)
-            (fun inherited => by
-              simp [FrameEvidence.outerWire, localWire,
-                FiniteEquiv.finCast, extendWireEquiv])
-            (fun localIndex => by
-              have outerLength : targetOuter.length =
-                  sourceCall.outerContext.length :=
-                (congrArg List.length frame.outerEq).trans (by
-                  simpa using congrArg List.length
-                    (domains.mapWireContext_origin_eq
-                      sourceCall.outerContext frame.outerSurvives))
-              simp [FrameEvidence.outerWire, localWire,
-                FiniteEquiv.finCast, extendWireEquiv]
-              exact outerLength) split)
-        childAlignment blocks.frame
-    have targetRebuild : targetContext.fill childResult.targetSite =
-        domains.targetErase sourceCall frame.originSurvives targetOuter
-          targetLocal targetBinders targetBody := by
-      have childRebuild : childResult.targetContext.fill
-          childResult.targetSite =
-            domains.targetErase
-              (.nested origin sourceCall.fullContext (arity :: sourceCall.rels)
-                (sourceCall.binders.push origin arity))
-              childFrame.originSurvives childTargetOuter childTargetLocal
-              childTargetBinders childResult.targetBody :=
-        childResult.targetRebuild
-      have childErase : domains.targetErase
-          (.nested origin sourceCall.fullContext (arity :: sourceCall.rels)
-            (sourceCall.binders.push origin arity))
-          childFrame.originSurvives childTargetOuter childTargetLocal
-          childTargetBinders childResult.targetBody =
-            childResult.targetBody.erase := rfl
-      rw [childErase] at childRebuild
-      have nestedEq : (targetSplit ▸ childResult.targetContext).fill
-          childResult.targetSite =
-            childResult.targetBody.erase.castWiresEq targetSplit :=
-        (DiagramContext.castOuterWires_fill targetSplit
-          childResult.targetContext childResult.targetSite).trans
-            (congrArg (Region.castWiresEq targetSplit) childRebuild)
-      dsimp only [targetContext]
-      simp only [DiagramContext.fill]
-      calc
-        _ = .mk targetLocal.length
-            ((targetBefore.erase.castWiresEq targetSplit).append
-              (.cons (.bubble arity
-                (childResult.targetBody.erase.castWiresEq targetSplit))
-                (targetSuffix.erase.castWiresEq targetSplit))) := by
-          exact congrArg (fun sequence => Region.mk targetLocal.length
-            ((targetBefore.erase.castWiresEq targetSplit).append
-              (.cons (.bubble arity sequence)
-                (targetSuffix.erase.castWiresEq targetSplit)))) nestedEq
-        _ = _ := by
-          rw [targetErase_targetBody]
-          dsimp only [targetItems, targetSelected]
-          rw [CompiledItems.erase_append]
-          simp only [CompiledItems.erase_cons, ItemSeq.castWiresEq_append,
-            ItemSeq.castWiresEq_cons]
-          apply congrArg (Region.mk targetLocal.length)
-          rw [ItemSeq.castWiresEq_proof_irrel targetSplit _ targetBefore.erase]
-          rw [ItemSeq.castWiresEq_proof_irrel targetSplit _ targetSuffix.erase]
-          change _ = _
-          simp only [CompiledItem.erase, Item.castWiresEq_bubble]
-          congr 1
-          all_goals exact targetSplit
+    have fullWireAgreement : ∀ index,
+        (childFrame.outerWire index).val =
+          (extendWireEquiv frame.outerWire localWire
+            (Fin.cast targetSplit index)).val := by
+      intro index
+      let split := Fin.cast targetSplit index
+      have splitEq : Fin.cast targetSplit.symm split = index := by
+        apply Fin.ext
+        rfl
+      rw [← splitEq]
+      exact Fin.addCases
+        (motive := fun position =>
+          (childFrame.outerWire
+            (Fin.cast targetSplit.symm position)).val =
+          (extendWireEquiv frame.outerWire localWire
+            (Fin.cast targetSplit
+              (Fin.cast targetSplit.symm position))).val)
+        (fun inherited => by
+          simp [FrameEvidence.outerWire, localWire,
+            FiniteEquiv.finCast, extendWireEquiv])
+        (fun localIndex => by
+          have outerLength : targetOuter.length =
+              sourceCall.outerContext.length :=
+            (congrArg List.length frame.outerEq).trans (by
+              simpa using congrArg List.length
+                (domains.mapWireContext_origin_eq
+                  sourceCall.outerContext frame.outerSurvives))
+          simp [FrameEvidence.outerWire, localWire,
+            FiniteEquiv.finCast, extendWireEquiv]
+          exact outerLength) split
+    have childRebuild : childResult.targetContext.fill
+        childResult.targetSite = childResult.targetBody.erase := by
+      simpa only using childResult.targetRebuild
+    have targetBodyEq : domains.targetErase sourceCall frame.originSurvives
+        targetOuter targetLocal targetBinders targetBody =
+          .mk targetLocal.length
+            ((targetBefore.erase.append
+              (.cons (.bubble arity childResult.targetBody.erase)
+                targetSuffix.erase)).castWiresEq targetSplit) := by
+      rw [targetErase_targetBody]
+      dsimp only [targetItems, targetSelected]
+      rw [CompiledItems.erase_append]
+      rfl
+    let assembled := DiagramContextIso.bubbleCompilerFrameResult localWire
+      sourceSplit targetSplit before.erase suffix.erase targetBefore.erase
+      targetSuffix.erase nested.intrinsic.context childResult.targetContext
+      childFrame.outerWire fullWireAgreement childResult.alignment blocks.frame
+      childResult.targetSite childResult.targetBody.erase childRebuild
+      (domains.targetErase sourceCall frame.originSurvives targetOuter
+        targetLocal targetBinders targetBody) targetBodyEq
     exact ⟨{
       targetBody := targetBody
       targetCompiled := targetCompiled
       holeWires := childResult.holeWires
       holeWire := childResult.holeWire
       targetSite := childResult.targetSite
-      targetContext := targetContext
+      targetContext := assembled.targetContext
       alignment := by
         simpa only [CompiledItemsZipper.intrinsic,
-          CompiledZipper.intrinsic] using alignment
-      targetRebuild := targetRebuild
+          CompiledZipper.intrinsic] using assembled.alignment
+      targetRebuild := assembled.rebuild
     }⟩
 
 /-- The compact removal frame at the checked root, retaining the selected
