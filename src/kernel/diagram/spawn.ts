@@ -1,5 +1,6 @@
 import type { Diagram, DiagramNode, Endpoint, NodeId, RegionId, Wire, WireId } from './diagram'
 import { DiagramError, mkDiagram, portSig, requiredPorts } from './diagram'
+import { derivedScope, wireVisibleAt } from './regions'
 import type { RelSig, Sig } from './sig'
 import { freshId, type IdNamespaceReservation, type IdReservation } from './subgraph/freshId'
 
@@ -71,6 +72,14 @@ export function spawnAtomNode(
   if (target.sig.kind !== 'rel') {
     throw new DiagramError(
       `spawnAtomNode: wire '${wireId}' has sig 'iota', expected a relation signature`,
+    )
+  }
+  // Attaching a head at a region outside the wire's scope would silently
+  // raise its quantifier to the DCA — quantifier movement is join/sever.
+  if (!wireVisibleAt(diagram, wireId, region)) {
+    throw new DiagramError(
+      `spawnAtomNode: wire '${wireId}' scoped at '${derivedScope(diagram, wireId)}' `
+      + `does not enclose spawn region '${region}'`,
     )
   }
   const takenNodes = new Set(Object.keys(diagram.nodes))
