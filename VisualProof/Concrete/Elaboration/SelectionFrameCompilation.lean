@@ -201,29 +201,86 @@ structure FrameEvidence
     (host : Checked) (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     (sourceCall : CompilerCall host.val)
-    (sourceBody : CompiledRegion host.val sourceCall)
-    (targetOuter targetLocal : WireContext
-      (host.val.removeRaw selection domains))
-    (targetBinders : BinderContext
-      (host.val.removeRaw selection domains) sourceCall.rels) where
+    (sourceBody : CompiledRegion host.val sourceCall) where
   originSurvives : domains.regions.survives sourceCall.origin = true
+  targetOuter : WireContext (host.val.removeRaw selection domains)
+  rootLocal : match sourceCall with
+    | .root .. => WireContext (host.val.removeRaw selection domains)
+    | .nested .. => PUnit
+  nestedBinders : match sourceCall with
+    | .root .. => PUnit
+    | .nested _ _ rels _ =>
+        BinderContext (host.val.removeRaw selection domains) rels
   outerEq : targetOuter = domains.mapWireContext sourceCall.outerContext
-  localEq : targetLocal = domains.mapWireContext sourceCall.localContext
+  rootLocalEq : match sourceCall with
+    | .root .. => rootLocal = domains.mapWireContext sourceCall.localContext
+    | .nested .. => True
   outerSurvives : ∀ wire, wire ∈ sourceCall.outerContext →
     domains.wires.survives wire = true
-  targetLocalCall : (domains.targetCall sourceCall originSurvives targetOuter
-    targetLocal targetBinders).localContext = targetLocal
-  bindersEq : targetBinders = domains.mapBinderContext sourceCall.binders
+  nestedBindersEq : match sourceCall with
+    | .root .. => True
+    | .nested _ _ _ binders => nestedBinders =
+        domains.mapBinderContext binders
   sourceExact : sourceCall.fullContext.Exact sourceCall.origin
   sourceCovers : sourceCall.binders.Covers sourceCall.origin
   sourceEnumeration : BinderContext.Enumeration host.val sourceCall.binders
     sourceCall.origin
   sourceCompiled : sourceCall.compile? host.val host.property = some sourceBody
 
+def FrameEvidence.targetLocal
+    (frame : FrameEvidence host selection domains sourceCall sourceBody) :
+    WireContext (host.val.removeRaw selection domains) :=
+  match sourceCall with
+  | .root .. => frame.rootLocal
+  | .nested origin .. => exactScopeWires
+      (host.val.removeRaw selection domains)
+        (domains.regions.index origin frame.originSurvives)
+
+def FrameEvidence.targetBinders
+    (frame : FrameEvidence host selection domains sourceCall sourceBody) :
+    BinderContext (host.val.removeRaw selection domains) sourceCall.rels :=
+  match sourceCall with
+  | .root .. => BinderContext.empty
+  | .nested .. => frame.nestedBinders
+
+noncomputable def FrameEvidence.targetCall
+    (frame : FrameEvidence host selection domains sourceCall sourceBody) :
+    CompilerCall (host.val.removeRaw selection domains) :=
+  domains.targetCall sourceCall frame.originSurvives frame.targetOuter
+    frame.targetLocal frame.targetBinders
+
+theorem FrameEvidence.localEq
+    (frame : FrameEvidence host selection domains sourceCall sourceBody) :
+    frame.targetLocal = domains.mapWireContext sourceCall.localContext := by
+  cases sourceCall with
+  | root => exact frame.rootLocalEq
+  | nested origin outer rels binders =>
+      dsimp only [FrameEvidence.targetLocal]
+      rw [← domains.mapWireContext_exactScope host selection
+        (domains.regions.index origin frame.originSurvives),
+        domains.regions.origin_index]
+      rfl
+
+theorem FrameEvidence.bindersEq
+    (frame : FrameEvidence host selection domains sourceCall sourceBody) :
+    frame.targetBinders = domains.mapBinderContext sourceCall.binders := by
+  cases sourceCall with
+  | root => exact domains.mapBinderContext_empty.symm
+  | nested => exact frame.nestedBindersEq
+
+@[simp] theorem FrameEvidence.targetLocalCall
+    (frame : FrameEvidence host selection domains sourceCall sourceBody) :
+    frame.targetCall.localContext = frame.targetLocal := by
+  cases sourceCall <;> rfl
+
+@[simp] theorem FrameEvidence.targetCall_fullContext
+    (frame : FrameEvidence host selection domains sourceCall sourceBody) :
+    frame.targetCall.fullContext = frame.targetOuter ++ frame.targetLocal := by
+  cases sourceCall <;> rfl
+
 noncomputable def FrameEvidence.outerWire
-    (frame : FrameEvidence host selection domains sourceCall sourceBody
-      targetOuter targetLocal targetBinders) :
-    FiniteEquiv (Fin targetOuter.length)
+    (frame : FrameEvidence host selection domains sourceCall sourceBody) :
+    FiniteEquiv (Fin frame.targetOuter.length)
       (Fin sourceCall.outerContext.length) :=
   (FiniteEquiv.finCast (congrArg List.length frame.outerEq)).trans
     (domains.mapWireContextEquiv sourceCall.outerContext frame.outerSurvives)
@@ -236,31 +293,24 @@ structure FrameFocusResult
     {endpoint : CompiledRegion host.val endpointCall}
     {site : Fin host.val.regionCount}
     (focus : CompiledZipper host.val sourceBody site endpointCall endpoint)
-    (targetOuter targetLocal : WireContext
-      (host.val.removeRaw selection domains))
-    (targetBinders : BinderContext
-      (host.val.removeRaw selection domains) sourceCall.rels)
-    (frame : FrameEvidence host selection domains sourceCall sourceBody
-      targetOuter targetLocal targetBinders) where
+    (frame : FrameEvidence host selection domains sourceCall sourceBody) where
   targetBody : CompiledRegion (host.val.removeRaw selection domains)
-    (domains.targetCall sourceCall frame.originSurvives targetOuter targetLocal
-      targetBinders)
-  targetCompiled : (domains.targetCall sourceCall frame.originSurvives
-    targetOuter targetLocal targetBinders).compile?
+    frame.targetCall
+  siteSurvives : domains.regions.survives site = true
+  targetEndpointCall : CompilerCall (host.val.removeRaw selection domains)
+  targetEndpoint : CompiledRegion (host.val.removeRaw selection domains)
+    targetEndpointCall
+  targetFocus : CompiledZipper (host.val.removeRaw selection domains)
+    targetBody (domains.regions.index site siteSurvives) targetEndpointCall
+      targetEndpoint
+  targetCompiled : frame.targetCall.compile?
       (host.val.removeRaw selection domains)
       (Diagram.removeRaw_wellFormed host selection domains) = some targetBody
-  holeWires : Nat
-  holeWire : FiniteEquiv (Fin holeWires)
+  holeWire : FiniteEquiv (Fin targetEndpointCall.outerContext.length)
     (Fin endpointCall.outerContext.length)
-  targetSite : Region holeWires endpointCall.rels
-  targetContext : DiagramContext targetOuter.length holeWires
-    sourceCall.rels endpointCall.rels
   alignment : DiagramContextIso
     frame.outerWire holeWire sourceCall.rels endpointCall.rels
-    targetContext focus.intrinsic.context
-  targetRebuild : targetContext.fill targetSite =
-    domains.targetErase sourceCall frame.originSurvives targetOuter targetLocal
-      targetBinders targetBody
+    targetFocus.intrinsic.context focus.intrinsic.context
 
 private abbrev FrameRegionFold
     (host : Checked) (selection : CheckedSelection host.val)
@@ -269,16 +319,10 @@ private abbrev FrameRegionFold
     (sourceBody : CompiledRegion host.val sourceCall)
     (site : Fin host.val.regionCount)
     (endpoint : CompiledRegion host.val endpointCall)
-    (focus : CompiledZipper host.val sourceBody site endpointCall endpoint) :=
+  (focus : CompiledZipper host.val sourceBody site endpointCall endpoint) :=
   (siteEq : site = selection.val.anchor) →
-  (targetOuter targetLocal : WireContext
-    (host.val.removeRaw selection domains)) →
-  (targetBinders : BinderContext
-    (host.val.removeRaw selection domains) sourceCall.rels) →
-  (frame : FrameEvidence host selection domains sourceCall sourceBody
-    targetOuter targetLocal targetBinders) →
-  Nonempty (FrameFocusResult host selection domains focus targetOuter
-    targetLocal targetBinders frame)
+  (frame : FrameEvidence host selection domains sourceCall sourceBody) →
+  Nonempty (FrameFocusResult host selection domains focus frame)
 
 private abbrev FrameItemsFold
     (host : Checked) (selection : CheckedSelection host.val)
@@ -288,16 +332,10 @@ private abbrev FrameItemsFold
       sourceCall.rels sourceCall.binders)
     (site : Fin host.val.regionCount)
     (endpoint : CompiledRegion host.val endpointCall)
-    (focus : CompiledItemsZipper host.val items site endpointCall endpoint) :=
+  (focus : CompiledItemsZipper host.val items site endpointCall endpoint) :=
   (siteEq : site = selection.val.anchor) →
-  (targetOuter targetLocal : WireContext
-    (host.val.removeRaw selection domains)) →
-  (targetBinders : BinderContext
-    (host.val.removeRaw selection domains) sourceCall.rels) →
-  (frame : FrameEvidence host selection domains sourceCall (.mk items)
-    targetOuter targetLocal targetBinders) →
-  Nonempty (FrameFocusResult host selection domains (.child focus)
-    targetOuter targetLocal targetBinders frame)
+  (frame : FrameEvidence host selection domains sourceCall (.mk items)) →
+  Nonempty (FrameFocusResult host selection domains (.child focus) frame)
 
 /-- The single source-focus fold constructs the compact frame compiler result
 and aligns its unfilled endpoint context with the source endpoint context. -/
@@ -315,7 +353,10 @@ theorem compileAlongFocus
       FrameRegionFold host selection domains sourceBody site endpoint focus)
     (motive_2 := fun items site _ endpoint focus =>
       FrameItemsFold host selection domains items site endpoint focus)
-  · intro sourceCall source siteEq targetOuter targetLocal targetBinders frame
+  · intro sourceCall source siteEq frame
+    let targetOuter := frame.targetOuter
+    let targetLocal := frame.targetLocal
+    let targetBinders := frame.targetBinders
     have originEq : sourceCall.origin = selection.val.anchor := siteEq
     cases sourceCall with
     | root sourceAmbient sourceLocal =>
@@ -325,15 +366,17 @@ theorem compileAlongFocus
           frame.sourceCompiled)
         refine ⟨{
           targetBody := result.body
+          siteSurvives := frame.originSurvives
+          targetEndpointCall := frame.targetCall
+          targetEndpoint := result.body
+          targetFocus := by
+            simpa [FrameEvidence.targetCall, FrameEvidence.targetLocal,
+              FrameEvidence.targetBinders, FrameDomains.targetCall] using
+                (CompiledZipper.here result.body)
           targetCompiled := result.compiled
-          holeWires := targetOuter.length
           holeWire := frame.outerWire
-          targetSite := result.body.erase
-          targetContext := .hole
           alignment := .hole frame.outerWire
-          targetRebuild := ?_
         }⟩
-        rfl
     | nested origin sourceOuter rels sourceBinders =>
         let result := Classical.choice (domains.compileRegionSurvivors host
           selection origin frame.originSurvives sourceOuter sourceBinders
@@ -341,21 +384,22 @@ theorem compileAlongFocus
           frame.sourceExact source frame.sourceCompiled)
         refine ⟨{
           targetBody := result.body
+          siteSurvives := frame.originSurvives
+          targetEndpointCall := frame.targetCall
+          targetEndpoint := result.body
+          targetFocus := CompiledZipper.here result.body
           targetCompiled := result.compiled
-          holeWires := targetOuter.length
           holeWire := frame.outerWire
-          targetSite := result.body.erase
-          targetContext := .hole
           alignment := .hole frame.outerWire
-          targetRebuild := ?_
         }⟩
-        rfl
   · intro sourceCall endpointCall items site endpoint nested induction
-      siteEq targetOuter targetLocal targetBinders frame
-    exact induction siteEq targetOuter targetLocal targetBinders frame
+      siteEq frame
+    exact induction siteEq frame
   · intro sourceCall origin body before suffix items site endpointCall
-      endpoint nested rebuild induction siteEq targetOuter targetLocal
-      targetBinders frame
+      endpoint nested rebuild induction siteEq frame
+    let targetOuter := frame.targetOuter
+    let targetLocal := frame.targetLocal
+    let targetBinders := frame.targetBinders
     subst items
     have sourceItemsCompiled := sourceCall.compile?_items_of_success
       host.property frame.sourceCompiled
@@ -440,7 +484,7 @@ theorem compileAlongFocus
         (Fin sourceCall.localContext.length) :=
       (FiniteEquiv.finCast (congrArg List.length frame.localEq)).trans
         (domains.mapWireContextEquiv sourceCall.localContext localSurvives)
-    let childTargetOuter := targetOuter ++ targetLocal
+    let childTargetOuter := frame.targetCall.fullContext
     have childSurvives : domains.regions.survives origin = true :=
       domains.localOccurrence_survives_above host selection sourceCall.origin
         above parentAway (.child origin) selectedDirect
@@ -449,9 +493,10 @@ theorem compileAlongFocus
         (domains.regions.index origin childSurvives)
     have childOuterEq : childTargetOuter =
         domains.mapWireContext sourceCall.fullContext := by
-      dsimp only [childTargetOuter]
+      rw [frame.targetCall_fullContext]
+      dsimp only [targetOuter, targetLocal]
       rw [CompilerCall.fullContext, domains.mapWireContext_append,
-        ← frame.outerEq, ← frame.localEq]
+        frame.outerEq, frame.localEq]
     have childLocalEq : childTargetLocal = domains.mapWireContext
         (exactScopeWires host.val origin) := by
       dsimp only [childTargetLocal]
@@ -468,21 +513,21 @@ theorem compileAlongFocus
         above parentAway sourceCall.fullContext frame.sourceExact wire member
     let childFrame : FrameEvidence host selection domains
         (.nested origin sourceCall.fullContext sourceCall.rels
-          sourceCall.binders) body childTargetOuter childTargetLocal
-          targetBinders := {
+          sourceCall.binders) body := {
       originSurvives := childSurvives
+      targetOuter := childTargetOuter
+      rootLocal := PUnit.unit
+      nestedBinders := targetBinders
       outerEq := childOuterEq
-      localEq := childLocalEq
+      rootLocalEq := trivial
       outerSurvives := childOuterSurvives
-      targetLocalCall := childLocalCall
-      bindersEq := frame.bindersEq
+      nestedBindersEq := frame.bindersEq
       sourceExact := childExact
       sourceCovers := childCovers
       sourceEnumeration := childEnumeration
       sourceCompiled := childCompiled
     }
-    obtain ⟨childResult⟩ := induction siteEq childTargetOuter
-      childTargetLocal targetBinders childFrame
+    obtain ⟨childResult⟩ := induction siteEq childFrame
     have sourceNodup :
         (before.append (.cons (.cut body) suffix)).origins.Nodup := by
       rw [sourceOrigins]
@@ -691,18 +736,19 @@ theorem compileAlongFocus
       targetSelected targetOrigins beforeCanonical suffixCanonical
       selectedCanonical beforeBack suffixBack
     let targetItems := targetBefore.append (.cons targetSelected targetSuffix)
-    let targetBody := domains.targetBody sourceCall frame.originSurvives
-      targetOuter targetLocal targetBinders frame.targetLocalCall targetItems
-    have targetCompiled : (domains.targetCall sourceCall frame.originSurvives
-        targetOuter targetLocal targetBinders).compile?
+    let targetBody : CompiledRegion (host.val.removeRaw selection domains)
+        frame.targetCall := .mk targetItems
+    have targetCompiled : frame.targetCall.compile?
         (host.val.removeRaw selection domains)
           (Diagram.removeRaw_wellFormed host selection domains) =
         some targetBody :=
-      domains.targetCall_compile_of_items host selection sourceCall
-        frame.originSurvives targetOuter targetLocal targetBinders
-        frame.targetLocalCall targetItems blocks.compiled
+      frame.targetCall.compile?_of_items
+        (Diagram.removeRaw_wellFormed host selection domains) (by
+          simpa [FrameEvidence.targetCall, FrameDomains.targetCall] using
+            blocks.compiled)
     let targetSplit : childTargetOuter.length =
-        targetOuter.length + targetLocal.length := List.length_append
+        targetOuter.length + targetLocal.length := by
+      exact congrArg List.length frame.targetCall_fullContext
     let sourceSplit : sourceCall.fullContext.length =
         sourceCall.outerContext.length + sourceCall.localContext.length :=
       sourceCall.fullContext_length
@@ -747,71 +793,33 @@ theorem compileAlongFocus
                     (domains.mapWireContext_origin_eq
                       sourceCall.outerContext frame.outerSurvives))
               simp [FrameEvidence.outerWire, localWire,
-                FiniteEquiv.finCast, extendWireEquiv]
+                FiniteEquiv.finCast, extendWireEquiv, targetOuter,
+                targetLocal]
               exact outerLength) split)
         childAlignment blocks.frame
-    have targetRebuild : targetContext.fill childResult.targetSite =
-        domains.targetErase sourceCall frame.originSurvives targetOuter
-          targetLocal targetBinders targetBody := by
-      have childRebuild : childResult.targetContext.fill
-          childResult.targetSite =
-            domains.targetErase
-              (.nested origin sourceCall.fullContext sourceCall.rels
-                sourceCall.binders) childFrame.originSurvives childTargetOuter
-              childTargetLocal targetBinders childResult.targetBody :=
-        childResult.targetRebuild
-      have childErase : domains.targetErase
-          (.nested origin sourceCall.fullContext sourceCall.rels
-            sourceCall.binders) childFrame.originSurvives childTargetOuter
-          childTargetLocal targetBinders childResult.targetBody =
-            childResult.targetBody.erase := rfl
-      rw [childErase] at childRebuild
-      have nestedEq : (targetSplit ▸ childResult.targetContext).fill
-          childResult.targetSite =
-            childResult.targetBody.erase.castWiresEq targetSplit :=
-        (DiagramContext.castOuterWires_fill targetSplit
-          childResult.targetContext childResult.targetSite).trans
-            (congrArg (Region.castWiresEq targetSplit) childRebuild)
-      dsimp only [targetContext]
-      simp only [DiagramContext.fill]
-      calc
-        _ = .mk targetLocal.length
-            ((targetBefore.erase.castWiresEq targetSplit).append
-              (.cons (.cut
-                (childResult.targetBody.erase.castWiresEq targetSplit))
-                (targetSuffix.erase.castWiresEq targetSplit))) := by
-          exact congrArg (fun sequence => Region.mk targetLocal.length
-            ((targetBefore.erase.castWiresEq targetSplit).append
-              (.cons (.cut sequence)
-                (targetSuffix.erase.castWiresEq targetSplit)))) nestedEq
-        _ = _ := by
-          rw [targetErase_targetBody]
-          dsimp only [targetItems, targetSelected]
-          rw [CompiledItems.erase_append]
-          simp only [CompiledItems.erase_cons, ItemSeq.castWiresEq_append,
-            ItemSeq.castWiresEq_cons]
-          apply congrArg (Region.mk targetLocal.length)
-          rw [ItemSeq.castWiresEq_proof_irrel targetSplit _ targetBefore.erase]
-          rw [ItemSeq.castWiresEq_proof_irrel targetSplit _ targetSuffix.erase]
-          change _ = _
-          simp only [CompiledItem.erase, Item.castWiresEq_cut]
-          congr 1
-          all_goals exact targetSplit
     exact ⟨{
       targetBody := targetBody
+      siteSurvives := childResult.siteSurvives
+      targetEndpointCall := childResult.targetEndpointCall
+      targetEndpoint := childResult.targetEndpoint
+      targetFocus := by
+        exact .child (.cut
+          (sourceCall := frame.targetCall)
+          (origin := domains.regions.index origin childSurvives)
+          (body := childResult.targetBody)
+          (items := targetItems)
+          targetBefore targetSuffix childResult.targetFocus rfl)
       targetCompiled := targetCompiled
-      holeWires := childResult.holeWires
       holeWire := childResult.holeWire
-      targetSite := childResult.targetSite
-      targetContext := targetContext
       alignment := by
-        simpa only [CompiledItemsZipper.intrinsic,
-          CompiledZipper.intrinsic] using alignment
-      targetRebuild := targetRebuild
+        simpa only [CompiledItemsZipper.intrinsic, CompiledZipper.intrinsic]
+          using alignment
     }⟩
   · intro sourceCall origin arity body before suffix items site endpointCall
-      endpoint nested rebuild induction siteEq targetOuter targetLocal
-      targetBinders frame
+      endpoint nested rebuild induction siteEq frame
+    let targetOuter := frame.targetOuter
+    let targetLocal := frame.targetLocal
+    let targetBinders := frame.targetBinders
     subst items
     have sourceItemsCompiled := sourceCall.compile?_items_of_success
       host.property frame.sourceCompiled
@@ -909,7 +917,7 @@ theorem compileAlongFocus
     have childSurvives : domains.regions.survives origin = true :=
       domains.localOccurrence_survives_above host selection sourceCall.origin
         above parentAway (.child origin) selectedDirect
-    let childTargetOuter := targetOuter ++ targetLocal
+    let childTargetOuter := frame.targetCall.fullContext
     let childTargetLocal := exactScopeWires
       (host.val.removeRaw selection domains)
         (domains.regions.index origin childSurvives)
@@ -918,9 +926,10 @@ theorem compileAlongFocus
       (domains.regions.index origin childSurvives) arity
     have childOuterEq : childTargetOuter =
         domains.mapWireContext sourceCall.fullContext := by
-      dsimp only [childTargetOuter]
+      rw [frame.targetCall_fullContext]
+      dsimp only [targetOuter, targetLocal]
       rw [CompilerCall.fullContext, domains.mapWireContext_append,
-        ← frame.outerEq, ← frame.localEq]
+        frame.outerEq, frame.localEq]
     have childLocalEq : childTargetLocal = domains.mapWireContext
         (exactScopeWires host.val origin) := by
       dsimp only [childTargetLocal]
@@ -938,26 +947,28 @@ theorem compileAlongFocus
     have childBindersEq : childTargetBinders =
         domains.mapBinderContext (sourceCall.binders.push origin arity) := by
       dsimp only [childTargetBinders]
+      change frame.targetBinders.push
+        (domains.regions.index origin childSurvives) arity = _
       rw [frame.bindersEq]
       exact (domains.mapBinderContext_push sourceCall.binders origin
         childSurvives arity).symm
     let childFrame : FrameEvidence host selection domains
         (.nested origin sourceCall.fullContext (arity :: sourceCall.rels)
-          (sourceCall.binders.push origin arity)) body childTargetOuter
-          childTargetLocal childTargetBinders := {
+          (sourceCall.binders.push origin arity)) body := {
       originSurvives := childSurvives
+      targetOuter := childTargetOuter
+      rootLocal := PUnit.unit
+      nestedBinders := childTargetBinders
       outerEq := childOuterEq
-      localEq := childLocalEq
+      rootLocalEq := trivial
       outerSurvives := childOuterSurvives
-      targetLocalCall := childLocalCall
-      bindersEq := childBindersEq
+      nestedBindersEq := childBindersEq
       sourceExact := childExact
       sourceCovers := childCovers
       sourceEnumeration := childEnumeration
       sourceCompiled := childCompiled
     }
-    obtain ⟨childResult⟩ := induction siteEq childTargetOuter
-      childTargetLocal childTargetBinders childFrame
+    obtain ⟨childResult⟩ := induction siteEq childFrame
     have sourceNodup :
         (before.append (.cons (.bubble arity body) suffix)).origins.Nodup := by
       rw [sourceOrigins]
@@ -1167,18 +1178,19 @@ theorem compileAlongFocus
       targetSelected targetOrigins beforeCanonical suffixCanonical
       selectedCanonical beforeBack suffixBack
     let targetItems := targetBefore.append (.cons targetSelected targetSuffix)
-    let targetBody := domains.targetBody sourceCall frame.originSurvives
-      targetOuter targetLocal targetBinders frame.targetLocalCall targetItems
-    have targetCompiled : (domains.targetCall sourceCall frame.originSurvives
-        targetOuter targetLocal targetBinders).compile?
+    let targetBody : CompiledRegion (host.val.removeRaw selection domains)
+        frame.targetCall := .mk targetItems
+    have targetCompiled : frame.targetCall.compile?
         (host.val.removeRaw selection domains)
           (Diagram.removeRaw_wellFormed host selection domains) =
         some targetBody :=
-      domains.targetCall_compile_of_items host selection sourceCall
-        frame.originSurvives targetOuter targetLocal targetBinders
-        frame.targetLocalCall targetItems blocks.compiled
+      frame.targetCall.compile?_of_items
+        (Diagram.removeRaw_wellFormed host selection domains) (by
+          simpa [FrameEvidence.targetCall, FrameDomains.targetCall] using
+            blocks.compiled)
     let targetSplit : childTargetOuter.length =
-        targetOuter.length + targetLocal.length := List.length_append
+        targetOuter.length + targetLocal.length := by
+      exact congrArg List.length frame.targetCall_fullContext
     let sourceSplit : sourceCall.fullContext.length =
         sourceCall.outerContext.length + sourceCall.localContext.length :=
       sourceCall.fullContext_length
@@ -1223,69 +1235,28 @@ theorem compileAlongFocus
                     (domains.mapWireContext_origin_eq
                       sourceCall.outerContext frame.outerSurvives))
               simp [FrameEvidence.outerWire, localWire,
-                FiniteEquiv.finCast, extendWireEquiv]
+                FiniteEquiv.finCast, extendWireEquiv, targetOuter,
+                targetLocal]
               exact outerLength) split)
         childAlignment blocks.frame
-    have targetRebuild : targetContext.fill childResult.targetSite =
-        domains.targetErase sourceCall frame.originSurvives targetOuter
-          targetLocal targetBinders targetBody := by
-      have childRebuild : childResult.targetContext.fill
-          childResult.targetSite =
-            domains.targetErase
-              (.nested origin sourceCall.fullContext (arity :: sourceCall.rels)
-                (sourceCall.binders.push origin arity))
-              childFrame.originSurvives childTargetOuter childTargetLocal
-              childTargetBinders childResult.targetBody :=
-        childResult.targetRebuild
-      have childErase : domains.targetErase
-          (.nested origin sourceCall.fullContext (arity :: sourceCall.rels)
-            (sourceCall.binders.push origin arity))
-          childFrame.originSurvives childTargetOuter childTargetLocal
-          childTargetBinders childResult.targetBody =
-            childResult.targetBody.erase := rfl
-      rw [childErase] at childRebuild
-      have nestedEq : (targetSplit ▸ childResult.targetContext).fill
-          childResult.targetSite =
-            childResult.targetBody.erase.castWiresEq targetSplit :=
-        (DiagramContext.castOuterWires_fill targetSplit
-          childResult.targetContext childResult.targetSite).trans
-            (congrArg (Region.castWiresEq targetSplit) childRebuild)
-      dsimp only [targetContext]
-      simp only [DiagramContext.fill]
-      calc
-        _ = .mk targetLocal.length
-            ((targetBefore.erase.castWiresEq targetSplit).append
-              (.cons (.bubble arity
-                (childResult.targetBody.erase.castWiresEq targetSplit))
-                (targetSuffix.erase.castWiresEq targetSplit))) := by
-          exact congrArg (fun sequence => Region.mk targetLocal.length
-            ((targetBefore.erase.castWiresEq targetSplit).append
-              (.cons (.bubble arity sequence)
-                (targetSuffix.erase.castWiresEq targetSplit)))) nestedEq
-        _ = _ := by
-          rw [targetErase_targetBody]
-          dsimp only [targetItems, targetSelected]
-          rw [CompiledItems.erase_append]
-          simp only [CompiledItems.erase_cons, ItemSeq.castWiresEq_append,
-            ItemSeq.castWiresEq_cons]
-          apply congrArg (Region.mk targetLocal.length)
-          rw [ItemSeq.castWiresEq_proof_irrel targetSplit _ targetBefore.erase]
-          rw [ItemSeq.castWiresEq_proof_irrel targetSplit _ targetSuffix.erase]
-          change _ = _
-          simp only [CompiledItem.erase, Item.castWiresEq_bubble]
-          congr 1
-          all_goals exact targetSplit
     exact ⟨{
       targetBody := targetBody
+      siteSurvives := childResult.siteSurvives
+      targetEndpointCall := childResult.targetEndpointCall
+      targetEndpoint := childResult.targetEndpoint
+      targetFocus := by
+        exact .child (.bubble
+          (sourceCall := frame.targetCall)
+          (origin := domains.regions.index origin childSurvives)
+          (arity := arity)
+          (body := childResult.targetBody)
+          (items := targetItems)
+          targetBefore targetSuffix childResult.targetFocus rfl)
       targetCompiled := targetCompiled
-      holeWires := childResult.holeWires
       holeWire := childResult.holeWire
-      targetSite := childResult.targetSite
-      targetContext := targetContext
       alignment := by
-        simpa only [CompiledItemsZipper.intrinsic,
-          CompiledZipper.intrinsic] using alignment
-      targetRebuild := targetRebuild
+        simpa only [CompiledItemsZipper.intrinsic, CompiledZipper.intrinsic]
+          using alignment
     }⟩
 
 /-- The compact removal frame at the checked root, retaining the selected
@@ -1302,22 +1273,25 @@ structure FrameRootResult
     (Diagram.removeRaw_wellFormed source.diagram selection domains)
     (domains.mapWireContext source.checked.val.exposedWires)
     (domains.mapWireContext source.checked.val.hiddenWires) = some body
-  holeWires : Nat
-  holeWire : FiniteEquiv (Fin holeWires)
+  siteSurvives : domains.regions.survives selection.val.anchor = true
+  endpointCall : CompilerCall
+    (source.checked.val.diagram.removeRaw selection domains)
+  endpoint : CompiledRegion
+    (source.checked.val.diagram.removeRaw selection domains) endpointCall
+  focus : CompiledZipper
+    (source.checked.val.diagram.removeRaw selection domains) body
+    (domains.regions.index selection.val.anchor siteSurvives)
+    endpointCall endpoint
+  holeWire : FiniteEquiv (Fin endpointCall.outerContext.length)
     (Fin (CompiledSite.endpointCall source selection.val.anchor
       ).outerContext.length)
-  targetSite : Region holeWires
-    (CompiledSite.endpointCall source selection.val.anchor).rels
-  targetContext : DiagramContext
-    (domains.mapWireContext source.checked.val.exposedWires).length holeWires
-    [] (CompiledSite.endpointCall source selection.val.anchor).rels
   externalWire : FiniteEquiv
     (Fin (domains.mapWireContext source.checked.val.exposedWires).length)
     (Fin source.checked.val.exposedWires.length)
   alignment : DiagramContextIso externalWire holeWire []
-    (CompiledSite.endpointCall source selection.val.anchor).rels targetContext
+    (CompiledSite.endpointCall source selection.val.anchor).rels
+    focus.intrinsic.context
     (CompiledSite.context source selection.val.anchor)
-  rebuild : targetContext.fill targetSite = body.erase
 
 theorem compileRootFrame
     (source : State arity)
@@ -1335,15 +1309,15 @@ theorem compileRootFrame
     simpa [sourceCall, CompilerCall.fullContext, OpenDiagram.rootWires] using
       openRootWires_exact source.checked.property
   let frame : FrameEvidence source.diagram selection domains
-      sourceCall source.checked.compilation targetOuter targetLocal
-      BinderContext.empty := {
+      sourceCall source.checked.compilation := {
     originSurvives := domains.root_survives
+    targetOuter := targetOuter
+    rootLocal := targetLocal
+    nestedBinders := PUnit.unit
     outerEq := rfl
-    localEq := rfl
+    rootLocalEq := rfl
     outerSurvives := exposedSurvives
-    targetLocalCall := rfl
-    bindersEq := by
-      exact domains.mapBinderContext_empty.symm
+    nestedBindersEq := trivial
     sourceExact := sourceExact
     sourceCovers := by
       simpa [sourceCall] using BinderContext.empty_covers_root
@@ -1355,23 +1329,20 @@ theorem compileRootFrame
       simpa [sourceCall] using source.checked.compilation_computation
   }
   obtain ⟨result⟩ := domains.compileAlongFocus source.diagram
-    selection (CompiledSite.zipper source selection.val.anchor) rfl
-    targetOuter targetLocal BinderContext.empty frame
+    selection (CompiledSite.zipper source selection.val.anchor) rfl frame
   refine ⟨{
     body := result.targetBody
     compiled := ?_
-    holeWires := result.holeWires
+    siteSurvives := result.siteSurvives
+    endpointCall := result.targetEndpointCall
+    endpoint := result.targetEndpoint
+    focus := result.targetFocus
     holeWire := result.holeWire
-    targetSite := result.targetSite
-    targetContext := result.targetContext
     externalWire := frame.outerWire
     alignment := result.alignment
-    rebuild := ?_
   }⟩
   · simpa [sourceCall, targetOuter, targetLocal, targetCall, frame] using
       result.targetCompiled
-  · simpa [sourceCall, targetOuter, targetLocal, targetErase, frame] using
-      result.targetRebuild
 
 end FrameDomains
 

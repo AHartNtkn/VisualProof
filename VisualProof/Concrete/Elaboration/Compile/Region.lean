@@ -1043,6 +1043,17 @@ theorem CompilerCall.compile?_eq_compileItems?
   rw [CompilerCall.compile?]
   rfl
 
+/-- Package an exact successful item compilation as the corresponding
+signature-indexed region result. -/
+theorem CompilerCall.compile?_of_items
+    (hwf : d.WellFormed) (call : CompilerCall d)
+    {items : CompiledItems d call.fullContext call.rels call.binders}
+    (compiled : compileItems? d hwf call.origin call.fullContext call.binders
+      (localOccurrences d call.origin) (fun _ member => member) = some items) :
+    call.compile? d hwf = some (.mk items) := by
+  rw [CompilerCall.compile?_eq_compileItems?, compiled]
+  rfl
+
 theorem compileItems?_congr_occurrences
     (hwf : d.WellFormed) (parent : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)
