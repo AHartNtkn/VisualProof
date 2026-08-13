@@ -9,7 +9,7 @@ import type {
   WireId,
 } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
-import { isAncestorOrEqual, polarity } from '../diagram/regions'
+import { derivedScope, derivedScopes, isAncestorOrEqual, polarity, wireVisibleAt } from '../diagram/regions'
 import type { RelSig } from '../diagram/sig'
 import { sigEquals, sigKey } from '../diagram/sig'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
@@ -17,15 +17,39 @@ import { RuleError } from './error'
 import {
   appliedEnds,
   attachArgs,
+  completeWireEnds,
+  pinEndpointsOf,
   relSigOf,
+  transferPins,
   wireAt,
   withoutEndpointsOf,
   type AppliedEnd,
+  type PartsInProgress,
 } from './wire-ends'
 
 export type EndSite = {
   readonly region: RegionId
   readonly args: readonly WireId[]
+}
+
+function mintDuplicatePins(
+  parts: PartsInProgress,
+  pins: readonly { endpoint: Endpoint; region: RegionId }[],
+  sig: Wire['sig'],
+  onto: WireId,
+  reservation?: IdReservation,
+): void {
+  if (pins.length === 0) return
+  const taken = new Set(Object.keys(parts.nodes))
+  const added: Endpoint[] = []
+  for (const pin of pins) {
+    const node = freshId(taken, 'pin', reservation?.nodes)
+    taken.add(node)
+    parts.nodes[node] = { kind: 'identity', region: pin.region, sig, arity: 1 }
+    added.push({ node, port: { kind: 'identity', index: 0 } })
+  }
+  const wire = parts.wires[onto]!
+  parts.wires[onto] = { sig: wire.sig, endpoints: [...wire.endpoints, ...added] }
 }
 
 /** Equivalence: every end R(x̄) becomes ¬W′(x̄) — a cut holding one fresh end. */
@@ -36,6 +60,8 @@ export function applyCutWrap(
 ): Diagram {
   const ends = appliedEnds(diagram, wireId, 'cut wrap')
   const old = wireAt(diagram, wireId)
+  const oldScope = derivedScope(diagram, wireId)
+  const pins = pinEndpointsOf(diagram, wireId)
 
   const regions: Record<RegionId, Region> = { ...diagram.regions }
   const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes }
@@ -63,9 +89,12 @@ export function applyCutWrap(
     freshEndpoints.push({ node, port: { kind: 'head' } })
     attachArgs(wires, node, end.args)
   }
-  wires[fresh] = { scope: old.scope, sig: old.sig, endpoints: freshEndpoints }
+  wires[fresh] = { sig: old.sig, endpoints: freshEndpoints }
 
-  return mkDiagram({ root: diagram.root, regions, nodes, wires })
+  const parts: PartsInProgress = { regions, nodes, wires }
+  transferPins(parts, pins, fresh)
+  completeWireEnds(parts, fresh, oldScope, 'cut wrap', reservation?.nodes)
+  return mkDiagram({ root: diagram.root, ...parts })
 }
 
 /** Inverse of cut wrap: every end sits alone in its own cut, which dissolves. */
@@ -76,6 +105,9 @@ export function applyCutAbsorb(
 ): Diagram {
   const ends = appliedEnds(diagram, wireId, 'cut absorb')
   const old = wireAt(diagram, wireId)
+  const oldScope = derivedScope(diagram, wireId)
+  const pins = pinEndpointsOf(diagram, wireId)
+  const scopes = derivedScopes(diagram)
 
   for (const end of ends) {
     const region = diagram.regions[end.region]!
@@ -89,8 +121,8 @@ export function applyCutAbsorb(
       node.region === end.region && nodeId !== end.node)
     const extraRegion = Object.values(diagram.regions).some((candidate) =>
       candidate.kind === 'cut' && candidate.parent === end.region)
-    const extraWire = Object.values(diagram.wires).some((wire) =>
-      wire.scope === end.region)
+    const extraWire = [...scopes.entries()].some(([candidateId, scope]) =>
+      scope === end.region && candidateId !== wireId)
     if (extraNode || extraRegion || extraWire) {
       throw new RuleError(
         `cut absorb requires cut '${end.region}' to hold exactly the applied `
@@ -125,9 +157,14 @@ export function applyCutAbsorb(
     freshEndpoints.push({ node, port: { kind: 'head' } })
     attachArgs(wires, node, end.args)
   }
-  wires[fresh] = { scope: old.scope, sig: old.sig, endpoints: freshEndpoints }
+  wires[fresh] = { sig: old.sig, endpoints: freshEndpoints }
 
-  return mkDiagram({ root: diagram.root, regions, nodes, wires })
+  // The completion clause doubles as the precondition: raising an end above
+  // the old derived scope would need the quantifier to move, and refuses.
+  const parts: PartsInProgress = { regions, nodes, wires }
+  transferPins(parts, pins, fresh)
+  completeWireEnds(parts, fresh, oldScope, 'cut absorb', reservation?.nodes)
+  return mkDiagram({ root: diagram.root, ...parts })
 }
 
 /** Equivalence: every end R(x̄) becomes W′(x̄) beside W″(x̄) on fresh wires. */
@@ -138,6 +175,8 @@ export function applyParallelSplit(
 ): Diagram {
   const ends = appliedEnds(diagram, wireId, 'parallel split')
   const old = wireAt(diagram, wireId)
+  const oldScope = derivedScope(diagram, wireId)
+  const pins = pinEndpointsOf(diagram, wireId)
 
   const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes }
   const wires: Record<WireId, Wire> = { ...diagram.wires }
@@ -161,15 +200,16 @@ export function applyParallelSplit(
       attachArgs(wires, node, end.args)
     }
   }
-  wires[first] = { scope: old.scope, sig: old.sig, endpoints: endpoints[first]! }
-  wires[second] = { scope: old.scope, sig: old.sig, endpoints: endpoints[second]! }
+  wires[first] = { sig: old.sig, endpoints: endpoints[first]! }
+  wires[second] = { sig: old.sig, endpoints: endpoints[second]! }
 
-  return mkDiagram({
-    root: diagram.root,
-    regions: { ...diagram.regions },
-    nodes,
-    wires,
-  })
+  // Pins duplicate onto both halves: ⊤ content copies freely.
+  const parts: PartsInProgress = { regions: { ...diagram.regions }, nodes, wires }
+  transferPins(parts, pins, first)
+  mintDuplicatePins(parts, pins, old.sig, second, reservation)
+  completeWireEnds(parts, first, oldScope, 'parallel split', reservation?.nodes)
+  completeWireEnds(parts, second, oldScope, 'parallel split', reservation?.nodes)
+  return mkDiagram({ root: diagram.root, ...parts })
 }
 
 /**
@@ -193,14 +233,17 @@ export function applyParallelFuse(
       + `'${a}' has '${sigKey(left.sig)}' but '${b}' has '${sigKey(right.sig)}'`,
     )
   }
-  if (left.scope !== right.scope) {
+  const scopeA = derivedScope(diagram, a)
+  const scopeB = derivedScope(diagram, b)
+  if (scopeA !== scopeB) {
     throw new RuleError(
       `parallel fuse requires equal scopes; `
-      + `'${a}' is scoped at '${left.scope}' but '${b}' at '${right.scope}'`,
+      + `'${a}' is scoped at '${scopeA}' but '${b}' at '${scopeB}'`,
     )
   }
   const leftEnds = appliedEnds(diagram, a, 'parallel fuse')
   const rightEnds = appliedEnds(diagram, b, 'parallel fuse')
+  const pins = [...pinEndpointsOf(diagram, a), ...pinEndpointsOf(diagram, b)]
 
   const siteKey = (end: AppliedEnd): string =>
     JSON.stringify([end.region, ...end.args])
@@ -259,14 +302,12 @@ export function applyParallelFuse(
     freshEndpoints.push({ node, port: { kind: 'head' } })
     attachArgs(wires, node, pair.left.args)
   }
-  wires[fresh] = { scope: left.scope, sig: left.sig, endpoints: freshEndpoints }
+  wires[fresh] = { sig: left.sig, endpoints: freshEndpoints }
 
-  return mkDiagram({
-    root: diagram.root,
-    regions: { ...diagram.regions },
-    nodes,
-    wires,
-  })
+  const parts: PartsInProgress = { regions: { ...diagram.regions }, nodes, wires }
+  transferPins(parts, pins, fresh)
+  completeWireEnds(parts, fresh, scopeA, 'parallel fuse', reservation?.nodes)
+  return mkDiagram({ root: diagram.root, ...parts })
 }
 
 /** Gated (join family): instantiate with the empty sheet — every end vanishes. */
@@ -274,16 +315,17 @@ export function applyEndsDelete(
   diagram: Diagram,
   wireId: WireId,
   orientation: 'forward' | 'backward' = 'forward',
+  reservation?: IdReservation,
 ): Diagram {
   const ends = appliedEnds(diagram, wireId, "deleting a wire's ends")
-  const old = wireAt(diagram, wireId)
+  const oldScope = derivedScope(diagram, wireId)
   const need = orientation === 'forward' ? 'negative' : 'positive'
-  const have = polarity(diagram, old.scope)
+  const have = polarity(diagram, oldScope)
   if (have !== need) {
     throw new RuleError(
       `${orientation === 'backward' ? 'backward ' : ''}`
       + `deleting a wire's ends requires a ${need} scope; `
-      + `'${old.scope}' is ${have}`,
+      + `'${oldScope}' is ${have}`,
     )
   }
 
@@ -292,17 +334,16 @@ export function applyEndsDelete(
   const removed = new Set(ends.map((end) => end.node))
   for (const end of ends) delete nodes[end.node]
   withoutEndpointsOf(wires, removed)
-  wires[wireId] = { scope: old.scope, sig: old.sig, endpoints: [] }
 
-  return mkDiagram({
-    root: diagram.root,
-    regions: { ...diagram.regions },
-    nodes,
-    wires,
-  })
+  // The wire survives as the bare form: its pins stay, and the completion
+  // clause pins it at its old derived scope until two ends exist — the
+  // endpoint-free husk is unrepresentable.
+  const parts: PartsInProgress = { regions: { ...diagram.regions }, nodes, wires }
+  completeWireEnds(parts, wireId, oldScope, "deleting a wire's ends", reservation?.nodes)
+  return mkDiagram({ root: diagram.root, ...parts })
 }
 
-/** Gated (sever family): give an endpoint-free wire ends at chosen sites. */
+/** Gated (sever family): give a bare wire ends at chosen sites. */
 export function applyEndsSpawn(
   diagram: Diagram,
   wireId: WireId,
@@ -312,32 +353,36 @@ export function applyEndsSpawn(
 ): Diagram {
   const sig = relSigOf(diagram, wireId, "spawning a wire's ends")
   const old = wireAt(diagram, wireId)
-  if (old.endpoints.length !== 0) {
+  const oldScope = derivedScope(diagram, wireId)
+  if (old.endpoints.some((endpoint) => {
+    const node = diagram.nodes[endpoint.node]
+    return node === undefined || node.kind !== 'identity' || node.arity !== 1
+  })) {
     throw new RuleError(
-      `spawning a wire's ends requires an endpoint-free wire; `
-      + `'${wireId}' has ${old.endpoints.length} endpoint(s)`,
+      `spawning a wire's ends requires a bare wire (pin ends only); `
+      + `'${wireId}' has applied content`,
     )
   }
   if (sites.length === 0) {
     throw new RuleError("spawning a wire's ends requires at least one site")
   }
   const need = orientation === 'forward' ? 'positive' : 'negative'
-  const have = polarity(diagram, old.scope)
+  const have = polarity(diagram, oldScope)
   if (have !== need) {
     throw new RuleError(
       `${orientation === 'backward' ? 'backward ' : ''}`
       + `spawning a wire's ends requires a ${need} scope; `
-      + `'${old.scope}' is ${have}`,
+      + `'${oldScope}' is ${have}`,
     )
   }
   for (const site of sites) {
     if (diagram.regions[site.region] === undefined) {
       throw new DiagramError(`unknown region '${site.region}'`)
     }
-    if (!isAncestorOrEqual(diagram, old.scope, site.region)) {
+    if (!isAncestorOrEqual(diagram, oldScope, site.region)) {
       throw new RuleError(
         `site region '${site.region}' is not inside the scope `
-        + `'${old.scope}' of wire '${wireId}'`,
+        + `'${oldScope}' of wire '${wireId}'`,
       )
     }
     if (site.args.length !== sig.args.length) {
@@ -354,9 +399,9 @@ export function applyEndsSpawn(
           + `'${sigKey(sig.args[index]!)}'; '${argWire}' has '${sigKey(arg.sig)}'`,
         )
       }
-      if (!isAncestorOrEqual(diagram, arg.scope, site.region)) {
+      if (!wireVisibleAt(diagram, argWire, site.region)) {
         throw new RuleError(
-          `argument wire '${argWire}' scoped at '${arg.scope}' is not `
+          `argument wire '${argWire}' scoped at '${derivedScope(diagram, argWire)}' is not `
           + `visible at site '${site.region}'`,
         )
       }
@@ -366,7 +411,7 @@ export function applyEndsSpawn(
   const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes }
   const wires: Record<WireId, Wire> = { ...diagram.wires }
   const takenNodes = new Set(Object.keys(nodes))
-  const endpoints: Endpoint[] = []
+  const endpoints: Endpoint[] = [...old.endpoints]
   for (const site of sites) {
     const node = freshId(takenNodes, 'n', reservation?.nodes)
     takenNodes.add(node)
@@ -374,7 +419,7 @@ export function applyEndsSpawn(
     endpoints.push({ node, port: { kind: 'head' } })
     attachArgs(wires, node, site.args)
   }
-  wires[wireId] = { scope: old.scope, sig: old.sig, endpoints }
+  wires[wireId] = { sig: old.sig, endpoints }
 
   return mkDiagram({
     root: diagram.root,

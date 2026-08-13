@@ -6,22 +6,27 @@ import type {
   WireId,
 } from '../diagram/diagram'
 import { DiagramError, mkDiagram, portKey } from '../diagram/diagram'
-import { isAncestorOrEqual, polarity } from '../diagram/regions'
+import { derivedScope, isAncestorOrEqual, polarity } from '../diagram/regions'
 import { sigEquals, sigKey } from '../diagram/sig'
-import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
+import { type IdReservation } from '../diagram/subgraph/freshId'
+import { freshId } from '../diagram/subgraph/freshId'
+import { completeWireEnds } from './wire-ends'
 import { RuleError } from './error'
 
 /**
  * Durable single-wire sever input. Splitting one wire's endpoint set into
  * two wires forgets the equality between the parts; the fresh wire's scope
- * may be chosen anywhere enclosing the moved endpoints.
+ * may be chosen anywhere enclosing the moved endpoints, and the choice is
+ * materialized as pins by the completion clause — each side of the split is
+ * completed at its declared scope until it has two ends.
  */
 export type WireSeverInput = {
   readonly wire: WireId
   readonly keep: readonly Endpoint[]
   /**
    * Scope for the split-off wire. Must enclose every moved endpoint; the
-   * polarity gate follows this region. Defaults to the wire's own scope.
+   * polarity gate follows this region. Defaults to the wire's own derived
+   * scope.
    */
   readonly scope?: RegionId
 }
@@ -54,7 +59,8 @@ export function applyWireSever(
   reservation?: IdReservation,
 ): Diagram {
   const selected = wire(d, input.wire)
-  const freshScope = input.scope ?? selected.scope
+  const oldScope = derivedScope(d, input.wire)
+  const freshScope = input.scope ?? oldScope
   if (d.regions[freshScope] === undefined) {
     throw new DiagramError(`unknown region '${freshScope}'`)
   }
@@ -93,24 +99,18 @@ export function applyWireSever(
     `${input.wire}_sever`,
     reservation?.wires,
   )
-  return mkDiagram({
-    root: d.root,
+  const parts = {
     regions: { ...d.regions },
     nodes: { ...d.nodes },
     wires: {
       ...d.wires,
-      [input.wire]: {
-        scope: selected.scope,
-        sig: selected.sig,
-        endpoints: kept,
-      },
-      [fresh]: {
-        scope: freshScope,
-        sig: selected.sig,
-        endpoints: moved,
-      },
+      [input.wire]: { sig: selected.sig, endpoints: kept },
+      [fresh]: { sig: selected.sig, endpoints: moved },
     },
-  })
+  }
+  completeWireEnds(parts, fresh, freshScope, 'sever', reservation?.nodes)
+  completeWireEnds(parts, input.wire, oldScope, 'sever', reservation?.nodes)
+  return mkDiagram({ root: d.root, ...parts })
 }
 
 export function applyWireJoin(
@@ -130,28 +130,30 @@ export function applyWireJoin(
     )
   }
 
+  const scopeA = derivedScope(d, input.a)
+  const scopeB = derivedScope(d, input.b)
   let outerId: WireId
   let innerId: WireId
-  if (isAncestorOrEqual(d, a.scope, b.scope)) {
+  if (isAncestorOrEqual(d, scopeA, scopeB)) {
     outerId = input.a
     innerId = input.b
-  } else if (isAncestorOrEqual(d, b.scope, a.scope)) {
+  } else if (isAncestorOrEqual(d, scopeB, scopeA)) {
     outerId = input.b
     innerId = input.a
   } else {
     throw new RuleError(
       `wires '${input.a}' and '${input.b}' have incomparable scopes `
-      + `('${a.scope}', '${b.scope}'); iterate one inward first`,
+      + `('${scopeA}', '${scopeB}'); iterate one inward first`,
     )
   }
   const inner = d.wires[innerId]!
   const need = orientation === 'forward' ? 'negative' : 'positive'
-  const have = polarity(d, inner.scope)
+  const have = polarity(d, innerId === input.a ? scopeA : scopeB)
   if (have !== need) {
     throw new RuleError(
       `${orientation === 'backward' ? 'backward ' : ''}`
       + `joining wires requires the inner wire's scope to be ${need}; `
-      + `'${inner.scope}' is ${have}`,
+      + `'${innerId === input.a ? scopeA : scopeB}' is ${have}`,
     )
   }
   const outer = d.wires[outerId]!
@@ -160,7 +162,6 @@ export function applyWireJoin(
     if (id === innerId) continue
     wires[id] = id === outerId
       ? {
-          scope: outer.scope,
           sig: outer.sig,
           endpoints: [...outer.endpoints, ...inner.endpoints],
         }

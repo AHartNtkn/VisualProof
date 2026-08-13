@@ -9,6 +9,7 @@ import { findOccurrences, type Occurrence } from '../diagram/subgraph/match'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import { checkOccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
 import { occurrenceToSelection } from '../diagram/subgraph/occurrence'
+import { requireRemovalScopePreserved } from './wire-ends'
 import { RuleError } from './error'
 
 /**
@@ -188,6 +189,12 @@ export function applyDeiteration(
   justifier: SubgraphSelection,
   certificate: OccurrenceCertificate,
 ): Diagram {
-  evidenceGate(diagram, selection, justifier, certificate)
+  const { contents } = evidenceGate(diagram, selection, justifier, certificate)
+  requireRemovalScopePreserved(
+    diagram,
+    contents.allNodes,
+    new Set(contents.internalWires),
+    'deiteration',
+  )
   return removeSubgraph(diagram, selection)
 }

@@ -9,7 +9,7 @@ import type {
   WireId,
 } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
-import { isAncestorOrEqual, polarity } from '../diagram/regions'
+import { derivedScope, isAncestorOrEqual, polarity, wireVisibleAt } from '../diagram/regions'
 import type { RelSig, Sig } from '../diagram/sig'
 import { relSig, sigEquals, sigKey } from '../diagram/sig'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
@@ -18,10 +18,17 @@ import { definitionSig } from './fold'
 import {
   appliedEnds,
   attachArgs,
+  completeWireEnds,
+  deletePins,
+  isPinEndpoint,
+  pinEndpointsOf,
   relSigOf,
+  requireRemovalScopePreserved,
+  transferPins,
   wireAt,
   withoutEndpointsOf,
   type AppliedEnd,
+  type PartsInProgress,
 } from './wire-ends'
 
 type Orientation = 'forward' | 'backward'
@@ -69,6 +76,8 @@ function replaceEnds(
   reservation?: IdReservation,
 ): Diagram {
   const old = wireAt(diagram, wireId)
+  const oldScope = derivedScope(diagram, wireId)
+  const pins = pinEndpointsOf(diagram, wireId)
   const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes }
   const wires: Record<WireId, Wire> = { ...diagram.wires }
   const removed = new Set(ends.map((end) => end.node))
@@ -90,14 +99,15 @@ function replaceEnds(
     endpoints.push({ node, port: { kind: 'head' } })
     attachArgs(wires, node, argsOf(end))
   }
-  wires[fresh] = { scope: old.scope, sig, endpoints }
+  void old
+  wires[fresh] = { sig, endpoints }
 
-  return mkDiagram({
-    root: diagram.root,
-    regions: { ...diagram.regions },
-    nodes,
-    wires,
-  })
+  // Successor completion (spec §5): the acted wire's pins carry over, and
+  // the successor is pinned at the old derived scope until it stands.
+  const parts: PartsInProgress = { regions: { ...diagram.regions }, nodes, wires }
+  transferPins(parts, pins, fresh)
+  completeWireEnds(parts, fresh, oldScope, freshSuffix, reservation?.nodes)
+  return mkDiagram({ root: diagram.root, ...parts })
 }
 
 /**
@@ -116,16 +126,24 @@ export function applyArityShift(
 
   const locals = new Map<NodeId, WireId>()
   const taken = new Set(Object.keys(diagram.wires))
+  const takenNodes = new Set(Object.keys(diagram.nodes))
   const wires: Record<WireId, Wire> = { ...diagram.wires }
+  const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes }
   for (const end of ends) {
     const local = freshId(taken, `${wireId}_local`, reservation?.wires)
     taken.add(local)
-    wires[local] = { scope: end.region, sig: newArgSig, endpoints: [] }
+    const pin = freshId(takenNodes, 'pin', reservation?.nodes)
+    takenNodes.add(pin)
+    nodes[pin] = { kind: 'identity', region: end.region, sig: newArgSig, arity: 1 }
+    wires[local] = {
+      sig: newArgSig,
+      endpoints: [{ node: pin, port: { kind: 'identity', index: 0 } }],
+    }
     locals.set(end.node, local)
   }
 
   return replaceEnds(
-    { ...diagram, wires },
+    { ...diagram, nodes, wires },
     wireId,
     ends,
     extended,
@@ -153,18 +171,19 @@ export function applyArityUnshift(
   for (const end of ends) {
     const local = end.args[position]!
     const wire = wireAt(diagram, local)
-    if (wire.scope !== end.region) {
+    if (derivedScope(diagram, local) !== end.region) {
       throw new RuleError(
         `arity unshift requires the position-${position} wire of end `
         + `'${end.node}' to be scoped at the end's region; `
-        + `'${local}' is scoped at '${wire.scope}'`,
+        + `'${local}' is scoped at '${derivedScope(diagram, local)}'`,
       )
     }
-    if (wire.endpoints.length !== 1) {
+    const applied = wire.endpoints.filter((ep) => !isPinEndpoint(diagram, ep))
+    if (applied.length !== 1) {
       throw new RuleError(
         `arity unshift requires the position-${position} wire of end `
-        + `'${end.node}' to be locally scoped with that attachment as its `
-        + `only endpoint; '${local}' has ${wire.endpoints.length}`,
+        + `'${end.node}' to have that attachment as its only non-pin `
+        + `endpoint; '${local}' has ${applied.length}`,
       )
     }
     removedWires.add(local)
@@ -180,11 +199,20 @@ export function applyArityUnshift(
     'unshift',
   )
   const wires: Record<WireId, Wire> = { ...result.wires }
-  for (const local of removedWires) delete wires[local]
+  const nodes: Record<NodeId, DiagramNode> = { ...result.nodes }
+  for (const local of removedWires) {
+    for (const endpoint of wires[local]!.endpoints) {
+      const node = nodes[endpoint.node]
+      if (node !== undefined && node.kind === 'identity' && node.arity === 1) {
+        delete nodes[endpoint.node]
+      }
+    }
+    delete wires[local]
+  }
   return mkDiagram({
     root: result.root,
     regions: { ...result.regions },
-    nodes: { ...result.nodes },
+    nodes,
     wires,
   })
 }
@@ -305,7 +333,7 @@ function uniformVisibleAttachment(
   if (attachments.length === 0) return true
   const first = attachments[0]!
   if (attachments.some((wire) => wire !== first)) return false
-  return isAncestorOrEqual(diagram, wireAt(diagram, first).scope, wireScope)
+  return wireVisibleAt(diagram, first, wireScope)
 }
 
 /** Gated (join family) unless the attachment is uniform and scope-visible. */
@@ -321,18 +349,33 @@ export function applyArgDrop(
   requirePosition(sig, position, 'dropping an argument')
   if (!uniformVisibleAttachment(
     diagram,
-    wireAt(diagram, wireId).scope,
+    derivedScope(diagram, wireId),
     ends.map((end) => end.args[position]!),
   )) {
     requireGate(
       diagram,
-      wireAt(diagram, wireId).scope,
+      derivedScope(diagram, wireId),
       orientation,
       'negative',
       'dropping an argument',
     )
   }
 
+  // Dropped-position wires lose one endpoint per end: class-(b) — their
+  // quantifiers and floors must survive (wires still serving another
+  // position keep replacement endpoints and are exempt).
+  const keptElsewhere = new Set(
+    ends.flatMap((end) => end.args.filter((_, index) => index !== position)),
+  )
+  requireRemovalScopePreserved(
+    diagram,
+    new Set(ends.map((end) => end.node)),
+    new Set([wireId]),
+    'dropping an argument',
+    new Set(
+      ends.map((end) => end.args[position]!).filter((w) => !keptElsewhere.has(w)),
+    ),
+  )
   return replaceEnds(
     diagram,
     wireId,
@@ -370,14 +413,14 @@ export function applyArgExtend(
   }
   if (!uniformVisibleAttachment(
     diagram,
-    wireAt(diagram, wireId).scope,
+    derivedScope(diagram, wireId),
     ends.map((end) => attachments.get(end.node)).filter(
       (wire): wire is WireId => wire !== undefined,
     ),
   )) {
     requireGate(
       diagram,
-      wireAt(diagram, wireId).scope,
+      derivedScope(diagram, wireId),
       orientation,
       'positive',
       'extending an argument',
@@ -401,9 +444,9 @@ export function applyArgExtend(
         + `'${target}' has '${sigKey(wire.sig)}'`,
       )
     }
-    if (!isAncestorOrEqual(diagram, wire.scope, end.region)) {
+    if (!wireVisibleAt(diagram, target, end.region)) {
       throw new RuleError(
-        `attachment wire '${target}' scoped at '${wire.scope}' is not `
+        `attachment wire '${target}' scoped at '${derivedScope(diagram, target)}' is not `
         + `visible at end '${end.node}' in region '${end.region}'`,
       )
     }
@@ -452,18 +495,20 @@ export function applyApplyFormal(
   }
   requireGate(
     diagram,
-    wireAt(diagram, wireId).scope,
+    derivedScope(diagram, wireId),
     orientation,
     'negative',
     'applying a formal',
   )
 
+  const pins = pinEndpointsOf(diagram, wireId)
   const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes }
   const wires: Record<WireId, Wire> = { ...diagram.wires }
   const removed = new Set(ends.map((end) => end.node))
   for (const end of ends) delete nodes[end.node]
   withoutEndpointsOf(wires, removed)
   delete wires[wireId]
+  deletePins(nodes, pins)
 
   const takenNodes = new Set(Object.keys(nodes))
   for (const end of ends) {
@@ -473,7 +518,6 @@ export function applyApplyFormal(
     const target = end.args[position]!
     const wire = wires[target]!
     wires[target] = {
-      scope: wire.scope,
       sig: wire.sig,
       endpoints: [...wire.endpoints, { node, port: { kind: 'head' } }],
     }
@@ -587,14 +631,11 @@ export function applyAbstractFormal(
     endpoints.push({ node, port: { kind: 'head' } })
     attachArgs(wires, node, [end.head, ...end.args])
   }
-  wires[fresh] = { scope, sig: freshSig, endpoints }
+  wires[fresh] = { sig: freshSig, endpoints }
 
-  return mkDiagram({
-    root: diagram.root,
-    regions: { ...diagram.regions },
-    nodes,
-    wires,
-  })
+  const parts: PartsInProgress = { regions: { ...diagram.regions }, nodes, wires }
+  completeWireEnds(parts, fresh, scope, 'abstracting a formal', reservation?.nodes)
+  return mkDiagram({ root: diagram.root, ...parts })
 }
 
 /** Gated (join family): every end becomes an identity node over its arguments. */
@@ -621,18 +662,20 @@ export function applyIdentityLeaf(
   }
   requireGate(
     diagram,
-    wireAt(diagram, wireId).scope,
+    derivedScope(diagram, wireId),
     orientation,
     'negative',
     'identity leaf',
   )
 
+  const pins = pinEndpointsOf(diagram, wireId)
   const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes }
   const wires: Record<WireId, Wire> = { ...diagram.wires }
   const removed = new Set(ends.map((end) => end.node))
   for (const end of ends) delete nodes[end.node]
   withoutEndpointsOf(wires, removed)
   delete wires[wireId]
+  deletePins(nodes, pins)
 
   const takenNodes = new Set(Object.keys(nodes))
   for (const end of ends) {
@@ -647,7 +690,6 @@ export function applyIdentityLeaf(
     end.args.forEach((argWire, index) => {
       const wire = wires[argWire]!
       wires[argWire] = {
-        scope: wire.scope,
         sig: wire.sig,
         endpoints: [
           ...wire.endpoints,
@@ -753,14 +795,11 @@ export function applyIdentityAbstract(
     endpoints.push({ node, port: { kind: 'head' } })
     attachArgs(wires, node, end.args)
   }
-  wires[fresh] = { scope, sig: freshSig, endpoints }
+  wires[fresh] = { sig: freshSig, endpoints }
 
-  return mkDiagram({
-    root: diagram.root,
-    regions: { ...diagram.regions },
-    nodes: nextNodes,
-    wires,
-  })
+  const parts: PartsInProgress = { regions: { ...diagram.regions }, nodes: nextNodes, wires }
+  completeWireEnds(parts, fresh, scope, 'identity abstract', reservation?.nodes)
+  return mkDiagram({ root: diagram.root, ...parts })
 }
 
 /**
@@ -795,18 +834,20 @@ export function applyRefLeaf(
   }
   requireGate(
     diagram,
-    wireAt(diagram, wireId).scope,
+    derivedScope(diagram, wireId),
     orientation,
     'negative',
     'ref leaf',
   )
 
+  const pins = pinEndpointsOf(diagram, wireId)
   const nodes: Record<NodeId, DiagramNode> = { ...diagram.nodes }
   const wires: Record<WireId, Wire> = { ...diagram.wires }
   const removed = new Set(ends.map((end) => end.node))
   for (const end of ends) delete nodes[end.node]
   withoutEndpointsOf(wires, removed)
   delete wires[wireId]
+  deletePins(nodes, pins)
 
   const takenNodes = new Set(Object.keys(nodes))
   for (const end of ends) {
@@ -909,12 +950,9 @@ export function applyRefAbstract(
     endpoints.push({ node, port: { kind: 'head' } })
     attachArgs(wires, node, end.args)
   }
-  wires[fresh] = { scope, sig: first.sig, endpoints }
+  wires[fresh] = { sig: first.sig, endpoints }
 
-  return mkDiagram({
-    root: diagram.root,
-    regions: { ...diagram.regions },
-    nodes: nextNodes,
-    wires,
-  })
+  const parts: PartsInProgress = { regions: { ...diagram.regions }, nodes: nextNodes, wires }
+  completeWireEnds(parts, fresh, scope, 'ref abstract', reservation?.nodes)
+  return mkDiagram({ root: diagram.root, ...parts })
 }

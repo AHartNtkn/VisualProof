@@ -1,8 +1,10 @@
-import type { Diagram, DiagramNode, Region, RegionId, Wire, WireId } from '../diagram/diagram'
+import type { Diagram, DiagramNode, Endpoint, Region, RegionId } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
+import { derivedScope } from '../diagram/regions'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
+import { endpointDca, type PartsInProgress } from './wire-ends'
 import { RuleError } from './error'
 
 /**
@@ -20,9 +22,11 @@ function reparent(n: DiagramNode, region: RegionId): DiagramNode {
 
 /**
  * Wrap a selection in two fresh nested cuts. Implemented by REPARENTING —
- * every id is stable, so callers' references survive.
- * Explicitly selected top-level wires keep their scope: they pass through the
- * empty annulus (∃x · ¬¬φ(x) ≡ ∃x · φ(x)). Equivalence — no polarity gate.
+ * every id is stable, so callers' references survive. Every quantifier stays
+ * where it was: a wire whose derived scope the reparenting would move (its
+ * incidences all descend into the new cuts) receives a pin at its old scope
+ * — the rule's declared scope transport, sound because an even crossing
+ * over the empty annulus is an equivalence. Equivalence — no polarity gate.
  */
 export function applyDoubleCutIntro(d: Diagram, sel: SubgraphSelection, reservation?: IdReservation): Diagram {
   const c = selectionContents(d, sel) // validates loudly
@@ -47,14 +51,33 @@ export function applyDoubleCutIntro(d: Diagram, sel: SubgraphSelection, reservat
     }
   }
   void c
-  return mkDiagram({ root: d.root, regions, nodes, wires: { ...d.wires } })
+
+  const parts: PartsInProgress = { regions, nodes, wires: { ...d.wires } }
+  const takenNodes = new Set(Object.keys(nodes))
+  for (const [wireId, wire] of Object.entries(d.wires)) {
+    const before = derivedScope(d, wireId)
+    const after = endpointDca(parts, wire.endpoints)
+    if (after === before) continue
+    const pin = freshId(takenNodes, 'pin', reservation?.nodes)
+    takenNodes.add(pin)
+    parts.nodes[pin] = { kind: 'identity', region: before, sig: wire.sig, arity: 1 }
+    parts.wires[wireId] = {
+      sig: wire.sig,
+      endpoints: [
+        ...wire.endpoints,
+        { node: pin, port: { kind: 'identity', index: 0 } } satisfies Endpoint,
+      ],
+    }
+  }
+  return mkDiagram({ root: d.root, ...parts })
 }
 
 /**
  * Eliminate a double cut. The outer cut's annulus must be empty: exactly one
- * child region (a cut), no nodes, no wires SCOPED there
- * (pass-through wires are scoped above and unaffected). The inner cut's
- * contents are promoted to the outer cut's parent.
+ * child region (a cut) and no nodes — a pin in the annulus is a node and
+ * blocks, correctly: it marks a quantifier living there. Pass-through wires
+ * keep their outside incidences; promoted content moves two cuts up
+ * together, so every derived scope follows its nodes.
  */
 export function applyDoubleCutElim(d: Diagram, outerId: RegionId): Diagram {
   const outer = d.regions[outerId]
@@ -64,11 +87,12 @@ export function applyDoubleCutElim(d: Diagram, outerId: RegionId): Diagram {
   }
   const children = Object.entries(d.regions).filter(([, r]) => r.kind !== 'sheet' && r.parent === outerId)
   const nodesInOuter = Object.values(d.nodes).some((n) => n.region === outerId)
-  const wiresInOuter = Object.values(d.wires).some((w) => w.scope === outerId)
   // Every non-root region is a cut (Region has no third kind), so a lone
-  // child is necessarily a cut; only its presence needs checking.
+  // child is necessarily a cut; only its presence needs checking. A wire
+  // cannot be scoped in the annulus without a node there: with one child
+  // subtree, no incidence set has its DCA at the annulus itself.
   const lone = children.length === 1 ? children[0]! : undefined
-  if (lone === undefined || nodesInOuter || wiresInOuter) {
+  if (lone === undefined || nodesInOuter) {
     throw new RuleError(`annulus '${outerId}' must contain exactly one child cut and nothing else`)
   }
   const innerId = lone[0]
@@ -85,9 +109,5 @@ export function applyDoubleCutElim(d: Diagram, outerId: RegionId): Diagram {
   for (const [id, n] of Object.entries(d.nodes)) {
     nodes[id] = n.region === innerId ? reparent(n, target) : n
   }
-  const wires: Record<WireId, Wire> = {}
-  for (const [id, w] of Object.entries(d.wires)) {
-    wires[id] = w.scope === innerId ? { scope: target, sig: w.sig, endpoints: w.endpoints } : w
-  }
-  return mkDiagram({ root: d.root, regions, nodes, wires })
+  return mkDiagram({ root: d.root, regions, nodes, wires: { ...d.wires } })
 }

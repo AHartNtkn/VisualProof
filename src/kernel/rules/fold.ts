@@ -13,6 +13,7 @@ import {
   mkDiagram,
 } from '../diagram/diagram'
 import type { DiagramWithBoundary } from '../diagram/boundary'
+import { derivedScope } from '../diagram/regions'
 import { exploreForm } from '../diagram/canonical/explore'
 import type { RelSig } from '../diagram/sig'
 import { relSig, sigEquals, sigKey } from '../diagram/sig'
@@ -97,19 +98,30 @@ function expectedFoldOccurrence(
   args: readonly WireId[],
   definition: DiagramWithBoundary,
 ): ReturnType<typeof extractSubgraph> {
+  // The comparison shell reproduces each argument wire at its host derived
+  // scope as a bare two-pin segment (the drawable stand-in for the old
+  // scope-carrying empty wire). The pins are shell scaffolding and are
+  // excluded from the expected-occurrence selection below.
   const shellWires: Record<WireId, Wire> = {}
+  const shellNodes: Record<string, DiagramNode> = {}
+  const shellPinIds = new Set<string>()
+  let pinCount = 0
   for (const wireId of new Set(args)) {
     const wire = host.wires[wireId]!
-    shellWires[wireId] = {
-      scope: wire.scope,
-      sig: wire.sig,
-      endpoints: [],
+    const scope = derivedScope(host, wireId)
+    const endpoints: Endpoint[] = []
+    for (let i = 0; i < 2; i += 1) {
+      const pin = `shellpin${pinCount++}`
+      shellPinIds.add(pin)
+      shellNodes[pin] = { kind: 'identity', region: scope, sig: wire.sig, arity: 1 }
+      endpoints.push({ node: pin, port: { kind: 'identity', index: 0 } })
     }
+    shellWires[wireId] = { sig: wire.sig, endpoints }
   }
   const shell = mkDiagram({
     root: host.root,
     regions: { ...host.regions },
-    nodes: {},
+    nodes: shellNodes,
     wires: shellWires,
   })
   const mapped = spliceSubgraphMapped(shell, region, definition, args)
@@ -119,14 +131,15 @@ function expectedFoldOccurrence(
       candidate.kind === 'cut' && candidate.parent === definitionRoot)
     .map(([regionId]) => mapped.regionMap.get(regionId)!)
   const nodes = Object.entries(mapped.diagram.nodes)
-    .filter(([, node]) => node.region === region)
+    .filter(([nodeId, node]) => node.region === region && !shellPinIds.has(nodeId))
     .map(([nodeId]) => nodeId)
   const boundary = new Set(definition.boundary)
   const wires = [...new Set(
-    Object.entries(definition.diagram.wires)
-      .filter(([wireId, wire]) =>
-        !boundary.has(wireId) && wire.scope === definitionRoot)
-      .map(([wireId]) => mapped.wireMap.get(wireId)!),
+    Object.keys(definition.diagram.wires)
+      .filter((wireId) =>
+        !boundary.has(wireId)
+        && derivedScope(definition.diagram, wireId, definition.boundary) === definitionRoot)
+      .map((wireId) => mapped.wireMap.get(wireId)!),
   )]
   const selection = mkSelection(mapped.diagram, {
     region,
@@ -228,7 +241,7 @@ export function applyFold(
       argument === id ? [{ node: nodeId, port: { kind: 'arg', index } }] : [])
     wires[id] = added.length === 0
       ? wire
-      : { scope: wire.scope, sig: wire.sig, endpoints: [...wire.endpoints, ...added] }
+      : { sig: wire.sig, endpoints: [...wire.endpoints, ...added] }
   }
   return mkDiagram({ root: cleaned.root, regions, nodes, wires })
 }

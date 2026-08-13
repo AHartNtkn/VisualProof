@@ -7,7 +7,7 @@ import type {
   WireId,
 } from '../diagram/diagram'
 import { DiagramError, mkDiagram } from '../diagram/diagram'
-import { isAncestorOrEqual, polarity } from '../diagram/regions'
+import { derivedScope, polarity, wireVisibleAt } from '../diagram/regions'
 import { sigEquals, sigKey } from '../diagram/sig'
 import { freshId, type IdReservation } from '../diagram/subgraph/freshId'
 import { RuleError } from './error'
@@ -19,11 +19,10 @@ function wireAt(diagram: Diagram, wireId: WireId): Wire {
 }
 
 /**
- * Rule 4: physically insert one inherited identity. Forward replay requires a
- * negative region; backward replay requires the dual positive region.
- * Construction delegates immediately to the canonical diagram owner, so an
- * unconditional same-scope identity collapses instead of surviving as a second
- * authority.
+ * Gated equality assertion (spec §4.1): physically insert one identity node.
+ * Forward replay requires a negative region; backward replay the dual
+ * positive region. The node persists — nothing rewrites identity content
+ * eagerly; visibility keeps every touched wire's derived scope fixed.
  */
 export function applyIdentityInsertion(
   diagram: Diagram,
@@ -52,9 +51,9 @@ export function applyIdentityInsertion(
         + `'${wires[0]}' has '${sigKey(sig)}' but '${wireId}' has '${sigKey(wire.sig)}'`,
       )
     }
-    if (!isAncestorOrEqual(diagram, wire.scope, region)) {
+    if (!wireVisibleAt(diagram, wireId, region)) {
       throw new RuleError(
-        `identity insertion wire '${wireId}' scoped at '${wire.scope}' is not visible at '${region}'`,
+        `identity insertion wire '${wireId}' scoped at '${derivedScope(diagram, wireId)}' is not visible at '${region}'`,
       )
     }
   }
@@ -77,7 +76,6 @@ export function applyIdentityInsertion(
   wires.forEach((wireId, index) => {
     const wire = rebuiltWires[wireId]!
     rebuiltWires[wireId] = {
-      scope: wire.scope,
       sig: wire.sig,
       endpoints: [
         ...wire.endpoints,
