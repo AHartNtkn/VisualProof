@@ -1042,6 +1042,67 @@ theorem localOccurrence_survives_away
             contradiction
           · exact regionNotSelected selectedRegion
 
+/-- Every direct occurrence strictly above the selected anchor survives
+removal.  Selection-owned occurrences can only occur at or below the anchor. -/
+theorem localOccurrence_survives_above
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (region : Fin host.val.regionCount)
+    (above : host.val.Encloses region selection.val.anchor)
+    (different : region ≠ selection.val.anchor)
+    (occurrence : LocalOccurrence host.val.regionCount host.val.nodeCount)
+    (member : occurrence ∈ localOccurrences host.val region) :
+    domains.occurrenceSurvives occurrence = true := by
+  cases occurrence with
+  | node node =>
+      change domains.nodes.survives node = true
+      apply (domains.node_survives_iff node).2
+      intro selected
+      have nodeRegion := (mem_localOccurrences_node host.val region node).mp
+        member
+      rcases (selection.mem_selectedNodes node).1 selected with
+        direct | selectedRegion
+      · have atAnchor := selection.property.directNodes_at_anchor node direct
+        exact different (nodeRegion.symm.trans atAnchor)
+      · have regionSelected : region ∈ selection.selectedRegions := by
+          rw [← nodeRegion]
+          exact (selection.mem_selectedRegions _).2 selectedRegion
+        obtain ⟨root, rootMember, rootEnclosesRegion⟩ :=
+          (selection.mem_selectedRegions region).1 regionSelected
+        have anchorEnclosesRoot : host.val.Encloses selection.val.anchor root := by
+          have rootParent := selection.property.childRoots_direct root rootMember
+          refine ⟨⟨1, by omega⟩, ?_⟩
+          simp [Diagram.climb, rootParent]
+        have anchorEnclosesRegion := checked_encloses_trans host.property
+          anchorEnclosesRoot rootEnclosesRegion
+        exact different (checked_encloses_antisymm host.property above
+          anchorEnclosesRegion)
+  | child child =>
+      change domains.regions.survives child = true
+      apply (domains.region_survives_iff child).2
+      by_cases atRoot : child = host.val.root
+      · exact Or.inl atRoot
+      · right
+        intro selected
+        have childParent := (mem_localOccurrences_child host.val region child).mp
+          member
+        obtain ⟨root, rootMember, rootEnclosesChild⟩ :=
+          (selection.mem_selectedRegions child).1 selected
+        rcases encloses_direct_child childParent rootEnclosesChild with
+          rootEq | rootEnclosesRegion
+        · subst child
+          have rootParent := selection.property.childRoots_direct root rootMember
+          exact different (Option.some.inj (childParent.symm.trans rootParent))
+        · have anchorEnclosesRoot : host.val.Encloses
+              selection.val.anchor root := by
+            have rootParent := selection.property.childRoots_direct root rootMember
+            refine ⟨⟨1, by omega⟩, ?_⟩
+            simp [Diagram.climb, rootParent]
+          have anchorEnclosesRegion := checked_encloses_trans host.property
+            anchorEnclosesRoot rootEnclosesRegion
+          exact different (checked_encloses_antisymm host.property above
+            anchorEnclosesRegion)
+
 /-- Compaction is position-preserving when every wire in the source context
 survives. -/
 theorem mapWireContext_origin_eq
