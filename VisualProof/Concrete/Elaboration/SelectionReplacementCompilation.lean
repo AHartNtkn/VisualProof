@@ -227,6 +227,18 @@ noncomputable def replaceSelectionRaw_decomposition
 
 namespace FrameDomains
 
+private theorem nodup_of_map_injective
+    (map : α → β)
+    (values : List α) (mappedNodup : (values.map map).Nodup) :
+    values.Nodup := by
+  induction values with
+  | nil => simp
+  | cons head tail inductionHypothesis =>
+      simp only [List.map_cons, List.nodup_cons] at mappedNodup ⊢
+      refine ⟨?_, inductionHypothesis mappedNodup.2⟩
+      intro member
+      exact mappedNodup.1 (List.mem_map.mpr ⟨head, member, rfl⟩)
+
 /-- Whether one source occurrence survives the exact selection frame. -/
 def occurrenceSurvives (domains : FrameDomains d selection) :
     LocalOccurrence d.regionCount d.nodeCount → Bool
@@ -239,6 +251,124 @@ def originOccurrence (domains : FrameDomains d selection) :
       LocalOccurrence d.regionCount d.nodeCount
   | .node node => .node (domains.nodes.origin node)
   | .child region => .child (domains.regions.origin region)
+
+/-- Compact one source occurrence when it survives the frame removal. -/
+def indexOccurrence? (domains : FrameDomains d selection) :
+    LocalOccurrence d.regionCount d.nodeCount →
+      Option (LocalOccurrence domains.regions.count domains.nodes.count)
+  | .node node => (domains.nodes.index? node).map .node
+  | .child region => (domains.regions.index? region).map .child
+
+/-- Total occurrence compaction.  The root fallback is unreachable on every
+compiler block to which the removal proof applies. -/
+def indexOccurrence (domains : FrameDomains d selection) :
+    LocalOccurrence d.regionCount d.nodeCount →
+      LocalOccurrence domains.regions.count domains.nodes.count := fun value =>
+  (domains.indexOccurrence? value).getD (.child domains.root)
+
+theorem indexOccurrence?_eq_some_iff
+    (domains : FrameDomains d selection)
+    (source : LocalOccurrence d.regionCount d.nodeCount)
+    (target : LocalOccurrence domains.regions.count domains.nodes.count) :
+    domains.indexOccurrence? source = some target ↔
+      domains.originOccurrence target = source := by
+  cases source with
+  | node node =>
+      cases target with
+      | child region => simp [indexOccurrence?, originOccurrence]
+      | node targetNode =>
+          simp only [indexOccurrence?, Option.map_eq_some_iff,
+            LocalOccurrence.node.injEq]
+          constructor
+          · rintro ⟨indexed, found, rfl⟩
+            exact congrArg LocalOccurrence.node
+              ((domains.nodes.index?_eq_some_iff node indexed).1 found)
+          · intro equality
+            have originEq : domains.nodes.origin targetNode = node :=
+              LocalOccurrence.node.inj equality
+            refine ⟨targetNode, ?_, rfl⟩
+            rw [← originEq]
+            exact domains.nodes.index?_origin targetNode
+  | child region =>
+      cases target with
+      | node node => simp [indexOccurrence?, originOccurrence]
+      | child targetRegion =>
+          simp only [indexOccurrence?, Option.map_eq_some_iff,
+            LocalOccurrence.child.injEq]
+          constructor
+          · rintro ⟨indexed, found, rfl⟩
+            exact congrArg LocalOccurrence.child
+              ((domains.regions.index?_eq_some_iff region indexed).1 found)
+          · intro equality
+            have originEq : domains.regions.origin targetRegion = region :=
+              LocalOccurrence.child.inj equality
+            refine ⟨targetRegion, ?_, rfl⟩
+            rw [← originEq]
+            exact domains.regions.index?_origin targetRegion
+
+theorem indexOccurrence?_isSome
+    (domains : FrameDomains d selection)
+    (occurrence : LocalOccurrence d.regionCount d.nodeCount) :
+    (domains.indexOccurrence? occurrence).isSome =
+      domains.occurrenceSurvives occurrence := by
+  cases occurrence with
+  | node node =>
+      unfold indexOccurrence? occurrenceSurvives
+      change ((domains.nodes.index? node).map LocalOccurrence.node).isSome =
+        domains.nodes.survives node
+      cases survives : domains.nodes.survives node with
+      | false =>
+          have missing := (domains.nodes.index?_eq_none_iff node).2 survives
+          rw [missing]
+          rfl
+      | true =>
+          rw [domains.nodes.index?_index node survives]
+          rfl
+  | child region =>
+      unfold indexOccurrence? occurrenceSurvives
+      change ((domains.regions.index? region).map
+        LocalOccurrence.child).isSome = domains.regions.survives region
+      cases survives : domains.regions.survives region with
+      | false =>
+          have missing := (domains.regions.index?_eq_none_iff region).2 survives
+          rw [missing]
+          rfl
+      | true =>
+          rw [domains.regions.index?_index region survives]
+          rfl
+
+theorem originOccurrence_indexOccurrence
+    (domains : FrameDomains d selection)
+    (occurrence : LocalOccurrence d.regionCount d.nodeCount)
+    (survives : domains.occurrenceSurvives occurrence = true) :
+    domains.originOccurrence (domains.indexOccurrence occurrence) =
+      occurrence := by
+  have present : (domains.indexOccurrence? occurrence).isSome = true := by
+    rw [domains.indexOccurrence?_isSome]
+    exact survives
+  obtain ⟨target, targetEq⟩ := Option.isSome_iff_exists.mp present
+  rw [indexOccurrence, targetEq]
+  exact (domains.indexOccurrence?_eq_some_iff occurrence target).1 targetEq
+
+theorem originOccurrence_injective
+    (domains : FrameDomains d selection) :
+    Function.Injective domains.originOccurrence := by
+  intro left right equality
+  cases left with
+  | node left =>
+      cases right with
+      | child right => contradiction
+      | node right =>
+          apply congrArg LocalOccurrence.node
+          apply domains.nodes.origin_injective
+          exact LocalOccurrence.node.inj equality
+  | child left =>
+      cases right with
+      | node right => contradiction
+      | child right =>
+          apply congrArg LocalOccurrence.child
+          apply domains.regions.origin_injective
+          exact LocalOccurrence.child.inj equality
 
 private theorem map_origin_allFin (domain : SurvivorDomain size) :
     (allFin domain.count).map domain.origin = domain.enumeration := by
@@ -359,6 +489,7 @@ private theorem removeRaw_parent_eq_iff
         apply congrArg some
         apply domains.regions.origin_injective
         rw [domains.regions.origin_index, equality]
+
   | bubble parent arity =>
       have parentEq :
           (host.val.regions (domains.regions.origin child)).parent? =
@@ -378,6 +509,55 @@ private theorem removeRaw_parent_eq_iff
         apply congrArg some
         apply domains.regions.origin_injective
         rw [domains.regions.origin_index, equality]
+
+private theorem removeRaw_climb_origin
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (steps : Nat) (start finish : domains.regions.Carrier)
+    (climb : (host.val.removeRaw selection domains).climb steps start =
+      some finish) :
+    host.val.climb steps (domains.regions.origin start) =
+      some (domains.regions.origin finish) := by
+  induction steps generalizing start with
+  | zero =>
+      have equality : start = finish := Option.some.inj climb
+      subst finish
+      rfl
+  | succ steps inductionHypothesis =>
+      simp only [Diagram.climb] at climb ⊢
+      cases parentEq : ((host.val.removeRaw selection domains).regions
+          start).parent? with
+      | none => rw [parentEq] at climb; contradiction
+      | some parent =>
+          rw [parentEq] at climb
+          have sourceParent := (domains.removeRaw_parent_eq_iff host selection
+            parent start).1 parentEq
+          rw [sourceParent]
+          exact inductionHypothesis parent climb
+
+/-- Enclosure in the compact frame reflects enclosure between the represented
+source regions. -/
+theorem removeRaw_encloses_origin
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (ancestor descendant : domains.regions.Carrier)
+    (encloses : (host.val.removeRaw selection domains).Encloses ancestor
+      descendant) :
+    host.val.Encloses (domains.regions.origin ancestor)
+      (domains.regions.origin descendant) := by
+  obtain ⟨steps, climb⟩ := encloses
+  exact ⟨⟨steps.val, by
+    have frameBound : steps.val <
+        (host.val.removeRaw selection domains).regionCount + 1 := steps.isLt
+    have countLe : (host.val.removeRaw selection domains).regionCount ≤
+        host.val.regionCount := by
+      change domains.regions.count ≤ host.val.regionCount
+      exact fin_card_le_of_injective domains.regions.origin
+        domains.regions.origin_injective
+    have sourceBound : 0 < host.val.regionCount :=
+      Nat.zero_lt_of_lt (domains.regions.origin descendant).isLt
+    omega⟩, domains.removeRaw_climb_origin host selection steps.val
+      descendant ancestor climb⟩
 
 /-- Dense frame occurrence order is exactly the source occurrence order with
 the removed selection occurrences filtered out. -/
@@ -480,6 +660,34 @@ theorem map_localOccurrences_removeRaw
       rw [List.filter_append, List.filter_map, List.filter_map]
       rfl
 
+/-- When a complete source block survives, dense frame occurrence order is
+its pointwise compacted order. -/
+theorem localOccurrences_removeRaw_eq_map_index
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (region : Fin host.val.regionCount)
+    (regionSurvives : domains.regions.survives region = true)
+    (allSurvive : ∀ occurrence,
+      occurrence ∈ localOccurrences host.val region →
+        domains.occurrenceSurvives occurrence = true) :
+    localOccurrences (host.val.removeRaw selection domains)
+        (domains.regions.index region regionSurvives) =
+      (localOccurrences host.val region).map domains.indexOccurrence := by
+  apply (List.map_inj_right domains.originOccurrence_injective).mp
+  have targetOrigins := domains.map_localOccurrences_removeRaw host selection
+    (domains.regions.index region regionSurvives)
+  rw [domains.regions.origin_index] at targetOrigins
+  rw [targetOrigins, List.filter_eq_self.mpr allSurvive]
+  rw [List.map_map]
+  symm
+  calc
+    _ = List.map id (localOccurrences host.val region) := by
+      apply List.map_congr_left
+      intro occurrence member
+      exact domains.originOccurrence_indexOccurrence occurrence
+        (allSurvive occurrence member)
+    _ = _ := List.map_id _
+
 /-- A retained source cut remains the corresponding dense frame cut. -/
 theorem removeRaw_cut
     (host : Checked) (selection : CheckedSelection host.val)
@@ -516,6 +724,53 @@ theorem removeRaw_bubble
     SurvivorDomain.reindexRegion?] at reindexed
   rw [domains.regions.index?_index parent parentSurvives] at reindexed
   exact (Option.some.inj reindexed).symm
+
+/-- A dense frame bubble is represented by the source bubble of the same
+arity. -/
+theorem removeRaw_bubble_origin
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (binder parent : domains.regions.Carrier) (arity : Nat)
+    (kind : (host.val.removeRaw selection domains).regions binder =
+      .bubble parent arity) :
+    host.val.regions (domains.regions.origin binder) =
+      .bubble (domains.regions.origin parent) arity := by
+  have reindexed := Diagram.removeRaw_region_reindexed host selection domains
+    binder
+  cases sourceKind : host.val.regions (domains.regions.origin binder) with
+  | sheet =>
+      rw [sourceKind] at reindexed
+      simp only [SurvivorDomain.reindexRegion?] at reindexed
+      rw [← Option.some.inj reindexed] at kind
+      contradiction
+  | cut sourceParent =>
+      have sourceParentEq :
+          (host.val.regions (domains.regions.origin binder)).parent? =
+            some sourceParent := (congrArg CRegion.parent? sourceKind).trans rfl
+      have parentSurvives := domains.parent_survives host selection
+        (domains.regions.origin_survives binder) sourceParentEq
+      rw [sourceKind] at reindexed
+      simp only [SurvivorDomain.reindexRegion?] at reindexed
+      rw [domains.regions.index?_index sourceParent parentSurvives] at reindexed
+      rw [← Option.some.inj reindexed] at kind
+      contradiction
+  | bubble sourceParent sourceArity =>
+      have sourceParentEq :
+          (host.val.regions (domains.regions.origin binder)).parent? =
+            some sourceParent := (congrArg CRegion.parent? sourceKind).trans rfl
+      have parentSurvives := domains.parent_survives host selection
+        (domains.regions.origin_survives binder) sourceParentEq
+      rw [sourceKind] at reindexed
+      simp only [SurvivorDomain.reindexRegion?] at reindexed
+      rw [domains.regions.index?_index sourceParent parentSurvives] at reindexed
+      have targetKind := Option.some.inj reindexed
+      have parts := CRegion.bubble.inj (targetKind.trans kind)
+      have parentEq : domains.regions.index sourceParent parentSurvives =
+          parent := parts.1
+      have arityEq : sourceArity = arity := parts.2
+      subst sourceArity
+      apply congrArg (fun value => CRegion.bubble value arity)
+      rw [← parentEq, domains.regions.origin_index]
 
 private theorem removeRaw_wire_scope_eq_iff
     (host : Checked) (selection : CheckedSelection host.val)
@@ -631,6 +886,214 @@ theorem mapWireContext_extend
   rw [domains.mapWireContext_append,
     domains.mapWireContext_exactScope host selection region]
 
+/-- Exact lexical visibility descends to the dense survivor frame. -/
+theorem mapWireContext_exact
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (context : WireContext host.val)
+    (region : domains.regions.Carrier)
+    (exact : context.Exact (domains.regions.origin region)) :
+    (domains.mapWireContext context).Exact region := by
+  constructor
+  · apply nodup_of_map_injective domains.wires.origin
+    rw [domains.map_mapWireContext_origin]
+    exact exact.nodup.filter _
+  · intro wire
+    constructor
+    · intro targetMember
+      obtain ⟨sourceWire, sourceMember, indexed⟩ :=
+        List.mem_filterMap.mp targetMember
+      have sourceEq := (domains.wires.index?_eq_some_iff sourceWire wire).1
+        indexed
+      subst sourceWire
+      have sourceEncloses := (exact.mem_iff _).1 sourceMember
+      have scopeSurvives := domains.wireScope_survives
+        (domains.wires.origin_survives wire)
+      have targetEncloses := Diagram.removeRaw_encloses host selection domains
+        scopeSurvives (domains.regions.origin_survives region) sourceEncloses
+      have scopeEq := Diagram.removeRaw_wire_scope host selection domains wire
+      rw [domains.regions.index_origin] at targetEncloses
+      rw [scopeEq]
+      exact targetEncloses
+    · intro targetEncloses
+      have reflected := domains.removeRaw_encloses_origin host selection
+        ((host.val.removeRaw selection domains).wires wire).scope region
+        targetEncloses
+      have scopeEq := Diagram.removeRaw_wire_scope host selection domains wire
+      rw [scopeEq, domains.regions.origin_index] at reflected
+      have sourceMember := (exact.mem_iff _).2 reflected
+      exact List.mem_filterMap.mpr
+        ⟨domains.wires.origin wire, sourceMember,
+          domains.wires.index?_origin wire⟩
+
+/-- Every wire visible strictly above the selected anchor survives removal.
+The only removable visible wires are owned exactly at, or below, the anchor. -/
+theorem visibleWire_survives_above
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (region : Fin host.val.regionCount)
+    (above : host.val.Encloses region selection.val.anchor)
+    (different : region ≠ selection.val.anchor)
+    (context : WireContext host.val) (exact : context.Exact region)
+    (wire : Fin host.val.wireCount) (member : wire ∈ context) :
+    domains.wires.survives wire = true := by
+  apply (domains.wire_survives_iff wire).2
+  intro removed
+  have scopeEnclosesRegion : host.val.Encloses
+      (host.val.wires wire).scope region := (exact.mem_iff wire).1 member
+  have scopeEnclosesAnchor := checked_encloses_trans host.property
+    scopeEnclosesRegion above
+  rcases (selection.mem_internalWires_expanded wire).1 removed with
+    selectedScope | explicit
+  · obtain ⟨child, childMember, childEnclosesScope⟩ := selectedScope
+    have childParent := selection.property.childRoots_direct child childMember
+    have anchorEnclosesChild : host.val.Encloses selection.val.anchor child := by
+      refine ⟨⟨1, by omega⟩, ?_⟩
+      simp [Diagram.climb, childParent]
+    have anchorEnclosesScope := checked_encloses_trans host.property
+      anchorEnclosesChild childEnclosesScope
+    have scopeEq := checked_encloses_antisymm host.property
+      scopeEnclosesAnchor anchorEnclosesScope
+    rw [scopeEq] at scopeEnclosesRegion
+    have regionEq := checked_encloses_antisymm host.property
+      above scopeEnclosesRegion
+    exact different regionEq
+  · have scopeEq := selection.property.explicitWires_at_anchor wire explicit
+    rw [scopeEq] at scopeEnclosesRegion
+    have regionEq := checked_encloses_antisymm host.property
+      scopeEnclosesRegion above
+    exact different regionEq.symm
+
+/-- Every direct occurrence of a surviving region outside the selected
+subtree survives. -/
+theorem localOccurrence_survives_away
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (region : Fin host.val.regionCount)
+    (regionSurvives : domains.regions.survives region = true)
+    (away : ¬ host.val.Encloses region selection.val.anchor)
+    (occurrence : LocalOccurrence host.val.regionCount host.val.nodeCount)
+    (member : occurrence ∈ localOccurrences host.val region) :
+    domains.occurrenceSurvives occurrence = true := by
+  cases occurrence with
+  | node node =>
+      change domains.nodes.survives node = true
+      apply (domains.node_survives_iff node).2
+      intro selected
+      have nodeRegion := (mem_localOccurrences_node host.val region node).mp
+        member
+      rcases (selection.mem_selectedNodes node).1 selected with
+        direct | selectedRegion
+      · have atAnchor := selection.property.directNodes_at_anchor node direct
+        have regionEq : region = selection.val.anchor :=
+          nodeRegion.symm.trans atAnchor
+        apply away
+        rw [regionEq]
+        exact Diagram.Encloses.refl host.val selection.val.anchor
+      · have ownerSelected : region ∈ selection.selectedRegions := by
+          rw [← nodeRegion]
+          exact (selection.mem_selectedRegions _).2 selectedRegion
+        rcases (domains.region_survives_iff region).1 regionSurvives with
+          regionRoot | regionNotSelected
+        ·
+          obtain ⟨selectedRoot, selectedRootMember, selectedRootEncloses⟩ :=
+            (selection.mem_selectedRegions _).1 ownerSelected
+          have selectedRootEnclosesRoot : host.val.Encloses selectedRoot
+              host.val.root := by
+            simpa only [regionRoot] using selectedRootEncloses
+          have impossible := encloses_sheet_eq host.property.root_is_sheet
+            selectedRootEnclosesRoot
+          subst selectedRoot
+          have selectedRootParent := selection.property.childRoots_direct
+            host.val.root selectedRootMember
+          rw [host.property.root_is_sheet] at selectedRootParent
+          contradiction
+        · exact regionNotSelected ownerSelected
+  | child child =>
+      change domains.regions.survives child = true
+      apply (domains.region_survives_iff child).2
+      by_cases atRoot : child = host.val.root
+      · exact Or.inl atRoot
+      · right
+        intro selected
+        have childParent := (mem_localOccurrences_child host.val region child).mp
+          member
+        obtain ⟨root, rootMember, rootEnclosesChild⟩ :=
+          (selection.mem_selectedRegions child).1 selected
+        rcases encloses_direct_child childParent rootEnclosesChild with
+          rootEq | rootEnclosesRegion
+        · subst child
+          have rootParent := selection.property.childRoots_direct root rootMember
+          have regionEq := Option.some.inj (childParent.symm.trans rootParent)
+          subst region
+          exact away (Diagram.Encloses.refl host.val selection.val.anchor)
+        · have selectedRegion : region ∈ selection.selectedRegions :=
+            (selection.mem_selectedRegions region).2
+              ⟨root, rootMember, rootEnclosesRegion⟩
+          rcases (domains.region_survives_iff region).1 regionSurvives with
+            regionRoot | regionNotSelected
+          · subst region
+            have rootEq := encloses_sheet_eq host.property.root_is_sheet
+              rootEnclosesRegion
+            subst root
+            have rootParent := selection.property.childRoots_direct
+              host.val.root rootMember
+            rw [host.property.root_is_sheet] at rootParent
+            contradiction
+          · exact regionNotSelected selectedRegion
+
+/-- Compaction is position-preserving when every wire in the source context
+survives. -/
+theorem mapWireContext_origin_eq
+    (domains : FrameDomains d selection) (context : WireContext d)
+    (allSurvive : ∀ wire, wire ∈ context →
+      domains.wires.survives wire = true) :
+    (domains.mapWireContext context).map domains.wires.origin = context := by
+  rw [domains.map_mapWireContext_origin]
+  exact List.filter_eq_self.mpr allSurvive
+
+/-- Canonical position equivalence for an unchanged lexical context. -/
+noncomputable def mapWireContextEquiv
+    (domains : FrameDomains d selection) (context : WireContext d)
+    (allSurvive : ∀ wire, wire ∈ context →
+      domains.wires.survives wire = true) :
+    FiniteEquiv (Fin (domains.mapWireContext context).length)
+      (Fin context.length) := by
+  apply FiniteEquiv.finCast
+  simpa using congrArg List.length
+    (domains.mapWireContext_origin_eq context allSurvive)
+
+/-- The unchanged-context equivalence retrieves the represented source wire. -/
+theorem mapWireContextEquiv_get
+    (domains : FrameDomains d selection) (context : WireContext d)
+    (allSurvive : ∀ wire, wire ∈ context →
+      domains.wires.survives wire = true)
+    (index : Fin (domains.mapWireContext context).length) :
+    context.get (domains.mapWireContextEquiv context allSurvive index) =
+      domains.wires.origin ((domains.mapWireContext context).get index) := by
+  have equality := domains.mapWireContext_origin_eq context allSurvive
+  have lengthEq : (domains.mapWireContext context).length = context.length := by
+    simpa using congrArg List.length equality
+  let sourceIndex : Fin context.length := ⟨index.val, by
+    rw [← lengthEq]
+    exact index.isLt⟩
+  have positionEq : domains.mapWireContextEquiv context allSurvive index =
+      sourceIndex := by
+    apply Fin.ext
+    rfl
+  have point := congrArg (fun values => values[index.val]?) equality
+  have mappedBound : index.val <
+      ((domains.mapWireContext context).map domains.wires.origin).length := by
+    rw [List.length_map]
+    exact index.isLt
+  have sourceBound : index.val < context.length := sourceIndex.isLt
+  dsimp only at point
+  rw [List.getElem?_eq_getElem mappedBound,
+    List.getElem?_eq_getElem sourceBound] at point
+  rw [positionEq]
+  simpa only [List.get_eq_getElem, List.getElem_map] using
+    (Option.some.inj point).symm
+
 /-- Restrict a source binder context to the retained dense frame regions. -/
 def mapBinderContext (domains : FrameDomains d selection)
     (context : BinderContext d rels) :
@@ -671,6 +1134,23 @@ theorem mapBinderContext_push
       fun targetEquality => equality (candidate_eq_iff.mpr targetEquality)
     simp only [mapBinderContext, BinderContext.push, equality,
       targetInequality, ↓reduceIte]
+
+/-- Lexical binder coverage descends to the dense survivor frame. -/
+theorem mapBinderContext_covers
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (context : BinderContext host.val rels)
+    (region : domains.regions.Carrier)
+    (covers : context.Covers (domains.regions.origin region)) :
+    (domains.mapBinderContext context).Covers region := by
+  intro binder parent arity bubble encloses
+  have sourceBubble := domains.removeRaw_bubble_origin host selection
+    binder parent arity bubble
+  have sourceEncloses := domains.removeRaw_encloses_origin host selection
+    binder region encloses
+  obtain ⟨relation, lookup⟩ := covers (domains.regions.origin binder)
+    (domains.regions.origin parent) arity sourceBubble sourceEncloses
+  exact ⟨relation, by simpa [mapBinderContext] using lookup⟩
 
 /-- The source lexical position represented by one compacted frame-context
 position.  Lookup is performed only in the supplied source context. -/
@@ -914,6 +1394,43 @@ private theorem mappedCall_fullContext
         (domains.regions.index origin originSurvives)
       rw [domains.regions.origin_index] at localEq
       exact localEq.symm
+
+/-- The exact compacted call is total from the source lexical certificates;
+no frame compiler result is accepted as input. -/
+private theorem mappedCallCompilation
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (call : CompilerCall host.val)
+    (originSurvives : domains.regions.survives call.origin = true)
+    (exact : call.fullContext.Exact call.origin)
+    (covers : call.binders.Covers call.origin) :
+    ∃ body : CompiledRegion (host.val.removeRaw selection domains)
+        (domains.mappedCall call originSurvives),
+      (domains.mappedCall call originSurvives).compile?
+          (host.val.removeRaw selection domains)
+          (Diagram.removeRaw_wellFormed host selection domains) = some body := by
+  let targetCall := domains.mappedCall call originSurvives
+  have targetExact : targetCall.fullContext.Exact targetCall.origin := by
+    rw [domains.mappedCall_origin call originSurvives,
+      domains.mappedCall_fullContext host selection call originSurvives]
+    exact domains.mapWireContext_exact host selection call.fullContext
+      (domains.regions.index call.origin originSurvives) (by
+        simpa only [domains.regions.origin_index] using exact)
+  have targetCovers : targetCall.binders.Covers targetCall.origin := by
+    rw [domains.mappedCall_origin call originSurvives]
+    cases call with
+    | root outer locals =>
+        exact domains.mapBinderContext_covers host selection
+          BinderContext.empty (domains.regions.index host.val.root
+            originSurvives) (by
+              simpa only [domains.regions.origin_index] using covers)
+    | nested origin context rels binders =>
+        exact domains.mapBinderContext_covers host selection binders
+          (domains.regions.index origin originSurvives) (by
+            simpa only [domains.regions.origin_index] using covers)
+  exact CompilerCall.compile?_complete
+    (Diagram.removeRaw_wellFormed host selection domains) targetCall
+      targetExact targetCovers
 
 end FrameDomains
 
