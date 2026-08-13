@@ -1,24 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
+import { bareWire } from '../../fixtures/pins'
 
 describe('open signature-indexed matching', () => {
   it('rejects a relational boundary attachment of a different signature', () => {
     const unary = relSig([IOTA])
     const nullary = relSig([])
     const patternBuilder = new DiagramBuilder()
-    const boundary = patternBuilder.relWire( unary)
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [boundary])
+    const boundary = patternBuilder.relWire(unary)
+    const pattern = patternBuilder.buildOpen([boundary])
 
     const hostBuilder = new DiagramBuilder()
-    const good = hostBuilder.relWire( unary)
-    const bad = hostBuilder.relWire( nullary)
+    const good = bareWire(hostBuilder, hostBuilder.root, unary)
+    const bad = bareWire(hostBuilder, hostBuilder.root, nullary)
     const host = hostBuilder.build()
 
-    expect(findOccurrences(host, pattern, { attachments: [good] }).matches)
-      .toHaveLength(1)
+    // Exposed once, the pattern's line ends in one point; the host's bare line
+    // has two, so the point embeds either way. Both are real occurrences and
+    // they differ in exactly that image.
+    const found = findOccurrences(host, pattern, { attachments: [good] }).matches
+    expect(found).toHaveLength(2)
+    const patternPoint = Object.keys(pattern.diagram.nodes)[0]!
+    expect(found.map((match) => match.nodeMap.get(patternPoint)))
+      .toEqual(host.wires[good]!.endpoints.map((end) => end.node))
+
     expect(findOccurrences(host, pattern, { attachments: [bad] }).matches)
       .toHaveLength(0)
   })
@@ -32,7 +39,7 @@ describe('open signature-indexed matching', () => {
       [{ node: patternAtom, port: { kind: 'head' } }],
       unary,
     )
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [boundary])
+    const pattern = patternBuilder.buildOpen([boundary])
 
     const hostBuilder = new DiagramBuilder()
     const goodAtom = hostBuilder.atom(hostBuilder.root, unary)
@@ -58,16 +65,16 @@ describe('open signature-indexed matching', () => {
     const patternBuilder = new DiagramBuilder()
     const firstPatternAtom = patternBuilder.atom(patternBuilder.root, relation)
     const secondPatternAtom = patternBuilder.atom(patternBuilder.root, relation)
-    patternBuilder.wire( [
+    patternBuilder.wire([
       { node: firstPatternAtom, port: { kind: 'head' } },
       { node: secondPatternAtom, port: { kind: 'head' } },
     ], relation)
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    const pattern = patternBuilder.buildOpen([])
 
     const sharedBuilder = new DiagramBuilder()
     const firstSharedAtom = sharedBuilder.atom(sharedBuilder.root, relation)
     const secondSharedAtom = sharedBuilder.atom(sharedBuilder.root, relation)
-    sharedBuilder.wire( [
+    sharedBuilder.wire([
       { node: firstSharedAtom, port: { kind: 'head' } },
       { node: secondSharedAtom, port: { kind: 'head' } },
     ], relation)

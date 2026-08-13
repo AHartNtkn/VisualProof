@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { applyVacuityDelete } from '../../../src/kernel/rules/identity-rules'
 import { applyWireJoin } from '../../../src/kernel/rules/wire-quantifier'
 import { bareWire } from '../../fixtures/pins'
 
@@ -42,13 +44,9 @@ describe('iota wire join', () => {
     }, 'backward')).not.toThrow()
   })
 
-  // NEEDS-ADJUDICATION: the closing assertion (the degenerate identity node
-  // disappears) is eager-normalizer behavior. Identity nodes now persist and
-  // only the explicit identification rule collapses them, so a join can no
-  // longer remove one on its own.
-  it('retains the outer wire and re-normalizes affected identity content', () => {
-    // The identity sits below both wire scopes; the join degenerates it to
-    // one wire.
+  it('retains the outer wire and leaves the degenerate identity for vacuity', () => {
+    // The identity sits below both wire scopes, so the join leaves both its
+    // ports on one wire: it now asserts only x = x.
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const deep = builder.cut(cut)
@@ -77,7 +75,36 @@ describe('iota wire join', () => {
       { node: outerNode, port: { kind: 'arg', index: 0 } },
       { node: innerNode, port: { kind: 'arg', index: 0 } },
     ]))
-    expect(joined.nodes[identity]).toBeUndefined()
+    // The join moves incidences; it does not rewrite equality apparatus. Both
+    // of the identity's ports now sit on the merged wire, a loop.
+    expect(joined.nodes[identity]).toEqual({
+      kind: 'identity',
+      region: deep,
+      sig: IOTA,
+      arity: 2,
+    })
+    expect(joined.wires[outer]!.endpoints.filter((endpoint) =>
+      endpoint.node === identity)).toHaveLength(2)
+
+    // x = x is ⊤-shaped, so vacuity detaches it — and may, because the merged
+    // wire keeps the two real ends that fix its derived scope at the root.
+    const cleaned = applyVacuityDelete(joined, {
+      nodes: { [identity]: { region: deep, sig: IOTA, arity: 2 } },
+      wires: {},
+      attachments: {
+        [outer]: [
+          { node: identity, port: { kind: 'identity', index: 0 } },
+          { node: identity, port: { kind: 'identity', index: 1 } },
+        ],
+      },
+    })
+
+    expect(cleaned.nodes[identity]).toBeUndefined()
+    expect(cleaned.wires[outer]!.endpoints).toEqual([
+      { node: outerNode, port: { kind: 'arg', index: 0 } },
+      { node: innerNode, port: { kind: 'arg', index: 0 } },
+    ])
+    expect(derivedScope(cleaned, outer)).toBe(builder.root)
   })
 })
 

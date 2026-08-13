@@ -3,6 +3,7 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { bareWire } from '../../fixtures/pins'
 
 describe('exploreForm', () => {
   it('is invariant under construction order and id renaming', () => {
@@ -62,9 +63,10 @@ describe('exploreForm', () => {
       const builder = new DiagramBuilder()
       const cut = builder.cut(builder.root)
       const ref = builder.ref(cut, 'P', relSig([IOTA]))
-      builder.wire( [
+      const argument = builder.wire([
         { node: ref, port: { kind: 'arg', index: 0 } },
       ])
+      builder.pin(argument, atRoot ? builder.root : cut)
       return builder.build()
     }
 
@@ -99,7 +101,7 @@ describe('exploreForm', () => {
     const exposed = builder.wire( [
       { node: ref, port: { kind: 'arg', index: 0 } },
     ])
-    const bare = builder.wire( [])
+    const bare = bareWire(builder, builder.root)
     const diagram = builder.build()
 
     expect(exploreForm(diagram, [exposed, exposed, bare]))
@@ -113,21 +115,37 @@ describe('exploreForm signature-indexed content', () => {
   it('ignores insertion order for same-scope relational wires', () => {
     const unary = relSig([IOTA])
     const nullary = relSig([])
+    const pinEnd = (node: string) => ({
+      node,
+      port: { kind: 'identity' as const, index: 0 },
+    })
     const nodes = {
       unary: { kind: 'atom', region: 'r0', sig: unary },
       nullary: { kind: 'atom', region: 'r0', sig: nullary },
+      unaryHeadPin: { kind: 'identity', region: 'r0', sig: unary, arity: 1 },
+      nullaryHeadPin: { kind: 'identity', region: 'r0', sig: nullary, arity: 1 },
+      unaryArgPin: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
     } as const
     const unaryHead = {
       sig: unary,
-      endpoints: [{ node: 'unary', port: { kind: 'head' as const } }],
+      endpoints: [
+        { node: 'unary', port: { kind: 'head' as const } },
+        pinEnd('unaryHeadPin'),
+      ],
     }
     const nullaryHead = {
       sig: nullary,
-      endpoints: [{ node: 'nullary', port: { kind: 'head' as const } }],
+      endpoints: [
+        { node: 'nullary', port: { kind: 'head' as const } },
+        pinEnd('nullaryHeadPin'),
+      ],
     }
     const unaryArg = {
       sig: IOTA,
-      endpoints: [{ node: 'unary', port: { kind: 'arg' as const, index: 0 } }],
+      endpoints: [
+        { node: 'unary', port: { kind: 'arg' as const, index: 0 } },
+        pinEnd('unaryArgPin'),
+      ],
     }
     const forward = mkDiagram({
       root: 'r0',
@@ -148,7 +166,10 @@ describe('exploreForm signature-indexed content', () => {
   it('distinguishes wire signatures at the same scope', () => {
     const make = (arity: number) => {
       const builder = new DiagramBuilder()
-      builder.relWire(
+      bareWire(
+        builder,
+        builder.root,
+        relSig(Array.from({ length: arity }, () => IOTA)),
       )
       return builder.build()
     }

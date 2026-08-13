@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { bareWire } from '../../fixtures/pins'
 
 describe('exploreForm adversarial graph battery', () => {
   it("distinguishes the scope of an atom's head wire", () => {
@@ -11,10 +12,11 @@ describe('exploreForm adversarial graph battery', () => {
       const outer = builder.cut(builder.root)
       const inner = builder.cut(outer)
       const atom = builder.atom(inner, sig)
-      builder.wire(
+      const head = builder.wire(
         [{ node: atom, port: { kind: 'head' } }],
         sig,
       )
+      builder.pin(head, headAtOuter ? outer : inner)
       return builder.build()
     }
 
@@ -92,7 +94,7 @@ describe('exploreForm adversarial graph battery', () => {
       const builder = new DiagramBuilder()
       const cut = builder.cut(builder.root)
       for (let index = 0; index < count; index++) {
-        builder.wire( [])
+        bareWire(builder, atRoot ? builder.root : cut)
       }
       return builder.build()
     }

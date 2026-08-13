@@ -3,7 +3,9 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagram, type Region } from '../../../src/kernel/diagram/diagram'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { applyIdentification } from '../../../src/kernel/rules/identity-rules'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import {
@@ -101,10 +103,7 @@ describe('subgraph removal and splice', () => {
     expect(spliced.wireMap.get(extraction.pattern.boundary[0]!)).toBe(value.shared)
   })
 
-  // NEEDS-ADJUDICATION: the identity a repeated boundary creates is no longer
-  // absorbed when the attachments are co-scoped — splice records the equality
-  // and it persists until an identification step absorbs it.
-  it('collapses a repeated boundary identity when attachments are co-scoped', () => {
+  it('records a co-scoped repeated boundary as an identity that identification can collapse', () => {
     const hostDiagram = bareHost()
     const spliced = spliceSubgraphMapped(
       hostDiagram,
@@ -113,15 +112,32 @@ describe('subgraph removal and splice', () => {
       ['b', 'a'],
     )
 
-    expect(spliced.diagram.nodes).toEqual({})
-    expect(Object.keys(spliced.diagram.wires)).toEqual(['a'])
-    expect(spliced.wireMap.get('stub')).toBe('a')
+    // Splice states the equality the repeated boundary position asserts; it
+    // does not act on it.
+    expect(spliced.diagram.nodes.identity_0).toEqual({
+      kind: 'identity',
+      region: 'r0',
+      sig: IOTA,
+      arity: 2,
+    })
+    expect(Object.keys(spliced.diagram.wires).sort()).toEqual(['a', 'b'])
+    // The stub lands on the wire its FIRST boundary position names; the
+    // second position becomes the identity's other port.
+    expect(spliced.wireMap.get('stub')).toBe('b')
+
+    // Co-scoped is exactly the configuration the one-point rule needs: both
+    // lines are quantified at the region where they are equated.
+    const collapsed = applyIdentification(spliced.diagram, {
+      kind: 'collapse',
+      node: 'identity_0',
+      survivor: 'a',
+      absorbed: ['b'],
+    })
+    expect(Object.keys(collapsed.wires)).toEqual(['a'])
+    expect(derivedScope(collapsed, 'a')).toBe('r0')
   })
 
-  // NEEDS-ADJUDICATION: the closing assertions expect the minted alias
-  // identity to be normalized away. Splice keeps it now, so the receipt and
-  // the surviving nodes coincide.
-  it('receipts every pre-normalization mint even when an alias is normalized away', () => {
+  it('receipts every mint, the alias identity among them', () => {
     const patternBuilder = new DiagramBuilder()
     const patternCut = patternBuilder.cut(patternBuilder.root)
     const body = patternBuilder.atom(
@@ -136,10 +152,7 @@ describe('subgraph removal and splice', () => {
       node: body,
       port: { kind: 'head' },
     }], relSig([IOTA]))
-    const pattern = mkDiagramWithBoundary(
-      patternBuilder.build(),
-      [boundary, boundary],
-    )
+    const pattern = patternBuilder.buildOpen([boundary, boundary])
     const hostDiagram = bareHost()
 
     const spliced = spliceSubgraphMapped(
@@ -149,13 +162,18 @@ describe('subgraph removal and splice', () => {
       ['b', 'a'],
     )
 
+    // The receipt lists every id the splice minted: the copied atom, the pin
+    // completing its head wire, and the identity aliasing the two boundary
+    // positions. Nothing is minted and then quietly withdrawn, so every id on
+    // the receipt is present in the result.
     expect(spliced.allocation).toEqual({
       regions: ['r1'],
-      nodes: ['n0', 'identity_0'],
+      nodes: ['n0', 'n1', 'identity_0'],
       wires: ['w1'],
     })
-    expect(spliced.diagram.nodes.identity_0).toBeUndefined()
-    expect(spliced.diagram.nodes.n0).toBeDefined()
+    for (const id of spliced.allocation.nodes) {
+      expect(spliced.diagram.nodes[id]).toBeDefined()
+    }
     expect(spliced.diagram.wires.w1).toBeDefined()
   })
 
@@ -180,6 +198,16 @@ describe('subgraph removal and splice', () => {
     })
     expect(Object.keys(spliced.diagram.wires).sort()).toEqual(['a', 'b'])
     expect(spliced.wireMap.get('stub')).toBe('a')
+
+    // Both lines are quantified outside the region where the splice equates
+    // them, so absorbing either would move a quantifier inward — join/sever's
+    // gated business, not the one-point rule's.
+    expect(() => applyIdentification(spliced.diagram, {
+      kind: 'collapse',
+      node: identities[0]![0],
+      survivor: 'a',
+      absorbed: ['b'],
+    })).toThrowError(/quantifier does not sit where it is equated/)
   })
 
   it('rejects arity, visibility, and signature mismatches', () => {

@@ -8,6 +8,11 @@ import { replayActions, type ProofAction } from '../../../src/kernel/proof/actio
 import { composeActions, mapStepIds } from '../../../src/kernel/proof/compose'
 import { EMPTY_PROOF_CONTEXT } from '../../../src/kernel/proof/context'
 import type { ProofStep } from '../../../src/kernel/proof/step'
+import {
+  bareWireAssembly,
+  bareWireDescription,
+} from '../../../src/kernel/rules/identity-rules'
+import { bareWire } from '../../fixtures/pins'
 
 function action(label: string, steps: readonly ProofStep[]): ProofAction {
   return { label, steps, placements: [] }
@@ -111,7 +116,11 @@ describe('composeActions', () => {
     const target = new DiagramBuilder().build()
     const tail: ProofAction[] = [{
       label: 'reserved vacuity',
-      steps: [{ rule: 'vacuousIntro', scope: source.root, sig: IOTA }],
+      steps: [{
+        rule: 'vacuity',
+        direction: 'insert',
+        assembly: bareWireAssembly('r0_vac', source.root, IOTA),
+      }],
       placements: [],
       allocation: { regions: ['dc'], nodes: ['n'], wires: ['r0_vac'] },
     }]
@@ -136,12 +145,12 @@ describe('composeActions', () => {
     const build = () => {
       const builder = new DiagramBuilder()
       const first = builder.ref(builder.root, 'R', relSig([IOTA]))
-      const firstWire = builder.wire( [{
+      const firstWire = builder.wire([{
         node: first,
         port: { kind: 'arg', index: 0 },
       }])
       const second = builder.ref(builder.root, 'R', relSig([IOTA]))
-      const secondWire = builder.wire( [{
+      const secondWire = builder.wire([{
         node: second,
         port: { kind: 'arg', index: 0 },
       }])
@@ -187,14 +196,15 @@ describe('composeActions', () => {
   it('reports boundary erasure on both sides', () => {
     const build = () => {
       const builder = new DiagramBuilder()
-      const wire = builder.wire( [], IOTA)
+      const wire = bareWire(builder, builder.root, IOTA)
       return { diagram: builder.build(), wire }
     }
     const target = build()
     const source = build()
     const tail = [action('erase exposed wire', [{
-      rule: 'vacuousElim',
-      wireId: source.wire,
+      rule: 'vacuity',
+      direction: 'delete',
+      assembly: bareWireDescription(source.diagram, source.wire),
     }])]
 
     expect(() => composeActions(
@@ -365,19 +375,43 @@ describe('mapStepIds', () => {
       at: { sel: mappedSelection, args: ['W0', 'W1'] },
       direction: 'forward',
     })
+    // Insert-direction ids are mint labels and pass through unmapped.
     expect(mapStepIds({
-      rule: 'vacuousIntro',
-      sig: IOTA,
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('fresh', 'r1', IOTA),
     }, iso)).toEqual({
-      rule: 'vacuousIntro',
-      sig: IOTA,
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('fresh', 'R1', IOTA),
     })
+    // Delete-direction ids are real and map with the isomorphism.
     expect(mapStepIds({
-      rule: 'vacuousElim',
-      wireId: 'w0',
+      rule: 'vacuity',
+      direction: 'delete',
+      assembly: {
+        nodes: { n0: { region: 'r1', sig: IOTA, arity: 1 } },
+        wires: {
+          w0: {
+            sig: IOTA,
+            endpoints: [{ node: 'n0', port: { kind: 'identity', index: 0 } }],
+          },
+        },
+        attachments: {},
+      },
     }, iso)).toEqual({
-      rule: 'vacuousElim',
-      wireId: 'W0',
+      rule: 'vacuity',
+      direction: 'delete',
+      assembly: {
+        nodes: { N0: { region: 'R1', sig: IOTA, arity: 1 } },
+        wires: {
+          W0: {
+            sig: IOTA,
+            endpoints: [{ node: 'N0', port: { kind: 'identity', index: 0 } }],
+          },
+        },
+        attachments: {},
+      },
     })
     expect(mapStepIds({
       rule: 'unfold',

@@ -13,8 +13,14 @@ import {
   exploreIso,
   exploreLabeling,
 } from '../../../src/kernel/diagram/canonical/explore'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 
+/**
+ * A closed diagram spanning every node kind and both derived scopes: `value`
+ * reaches out of the cut to the ref, while `head` and `other` stay inside it.
+ * The pins are the second ends the otherwise one-ended wires need.
+ */
 function host(): Diagram {
   const relation = relSig([IOTA])
   return mkDiagram({
@@ -27,11 +33,16 @@ function host(): Diagram {
       atom: { kind: 'atom', region: 'r1', sig: relation },
       ref: { kind: 'ref', region: 'r0', defId: 'P', sig: relation },
       identity: { kind: 'identity', region: 'r1', sig: IOTA, arity: 2 },
+      headpin: { kind: 'identity', region: 'r1', sig: relation, arity: 1 },
+      otherpin: { kind: 'identity', region: 'r1', sig: IOTA, arity: 1 },
     },
     wires: {
       head: {
         sig: relation,
-        endpoints: [{ node: 'atom', port: { kind: 'head' } }],
+        endpoints: [
+          { node: 'atom', port: { kind: 'head' } },
+          { node: 'headpin', port: { kind: 'identity', index: 0 } },
+        ],
       },
       value: {
         sig: IOTA,
@@ -45,6 +56,7 @@ function host(): Diagram {
         sig: IOTA,
         endpoints: [
           { node: 'identity', port: { kind: 'identity', index: 1 } },
+          { node: 'otherpin', port: { kind: 'identity', index: 0 } },
         ],
       },
     },
@@ -190,7 +202,8 @@ describe('exploreIso', () => {
     }
     for (const [id, wire] of Object.entries(diagram.wires)) {
       const image = copy.wires[iso.wires.get(id)!]!
-      expect(image.scope).toBe(iso.regions.get(wire.scope))
+      expect(derivedScope(copy, iso.wires.get(id)!))
+        .toBe(iso.regions.get(derivedScope(diagram, id)))
       const expected = wire.endpoints.map((endpoint) =>
         semanticEndpointKey(copy, {
           node: iso.nodes.get(endpoint.node)!,

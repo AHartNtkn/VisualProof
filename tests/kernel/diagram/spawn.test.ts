@@ -7,6 +7,7 @@ import {
 } from '../../../src/kernel/diagram/spawn'
 import { IOTA, relSig, sigKey } from '../../../src/kernel/diagram/sig'
 import type { IdReservation } from '../../../src/kernel/diagram/subgraph/freshId'
+import { bareWire, contentEndpoints } from '../../fixtures/pins'
 
 describe('relation node spawning', () => {
   it('adds a ref with signature-indexed argument wires', () => {
@@ -32,7 +33,7 @@ describe('relation node spawning', () => {
   it('binds a fresh atom head to an existing relational wire', () => {
     const builder = new DiagramBuilder()
     const sig = relSig([IOTA])
-    const target = builder.relWire( sig)
+    const target = bareWire(builder, builder.root, sig)
     const spawned = spawnAtomNode(
       builder.build(),
       builder.root,
@@ -43,7 +44,7 @@ describe('relation node spawning', () => {
       kind: 'atom',
       sig,
     })
-    expect(spawned.diagram.wires[target]?.endpoints).toEqual([
+    expect(contentEndpoints(spawned.diagram, target)).toEqual([
       { node: spawned.node, port: { kind: 'head' } },
     ])
   })
@@ -54,7 +55,7 @@ describe('relation node spawning', () => {
       .toThrowError(/wire 'ghost' does not exist/)
 
     const builder = new DiagramBuilder()
-    const iota = builder.wire( [])
+    const iota = bareWire(builder, builder.root)
     const diagram = builder.build()
     expect(() => spawnAtomNode(diagram, diagram.root, iota))
       .toThrowError(/has sig 'iota'/)
@@ -62,7 +63,7 @@ describe('relation node spawning', () => {
 
   it('honors reserved node ids', () => {
     const builder = new DiagramBuilder()
-    const target = builder.relWire( relSig([]))
+    const target = bareWire(builder, builder.root, relSig([]))
     const reservation: IdReservation = {
       regions: new Set(),
       nodes: new Set(['n']),

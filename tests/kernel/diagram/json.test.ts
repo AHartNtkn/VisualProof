@@ -9,6 +9,7 @@ import {
 } from '../../../src/kernel/diagram/json'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { applyIdentification } from '../../../src/kernel/rules/identity-rules'
 
 function sample() {
   const relation = relSig([IOTA])
@@ -22,11 +23,16 @@ function sample() {
       atom: { kind: 'atom', region: 'r1', sig: relation },
       ref: { kind: 'ref', region: 'r1', defId: 'P', sig: relation },
       eq: { kind: 'identity', region: 'r1', sig: IOTA, arity: 2 },
+      relationPin: { kind: 'identity', region: 'r0', sig: relation, arity: 1 },
+      otherPin: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
     },
     wires: {
       relation: {
         sig: relation,
-        endpoints: [{ node: 'atom', port: { kind: 'head' } }],
+        endpoints: [
+          { node: 'atom', port: { kind: 'head' } },
+          { node: 'relationPin', port: { kind: 'identity', index: 0 } },
+        ],
       },
       value: {
         sig: IOTA,
@@ -38,7 +44,10 @@ function sample() {
       },
       other: {
         sig: IOTA,
-        endpoints: [{ node: 'eq', port: { kind: 'identity', index: 1 } }],
+        endpoints: [
+          { node: 'eq', port: { kind: 'identity', index: 1 } },
+          { node: 'otherPin', port: { kind: 'identity', index: 0 } },
+        ],
       },
     },
   })
@@ -107,7 +116,7 @@ describe('diagram JSON', () => {
       .toThrowError(/extra fields/)
   })
 
-  it('keeps eager co-scoped identity normalization for ordinary diagram JSON', () => {
+  it('decodes a co-scoped identity without collapsing it', () => {
     const decoded = diagramFromJson({
       root: 'r0',
       regions: { r0: { kind: 'sheet' } },
@@ -118,20 +127,44 @@ describe('diagram JSON', () => {
           sig: { kind: 'iota' },
           arity: 2,
         },
+        leftPin: { kind: 'identity', region: 'r0', sig: { kind: 'iota' }, arity: 1 },
+        rightPin: { kind: 'identity', region: 'r0', sig: { kind: 'iota' }, arity: 1 },
       },
       wires: {
         left: {
           sig: { kind: 'iota' },
-          endpoints: [{ node: 'eq', port: 'i:0' }],
+          endpoints: [{ node: 'eq', port: 'i:0' }, { node: 'leftPin', port: 'i:0' }],
         },
         right: {
           sig: { kind: 'iota' },
-          endpoints: [{ node: 'eq', port: 'i:1' }],
+          endpoints: [{ node: 'eq', port: 'i:1' }, { node: 'rightPin', port: 'i:0' }],
         },
       },
     })
 
-    expect(decoded.nodes).toEqual({})
-    expect(Object.keys(decoded.wires)).toEqual(['left'])
+    // Decoding is validate-and-freeze: the file says the two lines are equal
+    // at the root, and that is what the diagram holds. Merging them is a
+    // recorded identification step, never a side effect of reading a file.
+    expect(decoded.nodes.eq).toEqual({
+      kind: 'identity',
+      region: 'r0',
+      sig: IOTA,
+      arity: 2,
+    })
+    expect(Object.keys(decoded.wires).sort()).toEqual(['left', 'right'])
+
+    const collapsed = applyIdentification(decoded, {
+      kind: 'collapse',
+      node: 'eq',
+      survivor: 'left',
+      absorbed: ['right'],
+    })
+    expect(Object.keys(collapsed.wires)).toEqual(['left'])
+    expect(collapsed.nodes.eq).toEqual({
+      kind: 'identity',
+      region: 'r0',
+      sig: IOTA,
+      arity: 1,
+    })
   })
 })

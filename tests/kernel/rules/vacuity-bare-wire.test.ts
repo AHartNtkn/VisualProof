@@ -12,13 +12,11 @@ import {
   bareWireDescription,
 } from '../../../src/kernel/rules/identity-rules'
 
-// NEEDS-ADJUDICATION: this file was written against applyVacuousIntro /
-// applyVacuousElim, whose subject — a wire with no endpoints at all — is
-// unrepresentable now that a wire needs two ends. Its successor, the bare
-// two-point segment, is what these tests now build, and tests/kernel/rules/
-// identity-rules.test.ts already covers that shape directly. Keeping both
-// files means duplicated coverage; deciding which survives is a judgement
-// call, not a conversion.
+// Vacuity on one shape — the bare two-point segment, the drawable floating
+// existential — swept across both signature sorts and both polarities.
+// identity-rules.test.ts states each of the three rules once; this file is
+// where the segment's sig-indexing, its gatelessness, and the exact
+// insert/delete round trip are pinned.
 
 function wiredWireOf(sig: Sig): { diagram: Diagram; wire: string } {
   const builder = new DiagramBuilder()

@@ -4,6 +4,7 @@ import {
   boundaryArity,
   mkDiagramWithBoundary,
 } from '../../../src/kernel/diagram/boundary'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 
 describe('DiagramWithBoundary', () => {
@@ -23,11 +24,7 @@ describe('DiagramWithBoundary', () => {
     expect(Object.isFrozen(bounded.boundary)).toBe(true)
   })
 
-  // NEEDS-ADJUDICATION: the second clause requires a boundary wire to be
-  // scoped at the root. A boundary entry is now an incidence at the root, so
-  // every boundary wire's derived scope is the root by construction and the
-  // check has nothing to reject.
-  it('rejects missing and non-root-scoped boundary wires', () => {
+  it('rejects missing boundary wires and roots the scope of every wire it exposes', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const ref = builder.ref(cut, 'P', relSig([IOTA]))
@@ -38,7 +35,12 @@ describe('DiagramWithBoundary', () => {
 
     expect(() => mkDiagramWithBoundary(diagram, ['ghost']))
       .toThrowError(/does not exist/)
-    expect(() => mkDiagramWithBoundary(diagram, [inner]))
-      .toThrowError(/must be scoped at the diagram root/)
+
+    // Every endpoint of `inner` sits inside the cut, so it is cut-scoped as
+    // an internal wire; exposing it adds a root incidence, which is what
+    // makes a boundary wire root-scoped — there is nothing left to reject.
+    expect(derivedScope(diagram, inner)).toBe(cut)
+    const bounded = mkDiagramWithBoundary(diagram, [inner])
+    expect(derivedScope(bounded.diagram, inner, bounded.boundary)).toBe(builder.root)
   })
 })

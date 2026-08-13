@@ -1,9 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import {
-  mkDiagramWithBoundary,
-  type DiagramWithBoundary,
-} from '../../../src/kernel/diagram/boundary'
+import type { DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import type {
   Diagram,
   RegionId,
@@ -12,6 +9,7 @@ import type {
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 import { spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
+import { bareWire } from '../../fixtures/pins'
 
 function expectFound(
   host: Diagram,
@@ -35,17 +33,17 @@ function expectFound(
 function unaryRefPattern(defId = 'P'): DiagramWithBoundary {
   const builder = new DiagramBuilder()
   const ref = builder.ref(builder.root, defId, relSig([IOTA]))
-  const stub = builder.wire( [
+  const stub = builder.wire([
     { node: ref, port: { kind: 'arg', index: 0 } },
   ])
-  return mkDiagramWithBoundary(builder.build(), [stub])
+  return builder.buildOpen([stub])
 }
 
 describe('splice to exact-match round trip', () => {
   it('finds a spliced reference pattern at the root with its attachment', () => {
     const pattern = unaryRefPattern()
     const hostBuilder = new DiagramBuilder()
-    const attachment = hostBuilder.wire( [])
+    const attachment = bareWire(hostBuilder, hostBuilder.root)
     expectFound(
       hostBuilder.build(),
       hostBuilder.root,
@@ -59,7 +57,7 @@ describe('splice to exact-match round trip', () => {
     const hostBuilder = new DiagramBuilder()
     const outer = hostBuilder.cut(hostBuilder.root)
     const inner = hostBuilder.cut(outer)
-    const attachment = hostBuilder.wire( [])
+    const attachment = bareWire(hostBuilder, hostBuilder.root)
     expectFound(hostBuilder.build(), inner, pattern, [attachment])
   })
 
@@ -67,12 +65,12 @@ describe('splice to exact-match round trip', () => {
     const patternBuilder = new DiagramBuilder()
     const cut = patternBuilder.cut(patternBuilder.root)
     const ref = patternBuilder.ref(cut, 'P', relSig([IOTA]))
-    const stub = patternBuilder.wire( [
+    const stub = patternBuilder.wire([
       { node: ref, port: { kind: 'arg', index: 0 } },
     ])
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [stub])
+    const pattern = patternBuilder.buildOpen([stub])
     const hostBuilder = new DiagramBuilder()
-    const attachment = hostBuilder.wire( [])
+    const attachment = bareWire(hostBuilder, hostBuilder.root)
 
     expectFound(
       hostBuilder.build(),
@@ -85,7 +83,7 @@ describe('splice to exact-match round trip', () => {
   it('finds a closed relational-atom pattern after splicing', () => {
     const patternBuilder = new DiagramBuilder()
     patternBuilder.atom(patternBuilder.root, relSig([IOTA]))
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    const pattern = patternBuilder.buildOpen([])
     const hostBuilder = new DiagramBuilder()
     hostBuilder.ref(hostBuilder.root, 'Existing', relSig([]))
 
@@ -99,18 +97,15 @@ describe('splice to exact-match round trip', () => {
       'P',
       relSig([IOTA, IOTA]),
     )
-    const first = patternBuilder.wire( [
+    const first = patternBuilder.wire([
       { node: ref, port: { kind: 'arg', index: 0 } },
     ])
-    const second = patternBuilder.wire( [
+    const second = patternBuilder.wire([
       { node: ref, port: { kind: 'arg', index: 1 } },
     ])
-    const pattern = mkDiagramWithBoundary(
-      patternBuilder.build(),
-      [first, second],
-    )
+    const pattern = patternBuilder.buildOpen([first, second])
     const hostBuilder = new DiagramBuilder()
-    const attachment = hostBuilder.wire( [])
+    const attachment = bareWire(hostBuilder, hostBuilder.root)
 
     expectFound(
       hostBuilder.build(),
@@ -127,19 +122,16 @@ describe('splice to exact-match round trip', () => {
       'P',
       relSig([IOTA, IOTA]),
     )
-    const first = patternBuilder.wire( [
+    const first = patternBuilder.wire([
       { node: ref, port: { kind: 'arg', index: 0 } },
     ])
-    const second = patternBuilder.wire( [
+    const second = patternBuilder.wire([
       { node: ref, port: { kind: 'arg', index: 1 } },
     ])
-    const pattern = mkDiagramWithBoundary(
-      patternBuilder.build(),
-      [first, second],
-    )
+    const pattern = patternBuilder.buildOpen([first, second])
     const hostBuilder = new DiagramBuilder()
-    const firstAttachment = hostBuilder.wire( [])
-    const secondAttachment = hostBuilder.wire( [])
+    const firstAttachment = bareWire(hostBuilder, hostBuilder.root)
+    const secondAttachment = bareWire(hostBuilder, hostBuilder.root)
     const host = hostBuilder.build()
 
     expectFound(host, host.root, pattern, [firstAttachment, secondAttachment])
@@ -159,7 +151,7 @@ describe('splice to exact-match round trip', () => {
       'Hub',
       relSig([IOTA]),
     )
-    const attachment = hostBuilder.wire( [
+    const attachment = hostBuilder.wire([
       { node: existing, port: { kind: 'arg', index: 0 } },
       { node: hub, port: { kind: 'arg', index: 0 } },
     ])

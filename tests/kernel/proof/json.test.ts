@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { dwbFromJson, dwbToJson } from '../../../src/kernel/diagram/json'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
@@ -17,6 +17,10 @@ import {
 } from '../../../src/kernel/proof/json'
 import type { ProofStep } from '../../../src/kernel/proof/step'
 import type { Theorem } from '../../../src/kernel/proof/theorem'
+import {
+  bareWireAssembly,
+  pointAssembly,
+} from '../../../src/kernel/rules/identity-rules'
 
 function roundTrip(step: ProofStep): void {
   const encoded = JSON.parse(JSON.stringify(stepToJson(step)))
@@ -104,13 +108,16 @@ describe('step JSON', () => {
     const wire = builder.wire( [
       { node, port: { kind: 'arg', index: 0 } },
     ])
+    // A selected wire's every end must be selected too, and a wire end is a
+    // node: the argument's free tip is the pin.
+    const tip = builder.pin(wire, builder.root)
     const diagram = builder.build()
     const step: ProofStep = {
       rule: 'iteration',
       sel: mkSelection(diagram, {
         region: diagram.root,
         regions: [],
-        nodes: [node],
+        nodes: [node, tip],
         wires: [wire],
       }),
       target: diagram.root,
@@ -122,7 +129,7 @@ describe('step JSON', () => {
       sel: {
         region: diagram.root,
         regions: [],
-        nodes: [node],
+        nodes: [node, tip],
         wires: [wire],
       },
       target: diagram.root,
@@ -170,8 +177,55 @@ describe('step JSON', () => {
         at: { sel: selection, args: ['w0'] },
         direction: 'reverse',
       },
-      { rule: 'vacuousIntro', scope: 'r1', sig: IOTA },
-      { rule: 'vacuousElim', wireId: 'w0' },
+      {
+        rule: 'vacuity',
+        direction: 'insert',
+        assembly: pointAssembly('pt', 'r1', IOTA),
+      },
+      {
+        rule: 'vacuity',
+        direction: 'delete',
+        assembly: bareWireAssembly('w0', 'r1', IOTA),
+      },
+      {
+        rule: 'vacuity',
+        direction: 'insert',
+        assembly: {
+          nodes: { pin: { region: 'r1', sig: IOTA, arity: 1 } },
+          wires: {},
+          attachments: {
+            w0: [{ node: 'pin', port: { kind: 'identity', index: 0 } }],
+          },
+        },
+      },
+      {
+        rule: 'presentation',
+        input: {
+          region: 'r1',
+          removeNodes: ['n0', 'n1'],
+          // Repeats are duplicate ports: the fused node loops on 'w1'.
+          addNodes: { fused: ['w0', 'w1', 'w1', 'w2'] },
+        },
+      },
+      {
+        rule: 'identification',
+        input: {
+          kind: 'collapse',
+          node: 'n0',
+          survivor: 'w0',
+          absorbed: ['w1'],
+        },
+      },
+      {
+        rule: 'identification',
+        input: {
+          kind: 'expose',
+          node: 'n0',
+          survivor: 'w0',
+          freshWire: 'w2',
+          transfer: [{ node: 'n1', port: { kind: 'arg', index: 0 } }],
+        },
+      },
       { rule: 'unfold', nodeId: 'n0' },
       {
         rule: 'fold',
@@ -292,6 +346,7 @@ describe('step JSON', () => {
       'anchoredWireSplit', 'anchoredWireContract', 'headStrip',
       'closedTermIntro', 'fusion', 'fission',
       'bodyAttach', 'bodyDetach',
+      'vacuousIntro', 'vacuousElim',
     ]) {
       expect(() => stepFromJson({ rule })).toThrow(/unknown rule/)
     }
@@ -330,10 +385,20 @@ describe('step JSON', () => {
       },
       })).toThrowError(/unknown field 'termCertificates'/)
     expect(() => stepFromJson({
-      rule: 'vacuousIntro',
-      sig: { kind: 'iota' },
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: { nodes: {}, wires: {}, attachments: {} },
       body: {},
-    })).toThrowError(/unknown field 'body'/)
+    })).toThrowError(/vacuity step has unknown field 'body'/)
+    expect(() => stepFromJson({
+      rule: 'vacuity',
+      direction: 'sideways',
+      assembly: { nodes: {}, wires: {}, attachments: {} },
+    })).toThrowError(/vacuity direction must be 'insert'\|'delete'/)
+    expect(() => stepFromJson({
+      rule: 'identification',
+      input: { kind: 'merge', node: 'n0', survivor: 'w0', absorbed: ['w1'] },
+    })).toThrowError(/identification input\.kind must be 'collapse'\|'expose'/)
     expect(() => stepFromJson({
       rule: 'fold',
       occurrence: selection,
@@ -365,30 +430,35 @@ describe('diagram-with-boundary JSON', () => {
   it('round-trips repeated boundary positions without collapsing arity', () => {
     const builder = new DiagramBuilder()
     const wire = builder.wire( [], IOTA)
-    const aliased = mkDiagramWithBoundary(builder.build(), [wire, wire])
+    const aliased = builder.buildOpen([wire, wire])
     const decoded = dwbFromJson(JSON.parse(JSON.stringify(dwbToJson(aliased))))
 
     expect(decoded.boundary).toEqual([wire, wire])
   })
 
-  it('round-trips and re-enforces the root-scoped-boundary invariant', () => {
+  it('derives a boundary wire root scope that the file never states', () => {
+    // The boundary entry IS the wire's root incidence, so a formal reaching
+    // only into a cut comes back root-scoped without the file saying so —
+    // and a file that tries to say so is rejected as extra data.
     const builder = new DiagramBuilder()
-    const bare = builder.wire( [], IOTA)
-    const dwb = mkDiagramWithBoundary(builder.build(), [bare])
-    const decoded = dwbFromJson(JSON.parse(JSON.stringify(dwbToJson(dwb))))
-
-    expect(decoded.boundary).toEqual([bare])
+    const cut = builder.cut(builder.root)
+    const atom = builder.atom(cut, relSig([IOTA]))
+    const formal = builder.wire( [{ node: atom, port: { kind: 'arg', index: 0 } }])
+    const dwb = builder.buildOpen([formal])
     const encoded = JSON.parse(JSON.stringify(dwbToJson(dwb))) as {
-      diagram: {
-        root: string
-        regions: Record<string, unknown>
-        wires: Record<string, { scope: string }>
-      }
+      diagram: { root: string; wires: Record<string, Record<string, unknown>> }
       boundary: string[]
     }
-    encoded.diagram.regions.r1 = { kind: 'cut', parent: encoded.diagram.root }
-    encoded.diagram.wires[encoded.boundary[0]!]!.scope = 'r1'
-    expect(() => dwbFromJson(encoded)).toThrowError(/must be scoped at the diagram root/)
+
+    expect(encoded.diagram.wires[formal]).not.toHaveProperty('scope')
+    const decoded = dwbFromJson(JSON.parse(JSON.stringify(encoded)))
+    expect(decoded.boundary).toEqual([formal])
+    expect(derivedScope(decoded.diagram, formal, decoded.boundary))
+      .toBe(decoded.diagram.root)
+
+    encoded.diagram.wires[formal]!.scope = cut
+    expect(() => dwbFromJson(encoded))
+      .toThrowError(new RegExp(`wire '${formal}' has unknown field 'scope'`))
   })
 
   it('includes the supplied context when a boundary wire is missing', () => {
@@ -417,7 +487,7 @@ describe('theorem JSON', () => {
       node: ref,
       port: { kind: 'arg', index: 0 },
     }])
-    const side = mkDiagramWithBoundary(builder.build(), [boundary])
+    const side = builder.buildOpen([boundary])
     const theorem: Theorem = {
       name: 'noop',
       lhs: side,
@@ -445,15 +515,15 @@ describe('theorem JSON', () => {
 
   it('rejects obsolete flat theorem fields and nested extras', () => {
     const builder = new DiagramBuilder()
-    const side = dwbToJson(mkDiagramWithBoundary(builder.build(), []))
+    const side = dwbToJson(builder.buildOpen([]))
     expect(() => theoremFromJson({
       name: 'old', lhs: side, rhs: side, actions: [], steps: [],
     })).toThrowError(/unknown field 'steps'/)
 
     const theorem: Theorem = {
       name: 'strict',
-      lhs: mkDiagramWithBoundary(builder.build(), []),
-      rhs: mkDiagramWithBoundary(builder.build(), []),
+      lhs: builder.buildOpen([]),
+      rhs: builder.buildOpen([]),
       actions: [{
         label: 'strict action',
         steps: [{

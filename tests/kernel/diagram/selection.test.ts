@@ -68,7 +68,10 @@ describe('subgraph selection', () => {
     const contents = selectionContents(value.diagram, selection)
 
     expect([...contents.allRegions]).toEqual([value.cut])
-    expect([...contents.allNodes]).toEqual([value.inner])
+    // The inside wire's pin lives in the cut, so it is selected content too.
+    const insidePin = value.diagram.wires[value.inside]!.endpoints
+      .find((endpoint) => endpoint.node !== value.inner)!.node
+    expect([...contents.allNodes].sort()).toEqual([value.inner, insidePin].sort())
     expect(contents.internalWires).toEqual([value.inside])
     expect(contents.touchingWires).toEqual([value.shared])
   })

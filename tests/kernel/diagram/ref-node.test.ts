@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { portKey } from '../../../src/kernel/diagram/diagram'
 import {
   spawnAtomNode,
@@ -11,6 +10,7 @@ import {
   applyAtomSpawn,
   applyRefSpawn,
 } from '../../../src/kernel/rules/spawn'
+import { bareWire, contentEndpoints } from '../../fixtures/pins'
 
 describe('ref and atom spawning vocabulary', () => {
   it('spawnRefNode creates a ref with recursively signature-indexed argument wires', () => {
@@ -35,11 +35,11 @@ describe('ref and atom spawning vocabulary', () => {
   it('spawnAtomNode binds a fresh atom head to an existing relational wire', () => {
     const builder = new DiagramBuilder()
     const sig = relSig([IOTA])
-    const target = builder.relWire( sig)
+    const target = bareWire(builder, builder.root, sig)
     const spawned = spawnAtomNode(builder.build(), builder.root, target)
 
     expect(spawned.diagram.nodes[spawned.node]).toMatchObject({ kind: 'atom', sig })
-    expect(spawned.diagram.wires[target]!.endpoints).toEqual([
+    expect(contentEndpoints(spawned.diagram, target)).toEqual([
       { node: spawned.node, port: { kind: 'head' } },
     ])
   })
@@ -47,8 +47,8 @@ describe('ref and atom spawning vocabulary', () => {
   it('applyRefSpawn uses the definition store and checks the full recursive signature', () => {
     const definitionBuilder = new DiagramBuilder()
     const nested = relSig([IOTA])
-    const boundary = definitionBuilder.wire( [], nested)
-    const relation = mkDiagramWithBoundary(definitionBuilder.build(), [boundary])
+    const boundary = definitionBuilder.wire([], nested)
+    const relation = definitionBuilder.buildOpen([boundary])
     const store = new Map([['P', relation]])
 
     const hostBuilder = new DiagramBuilder()
@@ -62,7 +62,7 @@ describe('ref and atom spawning vocabulary', () => {
   it('applyAtomSpawn creates an atom through the atom-named rule entry', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const target = builder.relWire( relSig([]))
+    const target = bareWire(builder, builder.root, relSig([]))
     const spawned = applyAtomSpawn(builder.build(), cut, target)
     expect(Object.values(spawned.nodes).some((node) => node.kind === 'atom')).toBe(true)
   })

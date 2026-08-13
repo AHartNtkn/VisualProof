@@ -12,6 +12,7 @@ import {
   removeSubgraph,
   spliceSubgraph,
 } from '../../../src/kernel/diagram/subgraph/splice'
+import { bareWire } from '../../fixtures/pins'
 
 function roundTrip(diagram: Diagram, rawSelection: SubgraphSelection): void {
   const selection = mkSelection(diagram, rawSelection)
@@ -32,11 +33,14 @@ describe('extract, remove, and splice canonical round trip', () => {
     const outside = builder.ref(builder.root, 'Outside', relSig([IOTA]))
     const cut = builder.cut(builder.root)
     const inside = builder.ref(cut, 'Inside', relSig([IOTA]))
-    builder.wire( [
+    const crossing = builder.wire([
       { node: outside, port: { kind: 'arg', index: 0 } },
       { node: inside, port: { kind: 'arg', index: 0 } },
     ])
-    builder.wire( [])
+    // The crossing wire outlives the removal of the cut, so it is pinned at
+    // its own scope first.
+    builder.pin(crossing, builder.root)
+    bareWire(builder, cut)
     const diagram = builder.build()
 
     roundTrip(diagram, {
@@ -52,7 +56,7 @@ describe('extract, remove, and splice canonical round trip', () => {
     const cut = builder.cut(builder.root)
     const atom = builder.atom(cut, relSig([IOTA, IOTA]))
     const feeder = builder.ref(cut, 'Feeder', relSig([IOTA]))
-    builder.wire( [
+    builder.wire([
       { node: feeder, port: { kind: 'arg', index: 0 } },
       { node: atom, port: { kind: 'arg', index: 0 } },
       { node: atom, port: { kind: 'arg', index: 1 } },
@@ -72,7 +76,7 @@ describe('extract, remove, and splice canonical round trip', () => {
     const direct = builder.ref(builder.root, 'Direct', relSig([IOTA]))
     const cut = builder.cut(builder.root)
     const nested = builder.ref(cut, 'Nested', relSig([IOTA]))
-    const wire = builder.wire( [
+    const wire = builder.wire([
       { node: direct, port: { kind: 'arg', index: 0 } },
       { node: nested, port: { kind: 'arg', index: 0 } },
     ])

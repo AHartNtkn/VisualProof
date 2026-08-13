@@ -13,15 +13,15 @@ import { occurrenceToSelection } from '../../../src/kernel/diagram/subgraph/occu
 function fixture() {
   const patternBuilder = new DiagramBuilder()
   const patternNode = patternBuilder.ref(patternBuilder.root, 'P', relSig([IOTA]))
-  const patternWire = patternBuilder.wire( [
+  const patternWire = patternBuilder.wire([
     { node: patternNode, port: { kind: 'arg', index: 0 } },
   ])
-  const pattern = mkDiagramWithBoundary(patternBuilder.build(), [patternWire])
+  const pattern = patternBuilder.buildOpen([patternWire])
 
   const hostBuilder = new DiagramBuilder()
   const hostNode = hostBuilder.ref(hostBuilder.root, 'P', relSig([IOTA]))
   const extra = hostBuilder.ref(hostBuilder.root, 'Q', relSig([IOTA]))
-  const hostWire = hostBuilder.wire( [
+  const hostWire = hostBuilder.wire([
     { node: hostNode, port: { kind: 'arg', index: 0 } },
     { node: extra, port: { kind: 'arg', index: 0 } },
   ])
@@ -150,7 +150,7 @@ describe('occurrence certificates', () => {
     const patternBuilder = new DiagramBuilder()
     const patternCut = patternBuilder.cut(patternBuilder.root)
     const patternNode = patternBuilder.ref(patternCut, 'P', relSig([]))
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    const pattern = patternBuilder.buildOpen([])
 
     const hostBuilder = new DiagramBuilder()
     const hostCut = hostBuilder.cut(hostBuilder.root)
@@ -176,7 +176,9 @@ describe('occurrence certificates', () => {
   })
 
   it('preserves exact unordered identity incidence multisets', () => {
-    const pattern = mkDiagramWithBoundary(mkDiagram({
+    // Each stub's boundary incidence is its second end, and puts its derived
+    // scope at the pattern root.
+    const pattern = mkDiagramWithBoundary({
       root: 'p0',
       regions: {
         p0: { kind: 'sheet' },
@@ -201,7 +203,10 @@ describe('occurrence certificates', () => {
           }],
         },
       },
-    }), ['left', 'right'])
+    }, ['left', 'right'])
+    // Root pins are the host counterpart of those boundary incidences: they
+    // are the second end of each line and hold its quantifier at the sheet,
+    // so both lines are visible at the occurrence region.
     const host = mkDiagram({
       root: 'h0',
       regions: {
@@ -210,21 +215,23 @@ describe('occurrence certificates', () => {
       },
       nodes: {
         identity: { kind: 'identity', region: 'h1', sig: IOTA, arity: 2 },
+        aPin: { kind: 'identity', region: 'h0', sig: IOTA, arity: 1 },
+        bPin: { kind: 'identity', region: 'h0', sig: IOTA, arity: 1 },
       },
       wires: {
         a: {
           sig: IOTA,
-          endpoints: [{
-            node: 'identity',
-            port: { kind: 'identity', index: 1 },
-          }],
+          endpoints: [
+            { node: 'identity', port: { kind: 'identity', index: 1 } },
+            { node: 'aPin', port: { kind: 'identity', index: 0 } },
+          ],
         },
         b: {
           sig: IOTA,
-          endpoints: [{
-            node: 'identity',
-            port: { kind: 'identity', index: 0 },
-          }],
+          endpoints: [
+            { node: 'identity', port: { kind: 'identity', index: 0 } },
+            { node: 'bPin', port: { kind: 'identity', index: 0 } },
+          ],
         },
       },
     })

@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
+import { pointAssembly } from '../../../src/kernel/rules/identity-rules'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { relSig, IOTA } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
@@ -81,8 +83,9 @@ describe('verified ProofContext authority', () => {
     const action: ProofAction = { label: 'noop-looking', steps: [], placements: [] }
     const diagram = emptyDiagram()
     const step = {
-      rule: 'vacuousIntro',
-      sig: IOTA,
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: pointAssembly('point', diagram.root, IOTA),
     } as const
 
     for (const forged of [lookalike, prototype]) {
@@ -236,58 +239,71 @@ describe('verified ProofContext authority', () => {
 
   it('owns immutable relation snapshots and preserves valid incremental order', () => {
     const baseBuilder = new DiagramBuilder()
-    const baseWire = baseBuilder.wire( [])
-    const baseSource = mkDiagramWithBoundary(baseBuilder.build(), [baseWire])
+    const baseWire = baseBuilder.wire([])
+    const baseSource = baseBuilder.buildOpen([baseWire])
     const first = extendRelations(EMPTY_PROOF_CONTEXT, [['Base', baseSource]])
 
     const aliasBuilder = new DiagramBuilder()
     const aliasNode = aliasBuilder.ref(aliasBuilder.root, 'Base', relSig([IOTA]))
-    const aliasWire = aliasBuilder.wire( [{ node: aliasNode, port: { kind: 'arg', index: 0 } }])
-    const second = extendRelations(first, [['Alias', mkDiagramWithBoundary(aliasBuilder.build(), [aliasWire])]])
+    const aliasWire = aliasBuilder.wire([{ node: aliasNode, port: { kind: 'arg', index: 0 } }])
+    const second = extendRelations(first, [['Alias', aliasBuilder.buildOpen([aliasWire])]])
     expect([...second.relations.keys()]).toEqual(['Base', 'Alias'])
 
     expect(() => (second.relations as Map<string, unknown>).delete('Base')).toThrow()
     const stored = second.relations.get('Base')!
-    expect(() => ((stored.diagram.wires[baseWire] as { scope: string }).scope = 'forged')).toThrow()
-    ;(baseSource.diagram.wires[baseWire] as { scope: string }).scope = 'mutated-source'
-    expect(stored.diagram.wires[baseWire]!.scope).toBe(stored.diagram.root)
+    expect(() => ((stored.diagram.wires[baseWire] as { sig: unknown }).sig = 'forged'))
+      .toThrow()
+    ;(baseSource.diagram.wires[baseWire] as { sig: unknown }).sig = 'mutated-source'
+    expect(stored.diagram.wires[baseWire]!.sig).toEqual(IOTA)
+    expect(derivedScope(stored.diagram, baseWire, stored.boundary))
+      .toBe(stored.diagram.root)
   })
 
   it('rejects a reference whose arity matches but nested signature differs', () => {
     const baseBuilder = new DiagramBuilder()
     const nested = relSig([IOTA])
-    const baseWire = baseBuilder.wire( [], nested)
-    const base = mkDiagramWithBoundary(baseBuilder.build(), [baseWire])
+    const baseWire = baseBuilder.wire([], nested)
+    const base = baseBuilder.buildOpen([baseWire])
     const first = extendRelations(EMPTY_PROOF_CONTEXT, [['Base', base]])
 
     const aliasBuilder = new DiagramBuilder()
     const alias = aliasBuilder.ref(aliasBuilder.root, 'Base', relSig([IOTA]))
-    const aliasWire = aliasBuilder.wire( [
+    const aliasWire = aliasBuilder.wire([
       { node: alias, port: { kind: 'arg', index: 0 } },
     ], IOTA)
 
     expect(() => extendRelations(first, [[
       'Alias',
-      mkDiagramWithBoundary(aliasBuilder.build(), [aliasWire]),
+      aliasBuilder.buildOpen([aliasWire]),
     ]])).toThrowError(
       "relation 'Alias' body: reference node 'n0' signature '(i)' "
       + "does not match definition 'Base' signature '((i))'",
     )
   })
 
-  it('rejects a relation boundary below the root while preserving repeated root positions', () => {
+  it('roots a relation boundary however deep its other ends sit, and preserves repeated root positions', () => {
+    // A formal whose only node end is a pin inside a cut is still exposed at
+    // the frame, and the frame exit is a root incidence — so the formal is
+    // root-quantified and the body is a well-formed relation.
     const nestedBuilder = new DiagramBuilder()
     const cut = nestedBuilder.cut(nestedBuilder.root)
-    const nested = nestedBuilder.wire( [])
-    expect(() => verifyTheory({
-      relations: [['Bad', mkDiagramWithBoundary(nestedBuilder.build(), [nested])]],
+    const nested = nestedBuilder.wire([])
+    nestedBuilder.pin(nested, cut)
+    const nestedBody = nestedBuilder.buildOpen([nested])
+    expect(derivedScope(nestedBody.diagram, nested)).toBe(cut)
+    expect(derivedScope(nestedBody.diagram, nested, nestedBody.boundary))
+      .toBe(nestedBody.diagram.root)
+
+    const nestedCtx = verifyTheory({
+      relations: [['Deep', nestedBody]],
       theorems: [],
-    })).toThrowError(/boundary wire .* (?:is not|must be) scoped at the diagram root/)
+    })
+    expect(nestedCtx.relations.get('Deep')!.boundary).toEqual([nested])
 
     const rootBuilder = new DiagramBuilder()
-    const rootWire = rootBuilder.wire( [])
+    const rootWire = rootBuilder.wire([])
     const ctx = verifyTheory({
-      relations: [['Alias', mkDiagramWithBoundary(rootBuilder.build(), [rootWire, rootWire])]],
+      relations: [['Alias', rootBuilder.buildOpen([rootWire, rootWire])]],
       theorems: [],
     })
     expect(ctx.relations.get('Alias')!.boundary).toEqual([rootWire, rootWire])

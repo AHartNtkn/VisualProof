@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { IOTA, relSig, sigEquals } from '../../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
+import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 
 describe('extraction with open signature-indexed lines', () => {
   it('turns an externally scoped atom head into a typed boundary stub', () => {
@@ -15,6 +16,9 @@ describe('extraction with open signature-indexed lines', () => {
       [{ node: atom, port: { kind: 'head' } }],
       relation,
     )
+    // The head's quantifier is outside the cut, so extracting the cut has to
+    // expose it as a boundary stub.
+    builder.pin(head, builder.root)
     const diagram = builder.build()
     const selection = mkSelection(diagram, {
       region: diagram.root,
@@ -26,15 +30,21 @@ describe('extraction with open signature-indexed lines', () => {
     const stub = extraction.pattern.diagram.wires[extraction.pattern.boundary[0]!]!
 
     expect(extraction.attachments).toEqual([head])
-    expect(stub.scope).toBe(extraction.pattern.diagram.root)
+    expect(derivedScope(
+      extraction.pattern.diagram,
+      extraction.pattern.boundary[0]!,
+      extraction.pattern.boundary,
+    )).toBe(extraction.pattern.diagram.root)
     expect(sigEquals(stub.sig, relation)).toBe(true)
     expect(stub.endpoints).toEqual([{ node: atom, port: { kind: 'head' } }])
-    expect(() => mkDiagram({
+    // The pattern is well-formed as the open diagram it is: its boundary
+    // incidence is the stub's second end.
+    expect(() => mkDiagramWithBoundary({
       root: extraction.pattern.diagram.root,
       regions: { ...extraction.pattern.diagram.regions },
       nodes: { ...extraction.pattern.diagram.nodes },
       wires: { ...extraction.pattern.diagram.wires },
-    })).not.toThrow()
+    }, extraction.pattern.boundary)).not.toThrow()
   })
 
   it('keeps a fully internal extraction closed', () => {
@@ -62,14 +72,16 @@ describe('extraction with open signature-indexed lines', () => {
     const cut = builder.cut(builder.root)
     const unaryAtom = builder.atom(cut, unary)
     const nullaryAtom = builder.atom(cut, nullary)
-    builder.wire(
+    const unaryHead = builder.wire(
       [{ node: unaryAtom, port: { kind: 'head' } }],
       unary,
     )
-    builder.wire(
+    builder.pin(unaryHead, builder.root)
+    const nullaryHead = builder.wire(
       [{ node: nullaryAtom, port: { kind: 'head' } }],
       nullary,
     )
+    builder.pin(nullaryHead, builder.root)
     const diagram = builder.build()
     const extraction = extractSubgraph(diagram, mkSelection(diagram, {
       region: diagram.root,
@@ -108,7 +120,11 @@ describe('extraction with open signature-indexed lines', () => {
 
     expect(extraction.attachments).toEqual([crossing])
     const stub = extraction.pattern.diagram.wires[extraction.pattern.boundary[0]!]!
-    expect(stub.scope).toBe(extraction.pattern.diagram.root)
+    expect(derivedScope(
+      extraction.pattern.diagram,
+      extraction.pattern.boundary[0]!,
+      extraction.pattern.boundary,
+    )).toBe(extraction.pattern.diagram.root)
     expect(sigEquals(stub.sig, IOTA)).toBe(true)
   })
 })

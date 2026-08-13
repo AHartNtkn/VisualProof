@@ -16,6 +16,7 @@ import {
   type Theorem,
   type Theory,
 } from '../../../src/kernel/proof/index'
+import { contentEndpoints } from '../../fixtures/pins'
 
 const PROPOSITION = relSig([])
 
@@ -23,19 +24,19 @@ function dropQ(): Theorem {
   const left = new DiagramBuilder()
   const p = left.atom(left.root, PROPOSITION)
   const q = left.atom(left.root, PROPOSITION)
-  const boundary = left.wire( [
+  const boundary = left.wire([
     { node: p, port: { kind: 'head' } },
     { node: q, port: { kind: 'head' } },
   ], PROPOSITION)
-  const lhs = mkDiagramWithBoundary(left.build(), [boundary])
+  const lhs = left.buildOpen([boundary])
 
   const right = new DiagramBuilder()
   const rightP = right.atom(right.root, PROPOSITION)
-  const rightBoundary = right.wire( [{
+  const rightBoundary = right.wire([{
     node: rightP,
     port: { kind: 'head' },
   }], PROPOSITION)
-  const rhs = mkDiagramWithBoundary(right.build(), [rightBoundary])
+  const rhs = right.buildOpen([rightBoundary])
 
   return {
     name: 'dropQ',
@@ -97,12 +98,15 @@ describe('stored derived rule pipeline', () => {
     const host = new DiagramBuilder()
     const p = host.atom(host.root, PROPOSITION)
     const q = host.atom(host.root, PROPOSITION)
-    const boundary = host.wire( [
+    const boundary = host.wire([
       { node: p, port: { kind: 'head' } },
       { node: q, port: { kind: 'head' } },
     ], PROPOSITION)
+    // Q's head goes when the theorem fires; the pin keeps the line above the
+    // two-end floor at the scope it already had.
+    host.pin(boundary, host.root)
     const marker = host.atom(host.root, relSig([IOTA]))
-    const markerArgument = host.wire( [{
+    const markerArgument = host.wire([{
       node: marker,
       port: { kind: 'arg', index: 0 },
     }])
@@ -123,8 +127,11 @@ describe('stored derived rule pipeline', () => {
       direction: 'forward',
     }], ctx)
 
-    expect(Object.values(result.nodes)).toHaveLength(2)
-    expect(result.wires[boundary]?.endpoints).toHaveLength(1)
+    // P and the marker survive as content, alongside the pins holding the
+    // proposition line and the marker's argument.
+    expect(Object.values(result.nodes)
+      .filter((node) => node.kind !== 'identity')).toHaveLength(2)
+    expect(contentEndpoints(result, boundary)).toHaveLength(1)
     expect(result.wires[markerArgument]).toBeDefined()
   })
 
@@ -145,10 +152,13 @@ describe('stored derived rule pipeline', () => {
     const host = new DiagramBuilder()
     const p = host.atom(host.root, PROPOSITION)
     const q = host.atom(host.root, PROPOSITION)
-    const boundary = host.wire( [
+    const boundary = host.wire([
       { node: p, port: { kind: 'head' } },
       { node: q, port: { kind: 'head' } },
     ], PROPOSITION)
+    // Q's head goes when the theorem fires; the pin keeps the line above the
+    // two-end floor at the scope it already had.
+    host.pin(boundary, host.root)
     const diagram = host.build()
 
     const native = replayProof(diagram, [{

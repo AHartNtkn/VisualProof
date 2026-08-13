@@ -116,12 +116,6 @@ describe('Phase-1 primitive spawning', () => {
     ])
   })
 
-  // NEEDS-ADJUDICATION: the "does not enclose" clause no longer holds. The
-  // old mkDiagram checked a stored scope against every endpoint region, so
-  // spawning an atom outside the wire's scope was rejected; with scope
-  // derived, spawning at a sibling region silently raises the wire's
-  // quantifier to the deepest common ancestor. Either applyAtomSpawn regains
-  // the check (refuse or pin) or this clause goes.
   it('shares the flipped polarity gate and enforces wire scope', () => {
     const fixture = host()
     expect(() => applyRefSpawn(

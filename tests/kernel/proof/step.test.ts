@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { EMPTY_PROOF_CONTEXT, verifyTheory } from '../../../src/kernel/proof/context'
@@ -15,17 +16,25 @@ import {
 } from '../../../src/kernel/proof/step'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyIdentityInsertion } from '../../../src/kernel/rules/identity'
+import {
+  bareWireAssembly,
+  bareWireDescription,
+} from '../../../src/kernel/rules/identity-rules'
 
 describe('primitive replay', () => {
   it('routes erasure through the direct primitive', () => {
     const builder = new DiagramBuilder()
     const atom = builder.atom(builder.root, relSig([]))
+    // The head wire dies with the atom, so its own second end — the pin —
+    // belongs in the selection; erasing only the atom would strand it.
+    const head = builder.wire( [{ node: atom, port: { kind: 'head' } }], relSig([]))
+    const headPin = builder.pin(head, builder.root)
     const diagram = builder.build()
     const selection = mkSelection(diagram, {
       region: diagram.root,
       regions: [],
-      nodes: [atom],
-      wires: [],
+      nodes: [atom, headPin],
+      wires: [head],
     })
 
     expect(exploreForm(applyStep(
@@ -57,8 +66,14 @@ describe('primitive replay', () => {
   it('routes identity insertion through the orientation-aware polarity gate', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
+    // Two bare root-scoped wires: each is a two-point segment, so both are
+    // visible inside the cut where the identity is inserted.
     const left = builder.wire( [])
+    builder.pin(left, builder.root)
+    builder.pin(left, builder.root)
     const right = builder.wire( [])
+    builder.pin(right, builder.root)
+    builder.pin(right, builder.root)
     const diagram = builder.build()
     const step: ProofStep = {
       rule: 'identityInsert',
@@ -97,31 +112,34 @@ describe('primitive replay', () => {
   })
 
   it('replays ref and atom spawning with the stored signature authority', () => {
-    const definition = mkDiagramWithBoundary(
-      new DiagramBuilder().build(),
-      [],
-    )
+    const defBuilder = new DiagramBuilder()
+    const formal = defBuilder.wire( [])
+    const definition = defBuilder.buildOpen([formal])
     const context = verifyTheory({
-      relations: [['Truth', definition]],
+      relations: [['Any', definition]],
       theorems: [],
     })
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const relationWire = builder.relWire( relSig([]))
+    const relationWire = builder.relWire( relSig([IOTA]))
+    builder.pin(relationWire, builder.root)
+    builder.pin(relationWire, builder.root)
     const diagram = builder.build()
     const steps: ProofStep[] = [
       {
         rule: 'refSpawn',
         region: cut,
-        defId: 'Truth',
-        sig: relSig([]),
+        defId: 'Any',
+        sig: relSig([IOTA]),
       },
       { rule: 'atomSpawn', region: cut, wire: relationWire },
     ]
     const result = replayProof(diagram, steps, context)
 
+    // Both spawns mint a pin at the spawn region for each fresh argument
+    // wire, on top of the two pins that made the relational wire bare.
     expect(Object.values(result.nodes).map((node) => node.kind).sort())
-      .toEqual(['atom', 'ref'])
+      .toEqual(['atom', 'identity', 'identity', 'identity', 'identity', 'ref'])
   })
 
 })
@@ -133,11 +151,12 @@ describe('normalized step receipts', () => {
     const wire = builder.wire( [
       { node, port: { kind: 'arg', index: 0 } },
     ])
+    const tip = builder.pin(wire, builder.root)
     const diagram = builder.build()
     const sel = mkSelection(diagram, {
       region: diagram.root,
       regions: [],
-      nodes: [node],
+      nodes: [node, tip],
       wires: [wire],
     })
     const receipt = applyStepWithReceipt(
@@ -156,7 +175,7 @@ describe('normalized step receipts', () => {
     const copiedWire = Object.entries(receipt.result.wires).find(
       ([id, candidate]) =>
         id !== wire
-        && candidate.scope === diagram.root
+        && derivedScope(receipt.result, id) === diagram.root
         && candidate.endpoints.some(
           (endpoint) =>
             endpoint.node === copiedNode![0]
@@ -175,9 +194,11 @@ describe('normalized step receipts', () => {
     ])).toBeUndefined()
   })
 
-  it('composes wire-join intent with identity degeneration', () => {
-    // The identity sits below both wire scopes so it survives the build
-    // (two outer wires); the join then degenerates it to one wire.
+  it('composes wire-join intent over a surviving equating node', () => {
+    // The identity sits below both wire scopes; the pins put one quantifier
+    // at the sheet and the other in the negative cut the join needs. The
+    // node itself persists — the join merges wires, not equalities — so both
+    // of its ports end up on the surviving wire as a loop.
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const deep = builder.cut(cut)
@@ -186,11 +207,16 @@ describe('normalized step receipts', () => {
       node: identity,
       port: { kind: 'identity', index: 0 },
     }])
+    builder.pin(outer, builder.root)
     const inner = builder.wire( [{
       node: identity,
       port: { kind: 'identity', index: 1 },
     }])
+    builder.pin(inner, cut)
     const diagram = builder.build()
+
+    expect(derivedScope(diagram, outer)).toBe(diagram.root)
+    expect(derivedScope(diagram, inner)).toBe(cut)
 
     const receipt = applyStepWithReceipt(
       diagram,
@@ -201,8 +227,12 @@ describe('normalized step receipts', () => {
       EMPTY_PROOF_CONTEXT,
     )
 
-    expect(receipt.result.nodes[identity]).toBeUndefined()
+    expect(receipt.result.nodes[identity])
+      .toEqual({ kind: 'identity', region: deep, sig: IOTA, arity: 2 })
     expect(receipt.result.wires[inner]).toBeUndefined()
+    expect(receipt.result.wires[outer]!.endpoints
+      .filter((endpoint) => endpoint.node === identity)).toHaveLength(2)
+    expect(derivedScope(receipt.result, outer)).toBe(diagram.root)
     expect(receipt.provenance.image(inner)).toBeUndefined()
     expect(receipt.interface.image(outer)).toBe(outer)
     expect(receipt.interface.image(inner)).toBe(outer)
@@ -210,7 +240,7 @@ describe('normalized step receipts', () => {
       .toEqual([outer, outer, outer])
   })
 
-  it('maps both root wires when double-cut elimination co-scopes an identity', () => {
+  it('maps both root wires when double-cut elimination lifts a co-scoped identity', () => {
     const builder = new DiagramBuilder()
     const outerCut = builder.cut(builder.root)
     const innerCut = builder.cut(outerCut)
@@ -230,25 +260,35 @@ describe('normalized step receipts', () => {
       { rule: 'doubleCutElim', region: outerCut },
       EMPTY_PROOF_CONTEXT,
     )
-    const survivor = [first, second].sort()[0]!
-    const absorbed = survivor === first ? second : first
 
-    expect(receipt.result.nodes[identity]).toBeUndefined()
-    expect(receipt.result.wires[absorbed]).toBeUndefined()
-    expect(receipt.provenance.image(absorbed)).toBeUndefined()
-    expect(receipt.interface.image(first)).toBe(survivor)
-    expect(receipt.interface.image(second)).toBe(survivor)
+    // Elimination reparents the inner cut's content two cuts up; the equating
+    // node rides along and nothing merges its wires, so both keep their ids
+    // and both are now root-scoped.
+    expect(receipt.result.nodes[identity])
+      .toEqual({ kind: 'identity', region: diagram.root, sig: IOTA, arity: 2 })
+    expect(derivedScope(receipt.result, first)).toBe(diagram.root)
+    expect(derivedScope(receipt.result, second)).toBe(diagram.root)
+    expect(receipt.provenance.image(first)).toBe(first)
+    expect(receipt.provenance.image(second)).toBe(second)
+    expect(receipt.interface.image(first)).toBe(first)
+    expect(receipt.interface.image(second)).toBe(second)
     expect(transportBoundary(receipt.interface, [second, first, second]))
-      .toEqual([survivor, survivor, survivor])
+      .toEqual([second, first, second])
   })
 
   it('keeps an intentionally erased root wire undefined', () => {
     const builder = new DiagramBuilder()
     const erased = builder.wire( [], IOTA)
+    builder.pin(erased, builder.root)
+    builder.pin(erased, builder.root)
     const diagram = builder.build()
     const receipt = applyStepWithReceipt(
       diagram,
-      { rule: 'vacuousElim', wireId: erased },
+      {
+        rule: 'vacuity',
+        direction: 'delete',
+        assembly: bareWireDescription(diagram, erased),
+      },
       EMPTY_PROOF_CONTEXT,
     )
 
@@ -264,7 +304,11 @@ describe('normalized step receipts', () => {
     const diagram = builder.build()
     const receipt = applyStepWithReceipt(
       diagram,
-      { rule: 'vacuousIntro', scope: cut, sig: IOTA },
+      {
+        rule: 'vacuity',
+        direction: 'insert',
+        assembly: bareWireAssembly('bare', cut, IOTA),
+      },
       EMPTY_PROOF_CONTEXT,
     )
     const fresh = Object.keys(receipt.result.wires)

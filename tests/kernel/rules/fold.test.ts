@@ -174,25 +174,49 @@ describe('definition-store unfolding', () => {
     })
   }
 
-  // NEEDS-ADJUDICATION: this asserts that no identity node survives a
-  // repeated boundary incidence — eager-normalizer behavior. Splice now
-  // creates one identity node at the application region and it persists
-  // until an identification step absorbs it.
-  it('uses identity normalization for repeated stored boundary incidences', () => {
+  it('splices a repeated stored boundary as one explicit alias identity', () => {
     const definition = atomDefinition([IOTA], true)
     const store = definitions(['Repeated', definition])
     const host = refHost('Repeated', definitionSig(definition))
     const unfolded = applyUnfold(host.diagram, host.ref, store)
-    const body = copiedNodes(host.diagram, unfolded).find((id) => unfolded.nodes[id]!.kind === 'atom')!
+    const copied = copiedNodes(host.diagram, unfolded)
+    const body = copied.find((id) => unfolded.nodes[id]!.kind === 'atom')!
     const first = wireAt(unfolded, body, { kind: 'arg', index: 0 })
 
-    expect(unfolded.wires[first]).toBeDefined()
-    expect(Object.values(unfolded.wires).some((wire) =>
-      wire.endpoints.some((endpoint) => endpoint.node === host.carriers[0])
-      && wire.endpoints.some((endpoint) => endpoint.node === host.carriers[1]))).toBe(true)
-    expect(Object.values(unfolded.nodes).some((node) => node.kind === 'identity')).toBe(false)
+    // One stored wire at two boundary positions equates the two host argument
+    // wires; the splice asserts that equality with a node instead of merging
+    // the wires behind it, so each carrier keeps the wire it had.
+    const aliases = copied.filter((id) => {
+      const node = unfolded.nodes[id]!
+      return node.kind === 'identity' && node.arity === 2
+    })
+    expect(aliases).toHaveLength(1)
+    const alias = aliases[0]!
+    expect(unfolded.nodes[alias]).toEqual({
+      kind: 'identity',
+      region: host.region,
+      sig: IOTA,
+      arity: 2,
+    })
+    expect(first).toBe(host.args[0])
+    host.args.forEach((argument, index) => {
+      const endpoints = unfolded.wires[argument]!.endpoints
+      expect(endpoints).toContainEqual({
+        node: host.carriers[index],
+        port: { kind: 'arg', index: 0 },
+      })
+      // Identity ports are unordered; what matters is that the alias spends
+      // exactly one of its two ports on each argument wire.
+      expect(endpoints.filter((endpoint) => endpoint.node === alias)).toHaveLength(1)
+    })
+    expect(unfolded.wires[host.args[1]!]!.endpoints
+      .every((endpoint) => endpoint.node !== body)).toBe(true)
 
-    const occurrence = selectionOf(unfolded, host.region, [body])
+    // Folding back an occurrence that excludes the alias names one wire at
+    // both argument positions, which is what the repeated boundary demands.
+    const headPin = unfolded.wires[wireAt(unfolded, body, { kind: 'head' })]!
+      .endpoints.find((endpoint) => endpoint.node !== body)!.node
+    const occurrence = selectionOf(unfolded, host.region, [body, headPin])
     const folded = applyFold(
       unfolded,
       occurrence,
@@ -205,6 +229,7 @@ describe('definition-store unfolding', () => {
     expect(foldedRef[1].kind).toBe('ref')
     expect(wireAt(folded, foldedRef[0], { kind: 'arg', index: 0 }))
       .toBe(wireAt(folded, foldedRef[0], { kind: 'arg', index: 1 }))
+    expect(folded.nodes[alias]).toEqual(unfolded.nodes[alias])
   })
 
   for (const negative of [false, true]) {

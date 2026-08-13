@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { portKey } from '../../../src/kernel/diagram/diagram'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig, sigKey } from '../../../src/kernel/diagram/sig'
 
 describe('DiagramBuilder', () => {
@@ -53,15 +54,40 @@ describe('DiagramBuilder', () => {
     })
   })
 
-  // NEEDS-ADJUDICATION: auto-created wires are no longer normalized away —
-  // build() completes each of the identity's ports with its own wire and pin,
-  // and nothing collapses them.
-  it('auto-created same-scope identity wires normalize away eagerly', () => {
+  it('completes each free identity port with its own wire and pin, collapsing nothing', () => {
     const builder = new DiagramBuilder()
-    builder.identity(builder.root, IOTA, 3)
+    const identity = builder.identity(builder.root, IOTA, 3)
     const diagram = builder.build()
 
-    expect(diagram.nodes).toEqual({})
-    expect(Object.keys(diagram.wires)).toEqual(['w0'])
+    expect(diagram.nodes[identity]).toEqual({
+      kind: 'identity',
+      region: 'r0',
+      sig: IOTA,
+      arity: 3,
+    })
+    expect(Object.keys(diagram.wires)).toEqual(['w0', 'w1', 'w2'])
+    for (const [index, wireId] of ['w0', 'w1', 'w2'].entries()) {
+      const wire = diagram.wires[wireId]!
+      expect(wire.endpoints).toContainEqual({
+        node: identity,
+        port: { kind: 'identity', index },
+      })
+      // The other end is a real node — the pin that holds the quantifier.
+      const other = wire.endpoints.find((end) => end.node !== identity)!
+      expect(diagram.nodes[other.node]).toEqual({
+        kind: 'identity',
+        region: 'r0',
+        sig: IOTA,
+        arity: 1,
+      })
+      expect(derivedScope(diagram, wireId)).toBe('r0')
+    }
+  })
+
+  it('refuses to complete a wire with no ends at all', () => {
+    const builder = new DiagramBuilder()
+    builder.relWire(relSig([]))
+
+    expect(() => builder.build()).toThrowError(/has no ends/)
   })
 })

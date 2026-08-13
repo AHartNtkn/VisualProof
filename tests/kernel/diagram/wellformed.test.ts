@@ -6,6 +6,7 @@ import {
   type Region,
   type Wire,
 } from '../../../src/kernel/diagram/diagram'
+import { derivedScope, isAncestorOrEqual } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 
 const sheet: Record<string, Region> = { r0: { kind: 'sheet' } }
@@ -80,17 +81,15 @@ describe('mkDiagram validation', () => {
     })).toThrowError(/identity node 'n0' sig/)
   })
 
-  // NEEDS-ADJUDICATION: the first clause checks that a wire naming a missing
-  // scope region is rejected. Wires no longer store a scope, so there is no
-  // such region to be missing and no such check; what the clause's fixture
-  // now trips is the two-end floor.
-  it('rejects missing scopes, nodes, ports, duplicate attachments, and omissions', () => {
+  it('rejects one-ended wires, missing nodes, ports, duplicate attachments, and omissions', () => {
+    // A wire end is a node, so one incidence is a line from a point to
+    // nowhere — unrepresentable, not merely unscoped.
     expect(() => oneRef({
       w0: {
         sig: IOTA,
         endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
       },
-    })).toThrowError(/missing scope region 'ghost'/)
+    })).toThrowError(/wire 'w0' has 1 end\(s\)/)
     expect(() => oneRef({
       w0: {
         sig: IOTA,
@@ -112,43 +111,67 @@ describe('mkDiagram validation', () => {
         ],
       },
     })).toThrowError(/appears more than once/)
-    expect(() => oneRef({
-      w0: {
-        sig: IOTA,
-        endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
+    expect(() => mkDiagram({
+      root: 'r0',
+      regions: sheet,
+      nodes: {
+        n0: refNode,
+        p0: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
+        p1: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
       },
-      w1: {
-        sig: IOTA,
-        endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
+      wires: {
+        w0: {
+          sig: IOTA,
+          endpoints: [
+            { node: 'n0', port: { kind: 'arg', index: 0 } },
+            { node: 'p0', port: { kind: 'identity', index: 0 } },
+          ],
+        },
+        w1: {
+          sig: IOTA,
+          endpoints: [
+            { node: 'n0', port: { kind: 'arg', index: 0 } },
+            { node: 'p1', port: { kind: 'identity', index: 0 } },
+          ],
+        },
       },
     })).toThrowError(/attached to two wires/)
     expect(() => oneRef({})).toThrowError(/port 'a:0'.*not attached/)
   })
 
-  // NEEDS-ADJUDICATION: the second clause checks that a stored scope must
-  // enclose every endpoint. Scope is derived from the endpoints now, so it
-  // encloses them by construction and the check is gone.
-  it('rejects signature mismatch and a wire scope below its endpoint', () => {
+  it('rejects signature mismatch, and derives a scope that encloses every endpoint', () => {
     expect(() => oneRef({
       w0: {
         sig: relSig([]),
         endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
       },
     })).toThrowError(/does not match port 'a:0'/)
-    expect(() => mkDiagram({
+
+    // No scope is stored, so none can sit below an endpoint: the derived
+    // scope is the deepest common ancestor of the incidences, an ancestor of
+    // each of them by construction.
+    const spanning = mkDiagram({
       root: 'r0',
       regions: {
         ...sheet,
         r1: { kind: 'cut', parent: 'r0' },
       },
-      nodes: { n0: refNode },
+      nodes: {
+        n0: refNode,
+        deep: { kind: 'identity', region: 'r1', sig: IOTA, arity: 1 },
+      },
       wires: {
         w0: {
           sig: IOTA,
-          endpoints: [{ node: 'n0', port: { kind: 'arg', index: 0 } }],
+          endpoints: [
+            { node: 'n0', port: { kind: 'arg', index: 0 } },
+            { node: 'deep', port: { kind: 'identity', index: 0 } },
+          ],
         },
       },
-    })).toThrowError(/does not enclose node 'n0'/)
+    })
+    expect(derivedScope(spanning, 'w0')).toBe('r0')
+    expect(isAncestorOrEqual(spanning, 'r0', 'r1')).toBe(true)
   })
 
   it('rejects displaced term/body node vocabulary and throws DiagramError', () => {

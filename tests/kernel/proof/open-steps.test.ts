@@ -6,6 +6,11 @@ import { replayActions, singleStepAction } from '../../../src/kernel/proof/actio
 import { composeActions } from '../../../src/kernel/proof/compose'
 import { EMPTY_PROOF_CONTEXT } from '../../../src/kernel/proof/context'
 import { replayProof, type ProofStep } from '../../../src/kernel/proof/step'
+import {
+  bareWireAssembly,
+  bareWireDescription,
+} from '../../../src/kernel/rules/identity-rules'
+import { bareWire } from '../../fixtures/pins'
 
 describe('atom and vacuous proof steps', () => {
   it('replays atom spawn and the bare vacuous pair end to end', () => {
@@ -13,22 +18,25 @@ describe('atom and vacuous proof steps', () => {
     const cut = builder.cut(builder.root)
     const diagram = builder.build()
     const introduced = replayProof(diagram, [{
-      rule: 'vacuousIntro',
-      sig: relSig([]),
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('bare', diagram.root, relSig([])),
     }], EMPTY_PROOF_CONTEXT)
     const relationWire = Object.keys(introduced.wires).find((wire) =>
       diagram.wires[wire] === undefined)!
+    const removal = bareWireDescription(introduced, relationWire)
 
     expect(() => replayProof(introduced, [
       { rule: 'atomSpawn', region: cut, wire: relationWire },
-      { rule: 'vacuousElim', wireId: relationWire },
+      { rule: 'vacuity', direction: 'delete', assembly: removal },
     ], EMPTY_PROOF_CONTEXT)).toThrowError(
-      /step 1 \(vacuousElim\) failed: vacuous elimination requires an endpoint-free wire/,
+      /step 1 \(vacuity\) failed: vacuity deletion: wire '.*' does not match/,
     )
 
     const restored = replayProof(introduced, [{
-      rule: 'vacuousElim',
-      wireId: relationWire,
+      rule: 'vacuity',
+      direction: 'delete',
+      assembly: removal,
     }], EMPTY_PROOF_CONTEXT)
     expect(exploreForm(restored)).toBe(exploreForm(diagram))
   })
@@ -44,8 +52,9 @@ describe('atom and vacuous proof steps', () => {
     const target = build(true)
     const source = build(false)
     const intro: ProofStep = {
-      rule: 'vacuousIntro',
-      sig: relSig([]),
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('bare', source.diagram.root, relSig([])),
     }
     const afterIntro = replayProof(
       source.diagram,
@@ -84,14 +93,15 @@ describe('atom and vacuous proof steps', () => {
   it('maps a bare vacuous elimination wire across an isomorphism', () => {
     const build = () => {
       const builder = new DiagramBuilder()
-      const wire = builder.relWire( relSig([]))
+      const wire = bareWire(builder, builder.root, relSig([]))
       return { diagram: builder.build(), wire }
     }
     const target = build()
     const source = build()
     const tail = [singleStepAction('remove vacuity', {
-      rule: 'vacuousElim',
-      wireId: source.wire,
+      rule: 'vacuity',
+      direction: 'delete',
+      assembly: bareWireDescription(source.diagram, source.wire),
     })]
     const composed = composeActions(
       target.diagram,
@@ -101,8 +111,9 @@ describe('atom and vacuous proof steps', () => {
     )
 
     expect(composed[0]!.steps[0]).toEqual({
-      rule: 'vacuousElim',
-      wireId: target.wire,
+      rule: 'vacuity',
+      direction: 'delete',
+      assembly: bareWireDescription(target.diagram, target.wire),
     })
   })
 })

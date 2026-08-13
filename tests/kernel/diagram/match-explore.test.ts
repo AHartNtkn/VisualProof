@@ -118,7 +118,7 @@ describe('exploration matcher symmetry completeness', () => {
       const cut = patternBuilder.cut(patternBuilder.root)
       patternBuilder.ref(cut, 'P', relSig([]))
     }
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    const pattern = patternBuilder.buildOpen([])
 
     const hostBuilder = new DiagramBuilder()
     for (let index = 0; index < 3; index++) {
@@ -144,7 +144,7 @@ describe('exploration matcher symmetry completeness', () => {
     const stub = patternBuilder.wire( [
       { node: patternRef, port: { kind: 'arg', index: 0 } },
     ])
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [stub])
+    const pattern = patternBuilder.buildOpen([stub])
 
     const hostBuilder = new DiagramBuilder()
     const first = hostBuilder.ref(hostBuilder.root, 'P', relSig([IOTA]))
@@ -188,7 +188,7 @@ describe('exploration matcher symmetry completeness', () => {
     const stub = patternBuilder.wire( [
       { node: patternRef, port: { kind: 'arg', index: 0 } },
     ])
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [stub])
+    const pattern = patternBuilder.buildOpen([stub])
 
     const hostBuilder = new DiagramBuilder()
     const first = hostBuilder.ref(hostBuilder.root, 'P', relSig([IOTA]))

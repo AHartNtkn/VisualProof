@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { spliceSubgraph } from '../../../src/kernel/diagram/subgraph/splice'
 import { IOTA, relSig, sigEquals } from '../../../src/kernel/diagram/sig'
+import { bareWire } from '../../fixtures/pins'
 
 const head = { kind: 'head' as const }
 
@@ -18,11 +18,11 @@ describe('splice signature gate', () => {
     const S = relSig([IOTA])
     const pb = new DiagramBuilder()
     const a = pb.atom(pb.root, S)
-    const stub = pb.wire( [{ node: a, port: head }], S)
-    const pattern = mkDiagramWithBoundary(pb.build(), [stub])
+    const stub = pb.wire([{ node: a, port: head }], S)
+    const pattern = pb.buildOpen([stub])
 
     const hb = new DiagramBuilder()
-    const hostRel = hb.relWire( S) // an existential relation line of sig S
+    const hostRel = bareWire(hb, hb.root, S) // an existential relation line of sig S
     const host = hb.build()
 
     const out = spliceSubgraph(host, host.root, pattern, [hostRel])
@@ -36,11 +36,11 @@ describe('splice signature gate', () => {
     const T = relSig([])
     const pb = new DiagramBuilder()
     const a = pb.atom(pb.root, S)
-    const stub = pb.wire( [{ node: a, port: head }], S)
-    const pattern = mkDiagramWithBoundary(pb.build(), [stub])
+    const stub = pb.wire([{ node: a, port: head }], S)
+    const pattern = pb.buildOpen([stub])
 
     const hb = new DiagramBuilder()
-    const hostBad = hb.relWire( T)
+    const hostBad = bareWire(hb, hb.root, T)
     const host = hb.build()
 
     expect(() => spliceSubgraph(host, host.root, pattern, [hostBad]))
@@ -63,7 +63,9 @@ describe('splice signature gate', () => {
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const a = b.atom(cut, S)
-    const headWire = b.wire( [{ node: a, port: head }], S)
+    const headWire = b.wire([{ node: a, port: head }], S)
+    // ∃R lives at the root, above the cut holding its application.
+    b.pin(headWire, b.root)
     const d = b.build()
     const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
     const ex = extractSubgraph(d, sel)

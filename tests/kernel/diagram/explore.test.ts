@@ -28,11 +28,21 @@ function namedGraph(
     nodes: {
       [ids.atom]: { kind: 'atom', region: ids.cut, sig: relation },
       [ids.ref]: { kind: 'ref', region: ids.root, defId: 'P', sig: relation },
+      // The head wire's quantifier lives at the root, above the atom's cut.
+      [`${ids.head}Pin`]: {
+        kind: 'identity',
+        region: ids.root,
+        sig: relation,
+        arity: 1,
+      },
     },
     wires: {
       [ids.head]: {
         sig: relation,
-        endpoints: [{ node: ids.atom, port: { kind: 'head' } }],
+        endpoints: [
+          { node: ids.atom, port: { kind: 'head' } },
+          { node: `${ids.head}Pin`, port: { kind: 'identity', index: 0 } },
+        ],
       },
       [ids.value]: {
         sig: IOTA,
@@ -84,7 +94,8 @@ describe('canonical graph exploration', () => {
 
     expect(labeling.form).toBe(exploreForm(diagram))
     expect(new Set(labeling.regionOrd.values()).size).toBe(2)
-    expect(new Set(labeling.nodeOrd.values()).size).toBe(2)
+    // atom, ref, and the head wire's pin
+    expect(new Set(labeling.nodeOrd.values()).size).toBe(3)
     expect(new Set(labeling.wireOrd.values()).size).toBe(2)
   })
 
@@ -100,9 +111,10 @@ describe('canonical graph exploration', () => {
       const builder = new DiagramBuilder()
       const cut = builder.cut(builder.root)
       const node = builder.ref(cut, 'P', relSig([IOTA]))
-      builder.wire( [
+      const argument = builder.wire([
         { node, port: { kind: 'arg', index: 0 } },
       ])
+      builder.pin(argument, outer ? builder.root : cut)
       return builder.build()
     }
     expect(exploreForm(scoped(true))).not.toBe(exploreForm(scoped(false)))

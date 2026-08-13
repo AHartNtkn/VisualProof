@@ -4,6 +4,7 @@ import { mkDiagram } from '../../../src/kernel/diagram/diagram'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { extractSubgraph } from '../../../src/kernel/diagram/subgraph/extract'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 
 function host() {
   const builder = new DiagramBuilder()
@@ -42,8 +43,9 @@ describe('extractSubgraph', () => {
 
     expect(extraction.attachments).toEqual([value.shared])
     expect(pattern.nodes[value.inner]).toEqual(value.diagram.nodes[value.inner])
-    expect(pattern.wires[value.inside]?.scope).toBe(value.cut)
-    expect(pattern.wires[boundary]?.scope).toBe(pattern.root)
+    expect(derivedScope(pattern, value.inside)).toBe(value.cut)
+    expect(derivedScope(pattern, boundary, extraction.pattern.boundary))
+      .toBe(pattern.root)
     expect(pattern.wires[boundary]?.endpoints).toEqual([
       { node: value.inner, port: { kind: 'arg', index: 0 } },
     ])
@@ -87,15 +89,23 @@ describe('extractSubgraph', () => {
       },
       nodes: {
         eq: { kind: 'identity', region: 'r1', sig: IOTA, arity: 2 },
+        aPin: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
+        bPin: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
       },
       wires: {
         a: {
           sig: IOTA,
-          endpoints: [{ node: 'eq', port: { kind: 'identity', index: 0 } }],
+          endpoints: [
+            { node: 'eq', port: { kind: 'identity', index: 0 } },
+            { node: 'aPin', port: { kind: 'identity', index: 0 } },
+          ],
         },
         b: {
           sig: IOTA,
-          endpoints: [{ node: 'eq', port: { kind: 'identity', index: 1 } }],
+          endpoints: [
+            { node: 'eq', port: { kind: 'identity', index: 1 } },
+            { node: 'bPin', port: { kind: 'identity', index: 0 } },
+          ],
         },
       },
     })

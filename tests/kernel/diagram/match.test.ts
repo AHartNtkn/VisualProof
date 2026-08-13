@@ -5,6 +5,7 @@ import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
 import { checkOccurrenceCertificate } from '../../../src/kernel/diagram/subgraph/occurrence-certificate'
+import { bareWireParts } from '../../fixtures/pins'
 
 function unaryPattern(defId = 'P') {
   const builder = new DiagramBuilder()
@@ -12,7 +13,7 @@ function unaryPattern(defId = 'P') {
   const boundary = builder.wire( [
     { node, port: { kind: 'arg', index: 0 } },
   ])
-  return mkDiagramWithBoundary(builder.build(), [boundary])
+  return builder.buildOpen([boundary])
 }
 
 function unaryHost(defId = 'P') {
@@ -45,7 +46,7 @@ describe('exact occurrence matching', () => {
     const patternBuilder = new DiagramBuilder()
     const patternCut = patternBuilder.cut(patternBuilder.root)
     patternBuilder.ref(patternCut, 'P', relSig([]))
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    const pattern = patternBuilder.buildOpen([])
 
     const hostBuilder = new DiagramBuilder()
     const hostCut = hostBuilder.cut(hostBuilder.root)
@@ -85,31 +86,44 @@ describe('exact occurrence matching', () => {
     })).toThrowError(/positive safe integer/)
   })
 
-  it('requires a seed for bare boundary wires and validates the seed', () => {
-    const pattern = mkDiagramWithBoundary(mkDiagram({
+  it('requires a seed for endpoint-free boundary wires and validates the seed', () => {
+    // A wire exposed at two boundary positions has both its ends there and no
+    // endpoint at all, so the search has nothing to anchor on and the caller
+    // must name the host line.
+    const twiceExposed = mkDiagramWithBoundary({
       root: 'p0',
       regions: { p0: { kind: 'sheet' } },
-      wires: {
-        stub: { scope: 'p0', sig: IOTA, endpoints: [] },
-      },
-    }), ['stub'])
+      nodes: {},
+      wires: { stub: { sig: IOTA, endpoints: [] } },
+    }, ['stub', 'stub'])
+    const target = bareWireParts('target', 'r0')
     const host = mkDiagram({
       root: 'r0',
       regions: { r0: { kind: 'sheet' } },
-      wires: {
-        target: { scope: 'r0', sig: IOTA, endpoints: [] },
-      },
+      nodes: target.nodes,
+      wires: target.wires,
     })
 
-    expect(() => findOccurrences(host, pattern)).toThrowError(/supply its attachment/)
-    expect(findOccurrences(host, pattern, { attachments: ['target'] }).matches)
+    expect(() => findOccurrences(host, twiceExposed)).toThrowError(/supply its attachment/)
+    expect(findOccurrences(host, twiceExposed, { attachments: ['target', 'target'] }).matches)
       .toHaveLength(1)
-    expect(() => findOccurrences(host, pattern, { attachments: [] }))
+    expect(() => findOccurrences(host, twiceExposed, { attachments: [] }))
       .toThrowError(/index-aligned/)
+
+    // Exposed once, the same line ends in a point, and that point anchors the
+    // search on its own — no seed needed.
+    const patternStub = bareWireParts('stub', 'p0')
+    const onceExposed = mkDiagramWithBoundary({
+      root: 'p0',
+      regions: { p0: { kind: 'sheet' } },
+      nodes: patternStub.nodes,
+      wires: patternStub.wires,
+    }, ['stub'])
+    expect(findOccurrences(host, onceExposed).matches).toHaveLength(1)
   })
 
   it('matches identity incidences as an unordered mapped multiset', () => {
-    const pattern = mkDiagramWithBoundary(mkDiagram({
+    const pattern = mkDiagramWithBoundary({
       root: 'p0',
       regions: {
         p0: { kind: 'sheet' },
@@ -128,7 +142,7 @@ describe('exact occurrence matching', () => {
           endpoints: [{ node: 'eq', port: { kind: 'identity', index: 1 } }],
         },
       },
-    }), ['left', 'right'])
+    }, ['left', 'right'])
     const host = mkDiagram({
       root: 'r0',
       regions: {
@@ -137,15 +151,23 @@ describe('exact occurrence matching', () => {
       },
       nodes: {
         identity: { kind: 'identity', region: 'r1', sig: IOTA, arity: 2 },
+        aPin: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
+        bPin: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
       },
       wires: {
         a: {
           sig: IOTA,
-          endpoints: [{ node: 'identity', port: { kind: 'identity', index: 1 } }],
+          endpoints: [
+            { node: 'identity', port: { kind: 'identity', index: 1 } },
+            { node: 'aPin', port: { kind: 'identity', index: 0 } },
+          ],
         },
         b: {
           sig: IOTA,
-          endpoints: [{ node: 'identity', port: { kind: 'identity', index: 0 } }],
+          endpoints: [
+            { node: 'identity', port: { kind: 'identity', index: 0 } },
+            { node: 'bPin', port: { kind: 'identity', index: 0 } },
+          ],
         },
       },
     })

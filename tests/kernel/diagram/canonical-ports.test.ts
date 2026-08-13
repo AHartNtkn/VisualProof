@@ -78,6 +78,8 @@ describe('canonical positional and unordered ports', () => {
       },
       nodes: {
         eq: { kind: 'identity', region: 'r2', sig: IOTA, arity: 2 },
+        outerPin: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
+        innerPin: { kind: 'identity', region: 'r1', sig: IOTA, arity: 1 },
       },
       wires: {
         outer: {
@@ -85,14 +87,14 @@ describe('canonical positional and unordered ports', () => {
           endpoints: [{
             node: 'eq',
             port: { kind: 'identity', index: swapped ? 1 : 0 },
-          }],
+          }, { node: 'outerPin', port: { kind: 'identity', index: 0 } }],
         },
         inner: {
           sig: IOTA,
           endpoints: [{
             node: 'eq',
             port: { kind: 'identity', index: swapped ? 0 : 1 },
-          }],
+          }, { node: 'innerPin', port: { kind: 'identity', index: 0 } }],
         },
       },
     })
@@ -125,18 +127,31 @@ describe('canonical positional and unordered ports', () => {
       regions: { r0: { kind: 'sheet' as const } },
       nodes: {
         eq: { kind: 'identity' as const, region: 'r0', sig: IOTA, arity: 2 },
+        aPin: { kind: 'identity' as const, region: 'r0', sig: IOTA, arity: 1 },
+        bPin: { kind: 'identity' as const, region: 'r0', sig: IOTA, arity: 1 },
+        bPin2: { kind: 'identity' as const, region: 'r0', sig: IOTA, arity: 1 },
       },
     }
+    const pinEnd = (node: string) => ({
+      node,
+      port: { kind: 'identity' as const, index: 0 },
+    })
     expect(() => mkDiagram({
       ...identity,
       wires: {
         a: {
           sig: IOTA,
-          endpoints: [{ node: 'eq', port: { kind: 'identity', index: 0 } }],
+          endpoints: [
+            { node: 'eq', port: { kind: 'identity', index: 0 } },
+            pinEnd('aPin'),
+          ],
         },
         b: {
           sig: IOTA,
-          endpoints: [{ node: 'eq', port: { kind: 'identity', index: 2 } }],
+          endpoints: [
+            { node: 'eq', port: { kind: 'identity', index: 2 } },
+            pinEnd('bPin'),
+          ],
         },
       },
     })).toThrowError(/non-existent port 'i:2'/)
@@ -145,7 +160,14 @@ describe('canonical positional and unordered ports', () => {
       wires: {
         a: {
           sig: IOTA,
-          endpoints: [{ node: 'eq', port: { kind: 'identity', index: 0 } }],
+          endpoints: [
+            { node: 'eq', port: { kind: 'identity', index: 0 } },
+            pinEnd('aPin'),
+          ],
+        },
+        b: {
+          sig: IOTA,
+          endpoints: [pinEnd('bPin'), pinEnd('bPin2')],
         },
       },
     })).toThrowError(/port 'i:1'.*not attached/)

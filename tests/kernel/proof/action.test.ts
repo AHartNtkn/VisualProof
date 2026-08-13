@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import {
@@ -11,12 +10,13 @@ import {
 } from '../../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT, verifyTheory } from '../../../src/kernel/proof/context'
 import { applyStep, type ProofStep } from '../../../src/kernel/proof/step'
+import { bareWire } from '../../fixtures/pins'
 
 function negativeStart() {
   const builder = new DiagramBuilder()
   const cut = builder.cut(builder.root)
-  const first = builder.relWire( relSig([]))
-  const second = builder.relWire( relSig([]))
+  const first = bareWire(builder, builder.root, relSig([]))
+  const second = bareWire(builder, builder.root, relSig([]))
   return { diagram: builder.build(), cut, first, second }
 }
 
@@ -65,20 +65,22 @@ describe('proof actions', () => {
       },
     )
 
+    // The start already holds four nodes: a pin at each end of both bare
+    // wires. Each step adds exactly one atom on top of those.
     expect(seen).toEqual([
-      { action: 0, step: 0, nodes: 1 },
-      { action: 0, step: 1, nodes: 2 },
+      { action: 0, step: 0, nodes: 5 },
+      { action: 0, step: 1, nodes: 6 },
     ])
-    expect(Object.keys(result.nodes)).toHaveLength(2)
+    expect(Object.keys(result.nodes)).toHaveLength(6)
   })
 
   it('excludes action-reserved node and wire ids', () => {
     const bodyBuilder = new DiagramBuilder()
-    const boundary = bodyBuilder.wire( [], IOTA)
+    const boundary = bodyBuilder.wire([], IOTA)
     const context = verifyTheory({
       relations: [[
         'Unary',
-        mkDiagramWithBoundary(bodyBuilder.build(), [boundary]),
+        bodyBuilder.buildOpen([boundary]),
       ]],
       theorems: [],
     })
@@ -103,7 +105,9 @@ describe('proof actions', () => {
 
     const result = applyAction(diagram, reserved, context)
 
-    expect(Object.keys(result.nodes)).toEqual(['n_0'])
+    // The reserved bases are skipped; the ref's fresh argument wire also
+    // brings the pin that holds its quantifier, whose base is not reserved.
+    expect(Object.keys(result.nodes)).toEqual(['n_0', 'pin'])
     expect(Object.keys(result.wires)).toEqual(['w_0'])
   })
 

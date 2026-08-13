@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { findOccurrences } from '../../../src/kernel/diagram/subgraph/match'
+import { bareWire } from '../../fixtures/pins'
 
 describe('exact occurrence matching adversarial battery', () => {
   it('matches exact reference content with positional wiring intact', () => {
@@ -12,16 +12,13 @@ describe('exact occurrence matching adversarial battery', () => {
       'P',
       relSig([IOTA, IOTA]),
     )
-    const firstStub = patternBuilder.wire( [
+    const firstStub = patternBuilder.wire([
       { node: patternRef, port: { kind: 'arg', index: 0 } },
     ])
-    const secondStub = patternBuilder.wire( [
+    const secondStub = patternBuilder.wire([
       { node: patternRef, port: { kind: 'arg', index: 1 } },
     ])
-    const pattern = mkDiagramWithBoundary(
-      patternBuilder.build(),
-      [firstStub, secondStub],
-    )
+    const pattern = patternBuilder.buildOpen([firstStub, secondStub])
 
     const hostBuilder = new DiagramBuilder()
     const hostRef = hostBuilder.ref(
@@ -29,10 +26,10 @@ describe('exact occurrence matching adversarial battery', () => {
       'P',
       relSig([IOTA, IOTA]),
     )
-    const firstWire = hostBuilder.wire( [
+    const firstWire = hostBuilder.wire([
       { node: hostRef, port: { kind: 'arg', index: 0 } },
     ])
-    const secondWire = hostBuilder.wire( [
+    const secondWire = hostBuilder.wire([
       { node: hostRef, port: { kind: 'arg', index: 1 } },
     ])
     const host = hostBuilder.build()
@@ -48,7 +45,7 @@ describe('exact occurrence matching adversarial battery', () => {
   it('returns only exact graph-search fields and no semantic verdict channel', () => {
     const patternBuilder = new DiagramBuilder()
     patternBuilder.ref(patternBuilder.root, 'P', relSig([]))
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    const pattern = patternBuilder.buildOpen([])
     const hostBuilder = new DiagramBuilder()
     hostBuilder.ref(hostBuilder.root, 'P', relSig([]))
     const result = findOccurrences(hostBuilder.build(), pattern)
@@ -65,7 +62,7 @@ describe('exact occurrence matching adversarial battery', () => {
     const patternBuilder = new DiagramBuilder()
     patternBuilder.ref(patternBuilder.root, 'P', relSig([]))
     patternBuilder.ref(patternBuilder.root, 'P', relSig([]))
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    const pattern = patternBuilder.buildOpen([])
     const hostBuilder = new DiagramBuilder()
     hostBuilder.ref(hostBuilder.root, 'P', relSig([]))
     hostBuilder.ref(hostBuilder.root, 'P', relSig([]))
@@ -76,7 +73,7 @@ describe('exact occurrence matching adversarial battery', () => {
   it('retains distinct partial-selection footprints', () => {
     const patternBuilder = new DiagramBuilder()
     patternBuilder.ref(patternBuilder.root, 'P', relSig([]))
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    const pattern = patternBuilder.buildOpen([])
     const hostBuilder = new DiagramBuilder()
     hostBuilder.ref(hostBuilder.root, 'P', relSig([]))
     hostBuilder.ref(hostBuilder.root, 'P', relSig([]))
@@ -87,25 +84,22 @@ describe('exact occurrence matching adversarial battery', () => {
   it('uses exact wire sets below the root and subset semantics at the root', () => {
     const nestedPatternBuilder = new DiagramBuilder()
     const patternCut = nestedPatternBuilder.cut(nestedPatternBuilder.root)
-    nestedPatternBuilder.wire( [])
-    const nestedPattern = mkDiagramWithBoundary(
-      nestedPatternBuilder.build(),
-      [],
-    )
+    bareWire(nestedPatternBuilder, patternCut)
+    const nestedPattern = nestedPatternBuilder.buildOpen([])
 
     const nestedHostBuilder = new DiagramBuilder()
     const hostCut = nestedHostBuilder.cut(nestedHostBuilder.root)
-    nestedHostBuilder.wire( [])
-    nestedHostBuilder.wire( [])
+    bareWire(nestedHostBuilder, hostCut)
+    bareWire(nestedHostBuilder, hostCut)
     expect(findOccurrences(nestedHostBuilder.build(), nestedPattern).matches)
       .toHaveLength(0)
 
     const rootPatternBuilder = new DiagramBuilder()
-    rootPatternBuilder.wire( [])
-    const rootPattern = mkDiagramWithBoundary(rootPatternBuilder.build(), [])
+    bareWire(rootPatternBuilder, rootPatternBuilder.root)
+    const rootPattern = rootPatternBuilder.buildOpen([])
     const rootHostBuilder = new DiagramBuilder()
-    rootHostBuilder.wire( [])
-    rootHostBuilder.wire( [])
+    bareWire(rootHostBuilder, rootHostBuilder.root)
+    bareWire(rootHostBuilder, rootHostBuilder.root)
     expect(findOccurrences(
       rootHostBuilder.build(),
       rootPattern,
@@ -121,17 +115,19 @@ describe('exact occurrence matching adversarial battery', () => {
       'P',
       relSig([IOTA]),
     )
-    patternBuilder.wire( [
+    patternBuilder.wire([
       { node: patternRef, port: { kind: 'arg', index: 0 } },
     ])
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    const pattern = patternBuilder.buildOpen([])
 
     const hostBuilder = new DiagramBuilder()
     const hostCut = hostBuilder.cut(hostBuilder.root)
     const hostRef = hostBuilder.ref(hostCut, 'P', relSig([IOTA]))
-    hostBuilder.wire( [
+    // The host's wire is quantified at the root, the pattern's inside its cut.
+    const hostArgument = hostBuilder.wire([
       { node: hostRef, port: { kind: 'arg', index: 0 } },
     ])
+    hostBuilder.pin(hostArgument, hostBuilder.root)
 
     expect(findOccurrences(hostBuilder.build(), pattern).matches).toHaveLength(0)
   })
@@ -141,22 +137,24 @@ describe('exact occurrence matching adversarial battery', () => {
     const patternCut = patternBuilder.cut(patternBuilder.root)
     const patternA = patternBuilder.ref(patternCut, 'A', relSig([IOTA]))
     const patternB = patternBuilder.ref(patternCut, 'B', relSig([IOTA]))
-    patternBuilder.wire( [
+    patternBuilder.wire([
       { node: patternA, port: { kind: 'arg', index: 0 } },
     ])
-    patternBuilder.wire( [
+    const patternOuter = patternBuilder.wire([
       { node: patternB, port: { kind: 'arg', index: 0 } },
     ])
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
+    patternBuilder.pin(patternOuter, patternBuilder.root)
+    const pattern = patternBuilder.buildOpen([])
 
     const hostBuilder = new DiagramBuilder()
     const hostCut = hostBuilder.cut(hostBuilder.root)
     const hostA = hostBuilder.ref(hostCut, 'A', relSig([IOTA]))
     const hostB = hostBuilder.ref(hostCut, 'B', relSig([IOTA]))
-    hostBuilder.wire( [
+    const hostOuter = hostBuilder.wire([
       { node: hostA, port: { kind: 'arg', index: 0 } },
     ])
-    hostBuilder.wire( [
+    hostBuilder.pin(hostOuter, hostBuilder.root)
+    hostBuilder.wire([
       { node: hostB, port: { kind: 'arg', index: 0 } },
     ])
 
@@ -175,11 +173,11 @@ describe('exact occurrence matching adversarial battery', () => {
       'P',
       relSig([IOTA]),
     )
-    const stub = patternBuilder.wire( [
+    const stub = patternBuilder.wire([
       { node: first, port: { kind: 'arg', index: 0 } },
       { node: second, port: { kind: 'arg', index: 0 } },
     ])
-    const pattern = mkDiagramWithBoundary(patternBuilder.build(), [stub])
+    const pattern = patternBuilder.buildOpen([stub])
 
     const sharedBuilder = new DiagramBuilder()
     const sharedFirst = sharedBuilder.ref(
@@ -192,7 +190,7 @@ describe('exact occurrence matching adversarial battery', () => {
       'P',
       relSig([IOTA]),
     )
-    sharedBuilder.wire( [
+    sharedBuilder.wire([
       { node: sharedFirst, port: { kind: 'arg', index: 0 } },
       { node: sharedSecond, port: { kind: 'arg', index: 0 } },
     ])
@@ -212,7 +210,7 @@ describe('exact occurrence matching adversarial battery', () => {
         builder.root,
         relSig(Array.from({ length: arity }, () => IOTA)),
       )
-      return mkDiagramWithBoundary(builder.build(), [])
+      return builder.buildOpen([])
     }
     const hostBuilder = new DiagramBuilder()
     hostBuilder.atom(hostBuilder.root, relSig([IOTA]))

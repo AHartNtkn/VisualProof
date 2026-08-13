@@ -18,7 +18,7 @@ function bodyR() {
     port: { kind: 'arg', index: 0 },
   }])
   builder.atom(builder.root, relSig([]))
-  return mkDiagramWithBoundary(builder.build(), [argument])
+  return builder.buildOpen([argument])
 }
 
 describe('folded-guard integration proof', () => {
@@ -34,7 +34,7 @@ describe('folded-guard integration proof', () => {
       node: ambient,
       port: { kind: 'arg', index: 0 },
     }])
-    const lhs = mkDiagramWithBoundary(left.build(), [argument])
+    const lhs = left.buildOpen([argument])
 
     const steps: ProofStep[] = []
     let current = lhs.diagram
