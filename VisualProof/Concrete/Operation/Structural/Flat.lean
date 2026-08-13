@@ -523,38 +523,43 @@ private def replacementSpliceInput?
                       ← sequenceFin_sound hattachment right, sourceEq]
                   exact congrArg (Fin.cast wireCountEq.symm) denseEq⟩
 
+/-- The canonical checked survivor frame.  Selection validity already proves
+this graph well formed, so preparation does not retain a second checked
+presentation of the same diagram. -/
+def selectionReplacementFrame (input : Checked)
+    (selection : CheckedSelection input.val)
+    (domains : FrameDomains input.val selection) : Checked :=
+  ⟨input.val.removeRaw selection domains,
+    Diagram.removeRaw_wellFormed input selection domains⟩
+
 /-- The exact removal-plus-splice input computed for one selection replacement. -/
 structure PreparedSelectionReplacement (input : Checked)
     (selection : CheckedSelection input.val)
     (replacement : SelectionReplacement input selection) where
   domains : FrameDomains input.val selection
-  frame : Checked
-  frameEq : frame.val = input.val.removeRaw selection domains
   spliceInput : Splice.Input
-  spliceFrameEq : spliceInput.frame = frame
+  spliceFrameEq : spliceInput.frame =
+    selectionReplacementFrame input selection domains
   spliceAttachmentConsistent : spliceInput.AttachmentConsistent
+
+def PreparedSelectionReplacement.frame
+    (prepared : PreparedSelectionReplacement input selection replacement) :
+    Checked := selectionReplacementFrame input selection prepared.domains
 
 def prepareSelectionReplacement (input : Checked)
     (selection : CheckedSelection input.val)
     (replacement : SelectionReplacement input selection) :
     Except Error (PreparedSelectionReplacement input selection replacement) :=
   let domains : FrameDomains input.val selection := {}
-  match hframe : Diagram.removeChecked input selection domains with
-  | .error error => .error (.resultNotWellFormed error)
-  | .ok frame =>
-      let frameEq : frame.val = input.val.removeRaw selection domains :=
-        (Diagram.removeChecked_sound hframe).1
-      match replacementSpliceInput? input selection replacement domains frame
-          frameEq with
-      | none => .error .invalidSelection
-      | some prepared => .ok {
-          domains
-          frame
-          frameEq
-          spliceInput := prepared.val
-          spliceFrameEq := prepared.property.1
-          spliceAttachmentConsistent := prepared.property.2
-        }
+  let frame := selectionReplacementFrame input selection domains
+  match replacementSpliceInput? input selection replacement domains frame rfl with
+  | none => .error .invalidSelection
+  | some prepared => .ok {
+      domains
+      spliceInput := prepared.val
+      spliceFrameEq := prepared.property.1
+      spliceAttachmentConsistent := prepared.property.2
+    }
 
 private theorem replacementSpliceInput?_pattern_spine
     (input : Checked) (selection : CheckedSelection input.val)
@@ -590,12 +595,11 @@ private theorem prepareSelectionReplacement_pattern_spine
   unfold prepareSelectionReplacement at success
   dsimp only at success
   split at success <;> try contradiction
-  rename_i frame frameSuccess
-  split at success <;> try contradiction
   rename_i preparedInput preparedInputSuccess
   cases success
   exact replacementSpliceInput?_pattern_spine input selection replacement _
-    frame _ preparedInput preparedInputSuccess
+    (selectionReplacementFrame input selection _) rfl preparedInput
+      preparedInputSuccess
 
 /-- The prepared splice uses exactly the replacement pattern supplied to the
 flat primitive; successful preparation selects only its dense frame maps. -/
@@ -638,7 +642,7 @@ def PreparedSelectionReplacement.frameProvenance
     WireProvenance input.val prepared.frame.val :=
   (WireProvenance.survivors input.val
     (input.val.removeRaw selection prepared.domains) prepared.domains.wires
-      rfl).castTarget prepared.frameEq.symm
+      rfl)
 
 /-- Exact logical wire transport from the replacement source to its prepared
 dense frame.  Ordered aliases are retained by `transportBoundary`. -/
@@ -647,7 +651,7 @@ def PreparedSelectionReplacement.frameTransport
     WireTransport input.val prepared.frame.val :=
   (WireTransport.survivors input.val
     (input.val.removeRaw selection prepared.domains) prepared.domains.wires
-      rfl).castTarget prepared.frameEq.symm
+      rfl)
 
 /-- The removal phase as its own exact operation receipt. -/
 def PreparedSelectionReplacement.frameReceipt
