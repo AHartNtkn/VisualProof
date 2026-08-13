@@ -557,6 +557,101 @@ theorem compileItems?_map_success
               · simp [CompiledItems.erase, ItemSeq.renameWires,
                   ItemSeq.renameRelations, targetHeadErase, targetTailErase]
 
+/-- Constructively transport one finite occurrence block when each head is
+intrinsically isomorphic. This is the semantic counterpart of
+`compileItems?_map_success`; recursive-region meaning remains with the caller. -/
+theorem compileItems?_map_iso_success
+    {source target : Diagram}
+    (sourceWf : source.WellFormed) (targetWf : target.WellFormed)
+    (sourceParent : Fin source.regionCount)
+    (targetParent : Fin target.regionCount)
+    (sourceContext : WireContext source)
+    (targetContext : WireContext target)
+    (sourceBinders : BinderContext source rels)
+    (targetBinders : BinderContext target rels)
+    (sourceOccurrences :
+      List (LocalOccurrence source.regionCount source.nodeCount))
+    (mapOccurrence : LocalOccurrence source.regionCount source.nodeCount →
+      LocalOccurrence target.regionCount target.nodeCount)
+    (sourceDirect : ∀ occurrence, occurrence ∈ sourceOccurrences →
+      occurrence ∈ localOccurrences source sourceParent)
+    (targetDirect : ∀ occurrence,
+      occurrence ∈ sourceOccurrences.map mapOccurrence →
+        occurrence ∈ localOccurrences target targetParent)
+    (wire : FiniteEquiv (Fin sourceContext.length)
+      (Fin targetContext.length))
+    (mapHead : ∀ occurrence (member : occurrence ∈ sourceOccurrences)
+        {sourceItem : CompiledItem source sourceContext rels sourceBinders},
+      compileOccurrence? source sourceWf sourceParent sourceContext
+          sourceBinders occurrence (sourceDirect occurrence member) =
+        some sourceItem →
+      Nonempty (Σ targetItem : CompiledItem target targetContext rels
+          targetBinders,
+        PSigma (fun _ : compileOccurrence? target targetWf targetParent
+            targetContext targetBinders (mapOccurrence occurrence)
+            (targetDirect _
+              (List.mem_map.mpr ⟨occurrence, member, rfl⟩)) =
+              some targetItem =>
+          ItemIso wire rels sourceItem.erase targetItem.erase)))
+    {sourceItems : CompiledItems source sourceContext rels sourceBinders}
+    (sourceCompiled : compileItems? source sourceWf sourceParent
+      sourceContext sourceBinders sourceOccurrences sourceDirect =
+        some sourceItems) :
+    Nonempty (Σ targetItems : CompiledItems target targetContext rels
+        targetBinders,
+      PSigma (fun _ : compileItems? target targetWf targetParent targetContext
+          targetBinders (sourceOccurrences.map mapOccurrence) targetDirect =
+            some targetItems =>
+        ItemSeqIso wire rels sourceItems.erase targetItems.erase)) := by
+  induction sourceOccurrences generalizing sourceItems with
+  | nil =>
+      simp only [compileItems?_nil] at sourceCompiled
+      cases sourceCompiled
+      refine ⟨⟨.nil, ⟨compileItems?_nil _ _ _ _ _, ?_⟩⟩⟩
+      exact .permute (FiniteEquiv.refl (Fin 0)) (fun index => Fin.elim0 index)
+  | cons occurrence tail induction =>
+      rw [compileItems?_cons] at sourceCompiled
+      cases headCompiled : compileOccurrence? source sourceWf sourceParent
+          sourceContext sourceBinders occurrence
+          (sourceDirect occurrence (by simp)) with
+      | none => simp [headCompiled] at sourceCompiled
+      | some sourceHead =>
+          cases tailCompiled : compileItems? source sourceWf sourceParent
+              sourceContext sourceBinders tail (by
+                intro candidate member
+                exact sourceDirect candidate (by simp [member])) with
+          | none => simp [headCompiled, tailCompiled] at sourceCompiled
+          | some sourceTail =>
+              simp [headCompiled, tailCompiled] at sourceCompiled
+              subst sourceItems
+              let headResult := Classical.choice
+                (mapHead occurrence (by simp) headCompiled)
+              let tailResult := Classical.choice (induction
+                (sourceDirect := by
+                  intro candidate member
+                  exact sourceDirect candidate (by simp [member]))
+                (targetDirect := by
+                  intro candidate member
+                  exact targetDirect candidate (by
+                    rw [List.map_cons]
+                    exact List.mem_cons_of_mem _ member))
+                (mapHead := by
+                  intro candidate member sourceItem compiled
+                  exact mapHead candidate (by simp [member]) compiled)
+                tailCompiled)
+              let targetItems := CompiledItems.cons headResult.fst
+                tailResult.fst
+              refine ⟨⟨targetItems, ⟨?_, ?_⟩⟩⟩
+              · change compileItems? target targetWf targetParent
+                  targetContext targetBinders
+                    (mapOccurrence occurrence :: tail.map mapOccurrence) _ =
+                  some targetItems
+                rw [compileItems?_cons, headResult.snd.fst,
+                  tailResult.snd.fst]
+                rfl
+              · exact (ItemSeqIso.singleton headResult.snd.snd).append
+                  tailResult.snd.snd
+
 theorem compileItems?_length
     (hwf : d.WellFormed) (parent : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)

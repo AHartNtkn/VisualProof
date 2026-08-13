@@ -964,6 +964,45 @@ theorem visibleWire_survives_above
       scopeEnclosesRegion above
     exact different regionEq.symm
 
+/-- Every wire visible from a surviving region incomparable with the selected
+anchor survives removal. -/
+theorem visibleWire_survives_away
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (region : Fin host.val.regionCount)
+    (regionSurvives : domains.regions.survives region = true)
+    (away : ¬ host.val.Encloses region selection.val.anchor)
+    (outside : ¬ host.val.Encloses selection.val.anchor region)
+    (context : WireContext host.val) (exact : context.Exact region)
+    (wire : Fin host.val.wireCount) (member : wire ∈ context) :
+    domains.wires.survives wire = true := by
+  apply (domains.wire_survives_iff wire).2
+  intro removed
+  have scopeEnclosesRegion : host.val.Encloses
+      (host.val.wires wire).scope region := (exact.mem_iff wire).1 member
+  rcases (selection.mem_internalWires_expanded wire).1 removed with
+    selectedScope | explicit
+  · obtain ⟨root, rootMember, rootEnclosesScope⟩ := selectedScope
+    have rootEnclosesRegion := checked_encloses_trans host.property
+      rootEnclosesScope scopeEnclosesRegion
+    have regionSelected : region ∈ selection.selectedRegions :=
+      (selection.mem_selectedRegions region).2
+        ⟨root, rootMember, rootEnclosesRegion⟩
+    rcases (domains.region_survives_iff region).1 regionSurvives with
+      regionRoot | regionNotSelected
+    · subst region
+      have rootEq := encloses_sheet_eq host.property.root_is_sheet
+        rootEnclosesRegion
+      subst root
+      have rootParent := selection.property.childRoots_direct
+        host.val.root rootMember
+      rw [host.property.root_is_sheet] at rootParent
+      contradiction
+    · exact regionNotSelected regionSelected
+  · have scopeEq := selection.property.explicitWires_at_anchor wire explicit
+    rw [scopeEq] at scopeEnclosesRegion
+    exact outside scopeEnclosesRegion
+
 /-- Every direct occurrence of a surviving region outside the selected
 subtree survives. -/
 theorem localOccurrence_survives_away
@@ -1124,6 +1163,45 @@ noncomputable def mapWireContextEquiv
   simpa using congrArg List.length
     (domains.mapWireContext_origin_eq context allSurvive)
 
+@[simp] theorem mapWireContextEquiv_val
+    (domains : FrameDomains d selection) (context : WireContext d)
+    (allSurvive : ∀ wire, wire ∈ context →
+      domains.wires.survives wire = true)
+    (index : Fin (domains.mapWireContext context).length) :
+    (domains.mapWireContextEquiv context allSurvive index).val = index.val :=
+  rfl
+
+/-- Survivor-position equivalences compose across lexical context extension. -/
+theorem mapWireContextEquiv_append
+    (domains : FrameDomains d selection)
+    (outer locals : WireContext d)
+    (outerSurvives : ∀ wire, wire ∈ outer →
+      domains.wires.survives wire = true)
+    (localSurvives : ∀ wire, wire ∈ locals →
+      domains.wires.survives wire = true)
+    (allSurvive : ∀ wire, wire ∈ outer ++ locals →
+      domains.wires.survives wire = true) :
+    castFinEquiv (by
+        rw [domains.mapWireContext_append]
+        exact List.length_append.symm)
+      (by exact List.length_append.symm)
+      (domains.mapWireContextEquiv (outer ++ locals) allSurvive) =
+    extendWireEquiv
+      (domains.mapWireContextEquiv outer outerSurvives)
+      (domains.mapWireContextEquiv locals localSurvives) := by
+  have outerLength : (domains.mapWireContext outer).length = outer.length := by
+    simpa using congrArg List.length
+      (domains.mapWireContext_origin_eq outer outerSurvives)
+  apply FiniteEquiv.ext
+  intro index
+  apply Fin.ext
+  refine Fin.addCases (m := (domains.mapWireContext outer).length)
+    (n := (domains.mapWireContext locals).length) (fun inherited => ?_)
+      (fun localIndex => ?_) index
+  · simp [castFinEquiv, extendWireEquiv]
+  · simp [castFinEquiv, extendWireEquiv]
+    exact outerLength
+
 /-- The unchanged-context equivalence retrieves the represented source wire. -/
 theorem mapWireContextEquiv_get
     (domains : FrameDomains d selection) (context : WireContext d)
@@ -1229,6 +1307,21 @@ noncomputable def mapWireContextOriginIndex
     rw [domains.map_mapWireContext_origin] at mappedMember
     exact (List.mem_filter.mp mappedMember).1
   exact Classical.choose (WireContext.lookup?_complete sourceMember)
+
+theorem mapWireContextOriginIndex_lookup
+    (domains : FrameDomains d selection) (context : WireContext d)
+    (index : Fin (domains.mapWireContext context).length) :
+    context.lookup?
+        (domains.wires.origin ((domains.mapWireContext context).get index)) =
+      some (domains.mapWireContextOriginIndex context index) := by
+  unfold mapWireContextOriginIndex
+  exact Classical.choose_spec (WireContext.lookup?_complete (by
+    have mappedMember : domains.wires.origin
+        ((domains.mapWireContext context).get index) ∈
+        (domains.mapWireContext context).map domains.wires.origin :=
+      List.mem_map.mpr ⟨_, List.get_mem _ index, rfl⟩
+    rw [domains.map_mapWireContext_origin] at mappedMember
+    exact (List.mem_filter.mp mappedMember).1))
 
 /-- A compacted context position retrieves its represented source wire at the
 source-only position selected above. -/
@@ -1357,6 +1450,106 @@ theorem resolvePort?_removeRaw_origin_map
       ⟨domains.wires.origin wire, sourceMember,
         domains.wires.index?_origin wire⟩
   · exact host.property.wire_endpoints_are_disjoint
+
+theorem mapWireContextOriginIndex_eq_equiv
+    (domains : FrameDomains d selection) (context : WireContext d)
+    (contextNodup : context.Nodup)
+    (allSurvive : ∀ wire, wire ∈ context →
+      domains.wires.survives wire = true) :
+    domains.mapWireContextOriginIndex context =
+      domains.mapWireContextEquiv context allSurvive := by
+  funext index
+  apply Fin.ext
+  have getEquiv := domains.mapWireContextEquiv_get context allSurvive index
+  exact congrArg Fin.val ((WireContext.lookup?_unique contextNodup
+    (domains.mapWireContextOriginIndex_lookup context index)
+    (other := domains.mapWireContextEquiv context allSurvive index)
+    getEquiv).symm)
+
+/-- Reverse the retained-port law through the canonical context equivalence
+when the complete context survives. -/
+theorem resolvePort?_removeRaw_index_map
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (context : WireContext host.val) (contextNodup : context.Nodup)
+    (allSurvive : ∀ wire, wire ∈ context →
+      domains.wires.survives wire = true)
+    (node : domains.nodes.Carrier) (port : CPort) :
+    resolvePort? (host.val.removeRaw selection domains)
+        (domains.mapWireContext context) node port =
+      (resolvePort? host.val context (domains.nodes.origin node) port).map
+        (domains.mapWireContextEquiv context allSurvive).symm := by
+  have forward := domains.resolvePort?_removeRaw_origin_map host selection
+    context contextNodup node port
+  let wireEquiv := domains.mapWireContextEquiv context allSurvive
+  have positionEq : domains.mapWireContextOriginIndex context = wireEquiv :=
+    domains.mapWireContextOriginIndex_eq_equiv context contextNodup allSurvive
+  rw [positionEq] at forward
+  cases sourceEq : resolvePort? host.val context
+      (domains.nodes.origin node) port with
+  | none =>
+      rw [sourceEq] at forward
+      cases targetEq : resolvePort? (host.val.removeRaw selection domains)
+          (domains.mapWireContext context) node port <;>
+        simp [targetEq] at forward ⊢
+  | some sourceIndex =>
+      rw [sourceEq] at forward
+      cases targetEq : resolvePort? (host.val.removeRaw selection domains)
+          (domains.mapWireContext context) node port with
+      | none => simp [targetEq] at forward
+      | some targetIndex =>
+          simp only [targetEq, Option.map_some, Option.some.injEq] at forward ⊢
+          rw [forward]
+          exact (wireEquiv.left_inv targetIndex).symm
+
+/-- Compile one retained dense node back to its represented source node. -/
+private theorem mapNodeCompilationBack
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (context : WireContext host.val) (contextNodup : context.Nodup)
+    (allSurvive : ∀ wire, wire ∈ context →
+      domains.wires.survives wire = true)
+    (binders : BinderContext host.val rels)
+    (node : domains.nodes.Carrier)
+    {frameItem : CompiledItem (host.val.removeRaw selection domains)
+      (domains.mapWireContext context) rels
+      (domains.mapBinderContext binders)}
+    (frameCompiled : compileNode? (host.val.removeRaw selection domains)
+      (domains.mapWireContext context) (domains.mapBinderContext binders) node =
+        some frameItem) :
+    ∃ sourceItem : CompiledItem host.val context rels binders,
+      compileNode? host.val context binders (domains.nodes.origin node) =
+        some sourceItem ∧
+      sourceItem.erase = frameItem.erase.renameWires
+        (domains.mapWireContextEquiv context allSurvive) := by
+  obtain ⟨sourceItem, sourceCompiled, eraseEq⟩ := compileNode?_map_success
+    (source := host.val.removeRaw selection domains) (target := host.val)
+    (domains.mapWireContext context) context
+    (domains.mapBinderContext binders) binders node
+    (domains.nodes.origin node) domains.regions.origin domains.regions.origin
+    (domains.mapWireContextEquiv context allSurvive) (fun relation => relation)
+    (by
+      have nodeOrigin := domains.removeRaw_node_origin host selection node
+      cases targetKind : (host.val.removeRaw selection domains).nodes node with
+      | atom region binder => simpa [targetKind] using nodeOrigin
+      | identity region arity => simpa [targetKind] using nodeOrigin)
+    (by
+      intro port
+      have ports := domains.resolvePort?_removeRaw_origin_map host selection
+        context contextNodup node port
+      rw [domains.mapWireContextOriginIndex_eq_equiv context contextNodup
+        allSurvive] at ports
+      exact ports)
+    (by
+      intro region binder nodeKind
+      change binders (domains.regions.origin binder) =
+        (binders (domains.regions.origin binder)).map _
+      cases binders (domains.regions.origin binder) with
+      | none => rfl
+      | some value => cases value; rfl)
+    frameCompiled
+  exact ⟨sourceItem, sourceCompiled, by
+    simpa only [Item.renameRelations_id] using eraseEq⟩
 
 /-- Compile one retained dense node from its source compiler result.  The
 erasure equation points back into the source context; no target node result is
