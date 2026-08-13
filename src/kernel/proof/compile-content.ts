@@ -1090,9 +1090,6 @@ export function compileRelationSever(
   const diffs: Array<{ before: Diagram; after: Diagram }> = []
   let real = diagram
   let reservation = options.reservation
-  if (process.env.SEVER_DEBUG) {
-    console.error('plan:', trace.map((entry, i) => `${i}:${entry.step.rule}`).join(' '))
-  }
   for (let index = trace.length - 1; index >= 0; index -= 1) {
     const { step, pre, post } = trace[index]!
     const iso = exploreIso(post, real)

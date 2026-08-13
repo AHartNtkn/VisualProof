@@ -2,7 +2,7 @@ import type { Diagram, RegionId } from '../diagram/diagram'
 import { isAncestorOrEqual } from '../diagram/regions'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import { selectionContents } from '../diagram/subgraph/selection'
-import { exploreForm } from '../diagram/canonical/explore'
+import { exploreForm, exploreIso } from '../diagram/canonical/explore'
 import { extractSubgraph } from '../diagram/subgraph/extract'
 import { removeSubgraph, spliceSubgraphMapped } from '../diagram/subgraph/splice'
 import type { IdReservation } from '../diagram/subgraph/freshId'
@@ -128,11 +128,96 @@ function mkValidatedSelection(
  * Construct exact structural replay evidence. Fuel limits graph exploration
  * only; there is no object-language comparison or secondary verdict channel.
  */
+/**
+ * Fast exact justifier search for single-subtree selections: canonical
+ * forms are complete invariants, so comparing candidate cut subtrees by
+ * form (with boundary pinning) finds every exact occurrence without the
+ * matcher's backtracking — which degenerates when a pattern carries many
+ * interchangeable pins. The certificate is assembled from the labeling
+ * isomorphism.
+ */
+function subtreeEvidence(
+  diagram: Diagram,
+  selection: SubgraphSelection,
+): DeiterationEvidence | null {
+  if (selection.regions.length !== 1 || selection.nodes.length > 0 || selection.wires.length > 0) {
+    return null
+  }
+  const contents = selectionContents(diagram, selection)
+  const { pattern, attachments } = extractSubgraph(diagram, selection)
+  const want = exploreForm(pattern.diagram, pattern.boundary)
+  for (const [rid, region] of Object.entries(diagram.regions).sort()) {
+    if (region.kind !== 'cut') continue
+    if (rid === selection.regions[0]) continue
+    if (!isAncestorOrEqual(diagram, region.parent, selection.region)) continue
+    if (contents.allRegions.has(rid)) continue
+    let probe
+    try {
+      probe = extractSubgraph(diagram, {
+        region: region.parent,
+        regions: [rid],
+        nodes: [],
+        wires: [],
+      })
+    } catch {
+      continue
+    }
+    if (probe.attachments.length !== attachments.length) continue
+    if (probe.attachments.some((wire, index) => wire !== attachments[index])) continue
+    if (exploreForm(probe.pattern.diagram, probe.pattern.boundary) !== want) continue
+    const iso = exploreIso(
+      pattern.diagram,
+      probe.pattern.diagram,
+      pattern.boundary,
+      probe.pattern.boundary,
+    )
+    if (iso === null) continue
+    // Disjointness against the selection's own content.
+    const overlapping = [...iso.regions.values()].some((mapped) => contents.allRegions.has(mapped))
+      || [...iso.nodes.values()].some((mapped) => contents.allNodes.has(mapped))
+    if (overlapping) {
+      continue
+    }
+    const regionMap = new Map<RegionId, RegionId>()
+    for (const [from, to] of iso.regions) {
+      regionMap.set(from, from === pattern.diagram.root ? region.parent : to)
+    }
+    const stubSet = new Set(pattern.boundary)
+    const wireMap = new Map<string, string>()
+    for (const [from, to] of iso.wires) {
+      if (stubSet.has(from)) continue
+      wireMap.set(from, to)
+    }
+    pattern.boundary.forEach((stub, index) => {
+      if (!wireMap.has(stub)) wireMap.set(stub, probe.attachments[index]!)
+    })
+    const certificate: OccurrenceCertificate = {
+      region: region.parent,
+      regionMap,
+      nodeMap: new Map(iso.nodes),
+      wireMap,
+      attachments: [...probe.attachments],
+    }
+    const justifier: SubgraphSelection = {
+      region: region.parent,
+      regions: [rid],
+      nodes: [],
+      wires: [],
+    }
+    const checked = checkOccurrenceCertificate(diagram, pattern, certificate)
+    if (!checked.ok) continue
+    return { justifier, certificate }
+  }
+  return null
+}
+
 export function findDeiterationEvidence(
   diagram: Diagram,
   selection: SubgraphSelection,
   explorationFuel: number,
 ): DeiterationEvidence {
+  const fast = subtreeEvidence(diagram, selection)
+  if (fast !== null) return fast
   const contents = selectionContents(diagram, selection)
   const { pattern, attachments } = extractSubgraph(diagram, selection)
   const result = findOccurrences(diagram, pattern, {
@@ -165,26 +250,7 @@ export function findDeiterationEvidence(
       && disjoint(occurrence),
   )
   if (justifying === undefined) {
-    if (process.env.DEITERATION_DEBUG) {
-      console.error(`deiteration debug at '${selection.region}': ${result.matches.length} raw matches, expected attachments [${attachments.join(', ')}]`)
-      const selectedNode = selection.nodes[0]
-      const selected = selectedNode === undefined ? undefined : diagram.nodes[selectedNode]
-      if (selected !== undefined) {
-        for (const [nodeId, node] of Object.entries(diagram.nodes)) {
-          if (node.kind !== selected.kind) continue
-          if (JSON.stringify((node as { sig?: unknown }).sig) !== JSON.stringify((selected as { sig?: unknown }).sig)) continue
-          const attached = Object.entries(diagram.wires)
-            .filter(([, wire]) => wire.endpoints.some((ep) => ep.node === nodeId))
-            .map(([wireId]) => wireId)
-          console.error(`  candidate '${nodeId}' at '${node.region}': wires [${attached.join(', ')}]`)
-        }
-      }
-    }
     if (result.status === 'exhausted') {
-      if (process.env.DEITERATION_DEBUG) {
-        console.error('exhausted pattern form:')
-        console.error(exploreForm(pattern.diagram, pattern.boundary))
-      }
       throw new RuleError(
         `graph exploration exhausted before finding an exact justifier `
         + `for deiteration at '${selection.region}'`,
