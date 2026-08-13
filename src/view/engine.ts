@@ -1,10 +1,10 @@
 import type { Diagram, DiagramNode, NodeId, Port, RegionId, WireId } from '../kernel/diagram/diagram'
 import { requiredPorts, portKey } from '../kernel/diagram/diagram'
-import { deepestCommonAncestor } from '../kernel/diagram/regions'
+import { derivedScope } from '../kernel/diagram/regions'
 import type { Vec2 } from './vec'
 import { add } from './vec'
 import type { NodeGeometry } from './bend'
-import { atomGeometry, END_PORT_KEY, endGeometry, identityGeometry, refGeometry } from './bend'
+import { atomGeometry, identityGeometry, refGeometry } from './bend'
 export { END_PORT_KEY } from './bend'
 import type { Disc, FreeSpace } from './route/freespace'
 import { mkFreeSpace } from './route/freespace'
@@ -273,60 +273,21 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     if (positions === undefined) slotsOf.set(wid, [position])
     else positions.push(position)
   })
-  // The line's OUTERMOST POINT is where its individual is quantified, and it
-  // must be a body homed at the wire's SCOPE (USER LAW: dangling ends are
-  // their own nodes — the ∃ is manipulable independently of what it attaches
-  // to). A dangling wire's free tip IS that body; the ∀ via-body shape (scope
-  // above the dca) grows a scope-homed branch body so the line never contorts
-  // through its scope. Boundary wires get a frame-slot terminal instead.
-  const mkWireBody = (id: string, region: RegionId, near: Vec2 | null): Body => {
-    // seed NEAR the wire's own anchors, not on the global spiral: after a
-    // rewrite, spiral-seeded ends left wires stretched wildly across the sheet
-    const seed = near !== null
-      ? { x: near.x + 4 + (i % 3), y: near.y - 3 - (i % 2) }
-      : { x: (i++) * 3, y: -(i * 2) }
-    i++
-    const geometry = endGeometry()
-    const local = geometry.portAnchors[END_PORT_KEY]!
-    const localAnchor = new Map([[END_PORT_KEY, local]])
-    const b: Body = {
-      id, kind: 'end', node: null, geometry,
-      localAnchor, discR: smallBodyDiscR(geometry), region,
-      pos: seed, theta: 0,
-    }
-    bodies.set(id, b)
-    membersOf.get(region)!.push(id)
-    return b
-  }
   for (const [wid, w] of Object.entries(d.wires)) {
     const binds: WireBind[] = w.endpoints.map((ep) => ({ body: ep.node, key: pkey(ep.port) }))
     const slots = slotsOf.get(wid) ?? []
-    const isBoundary = slots.length > 0
-    if (!isBoundary && binds.length === 0) {
-      // A bare INTERNAL ∃ — the wire asserts only that an individual exists:
-      // one scope-homed body, no edges (its dot is the whole rendering).
-      mkWireBody(`j:${wid}`, w.scope, null)
-      continue
-    }
+    // Every wire end is a NODE (two-end floor): pins and points are real
+    // identity bodies, so the engine synthesizes nothing — no free-tip
+    // bodies, no scope dangles. Terminals are port binds plus boundary
+    // incidences, always at least two.
+    const end: WireBind | null = null
     const anchorPos = binds.map((bd) => worldBindAnchor(engine, bodies.get(bd.body)!, bd.key))
     const centroid = (): Vec2 => binds.length === 0
       ? { x: 0, y: 0 }
       : {
-          x: anchorPos.reduce((s, p) => s + p.x, 0) / anchorPos.length,
-          y: anchorPos.reduce((s, p) => s + p.y, 0) / anchorPos.length,
+          x: anchorPos.reduce((sum, p) => sum + p.x, 0) / anchorPos.length,
+          y: anchorPos.reduce((sum, p) => sum + p.y, 0) / anchorPos.length,
         }
-
-    let end: WireBind | null = null
-    if (isBoundary) {
-      // port binds + boundary incidences are the terminals; the line exits to the frame.
-    } else if (binds.length === 1) {
-      end = { body: mkWireBody(`j:${wid}`, w.scope, anchorPos[0]!).id, key: END_PORT_KEY }
-    } else if (w.scope !== w.endpoints
-      .map((ep) => d.nodes[ep.node]!.region)
-      .reduce((a, b) => deepestCommonAncestor(d, a, b))) {
-      // the ∀ via-body: a scope-homed END body, an ordinary terminal of the network.
-      end = { body: mkWireBody(`x:${wid}`, w.scope, centroid()).id, key: END_PORT_KEY }
-    }
     // Initial topology: <2 terminals → no edges; 2 → one direct edge; ≥3 → a
     // STAR on one junction at the terminal centroid. The split rule (the
     // tangent-cone derivative of routed length) refines the star into the
@@ -684,7 +645,7 @@ export function wireRouteSpaces(e: Engine): WireSpaces {
   const forbiddenRids = new Map<WireId, readonly RegionId[]>()
   for (const [wid, w] of e.wires) {
     const allowed = new Set<RegionId>()
-    chainInto(e.d.wires[wid]!.scope, allowed)
+    chainInto(derivedScope(e.d, wid, e.boundary), allowed)
     for (const bd of w.binds) chainInto(e.bodies.get(bd.body)!.region, allowed)
     if (w.end !== null) chainInto(e.bodies.get(w.end.body)!.region, allowed)
     const forb = nonSheet.filter((rid) => !allowed.has(rid))

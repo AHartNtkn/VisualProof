@@ -25,6 +25,7 @@ import { removeSubgraph } from '../diagram/subgraph/splice'
 import { freshId } from '../diagram/subgraph/freshId'
 import { polarity } from '../diagram/regions'
 import { RuleError } from '../rules/error'
+import { bareWireDescription } from '../rules/identity-rules'
 import { completeWireEnds } from '../rules/wire-ends'
 import { mapStepIds } from './compose'
 import type { ProofContext } from './context'
@@ -362,25 +363,10 @@ function plumb(
 
 /** Vacuity deletion of a bare (all-pin) wire, described from the diagram. */
 function bareWireDeletion(diagram: Diagram, wireId: WireId): ProofStep {
-  const wire = diagram.wires[wireId]!
-  const nodes: Record<NodeId, { region: RegionId; sig: Sig; arity: number }> = {}
-  for (const endpoint of wire.endpoints) {
-    const node = diagram.nodes[endpoint.node]!
-    if (node.kind !== 'identity' || node.arity !== 1) {
-      throw new RuleError(
-        `wire '${wireId}' is not bare; endpoint '${endpoint.node}' is not a pin`,
-      )
-    }
-    nodes[endpoint.node] = { region: node.region, sig: node.sig, arity: 1 }
-  }
   return {
     rule: 'vacuity',
     direction: 'delete',
-    assembly: {
-      nodes,
-      wires: { [wireId]: { sig: wire.sig, endpoints: [...wire.endpoints] } },
-      attachments: {},
-    },
+    assembly: bareWireDescription(diagram, wireId),
   }
 }
 

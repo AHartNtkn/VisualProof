@@ -76,6 +76,72 @@ export type IdentificationInput =
       readonly transfer: readonly Endpoint[]
     }
 
+
+/** A one-node vacuity assembly: the typed point ∃x:σ.⊤ at `region`. */
+export function pointAssembly(
+  label: NodeId,
+  region: RegionId,
+  sig: Sig,
+): VacuityInput {
+  return {
+    nodes: { [label]: { region, sig, arity: 0 } },
+    wires: {},
+    attachments: {},
+  }
+}
+
+/**
+ * The bare two-point segment at `region` — the drawable floating
+ * existential, and the shape the old endpoint-free vacuous wire becomes.
+ */
+export function bareWireAssembly(
+  wireLabel: WireId,
+  region: RegionId,
+  sig: Sig,
+  endLabels: readonly [NodeId, NodeId] = [`${wireLabel}_end0`, `${wireLabel}_end1`],
+): VacuityInput {
+  return {
+    nodes: {
+      [endLabels[0]]: { region, sig, arity: 1 },
+      [endLabels[1]]: { region, sig, arity: 1 },
+    },
+    wires: {
+      [wireLabel]: {
+        sig,
+        endpoints: [
+          { node: endLabels[0], port: { kind: 'identity', index: 0 } },
+          { node: endLabels[1], port: { kind: 'identity', index: 0 } },
+        ],
+      },
+    },
+    attachments: {},
+  }
+}
+
+/**
+ * Describe an existing bare (all-pin) wire as the vacuity assembly that
+ * deletes it — the successor of the old vacuous elimination.
+ */
+export function bareWireDescription(d: Diagram, wireId: WireId): VacuityInput {
+  const wire = d.wires[wireId]
+  if (wire === undefined) throw new DiagramError(`unknown wire '${wireId}'`)
+  const nodes: Record<NodeId, VacuityNode> = {}
+  for (const endpoint of wire.endpoints) {
+    const node = d.nodes[endpoint.node]!
+    if (node.kind !== 'identity' || node.arity !== 1) {
+      throw new RuleError(
+        `wire '${wireId}' is not bare; endpoint '${endpoint.node}' is not a pin`,
+      )
+    }
+    nodes[endpoint.node] = { region: node.region, sig: node.sig, arity: 1 }
+  }
+  return {
+    nodes,
+    wires: { [wireId]: { sig: wire.sig, endpoints: [...wire.endpoints] } },
+    attachments: {},
+  }
+}
+
 function identityNodeAt(d: Diagram, nodeId: NodeId, operation: string): IdentityDiagramNode {
   const node = d.nodes[nodeId]
   if (node === undefined) throw new DiagramError(`unknown node '${nodeId}'`)

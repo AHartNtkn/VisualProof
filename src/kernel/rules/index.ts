@@ -23,6 +23,9 @@ export {
   applyPresentation,
   applyVacuityDelete,
   applyVacuityInsert,
+  bareWireAssembly,
+  bareWireDescription,
+  pointAssembly,
 } from './identity-rules'
 export type {
   IdentificationInput,
