@@ -872,20 +872,18 @@ private theorem spliceAttachment_mem
   rw [← castWire_scope diagramEq] at castVisible
   simpa [spliceSite, sourceWire, diagramEq] using castVisible
 
-private theorem spliceAttachment_mem_fromFocus
+private theorem spliceAttachment_mem_atCall
     {source : State arity} (input : Splice.Input)
     (frameEq : input.frame = source.diagram)
     (admissible : input.Admissible)
     (layout : input.PlugLayout)
     {sourceCall : CompilerCall source.checked.val.diagram}
-    {sourceBody : CompiledRegion source.checked.val.diagram sourceCall}
-    (focus : CompiledFocus sourceBody (spliceSite input frameEq))
-    (exact : focus.endpointCall.fullContext.Exact
+    (exact : sourceCall.fullContext.Exact
       (spliceSite input frameEq))
     (external : Fin input.pattern.val.exposedWires.length) :
     sourceWire input frameEq
         (input.attachment (layout.exposedPosition external)) ∈
-      focus.endpointCall.fullContext := by
+      sourceCall.fullContext := by
   apply (exact.mem_iff _).mpr
   let diagramEq : input.frame.val = source.checked.val.diagram :=
     congrArg (fun frame : Checked => frame.val) frameEq
@@ -895,86 +893,77 @@ private theorem spliceAttachment_mem_fromFocus
   rw [← castWire_scope diagramEq] at castVisible
   simpa [spliceSite, sourceWire, diagramEq] using castVisible
 
-noncomputable def spliceAttachmentPositionFromFocus
+noncomputable def spliceAttachmentPositionAtCall
     {source : State arity} (input : Splice.Input)
     (frameEq : input.frame = source.diagram)
     (admissible : input.Admissible)
     (layout : input.PlugLayout)
     {sourceCall : CompilerCall source.checked.val.diagram}
-    {sourceBody : CompiledRegion source.checked.val.diagram sourceCall}
-    (focus : CompiledFocus sourceBody (spliceSite input frameEq))
-    (exact : focus.endpointCall.fullContext.Exact
+    (exact : sourceCall.fullContext.Exact
       (spliceSite input frameEq))
     (external : Fin input.pattern.val.exposedWires.length) :
-    Fin focus.endpointCall.fullContext.length :=
-  (focus.endpointCall.fullContext.lookup?
+    Fin sourceCall.fullContext.length :=
+  (sourceCall.fullContext.lookup?
     (sourceWire input frameEq
       (input.attachment (layout.exposedPosition external)))).get
         (Option.isSome_iff_exists.mpr
           (WireContext.lookup?_complete
-            (spliceAttachment_mem_fromFocus input frameEq admissible layout
-              focus exact external)))
+            (spliceAttachment_mem_atCall input frameEq admissible layout
+              exact external)))
 
-theorem spliceAttachmentPositionFromFocus_get
+theorem spliceAttachmentPositionAtCall_get
     {source : State arity} (input : Splice.Input)
     (frameEq : input.frame = source.diagram)
     (admissible : input.Admissible)
     (layout : input.PlugLayout)
     {sourceCall : CompilerCall source.checked.val.diagram}
-    {sourceBody : CompiledRegion source.checked.val.diagram sourceCall}
-    (focus : CompiledFocus sourceBody (spliceSite input frameEq))
-    (exact : focus.endpointCall.fullContext.Exact
+    (exact : sourceCall.fullContext.Exact
       (spliceSite input frameEq))
     (external : Fin input.pattern.val.exposedWires.length) :
-    focus.endpointCall.fullContext.get
-        (spliceAttachmentPositionFromFocus input frameEq admissible layout
-          focus exact external) =
+    sourceCall.fullContext.get
+        (spliceAttachmentPositionAtCall input frameEq admissible layout
+          exact external) =
       sourceWire input frameEq
         (input.attachment (layout.exposedPosition external)) := by
   apply WireContext.lookup?_sound
   exact (Option.some_get (Option.isSome_iff_exists.mpr
     (WireContext.lookup?_complete
-      (spliceAttachment_mem_fromFocus input frameEq admissible layout focus
-        exact external)))).symm
+      (spliceAttachment_mem_atCall input frameEq admissible layout exact
+        external)))).symm
 
-noncomputable def spliceWireMapFromFocus
+noncomputable def spliceWireMapAtCall
     {source : State arity} (input : Splice.Input)
     (frameEq : input.frame = source.diagram)
     (admissible : input.Admissible)
     (layout : input.PlugLayout)
     {sourceCall : CompilerCall source.checked.val.diagram}
-    {sourceBody : CompiledRegion source.checked.val.diagram sourceCall}
-    (focus : CompiledFocus sourceBody (spliceSite input frameEq))
-    (exact : focus.endpointCall.fullContext.Exact
+    (exact : sourceCall.fullContext.Exact
       (spliceSite input frameEq)) :
     Fin (endpointCall (State.ofOpen input.pattern)
         input.binderSpine.bodyContainer).outerContext.length →
-      Fin focus.endpointCall.fullContext.length :=
-  fun wire => spliceAttachmentPositionFromFocus input frameEq admissible layout
-    focus exact (Fin.cast (congrArg List.length
+      Fin sourceCall.fullContext.length :=
+  fun wire => spliceAttachmentPositionAtCall input frameEq admissible layout
+    exact (Fin.cast (congrArg List.length
       (patternTerminal_outerContext input admissible.terminal_body)) wire)
 
-theorem spliceWireMapFromFocus_get
+theorem spliceWireMapAtCall_get
     {source : State arity} (input : Splice.Input)
     (frameEq : input.frame = source.diagram)
     (admissible : input.Admissible)
     (layout : input.PlugLayout)
     {sourceCall : CompilerCall source.checked.val.diagram}
-    {sourceBody : CompiledRegion source.checked.val.diagram sourceCall}
-    (focus : CompiledFocus sourceBody (spliceSite input frameEq))
-    (exact : focus.endpointCall.fullContext.Exact
+    (exact : sourceCall.fullContext.Exact
       (spliceSite input frameEq))
     (wire : Fin (endpointCall (State.ofOpen input.pattern)
       input.binderSpine.bodyContainer).outerContext.length) :
-    focus.endpointCall.fullContext.get
-        (spliceWireMapFromFocus input frameEq admissible layout focus exact
+    sourceCall.fullContext.get
+        (spliceWireMapAtCall input frameEq admissible layout exact
           wire) =
       sourceWire input frameEq (input.attachment
         (layout.exposedPosition (Fin.cast (congrArg List.length
           (patternTerminal_outerContext input admissible.terminal_body))
             wire))) :=
-  spliceAttachmentPositionFromFocus_get input frameEq admissible layout focus
-    exact _
+  spliceAttachmentPositionAtCall_get input frameEq admissible layout exact _
 
 noncomputable def spliceAttachmentPosition
     {source : State arity} (input : Splice.Input)
@@ -1077,20 +1066,18 @@ private theorem spliceRelation_exists
       (Fin.cast (congrArg Diagram.regionCount diagramEq) parent)
       relationArity castedBubble castedEncloses')
 
-private theorem spliceRelation_exists_fromFocus
+private theorem spliceRelation_exists_atCall
     {source : State arity} (input : Splice.Input)
     (frameEq : input.frame = source.diagram)
     (admissible : input.Admissible)
     {sourceCall : CompilerCall source.checked.val.diagram}
-    {sourceBody : CompiledRegion source.checked.val.diagram sourceCall}
-    (focus : CompiledFocus sourceBody (spliceSite input frameEq))
-    (covers : focus.endpointCall.binders.Covers
+    (covers : sourceCall.binders.Covers
       (spliceSite input frameEq))
     (relation : RelVar
       (endpointCall (State.ofOpen input.pattern)
         input.binderSpine.bodyContainer).rels relationArity) :
-    ∃ targetRelation : RelVar focus.endpointCall.rels relationArity,
-      focus.endpointCall.binders
+    ∃ targetRelation : RelVar sourceCall.rels relationArity,
+      sourceCall.binders
           (sourceRegion input frameEq (input.binderTarget
             (terminalRelationProxyEquiv input relation.index))) =
         some ⟨relationArity, targetRelation⟩ := by
@@ -1115,41 +1102,37 @@ private theorem spliceRelation_exists_fromFocus
       (Fin.cast (congrArg Diagram.regionCount diagramEq) parent)
       relationArity castedBubble castedEncloses')
 
-noncomputable def spliceRelationMapFromFocus
+noncomputable def spliceRelationMapAtCall
     {source : State arity} (input : Splice.Input)
     (frameEq : input.frame = source.diagram)
     (admissible : input.Admissible)
     {sourceCall : CompilerCall source.checked.val.diagram}
-    {sourceBody : CompiledRegion source.checked.val.diagram sourceCall}
-    (focus : CompiledFocus sourceBody (spliceSite input frameEq))
-    (covers : focus.endpointCall.binders.Covers
+    (covers : sourceCall.binders.Covers
       (spliceSite input frameEq)) :
     RelationRenaming
       (endpointCall (State.ofOpen input.pattern)
-        input.binderSpine.bodyContainer).rels focus.endpointCall.rels :=
+        input.binderSpine.bodyContainer).rels sourceCall.rels :=
   fun relation => Classical.choose
-    (spliceRelation_exists_fromFocus input frameEq admissible focus covers
+    (spliceRelation_exists_atCall input frameEq admissible covers
       relation)
 
-theorem spliceRelationMapFromFocus_lookup
+theorem spliceRelationMapAtCall_lookup
     {source : State arity} (input : Splice.Input)
     (frameEq : input.frame = source.diagram)
     (admissible : input.Admissible)
     {sourceCall : CompilerCall source.checked.val.diagram}
-    {sourceBody : CompiledRegion source.checked.val.diagram sourceCall}
-    (focus : CompiledFocus sourceBody (spliceSite input frameEq))
-    (covers : focus.endpointCall.binders.Covers
+    (covers : sourceCall.binders.Covers
       (spliceSite input frameEq))
     (relation : RelVar (endpointCall (State.ofOpen input.pattern)
       input.binderSpine.bodyContainer).rels relationArity) :
-    focus.endpointCall.binders
+    sourceCall.binders
         (sourceRegion input frameEq (input.binderTarget
           (terminalRelationProxyEquiv input relation.index))) =
       some ⟨relationArity,
-        spliceRelationMapFromFocus input frameEq admissible focus covers
+        spliceRelationMapAtCall input frameEq admissible covers
           relation⟩ :=
-  Classical.choose_spec (spliceRelation_exists_fromFocus input frameEq
-    admissible focus covers relation)
+  Classical.choose_spec (spliceRelation_exists_atCall input frameEq
+    admissible covers relation)
 
 noncomputable def spliceRelationMap
     {source : State arity} (input : Splice.Input)
