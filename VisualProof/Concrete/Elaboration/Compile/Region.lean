@@ -801,6 +801,71 @@ def compileItems?_selected_inv
       rw [compileItems?_cons, headCompiled, tailCompiled]
       rfl
 
+/-- A successful compiled sequence remains successful after either side of
+its stable origin partition is selected.  This is a grammar property of the
+sole compiler result; callers do not replay the omitted occurrences. -/
+theorem compileItems?_partition_success
+    (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (context : WireContext d) (binders : BinderContext d rels)
+    (classifier : LocalOccurrence d.regionCount d.nodeCount → Bool)
+    (items : CompiledItems d context rels binders)
+    (direct : ∀ occurrence, occurrence ∈ items.origins →
+      occurrence ∈ localOccurrences d parent)
+    (compiled : compileItems? d hwf parent context binders items.origins
+      direct = some items) :
+    compileItems? d hwf parent context binders
+        (items.partition classifier).retained.origins
+        (fun occurrence member => direct occurrence
+          ((items.partition_retained_stable classifier).mem member)) =
+      some (items.partition classifier).retained ∧
+    compileItems? d hwf parent context binders
+        (items.partition classifier).material.origins
+        (fun occurrence member => direct occurrence
+          ((items.partition_material_stable classifier).mem member)) =
+      some (items.partition classifier).material := by
+  cases items with
+  | nil => exact ⟨rfl, rfl⟩
+  | cons head tail =>
+      obtain ⟨headCompiled, tailCompiled⟩ :=
+        compileItems?_cons_inv hwf parent context binders head tail direct
+          compiled
+      let tailDirect : ∀ occurrence, occurrence ∈ tail.origins →
+          occurrence ∈ localOccurrences d parent := by
+        intro occurrence member
+        exact direct occurrence (by simp [CompiledItems.origins, member])
+      have divided := compileItems?_partition_success hwf parent context
+        binders classifier tail tailDirect tailCompiled
+      cases classified : classifier head.origin with
+      | false =>
+          constructor
+          · simp only [CompiledItems.partition, classified]
+            change compileItems? d hwf parent context binders
+              (head.origin :: (tail.partition classifier).retained.origins)
+              _ = some (.cons head (tail.partition classifier).retained)
+            rw [compileItems?_cons]
+            have headCompiled' : compileOccurrence? d hwf parent context
+                binders head.origin
+                  (direct head.origin (by simp [CompiledItems.origins])) =
+                some head := by
+              simpa only using headCompiled
+            rw [headCompiled', divided.1]
+            rfl
+          · simpa [CompiledItems.partition, classified] using divided.2
+      | true =>
+          constructor
+          · simpa [CompiledItems.partition, classified] using divided.1
+          · simp only [CompiledItems.partition, classified]
+            change compileItems? d hwf parent context binders
+              (head.origin :: (tail.partition classifier).material.origins)
+              _ = some (.cons head (tail.partition classifier).material)
+            rw [compileItems?_cons]
+            have headCompiled' : compileOccurrence? d hwf parent context
+                binders head.origin
+                  (direct head.origin (by simp [CompiledItems.origins])) =
+                some head := by
+              simpa only using headCompiled
+            rw [headCompiled', divided.2]
+            rfl
 theorem compileOccurrence?_origin
     (hwf : d.WellFormed) (parent : Fin d.regionCount)
     {context : WireContext d} {binders : BinderContext d rels}
