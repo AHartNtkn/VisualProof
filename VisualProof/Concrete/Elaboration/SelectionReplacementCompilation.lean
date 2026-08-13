@@ -2060,6 +2060,270 @@ theorem compileRegionSurvivors
   exact mapped survives targetOuter outerEq targetBinders bindersEq sourceExact
     sourceBody sourceCompiled
 
+/-- Source-determined compact compilation for the sheet root.  Nested child
+calls delegate to `compileRegionSurvivors`; the root itself introduces no
+second recursive compiler authority. -/
+structure SurvivorRootResult
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (targetAmbient targetLocal : WireContext
+      (host.val.removeRaw selection domains)) where
+  body : CompiledRegion (host.val.removeRaw selection domains)
+    (.root targetAmbient targetLocal)
+  compiled : compileRoot? (host.val.removeRaw selection domains)
+    (Diagram.removeRaw_wellFormed host selection domains)
+    targetAmbient targetLocal = some body
+
+theorem compileRootSurvivors
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (sourceAmbient sourceLocal : WireContext host.val)
+    (targetAmbient targetLocal : WireContext
+      (host.val.removeRaw selection domains))
+    (ambientEq : targetAmbient = domains.mapWireContext sourceAmbient)
+    (localEq : targetLocal = domains.mapWireContext sourceLocal)
+    (sourceExact : (sourceAmbient ++ sourceLocal).Exact host.val.root)
+    (sourceBody : CompiledRegion host.val
+      (.root sourceAmbient sourceLocal))
+    (sourceCompiled : compileRoot? host.val host.property sourceAmbient
+      sourceLocal = some sourceBody) :
+    Nonempty (SurvivorRootResult host selection domains targetAmbient
+      targetLocal) := by
+  rcases sourceBody with ⟨sourceItems⟩
+  have sourceItemsCompiled := CompilerCall.compile?_items_of_success
+    host.property (.root sourceAmbient sourceLocal) sourceCompiled
+  have sourceOrigins : sourceItems.origins =
+      localOccurrences host.val host.val.root :=
+    compileItems?_origins host.property host.val.root
+      (sourceAmbient ++ sourceLocal) BinderContext.empty sourceItemsCompiled
+  let survivors :=
+    (sourceItems.partition domains.occurrenceSurvives).material
+  let sourceDirect : forall occurrence, occurrence ∈ survivors.origins ->
+      occurrence ∈ localOccurrences host.val host.val.root := by
+    intro occurrence member
+    rw [← sourceOrigins]
+    exact (sourceItems.partition_material_stable
+      domains.occurrenceSurvives).mem member
+  let allSourceDirect : forall occurrence,
+      occurrence ∈ sourceItems.origins ->
+        occurrence ∈ localOccurrences host.val host.val.root := by
+    intro occurrence member
+    exact sourceOrigins ▸ member
+  have sourceItemsCompiled' : compileItems? host.val host.property
+      host.val.root (sourceAmbient ++ sourceLocal) BinderContext.empty
+      sourceItems.origins allSourceDirect = some sourceItems := by
+    exact (compileItems?_congr_occurrences host.property host.val.root
+      (sourceAmbient ++ sourceLocal) BinderContext.empty sourceOrigins
+      allSourceDirect (fun _ member => member)).trans sourceItemsCompiled
+  have survivorsCompiled : compileItems? host.val host.property host.val.root
+      (sourceAmbient ++ sourceLocal) BinderContext.empty survivors.origins
+      sourceDirect = some survivors := by
+    exact (compileItems?_partition_success host.property host.val.root
+      (sourceAmbient ++ sourceLocal) BinderContext.empty
+      domains.occurrenceSurvives sourceItems allSourceDirect
+      sourceItemsCompiled').2
+  let targetRoot := domains.root
+  let sourceFull := sourceAmbient ++ sourceLocal
+  let targetFull := targetAmbient ++ targetLocal
+  have targetFullEq : targetFull = domains.mapWireContext sourceFull := by
+    dsimp only [targetFull, sourceFull]
+    rw [ambientEq, localEq, domains.mapWireContext_append]
+  have survivorOrigins : survivors.origins =
+      (localOccurrences host.val host.val.root).filter
+        domains.occurrenceSurvives := by
+    dsimp only [survivors]
+    rw [CompiledItems.partition_material_origins, sourceOrigins]
+  let targetDirect : forall occurrence,
+      occurrence ∈ survivors.origins.map domains.indexOccurrence ->
+        occurrence ∈ localOccurrences
+          (host.val.removeRaw selection domains) targetRoot := by
+    intro occurrence member
+    rw [domains.localOccurrences_removeRaw_eq_map_filter host selection
+      targetRoot, domains.root_origin, ← survivorOrigins]
+    exact member
+  let mappedItems := compileItems?_map_success_only host.property
+    (Diagram.removeRaw_wellFormed host selection domains) host.val.root
+    targetRoot sourceFull targetFull BinderContext.empty BinderContext.empty
+    survivors.origins domains.indexOccurrence sourceDirect targetDirect
+    (by
+      intro occurrence member sourceItem occurrenceCompiled
+      have occurrenceSurvives : domains.occurrenceSurvives occurrence = true := by
+        rw [survivorOrigins] at member
+        exact (List.mem_filter.mp member).2
+      cases occurrence with
+      | node node =>
+          change domains.nodes.survives node = true at occurrenceSurvives
+          let targetNode := domains.nodes.index node occurrenceSurvives
+          have mappedEq : domains.indexOccurrence (.node node) =
+              .node targetNode := by
+            apply domains.originOccurrence_injective
+            rw [domains.originOccurrence_indexOccurrence (.node node)
+              occurrenceSurvives]
+            exact congrArg LocalOccurrence.node
+              (domains.nodes.origin_index node occurrenceSurvives).symm
+          have sourceNodeCompiled : compileNode? host.val sourceFull
+              BinderContext.empty node = some sourceItem := by
+            simpa only [compileOccurrence?_node] using occurrenceCompiled
+          let targetNodeResult := Classical.choice
+            (domains.mapNodeCompilationSuccessAt host selection sourceFull
+              targetFull targetFullEq sourceExact.nodup BinderContext.empty
+              BinderContext.empty rfl targetNode (by
+                have originEq := domains.nodes.origin_index node
+                  occurrenceSurvives
+                rw [originEq]
+                exact sourceNodeCompiled))
+          have targetNodeDirect : LocalOccurrence.node targetNode ∈
+              localOccurrences (host.val.removeRaw selection domains)
+                targetRoot := by
+            exact Eq.mp (congrArg (fun candidate => candidate ∈
+              localOccurrences (host.val.removeRaw selection domains)
+                targetRoot) mappedEq)
+              (targetDirect (domains.indexOccurrence (.node node))
+                (List.mem_map.mpr ⟨.node node, member, rfl⟩))
+          refine ⟨targetNodeResult.item, ?_⟩
+          exact (compileOccurrence?_congr_occurrence _ _ _ _ mappedEq _
+            targetNodeDirect).trans (by
+              simpa only [compileOccurrence?_node] using
+                targetNodeResult.compiled)
+      | child child =>
+          change domains.regions.survives child = true at occurrenceSurvives
+          let targetChild := domains.regions.index child occurrenceSurvives
+          have mappedEq : domains.indexOccurrence (.child child) =
+              .child targetChild := by
+            apply domains.originOccurrence_injective
+            rw [domains.originOccurrence_indexOccurrence (.child child)
+              occurrenceSurvives]
+            exact congrArg LocalOccurrence.child
+              (domains.regions.origin_index child occurrenceSurvives).symm
+          have sourceParent := (mem_localOccurrences_child host.val
+            host.val.root child).mp (sourceDirect (.child child) member)
+          have childExact := sourceExact.extend_child host.property sourceParent
+          have targetChildDirect : LocalOccurrence.child targetChild ∈
+              localOccurrences (host.val.removeRaw selection domains)
+                targetRoot := by
+            exact Eq.mp (congrArg (fun candidate => candidate ∈
+              localOccurrences (host.val.removeRaw selection domains)
+                targetRoot) mappedEq)
+              (targetDirect (domains.indexOccurrence (.child child))
+                (List.mem_map.mpr ⟨.child child, member, rfl⟩))
+          cases sourceKind : host.val.regions child with
+          | sheet =>
+              rw [compileOccurrence?_child_sheet host.property host.val.root
+                child sourceFull BinderContext.empty
+                (sourceDirect (.child child) member) sourceKind]
+                at occurrenceCompiled
+              contradiction
+          | cut parent =>
+              have parentEq : parent = host.val.root := by
+                simpa [sourceKind, CRegion.parent?] using sourceParent
+              subst parent
+              obtain ⟨sourceChild, childCompiled, itemEq⟩ :=
+                compileOccurrence?_child_cut_success host.property
+                  host.val.root child sourceFull BinderContext.empty
+                  (sourceDirect (.child child) member) sourceKind
+                  occurrenceCompiled
+              subst sourceItem
+              let childResult := Classical.choice
+                (domains.compileRegionSurvivors host selection child
+                  occurrenceSurvives sourceFull BinderContext.empty targetFull
+                  targetFullEq BinderContext.empty rfl childExact sourceChild
+                  childCompiled)
+              let targetItem : CompiledItem
+                  (host.val.removeRaw selection domains) targetFull []
+                  BinderContext.empty := .cut childResult.body
+              have targetKind := domains.removeRaw_cut host selection
+                domains.root_survives occurrenceSurvives sourceKind
+              refine ⟨targetItem, ?_⟩
+              exact (compileOccurrence?_congr_occurrence _ _ _ _ mappedEq _
+                targetChildDirect).trans (by
+                  change compileOccurrence?
+                    (host.val.removeRaw selection domains)
+                    (Diagram.removeRaw_wellFormed host selection domains)
+                    targetRoot targetFull BinderContext.empty
+                    (.child targetChild) targetChildDirect =
+                      some (.cut childResult.body)
+                  rw [compileOccurrence?_child_cut
+                    (Diagram.removeRaw_wellFormed host selection domains)
+                    targetRoot targetChild targetFull BinderContext.empty
+                    targetChildDirect (by simpa [targetRoot, targetChild]
+                      using targetKind), childResult.compiled]
+                  rfl)
+          | bubble parent arity =>
+              have parentEq : parent = host.val.root := by
+                simpa [sourceKind, CRegion.parent?] using sourceParent
+              subst parent
+              obtain ⟨sourceChild, childCompiled, itemEq⟩ :=
+                compileOccurrence?_child_bubble_success host.property
+                  host.val.root child sourceFull BinderContext.empty arity
+                  (sourceDirect (.child child) member) sourceKind
+                  occurrenceCompiled
+              subst sourceItem
+              let targetPushed : BinderContext
+                  (host.val.removeRaw selection domains) [arity] :=
+                BinderContext.empty.push targetChild arity
+              have targetPushedEq : targetPushed =
+                  domains.mapBinderContext
+                    (BinderContext.empty.push child arity) := by
+                dsimp only [targetPushed]
+                exact (domains.mapBinderContext_push BinderContext.empty child
+                  occurrenceSurvives arity).symm
+              let childResult := Classical.choice
+                (domains.compileRegionSurvivors host selection child
+                  occurrenceSurvives sourceFull
+                  (BinderContext.empty.push child arity) targetFull targetFullEq
+                  targetPushed targetPushedEq childExact sourceChild
+                  childCompiled)
+              let targetItem : CompiledItem
+                  (host.val.removeRaw selection domains) targetFull []
+                  BinderContext.empty := .bubble arity childResult.body
+              have targetKind := domains.removeRaw_bubble host selection
+                domains.root_survives occurrenceSurvives arity sourceKind
+              refine ⟨targetItem, ?_⟩
+              exact (compileOccurrence?_congr_occurrence _ _ _ _ mappedEq _
+                targetChildDirect).trans (by
+                  change compileOccurrence?
+                    (host.val.removeRaw selection domains)
+                    (Diagram.removeRaw_wellFormed host selection domains)
+                    targetRoot targetFull BinderContext.empty
+                    (.child targetChild) targetChildDirect =
+                      some (.bubble arity childResult.body)
+                  rw [compileOccurrence?_child_bubble
+                    (Diagram.removeRaw_wellFormed host selection domains)
+                    targetRoot targetChild targetFull BinderContext.empty arity
+                    targetChildDirect (by simpa [targetRoot, targetChild]
+                      using targetKind), childResult.compiled]
+                  rfl))
+    survivorsCompiled
+  obtain ⟨targetItems, targetItemsCompiled⟩ := mappedItems
+  have occurrencesEq : localOccurrences
+      (host.val.removeRaw selection domains) targetRoot =
+        survivors.origins.map domains.indexOccurrence := by
+    rw [domains.localOccurrences_removeRaw_eq_map_filter host selection
+      targetRoot, domains.root_origin, ← survivorOrigins]
+  let targetBody : CompiledRegion (host.val.removeRaw selection domains)
+      (.root targetAmbient targetLocal) := .mk targetItems
+  have targetCompiled : compileRoot?
+      (host.val.removeRaw selection domains)
+      (Diagram.removeRaw_wellFormed host selection domains)
+      targetAmbient targetLocal = some targetBody := by
+    rw [compileRoot?_eq_compileItems?]
+    change (do
+      let items ← compileItems? (host.val.removeRaw selection domains)
+        (Diagram.removeRaw_wellFormed host selection domains) targetRoot
+        targetFull BinderContext.empty
+        (localOccurrences (host.val.removeRaw selection domains) targetRoot)
+        (fun _ member => member)
+      pure (CompiledRegion.mk items : CompiledRegion
+        (host.val.removeRaw selection domains)
+          (.root targetAmbient targetLocal))) = some targetBody
+    have normalized := (compileItems?_congr_occurrences
+      (Diagram.removeRaw_wellFormed host selection domains) targetRoot
+      targetFull BinderContext.empty occurrencesEq (fun _ member => member)
+      targetDirect).trans targetItemsCompiled
+    rw [normalized]
+    rfl
+  exact ⟨⟨targetBody, targetCompiled⟩⟩
+
 /-- Semantic result for one unchanged nested subtree in the actual compact
 parent context supplied by its caller. -/
 abbrev AwayRegionResult
