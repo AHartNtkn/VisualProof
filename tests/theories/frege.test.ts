@@ -6,7 +6,7 @@ import type {
   Diagram,
   RegionId,
 } from '../../src/kernel/diagram/diagram'
-import { isAncestorOrEqual } from '../../src/kernel/diagram/regions'
+import { derivedScope, isAncestorOrEqual } from '../../src/kernel/diagram/regions'
 import {
   checkOccurrenceCertificate,
 } from '../../src/kernel/diagram/subgraph/occurrence-certificate'
@@ -21,7 +21,7 @@ import {
 } from '../../src/kernel/diagram/subgraph/selection'
 import { extractSubgraph } from '../../src/kernel/diagram/subgraph/extract'
 import { removeSubgraph } from '../../src/kernel/diagram/subgraph/splice'
-import type { Theorem } from '../../src/kernel/proof/theorem'
+import { pinnedForReplay, type Theorem } from '../../src/kernel/proof/theorem'
 import {
   registerTheorem,
   verifyTheory,
@@ -567,11 +567,18 @@ function iterationCopySelection(
       trace.before.nodes[id] === undefined
       && node.region === target)
     .map(([id]) => id)
+  // A copied bare wire: nothing on it but its own pins, all at the target.
   const wires = Object.entries(trace.after.wires)
     .filter(([id, wire]) =>
       trace.before.wires[id] === undefined
-      && wire.scope === target
-      && wire.endpoints.length === 0)
+      && wire.endpoints.length > 0
+      && wire.endpoints.every((endpoint) => {
+        const node = trace.after.nodes[endpoint.node]
+        return node !== undefined
+          && node.kind === 'identity'
+          && node.arity === 1
+          && node.region === target
+      }))
     .map(([id]) => id)
   return {
     region: target,
@@ -1212,13 +1219,12 @@ describe('relational Frege arithmetic proofs', () => {
     )
     expect(endpointWire(succDiagram, statementSuccessor, 'arg', 0))
       .toBe(statementPredecessor)
-    expect(succDiagram.wires[statementPredecessor]!.scope)
+    expect(derivedScope(succDiagram, statementPredecessor))
       .toBe(succClaim.scope)
-    expect(
-      succDiagram.wires[
-        endpointWire(succDiagram, statementSuccessor, 'arg', 1)
-      ]!.scope,
-    ).toBe(succClaim.scope)
+    expect(derivedScope(
+      succDiagram,
+      endpointWire(succDiagram, statementSuccessor, 'arg', 1),
+    )).toBe(succClaim.scope)
     const succTraces = traceProofHalf(
       succ.theorem,
       succ.context,
@@ -1599,8 +1605,10 @@ describe('relational Frege arithmetic proofs', () => {
       support.rhs.diagram,
       hypotheses,
     ).find((region) =>
-      Object.values(support.rhs.diagram.wires)
-        .filter((wire) => wire.scope === region).length === 5)
+      Object.keys(support.rhs.diagram.wires)
+        .filter((wire) =>
+          derivedScope(support.rhs.diagram, wire, support.rhs.boundary)
+            === region).length === 5)
     expect(additionStep).toBeDefined()
 
     const weakened = {
@@ -1724,13 +1732,15 @@ describe('relational Frege arithmetic proofs', () => {
         }
       }
 
+      // Replay against the closed stand-ins checkTheorem uses: each boundary
+      // entry materialized as its frame pin.
       const forward = replayActions(
-        theorem.lhs.diagram,
+        pinnedForReplay(theorem.lhs),
         theorem.actions,
         context,
       )
       const backward = replayActions(
-        theorem.rhs.diagram,
+        pinnedForReplay(theorem.rhs),
         theorem.backActions ?? [],
         context,
         undefined,

@@ -9,7 +9,7 @@ import type {
   RegionId,
   WireId,
 } from '../../src/kernel/diagram/diagram'
-import { polarity } from '../../src/kernel/diagram/regions'
+import { derivedScope, polarity } from '../../src/kernel/diagram/regions'
 import { IOTA, relSig, sigKey, type Sig } from '../../src/kernel/diagram/sig'
 import {
   registerTheorem,
@@ -22,6 +22,7 @@ import {
 } from '../../src/kernel/proof/json'
 import {
   checkTheorem,
+  pinnedForReplay,
   type Theorem,
 } from '../../src/kernel/proof/theorem'
 import {
@@ -91,18 +92,22 @@ function directNodes(
   diagram: Diagram,
   region: RegionId,
 ): readonly NodeId[] {
+  // Pins carry a wire's quantifier, not content; scopedWires reports where
+  // they put it.
   return Object.entries(diagram.nodes)
-    .filter(([, node]) => node.region === region)
+    .filter(([, node]) =>
+      node.region === region
+      && !(node.kind === 'identity' && node.arity === 1))
     .map(([id]) => id)
 }
 
 function scopedWires(
   diagram: Diagram,
   region: RegionId,
+  boundary: readonly WireId[] = [],
 ): readonly WireId[] {
-  return Object.entries(diagram.wires)
-    .filter(([, wire]) => wire.scope === region)
-    .map(([id]) => id)
+  return Object.keys(diagram.wires)
+    .filter((id) => derivedScope(diagram, id, boundary) === region)
 }
 
 function atomDescriptors(
@@ -147,7 +152,11 @@ function compiledSeverScope(
     if (step.rule === 'wireSever' && step.input.scope !== undefined) {
       return step.input.scope
     }
-    if (step.rule === 'vacuousIntro') return step.scope
+    if (step.rule === 'vacuity' && step.direction === 'insert') {
+      // The assembly's own nodes say where the inserted apparatus lives.
+      const node = Object.values(step.assembly.nodes)[0]
+      if (node !== undefined) return node.region
+    }
     if (step.rule === 'abstractFormal' || step.rule === 'identityAbstract'
       || step.rule === 'refAbstract') return step.scope
   }
@@ -170,17 +179,17 @@ function assertAdditionTotality(
         ),
       }))
       .filter(({ scope, body }) =>
-        scopedWires(diagram, scope).length === 1
-        && scopedWires(diagram, body).length === 1
+        scopedWires(diagram, scope, material.boundary).length === 1
+        && scopedWires(diagram, body, material.boundary).length === 1
         && directNodes(diagram, body).length === 1),
     'addition-totality universal',
   )
   const right = exactlyOne(
-    scopedWires(diagram, totality.scope),
+    scopedWires(diagram, totality.scope, material.boundary),
     'totality input',
   )
   const output = exactlyOne(
-    scopedWires(diagram, totality.body),
+    scopedWires(diagram, totality.body, material.boundary),
     'existential totality output',
   )
   expect(atomDescriptors(diagram, totality.body, new Map([
@@ -632,7 +641,7 @@ describe('recorded general relation reification', () => {
       'right-identity universal',
     )
     const zeroValue = exactlyOne(
-      scopedWires(right.diagram, rightScope),
+      scopedWires(right.diagram, rightScope, right.boundary),
       'universally quantified zero value',
     )
     const rightClaim = implicationRegions(
@@ -655,7 +664,7 @@ describe('recorded general relation reification', () => {
       rightClaim.consequent,
       rightLabels,
     )).toEqual(['plus(a,z,a)'])
-    expect(scopedWires(right.diagram, rightClaim.consequent)).toEqual([])
+    expect(scopedWires(right.diagram, rightClaim.consequent, right.boundary)).toEqual([])
 
     const associativity = explicitMaterial(
       associativityInductionReification(),
@@ -671,17 +680,14 @@ describe('recorded general relation reification', () => {
         .filter((scope) => scope !== assocTotality),
       'associativity transport universal',
     )
-    const [b, c, t, u] = scopedWires(
-      associativity.diagram,
-      assocTransport,
-    )
+    const [b, c, t, u] = scopedWires(associativity.diagram, assocTransport, associativity.boundary)
     expect([b, c, t, u].every((wire) => wire !== undefined)).toBe(true)
     const assocClaim = implicationRegions(
       associativity.diagram,
       universalBody(associativity.diagram, assocTransport),
     )
     const v = exactlyOne(
-      scopedWires(associativity.diagram, assocClaim.consequent),
+      scopedWires(associativity.diagram, assocClaim.consequent, associativity.boundary),
       'proof-local associativity transport witness',
     )
     const assocLabels = new Map<WireId, string>([
@@ -716,7 +722,7 @@ describe('recorded general relation reification', () => {
         .filter((scope) => scope !== shiftTotality),
       'successor-shift universal',
     )
-    const [b0, sb, t0, st] = scopedWires(shift.diagram, shiftUniversal)
+    const [b0, sb, t0, st] = scopedWires(shift.diagram, shiftUniversal, shift.boundary)
     expect([b0, sb, t0, st].every((wire) => wire !== undefined)).toBe(true)
     const shiftClaim = implicationRegions(
       shift.diagram,
@@ -741,7 +747,7 @@ describe('recorded general relation reification', () => {
       shiftClaim.consequent,
       shiftLabels,
     )).toEqual(['plus(a,sb,st)'])
-    expect(scopedWires(shift.diagram, shiftClaim.consequent)).toEqual([])
+    expect(scopedWires(shift.diagram, shiftClaim.consequent, shift.boundary)).toEqual([])
 
     const commutativity = explicitMaterial(
       commutativityInductionReification(),
@@ -758,7 +764,7 @@ describe('recorded general relation reification', () => {
       'fixed-addend commutativity universal',
     )
     const output = exactlyOne(
-      scopedWires(commutativity.diagram, commUniversal),
+      scopedWires(commutativity.diagram, commUniversal, commutativity.boundary),
       'commutativity output',
     )
     const commClaim = implicationRegions(
@@ -781,10 +787,7 @@ describe('recorded general relation reification', () => {
       commClaim.consequent,
       commLabels,
     )).toEqual(['plus(r,a,o)'])
-    expect(scopedWires(
-      commutativity.diagram,
-      commClaim.consequent,
-    )).toEqual([])
+    expect(scopedWires(commutativity.diagram, commClaim.consequent, commutativity.boundary)).toEqual([])
   })
 
   it('replays every reification without definitions, refs, or privileged spawn', () => {
@@ -809,7 +812,9 @@ describe('recorded general relation reification', () => {
     const context = verifyTheory({ relations: [], theorems: [] })
     for (const testCase of reificationCases) {
       const theorem = testCase.make()
-      let diagram = theorem.lhs.diagram
+      // Replay against the closed stand-in checkTheorem uses: each boundary
+      // entry materialized as its frame pin.
+      let diagram = pinnedForReplay(theorem.lhs)
       const severWires: WireId[] = []
 
       for (const action of theorem.actions) {
@@ -825,8 +830,13 @@ describe('recorded general relation reification', () => {
 
       const witness = exactlyOne(severWires, `${theorem.name} sever witness`)
       expect(diagram.wires[witness]).toBeDefined()
-      expect(diagram.wires[witness]!.endpoints).toHaveLength(2)
-      expect(diagram.wires[witness]!.endpoints.every((endpoint) =>
+      // Two applied ends; the sever's completion pin holds the quantifier.
+      const applied = diagram.wires[witness]!.endpoints.filter((endpoint) => {
+        const node = diagram.nodes[endpoint.node]
+        return !(node?.kind === 'identity' && node.arity === 1)
+      })
+      expect(applied).toHaveLength(2)
+      expect(applied.every((endpoint) =>
         endpoint.port.kind === 'head'
         && diagram.nodes[endpoint.node]?.kind === 'atom')).toBe(true)
       expect(theorem.lhs.boundary).not.toContain(witness)
@@ -901,8 +911,11 @@ describe('logical dependency prefix', () => {
     const exists = theoremByName(theory.theorems, 'existsProp')
     expect(exists.lhs.boundary).toEqual([])
     expect(exists.rhs.boundary).toEqual([])
+    // The vacuity insert pins the surviving wire before the erasure, which
+    // now refuses to move a quantifier.
     expect(flattenedRules(exists)).toEqual([
       'theorem',
+      'vacuity',
       'erasure',
       'doubleCutElim',
     ])
@@ -930,7 +943,7 @@ describe('logical dependency prefix', () => {
       context = registerTheorem(context, theorem)
     }
 
-    let diagram = exists.lhs.diagram
+    let diagram = pinnedForReplay(exists.lhs)
     const cited = applyActionWithReceipt(
       diagram,
       exists.actions[0]!,
@@ -948,7 +961,8 @@ describe('logical dependency prefix', () => {
 
     expect(Object.values(diagram.regions)).toEqual([{ kind: 'sheet' }])
     const finalAtom = exactlyOne(
-      Object.entries(diagram.nodes),
+      Object.entries(diagram.nodes).filter(([, node]) =>
+        !(node.kind === 'identity' && node.arity === 1)),
       'one final proposition atom',
     )
     expect(finalAtom[1]).toMatchObject({
@@ -957,10 +971,8 @@ describe('logical dependency prefix', () => {
       sig: relSig([]),
     })
     expect(endpointWire(diagram, finalAtom[0], 'head')).toBe(citedWitness)
-    expect(diagram.wires[citedWitness]).toMatchObject({
-      scope: diagram.root,
-      sig: relSig([]),
-    })
+    expect(diagram.wires[citedWitness]!.sig).toEqual(relSig([]))
+    expect(derivedScope(diagram, citedWitness)).toBe(diagram.root)
     expect(() => checkTheorem(exists, context)).not.toThrow()
   })
 
@@ -1020,7 +1032,8 @@ describe('theory surface exclusions', () => {
     for (const theorem of buildFregeTheory().theorems) {
       for (const side of [theorem.lhs, theorem.rhs]) {
         expect(side.boundary.every((wire) =>
-          side.diagram.wires[wire]!.scope === side.diagram.root)).toBe(true)
+          derivedScope(side.diagram, wire, side.boundary) === side.diagram.root))
+          .toBe(true)
       }
     }
   })
@@ -1029,7 +1042,7 @@ describe('theory surface exclusions', () => {
     const context = verifyTheory({ relations: [], theorems: [] })
     for (const testCase of reificationCases) {
       const theorem = testCase.make()
-      let diagram = theorem.lhs.diagram
+      let diagram = pinnedForReplay(theorem.lhs)
       let severCount = 0
       for (const action of theorem.actions) {
         if (isCompiledSeverAction(action)) {

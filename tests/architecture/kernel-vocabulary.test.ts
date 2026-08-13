@@ -62,6 +62,10 @@ const removedCodecRules = [
   'fission',
   'bodyAttach',
   'bodyDetach',
+  // The vacuous pair became one 'vacuity' rule with an insert/delete
+  // direction, so both old names are decoder-rejected too.
+  'vacuousIntro',
+  'vacuousElim',
 ] as const
 
 const prohibitedAuthorityStrings = new Set<string>([

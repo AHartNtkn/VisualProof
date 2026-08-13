@@ -14,6 +14,7 @@ import {
   type HypothesisName,
   type PrimitiveName,
 } from '../../src/theories/statements'
+import { derivedScope } from '../../src/kernel/diagram/regions'
 
 const UNARY = relSig([IOTA])
 const BINARY = relSig([IOTA, IOTA])
@@ -38,18 +39,22 @@ function directNodes(
   diagram: Diagram,
   region: RegionId,
 ): readonly NodeId[] {
+  // Pins hold a wire's quantifier; they are not content, and where they sit
+  // is asserted through scopedWires instead.
   return Object.entries(diagram.nodes)
-    .filter(([, node]) => node.region === region)
+    .filter(([, node]) =>
+      node.region === region
+      && !(node.kind === 'identity' && node.arity === 1))
     .map(([id]) => id)
 }
 
 function scopedWires(
   diagram: Diagram,
   region: RegionId,
+  boundary: readonly WireId[] = [],
 ): readonly WireId[] {
-  return Object.entries(diagram.wires)
-    .filter(([, wire]) => wire.scope === region)
-    .map(([id]) => id)
+  return Object.keys(diagram.wires)
+    .filter((id) => derivedScope(diagram, id, boundary) === region)
 }
 
 function endpointWire(
@@ -308,7 +313,8 @@ function assertStatementContract(
     })
     expect(endpointWire(diagram, existenceAtom, 'head')).toBe(zero)
     const witness = endpointWire(diagram, existenceAtom, 'arg', 0)
-    expect(diagram.wires[witness]).toMatchObject({ scope: antecedent, sig: IOTA })
+    expect(diagram.wires[witness]!.sig).toEqual(IOTA)
+    expect(derivedScope(diagram, witness)).toBe(antecedent)
   }
 
   const hypothesisCuts = antecedentCuts.slice(1)
@@ -341,8 +347,9 @@ function assertQuantifiedHypothesis(
   outer: RegionId,
   primitiveLabels: ReadonlyMap<WireId, string>,
   expected: QuantifiedHypothesisExpectation,
+  boundary: readonly WireId[] = [],
 ): void {
-  const variables = scopedWires(diagram, outer)
+  const variables = scopedWires(diagram, outer, boundary)
   expect(variables).toHaveLength(expected.variables)
   expect(variables.map((wire) => diagram.wires[wire]!.sig))
     .toEqual(Array.from({ length: expected.variables }, () => IOTA))
@@ -353,7 +360,7 @@ function assertQuantifiedHypothesis(
     directCuts(diagram, outer),
     'one positive quantified-hypothesis body',
   )
-  const existentials = scopedWires(diagram, body)
+  const existentials = scopedWires(diagram, body, boundary)
   expect(existentials).toHaveLength(expected.existentials ?? 0)
   expect(existentials.map((wire) => diagram.wires[wire]!.sig))
     .toEqual(Array.from(
@@ -378,8 +385,8 @@ function assertQuantifiedHypothesis(
     directCuts(diagram, premise),
     'one quantified-hypothesis implication conclusion',
   )
-  expect(scopedWires(diagram, premise)).toEqual([])
-  expect(scopedWires(diagram, conclusion)).toEqual([])
+  expect(scopedWires(diagram, premise, boundary)).toEqual([])
+  expect(scopedWires(diagram, conclusion, boundary)).toEqual([])
   expect(descriptors(diagram, premise, labels))
     .toEqual([...(expected.premises ?? [])].sort())
   expect(descriptors(diagram, conclusion, labels))
@@ -484,7 +491,7 @@ describe('relational Frege natural numbers', () => {
       diagram.wires[wire]!.sig)))
       .toEqual(relSig([UNARY, BINARY, IOTA]))
     expect(definition.boundary.every((wire) =>
-      diagram.wires[wire]!.scope === diagram.root)).toBe(true)
+      derivedScope(diagram, wire, definition.boundary) === diagram.root)).toBe(true)
     expect(Object.values(diagram.nodes).every((node) =>
       node.kind !== 'ref')).toBe(true)
 
@@ -494,7 +501,7 @@ describe('relational Frege natural numbers', () => {
       'one universal property scope',
     )
     const property = exactlyOne(
-      scopedWires(diagram, propertyScope),
+      scopedWires(diagram, propertyScope, definition.boundary),
       'one quantified hereditary property',
     )
     expect(diagram.wires[property]!.sig).toEqual(UNARY)
@@ -517,19 +524,19 @@ describe('relational Frege natural numbers', () => {
       [property, 'property'],
     ])
     expect(descriptors(diagram, consequent, labels)).toEqual(['property(n)'])
-    expect(scopedWires(diagram, consequent)).toEqual([])
+    expect(scopedWires(diagram, consequent, definition.boundary)).toEqual([])
 
     const conditions = antecedentCuts.slice(1)
     assertQuantifiedHypothesis(diagram, conditions[0]!, labels, {
       variables: 1,
       premises: ['zero(v0)'],
       conclusions: ['property(v0)'],
-    })
+    }, definition.boundary)
     assertQuantifiedHypothesis(diagram, conditions[1]!, labels, {
       variables: 2,
       premises: ['property(v0)', 'succ(v0,v1)'],
       conclusions: ['property(v1)'],
-    })
+    }, definition.boundary)
   })
 })
 
