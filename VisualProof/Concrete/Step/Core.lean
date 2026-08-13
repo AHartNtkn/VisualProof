@@ -356,6 +356,15 @@ def survivors (source target : Concrete.Diagram)
   rootFiltered source target
     (fun wire => (domain.index? wire).map (Fin.cast wireCountEq.symm))
 
+@[simp] theorem survivors_image?_eq_none
+    (domain : Concrete.SurvivorDomain source.wireCount)
+    (wireCountEq : target.wireCount = domain.count)
+    (wire : Fin source.wireCount)
+    (rejected : domain.survives wire = false) :
+    (survivors source target domain wireCountEq).image? wire = none := by
+  have noIndex := (domain.index?_eq_none_iff wire).2 rejected
+  simp [survivors, rootFiltered, noIndex]
+
 /-- Transport an ordered boundary, failing exactly when one position has no
 designated image. Repeated positions remain repeated, and distinct positions
 may become aliases when their source wires coalesce. -/

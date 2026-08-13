@@ -237,6 +237,33 @@ noncomputable def replaceSelectionRaw_decomposition
     target_eq := targetEq
   }
 
+/-- Successful packing of the intermediate removal frame proves that every
+open-interface wire survived the selected material removal. -/
+theorem SelectionReplacementDecomposition.exposedWire_survives
+    (decomposition : SelectionReplacementDecomposition source selection
+      replacement operation receipt)
+    (wire : Fin source.checked.val.diagram.wireCount)
+    (member : wire ∈ source.checked.val.exposedWires) :
+    decomposition.prepared.domains.wires.survives wire = true := by
+  have boundaryMember : wire ∈ source.checked.val.boundary :=
+    (OpenDiagram.mem_exposedWires source.checked.val wire).mp member
+  obtain ⟨position, positionEq⟩ := List.mem_iff_get.mp boundaryMember
+  subst wire
+  have transported := decomposition.prepared.frameTransport.transportBoundary_get
+    (decomposition.prepared.frameReceipt.toReceipt_boundary
+      decomposition.frame_packed) position
+  cases rejected : decomposition.prepared.domains.wires.survives
+      (source.checked.val.boundary.get position) with
+  | false =>
+      have imageNone : decomposition.prepared.frameTransport.image?
+          (source.checked.val.boundary.get position) = none := by
+        exact WireTransport.survivors_image?_eq_none
+          decomposition.prepared.domains.wires rfl
+          (source.checked.val.boundary.get position) rejected
+      have impossible := imageNone.symm.trans transported
+      contradiction
+  | true => rfl
+
 namespace FrameDomains
 
 /-- Distinct direct children cannot both enclose the same selected site. -/

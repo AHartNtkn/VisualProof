@@ -1284,6 +1284,91 @@ theorem compileAlongFocus
       targetRebuild := targetRebuild
     }⟩
 
+/-- The compact removal frame at the checked root, retaining the selected
+anchor as one unfilled aligned context. -/
+structure FrameRootResult
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram)
+    (domains : FrameDomains source.checked.val.diagram selection) where
+  body : CompiledRegion (source.checked.val.diagram.removeRaw selection domains)
+    (.root (domains.mapWireContext source.checked.val.exposedWires)
+      (domains.mapWireContext source.checked.val.hiddenWires))
+  compiled : compileRoot?
+    (source.checked.val.diagram.removeRaw selection domains)
+    (Diagram.removeRaw_wellFormed source.diagram selection domains)
+    (domains.mapWireContext source.checked.val.exposedWires)
+    (domains.mapWireContext source.checked.val.hiddenWires) = some body
+  holeWires : Nat
+  holeWire : FiniteEquiv (Fin holeWires)
+    (Fin (CompiledSite.endpointCall source selection.val.anchor
+      ).outerContext.length)
+  targetSite : Region holeWires
+    (CompiledSite.endpointCall source selection.val.anchor).rels
+  targetContext : DiagramContext
+    (domains.mapWireContext source.checked.val.exposedWires).length holeWires
+    [] (CompiledSite.endpointCall source selection.val.anchor).rels
+  externalWire : FiniteEquiv
+    (Fin (domains.mapWireContext source.checked.val.exposedWires).length)
+    (Fin source.checked.val.exposedWires.length)
+  alignment : DiagramContextIso externalWire holeWire []
+    (CompiledSite.endpointCall source selection.val.anchor).rels targetContext
+    (CompiledSite.context source selection.val.anchor)
+  rebuild : targetContext.fill targetSite = body.erase
+
+theorem compileRootFrame
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram)
+    (domains : FrameDomains source.checked.val.diagram selection)
+    (exposedSurvives : ∀ wire, wire ∈ source.checked.val.exposedWires →
+      domains.wires.survives wire = true) :
+    Nonempty (FrameRootResult source selection domains) := by
+  let sourceCall : CompilerCall source.checked.val.diagram :=
+    .root source.checked.val.exposedWires source.checked.val.hiddenWires
+  let targetOuter := domains.mapWireContext source.checked.val.exposedWires
+  let targetLocal := domains.mapWireContext source.checked.val.hiddenWires
+  have sourceExact : sourceCall.fullContext.Exact
+      source.checked.val.diagram.root := by
+    simpa [sourceCall, CompilerCall.fullContext, OpenDiagram.rootWires] using
+      openRootWires_exact source.checked.property
+  let frame : FrameEvidence source.diagram selection domains
+      sourceCall source.checked.compilation targetOuter targetLocal
+      BinderContext.empty := {
+    originSurvives := domains.root_survives
+    outerEq := rfl
+    localEq := rfl
+    outerSurvives := exposedSurvives
+    targetLocalCall := rfl
+    bindersEq := by
+      exact domains.mapBinderContext_empty.symm
+    sourceExact := sourceExact
+    sourceCovers := by
+      simpa [sourceCall] using BinderContext.empty_covers_root
+        source.checked.property.diagram_well_formed
+    sourceEnumeration := by
+      simpa [sourceCall] using BinderContext.Enumeration.empty
+        source.checked.val.diagram
+    sourceCompiled := by
+      simpa [sourceCall] using source.checked.compilation_computation
+  }
+  obtain ⟨result⟩ := domains.compileAlongFocus source.diagram
+    selection (CompiledSite.zipper source selection.val.anchor) rfl
+    targetOuter targetLocal BinderContext.empty frame
+  refine ⟨{
+    body := result.targetBody
+    compiled := ?_
+    holeWires := result.holeWires
+    holeWire := result.holeWire
+    targetSite := result.targetSite
+    targetContext := result.targetContext
+    externalWire := frame.outerWire
+    alignment := result.alignment
+    rebuild := ?_
+  }⟩
+  · simpa [sourceCall, targetOuter, targetLocal, targetCall, frame] using
+      result.targetCompiled
+  · simpa [sourceCall, targetOuter, targetLocal, targetErase, frame] using
+      result.targetRebuild
+
 end FrameDomains
 
 end VisualProof.Concrete
