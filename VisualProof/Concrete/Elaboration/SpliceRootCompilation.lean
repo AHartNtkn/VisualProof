@@ -334,7 +334,7 @@ private structure EndpointGraftInput
   afterEq : after = spliceEndpointAfter input endpointCall endpoint materialWireMap
     relationMap
 
-private structure AwayBlockResult
+structure AwayBlockResult
     (layout : PlugLayout input) (targetWf : layout.plugRaw.WellFormed)
     {sourceCall : CompilerCall input.frame.val}
     (targetOuter targetLocal : WireContext layout.plugRaw)
@@ -363,7 +363,7 @@ private structure AwayBlockResult
     (layout.mappedFullWire sourceCall targetOuter targetLocal outerEq localEq)
     sourceCall.rels target.erase source.erase
 
-private noncomputable def compileAwayBlock
+noncomputable def compileAwayBlock
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
     (terminal : input.TerminalBody) (targetWf : layout.plugRaw.WellFormed)
     (sourceCall : CompilerCall input.frame.val)
