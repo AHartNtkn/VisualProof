@@ -1,4 +1,5 @@
 import type { Diagram, NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
+import { derivedScope } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { mkSelection } from '../kernel/diagram/subgraph/selection'
 
@@ -28,7 +29,7 @@ export function buildSelection(d: Diagram, items: readonly Hit[]): SubgraphSelec
       const wire = d.wires[item.id]
       if (wire === undefined) throw new Error(`unknown wire '${item.id}'`)
       wires.push(item.id)
-      anchors.add(wire.scope)
+      anchors.add(derivedScope(d, item.id))
     }
   }
   if (anchors.size === 0) throw new Error('nothing selected')

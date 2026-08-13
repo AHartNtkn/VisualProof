@@ -10,6 +10,7 @@ import {
   type ProofContext,
   type Theory,
 } from '../kernel/proof/context'
+import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   BINARY,
@@ -121,17 +122,17 @@ function buildZeroForward(context: ProofContext) {
 
   before = forward.diagram
   forward.record('introduce theorem-local zero relation', {
-    rule: 'vacuousIntro',
-    scope: primitiveScope,
-    sig: UNARY,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('zero', primitiveScope, UNARY),
   })
   const zero = onlyNewWire(before, forward.diagram, primitiveScope)
 
   before = forward.diagram
   forward.record('introduce theorem-local successor relation', {
-    rule: 'vacuousIntro',
-    scope: primitiveScope,
-    sig: BINARY,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('successor', primitiveScope, BINARY),
   })
   const successor = onlyNewWire(before, forward.diagram, primitiveScope)
 
@@ -173,9 +174,9 @@ function buildZeroForward(context: ProofContext) {
   )
   before = forward.diagram
   forward.record('introduce arbitrary property', {
-    rule: 'vacuousIntro',
-    scope: propertyScope,
-    sig: UNARY,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('property', propertyScope, UNARY),
   })
   const property = onlyNewWire(before, forward.diagram, propertyScope)
 
@@ -192,9 +193,9 @@ function buildZeroForward(context: ProofContext) {
 
   before = forward.diagram
   forward.record('introduce temporary hereditary-conditions handle', {
-    rule: 'vacuousIntro',
-    scope: hereditary,
-    sig: relSig([]),
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('temporaryConditions', hereditary, relSig([])),
   })
   const temporaryConditions = onlyNewWire(
     before,
@@ -441,17 +442,17 @@ function buildSuccForward(context: ProofContext): ForwardResult {
 
   before = forward.diagram
   forward.record('introduce theorem-local zero relation', {
-    rule: 'vacuousIntro',
-    scope: primitiveScope,
-    sig: UNARY,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('zero', primitiveScope, UNARY),
   })
   const zero = onlyNewWire(before, forward.diagram, primitiveScope)
 
   before = forward.diagram
   forward.record('introduce theorem-local successor relation', {
-    rule: 'vacuousIntro',
-    scope: primitiveScope,
-    sig: BINARY,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('successor', primitiveScope, BINARY),
   })
   const successor = onlyNewWire(before, forward.diagram, primitiveScope)
 
@@ -499,9 +500,9 @@ function buildSuccForward(context: ProofContext): ForwardResult {
   for (const label of ['predecessor', 'successor']) {
     before = forward.diagram
     forward.record(`introduce successor-closure ${label}`, {
-      rule: 'vacuousIntro',
-      scope: claimScope,
-      sig: IOTA,
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('claimVariable', claimScope, IOTA),
     })
     claimVariables.push(onlyNewWire(before, forward.diagram, claimScope))
   }
@@ -532,9 +533,9 @@ function buildSuccForward(context: ProofContext): ForwardResult {
 
   before = forward.diagram
   forward.record('introduce temporary predecessor-Nat proposition', {
-    rule: 'vacuousIntro',
-    scope: claimAntecedent,
-    sig: { kind: 'rel', args: [] },
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('temporaryNat', claimAntecedent, { kind: 'rel', args: [] }),
   })
   const temporaryNat = onlyNewWire(
     before,

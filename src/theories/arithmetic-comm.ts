@@ -11,6 +11,7 @@ import {
   type ProofContext,
   type Theory,
 } from '../kernel/proof/context'
+import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import {
@@ -117,9 +118,9 @@ function plusComm(
   )
   let before = forward.diagram
   forward.record('introduce public left', {
-    rule: 'vacuousIntro',
-    scope: forwardClaimScope,
-    sig: IOTA,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('publicLeft', forwardClaimScope, IOTA),
   })
   const forwardLeft = onlyNewWire(
     before,
@@ -128,9 +129,9 @@ function plusComm(
   )
   before = forward.diagram
   forward.record('introduce public output', {
-    rule: 'vacuousIntro',
-    scope: forwardClaimScope,
-    sig: IOTA,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('publicOutput', forwardClaimScope, IOTA),
   })
   const forwardOutput = onlyNewWire(
     before,
@@ -262,9 +263,9 @@ function plusComm(
   )
   before = forward.diagram
   forward.record('introduce residual totality input', {
-    rule: 'vacuousIntro',
-    scope: forwardTotality,
-    sig: IOTA,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('totalityInput', forwardTotality, IOTA),
   })
   const forwardTotalityInput = onlyNewWire(
     before,
@@ -273,9 +274,9 @@ function plusComm(
   )
   before = forward.diagram
   forward.record('introduce residual totality output', {
-    rule: 'vacuousIntro',
-    scope: forwardTotalityBody,
-    sig: IOTA,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('totalityOutput', forwardTotalityBody, IOTA),
   })
   const forwardTotalityOutput = onlyNewWire(
     before,

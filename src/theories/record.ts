@@ -5,6 +5,7 @@ import type {
   RegionId,
   WireId,
 } from '../kernel/diagram/diagram'
+import { derivedScope } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import {
   applyAction,
@@ -56,7 +57,7 @@ export function onlyNewWire(
   const ids = Object.keys(after.wires)
     .filter((id) =>
       before.wires[id] === undefined
-      && (scope === undefined || after.wires[id]!.scope === scope))
+      && (scope === undefined || derivedScope(after, id) === scope))
     .sort()
   return exactOne('wire', ids, scope === undefined ? '' : ` in '${scope}'`)
 }

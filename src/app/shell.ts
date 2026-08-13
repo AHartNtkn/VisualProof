@@ -2,6 +2,7 @@ import type { Diagram, NodeId, WireId } from '../kernel/diagram/diagram'
 import type { DiagramWithBoundary } from '../kernel/diagram/boundary'
 import { mkDiagramWithBoundary } from '../kernel/diagram/boundary'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
+import { derivedScope } from '../kernel/diagram/regions'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
 import { applyFold, applyUnfold, definitionSig } from '../kernel/rules/fold'
 import { relationWireHues } from './proof-front'
@@ -1851,7 +1852,7 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
                   w.endpoints.some((ep) => ep.node === id && ep.port.kind === 'head'))?.[0] ?? null)
               : null,
           })),
-          wires: Object.entries(displayed.wires).map(([id, wire]) => ({ id, scope: wire.scope, endpoints: wire.endpoints.length })),
+          wires: Object.entries(displayed.wires).map(([id, wire]) => ({ id, scope: derivedScope(displayed, id), endpoints: wire.endpoints.length })),
           regions: Object.entries(displayed.regions).map(([id, region]) => ({
             id,
             kind: region.kind,

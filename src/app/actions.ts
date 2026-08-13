@@ -1,6 +1,7 @@
 import type { Diagram, WireId } from '../kernel/diagram/diagram'
-import { isAncestorOrEqual, polarity } from '../kernel/diagram/regions'
+import { polarity, wireVisibleAt } from '../kernel/diagram/regions'
 import { sigEquals } from '../kernel/diagram/sig'
+import { isPinEndpoint } from '../kernel/rules/wire-ends'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import type { ProofContext } from '../kernel/proof/context'
 import { assertProofContext } from '../kernel/proof/context'
@@ -16,7 +17,7 @@ export type ActionDescriptor =
   | { readonly kind: 'doubleCutWrap'; readonly label: string }
   | { readonly kind: 'doubleCutElim'; readonly label: string }
   | { readonly kind: 'identityInsert'; readonly label: string }
-  | { readonly kind: 'vacuousElim'; readonly label: string }
+  | { readonly kind: 'vacuityDelete'; readonly label: string }
   | { readonly kind: 'iterate'; readonly label: string; readonly needsTarget: true }
   | { readonly kind: 'deiterate'; readonly label: string }
   | { readonly kind: 'relUnfold'; readonly label: string }
@@ -69,20 +70,23 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
     const rid = sel.regions[0]!
     const r = d.regions[rid]!
     if (r.kind === 'cut') {
+      // The annulus must hold exactly one child cut and no nodes; a pin there
+      // is a node and blocks, marking a quantifier that lives in the annulus.
       const children = Object.entries(d.regions).filter(([, x]) => x.kind !== 'sheet' && x.parent === rid)
       const nodesIn = Object.values(d.nodes).some((n) => n.region === rid)
-      const wiresIn = Object.values(d.wires).some((w) => w.scope === rid)
-      if (children.length === 1 && children[0]![1].kind === 'cut' && !nodesIn && !wiresIn) {
+      if (children.length === 1 && children[0]![1].kind === 'cut' && !nodesIn) {
         out.push({ kind: 'doubleCutElim', label: 'Eliminate the double cut' })
       }
     }
   }
 
-  // A single endpoint-free wire of any signature is structurally vacuous.
+  // A single bare wire — every end a pin — is ⊤-shaped whatever its
+  // signature, so vacuity deletes it along with its pins.
   if (sel.wires.length === 1 && sel.regions.length === 0 && sel.nodes.length === 0) {
     const wid = sel.wires[0]!
-    const w = d.wires[wid]!
-    if (w.endpoints.length === 0) out.push({ kind: 'vacuousElim', label: 'Eliminate the vacuous wire' })
+    if (d.wires[wid]!.endpoints.every((endpoint) => isPinEndpoint(d, endpoint))) {
+      out.push({ kind: 'vacuityDelete', label: 'Delete the bare wire' })
+    }
   }
 
   for (const [name] of ctx.theorems) {
@@ -112,7 +116,7 @@ function identityInsertionWires(
     if (
       wire === undefined
       || !sigEquals(first.sig, wire.sig)
-      || !isAncestorOrEqual(diagram, wire.scope, selection.region)
+      || !wireVisibleAt(diagram, wireId, selection.region)
     ) return null
   }
   return selection.wires

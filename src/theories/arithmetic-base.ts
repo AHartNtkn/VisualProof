@@ -10,6 +10,7 @@ import {
   type ProofContext,
   type Theory,
 } from '../kernel/proof/context'
+import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   atom,
@@ -130,17 +131,17 @@ function plusLeftUnit(
 
   before = forward.diagram
   forward.record('introduce theorem-local zero relation', {
-    rule: 'vacuousIntro',
-    scope: primitiveScope,
-    sig: UNARY,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('zero', primitiveScope, UNARY),
   })
   const zero = onlyNewWire(before, forward.diagram, primitiveScope)
 
   before = forward.diagram
   forward.record('introduce theorem-local addition relation', {
-    rule: 'vacuousIntro',
-    scope: primitiveScope,
-    sig: TERNARY,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('plus', primitiveScope, TERNARY),
   })
   const plus = onlyNewWire(before, forward.diagram, primitiveScope)
 
@@ -157,9 +158,9 @@ function plusLeftUnit(
 
   before = forward.diagram
   forward.record('introduce temporary exact hypotheses handle', {
-    rule: 'vacuousIntro',
-    scope: hypotheses,
-    sig: relSig([]),
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('temporaryHypotheses', hypotheses, relSig([])),
   })
   const temporaryHypotheses = onlyNewWire(
     before,
@@ -192,9 +193,9 @@ function plusLeftUnit(
   for (const name of ['zero value', 'addend', 'output']) {
     before = forward.diagram
     forward.record(`introduce left-unit ${name}`, {
-      rule: 'vacuousIntro',
-      scope: claimScope,
-      sig: IOTA,
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('claimVariable', claimScope, IOTA),
     })
     claimVariables.push(onlyNewWire(before, forward.diagram, claimScope))
   }

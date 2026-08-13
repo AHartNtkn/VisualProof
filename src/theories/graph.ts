@@ -15,6 +15,7 @@ import {
   mkDiagramWithBoundary,
   type DiagramWithBoundary,
 } from '../kernel/diagram/boundary'
+import { deepestCommonAncestor, isAncestorOrEqual } from '../kernel/diagram/regions'
 import {
   relSig,
   sigEquals,
@@ -28,6 +29,12 @@ export type GraphConstruction = {
   readonly regions: Readonly<Record<RegionId, Region>>
   readonly nodes: Readonly<Record<NodeId, DiagramNode>>
   readonly wires: Readonly<Record<WireId, Wire>>
+  /**
+   * Where each declared wire's quantifier is meant to read. A wire carries no
+   * scope of its own; finishing the graph pins the wire at this region so the
+   * derived scope is the declared one.
+   */
+  readonly scopes: Readonly<Record<WireId, RegionId>>
   readonly nextRegion: number
   readonly nextNode: number
   readonly nextWire: number
@@ -68,6 +75,7 @@ function freezeGraph(graph: GraphConstruction): GraphConstruction {
     regions: Object.freeze({ ...graph.regions }),
     nodes: Object.freeze({ ...graph.nodes }),
     wires: Object.freeze({ ...graph.wires }),
+    scopes: Object.freeze({ ...graph.scopes }),
   })
 }
 
@@ -192,6 +200,7 @@ export function emptyGraph(): GraphConstruction {
     regions: { r0: { kind: 'sheet' } },
     nodes: {},
     wires: {},
+    scopes: {},
     nextRegion: 1,
     nextNode: 0,
     nextWire: 0,
@@ -209,8 +218,9 @@ export function declareWire(
     ...graph,
     wires: {
       ...graph.wires,
-      [id]: { scope, sig, endpoints: Object.freeze([]) },
+      [id]: { sig, endpoints: Object.freeze([]) },
     },
+    scopes: { ...graph.scopes, [id]: scope },
     nextWire: graph.nextWire + 1,
   }), id)
 }
@@ -359,12 +369,73 @@ export function identity(
   return result(attachNode(created.graph, created.value, ports), created.value)
 }
 
+/**
+ * Materialize every declared scope as incidences. A wire's quantifier reads
+ * off where its ends are, so a wire whose ends all lie strictly below its
+ * declared scope — or which has fewer than the two ends every wire needs —
+ * gets unary identity nodes (pins) at the declared region until its derived
+ * scope is the declared one and the two-end floor is met. Boundary entries
+ * count as ends at the root.
+ */
+function completed(
+  graph: GraphConstruction,
+  boundary: readonly WireId[],
+): {
+  readonly nodes: Record<NodeId, DiagramNode>
+  readonly wires: Record<WireId, Wire>
+} {
+  const nodes: Record<NodeId, DiagramNode> = { ...graph.nodes }
+  const wires: Record<WireId, Wire> = { ...graph.wires }
+  let nextNode = graph.nextNode
+
+  const boundaryEnds = new Map<WireId, number>()
+  for (const wireId of boundary) {
+    boundaryEnds.set(wireId, (boundaryEnds.get(wireId) ?? 0) + 1)
+  }
+
+  for (const [wireId, wire] of Object.entries(graph.wires)) {
+    const declared = graph.scopes[wireId]
+    if (declared === undefined) {
+      throw new Error(`graph construction: wire '${wireId}' has no declared scope`)
+    }
+    const boundaryCount = boundaryEnds.get(wireId) ?? 0
+    let scope: RegionId | null = boundaryCount > 0 ? graph.root : null
+    for (const endpoint of wire.endpoints) {
+      const region = nodes[endpoint.node]!.region
+      scope = scope === null
+        ? region
+        : deepestCommonAncestor(graph, scope, region)
+    }
+    if (scope !== null && !isAncestorOrEqual(graph, declared, scope)) {
+      throw new Error(
+        `graph construction: wire '${wireId}' is declared at '${declared}', `
+        + `which does not enclose its ends at '${scope}'`,
+      )
+    }
+    const endpoints = [...wire.endpoints]
+    let ends = endpoints.length + boundaryCount
+    while (scope !== declared || ends < 2) {
+      const node = `n${nextNode++}`
+      nodes[node] = { kind: 'identity', region: declared, sig: wire.sig, arity: 1 }
+      endpoints.push({ node, port: { kind: 'identity', index: 0 } })
+      scope = declared
+      ends += 1
+    }
+    if (endpoints.length !== wire.endpoints.length) {
+      wires[wireId] = { sig: wire.sig, endpoints: Object.freeze(endpoints) }
+    }
+  }
+
+  return { nodes, wires }
+}
+
 export function finishDiagram(graph: GraphConstruction): Diagram {
+  const { nodes, wires } = completed(graph, [])
   return mkDiagram({
     root: graph.root,
     regions: { ...graph.regions },
-    nodes: { ...graph.nodes },
-    wires: { ...graph.wires },
+    nodes,
+    wires,
   })
 }
 
@@ -372,10 +443,11 @@ export function finishDiagramWithBoundary(
   graph: GraphConstruction,
   boundary: readonly WireId[],
 ): DiagramWithBoundary {
+  const { nodes, wires } = completed(graph, boundary)
   return mkDiagramWithBoundary({
     root: graph.root,
     regions: graph.regions,
-    nodes: graph.nodes,
-    wires: graph.wires,
+    nodes,
+    wires,
   }, boundary)
 }

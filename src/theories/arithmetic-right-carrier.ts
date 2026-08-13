@@ -2,6 +2,7 @@ import type { NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { ProofContext } from '../kernel/proof/context'
+import { bareWireAssembly, bareWireDescription } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   BINARY,
@@ -207,9 +208,9 @@ export function rightIdentityCarrierInductive(
   ] as const) {
     before = forward.diagram
     forward.record(`introduce carrier-support ${label} relation`, {
-      rule: 'vacuousIntro',
-      scope: forwardPrimitiveScope,
-      sig,
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly(label, forwardPrimitiveScope, sig),
     })
     relations.push(
       onlyNewWire(before, forward.diagram, forwardPrimitiveScope),
@@ -265,9 +266,9 @@ export function rightIdentityCarrierInductive(
 
   before = forward.diagram
   forward.record('introduce exact carrier hypotheses handle', {
-    rule: 'vacuousIntro',
-    scope: forwardHypotheses,
-    sig: relSig([]),
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('exactHypotheses', forwardHypotheses, relSig([])),
   })
   const exactHypotheses = onlyNewWire(
     before,
@@ -306,9 +307,9 @@ export function rightIdentityCarrierInductive(
   )
   before = forward.diagram
   forward.record('introduce forward carrier base value', {
-    rule: 'vacuousIntro',
-    scope: forwardBase,
-    sig: IOTA,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('baseValue', forwardBase, IOTA),
   })
   const forwardBaseValue = onlyNewWire(
     before,
@@ -370,9 +371,9 @@ export function rightIdentityCarrierInductive(
   for (const label of ['predecessor', 'successor']) {
     before = forward.diagram
     forward.record(`introduce forward closure ${label}`, {
-      rule: 'vacuousIntro',
-      scope: forwardClosure,
-      sig: IOTA,
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('closureValue', forwardClosure, IOTA),
     })
     closureValues.push(onlyNewWire(before, forward.diagram, forwardClosure))
   }
@@ -380,9 +381,9 @@ export function rightIdentityCarrierInductive(
     closureValues as [WireId, WireId]
   before = forward.diagram
   forward.record('introduce temporary direct-E carrier', {
-    rule: 'vacuousIntro',
-    scope: forwardClosure,
-    sig: UNARY,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('temporaryCarrier', forwardClosure, UNARY),
   })
   const temporaryCarrier = onlyNewWire(
     before,
@@ -442,9 +443,9 @@ export function rightIdentityCarrierInductive(
   )
   before = forward.diagram
   forward.record('introduce forward successor local zero', {
-    rule: 'vacuousIntro',
-    scope: forwardSuccessorEScope,
-    sig: IOTA,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('successorLocalZero', forwardSuccessorEScope, IOTA),
   })
   const forwardLocalZero = onlyNewWire(
     before,
@@ -803,8 +804,9 @@ export function rightIdentityCarrierInductive(
     },
   })
   backward.record('remove carrier-base local zero binder', {
-    rule: 'vacuousElim',
-    wireId: baseLocalZero,
+    rule: 'vacuity',
+    direction: 'delete',
+    assembly: bareWireDescription(backward.diagram, baseLocalZero),
   })
   backward.record('eliminate proved carrier-base E', {
     rule: 'doubleCutElim',

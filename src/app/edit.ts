@@ -1,12 +1,14 @@
 import type { Diagram, DiagramNode, Endpoint, NodeId, Region, RegionId, Wire, WireId } from '../kernel/diagram/diagram'
 import { mkDiagram, portKey, requiredPorts } from '../kernel/diagram/diagram'
-import type { RelSig } from '../kernel/diagram/sig'
+import type { RelSig, Sig } from '../kernel/diagram/sig'
 import { sigEquals, sigKey } from '../kernel/diagram/sig'
-import { deepestCommonAncestor, isAncestorOrEqual } from '../kernel/diagram/regions'
+import { derivedScope, isAncestorOrEqual, wireVisibleAt } from '../kernel/diagram/regions'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import { selectionContents } from '../kernel/diagram/subgraph/selection'
 import { removeSubgraph } from '../kernel/diagram/subgraph/splice'
 import { freshId } from '../kernel/diagram/subgraph/freshId'
+import type { PartsInProgress } from '../kernel/rules/wire-ends'
+import { completeWireEnds, endpointDca } from '../kernel/rules/wire-ends'
 
 /**
  * Construction-mode surgery. These are NOT rules: they build statements
@@ -57,18 +59,10 @@ function wrap(d: Diagram, sel: SubgraphSelection, make: (parent: RegionId) => Re
   for (const [id, n] of Object.entries(d.nodes)) {
     if (selectedNodes.has(id)) nodes[id] = moveNodeToRegion(n, region)
   }
-  const selectedWires = new Set(sel.wires)
-  const wrappedTree = { regions }
-  const wires: Record<WireId, Wire> = {}
-  for (const [id, wire] of Object.entries(d.wires)) {
-    const enclosed = wire.scope === sel.region && (
-      wire.endpoints.length > 0
-        ? wire.endpoints.every((endpoint) => subtreeContains(wrappedTree, region, nodes[endpoint.node]!.region))
-        : selectedWires.has(id)
-    )
-    wires[id] = enclosed ? { scope: region, sig: wire.sig, endpoints: wire.endpoints } : wire
-  }
-  return { diagram: mkDiagram({ root: d.root, regions, nodes, wires }), region }
+  // Wires are untouched: a wire whose every incidence moves inside follows
+  // its nodes into the new region, and one with an incidence left outside
+  // keeps its quantifier there — both are what the derived scope computes.
+  return { diagram: mkDiagram({ root: d.root, regions, nodes, wires: { ...d.wires } }), region }
 }
 
 /** Wrap a selection in a SINGLE cut (construction only — proofs use double-cut intro). */
@@ -77,50 +71,65 @@ export function addCut(d: Diagram, sel: SubgraphSelection): { diagram: Diagram; 
 }
 
 /**
- * Introduce a fresh endpoint-free relational wire of sort `sig`, scoped at
- * `scope`. A relational wire IS the second-order existential variable (the old
- * "bubble"), and atoms attach their head to it. An endpoint-free relational
- * wire is a vacuous existential, deletable by vacuous elimination — the
- * construction-level counterpart of applyVacuousIntro.
+ * Introduce a fresh relational wire of sort `sig` at `region`, drawn as the
+ * bare two-pin segment that holds its quantifier there. A relational wire IS
+ * the second-order existential variable (the old "bubble"), and atoms attach
+ * their head to it. A bare segment is a vacuous existential, deletable by
+ * vacuity — the construction-level counterpart of vacuity insertion.
  */
-export function addRelationWire(d: Diagram, scope: RegionId, sig: RelSig): { diagram: Diagram; wire: WireId } {
-  if (d.regions[scope] === undefined) throw new Error(`unknown region '${scope}'`)
+export function addRelationWire(d: Diagram, region: RegionId, sig: RelSig): { diagram: Diagram; wire: WireId } {
+  if (d.regions[region] === undefined) throw new Error(`unknown region '${region}'`)
   const wire = freshId(new Set(Object.keys(d.wires)), 'w')
-  const wires: Record<WireId, Wire> = { ...d.wires, [wire]: { scope, sig, endpoints: [] } }
-  return { diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires }), wire }
+  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes }
+  const taken = new Set(Object.keys(nodes))
+  const endpoints: Endpoint[] = []
+  for (let end = 0; end < 2; end++) {
+    const pin = freshId(taken, 'pin')
+    taken.add(pin)
+    nodes[pin] = { kind: 'identity', region, sig, arity: 1 }
+    endpoints.push({ node: pin, port: { kind: 'identity', index: 0 } })
+  }
+  const wires: Record<WireId, Wire> = { ...d.wires, [wire]: { sig, endpoints } }
+  return { diagram: mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires }), wire }
 }
 
 /**
- * Construction-level identity placement. Unlike Rule 4 this is available at
- * either polarity because edit mode authors a statement rather than deriving
- * one. The canonical diagram constructor immediately merges a co-scoped
- * identity and retains a conditional identity over inherited wires.
+ * Construction-level identity placement over any number of wires: two or
+ * more equates them, one pins a wire at `region`, none places a typed point.
+ * Unlike Rule 4 this is available at either polarity because edit mode
+ * authors a statement rather than deriving one. `sig` is inferred from the
+ * wires when there are any, and must be given for a bare point.
  */
 export function addIdentity(
   diagram: Diagram,
   region: RegionId,
   wires: readonly WireId[],
+  sig?: Sig,
 ): Diagram {
   if (diagram.regions[region] === undefined) throw new Error(`unknown region '${region}'`)
-  if (wires.length < 2 || new Set(wires).size !== wires.length) {
-    throw new Error('identity construction requires at least two distinct wires')
+  if (new Set(wires).size !== wires.length) {
+    throw new Error('identity construction requires distinct wires')
   }
   const selected = wires.map((wireId) => {
     const wire = diagram.wires[wireId]
     if (wire === undefined) throw new Error(`unknown wire '${wireId}'`)
     return [wireId, wire] as const
   })
-  const sig = selected[0]![1].sig
+  const nodeSig = sig ?? selected[0]?.[1].sig
+  if (nodeSig === undefined) {
+    throw new Error('identity construction over no wires needs an explicit signature')
+  }
   for (const [wireId, wire] of selected) {
-    if (!sigEquals(wire.sig, sig)) {
+    if (!sigEquals(wire.sig, nodeSig)) {
       throw new Error(
         `identity construction wires must have the same signature; `
-        + `'${wires[0]}' has '${sigKey(sig)}' but '${wireId}' has '${sigKey(wire.sig)}'`,
+        + `the identity has '${sigKey(nodeSig)}' but '${wireId}' has '${sigKey(wire.sig)}'`,
       )
     }
-    if (!isAncestorOrEqual(diagram, wire.scope, region)) {
+    if (!wireVisibleAt(diagram, wireId, region)) {
       throw new Error(
-        `identity construction wire '${wireId}' scoped at '${wire.scope}' is not visible at '${region}'`,
+        `identity construction wire '${wireId}' scoped at `
+        + `'${derivedScope(diagram, wireId)}' is not visible at '${region}'`,
       )
     }
   }
@@ -128,13 +137,12 @@ export function addIdentity(
   const node = freshId(new Set(Object.keys(diagram.nodes)), 'identity')
   const nodes: Record<NodeId, DiagramNode> = {
     ...diagram.nodes,
-    [node]: { kind: 'identity', region, sig, arity: wires.length },
+    [node]: { kind: 'identity', region, sig: nodeSig, arity: wires.length },
   }
   const rebuiltWires: Record<WireId, Wire> = { ...diagram.wires }
   wires.forEach((wireId, index) => {
     const wire = rebuiltWires[wireId]!
     rebuiltWires[wireId] = {
-      scope: wire.scope,
       sig: wire.sig,
       endpoints: [...wire.endpoints, { node, port: { kind: 'identity', index } }],
     }
@@ -168,15 +176,14 @@ export function joinWires(d: Diagram, wireIds: readonly WireId[]): Diagram {
       )
     }
   }
-  const scope = ids.slice(1).reduce(
-    (current, id) => deepestCommonAncestor(d, current, d.wires[id]!.scope),
-    d.wires[survivor]!.scope,
-  )
+  // The merged incidences carry the merged quantifier: their deepest common
+  // ancestor is the deepest common ancestor of the old derived scopes, pins
+  // included — they are endpoints and merge along with the rest.
   const endpoints = ids.flatMap((id) => d.wires[id]!.endpoints)
   const merged = new Set(ids)
   const wires: Record<WireId, Wire> = {}
   for (const [id, wire] of Object.entries(d.wires)) {
-    if (id === survivor) wires[id] = { scope, sig: d.wires[survivor]!.sig, endpoints }
+    if (id === survivor) wires[id] = { sig: d.wires[survivor]!.sig, endpoints }
     else if (!merged.has(id)) wires[id] = wire
   }
   return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires })
@@ -212,24 +219,31 @@ export function joinPorts(d: Diagram, a: Endpoint, b: Endpoint): Diagram {
   return joinWires(d, [wa, wb])
 }
 
-/** Detach one endpoint from a multi-endpoint wire into a fresh singleton wire.
-    Both pieces retain the original quantifier scope. */
+/** Detach one endpoint from a wire into a fresh wire of its own. Both pieces
+    keep the original quantifier scope, held by pins where the remaining
+    incidences no longer reach it. */
 export function severEndpoint(d: Diagram, wireId: WireId, endpoint: Endpoint): Diagram {
   const wire = d.wires[wireId]
   if (wire === undefined) throw new Error(`unknown wire '${wireId}'`)
   const index = wire.endpoints.findIndex((candidate) =>
     candidate.node === endpoint.node && portKey(candidate.port) === portKey(endpoint.port))
   if (index < 0) throw new Error(`endpoint is not on wire '${wireId}'`)
-  if (wire.endpoints.length < 2) throw new Error('a single loose end cannot be severed further')
+  const scope = derivedScope(d, wireId)
   const fresh = freshId(new Set(Object.keys(d.wires)), 'w')
   const detached = wire.endpoints[index]!
   const rest = wire.endpoints.filter((_, candidate) => candidate !== index)
-  const wires: Record<WireId, Wire> = {
-    ...d.wires,
-    [wireId]: { scope: wire.scope, sig: wire.sig, endpoints: rest },
-    [fresh]: { scope: wire.scope, sig: wire.sig, endpoints: [detached] },
+  const parts: PartsInProgress = {
+    regions: { ...d.regions },
+    nodes: { ...d.nodes },
+    wires: {
+      ...d.wires,
+      [wireId]: { sig: wire.sig, endpoints: rest },
+      [fresh]: { sig: wire.sig, endpoints: [detached] },
+    },
   }
-  return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes: { ...d.nodes }, wires })
+  completeWireEnds(parts, wireId, scope, 'severing')
+  completeWireEnds(parts, fresh, scope, 'severing')
+  return mkDiagram({ root: d.root, ...parts })
 }
 
 /** Remove hits already represented by a selected region subtree. */
@@ -251,7 +265,7 @@ export function absorbHits(d: Diagram, hits: readonly ConstructionHit[]): Constr
   return unique.filter((hit) => {
     if (hit.kind === 'region') return !strictlyInside(hit.id)
     if (hit.kind === 'node') return !insideOrOn(d.nodes[hit.id]!.region)
-    return !insideOrOn(d.wires[hit.id]!.scope)
+    return !insideOrOn(derivedScope(d, hit.id))
   })
 }
 
@@ -272,18 +286,16 @@ export function dissolveRegion(d: Diagram, regionId: RegionId): Diagram {
   for (const [id, node] of Object.entries(d.nodes)) {
     nodes[id] = node.region === regionId ? moveNodeToRegion(node, parent) : node
   }
-  const wires: Record<WireId, Wire> = {}
-  for (const [id, wire] of Object.entries(d.wires)) {
-    wires[id] = { scope: wire.scope === regionId ? parent : wire.scope, sig: wire.sig, endpoints: wire.endpoints }
-  }
-  return mkDiagram({ root: d.root, regions, nodes, wires })
+  // Wires are untouched: a quantifier living in the dissolving boundary rides
+  // its nodes up to the parent, which is where the derived scope now lands.
+  return mkDiagram({ root: d.root, regions, nodes, wires: { ...d.wires } })
 }
 
-/** Endpointful wires whose every endpoint belongs to a deleted node. Existing
-    endpointless wires are independent semantic objects and are not orphans. */
+/** Wires whose every endpoint belongs to a deleted node: nothing of them
+    survives the deletion, so they die with their ends. */
 export function orphanedWires(d: Diagram, nodeIds: ReadonlySet<NodeId>): WireId[] {
   return Object.entries(d.wires)
-    .filter(([, wire]) => wire.endpoints.length > 0 && wire.endpoints.every((endpoint) => nodeIds.has(endpoint.node)))
+    .filter(([, wire]) => wire.endpoints.every((endpoint) => nodeIds.has(endpoint.node)))
     .map(([id]) => id)
     .sort()
 }
@@ -313,9 +325,17 @@ export function deleteHits(d: Diagram, hits: readonly ConstructionHit[]): Diagra
   const wires: Record<WireId, Wire> = {}
   for (const [id, wire] of Object.entries(d.wires)) {
     if (deadWires.has(id)) continue
-    wires[id] = { scope: wire.scope, sig: wire.sig, endpoints: wire.endpoints.filter((endpoint) => !deadNodes.has(endpoint.node)) }
+    wires[id] = { sig: wire.sig, endpoints: wire.endpoints.filter((endpoint) => !deadNodes.has(endpoint.node)) }
   }
-  let current = mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
+  // A surviving wire that loses ends keeps the quantifier it had: pins at the
+  // old derived scope replace the lost incidences, down to the two-end floor.
+  const parts: PartsInProgress = { regions: { ...d.regions }, nodes, wires }
+  for (const [id, wire] of Object.entries(d.wires)) {
+    if (deadWires.has(id)) continue
+    if (!wire.endpoints.some((endpoint) => deadNodes.has(endpoint.node))) continue
+    completeWireEnds(parts, id, derivedScope(d, id), 'deletion')
+  }
+  let current = mkDiagram({ root: d.root, ...parts })
 
   const depth = (regionId: RegionId): number => {
     let result = 0
@@ -342,28 +362,23 @@ export function reparentNode(d: Diagram, nodeId: NodeId, region: RegionId): Diag
   if (node === undefined) throw new Error(`unknown node '${nodeId}'`)
   if (d.regions[region] === undefined) throw new Error(`unknown region '${region}'`)
   if (node.region === region) return d
-  const nodes: Record<NodeId, DiagramNode> = { ...d.nodes, [nodeId]: moveNodeToRegion(node, region) }
-  const wires: Record<WireId, Wire> = {}
-  for (const [id, wire] of Object.entries(d.wires)) {
-    if (!wire.endpoints.some((endpoint) => endpoint.node === nodeId)) {
-      wires[id] = wire
-      continue
-    }
-    if (wire.endpoints.every((endpoint) => endpoint.node === nodeId)) {
-      wires[id] = { scope: region, sig: wire.sig, endpoints: wire.endpoints }
-      continue
-    }
-    const endpointRegions = wire.endpoints.map((endpoint) => nodes[endpoint.node]!.region)
-    const remainsValid = endpointRegions.every((endpointRegion) => subtreeContains(d, wire.scope, endpointRegion))
-    const scope = remainsValid
-      ? wire.scope
-      : endpointRegions.slice(1).reduce(
-        (current, endpointRegion) => deepestCommonAncestor(d, current, endpointRegion),
-        endpointRegions[0]!,
-      )
-    wires[id] = { scope, sig: wire.sig, endpoints: wire.endpoints }
+  const parts: PartsInProgress = {
+    regions: { ...d.regions },
+    nodes: { ...d.nodes, [nodeId]: moveNodeToRegion(node, region) },
+    wires: { ...d.wires },
   }
-  return mkDiagram({ root: d.root, regions: { ...d.regions }, nodes, wires })
+  for (const [id, wire] of Object.entries(d.wires)) {
+    if (!wire.endpoints.some((endpoint) => endpoint.node === nodeId)) continue
+    const before = derivedScope(d, id)
+    const after = endpointDca(parts, wire.endpoints)
+    // A move that narrows a wire still sound where it was keeps it there,
+    // held by a pin; a move that carries an end out of the old scope takes
+    // the quantifier with it, which is the derived scope of the new ends.
+    if (after !== null && after !== before && isAncestorOrEqual(d, before, after)) {
+      completeWireEnds(parts, id, before, 'reparenting')
+    }
+  }
+  return mkDiagram({ root: d.root, ...parts })
 }
 
 export function deleteSelection(d: Diagram, sel: SubgraphSelection): Diagram {

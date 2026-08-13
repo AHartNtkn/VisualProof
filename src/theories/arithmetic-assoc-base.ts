@@ -1,4 +1,5 @@
 import type { ProofContext } from '../kernel/proof/context'
+import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import type { NodeId } from '../kernel/diagram/diagram'
 import { IOTA, relSig } from '../kernel/diagram/sig'
@@ -122,9 +123,9 @@ export function associativityCarrierBase(
   ] as const) {
     before = forward.diagram
     forward.record('introduce base-support ' + label + ' relation', {
-      rule: 'vacuousIntro',
-      scope: forwardPrimitiveScope,
-      sig,
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly(label, forwardPrimitiveScope, sig),
     })
     relationsWires.push(
       onlyNewWire(before, forward.diagram, forwardPrimitiveScope),
@@ -147,9 +148,9 @@ export function associativityCarrierBase(
   )
   before = forward.diagram
   forward.record('introduce temporary standing hypotheses', {
-    rule: 'vacuousIntro',
-    scope: forwardHypotheses,
-    sig: relSig([]),
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('temporaryHypotheses', forwardHypotheses, relSig([])),
   })
   const temporaryHypotheses = onlyNewWire(
     before,
@@ -180,9 +181,9 @@ export function associativityCarrierBase(
   )
   before = forward.diagram
   forward.record('introduce material base value', {
-    rule: 'vacuousIntro',
-    scope: forwardBase,
-    sig: IOTA,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('baseValue', forwardBase, IOTA),
   })
   const forwardBaseValue = onlyNewWire(before, forward.diagram, forwardBase)
   before = forward.diagram
@@ -254,9 +255,9 @@ export function associativityCarrierBase(
   for (const label of ['right', 'third', 'first sum', 'inner sum']) {
     before = forward.diagram
     forward.record('introduce material transport ' + label, {
-      rule: 'vacuousIntro',
-      scope: forwardTransport,
-      sig: IOTA,
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('transportVariable', forwardTransport, IOTA),
     })
     transportVariables.push(
       onlyNewWire(before, forward.diagram, forwardTransport),

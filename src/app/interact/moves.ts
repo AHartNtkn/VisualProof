@@ -1,10 +1,12 @@
 import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
+import { derivedScope } from '../../kernel/diagram/regions'
 import { IOTA, relSig, type Sig } from '../../kernel/diagram/sig'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../kernel/proof/action'
 import type { ProofStep } from '../../kernel/proof/step'
 import type { ProofContext } from '../../kernel/proof/context'
 import { assertProofContext } from '../../kernel/proof/context'
+import { bareWireAssembly, bareWireDescription } from '../../kernel/rules/identity-rules'
 import { findDeiterationEvidence } from '../../kernel/rules/iteration'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
@@ -52,7 +54,7 @@ export function discoverProofActions(
 function erasureSelection(diagram: Diagram, selection: SubgraphSelection): SubgraphSelection {
   const existing = new Set(selection.wires)
   const riders = orphanedWires(diagram, new Set(selection.nodes))
-    .filter((wire) => !existing.has(wire) && diagram.wires[wire]!.scope === selection.region)
+    .filter((wire) => !existing.has(wire) && derivedScope(diagram, wire) === selection.region)
   return riders.length === 0
     ? selection
     : { ...selection, wires: [...selection.wires, ...riders] }
@@ -85,8 +87,12 @@ export function contextualDeleteStep(
   if (has('doubleCutElim')) {
     return { rule: 'doubleCutElim', region: discovery.sel.regions[0]! }
   }
-  if (has('vacuousElim')) {
-    return { rule: 'vacuousElim', wireId: discovery.sel.wires[0]! }
+  if (has('vacuityDelete')) {
+    return {
+      rule: 'vacuity',
+      direction: 'delete',
+      assembly: bareWireDescription(diagram, discovery.sel.wires[0]!),
+    }
   }
   if (has('erase')) return erasureStep(diagram, discovery.sel)
   return has('deiterate') ? deiterationStep(diagram, discovery.sel, fuel) : null
@@ -283,25 +289,30 @@ export class ProofMoveController {
         return true
       }
     }
-    // Q spawns a bare quantifier wire at the region under the pointer;
-    // Shift+Q spawns a proposition quantifier (nullary relation) instead
-    // (2026-07-30 rulings: a floating existential is meaningful content —
-    // its presence changes the statement, if only trivially — and the
-    // nullary spawn seeds every relational signature by application,
-    // rim-pull, and extension).
+    // Q spawns a bare quantifier wire — the two-pin segment — at the region
+    // under the pointer; Shift+Q spawns a proposition quantifier (nullary
+    // relation) instead (2026-07-30 rulings: a floating existential is
+    // meaningful content — its presence changes the statement, if only
+    // trivially — and the nullary spawn seeds every relational signature by
+    // application, rim-pull, and extension).
     if (sample.key === 'q' || sample.key === 'Q') {
       if (this.#lastWorld === null) {
         this.#options.refuse('point at a region first', this.#lastPointer)
         return true
       }
       this.#commit({
-        rule: 'vacuousIntro',
-        scope: regionAt(
-          this.#options.engine(),
-          this.#options.diagram(),
-          this.#lastWorld,
+        rule: 'vacuity',
+        direction: 'insert',
+        assembly: bareWireAssembly(
+          'w',
+          regionAt(
+            this.#options.engine(),
+            this.#options.diagram(),
+            this.#lastWorld,
+          ),
+          sample.shiftKey ? relSig([]) : IOTA,
+          ['pin0', 'pin1'],
         ),
-        sig: sample.shiftKey ? relSig([]) : IOTA,
       })
       return true
     }
@@ -558,10 +569,11 @@ export class ProofMoveController {
           wires: selection.wires,
         }))
         return
-      case 'vacuousElim':
+      case 'vacuityDelete':
         row(action.label, () => this.#commit({
-          rule: 'vacuousElim',
-          wireId: selection.wires[0]!,
+          rule: 'vacuity',
+          direction: 'delete',
+          assembly: bareWireDescription(this.#options.diagram(), selection.wires[0]!),
         }))
         return
       case 'deiterate':

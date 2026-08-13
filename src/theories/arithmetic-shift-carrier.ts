@@ -2,6 +2,7 @@ import type { NodeId, RegionId, WireId } from '../kernel/diagram/diagram'
 import { IOTA, relSig } from '../kernel/diagram/sig'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { ProofContext } from '../kernel/proof/context'
+import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   BINARY,
@@ -192,9 +193,13 @@ export function successorShiftCarrierInductive(
 
   let before = forward.diagram
   forward.record('introduce successorSingleValued hypothesis handle', {
-    rule: 'vacuousIntro',
-    scope: forwardHypotheses,
-    sig: relSig([]),
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly(
+      'successorSingleValued',
+      forwardHypotheses,
+      relSig([]),
+    ),
   })
   const forwardSuccessorFunctional = onlyNewWire(
     before,
@@ -218,9 +223,9 @@ export function successorShiftCarrierInductive(
   ): WireId[] => labels.map((label) => {
     const prior = forward.diagram
     forward.record(`introduce forward ${label}`, {
-      rule: 'vacuousIntro',
-      scope,
-      sig: IOTA,
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('individual', scope, IOTA),
     })
     return onlyNewWire(prior, forward.diagram, scope)
   })
@@ -468,9 +473,9 @@ export function successorShiftCarrierInductive(
     )
   before = forward.diagram
   forward.record('introduce temporary direct-E carrier', {
-    rule: 'vacuousIntro',
-    scope: forwardClosure,
-    sig: UNARY,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('temporaryCarrier', forwardClosure, UNARY),
   })
   const temporaryCarrier = onlyNewWire(
     before,

@@ -6,9 +6,11 @@ import type {
   WireId,
 } from '../kernel/diagram/diagram'
 import { exploreForm } from '../kernel/diagram/canonical/explore'
+import { derivedScope } from '../kernel/diagram/regions'
 import { IOTA, relSig, type Sig } from '../kernel/diagram/sig'
 import { extractSubgraph } from '../kernel/diagram/subgraph/extract'
 import { verifyTheory } from '../kernel/proof/context'
+import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   atom,
@@ -93,8 +95,8 @@ function newWires(
   scope: RegionId,
 ): readonly WireId[] {
   return Object.entries(after.wires)
-    .filter(([id, wire]) =>
-      before.wires[id] === undefined && wire.scope === scope)
+    .filter(([id]) =>
+      before.wires[id] === undefined && derivedScope(after, id) === scope)
     .map(([id]) => id)
     .sort()
 }
@@ -122,9 +124,8 @@ function completeRegionSelection(
     region,
     regions: directCuts(diagram, region),
     nodes: directNodes(diagram, region),
-    wires: Object.entries(diagram.wires)
-      .filter(([, wire]) => wire.scope === region)
-      .map(([id]) => id)
+    wires: Object.keys(diagram.wires)
+      .filter((id) => derivedScope(diagram, id) === region)
       .sort(),
   }
 }
@@ -194,9 +195,9 @@ function openUniversal(
   for (const [index, signature] of signatures.entries()) {
     const beforeVariable = recorder.diagram
     recorder.record(`introduce ${label} variable ${index + 1}`, {
-      rule: 'vacuousIntro',
-      scope,
-      sig: signature,
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('universalVariable', scope, signature),
     })
     variables.push(
       onlyNewWire(beforeVariable, recorder.diagram, scope),
@@ -215,9 +216,13 @@ function insertExplicitMaterial(
 ) {
   let before = recorder.diagram
   recorder.record('introduce a temporary material relation', {
-    rule: 'vacuousIntro',
-    scope: region,
-    sig: relSig(formalSignatures),
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly(
+      'temporaryMaterial',
+      region,
+      relSig(formalSignatures),
+    ),
   })
   const temporary = onlyNewWire(before, recorder.diagram, region)
 

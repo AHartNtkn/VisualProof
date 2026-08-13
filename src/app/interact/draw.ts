@@ -6,6 +6,7 @@ import type {
   WireId,
 } from '../../kernel/diagram/diagram'
 import { relSig } from '../../kernel/diagram/sig'
+import { bareWireAssembly } from '../../kernel/rules/identity-rules'
 import type { ProofContext } from '../../kernel/proof/context'
 import { applyStep, type ProofStep } from '../../kernel/proof/step'
 import { length, sub } from '../../view/vec'
@@ -357,10 +358,12 @@ export class DrawGestureController {
         const sites = contacts
           .filter((contact) => contact.kind === 'blank')
           .map((contact) => ({ region: contact.region, args: [] }))
+        // The stroke's own region holds the quantifier: the segment's pins
+        // stay there while the ends spawn at the touched sites below it.
         const intro: ProofStep = {
-          rule: 'vacuousIntro',
-          scope,
-          sig: relSig([]),
+          rule: 'vacuity',
+          direction: 'insert',
+          assembly: bareWireAssembly('w', scope, relSig([]), ['pin0', 'pin1']),
         }
         let fresh: WireId | undefined
         try {

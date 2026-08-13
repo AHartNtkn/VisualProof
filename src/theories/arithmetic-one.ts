@@ -10,6 +10,7 @@ import {
   type ProofContext,
   type Theory,
 } from '../kernel/proof/context'
+import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   atom,
@@ -181,17 +182,17 @@ function buildForward(context: ProofContext) {
 
   before = forward.diagram
   forward.record('introduce theorem-local zero relation', {
-    rule: 'vacuousIntro',
-    scope: primitiveScope,
-    sig: UNARY,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('zero', primitiveScope, UNARY),
   })
   const zero = onlyNewWire(before, forward.diagram, primitiveScope)
 
   before = forward.diagram
   forward.record('introduce theorem-local successor relation', {
-    rule: 'vacuousIntro',
-    scope: primitiveScope,
-    sig: BINARY,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('successor', primitiveScope, BINARY),
   })
   const successor = onlyNewWire(before, forward.diagram, primitiveScope)
 
@@ -213,9 +214,9 @@ function buildForward(context: ProofContext) {
 
   before = forward.diagram
   forward.record('introduce temporary exact hypotheses handle', {
-    rule: 'vacuousIntro',
-    scope: antecedent,
-    sig: relSig([]),
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('temporaryHypotheses', antecedent, relSig([])),
   })
   const temporaryHypotheses = onlyNewWire(
     before,
@@ -297,9 +298,9 @@ function buildForward(context: ProofContext) {
 
   before = forward.diagram
   forward.record('introduce arbitrary hereditary property', {
-    rule: 'vacuousIntro',
-    scope: propertyScope,
-    sig: UNARY,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('property', propertyScope, UNARY),
   })
   const property = onlyNewWire(
     before,
@@ -329,9 +330,9 @@ function buildForward(context: ProofContext) {
 
   before = forward.diagram
   forward.record('introduce temporary hereditary-conditions handle', {
-    rule: 'vacuousIntro',
-    scope: hereditary,
-    sig: relSig([]),
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('temporaryConditions', hereditary, relSig([])),
   })
   const temporaryConditions = onlyNewWire(
     before,

@@ -1,4 +1,5 @@
 import type { Diagram, RegionId, WireId } from '../../kernel/diagram/diagram'
+import { derivedScopes } from '../../kernel/diagram/regions'
 import type { Vec2 } from '../../view/vec'
 
 export const UNQUALIFIED_GROUP_LABEL = 'Unqualified'
@@ -40,12 +41,13 @@ export function atomHeadOptions(
   region: RegionId,
 ): readonly AtomHeadOption[] {
   const found: Array<{ readonly wire: WireId; readonly arity: number }> = []
+  const scopes = derivedScopes(diagram)
   let current: RegionId | undefined = region
   for (;;) {
     const value: Diagram['regions'][string] | undefined = diagram.regions[current]
     if (value === undefined) throw new Error(`unknown region '${current}'`)
     const here = Object.entries(diagram.wires)
-      .filter(([, wire]) => wire.scope === current && wire.sig.kind === 'rel')
+      .filter(([id, wire]) => scopes.get(id) === current && wire.sig.kind === 'rel')
       .sort(([left], [right]) => left.localeCompare(right))
     for (const [wire, value] of here) {
       if (value.sig.kind === 'rel') found.push({ wire, arity: value.sig.args.length })

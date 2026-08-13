@@ -11,6 +11,7 @@ import {
   type ProofContext,
   type Theory,
 } from '../kernel/proof/context'
+import { bareWireAssembly } from '../kernel/rules/identity-rules'
 import type { Theorem } from '../kernel/proof/theorem'
 import {
   BINARY,
@@ -158,9 +159,9 @@ function succShiftS(
   )
   for (const label of ['left', 'right', 'right successor', 'output']) {
     forward.record(`introduce forward claim ${label}`, {
-      rule: 'vacuousIntro',
-      scope: forwardClaimScope,
-      sig: IOTA,
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('claimVariable', forwardClaimScope, IOTA),
     })
   }
   const [
@@ -252,9 +253,9 @@ function succShiftS(
 
   before = forward.diagram
   forward.record('introduce midpoint predecessor sum', {
-    rule: 'vacuousIntro',
-    scope: forwardClaimAntecedent,
-    sig: IOTA,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly('predecessorSum', forwardClaimAntecedent, IOTA),
   })
   const forwardPredecessorSum = onlyNewWire(
     before,
@@ -263,9 +264,13 @@ function succShiftS(
   )
   before = forward.diagram
   forward.record('introduce midpoint predecessor sum successor', {
-    rule: 'vacuousIntro',
-    scope: forwardClaimAntecedent,
-    sig: IOTA,
+    rule: 'vacuity',
+    direction: 'insert',
+    assembly: bareWireAssembly(
+      'predecessorSumSuccessor',
+      forwardClaimAntecedent,
+      IOTA,
+    ),
   })
   const forwardPredecessorSumSuccessor = onlyNewWire(
     before,

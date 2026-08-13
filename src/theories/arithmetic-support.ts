@@ -12,6 +12,7 @@ import {
   type RelSig,
   type Sig,
 } from '../kernel/diagram/sig'
+import { derivedScope } from '../kernel/diagram/regions'
 import { findDeiterationEvidence } from '../kernel/rules/iteration'
 import type { SubgraphSelection } from '../kernel/diagram/subgraph/selection'
 import {
@@ -278,7 +279,7 @@ export function scopedWires(
   region: RegionId,
 ): readonly WireId[] {
   return Object.entries(diagram.wires)
-    .filter(([, wire]) => wire.scope === region)
+    .filter(([id]) => derivedScope(diagram, id) === region)
     .map(([id]) => id)
 }
 
