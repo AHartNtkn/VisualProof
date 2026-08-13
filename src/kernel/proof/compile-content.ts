@@ -12,7 +12,7 @@ import type {
 } from '../diagram/diagram'
 import { exploreForm, exploreIso } from '../diagram/canonical/explore'
 import { mkDiagram } from '../diagram/diagram'
-import { isAncestorOrEqual } from '../diagram/regions'
+import { derivedScope, derivedScopes, isAncestorOrEqual } from '../diagram/regions'
 import type { RelSig, Sig } from '../diagram/sig'
 import { relSig, sigEquals, sigKey } from '../diagram/sig'
 import { extractSubgraph } from '../diagram/subgraph/extract'
@@ -25,6 +25,7 @@ import { removeSubgraph } from '../diagram/subgraph/splice'
 import { freshId } from '../diagram/subgraph/freshId'
 import { polarity } from '../diagram/regions'
 import { RuleError } from '../rules/error'
+import { completeWireEnds } from '../rules/wire-ends'
 import { mapStepIds } from './compose'
 import type { ProofContext } from './context'
 import type { ProofAction } from './action'
@@ -76,10 +77,10 @@ function contentWire(content: DiagramWithBoundary, wireId: WireId): Wire {
 /** Wires scoped at the content root that are binders, not boundary stubs. */
 function internalRootWires(content: DiagramWithBoundary): WireId[] {
   const stubs = new Set(content.boundary)
-  return Object.entries(content.diagram.wires)
-    .filter(([wireId, wire]) =>
-      wire.scope === content.diagram.root && !stubs.has(wireId))
-    .map(([wireId]) => wireId)
+  return Object.keys(content.diagram.wires)
+    .filter((wireId) =>
+      !stubs.has(wireId)
+      && derivedScope(content.diagram, wireId, content.boundary) === content.diagram.root)
     .sort()
 }
 
@@ -156,16 +157,20 @@ function restrictContent(
   for (const [nodeId, node] of Object.entries(diagram.nodes)) {
     if (keepNode(nodeId, node)) nodes[nodeId] = node
   }
+  const scopes = derivedScopes(diagram, content.boundary)
   const wires: Record<WireId, Wire> = {}
   for (const [wireId, wire] of Object.entries(diagram.wires)) {
     if (stubs.has(wireId)) {
       wires[wireId] = {
-        scope: wire.scope,
         sig: wire.sig,
         endpoints: wire.endpoints.filter((endpoint) =>
           nodes[endpoint.node] !== undefined),
       }
-    } else if (regions[wire.scope] !== undefined && wire.scope !== diagram.root) {
+    } else if (
+      regions[scopes.get(wireId)!] !== undefined
+      && scopes.get(wireId) !== diagram.root
+      && wire.endpoints.every((endpoint) => nodes[endpoint.node] !== undefined)
+    ) {
       wires[wireId] = wire
     }
   }
@@ -193,11 +198,12 @@ function rerootContent(content: DiagramWithBoundary, cut: RegionId): DiagramWith
   for (const [nodeId, node] of Object.entries(diagram.nodes)) {
     if (subtree.has(node.region)) nodes[nodeId] = node
   }
+  const scopes = derivedScopes(diagram, content.boundary)
   const wires: Record<WireId, Wire> = {}
   for (const [wireId, wire] of Object.entries(diagram.wires)) {
     if (new Set(content.boundary).has(wireId)) {
-      wires[wireId] = { scope: cut, sig: wire.sig, endpoints: wire.endpoints }
-    } else if (subtree.has(wire.scope)) {
+      wires[wireId] = { sig: wire.sig, endpoints: wire.endpoints }
+    } else if (subtree.has(scopes.get(wireId)!)) {
       wires[wireId] = wire
     }
   }
@@ -353,6 +359,77 @@ function plumb(
   return wire
 }
 
+
+/** Vacuity deletion of a bare (all-pin) wire, described from the diagram. */
+function bareWireDeletion(diagram: Diagram, wireId: WireId): ProofStep {
+  const wire = diagram.wires[wireId]!
+  const nodes: Record<NodeId, { region: RegionId; sig: Sig; arity: number }> = {}
+  for (const endpoint of wire.endpoints) {
+    const node = diagram.nodes[endpoint.node]!
+    if (node.kind !== 'identity' || node.arity !== 1) {
+      throw new RuleError(
+        `wire '${wireId}' is not bare; endpoint '${endpoint.node}' is not a pin`,
+      )
+    }
+    nodes[endpoint.node] = { region: node.region, sig: node.sig, arity: 1 }
+  }
+  return {
+    rule: 'vacuity',
+    direction: 'delete',
+    assembly: {
+      nodes,
+      wires: { [wireId]: { sig: wire.sig, endpoints: [...wire.endpoints] } },
+      attachments: {},
+    },
+  }
+}
+
+/**
+ * The real ids a vacuity insertion minted, recovered by diffing: the delete
+ * direction must name the apparatus as it exists.
+ */
+function mintedAssembly(
+  pre: Diagram,
+  post: Diagram,
+  assembly: Extract<ProofStep, { rule: 'vacuity' }>['assembly'],
+): Extract<ProofStep, { rule: 'vacuity' }>['assembly'] {
+  const newNodeIds = Object.keys(post.nodes).filter((id) => pre.nodes[id] === undefined)
+  const newWireIds = Object.keys(post.wires).filter((id) => pre.wires[id] === undefined)
+  const nodes: Record<NodeId, { region: RegionId; sig: Sig; arity: number }> = {}
+  for (const id of newNodeIds) {
+    const node = post.nodes[id]!
+    if (node.kind !== 'identity') {
+      throw new RuleError(`vacuity inversion: minted node '${id}' is not an identity`)
+    }
+    nodes[id] = { region: node.region, sig: node.sig, arity: node.arity }
+  }
+  const wires: Record<WireId, { sig: Sig; endpoints: readonly Endpoint[] }> = {}
+  for (const id of newWireIds) {
+    const wire = post.wires[id]!
+    wires[id] = { sig: wire.sig, endpoints: [...wire.endpoints] }
+  }
+  const attachments: Record<WireId, Endpoint[]> = {}
+  for (const hostWireId of Object.keys(assembly.attachments)) {
+    const before = new Set(pre.wires[hostWireId]!.endpoints.map((endpoint) =>
+      `${endpoint.node}|${JSON.stringify(endpoint.port)}`))
+    attachments[hostWireId] = post.wires[hostWireId]!.endpoints.filter((endpoint) =>
+      !before.has(`${endpoint.node}|${JSON.stringify(endpoint.port)}`))
+  }
+  return { nodes, wires, attachments }
+}
+
+function endArgs(diagram: Diagram, nodeId: NodeId, arity: number): WireId[] {
+  return     Array.from({ length: arity }, (_, index) => {
+      for (const [wireId, wireValue] of Object.entries(diagram.wires)) {
+        if (wireValue.endpoints.some((endpoint) =>
+          endpoint.node === nodeId
+          && endpoint.port.kind === 'arg'
+          && endpoint.port.index === index)) return wireId
+      }
+      throw new RuleError(`invert: end '${nodeId}' lacks argument ${index}`)
+    })
+}
+
 function handleLeaf(
   emitter: Emitter,
   residual: Residual,
@@ -392,8 +469,56 @@ function handleLeaf(
       return
     }
     case 'identity': {
-      const wire = plumb(emitter, residual, attachments.args)
-      emitter.emit({ rule: 'identityLeaf', wire })
+      if (node.arity >= 2) {
+        const wire = plumb(emitter, residual, attachments.args)
+        emitter.emit({ rule: 'identityLeaf', wire })
+        return
+      }
+      // A point or a pin in the content is ⊤ apparatus: instantiate it at
+      // every site by one vacuity insertion, then retire the live wire.
+      const before = emitter.current()
+      const ends = before.wires[residual.wire]!.endpoints
+        .map((endpoint) => ({
+          node: endpoint.node,
+          region: before.nodes[endpoint.node]!.region,
+        }))
+        .filter(({ node: endNode }) => {
+          const host = before.nodes[endNode]!
+          return !(host.kind === 'identity' && host.arity === 1)
+        })
+      const assemblyNodes: Record<NodeId, { region: RegionId; sig: Sig; arity: number }> = {}
+      const assemblyAttachments: Record<WireId, Endpoint[]> = {}
+      ends.forEach((end, index) => {
+        const label = `leafpt${index}`
+        assemblyNodes[label] = { region: end.region, sig: node.sig, arity: node.arity }
+        if (node.arity === 1) {
+          const target = attachments.args[0]!
+          const host = residual.ambients.get(target)
+            ?? (() => {
+              const position = residual.content.boundary
+                .slice(0, residual.formals)
+                .indexOf(target)
+              if (position < 0) {
+                throw new RuleError(
+                  `content pin '${nodeId}' attaches to '${target}', which is `
+                  + `neither a formal nor an ambient`,
+                )
+              }
+              return endArgs(before, end.node, residual.formals)[position]!
+            })()
+          assemblyAttachments[host] = [
+            ...(assemblyAttachments[host] ?? []),
+            { node: label, port: { kind: 'identity', index: 0 } },
+          ]
+        }
+      })
+      emitter.emit({
+        rule: 'vacuity',
+        direction: 'insert',
+        assembly: { nodes: assemblyNodes, wires: {}, attachments: assemblyAttachments },
+      })
+      emitter.emit({ rule: 'endsDelete', wire: residual.wire })
+      emitter.emit(bareWireDeletion(emitter.current(), residual.wire))
       return
     }
   }
@@ -433,7 +558,7 @@ function handleResidual(emitter: Emitter, residual: Residual): Residual[] {
 
   if (items === 0) {
     emitter.emit({ rule: 'endsDelete', wire: residual.wire })
-    emitter.emit({ rule: 'vacuousElim', wireId: residual.wire })
+    emitter.emit(bareWireDeletion(emitter.current(), residual.wire))
     return []
   }
 
@@ -516,10 +641,12 @@ export function compileRelationJoin(
     if (hostWire === undefined) {
       throw new RuleError(`unknown parameter wire '${host}'`)
     }
-    if (!isAncestorOrEqual(diagram, hostWire.scope, relation.scope)) {
+    const hostScope = derivedScope(diagram, host)
+    const relationScope = derivedScope(diagram, wire)
+    if (!isAncestorOrEqual(diagram, hostScope, relationScope)) {
       throw new RuleError(
-        `parameter '${host}' scope '${hostWire.scope}' must enclose relation `
-        + `scope '${relation.scope}'`,
+        `parameter '${host}' scope '${hostScope}' must enclose relation `
+        + `scope '${relationScope}'`,
       )
     }
     ambients.set(stub, host)
@@ -760,10 +887,10 @@ function constructSevered(
     }
   }
   for (const attachment of first.ambientAttachments) {
-    const parameter = diagram.wires[attachment]!
-    if (!isAncestorOrEqual(diagram, parameter.scope, input.scope)) {
+    const parameterScope = derivedScope(diagram, attachment)
+    if (!isAncestorOrEqual(diagram, parameterScope, input.scope)) {
       throw new RuleError(
-        `ambient attachment '${attachment}' scope '${parameter.scope}' `
+        `ambient attachment '${attachment}' scope '${parameterScope}' `
         + `must enclose quantifier scope '${input.scope}'`,
       )
     }
@@ -803,7 +930,6 @@ function constructSevered(
         )
       }
       wires[attachment] = {
-        scope: existing.scope,
         sig: existing.sig,
         endpoints: [
           ...existing.endpoints,
@@ -813,17 +939,13 @@ function constructSevered(
     })
   })
   wires[quantifierId] = {
-    scope: input.scope,
     sig: quantifierSig,
     endpoints: quantifierEndpoints,
   }
+  const parts = { regions: { ...result.regions }, nodes, wires }
+  completeWireEnds(parts, quantifierId, input.scope, 'relation wire sever')
   return {
-    severed: mkDiagram({
-      root: result.root,
-      regions: { ...result.regions },
-      nodes,
-      wires,
-    }),
+    severed: mkDiagram({ root: result.root, ...parts }),
     wire: quantifierId,
     pattern: first.pattern,
     ambientAttachments: first.ambientAttachments,
@@ -921,16 +1043,6 @@ function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
   }
   const newNodes = (): NodeId[] =>
     Object.keys(post.nodes).filter((nodeId) => pre.nodes[nodeId] === undefined)
-  const endArgs = (diagram: Diagram, nodeId: NodeId, arity: number): WireId[] =>
-    Array.from({ length: arity }, (_, index) => {
-      for (const [wireId, wireValue] of Object.entries(diagram.wires)) {
-        if (wireValue.endpoints.some((endpoint) =>
-          endpoint.node === nodeId
-          && endpoint.port.kind === 'arg'
-          && endpoint.port.index === index)) return wireId
-      }
-      throw new RuleError(`invert: end '${nodeId}' lacks argument ${index}`)
-    })
 
   switch (step.rule) {
     case 'arityShift': {
@@ -961,15 +1073,22 @@ function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
       return {
         rule: 'endsSpawn',
         wire: step.wire,
-        sites: old.endpoints.map((endpoint) => ({
-          region: pre.nodes[endpoint.node]!.region,
-          args: endArgs(pre, endpoint.node, oldSig.args.length),
-        })),
+        sites: old.endpoints
+          .filter((endpoint) => {
+            const node = pre.nodes[endpoint.node]!
+            return !(node.kind === 'identity' && node.arity === 1)
+          })
+          .map((endpoint) => ({
+            region: pre.nodes[endpoint.node]!.region,
+            args: endArgs(pre, endpoint.node, oldSig.args.length),
+          })),
       }
     }
-    case 'vacuousElim': {
-      const old = preWire(step.wireId)
-      return { rule: 'vacuousIntro', scope: old.scope, sig: old.sig }
+    case 'vacuity': {
+      if (step.direction === 'insert') {
+        return { rule: 'vacuity', direction: 'delete', assembly: mintedAssembly(pre, post, step.assembly) }
+      }
+      return { rule: 'vacuity', direction: 'insert', assembly: step.assembly }
     }
     case 'argExtend': {
       const old = preWire(step.wire)
@@ -1018,30 +1137,24 @@ function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
       const fresh = newWireOfSig(pre, post, relSig(args))
       return { rule: 'argContract', wire: fresh, position: step.position }
     }
-    case 'applyFormal': {
-      const old = preWire(step.wire)
+    case 'applyFormal':
       return {
         rule: 'abstractFormal',
         ends: newNodes(),
-        scope: old.scope,
+        scope: derivedScope(pre, step.wire),
       }
-    }
-    case 'identityLeaf': {
-      const old = preWire(step.wire)
+    case 'identityLeaf':
       return {
         rule: 'identityAbstract',
         nodes: newNodes(),
-        scope: old.scope,
+        scope: derivedScope(pre, step.wire),
       }
-    }
-    case 'refLeaf': {
-      const old = preWire(step.wire)
+    case 'refLeaf':
       return {
         rule: 'refAbstract',
         nodes: newNodes(),
-        scope: old.scope,
+        scope: derivedScope(pre, step.wire),
       }
-    }
     case 'wireJoin': {
       const dying = preWire(step.input.b)
       const survivorPost = post.wires[step.input.a] !== undefined
@@ -1058,7 +1171,7 @@ function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
         input: {
           wire: survivorPost,
           keep,
-          scope: dying.scope,
+          scope: derivedScope(pre, step.input.b),
         },
       }
     }

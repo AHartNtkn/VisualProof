@@ -55,13 +55,6 @@ export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
       `theorem '${thm.name}': boundary arity mismatch (lhs ${thm.lhs.boundary.length}, rhs ${thm.rhs.boundary.length})`,
     )
   }
-  for (const side of [thm.lhs, thm.rhs]) {
-    for (const w of side.boundary) {
-      if (side.diagram.wires[w]!.scope !== side.diagram.root) {
-        throw new ProofError(`theorem '${thm.name}': boundary wire '${w}' is not scoped at the diagram root`)
-      }
-    }
-  }
   const backActions = thm.backActions ?? []
   const carry = (initial: readonly WireId[]) => {
     let boundary = initial
@@ -162,7 +155,9 @@ function applyVerifiedTheorem(
    * theorem identity cannot be split across different host wires.
    */
   const candidateWires = { ...pattern.diagram.wires }
+  const candidateNodes = { ...pattern.diagram.nodes }
   const takenCandidateWires = new Set(Object.keys(candidateWires))
+  const takenCandidateNodes = new Set(Object.keys(candidateNodes))
   const detachedCaptureStubs = new Map<WireId, WireId>()
   const candidateBoundary = from.boundary.map((sourceBoundary, index) => {
     const argument = at.args[index]!
@@ -174,25 +169,40 @@ function applyVerifiedTheorem(
     if (attachmentIndex !== -1) return pattern.boundary[attachmentIndex]!
 
     const sourceWire = from.diagram.wires[sourceBoundary]!
-    if (sourceWire.endpoints.length !== 0) {
+    const sourcePins = sourceWire.endpoints.filter((endpoint) => {
+      const node = from.diagram.nodes[endpoint.node]
+      return node !== undefined && node.kind === 'identity' && node.arity === 1
+    })
+    if (sourcePins.length !== sourceWire.endpoints.length) {
       throw new RuleError(`argument wire '${argument}' is not an attachment wire of the selection`)
     }
     const existing = detachedCaptureStubs.get(argument)
     if (existing !== undefined) return existing
 
+    // Mirror the detached formal's shape exactly — its pins included — so
+    // the canonical-form comparison sees the same structure.
     const stub = freshId(takenCandidateWires, `capture${index}`)
     takenCandidateWires.add(stub)
-    candidateWires[stub] = {
-      scope: pattern.diagram.root,
-      sig: hostWire.sig,
-      endpoints: [],
-    }
+    const endpoints = sourcePins.map((sourcePin) => {
+      const node = freshId(takenCandidateNodes, `capturepin${index}`)
+      takenCandidateNodes.add(node)
+      const sourceNode = from.diagram.nodes[sourcePin.node]!
+      candidateNodes[node] = {
+        kind: 'identity',
+        region: pattern.diagram.root,
+        sig: sourceNode.sig,
+        arity: 1,
+      }
+      return { node, port: { kind: 'identity', index: 0 } as const }
+    })
+    candidateWires[stub] = { sig: hostWire.sig, endpoints }
     detachedCaptureStubs.set(argument, stub)
     return stub
   })
   const candidate = mkDiagramWithBoundary(
     {
       ...pattern.diagram,
+      nodes: candidateNodes,
       wires: candidateWires,
     },
     candidateBoundary,
