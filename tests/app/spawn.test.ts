@@ -8,6 +8,7 @@ import {
 } from '../../src/app/interact/spawn'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { BINARY, UNARY } from '../fixtures/zero-signature'
+import { segment } from './helpers/build'
 
 describe('structural spawn catalog', () => {
   it('groups and searches opaque definition IDs', () => {
@@ -25,13 +26,13 @@ describe('structural spawn catalog', () => {
 
   it('offers visible relational head wires from inner to outer scope', () => {
     const builder = new DiagramBuilder()
-    const outer = builder.relWire(builder.root, UNARY)
+    const outer = segment(builder, builder.root, UNARY)
     const cut = builder.cut(builder.root)
-    const inner = builder.relWire(cut, BINARY)
+    const inner = segment(builder, cut, BINARY)
     const diagram = builder.build()
     expect(atomHeadOptions(diagram, cut)).toEqual([
-      { wire: inner, arity: 2, position: 1, total: 2 },
-      { wire: outer, arity: 1, position: 2, total: 2 },
+      { wire: inner.wire, arity: 2, position: 1, total: 2 },
+      { wire: outer.wire, arity: 1, position: 2, total: 2 },
     ])
     expect(() => atomHeadOptions(diagram, 'missing')).toThrow(/unknown region/)
   })

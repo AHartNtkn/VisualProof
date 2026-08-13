@@ -16,6 +16,7 @@ import {
   placeRegion,
   pointerSample,
 } from './helpers/gesture'
+import { segment, spread } from './helpers/build'
 
 const UNARY = relSig([IOTA])
 const BINARY = relSig([IOTA, IOTA])
@@ -99,22 +100,25 @@ function bandPoint(engine: Engine, node: string, anchor: Vec2): Vec2 {
 function pluming() {
   const builder = new DiagramBuilder()
   const atom = builder.atom(builder.root, BINARY)
-  const wire = builder.wire(builder.root, [
+  const wire = builder.wire([
     { node: atom, port: { kind: 'head' } },
   ], BINARY)
-  const first = builder.wire(builder.root, [
+  const wirePin = builder.pin(wire, builder.root)
+  const first = builder.wire([
     { node: atom, port: { kind: 'arg', index: 0 } },
   ])
-  const second = builder.wire(builder.root, [
+  const firstPin = builder.pin(first, builder.root)
+  const second = builder.wire([
     { node: atom, port: { kind: 'arg', index: 1 } },
   ])
+  const secondPin = builder.pin(second, builder.root)
   const diagram = builder.build()
   const engine = mkEngine(diagram, [])
   engine.scale = 12
   place(engine, atom, { x: 300, y: 300 })
-  place(engine, `j:${wire}`, { x: 300, y: 80 })
-  place(engine, `j:${first}`, { x: 100, y: 500 })
-  place(engine, `j:${second}`, { x: 500, y: 500 })
+  place(engine, wirePin, { x: 300, y: 80 })
+  place(engine, firstPin, { x: 100, y: 500 })
+  place(engine, secondPin, { x: 500, y: 500 })
   const port = (index: number): Vec2 =>
     endpointPoint(
       engine,
@@ -128,12 +132,12 @@ describe('object-typed drag dispatch', () => {
   it('strand onto another strand commits wireJoin', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const left = builder.wire(cut, [])
-    const right = builder.wire(cut, [])
+    const left = segment(builder, cut)
+    const right = segment(builder, cut)
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
-    const from = place(engine, `j:${left}`, { x: 100, y: 100 })
-    const to = place(engine, `j:${right}`, { x: 500, y: 100 })
+    const from = spread(engine, left, { x: 100, y: 100 })
+    const to = spread(engine, right, { x: 500, y: 100 })
     const h = harness(diagram, engine)
 
     drag(h.controller, from, to)
@@ -141,19 +145,19 @@ describe('object-typed drag dispatch', () => {
     expect(h.refusals).toEqual([])
     expect(onlyStep(h.committed)).toEqual({
       rule: 'wireJoin',
-      input: { a: left, b: right },
+      input: { a: left.wire, b: right.wire },
     })
   })
 
   it('joins relation wires through the same strand gesture', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const left = builder.wire(cut, [], relSig([]))
-    const right = builder.wire(cut, [], relSig([]))
+    const left = segment(builder, cut, relSig([]))
+    const right = segment(builder, cut, relSig([]))
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
-    const from = place(engine, `j:${left}`, { x: 100, y: 100 })
-    const to = place(engine, `j:${right}`, { x: 500, y: 100 })
+    const from = spread(engine, left, { x: 100, y: 100 })
+    const to = spread(engine, right, { x: 500, y: 100 })
     const h = harness(diagram, engine)
 
     drag(h.controller, from, to)
@@ -161,7 +165,7 @@ describe('object-typed drag dispatch', () => {
     expect(h.refusals).toEqual([])
     expect(onlyStep(h.committed)).toEqual({
       rule: 'wireJoin',
-      input: { a: left, b: right },
+      input: { a: left.wire, b: right.wire },
     })
   })
 
@@ -169,19 +173,19 @@ describe('object-typed drag dispatch', () => {
     const builder = new DiagramBuilder()
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    const target = builder.wire(builder.root, [
+    const target = builder.wire([
       { node: atomA, port: { kind: 'head' } },
       { node: atomB, port: { kind: 'head' } },
     ], UNARY)
-    builder.wire(builder.root, [
+    builder.wire([
       { node: atomA, port: { kind: 'arg', index: 0 } },
       { node: atomB, port: { kind: 'arg', index: 0 } },
     ])
-    const grabbed = builder.wire(builder.root, [])
+    const grabbed = segment(builder, builder.root)
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
     engine.scale = 12
-    const from = place(engine, `j:${grabbed}`, { x: 100, y: 500 })
+    const from = spread(engine, grabbed, { x: 100, y: 500 })
     place(engine, atomB, { x: 700, y: 100 })
     const to = place(engine, atomA, { x: 300, y: 100 })
     const h = harness(diagram, engine)
@@ -194,7 +198,7 @@ describe('object-typed drag dispatch', () => {
       wire: target,
       position: 1,
       newArgSig: IOTA,
-      attachments: { [atomA]: grabbed, [atomB]: grabbed },
+      attachments: { [atomA]: grabbed.wire, [atomB]: grabbed.wire },
     })
   })
 
@@ -202,23 +206,29 @@ describe('object-typed drag dispatch', () => {
     const builder = new DiagramBuilder()
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    const headA = builder.wire(builder.root, [
+    const headA = builder.wire([
       { node: atomA, port: { kind: 'head' } },
     ], UNARY)
-    const headB = builder.wire(builder.root, [
+    const headAPin = builder.pin(headA, builder.root)
+    const headB = builder.wire([
       { node: atomB, port: { kind: 'head' } },
     ], UNARY)
-    builder.wire(builder.root, [
+    const headBPin = builder.pin(headB, builder.root)
+    const fusedArg = builder.wire([
       { node: atomA, port: { kind: 'arg', index: 0 } },
       { node: atomB, port: { kind: 'arg', index: 0 } },
     ])
+    // The fused atoms both die; the argument wire keeps its quantifier at
+    // the sheet through pins, which is what lets the step through at all.
+    builder.pin(fusedArg, builder.root)
+    builder.pin(fusedArg, builder.root)
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
     engine.scale = 12
     const from = place(engine, atomA, { x: 200, y: 100 })
     const to = place(engine, atomB, { x: 600, y: 100 })
-    place(engine, `j:${headA}`, { x: 200, y: 400 })
-    place(engine, `j:${headB}`, { x: 600, y: 400 })
+    place(engine, headAPin, { x: 200, y: 400 })
+    place(engine, headBPin, { x: 600, y: 400 })
     const h = harness(diagram, engine)
 
     drag(h.controller, from, to)
@@ -235,14 +245,14 @@ describe('object-typed drag dispatch', () => {
     const builder = new DiagramBuilder()
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: atomA, port: { kind: 'head' } },
       { node: atomB, port: { kind: 'head' } },
     ], UNARY)
-    builder.wire(builder.root, [
+    builder.wire([
       { node: atomA, port: { kind: 'arg', index: 0 } },
     ])
-    builder.wire(builder.root, [
+    builder.wire([
       { node: atomB, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = builder.build()
@@ -262,21 +272,23 @@ describe('object-typed drag dispatch', () => {
     const builder = new DiagramBuilder()
     const scope = builder.cut(builder.root)
     const atom = builder.atom(scope, BINARY)
-    const wire = builder.wire(scope, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], BINARY)
-    const first = builder.wire(builder.root, [
+    const wirePin = builder.pin(wire, scope)
+    const first = builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])
-    builder.wire(builder.root, [
+    const firstPin = builder.pin(first, builder.root)
+    builder.wire([
       { node: atom, port: { kind: 'arg', index: 1 } },
     ])
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
     engine.scale = 12
     const from = place(engine, atom, { x: 300, y: 300 })
-    place(engine, `j:${wire}`, { x: 300, y: 80 })
-    place(engine, `j:${first}`, { x: 100, y: 500 })
+    place(engine, wirePin, { x: 300, y: 80 })
+    place(engine, firstPin, { x: 100, y: 500 })
     const to = endpointPoint(engine, first, {
       node: atom,
       port: { kind: 'arg', index: 0 },
@@ -326,14 +338,18 @@ describe('object-typed drag dispatch', () => {
     const builder = new DiagramBuilder()
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: atomA, port: { kind: 'head' } },
       { node: atomB, port: { kind: 'head' } },
     ], UNARY)
-    const shared = builder.wire(builder.root, [
+    const shared = builder.wire([
       { node: atomA, port: { kind: 'arg', index: 0 } },
       { node: atomB, port: { kind: 'arg', index: 0 } },
     ])
+    // Dropping the argument removes both incidences: the wire survives as
+    // the bare segment its pins already hold at the sheet.
+    builder.pin(shared, builder.root)
+    builder.pin(shared, builder.root)
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
     engine.scale = 12
@@ -358,18 +374,22 @@ describe('object-typed drag dispatch', () => {
   it('a port dropped onto its adjacent sibling with a shared wire commits argContract', () => {
     const builder = new DiagramBuilder()
     const atom = builder.atom(builder.root, BINARY)
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], BINARY)
-    const shared = builder.wire(builder.root, [
+    const wirePin = builder.pin(wire, builder.root)
+    const shared = builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
       { node: atom, port: { kind: 'arg', index: 1 } },
     ])
+    // Contracting the two positions into one leaves a single incidence, so
+    // the wire needs a pin to keep its quantifier at the sheet.
+    builder.pin(shared, builder.root)
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
     engine.scale = 12
     place(engine, atom, { x: 300, y: 300 })
-    place(engine, `j:${wire}`, { x: 300, y: 80 })
+    place(engine, wirePin, { x: 300, y: 80 })
     const from = endpointPoint(engine, shared, {
       node: atom,
       port: { kind: 'arg', index: 0 },
@@ -427,21 +447,23 @@ describe('object-typed drag dispatch', () => {
     const scope = builder.cut(builder.root)
     const higher = relSig([UNARY, IOTA])
     const atom = builder.atom(scope, higher)
-    const wire = builder.wire(scope, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], higher)
-    const target = builder.wire(scope, [
+    const wirePin = builder.pin(wire, scope)
+    const target = builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
     ], UNARY)
-    builder.wire(scope, [
+    const targetPin = builder.pin(target, scope)
+    builder.wire([
       { node: atom, port: { kind: 'arg', index: 1 } },
     ])
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
     engine.scale = 12
     const center = place(engine, atom, { x: 300, y: 300 })
-    place(engine, `j:${wire}`, { x: 300, y: 80 })
-    place(engine, `j:${target}`, { x: 100, y: 500 })
+    place(engine, wirePin, { x: 300, y: 80 })
+    place(engine, targetPin, { x: 100, y: 500 })
     const from = endpointPoint(engine, target, {
       node: atom,
       port: { kind: 'arg', index: 0 },
@@ -462,18 +484,20 @@ describe('object-typed drag dispatch', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const atom = builder.atom(cut, UNARY)
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], UNARY)
-    builder.wire(builder.root, [
+    const wirePin = builder.pin(wire, builder.root)
+    const argWire = builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])
+    builder.pin(argWire, builder.root)
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
     engine.scale = 12
     placeRegion(engine, cut, { x: 300, y: 300 }, 200)
     const to = place(engine, atom, { x: 300, y: 300 })
-    place(engine, `j:${wire}`, { x: 300, y: 700 })
+    place(engine, wirePin, { x: 300, y: 700 })
     const from = { x: 300, y: 100 }
     const h = harness(diagram, engine)
 
@@ -486,12 +510,12 @@ describe('object-typed drag dispatch', () => {
   it('springs back on a kernel refusal with the diagram unchanged', () => {
     // Joining at the root is gated off in the forward orientation.
     const builder = new DiagramBuilder()
-    const left = builder.wire(builder.root, [])
-    const right = builder.wire(builder.root, [])
+    const left = segment(builder, builder.root)
+    const right = segment(builder, builder.root)
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
-    const from = place(engine, `j:${left}`, { x: 100, y: 100 })
-    const to = place(engine, `j:${right}`, { x: 500, y: 100 })
+    const from = spread(engine, left, { x: 100, y: 100 })
+    const to = spread(engine, right, { x: 500, y: 100 })
     const h = harness(diagram, engine)
 
     drag(h.controller, from, to)

@@ -9,7 +9,7 @@ function iterationFixture() {
   const builder = new DiagramBuilder()
   const target = builder.cut(builder.root)
   const atom = builder.atom(builder.root, UNARY)
-  builder.wire(builder.root, [{ node: atom, port: { kind: 'head' } }], UNARY)
+  builder.wire([{ node: atom, port: { kind: 'head' } }], UNARY)
   const diagram = builder.build()
   const selection = mkSelection(diagram, {
     region: diagram.root, regions: [], nodes: [atom], wires: [],
@@ -54,7 +54,7 @@ describe('copy planning on three-node graphs', () => {
     const builder = new DiagramBuilder()
     const sourceRegion = builder.cut(builder.root)
     const atom = builder.atom(sourceRegion, UNARY)
-    builder.wire(sourceRegion, [{ node: atom, port: { kind: 'head' } }], UNARY)
+    builder.wire([{ node: atom, port: { kind: 'head' } }], UNARY)
     const diagram = builder.build()
     const selection = mkSelection(diagram, {
       region: sourceRegion, regions: [], nodes: [atom], wires: [],

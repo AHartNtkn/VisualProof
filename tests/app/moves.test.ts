@@ -5,7 +5,8 @@ import { ProofMoveController } from '../../src/app/interact/moves'
 import type { PointerSample } from '../../src/app/interact/viewport'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
-import { relSig } from '../../src/kernel/diagram/sig'
+import { IOTA, relSig } from '../../src/kernel/diagram/sig'
+import { bareWireAssembly, bareWireDescription } from '../../src/kernel/rules/identity-rules'
 import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import type { ProofAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
@@ -13,6 +14,7 @@ import { mkEngine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import { vec, type Vec2 } from '../../src/view/vec'
 import { UNARY } from '../fixtures/zero-signature'
+import { segment } from './helpers/build'
 
 function keySample(key: string, shiftKey = false) {
   return {
@@ -116,13 +118,13 @@ describe('proof move vocabulary', () => {
     expect(applied[0]!.steps[0]).toMatchObject({ rule: 'doubleCutIntro' })
   })
 
-  it('Delete on a lone wire deletes its ends; endpoint-free wires vacuous-eliminate', () => {
+  it('Delete on a lone wire deletes its ends; bare segments vacuity-delete', () => {
     const builder = new DiagramBuilder()
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    builder.wire(builder.root, [{ node: atomA, port: { kind: 'head' } }], UNARY)
-    builder.wire(builder.root, [{ node: atomB, port: { kind: 'head' } }], UNARY)
-    const shared = builder.wire(builder.root, [
+    builder.wire([{ node: atomA, port: { kind: 'head' } }], UNARY)
+    builder.wire([{ node: atomB, port: { kind: 'head' } }], UNARY)
+    const shared = builder.wire([
       { node: atomA, port: { kind: 'arg', index: 0 } },
       { node: atomB, port: { kind: 'arg', index: 0 } },
     ])
@@ -136,16 +138,25 @@ describe('proof move vocabulary', () => {
       { rule: 'endsDelete', wire: shared },
     ])
 
+    // A bare segment's pins are its drawn ends, so they come into the
+    // selection with it — and that is the shape vacuity deletes.
     const bareBuilder = new DiagramBuilder()
-    const bare = bareBuilder.wire(bareBuilder.root, [])
+    const bare = segment(bareBuilder, bareBuilder.root)
     const bareDiagram = bareBuilder.build()
-    const bareCase = harness(bareDiagram, [{ kind: 'wire', id: bare }])
+    const bareCase = harness(bareDiagram, [
+      { kind: 'wire', id: bare.wire },
+      { kind: 'node', id: bare.ends[0] },
+      { kind: 'node', id: bare.ends[1] },
+    ])
 
     expect(bareCase.moves.keyDown(keySample('Delete'))).toBe(true)
+    expect(bareCase.refusals).toEqual([])
     expect(bareCase.applied).toHaveLength(1)
-    expect(bareCase.applied[0]!.steps).toEqual([
-      { rule: 'vacuousElim', wireId: bare },
-    ])
+    expect(bareCase.applied[0]!.steps).toEqual([{
+      rule: 'vacuity',
+      direction: 'delete',
+      assembly: bareWireDescription(bareDiagram, bare.wire),
+    }])
   })
 
   it('Q spawns a bare quantifier wire at the hovered region', () => {
@@ -165,9 +176,9 @@ describe('proof move vocabulary', () => {
 
     expect(applied).toHaveLength(1)
     expect(applied[0]!.steps).toEqual([{
-      rule: 'vacuousIntro',
-      scope: cut,
-      sig: { kind: 'iota' },
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('w', cut, IOTA, ['pin0', 'pin1']),
     }])
   })
 
@@ -188,17 +199,17 @@ describe('proof move vocabulary', () => {
 
     expect(applied).toHaveLength(1)
     expect(applied[0]!.steps).toEqual([{
-      rule: 'vacuousIntro',
-      scope: cut,
-      sig: relSig([]),
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('w', cut, relSig([]), ['pin0', 'pin1']),
     }])
   })
 
   it('the i key is retired', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
-    const left = builder.wire(negative, [])
-    const right = builder.wire(negative, [])
+    const left = segment(builder, negative)
+    const right = segment(builder, negative)
     void left
     void right
     const diagram = builder.build()

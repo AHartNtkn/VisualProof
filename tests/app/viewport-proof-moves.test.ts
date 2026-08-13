@@ -9,6 +9,7 @@ import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import { carryOver, mkEngine, type Engine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import { vec, type Vec2 } from '../../src/view/vec'
+import { segment, spread } from './helpers/build'
 
 class TestPointerEvent extends Event {
   readonly pointerId: number
@@ -201,8 +202,8 @@ describe('Viewport → ProofMoveController wire connection', () => {
   it('preserves ordinary iota wire-to-wire dragging through the production route', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
-    const left = builder.wire(negative, [], IOTA)
-    const right = builder.wire(negative, [], IOTA)
+    const left = segment(builder, negative, IOTA)
+    const right = segment(builder, negative, IOTA)
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
     engine.regions.set(negative, {
@@ -210,19 +211,15 @@ describe('Viewport → ProofMoveController wire connection', () => {
       radius: 160,
       support: [],
     })
-    engine.bodies.get(`j:${left}`)!.pos = vec(220, 200)
-    engine.bodies.get(`j:${right}`)!.pos = vec(380, 200)
+    const leftPoint = spread(engine, left, vec(220, 200))
+    const rightPoint = spread(engine, right, vec(380, 200))
     const harness = createHarness(diagram, engine)
 
-    drag(
-      harness,
-      engine.bodies.get(`j:${left}`)!.pos,
-      engine.bodies.get(`j:${right}`)!.pos,
-    )
+    drag(harness, leftPoint, rightPoint)
 
     expect(harness.actions[0]?.steps[0]).toEqual({
       rule: 'wireJoin',
-      input: { a: left, b: right },
+      input: { a: left.wire, b: right.wire },
     })
   })
 })

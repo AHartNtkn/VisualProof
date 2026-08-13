@@ -8,6 +8,7 @@ import { applyAction, introducedNodeIds, singleStepAction } from '../../src/kern
 import { registerTheorem, verifyTheory } from '../../src/kernel/proof/context'
 import { IOTA } from '../../src/kernel/diagram/sig'
 import { carryOver, mkEngine } from '../../src/view/engine'
+import { bareWire } from './helpers/build'
 import { UNARY, tinyTheory } from '../fixtures/zero-signature'
 
 function renamed(
@@ -35,7 +36,6 @@ function renamed(
       wire(id),
       {
         ...value,
-        scope: region(value.scope),
         endpoints: (id === reversedWire
           ? [...value.endpoints].reverse()
           : value.endpoints).map((endpoint) => {
@@ -113,17 +113,17 @@ describe('replay placement reconstruction', () => {
       builder.atom(negative, UNARY),
       builder.identity(negative, IOTA, 2),
     ]
-    const sharedWire = builder.wire(builder.root, [
+    const sharedWire = builder.wire([
       { node: existing[0]!, port: { kind: 'arg', index: 0 } },
       { node: existing[1]!, port: { kind: 'arg', index: 0 } },
       { node: existing[2]!, port: { kind: 'identity', index: 0 } },
     ])
     // A second outer wire keeps the identity semantic (the one-point rule
     // collapses an identity with at most one wire scoped above its region).
-    builder.wire(builder.root, [
+    builder.wire([
       { node: existing[2]!, port: { kind: 'identity', index: 1 } },
     ])
-    const boundaryWire = builder.wire(builder.root, [])
+    const boundaryWire = bareWire(builder, builder.root)
     const lhsDiagram = builder.build()
     const action = singleStepAction(
       'spawn placed witness',
@@ -174,14 +174,14 @@ describe('replay placement reconstruction', () => {
     previous.slotShift = 3
     previous.bodies.get(existing[0]!)!.pos = { x: 30, y: 14 }
     previous.bodies.get(existing[0]!)!.theta = 1.25
-    previous.bodies.get(`x:${sharedWire}`)!.pos = { x: 50, y: 34 }
-    previous.bodies.get(`x:${sharedWire}`)!.theta = 2.5
+    previous.bodies.get(existing[2]!)!.pos = { x: 50, y: 34 }
+    previous.bodies.get(existing[2]!)!.theta = 2.5
     previous.wires.get(sharedWire)!.net.junctions = [
       { x: 70, y: 54 },
       { x: 90, y: 74 },
     ]
     previous.wires.get(sharedWire)!.net.edges = [
-      [0, 4], [1, 4], [4, 5], [2, 5], [3, 5],
+      [0, 3], [1, 3], [3, 4], [2, 4],
     ]
 
     const exactRhs = mkEngine(
@@ -201,11 +201,11 @@ describe('replay placement reconstruction', () => {
     expect(exactRhs.bodies.get(displayedIntroduced)!.pos).toEqual({ x: 101, y: 203 })
     expect(exactRhs.bodies.get(displayedExisting)!.pos).toEqual({ x: 20, y: 4 })
     expect(exactRhs.bodies.get(displayedExisting)!.theta).toBe(1.25)
-    expect(exactRhs.bodies.get(`x:${displayedWire}`)!.pos).toEqual({ x: 30, y: 14 })
-    expect(exactRhs.bodies.get(`x:${displayedWire}`)!.theta).toBe(2.5)
+    expect(exactRhs.bodies.get(displayedIdentity)!.pos).toEqual({ x: 30, y: 14 })
+    expect(exactRhs.bodies.get(displayedIdentity)!.theta).toBe(2.5)
     expect(exactRhs.wires.get(displayedWire)!.net).toEqual({
       junctions: [{ x: 40, y: 24 }, { x: 50, y: 34 }],
-      edges: [[2, 4], [1, 4], [4, 5], [0, 5], [3, 5]],
+      edges: [[2, 3], [1, 3], [3, 4], [0, 4]],
     })
     expect(exactRhs.frame).toBe(frame)
     expect(exactRhs.scale).toBe(1)

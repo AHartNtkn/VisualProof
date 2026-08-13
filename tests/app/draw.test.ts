@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest'
 import { DrawGestureController } from '../../src/app/interact/draw'
 import type { PointerSample } from '../../src/app/interact/viewport'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
-import type { Endpoint, Diagram, RegionId, WireId } from '../../src/kernel/diagram/diagram'
+import type { Endpoint, Diagram, RegionId } from '../../src/kernel/diagram/diagram'
 import { IOTA, relSig } from '../../src/kernel/diagram/sig'
+import { bareWireAssembly } from '../../src/kernel/rules/identity-rules'
 import { applyAction } from '../../src/kernel/proof/action'
 import { EMPTY_PROOF_CONTEXT } from '../../src/kernel/proof/context'
 import type { ProofStep } from '../../src/kernel/proof/step'
@@ -17,6 +18,7 @@ import {
   placeRegion,
   pointerSample,
 } from './helpers/gesture'
+import { segment, spread, type Segment } from './helpers/build'
 
 const UNARY = relSig([IOTA])
 
@@ -98,7 +100,7 @@ function drop(controller: DrawGestureController, loose: Vec2, to: Vec2): void {
 
 
 describe('drawing gesture dispatch', () => {
-  it('spawn-ends: blank-site contacts commit vacuousIntro + endsSpawn', () => {
+  it('spawn-ends: blank-site contacts commit vacuity insertion + endsSpawn', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const diagram = builder.build()
@@ -117,9 +119,9 @@ describe('drawing gesture dispatch', () => {
     const steps = h.committed[0]!.steps
     expect(steps).toHaveLength(2)
     expect(steps[0]).toEqual({
-      rule: 'vacuousIntro',
-      scope: diagram.root,
-      sig: relSig([]),
+      rule: 'vacuity',
+      direction: 'insert',
+      assembly: bareWireAssembly('w', diagram.root, relSig([]), ['pin0', 'pin1']),
     })
     expect(steps[1]).toMatchObject({
       rule: 'endsSpawn',
@@ -128,16 +130,17 @@ describe('drawing gesture dispatch', () => {
     const spawned = Object.keys(h.diagram().wires)
       .filter((id) => diagram.wires[id] === undefined)
     expect(spawned).toHaveLength(1)
-    expect(h.diagram().wires[spawned[0]!]!.endpoints).toHaveLength(1)
+    // The stroke's own two pins at the sheet, plus the end spawned in the cut.
+    expect(h.diagram().wires[spawned[0]!]!.endpoints).toHaveLength(3)
   })
 
   it('sever: end contacts on one wire commit wireSever with the complement kept', () => {
     const builder = new DiagramBuilder()
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    builder.wire(builder.root, [{ node: atomA, port: { kind: 'head' } }], UNARY)
-    builder.wire(builder.root, [{ node: atomB, port: { kind: 'head' } }], UNARY)
-    const shared = builder.wire(builder.root, [
+    builder.wire([{ node: atomA, port: { kind: 'head' } }], UNARY)
+    builder.wire([{ node: atomB, port: { kind: 'head' } }], UNARY)
+    const shared = builder.wire([
       { node: atomA, port: { kind: 'arg', index: 0 } },
       { node: atomB, port: { kind: 'arg', index: 0 } },
     ])
@@ -167,9 +170,9 @@ describe('drawing gesture dispatch', () => {
     const builder = new DiagramBuilder()
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    const headA = builder.wire(builder.root, [{ node: atomA, port: { kind: 'head' } }], UNARY)
-    const headB = builder.wire(builder.root, [{ node: atomB, port: { kind: 'head' } }], UNARY)
-    builder.wire(builder.root, [
+    const headA = builder.wire([{ node: atomA, port: { kind: 'head' } }], UNARY)
+    const headB = builder.wire([{ node: atomB, port: { kind: 'head' } }], UNARY)
+    builder.wire([
       { node: atomA, port: { kind: 'arg', index: 0 } },
       { node: atomB, port: { kind: 'arg', index: 0 } },
     ])
@@ -200,8 +203,8 @@ describe('drawing gesture dispatch', () => {
     const nodeA = builder.identity(cut, IOTA, 2)
     const nodeB = builder.identity(cut, IOTA, 2)
     for (const node of [nodeA, nodeB]) {
-      builder.wire(builder.root, [{ node, port: { kind: 'identity', index: 0 } }])
-      builder.wire(builder.root, [{ node, port: { kind: 'identity', index: 1 } }])
+      builder.wire([{ node, port: { kind: 'identity', index: 0 } }])
+      builder.wire([{ node, port: { kind: 'identity', index: 1 } }])
     }
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
@@ -225,14 +228,14 @@ describe('drawing gesture dispatch', () => {
   it('identity insertion: strand contacts commit identityInsert in canonical order', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const wireA = builder.wire(builder.root, [])
-    const wireB = builder.wire(builder.root, [])
+    const wireA = segment(builder, builder.root)
+    const wireB = segment(builder, builder.root)
     const diagram = builder.build()
-    const commitWith = (first: WireId, second: WireId) => {
+    const commitWith = (first: Segment, second: Segment) => {
       const engine = mkEngine(diagram, [])
       const dropAt = placeRegion(engine, cut, { x: 300, y: 200 }, 120)
-      const pointFirst = place(engine, `j:${first}`, { x: 100, y: 500 })
-      const pointSecond = place(engine, `j:${second}`, { x: 500, y: 500 })
+      const pointFirst = spread(engine, first, { x: 100, y: 500 })
+      const pointSecond = spread(engine, second, { x: 500, y: 500 })
       const h = harness(diagram, engine)
       stroke(h.controller, farBlank(), pointFirst)
       clickContact(h.controller, pointSecond)
@@ -250,7 +253,7 @@ describe('drawing gesture dispatch', () => {
     expect(forward).toEqual({
       rule: 'identityInsert',
       region: cut,
-      wires: [wireA, wireB].sort(),
+      wires: [wireA.wire, wireB.wire].sort(),
     })
   })
 
@@ -272,12 +275,12 @@ describe('drawing gesture dispatch', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const node = builder.identity(cut, IOTA, 2)
-    builder.wire(builder.root, [{ node, port: { kind: 'identity', index: 0 } }])
-    builder.wire(builder.root, [{ node, port: { kind: 'identity', index: 1 } }])
-    const other = builder.wire(builder.root, [])
+    builder.wire([{ node, port: { kind: 'identity', index: 0 } }])
+    builder.wire([{ node, port: { kind: 'identity', index: 1 } }])
+    const other = segment(builder, builder.root)
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
-    const strandPoint = place(engine, `j:${other}`, { x: 500, y: 600 })
+    const strandPoint = spread(engine, other, { x: 500, y: 600 })
     const nodePoint = place(engine, node, { x: 100, y: 600 })
     const h = harness(diagram, engine)
 
@@ -296,9 +299,9 @@ describe('drawing gesture dispatch', () => {
     const cut = builder.cut(builder.root)
     const atomA = builder.atom(cut, UNARY)
     const atomB = builder.atom(cut, UNARY)
-    builder.wire(cut, [{ node: atomA, port: { kind: 'head' } }], UNARY)
-    builder.wire(cut, [{ node: atomB, port: { kind: 'head' } }], UNARY)
-    const shared = builder.wire(cut, [
+    builder.wire([{ node: atomA, port: { kind: 'head' } }], UNARY)
+    builder.wire([{ node: atomB, port: { kind: 'head' } }], UNARY)
+    const shared = builder.wire([
       { node: atomA, port: { kind: 'arg', index: 0 } },
       { node: atomB, port: { kind: 'arg', index: 0 } },
     ])
@@ -322,16 +325,17 @@ describe('drawing gesture dispatch', () => {
   it('a closed founding stroke around one end commits cutWrap', () => {
     const builder = new DiagramBuilder()
     const atom = builder.atom(builder.root, UNARY)
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], UNARY)
-    builder.wire(builder.root, [
+    const wirePin = builder.pin(wire, builder.root)
+    builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = builder.build()
     const engine = mkEngine(diagram, [])
     place(engine, atom, { x: 300, y: 300 })
-    place(engine, `j:${wire}`, { x: 300, y: 80 })
+    place(engine, wirePin, { x: 300, y: 80 })
     const h = harness(diagram, engine)
 
     const claim = h.controller.claim(sample({ x: 200, y: 200 }))!
@@ -353,9 +357,9 @@ describe('drawing gesture dispatch', () => {
     const builder = new DiagramBuilder()
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    builder.wire(builder.root, [{ node: atomA, port: { kind: 'head' } }], UNARY)
-    builder.wire(builder.root, [{ node: atomB, port: { kind: 'head' } }], UNARY)
-    builder.wire(builder.root, [
+    builder.wire([{ node: atomA, port: { kind: 'head' } }], UNARY)
+    builder.wire([{ node: atomB, port: { kind: 'head' } }], UNARY)
+    builder.wire([
       { node: atomA, port: { kind: 'arg', index: 0 } },
       { node: atomB, port: { kind: 'arg', index: 0 } },
     ])

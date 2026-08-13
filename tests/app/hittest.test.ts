@@ -41,48 +41,59 @@ describe('hit selection policy', () => {
 })
 
 describe('connection hit grammar', () => {
-  it('distinguishes concrete endpoints, loose ends, vias, and wire bodies', () => {
+  it('distinguishes concrete endpoints — pins included — from wire bodies', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const a = builder.ref(cut, 'A', UNARY)
     const b = builder.ref(cut, 'B', UNARY)
     const c = builder.ref(cut, 'C', UNARY)
-    const loose = builder.wire(cut, [{
+    const loose = builder.wire([{
       node: a,
       port: { kind: 'arg', index: 0 },
     }])
-    const via = builder.wire(builder.root, [
+    // Every wire end is a node now: the free tip of `loose` is this pin, and
+    // the pointer names it exactly as it names any other port terminal.
+    const loosePin = builder.pin(loose, cut)
+    const via = builder.wire([
       { node: b, port: { kind: 'arg', index: 0 } },
       { node: c, port: { kind: 'arg', index: 0 } },
     ])
     const engine = mkEngine(builder.build(), [])
     engine.bodies.get(a)!.pos = vec(-30, 0)
     engine.bodies.get(b)!.pos = vec(30, 0)
-    engine.bodies.get(c)!.pos = vec(45, 0)
-    engine.bodies.get(`j:${loose}`)!.pos = vec(-30, 40)
-    engine.bodies.get(`x:${via}`)!.pos = vec(30, 40)
+    engine.bodies.get(c)!.pos = vec(120, 0)
+    engine.bodies.get(loosePin)!.pos = vec(-30, 40)
     engine.regions.set(cut, { center: vec(0, 0), radius: 55, support: [] })
 
-    expect(wireManipulationHitTest(
-      engine,
-      engine.bodies.get(`j:${loose}`)!.pos,
-      viewport,
-    )).toMatchObject({ kind: 'looseEnd', wire: loose })
-    expect(wireManipulationHitTest(
-      engine,
-      engine.bodies.get(`x:${via}`)!.pos,
-      viewport,
-    )).toMatchObject({ kind: 'via', wire: via })
     const endpointLeg = computeLegs(engine).find(({ leg }) =>
       leg.wid === loose && (leg.from.body === a || leg.to.body === a))!
     const endpointPoint = endpointLeg.leg.from.body === a
       ? endpointLeg.pts[0]!
       : endpointLeg.pts.at(-1)!
     expect(wireManipulationHitTest(engine, endpointPoint, viewport))
-      .toMatchObject({ kind: 'endpoint', wire: loose })
+      .toMatchObject({
+        kind: 'endpoint',
+        wire: loose,
+        endpoint: { node: a, port: { kind: 'arg', index: 0 } },
+      })
+    const pinPoint = endpointLeg.leg.from.body === a
+      ? endpointLeg.pts.at(-1)!
+      : endpointLeg.pts[0]!
+    expect(wireManipulationHitTest(engine, pinPoint, viewport))
+      .toMatchObject({
+        kind: 'endpoint',
+        wire: loose,
+        endpoint: { node: loosePin, port: { kind: 'identity', index: 0 } },
+      })
     const middle = endpointLeg.pts[Math.floor(endpointLeg.pts.length / 2)]!
     expect(wireManipulationHitTest(engine, middle, viewport))
       .toMatchObject({ kind: 'wireBody', wire: loose })
+
+    const viaLeg = computeLegs(engine).find(({ leg }) => leg.wid === via)!
+    const viaMiddle = viaLeg.pts[Math.floor(viaLeg.pts.length / 2)]!
+    expect(wireManipulationHitTest(engine, viaMiddle, viewport))
+      .toMatchObject({ kind: 'wireBody', wire: via })
+
     const pending = {
       wire: loose,
       bodyPaths: [[vec(-10, -20), vec(10, -20)]],

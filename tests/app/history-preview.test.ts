@@ -11,7 +11,9 @@ describe('history preview focus', () => {
     const focus = deriveChangeFocus(before, after)
     expect(focus.kind).toBe('items')
     if (focus.kind === 'items') {
-      expect(focus.nodes).toHaveLength(1)
+      // The spawned ref, the pin holding its fresh argument wire, and that
+      // wire: every end of a new wire is a new node.
+      expect(focus.nodes).toHaveLength(2)
       expect(focus.wires).toHaveLength(1)
     }
   })

@@ -5,6 +5,7 @@ import { mkSelection } from '../../src/kernel/diagram/subgraph/selection'
 import { verifyTheory } from '../../src/kernel/proof/context'
 import { applicableActions } from '../../src/app/actions'
 import { identityInCut, tinyTheory, UNARY } from '../fixtures/zero-signature'
+import { segment } from './helpers/build'
 
 const kinds = (
   diagram: Parameters<typeof applicableActions>[0],
@@ -21,16 +22,17 @@ describe('applicableActions', () => {
   it('mirrors the orientation-aware identity-insertion polarity matrix', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const left = builder.wire(cut, [])
-    const right = builder.wire(cut, [])
-    const relation = builder.wire(cut, [], relSig([]))
+    const left = segment(builder, cut)
+    const right = segment(builder, cut)
+    const relation = segment(builder, cut, relSig([]))
     const diagram = builder.build()
 
+    // A selected wire brings its pins: they are its drawn ends.
     const pair = mkSelection(diagram, {
       region: cut,
       regions: [],
-      nodes: [],
-      wires: [left, right],
+      nodes: [...left.ends, ...right.ends],
+      wires: [left.wire, right.wire],
     })
     expect(kinds(diagram, pair)).toContain('identityInsert')
     expect(kinds(diagram, pair, true)).not.toContain('identityInsert')
@@ -38,28 +40,28 @@ describe('applicableActions', () => {
     const singleton = mkSelection(diagram, {
       region: cut,
       regions: [],
-      nodes: [],
-      wires: [left],
+      nodes: [...left.ends],
+      wires: [left.wire],
     })
     expect(kinds(diagram, singleton)).not.toContain('identityInsert')
 
     const mixed = mkSelection(diagram, {
       region: cut,
       regions: [],
-      nodes: [],
-      wires: [left, relation],
+      nodes: [...left.ends, ...relation.ends],
+      wires: [left.wire, relation.wire],
     })
     expect(kinds(diagram, mixed)).not.toContain('identityInsert')
 
     const positiveBuilder = new DiagramBuilder()
-    const positiveLeft = positiveBuilder.wire(positiveBuilder.root, [])
-    const positiveRight = positiveBuilder.wire(positiveBuilder.root, [])
+    const positiveLeft = segment(positiveBuilder, positiveBuilder.root)
+    const positiveRight = segment(positiveBuilder, positiveBuilder.root)
     const positive = positiveBuilder.build()
     const positivePair = mkSelection(positive, {
       region: positive.root,
       regions: [],
-      nodes: [],
-      wires: [positiveLeft, positiveRight],
+      nodes: [...positiveLeft.ends, ...positiveRight.ends],
+      wires: [positiveLeft.wire, positiveRight.wire],
     })
     expect(kinds(positive, positivePair)).not.toContain('identityInsert')
     expect(kinds(positive, positivePair, true)).toContain('identityInsert')
@@ -138,8 +140,8 @@ describe('applicableActions', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const first = builder.identity(cut, IOTA, 2)
-    builder.wire(builder.root, [{ node: first, port: { kind: 'identity', index: 0 } }])
-    builder.wire(builder.root, [{ node: first, port: { kind: 'identity', index: 1 } }])
+    builder.wire([{ node: first, port: { kind: 'identity', index: 0 } }])
+    builder.wire([{ node: first, port: { kind: 'identity', index: 1 } }])
     const diagram = builder.build()
     const selection = mkSelection(diagram, {
       region: diagram.root,
@@ -157,11 +159,11 @@ describe('applicableActions', () => {
     ])
   })
 
-  it('offers double-cut elimination and vacuous elimination only for their structural shapes', () => {
+  it('offers double-cut elimination and vacuity deletion only for their structural shapes', () => {
     const builder = new DiagramBuilder()
     const outer = builder.cut(builder.root)
     builder.cut(outer)
-    const bare = builder.wire(builder.root, [], IOTA)
+    const bare = segment(builder, builder.root, IOTA)
     const diagram = builder.build()
     expect(kinds(diagram, mkSelection(diagram, {
       region: diagram.root,
@@ -172,9 +174,9 @@ describe('applicableActions', () => {
     expect(kinds(diagram, mkSelection(diagram, {
       region: diagram.root,
       regions: [],
-      nodes: [],
-      wires: [bare],
-    }))).toContain('vacuousElim')
+      nodes: [...bare.ends],
+      wires: [bare.wire],
+    }))).toContain('vacuityDelete')
   })
 
   it('does not offer relation quantifier menus or input descriptors', () => {
@@ -182,8 +184,8 @@ describe('applicableActions', () => {
     const negative = builder.cut(builder.root)
     const positiveContent = builder.ref(builder.root, 'Positive', relSig([]))
     const negativeContent = builder.ref(negative, 'Negative', relSig([]))
-    const negativeRelation = builder.relWire(negative, relSig([]))
-    const positiveRelation = builder.relWire(builder.root, relSig([]))
+    const negativeRelation = segment(builder, negative, relSig([]))
+    const positiveRelation = segment(builder, builder.root, relSig([]))
     const diagram = builder.build()
 
     const positiveOccurrence = mkSelection(diagram, {
@@ -207,8 +209,8 @@ describe('applicableActions', () => {
     const negativeWire = mkSelection(diagram, {
       region: negative,
       regions: [],
-      nodes: [],
-      wires: [negativeRelation],
+      nodes: [...negativeRelation.ends],
+      wires: [negativeRelation.wire],
     })
     expect(kinds(diagram, negativeWire)).not.toContain('relationJoin')
     expect(kinds(diagram, negativeWire, true)).not.toContain('relationJoin')
@@ -216,8 +218,8 @@ describe('applicableActions', () => {
     const positiveWire = mkSelection(diagram, {
       region: diagram.root,
       regions: [],
-      nodes: [],
-      wires: [positiveRelation],
+      nodes: [...positiveRelation.ends],
+      wires: [positiveRelation.wire],
     })
     expect(kinds(diagram, positiveWire)).not.toContain('relationJoin')
     expect(kinds(diagram, positiveWire, true)).not.toContain('relationJoin')

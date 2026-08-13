@@ -10,6 +10,7 @@ import type { WireId } from '../../src/kernel/diagram/diagram'
 import { mkEngine } from '../../src/view/engine'
 import { LIGHT } from '../../src/view/paint'
 import { vec, type Vec2 } from '../../src/view/vec'
+import { segment, spread } from './helpers/build'
 
 function sample(point: Vec2, hit: Hit | null = null): PointerSample {
   return {
@@ -34,11 +35,11 @@ describe('wire-to-wire connection drag', () => {
   it('commits a source/target pair on a landed drag', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
-    const left = builder.wire(negative, [])
-    const right = builder.wire(negative, [])
+    const left = segment(builder, negative)
+    const right = segment(builder, negative)
     const engine = mkEngine(builder.build(), [])
-    const leftPoint = engine.bodies.get(`j:${left}`)!.pos
-    const rightPoint = engine.bodies.get(`j:${right}`)!.pos
+    const leftPoint = spread(engine, left, vec(100, 100))
+    const rightPoint = spread(engine, right, vec(500, 100))
     const gestures: ConnectionGesture[] = []
     const drag = new ConnectionDragController({
       active: () => true,
@@ -49,21 +50,21 @@ describe('wire-to-wire connection drag', () => {
       refuse: () => undefined,
     })
 
-    const claim = drag.claim(sample(leftPoint, wireHit(left)))!
-    claim.move(sample(rightPoint, wireHit(right)))
-    claim.release(sample(rightPoint, wireHit(right)), true)
+    const claim = drag.claim(sample(leftPoint, wireHit(left.wire)))!
+    claim.move(sample(rightPoint, wireHit(right.wire)))
+    claim.release(sample(rightPoint, wireHit(right.wire)), true)
 
     expect(gestures).toEqual([{
-      source: { wire: left, endpoint: null },
-      target: { wire: right, endpoint: null },
+      source: { wire: left.wire, endpoint: null },
+      target: { wire: right.wire, endpoint: null },
     }])
   })
 
   it('refuses a release in the open with the diagram unchanged', () => {
     const builder = new DiagramBuilder()
-    const wire = builder.wire(builder.root, [])
+    const wire = segment(builder, builder.root)
     const engine = mkEngine(builder.build(), [])
-    const start = engine.bodies.get(`j:${wire}`)!.pos
+    const start = spread(engine, wire, vec(100, 100))
     const gestures: ConnectionGesture[] = []
     const refusals: string[] = []
     const drag = new ConnectionDragController({
@@ -75,7 +76,7 @@ describe('wire-to-wire connection drag', () => {
       refuse: (text) => { refusals.push(text) },
     })
 
-    const claim = drag.claim(sample(start, wireHit(wire)))!
+    const claim = drag.claim(sample(start, wireHit(wire.wire)))!
     const away = vec(start.x + 300, start.y + 300)
     claim.move(sample(away))
     claim.release(sample(away), true)

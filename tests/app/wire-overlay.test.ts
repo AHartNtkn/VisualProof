@@ -29,13 +29,13 @@ function scene(): { e: Engine; term: string; rel: string } {
   const b = new DiagramBuilder()
   const r0 = b.ref(b.root, 'A', UNARY)
   const r1 = b.ref(b.root, 'B', UNARY)
-  const term = b.wire(b.root, [
+  const term = b.wire([
     { node: r0, port: { kind: 'arg', index: 0 } },
     { node: r1, port: { kind: 'arg', index: 0 } },
   ])
   const a0 = b.atom(b.root, UNARY)
   const a1 = b.atom(b.root, UNARY)
-  const rel = b.wire(b.root, [
+  const rel = b.wire([
     { node: a0, port: { kind: 'head' } },
     { node: a1, port: { kind: 'head' } },
   ], UNARY)

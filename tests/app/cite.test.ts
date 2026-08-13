@@ -12,14 +12,16 @@ const R = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
 function unaryPattern(defId: string) {
   const b = new DiagramBuilder()
   const node = b.ref(b.root, defId, R(1))
-  const boundary = b.wire(b.root, [{ node, port: { kind: 'arg', index: 0 } }])
-  return { side: mkDiagramWithBoundary(b.build(), [boundary]), node }
+  const boundary = b.wire([{ node, port: { kind: 'arg', index: 0 } }])
+  return { side: b.buildOpen([boundary]), node }
 }
 
 function unaryRelation() {
   const builder = new DiagramBuilder()
-  const boundary = builder.wire(builder.root, [])
-  return mkDiagramWithBoundary(builder.build(), [boundary])
+  // A bare boundary wire: one boundary incidence plus the pin that holds
+  // its quantifier inside the definition.
+  const boundary = builder.wire([])
+  return builder.buildOpen([boundary])
 }
 
 function fixture(): { host: ReturnType<DiagramBuilder['build']>; first: string; second: string; firstWire: string; ctx: ProofContext } {
@@ -36,9 +38,9 @@ function fixture(): { host: ReturnType<DiagramBuilder['build']>; first: string; 
   }
   const h = new DiagramBuilder()
   const first = h.ref(h.root, 'p', R(1))
-  const firstWire = h.wire(h.root, [{ node: first, port: { kind: 'arg', index: 0 } }])
+  const firstWire = h.wire([{ node: first, port: { kind: 'arg', index: 0 } }])
   const second = h.ref(h.root, 'p', R(1))
-  h.wire(h.root, [{ node: second, port: { kind: 'arg', index: 0 } }])
+  h.wire([{ node: second, port: { kind: 'arg', index: 0 } }])
   return {
     host: h.build(),
     first,
