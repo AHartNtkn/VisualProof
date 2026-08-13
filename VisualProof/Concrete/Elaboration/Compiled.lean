@@ -34,33 +34,38 @@ mutual
         CompiledZipper d (.mk items) site endpointCall endpoint
 
   inductive CompiledItemsZipper (d : Diagram) :
-      {context : WireContext d} -> {rels : RelCtx} ->
-      {binders : BinderContext d rels} ->
-      CompiledItems d context rels binders ->
+      {sourceCall : CompilerCall d} ->
+      CompiledItems d sourceCall.fullContext sourceCall.rels
+        sourceCall.binders ->
       (site : Fin d.regionCount) ->
       (endpointCall : CompilerCall d) ->
       CompiledRegion d endpointCall -> Type
-    | cut {context : WireContext d} {rels : RelCtx}
-        {binders : BinderContext d rels} {origin : Fin d.regionCount}
+    | cut {sourceCall : CompilerCall d} {origin : Fin d.regionCount}
         {body : CompiledRegion d
-          (.nested origin context rels binders)}
-        (before : CompiledItems d context rels binders)
-        (suffix : CompiledItems d context rels binders)
-        {items : CompiledItems d context rels binders}
+          (.nested origin sourceCall.fullContext sourceCall.rels
+            sourceCall.binders)}
+        (before : CompiledItems d sourceCall.fullContext sourceCall.rels
+          sourceCall.binders)
+        (suffix : CompiledItems d sourceCall.fullContext sourceCall.rels
+          sourceCall.binders)
+        {items : CompiledItems d sourceCall.fullContext sourceCall.rels
+          sourceCall.binders}
         {site : Fin d.regionCount} {endpointCall : CompilerCall d}
         {endpoint : CompiledRegion d endpointCall}
         (nested : CompiledZipper d body site endpointCall endpoint) :
         (rebuild : before.append (.cons (.cut body) suffix) = items) →
         CompiledItemsZipper d items site endpointCall endpoint
-    | bubble {context : WireContext d} {rels : RelCtx}
-        {binders : BinderContext d rels} {origin : Fin d.regionCount}
+    | bubble {sourceCall : CompilerCall d} {origin : Fin d.regionCount}
         {arity : Nat}
         {body : CompiledRegion d
-          (.nested origin context (arity :: rels)
-            (binders.push origin arity))}
-        (before : CompiledItems d context rels binders)
-        (suffix : CompiledItems d context rels binders)
-        {items : CompiledItems d context rels binders}
+          (.nested origin sourceCall.fullContext (arity :: sourceCall.rels)
+            (sourceCall.binders.push origin arity))}
+        (before : CompiledItems d sourceCall.fullContext sourceCall.rels
+          sourceCall.binders)
+        (suffix : CompiledItems d sourceCall.fullContext sourceCall.rels
+          sourceCall.binders)
+        {items : CompiledItems d sourceCall.fullContext sourceCall.rels
+          sourceCall.binders}
         {site : Fin d.regionCount} {endpointCall : CompilerCall d}
         {endpoint : CompiledRegion d endpointCall}
         (nested : CompiledZipper d body site endpointCall endpoint) :
@@ -77,6 +82,46 @@ structure CompiledFocus {d : Diagram} {sourceCall : CompilerCall d}
   zipper : CompiledZipper d source site endpointCall endpoint
 
 mutual
+  private def CompiledRegion.focusSize : CompiledRegion d call → Nat
+    | .mk items => items.focusSize + 1
+
+  private def CompiledItems.focusSize :
+      CompiledItems d context rels binders → Nat
+    | .nil => 0
+    | .cons (.node _ _) tail => tail.focusSize + 1
+    | .cons (.cut body) tail => body.focusSize + tail.focusSize + 1
+    | .cons (.bubble _ body) tail => body.focusSize + tail.focusSize + 1
+end
+
+@[simp] private theorem CompiledRegion.focusSize_mk
+    {call : CompilerCall d}
+    (items : CompiledItems d call.fullContext call.rels call.binders) :
+    (CompiledRegion.mk items).focusSize = items.focusSize + 1 := rfl
+
+@[simp] private theorem CompiledItems.focusSize_nil :
+    (CompiledItems.nil : CompiledItems d context rels binders).focusSize = 0 :=
+  rfl
+
+@[simp] private theorem CompiledItems.focusSize_node
+    (origin : Fin d.nodeCount) (item : Item context.length rels)
+    (tail : CompiledItems d context rels binders) :
+    (CompiledItems.cons (.node origin item) tail).focusSize =
+      tail.focusSize + 1 := rfl
+
+@[simp] private theorem CompiledItems.focusSize_cut
+    (body : CompiledRegion d (.nested origin context rels binders))
+    (tail : CompiledItems d context rels binders) :
+    (CompiledItems.cons (.cut body) tail).focusSize =
+      body.focusSize + tail.focusSize + 1 := rfl
+
+@[simp] private theorem CompiledItems.focusSize_bubble
+    (body : CompiledRegion d (.nested origin context (arity :: rels)
+      (binders.push origin arity)))
+    (tail : CompiledItems d context rels binders) :
+    (CompiledItems.cons (.bubble arity body) tail).focusSize =
+      body.focusSize + tail.focusSize + 1 := rfl
+
+mutual
   /-- Canonically search the sole compiled region tree for a site. -/
   def CompiledRegion.focus?
       {d : Diagram} {sourceCall : CompilerCall d}
@@ -91,23 +136,27 @@ mutual
     else
       match source with
       | .mk items =>
-          (items.focus? site).map fun ⟨endpointCall, endpoint, zipper⟩ =>
+          (items.focus? sourceCall site).map fun ⟨endpointCall, endpoint, zipper⟩ =>
             ⟨endpointCall, endpoint, .child zipper⟩
+  termination_by 2 * source.focusSize + 1
+  decreasing_by
+    simp_all only [CompiledRegion.focusSize_mk]
+    omega
 
   /-- Structural worker for the canonical compiled-region focus search. It is
   exposed only so source-derived transformations can invert the exact search
   decision while following the one returned zipper. -/
   def CompiledItems.focus?
-      {d : Diagram} {context : WireContext d} {rels : RelCtx}
-      {binders : BinderContext d rels}
-      (items : CompiledItems d context rels binders)
+      {d : Diagram} (sourceCall : CompilerCall d)
+      (items : CompiledItems d sourceCall.fullContext sourceCall.rels
+        sourceCall.binders)
       (site : Fin d.regionCount) :
       Option (Σ endpointCall, Σ endpoint : CompiledRegion d endpointCall,
         CompiledItemsZipper d items site endpointCall endpoint) :=
     match items with
     | .nil => none
     | .cons (.node origin item) tail =>
-        match tail.focus? site with
+        match tail.focus? sourceCall site with
         | none => none
         | some ⟨endpointCall, endpoint, .cut before suffix nested rebuild⟩ =>
             some ⟨endpointCall, endpoint,
@@ -124,7 +173,7 @@ mutual
             some ⟨focus.endpointCall, focus.endpoint,
               .cut .nil tail focus.zipper rfl⟩
         | none =>
-            match tail.focus? site with
+            match tail.focus? sourceCall site with
             | none => none
             | some ⟨endpointCall, endpoint,
                 .cut before suffix nested rebuild⟩ =>
@@ -142,7 +191,7 @@ mutual
             some ⟨focus.endpointCall, focus.endpoint,
               .bubble .nil tail focus.zipper rfl⟩
         | none =>
-            match tail.focus? site with
+            match tail.focus? sourceCall site with
             | none => none
             | some ⟨endpointCall, endpoint,
                 .cut before suffix nested rebuild⟩ =>
@@ -154,6 +203,10 @@ mutual
                 some ⟨endpointCall, endpoint,
                   .bubble (.cons (.bubble arity body) before) suffix nested
                     (congrArg (CompiledItems.cons (.bubble arity body)) rebuild)⟩
+  termination_by 2 * items.focusSize
+  decreasing_by
+    all_goals cases tail <;>
+      simp [CompiledItems.focusSize] <;> omega
 end
 
 @[simp] theorem CompiledRegion.focus?_origin
@@ -181,10 +234,13 @@ theorem CompiledRegion.focus?_singleton_bubble
           endpoint := focus.endpoint
           zipper := .child (.bubble .nil .nil focus.zipper rfl)
         } := by
-  rw [CompiledRegion.focus?]
+  rw [CompiledRegion.focus?.eq_def]
   simp only [different, ↓reduceDIte]
+  rw [CompiledItems.focus?.eq_def]
   cases hfocus : body.focus? site <;>
-    simp [CompiledItems.focus?, hfocus]
+    simp only [hfocus, Option.map_none, Option.map_some]
+  all_goals rw [CompiledItems.focus?.eq_def]
+  all_goals simp
 
 theorem CompiledRegion.focus?_same_outerContext
     {d : Diagram} {call : CompilerCall d}
@@ -227,28 +283,24 @@ mutual
       (focus : CompiledZipper d source site endpointCall endpoint) ->
         CompiledIntrinsic d source.erase endpointCall endpoint
     | .here _ => ⟨.hole, rfl⟩
-    | .child nested => by
-        simpa [CompiledRegion.erase, CompilerCall.finish,
-          CompilerCall.castFullItems] using
-            nested.intrinsic sourceCall.outerContext.length
-              sourceCall.localContext.length (by
-                simp [CompilerCall.fullContext])
+    | .child nested => nested.intrinsic
 
   def CompiledItemsZipper.intrinsic
-      {context : WireContext d} {rels : RelCtx}
-      {binders : BinderContext d rels}
-      {items : CompiledItems d context rels binders}
+      {sourceCall : CompilerCall d}
+      {items : CompiledItems d sourceCall.fullContext sourceCall.rels
+        sourceCall.binders}
       {site : Fin d.regionCount} {endpointCall : CompilerCall d}
       {endpoint : CompiledRegion d endpointCall}
-      (focus : CompiledItemsZipper d items site endpointCall endpoint)
-      (outerWires localWires : Nat)
-      (split : context.length = outerWires + localWires) :
+      (focus : CompiledItemsZipper d items site endpointCall endpoint) :
       CompiledIntrinsic d
-        (.mk localWires (items.erase.castWiresEq split))
+        (sourceCall.finish items.erase)
         endpointCall endpoint :=
     match focus with
     | .cut (body := body) before suffix nested rebuild => by
         subst items
+        let outerWires := sourceCall.outerContext.length
+        let localWires := sourceCall.localContext.length
+        let split := sourceCall.fullContext_length
         let selected := nested.intrinsic
         exact {
           context := .cut localWires (before.erase.castWiresEq split)
@@ -271,11 +323,16 @@ mutual
                     (before.erase.castWiresEq split).append
                       (.cons item (suffix.erase.castWiresEq split)))
                     (congrArg Item.cut nestedEq))
-              _ = _ := by simp [CompiledItems.erase, CompiledItem.erase,
-                CompiledItems.erase_append]
+              _ = _ := by simp [localWires, CompiledItems.erase,
+                CompiledItem.erase,
+                CompiledItems.erase_append, CompilerCall.finish,
+                CompilerCall.castFullItems]
         }
     | .bubble (arity := arity) (body := body) before suffix nested rebuild => by
         subst items
+        let outerWires := sourceCall.outerContext.length
+        let localWires := sourceCall.localContext.length
+        let split := sourceCall.fullContext_length
         let selected := nested.intrinsic
         exact {
           context := .bubble localWires (before.erase.castWiresEq split)
@@ -299,8 +356,10 @@ mutual
                     (before.erase.castWiresEq split).append
                       (.cons item (suffix.erase.castWiresEq split)))
                     (congrArg (Item.bubble arity) nestedEq))
-              _ = _ := by simp [CompiledItems.erase, CompiledItem.erase,
-                CompiledItems.erase_append]
+              _ = _ := by simp [localWires, CompiledItems.erase,
+                CompiledItem.erase,
+                CompiledItems.erase_append, CompilerCall.finish,
+                CompilerCall.castFullItems]
         }
 end
 
@@ -403,8 +462,7 @@ mutual
         have hitems := sourceCall.compile?_items_of_success hwf compiled
         have origins := compileItems?_origins hwf sourceCall.origin
           sourceCall.fullContext sourceCall.binders hitems
-        let validity := nested.endpoint_validity hwf sourceCall.origin wires
-          binders enumeration
+        let validity := nested.endpoint_validity hwf wires binders enumeration
           (fun occurrence member => by simpa only [origins] using member)
           (by simpa only [origins] using hitems)
         exact validity.toCompiledEndpointValidity
@@ -440,57 +498,66 @@ mutual
           restCompiled
 
   private def CompiledItemsZipper.endpoint_validity
-      {d : Diagram} {context : WireContext d} {rels : RelCtx}
-      {binders : BinderContext d rels}
-      {items : CompiledItems d context rels binders}
+      {d : Diagram} {sourceCall : CompilerCall d}
+      {items : CompiledItems d sourceCall.fullContext sourceCall.rels
+        sourceCall.binders}
       {site : Fin d.regionCount} {endpointCall : CompilerCall d}
       {endpoint : CompiledRegion d endpointCall}
       (hwf : d.WellFormed) :
       (focus : CompiledItemsZipper d items site endpointCall endpoint) →
-      (parent : Fin d.regionCount) →
-      context.Exact parent → binders.Covers parent →
-      BinderContext.Enumeration d binders parent →
+      sourceCall.fullContext.Exact sourceCall.origin →
+      sourceCall.binders.Covers sourceCall.origin →
+      BinderContext.Enumeration d sourceCall.binders sourceCall.origin →
       (localOccurrencesValid : ∀ occurrence, occurrence ∈ items.origins →
-        occurrence ∈ localOccurrences d parent) →
-      compileItems? d hwf parent context binders items.origins
+        occurrence ∈ localOccurrences d sourceCall.origin) →
+      compileItems? d hwf sourceCall.origin sourceCall.fullContext
+        sourceCall.binders items.origins
         localOccurrencesValid = some items →
-      CompiledItemsEndpointValidity d hwf parent items site endpointCall endpoint
+      CompiledItemsEndpointValidity d hwf sourceCall.origin items site
+        endpointCall endpoint
     | .cut (origin := origin) (body := body) before suffix nested rebuild,
-        parent, wires, bindersCover, enumeration, localOccurrencesValid,
+        wires, bindersCover, enumeration, localOccurrencesValid,
         compiled => by
         subst items
         let headDirect :
-            LocalOccurrence.child origin ∈ localOccurrences d parent :=
+            LocalOccurrence.child origin ∈
+              localOccurrences d sourceCall.origin :=
           localOccurrencesValid (.child origin)
             (by simp [CompiledItems.origins_append, CompiledItems.origins,
               CompiledItem.origin])
-        have hhead := compileItems?_selected hwf parent context binders before
-          (.cut body) suffix localOccurrencesValid compiled
-        have hhead' : compileOccurrence? d hwf parent context binders
+        have hhead := compileItems?_selected hwf sourceCall.origin
+          sourceCall.fullContext sourceCall.binders before (.cut body) suffix
+          localOccurrencesValid compiled
+        have hhead' : compileOccurrence? d hwf sourceCall.origin
+            sourceCall.fullContext sourceCall.binders
             (.child origin) headDirect = some (.cut body) := by
           simpa only [CompiledItem.origin] using hhead
-        have hparent := (mem_localOccurrences_child d parent origin).mp headDirect
-        have hregion : d.regions origin = .cut parent := by
+        have hparent := (mem_localOccurrences_child d sourceCall.origin
+          origin).mp headDirect
+        have hregion : d.regions origin = .cut sourceCall.origin := by
           cases regionEq : d.regions origin with
-          | sheet => rw [compileOccurrence?_child_sheet hwf parent origin
-              context binders headDirect regionEq] at hhead'; contradiction
+          | sheet => rw [compileOccurrence?_child_sheet hwf sourceCall.origin
+              origin sourceCall.fullContext sourceCall.binders headDirect
+              regionEq] at hhead'; contradiction
           | cut childParent =>
-              have : childParent = parent := by
+              have : childParent = sourceCall.origin := by
                 simpa [regionEq, CRegion.parent?] using hparent
               subst childParent; rfl
           | bubble childParent arity =>
-              have : childParent = parent := by
+              have : childParent = sourceCall.origin := by
                 simpa [regionEq, CRegion.parent?] using hparent
               subst childParent
-              rw [compileOccurrence?_child_bubble hwf parent origin context
-                binders arity headDirect regionEq] at hhead'
-              cases hbody : compileRegion? d hwf origin context
-                (binders.push origin arity) <;> simp [hbody] at hhead'
-        have hbody := compileOccurrence?_child_cut_body hwf parent origin
-          context binders headDirect hregion hhead'
+              rw [compileOccurrence?_child_bubble hwf sourceCall.origin origin
+                sourceCall.fullContext sourceCall.binders arity headDirect
+                regionEq] at hhead'
+              cases hbody : compileRegion? d hwf origin sourceCall.fullContext
+                (sourceCall.binders.push origin arity) <;>
+                  simp [hbody] at hhead'
+        have hbody := compileOccurrence?_child_cut_body hwf sourceCall.origin
+          origin sourceCall.fullContext sourceCall.binders headDirect hregion
+          hhead'
         let childValidity := nested.endpoint_validity hwf hbody
-          (by simpa [CompilerCall.fullContext, CompilerCall.localContext,
-              WireContext.extend] using wires.extend_child hwf hparent)
+          (wires.extend_child hwf hparent)
           (BinderContext.covers_cut_child bindersCover hregion)
           (enumeration.cutChild hwf hregion)
         exact {
@@ -499,7 +566,7 @@ mutual
               refine ⟨⟨1, by have := origin.isLt; omega⟩, ?_⟩
               change (match (d.regions origin).parent? with
                 | none => none | some directParent => d.climb 0 directParent) =
-                  some parent
+                  some sourceCall.origin
               rw [hparent]
               rfl) childValidity.encloses }
           selectedChild := origin
@@ -509,48 +576,56 @@ mutual
           selectedChild_encloses := childValidity.encloses }
     | .bubble (origin := origin) (arity := arity) (body := body) before suffix
         nested rebuild,
-        parent, wires, bindersCover, enumeration, localOccurrencesValid,
+        wires, bindersCover, enumeration, localOccurrencesValid,
         compiled => by
         subst items
         let headDirect :
-            LocalOccurrence.child origin ∈ localOccurrences d parent :=
+            LocalOccurrence.child origin ∈
+              localOccurrences d sourceCall.origin :=
           localOccurrencesValid (.child origin)
             (by simp [CompiledItems.origins_append, CompiledItems.origins,
               CompiledItem.origin])
-        have hhead := compileItems?_selected hwf parent context binders before
+        have hhead := compileItems?_selected hwf sourceCall.origin
+          sourceCall.fullContext sourceCall.binders before
           (.bubble arity body) suffix localOccurrencesValid compiled
-        have hhead' : compileOccurrence? d hwf parent context binders
+        have hhead' : compileOccurrence? d hwf sourceCall.origin
+            sourceCall.fullContext sourceCall.binders
             (.child origin) headDirect = some (.bubble arity body) := by
           simpa only [CompiledItem.origin] using hhead
-        have hparent := (mem_localOccurrences_child d parent origin).mp headDirect
-        have hregion : d.regions origin = .bubble parent arity := by
+        have hparent := (mem_localOccurrences_child d sourceCall.origin
+          origin).mp headDirect
+        have hregion : d.regions origin = .bubble sourceCall.origin arity := by
           cases regionEq : d.regions origin with
-          | sheet => rw [compileOccurrence?_child_sheet hwf parent origin
-              context binders headDirect regionEq] at hhead'; contradiction
+          | sheet => rw [compileOccurrence?_child_sheet hwf sourceCall.origin
+              origin sourceCall.fullContext sourceCall.binders headDirect
+              regionEq] at hhead'; contradiction
           | cut childParent =>
-              have : childParent = parent := by
+              have : childParent = sourceCall.origin := by
                 simpa [regionEq, CRegion.parent?] using hparent
               subst childParent
-              rw [compileOccurrence?_child_cut hwf parent origin context
-                binders headDirect regionEq] at hhead'
-              cases hbody : compileRegion? d hwf origin context binders <;>
-                simp [hbody] at hhead'
+              rw [compileOccurrence?_child_cut hwf sourceCall.origin origin
+                sourceCall.fullContext sourceCall.binders headDirect regionEq]
+                at hhead'
+              cases hbody : compileRegion? d hwf origin sourceCall.fullContext
+                  sourceCall.binders <;> simp [hbody] at hhead'
           | bubble childParent actualArity =>
-              have hp : childParent = parent := by
+              have hp : childParent = sourceCall.origin := by
                 simpa [regionEq, CRegion.parent?] using hparent
               have ha : actualArity = arity := by
                 subst childParent
-                rw [compileOccurrence?_child_bubble hwf parent origin context
-                  binders actualArity headDirect regionEq] at hhead'
-                cases hbody : compileRegion? d hwf origin context
-                  (binders.push origin actualArity) <;> simp [hbody] at hhead'
+                rw [compileOccurrence?_child_bubble hwf sourceCall.origin
+                  origin sourceCall.fullContext sourceCall.binders actualArity
+                  headDirect regionEq] at hhead'
+                cases hbody : compileRegion? d hwf origin sourceCall.fullContext
+                  (sourceCall.binders.push origin actualArity) <;>
+                    simp [hbody] at hhead'
                 exact hhead'.1
               subst childParent; subst actualArity; rfl
-        have hbody := compileOccurrence?_child_bubble_body hwf parent origin
-          context binders arity headDirect hregion hhead'
+        have hbody := compileOccurrence?_child_bubble_body hwf
+          sourceCall.origin origin sourceCall.fullContext sourceCall.binders
+          arity headDirect hregion hhead'
         let childValidity := nested.endpoint_validity hwf hbody
-          (by simpa [CompilerCall.fullContext, CompilerCall.localContext,
-              WireContext.extend] using wires.extend_child hwf hparent)
+          (wires.extend_child hwf hparent)
           (BinderContext.push_covers_bubble_child bindersCover hregion)
           (enumeration.bubbleChild hwf hregion)
         exact {
@@ -559,7 +634,7 @@ mutual
               refine ⟨⟨1, by have := origin.isLt; omega⟩, ?_⟩
               change (match (d.regions origin).parent? with
                 | none => none | some directParent => d.climb 0 directParent) =
-                  some parent
+                  some sourceCall.origin
               rw [hparent]
               rfl) childValidity.encloses }
           selectedChild := origin
@@ -589,65 +664,71 @@ theorem CompiledZipper.endpoint_encloses
 /-- The selected branch of an item zipper starts at one actual direct child
 that encloses its endpoint. -/
 theorem CompiledItemsZipper.selected_child
-    {d : Diagram} {context : WireContext d} {rels : RelCtx}
-    {binders : BinderContext d rels}
-    {items : CompiledItems d context rels binders}
+    {d : Diagram} {sourceCall : CompilerCall d}
+    {items : CompiledItems d sourceCall.fullContext sourceCall.rels
+      sourceCall.binders}
     {site : Fin d.regionCount} {endpointCall : CompilerCall d}
     {endpoint : CompiledRegion d endpointCall}
     (focus : CompiledItemsZipper d items site endpointCall endpoint)
-    (hwf : d.WellFormed) (parent : Fin d.regionCount)
-    (wires : context.Exact parent) (covers : binders.Covers parent)
-    (enumeration : BinderContext.Enumeration d binders parent)
+    (hwf : d.WellFormed)
+    (wires : sourceCall.fullContext.Exact sourceCall.origin)
+    (covers : sourceCall.binders.Covers sourceCall.origin)
+    (enumeration : BinderContext.Enumeration d sourceCall.binders
+      sourceCall.origin)
     (direct : ∀ occurrence, occurrence ∈ items.origins →
-      occurrence ∈ localOccurrences d parent)
-    (compiled : compileItems? d hwf parent context binders items.origins
-      direct = some items) :
+      occurrence ∈ localOccurrences d sourceCall.origin)
+    (compiled : compileItems? d hwf sourceCall.origin sourceCall.fullContext
+      sourceCall.binders items.origins direct = some items) :
     ∃ child, LocalOccurrence.child child ∈ items.origins ∧
-      (d.regions child).parent? = some parent ∧
+      (d.regions child).parent? = some sourceCall.origin ∧
       d.Encloses child site := by
-  let validity := focus.endpoint_validity hwf parent wires covers enumeration
-    direct compiled
+  let validity := focus.endpoint_validity hwf wires covers enumeration direct
+    compiled
   exact ⟨validity.selectedChild, validity.selectedChild_mem,
     validity.selectedChild_parent,
     validity.selectedChild_encloses⟩
 
 private theorem compileItems?_focus?_isSome_of_child
-    (hwf : d.WellFormed) (parent : Fin d.regionCount)
-    {context : WireContext d} {binders : BinderContext d rels}
+    (hwf : d.WellFormed) (call : CompilerCall d)
     {occurrences : List (LocalOccurrence d.regionCount d.nodeCount)}
     {direct : ∀ occurrence, occurrence ∈ occurrences →
-      occurrence ∈ localOccurrences d parent}
-    {items : CompiledItems d context rels binders}
-    (compiled : compileItems? d hwf parent context binders occurrences direct =
-      some items)
+      occurrence ∈ localOccurrences d call.origin}
+    {items : CompiledItems d call.fullContext call.rels call.binders}
+    (compiled : compileItems? d hwf call.origin call.fullContext call.binders
+      occurrences direct = some items)
     (child site : Fin d.regionCount)
     (member : LocalOccurrence.child child ∈ occurrences)
     (cutComplete : ∀
-      {body : CompiledRegion d (.nested child context rels binders)},
-      compileRegion? d hwf child context binders = some body →
+      {body : CompiledRegion d (.nested child call.fullContext call.rels
+        call.binders)},
+      compileRegion? d hwf child call.fullContext call.binders = some body →
       (body.focus? site).isSome = true)
     (bubbleComplete : ∀ {arity : Nat}
       {body : CompiledRegion d
-        (.nested child context (arity :: rels) (binders.push child arity))},
-      compileRegion? d hwf child context (binders.push child arity) =
+        (.nested child call.fullContext (arity :: call.rels)
+          (call.binders.push child arity))},
+      compileRegion? d hwf child call.fullContext
+        (call.binders.push child arity) =
         some body →
       (body.focus? site).isSome = true) :
-    (items.focus? site).isSome = true := by
+    (items.focus? call site).isSome = true := by
   induction occurrences generalizing items with
   | nil => simp at member
   | cons occurrence tail ih =>
       rw [compileItems?_cons] at compiled
-      let headDirect : occurrence ∈ localOccurrences d parent :=
+      let headDirect : occurrence ∈ localOccurrences d call.origin :=
         direct occurrence (by simp)
       let tailDirect : ∀ candidate, candidate ∈ tail →
-          candidate ∈ localOccurrences d parent := by
+          candidate ∈ localOccurrences d call.origin := by
         intro candidate candidateMember
         exact direct candidate (by simp [candidateMember])
-      cases hitem : compileOccurrence? d hwf parent context binders occurrence
+      cases hitem : compileOccurrence? d hwf call.origin call.fullContext
+          call.binders occurrence
           headDirect with
       | none => simp [hitem] at compiled
       | some item =>
-          cases htail : compileItems? d hwf parent context binders tail
+          cases htail : compileItems? d hwf call.origin call.fullContext
+              call.binders tail
               tailDirect with
           | none => simp [hitem, htail] at compiled
           | some suffix =>
@@ -656,19 +737,20 @@ private theorem compileItems?_focus?_isSome_of_child
               rcases List.mem_cons.mp member with head | tailMember
               · subst occurrence
                 have childParent :=
-                  (mem_localOccurrences_child d parent child).mp headDirect
+                  (mem_localOccurrences_child d call.origin child).mp headDirect
                 cases hregion : d.regions child with
                 | sheet =>
-                    rw [compileOccurrence?_child_sheet hwf parent child context
-                      binders headDirect hregion] at hitem
+                    rw [compileOccurrence?_child_sheet hwf call.origin child
+                      call.fullContext call.binders headDirect hregion] at hitem
                     contradiction
                 | cut actualParent =>
-                    have parentEq : actualParent = parent := by
+                    have parentEq : actualParent = call.origin := by
                       simpa [hregion, CRegion.parent?] using childParent
                     subst actualParent
-                    rw [compileOccurrence?_child_cut hwf parent child context
-                      binders headDirect hregion] at hitem
-                    cases hbody : compileRegion? d hwf child context binders with
+                    rw [compileOccurrence?_child_cut hwf call.origin child
+                      call.fullContext call.binders headDirect hregion] at hitem
+                    cases hbody : compileRegion? d hwf child call.fullContext
+                        call.binders with
                     | none => simp [hbody] at hitem
                     | some body =>
                         simp [hbody] at hitem
@@ -679,13 +761,14 @@ private theorem compileItems?_focus?_isSome_of_child
                         rw [hfocus]
                         rfl
                 | bubble actualParent arity =>
-                    have parentEq : actualParent = parent := by
+                    have parentEq : actualParent = call.origin := by
                       simpa [hregion, CRegion.parent?] using childParent
                     subst actualParent
-                    rw [compileOccurrence?_child_bubble hwf parent child context
-                      binders arity headDirect hregion] at hitem
-                    cases hbody : compileRegion? d hwf child context
-                        (binders.push child arity) with
+                    rw [compileOccurrence?_child_bubble hwf call.origin child
+                      call.fullContext call.binders arity headDirect hregion]
+                      at hitem
+                    cases hbody : compileRegion? d hwf child call.fullContext
+                        (call.binders.push child arity) with
                     | none => simp [hbody] at hitem
                     | some body =>
                         simp [hbody] at hitem
@@ -734,7 +817,7 @@ private theorem CompilerCall.compile?_focus?_isSome
           Option.bind_eq_some_iff.mp bodyCompiled
         cases hbody
         have found := compileItems?_focus?_isSome_of_child hwf
-          current.origin hitems child site
+          current hitems child site
           ((mem_localOccurrences_child d current.origin child).mpr childParent)
           (fun childCompiled =>
             childIH child childParent current.fullContext current.binders
