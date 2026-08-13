@@ -239,6 +239,29 @@ noncomputable def replaceSelectionRaw_decomposition
 
 namespace FrameDomains
 
+/-- Distinct direct children cannot both enclose the same selected site. -/
+theorem sibling_not_encloses
+    (host : Checked)
+    {parent selected sibling site : Fin host.val.regionCount}
+    (selectedParent : (host.val.regions selected).parent? = some parent)
+    (siblingParent : (host.val.regions sibling).parent? = some parent)
+    (different : sibling ≠ selected)
+    (selectedEncloses : host.val.Encloses selected site) :
+    ¬ host.val.Encloses sibling site := by
+  intro siblingEncloses
+  rcases host.val.enclosingRegions_comparable selectedEncloses
+      siblingEncloses with selectedSibling | siblingSelected
+  · rcases encloses_direct_child siblingParent selectedSibling with
+      same | selectedParentEncloses
+    · exact different same.symm
+    · exact checked_direct_child_not_encloses_parent host.property
+        selectedParent selectedParentEncloses
+  · rcases encloses_direct_child selectedParent siblingSelected with
+      same | siblingParentEncloses
+    · exact different same
+    · exact checked_direct_child_not_encloses_parent host.property
+        siblingParent siblingParentEncloses
+
 private theorem nodup_of_map_injective
     (map : α → β)
     (values : List α) (mappedNodup : (values.map map).Nodup) :
@@ -999,6 +1022,37 @@ theorem visibleWire_survives_above
     have regionEq := checked_encloses_antisymm host.property
       scopeEnclosesRegion above
     exact different regionEq.symm
+
+/-- Every inherited outer wire at the selected anchor survives.  A selected
+wire whose scope is the anchor belongs to the disjoint local block; a selected
+descendant scope cannot enclose its direct parent. -/
+theorem outerWire_survives_anchor
+    (host : Checked) (selection : CheckedSelection host.val)
+    (domains : FrameDomains host.val selection)
+    (outer : WireContext host.val)
+    (fullExact : (outer.extend selection.val.anchor).Exact
+      selection.val.anchor)
+    (wire : Fin host.val.wireCount) (member : wire ∈ outer) :
+    domains.wires.survives wire = true := by
+  apply (domains.wire_survives_iff wire).2
+  intro removed
+  have scopeEncloses : host.val.Encloses (host.val.wires wire).scope
+      selection.val.anchor :=
+    (fullExact.mem_iff wire).1 (List.mem_append_left _ member)
+  rcases (selection.mem_internalWires_expanded wire).1 removed with
+    selectedScope | explicit
+  · obtain ⟨root, rootMember, rootEnclosesScope⟩ := selectedScope
+    have rootParent := selection.property.childRoots_direct root rootMember
+    have rootEnclosesAnchor := checked_encloses_trans host.property
+      rootEnclosesScope scopeEncloses
+    exact checked_direct_child_not_encloses_parent host.property rootParent
+      rootEnclosesAnchor
+  · have scopeEq := selection.property.explicitWires_at_anchor wire explicit
+    have localMember : wire ∈ exactScopeWires host.val selection.val.anchor :=
+      (mem_exactScopeWires host.val selection.val.anchor wire).2 scopeEq
+    have nodup := fullExact.nodup
+    rw [WireContext.extend, List.nodup_append] at nodup
+    exact nodup.2.2 wire member wire localMember rfl
 
 /-- Every wire visible from a surviving region incomparable with the selected
 anchor survives removal. -/
