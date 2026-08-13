@@ -812,11 +812,33 @@ private theorem encloses_cast
   cases equality
   exact encloses
 
-private def sourceSite {source : State arity} (input : Splice.Input)
+def castRegionIndex {source target : Checked}
+    (equality : source = target) (region : Fin source.val.regionCount) :
+    Fin target.val.regionCount :=
+  Eq.rec (motive := fun checked _ => Fin checked.val.regionCount)
+    region equality
+
+@[simp] theorem castRegionIndex_eq_finCast
+    {source target : Checked} (equality : source = target)
+    (region : Fin source.val.regionCount) :
+    castRegionIndex equality region =
+      Fin.cast (congrArg (fun checked : Checked => checked.val.regionCount)
+        equality) region := by
+  cases equality
+  rfl
+
+@[simp] theorem castRegionIndex_self
+    {source : Checked} (equality : source = source)
+    (region : Fin source.val.regionCount) :
+    castRegionIndex equality region = region := by
+  have equalityRefl : equality = rfl := Subsingleton.elim _ _
+  rw [equalityRefl]
+  rfl
+
+def spliceSite {source : State arity} (input : Splice.Input)
     (frameEq : input.frame = source.diagram) :
     Fin source.checked.val.diagram.regionCount :=
-  Fin.cast (congrArg (fun frame : Checked => frame.val.regionCount) frameEq)
-    input.site
+  castRegionIndex frameEq input.site
 
 private def sourceWire {source : State arity} (input : Splice.Input)
     (frameEq : input.frame = source.diagram)
@@ -839,16 +861,16 @@ private theorem spliceAttachment_mem
     (external : Fin input.pattern.val.exposedWires.length) :
     sourceWire input frameEq
         (input.attachment (layout.exposedPosition external)) ∈
-      (endpointCall source (sourceSite input frameEq)).fullContext := by
+      (endpointCall source (spliceSite input frameEq)).fullContext := by
   apply ((endpoint_fullContext_exact source
-    (sourceSite input frameEq)).mem_iff _).mpr
+    (spliceSite input frameEq)).mem_iff _).mpr
   let diagramEq : input.frame.val = source.checked.val.diagram :=
     congrArg (fun frame : Checked => frame.val) frameEq
   have visible := admissible.attachments_visible
     (layout.exposedPosition external)
   have castVisible := encloses_cast diagramEq visible
   rw [← castWire_scope diagramEq] at castVisible
-  simpa [sourceSite, sourceWire, diagramEq] using castVisible
+  simpa [spliceSite, sourceWire, diagramEq] using castVisible
 
 noncomputable def spliceAttachmentPosition
     {source : State arity} (input : Splice.Input)
@@ -856,8 +878,8 @@ noncomputable def spliceAttachmentPosition
     (admissible : input.Admissible)
     (layout : input.PlugLayout)
     (external : Fin input.pattern.val.exposedWires.length) :
-    Fin (endpointCall source (sourceSite input frameEq)).fullContext.length :=
-  ((endpointCall source (sourceSite input frameEq)).fullContext.lookup?
+    Fin (endpointCall source (spliceSite input frameEq)).fullContext.length :=
+  ((endpointCall source (spliceSite input frameEq)).fullContext.lookup?
     (sourceWire input frameEq
       (input.attachment (layout.exposedPosition external)))).get
         (Option.isSome_iff_exists.mpr
@@ -870,7 +892,7 @@ theorem spliceAttachmentPosition_get
     (admissible : input.Admissible)
     (layout : input.PlugLayout)
     (external : Fin input.pattern.val.exposedWires.length) :
-    (endpointCall source (sourceSite input frameEq)).fullContext.get
+    (endpointCall source (spliceSite input frameEq)).fullContext.get
         (spliceAttachmentPosition input frameEq admissible layout external) =
       sourceWire input frameEq
         (input.attachment (layout.exposedPosition external)) := by
@@ -886,7 +908,7 @@ noncomputable def spliceWireMap
     (layout : input.PlugLayout) :
     Fin (endpointCall (State.ofOpen input.pattern)
         input.binderSpine.bodyContainer).outerContext.length →
-      Fin (endpointCall source (sourceSite input frameEq)).fullContext.length :=
+      Fin (endpointCall source (spliceSite input frameEq)).fullContext.length :=
   fun wire => spliceAttachmentPosition input frameEq admissible layout
     (Fin.cast (congrArg List.length
       (patternTerminal_outerContext input admissible.terminal_body)) wire)
@@ -898,7 +920,7 @@ theorem spliceWireMap_get
     (layout : input.PlugLayout)
     (wire : Fin (endpointCall (State.ofOpen input.pattern)
       input.binderSpine.bodyContainer).outerContext.length) :
-    (endpointCall source (sourceSite input frameEq)).fullContext.get
+    (endpointCall source (spliceSite input frameEq)).fullContext.get
         (spliceWireMap input frameEq admissible layout wire) =
       sourceWire input frameEq (input.attachment
         (layout.exposedPosition (Fin.cast (congrArg List.length
@@ -924,8 +946,8 @@ private theorem spliceRelation_exists
       (endpointCall (State.ofOpen input.pattern)
         input.binderSpine.bodyContainer).rels relationArity) :
     ∃ targetRelation : RelVar
-        (endpointCall source (sourceSite input frameEq)).rels relationArity,
-      (endpointCall source (sourceSite input frameEq)).binders
+        (endpointCall source (spliceSite input frameEq)).rels relationArity,
+      (endpointCall source (spliceSite input frameEq)).binders
           (sourceRegion input frameEq (input.binderTarget
             (terminalRelationProxyEquiv input relation.index))) =
         some ⟨relationArity, targetRelation⟩ := by
@@ -940,11 +962,16 @@ private theorem spliceRelation_exists
   have castedBubble := castBubble diagramEq bubble
   have castedEncloses := encloses_cast diagramEq
     (admissible.binder_targets_enclose proxy)
-  simpa [sourceRegion, sourceSite, diagramEq] using
-    (endpoint_binders_covers source (sourceSite input frameEq)
+  have castedEncloses' : source.checked.val.diagram.Encloses
+      (sourceRegion input frameEq (input.binderTarget proxy))
+      (spliceSite input frameEq) := by
+    simpa [sourceRegion, spliceSite, castRegionIndex_eq_finCast, diagramEq] using
+      castedEncloses
+  simpa [sourceRegion, spliceSite, castRegionIndex_eq_finCast, diagramEq] using
+    (endpoint_binders_covers source (spliceSite input frameEq)
       (sourceRegion input frameEq (input.binderTarget proxy))
       (Fin.cast (congrArg Diagram.regionCount diagramEq) parent)
-      relationArity castedBubble castedEncloses)
+      relationArity castedBubble castedEncloses')
 
 noncomputable def spliceRelationMap
     {source : State arity} (input : Splice.Input)
@@ -953,7 +980,7 @@ noncomputable def spliceRelationMap
     RelationRenaming
       (endpointCall (State.ofOpen input.pattern)
         input.binderSpine.bodyContainer).rels
-      (endpointCall source (sourceSite input frameEq)).rels :=
+      (endpointCall source (spliceSite input frameEq)).rels :=
   fun relation => Classical.choose
     (spliceRelation_exists input frameEq admissible relation)
 
@@ -964,7 +991,7 @@ theorem spliceRelationMap_lookup
     (relation : RelVar
       (endpointCall (State.ofOpen input.pattern)
         input.binderSpine.bodyContainer).rels relationArity) :
-    (endpointCall source (sourceSite input frameEq)).binders
+    (endpointCall source (spliceSite input frameEq)).binders
         (sourceRegion input frameEq (input.binderTarget
           (terminalRelationProxyEquiv input relation.index))) =
       some ⟨relationArity,
@@ -976,15 +1003,15 @@ noncomputable def spliceAfter
     (frameEq : input.frame = source.diagram)
     (admissible : input.Admissible)
     (layout : input.PlugLayout) :
-    Region (endpointCall source (sourceSite input frameEq)).outerContext.length
-      (endpointCall source (sourceSite input frameEq)).rels :=
+    Region (endpointCall source (spliceSite input frameEq)).outerContext.length
+      (endpointCall source (spliceSite input frameEq)).rels :=
   Region.spliceAt
-    (endpointCall source (sourceSite input frameEq)).localContext.length
-    ((endpointCall source (sourceSite input frameEq)).castFullItems
-      (directItems source (sourceSite input frameEq)).erase)
+    (endpointCall source (spliceSite input frameEq)).localContext.length
+    ((endpointCall source (spliceSite input frameEq)).castFullItems
+      (directItems source (spliceSite input frameEq)).erase)
     (body (State.ofOpen input.pattern) input.binderSpine.bodyContainer)
     (fun wire => Fin.cast
-      (endpointCall source (sourceSite input frameEq)).fullContext_length
+      (endpointCall source (spliceSite input frameEq)).fullContext_length
         (spliceWireMap input frameEq admissible layout wire))
     (spliceRelationMap input frameEq admissible)
 

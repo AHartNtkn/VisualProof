@@ -84,13 +84,13 @@ namespace VisualProof.Diagram
 open VisualProof.Rule
 
 theorem ContextReplacement.lift
-    (replacement : ContextReplacement source target)
+    (replacement : ContextReplacement source target holeWires holeRels)
     (localEvidence :
       atPolarity replacement.context.polarity
-        (@localRule replacement.holeWires replacement.holeRels)
+        (@localRule holeWires holeRels)
         replacement.before replacement.after) :
     Contextual localRule source target := by
-  exact ⟨replacement.holeWires, replacement.holeRels,
+  exact ⟨holeWires, holeRels,
     replacement.before, replacement.after, replacement.occurrence,
     replacement.target_iso, localEvidence⟩
 

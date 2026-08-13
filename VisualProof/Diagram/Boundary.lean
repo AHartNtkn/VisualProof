@@ -21,8 +21,15 @@ def withBody (diagram : OpenDiagram arity)
 /-- Transport only the dependent arity index of an open diagram. -/
 def castArity (diagram : OpenDiagram sourceArity)
     (equality : sourceArity = targetArity) :
-    OpenDiagram targetArity :=
-  equality ▸ diagram
+    OpenDiagram targetArity where
+  externalClasses := diagram.externalClasses
+  boundary := fun position =>
+    diagram.boundary (Fin.cast equality.symm position)
+  boundary_surjective := by
+    intro external
+    obtain ⟨position, found⟩ := diagram.boundary_surjective external
+    exact ⟨Fin.cast equality position, by simpa using found⟩
+  body := diagram.body
 
 @[simp] theorem castArity_externalClasses
     (diagram : OpenDiagram sourceArity)

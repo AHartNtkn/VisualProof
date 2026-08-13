@@ -5,7 +5,6 @@ namespace VisualProof.Diagram
 open VisualProof
 open Theory
 
-
 namespace Region
 
 /-- Embed the first conjunct's inherited and local wires into the block sum. -/
@@ -127,6 +126,17 @@ def ItemSeq.castWiresEq (equality : source = target)
 def Region.castWiresEq (equality : source = target)
     (region : Region  source rels) : Region  target rels :=
   Eq.mp (congrArg (fun wires => Region  wires rels) equality) region
+
+/-- Filling commutes with transport of a context's outer wire index. -/
+theorem DiagramContext.castOuterWires_fill
+    {source target holeWires : Nat} {outerRels holeRels : RelCtx}
+    (equality : source = target)
+    (context : DiagramContext source holeWires outerRels holeRels)
+    (body : Region holeWires holeRels) :
+    (equality ▸ context).fill body =
+      (context.fill body).castWiresEq equality := by
+  cases equality
+  rfl
 
 @[simp] theorem ItemSeq.castWiresEq_trans
     (first : source = middle) (second : middle = target)
@@ -439,6 +449,18 @@ theorem Region.castWiresEq_castRels
       relsEquality ▸ (region.castWiresEq wireEquality) := by
   subst targetWires
   subst targetRels
+  rfl
+
+theorem Item.castWiresEq_proof_irrel
+    (first second : source = target) (item : Item source rels) :
+    item.castWiresEq first = item.castWiresEq second := by
+  cases first
+  rfl
+
+theorem ItemSeq.castWiresEq_proof_irrel
+    (first second : source = target) (items : ItemSeq source rels) :
+    items.castWiresEq first = items.castWiresEq second := by
+  cases first
   rfl
 
 @[simp] theorem Item.castWiresEq_cut
@@ -2176,19 +2198,20 @@ def DiagramContextIso.cutCompilerFrame
     (targetBefore targetAfter : ItemSeq targetFull outerRels)
     (sourceChild : DiagramContext sourceFull sourceHole outerRels holeRels)
     (targetChild : DiagramContext targetFull targetHole outerRels holeRels)
+    (fullWire : FiniteEquiv (Fin sourceFull) (Fin targetFull))
+    (fullWireAgreement : ∀ index,
+      (fullWire index).val =
+        (extendWireEquiv outerWire localWire
+          (Fin.cast sourceSplit index)).val)
     (child : DiagramContextIso
-      (extendWireEquiv outerWire localWire)
-      holeWire outerRels holeRels (sourceSplit ▸ sourceChild)
-        (targetSplit ▸ targetChild))
-    (frame : ∀ {sourceBody : Region (sourceOuter + sourceLocal) outerRels}
-        {targetBody : Region (targetOuter + targetLocal) outerRels},
-      ItemIso (extendWireEquiv outerWire localWire) outerRels
+      fullWire holeWire outerRels holeRels sourceChild targetChild)
+    (frame : ∀ {sourceBody : Region sourceFull outerRels}
+        {targetBody : Region targetFull outerRels},
+      ItemIso fullWire outerRels
           (.cut sourceBody) (.cut targetBody) →
-        ItemSeqIso (extendWireEquiv outerWire localWire) outerRels
-          ((sourceBefore.castWiresEq sourceSplit).append
-            (.cons (.cut sourceBody) (sourceAfter.castWiresEq sourceSplit)))
-          ((targetBefore.castWiresEq targetSplit).append
-            (.cons (.cut targetBody) (targetAfter.castWiresEq targetSplit)))) :
+        ItemSeqIso fullWire outerRels
+          (sourceBefore.append (.cons (.cut sourceBody) sourceAfter))
+          (targetBefore.append (.cons (.cut targetBody) targetAfter))) :
     DiagramContextIso outerWire holeWire outerRels holeRels
       (.cut sourceLocal (sourceBefore.castWiresEq sourceSplit)
         (sourceAfter.castWiresEq sourceSplit)
@@ -2198,6 +2221,12 @@ def DiagramContextIso.cutCompilerFrame
         (targetSplit ▸ targetChild)) := by
   subst sourceFull
   subst targetFull
+  have fullWireEq : fullWire = extendWireEquiv outerWire localWire := by
+    apply FiniteEquiv.ext
+    intro index
+    apply Fin.ext
+    exact fullWireAgreement index
+  subst fullWire
   exact .cut localWire sourceBefore sourceAfter targetBefore targetAfter
     sourceChild targetChild child frame
 
@@ -2215,22 +2244,21 @@ def DiagramContextIso.bubbleCompilerFrame
       (arity :: outerRels) holeRels)
     (targetChild : DiagramContext targetFull targetHole
       (arity :: outerRels) holeRels)
+    (fullWire : FiniteEquiv (Fin sourceFull) (Fin targetFull))
+    (fullWireAgreement : ∀ index,
+      (fullWire index).val =
+        (extendWireEquiv outerWire localWire
+          (Fin.cast sourceSplit index)).val)
     (child : DiagramContextIso
-      (extendWireEquiv outerWire localWire)
-      holeWire (arity :: outerRels) holeRels (sourceSplit ▸ sourceChild)
-        (targetSplit ▸ targetChild))
+      fullWire holeWire (arity :: outerRels) holeRels sourceChild targetChild)
     (frame : ∀
-        {sourceBody : Region (sourceOuter + sourceLocal) (arity :: outerRels)}
-        {targetBody : Region (targetOuter + targetLocal) (arity :: outerRels)},
-      ItemIso (extendWireEquiv outerWire localWire) outerRels
+        {sourceBody : Region sourceFull (arity :: outerRels)}
+        {targetBody : Region targetFull (arity :: outerRels)},
+      ItemIso fullWire outerRels
           (.bubble arity sourceBody) (.bubble arity targetBody) →
-        ItemSeqIso (extendWireEquiv outerWire localWire) outerRels
-          ((sourceBefore.castWiresEq sourceSplit).append
-            (.cons (.bubble arity sourceBody)
-              (sourceAfter.castWiresEq sourceSplit)))
-          ((targetBefore.castWiresEq targetSplit).append
-            (.cons (.bubble arity targetBody)
-              (targetAfter.castWiresEq targetSplit)))) :
+        ItemSeqIso fullWire outerRels
+          (sourceBefore.append (.cons (.bubble arity sourceBody) sourceAfter))
+          (targetBefore.append (.cons (.bubble arity targetBody) targetAfter))) :
     DiagramContextIso outerWire holeWire outerRels holeRels
       (.bubble sourceLocal (sourceBefore.castWiresEq sourceSplit)
         (sourceAfter.castWiresEq sourceSplit) arity
@@ -2240,6 +2268,12 @@ def DiagramContextIso.bubbleCompilerFrame
         (targetSplit ▸ targetChild)) := by
   subst sourceFull
   subst targetFull
+  have fullWireEq : fullWire = extendWireEquiv outerWire localWire := by
+    apply FiniteEquiv.ext
+    intro index
+    apply Fin.ext
+    exact fullWireAgreement index
+  subst fullWire
   exact .bubble localWire sourceBefore sourceAfter targetBefore targetAfter
     sourceChild targetChild child frame
 

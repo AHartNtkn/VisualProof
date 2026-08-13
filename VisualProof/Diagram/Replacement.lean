@@ -10,9 +10,8 @@ source endpoint identifies the context and its focused `before` region; the
 target endpoint identifies the generated result as the same context filled by
 `after`. -/
 structure ContextReplacement
-    (source target : OpenDiagram arity) where
-  holeWires : Nat
-  holeRels : RelCtx
+    (source target : OpenDiagram arity)
+    (holeWires : Nat) (holeRels : RelCtx) where
   interface : OpenDiagram arity
   context : DiagramContext interface.externalClasses holeWires [] holeRels
   before : Region holeWires holeRels
@@ -24,16 +23,16 @@ structure ContextReplacement
 
 noncomputable def ContextReplacement.castArity
     {source target : OpenDiagram sourceArity}
-    (replacement : ContextReplacement source target)
+    (replacement : ContextReplacement source target holeWires holeRels)
     (arityEq : sourceArity = targetArity) :
     ContextReplacement (source.castArity arityEq)
-      (target.castArity arityEq) := by
+      (target.castArity arityEq) holeWires holeRels := by
   subst targetArity
   exact replacement
 
 @[simp] theorem ContextReplacement.castArity_context_heq
     {source target : OpenDiagram sourceArity}
-    (replacement : ContextReplacement source target)
+    (replacement : ContextReplacement source target holeWires holeRels)
     (arityEq : sourceArity = targetArity) :
     HEq (replacement.castArity arityEq).context replacement.context := by
   subst targetArity
@@ -41,7 +40,7 @@ noncomputable def ContextReplacement.castArity
 
 @[simp] theorem ContextReplacement.castArity_before_heq
     {source target : OpenDiagram sourceArity}
-    (replacement : ContextReplacement source target)
+    (replacement : ContextReplacement source target holeWires holeRels)
     (arityEq : sourceArity = targetArity) :
     HEq (replacement.castArity arityEq).before replacement.before := by
   subst targetArity
@@ -49,14 +48,14 @@ noncomputable def ContextReplacement.castArity
 
 @[simp] theorem ContextReplacement.castArity_after_heq
     {source target : OpenDiagram sourceArity}
-    (replacement : ContextReplacement source target)
+    (replacement : ContextReplacement source target holeWires holeRels)
     (arityEq : sourceArity = targetArity) :
     HEq (replacement.castArity arityEq).after replacement.after := by
   subst targetArity
   rfl
 
 def ContextReplacement.occurrence
-    (replacement : ContextReplacement source target) :
+    (replacement : ContextReplacement source target holeWires holeRels) :
     Occurrence replacement.before source where
   interface := replacement.interface
   context := replacement.context
@@ -64,11 +63,9 @@ def ContextReplacement.occurrence
 
 noncomputable def ContextReplacement.iso
     (sourceIso : OpenDiagramIso source' source)
-    (replacement : ContextReplacement source target)
+    (replacement : ContextReplacement source target holeWires holeRels)
     (targetIso : OpenDiagramIso target target') :
-    ContextReplacement source' target' where
-  holeWires := replacement.holeWires
-  holeRels := replacement.holeRels
+    ContextReplacement source' target' holeWires holeRels where
   interface := replacement.interface
   context := replacement.context
   before := replacement.before
@@ -79,10 +76,8 @@ noncomputable def ContextReplacement.iso
 /-- Reverse a neutral contextual replacement without changing its context or
 either local region. -/
 noncomputable def ContextReplacement.symm
-    (replacement : ContextReplacement source target) :
-    ContextReplacement target source where
-  holeWires := replacement.holeWires
-  holeRels := replacement.holeRels
+    (replacement : ContextReplacement source target holeWires holeRels) :
+    ContextReplacement target source holeWires holeRels where
   interface := replacement.interface
   context := replacement.context
   before := replacement.after
