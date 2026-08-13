@@ -1643,7 +1643,7 @@ private theorem mapNodeCompilation
 /-- Actual-context form of retained node compilation.  The sole context
 presentation equality is eliminated at this boundary, before any compiled
 result escapes. -/
-private theorem mapNodeCompilationAt
+theorem mapNodeCompilationAt
     (host : Checked) (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     (sourceContext : WireContext host.val)
@@ -1693,7 +1693,7 @@ private theorem mapNodeCompilationAt
 
 /-- Semantic result for one unchanged nested subtree in the actual compact
 parent context supplied by its caller. -/
-private abbrev AwayRegionResult
+abbrev AwayRegionResult
     (host : Checked) (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     (sourceOrigin : Fin host.val.regionCount)
@@ -1729,7 +1729,7 @@ private abbrev AwayRegionResult
 /-- Compile an unchanged source subtree in the compact frame.  The target
 outer context is supplied by the enclosing fold and normalized only inside
 this theorem. -/
-private theorem compileRegionAway
+theorem compileRegionAway
     (host : Checked) (selection : CheckedSelection host.val)
     (domains : FrameDomains host.val selection)
     (sourceOrigin : Fin host.val.regionCount)
