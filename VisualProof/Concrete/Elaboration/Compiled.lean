@@ -730,6 +730,28 @@ theorem CompiledZipper.endpoint_encloses
     d.Encloses sourceCall.origin site :=
   (focus.endpoint_validity hwf compiled wires binders enumeration).encloses
 
+/-- The exact local compiler interface exposed by one already-derived focus.
+This projects the existing endpoint-validity fold and does not search for a
+focus or retain a second compiler presentation. -/
+theorem CompiledFocus.endpoint_interface
+    {d : Diagram} {sourceCall : CompilerCall d}
+    {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
+    (focus : CompiledFocus source site)
+    (hwf : d.WellFormed)
+    (compiled : sourceCall.compile? d hwf = some source)
+    (wires : sourceCall.fullContext.Exact sourceCall.origin)
+    (binders : sourceCall.binders.Covers sourceCall.origin)
+    (enumeration : BinderContext.Enumeration d sourceCall.binders
+      sourceCall.origin) :
+    focus.endpointCall.compile? d hwf = some focus.endpoint ∧
+      focus.endpointCall.origin = site ∧
+      focus.endpointCall.fullContext.Exact site ∧
+      focus.endpointCall.binders.Covers site := by
+  let validity := focus.zipper.endpoint_validity hwf compiled wires binders
+    enumeration
+  exact ⟨validity.computation, validity.origin, validity.fullContext_exact,
+    validity.binders_covers⟩
+
 /-- The selected branch of an item zipper starts at one actual direct child
 that encloses its endpoint. -/
 theorem CompiledItemsZipper.selected_child

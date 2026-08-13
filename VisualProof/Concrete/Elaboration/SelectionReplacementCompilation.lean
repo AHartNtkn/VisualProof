@@ -9,6 +9,37 @@ open VisualProof.Data.Finite
 open VisualProof.Diagram
 open Elaboration
 
+private theorem OpenDiagram.eq_of_parts
+    (left right : OpenDiagram)
+    (diagramEq : left.diagram = right.diagram)
+    (boundaryEq : left.boundary.map
+        (Fin.cast (congrArg Diagram.wireCount diagramEq)) = right.boundary) :
+    left = right := by
+  rcases left with ⟨leftDiagram, leftBoundary⟩
+  rcases right with ⟨rightDiagram, rightBoundary⟩
+  dsimp only at diagramEq boundaryEq ⊢
+  cases diagramEq
+  have castFunction : Fin.cast (congrArg Diagram.wireCount
+      (Eq.refl leftDiagram)) = id := by
+    funext index
+    apply Fin.ext
+    rfl
+  rw [castFunction, List.map_id] at boundaryEq
+  subst rightBoundary
+  rfl
+
+private theorem List.filterMap_cast_self
+    (values : List α) (map : α → Option (Fin count))
+    (equality : count = count) :
+    values.filterMap (fun value => (map value).map (Fin.cast equality)) =
+      values.filterMap map := by
+  have castFunction : Fin.cast equality = id := by
+    funext index
+    apply Fin.ext
+    rfl
+  rw [castFunction]
+  simp
+
 private theorem compileOccurrence?_congr_occurrence
     {d : Diagram} (hwf : d.WellFormed) (parent : Fin d.regionCount)
     (context : WireContext d) (binders : BinderContext d rels)
@@ -263,6 +294,78 @@ theorem SelectionReplacementDecomposition.exposedWire_survives
       have impossible := imageNone.symm.trans transported
       contradiction
   | true => rfl
+
+private theorem WireTransport.survivors_transportBoundary_eq_filterMap
+    (source target : Diagram)
+    (domain : SurvivorDomain source.wireCount)
+    (wireCountEq : target.wireCount = domain.count)
+    {boundary : List (Fin source.wireCount)}
+    {mapped : List (Fin target.wireCount)}
+    (success : (WireTransport.survivors source target domain wireCountEq
+      ).transportBoundary boundary = some mapped) :
+    mapped = boundary.filterMap fun wire =>
+      (domain.index? wire).map (Fin.cast wireCountEq.symm) := by
+  induction boundary generalizing mapped with
+  | nil => simpa [WireTransport.transportBoundary] using
+      Option.some.inj success
+  | cons head tail inductionHypothesis =>
+      cases indexed : domain.index? head with
+      | none =>
+          have imageNone :
+              (WireTransport.survivors source target domain wireCountEq
+                ).image? head = none := by
+            simp [WireTransport.survivors, WireTransport.rootFiltered,
+              indexed]
+          simp [WireTransport.transportBoundary, imageNone] at success
+      | some dense =>
+          let targetWire := Fin.cast wireCountEq.symm dense
+          have candidate :
+              (domain.index? head).map (Fin.cast wireCountEq.symm) =
+                some targetWire := by
+            rw [indexed]
+            rfl
+          by_cases rootScoped : (target.wires targetWire).scope = target.root
+          · have imageSome :
+                (WireTransport.survivors source target domain wireCountEq
+                  ).image? head = some targetWire := by
+              change (do
+                let mapped ← (domain.index? head).map
+                  (Fin.cast wireCountEq.symm)
+                if (target.wires mapped).scope = target.root then
+                  some mapped else none) = some targetWire
+              rw [indexed]
+              simp only [Option.map_some]
+              change (if (target.wires targetWire).scope = target.root then
+                some targetWire else none) = some targetWire
+              rw [if_pos rootScoped]
+            cases tailResult :
+                (WireTransport.survivors source target domain wireCountEq
+                  ).transportBoundary tail with
+            | none =>
+                simp [WireTransport.transportBoundary, imageSome, tailResult]
+                  at success
+            | some mappedTail =>
+                have mappedEq : targetWire :: mappedTail = mapped := by
+                  simpa [WireTransport.transportBoundary, imageSome,
+                    tailResult] using success
+                subst mapped
+                simp only [List.filterMap_cons, candidate]
+                rw [inductionHypothesis tailResult]
+          ·
+            have imageNone :
+                (WireTransport.survivors source target domain wireCountEq
+                  ).image? head = none := by
+              change (do
+                let mapped ← (domain.index? head).map
+                  (Fin.cast wireCountEq.symm)
+                if (target.wires mapped).scope = target.root then
+                  some mapped else none) = none
+              rw [indexed]
+              simp only [Option.map_some]
+              change (if (target.wires targetWire).scope = target.root then
+                some targetWire else none) = none
+              rw [if_neg rootScoped]
+            simp [WireTransport.transportBoundary, imageNone] at success
 
 namespace FrameDomains
 
@@ -911,6 +1014,161 @@ def mapWireContext (domains : FrameDomains d selection)
     (context : WireContext d) : WireContext (d.removeRaw selection domains) :=
   context.filterMap domains.wires.index?
 
+/-- The canonical open survivor frame, including the exact ordered boundary
+transport used by selection replacement. -/
+def frameOpen (source : OpenDiagram) (selection : CheckedSelection source.diagram)
+    (domains : FrameDomains source.diagram selection) : OpenDiagram where
+  diagram := source.diagram.removeRaw selection domains
+  boundary := source.boundary.filterMap domains.wires.index?
+
+/-- The intermediate receipt is exactly the canonical open survivor frame;
+its boundary is derived from the receipt transport rather than selected
+independently. -/
+theorem SelectionReplacementDecomposition.frame_open_eq
+    (decomposition : SelectionReplacementDecomposition source selection
+      replacement operation receipt) :
+    decomposition.frameReceipt.target.checked.val =
+      decomposition.prepared.domains.frameOpen source.checked.val selection := by
+  have transported := decomposition.prepared.frameReceipt.toReceipt_boundary
+    decomposition.frame_packed
+  have boundaryEq :
+      decomposition.frameReceipt.target.checked.val.boundary.map
+          (Fin.cast (congrArg Diagram.wireCount
+            (decomposition.prepared.frameReceipt.toReceipt_result
+              decomposition.frame_packed))) =
+        source.checked.val.boundary.filterMap
+          decomposition.prepared.domains.wires.index? := by
+    let wireCountEq : decomposition.prepared.frame.val.wireCount =
+        decomposition.prepared.domains.wires.count := rfl
+    have exactBoundary :=
+      WireTransport.survivors_transportBoundary_eq_filterMap
+        source.checked.val.diagram decomposition.prepared.frame.val
+        decomposition.prepared.domains.wires wireCountEq transported
+    have wireCountEqRefl : wireCountEq = rfl := Subsingleton.elim _ _
+    rw [wireCountEqRefl] at exactBoundary
+    exact exactBoundary.trans (List.filterMap_cast_self
+      source.checked.val.boundary
+      decomposition.prepared.domains.wires.index? _)
+  exact OpenDiagram.eq_of_parts _ _
+    (decomposition.prepared.frameReceipt.toReceipt_result
+      decomposition.frame_packed) boundaryEq
+
+private theorem eraseDups_filterMap_injective
+    [BEq α] [LawfulBEq α] [BEq β] [LawfulBEq β]
+    (map : α → Option β)
+    (injective : ∀ {left right value}, map left = some value →
+      map right = some value → left = right)
+    (values : List α) :
+    (values.filterMap map).eraseDups = values.eraseDups.filterMap map := by
+  cases values with
+  | nil => rfl
+  | cons head tail =>
+      cases found : map head with
+      | none =>
+          rw [List.filterMap_cons_none found, List.eraseDups_cons]
+          have filterEq :
+              (tail.filter fun value => !value == head).filterMap map =
+                tail.filterMap map := by
+            induction tail with
+            | nil => rfl
+            | cons value rest ih =>
+                by_cases equality : value = head
+                · subst value
+                  simp [found, ih]
+                · cases valueFound : map value <;>
+                    simp [valueFound, beq_false_of_ne equality, ih]
+          rw [List.filterMap_cons_none found]
+          calc
+            (tail.filterMap map).eraseDups =
+                ((tail.filter fun value => !value == head).filterMap map
+                  ).eraseDups := congrArg List.eraseDups filterEq.symm
+            _ = _ := eraseDups_filterMap_injective map injective
+              (tail.filter fun value => !value == head)
+      | some mapped =>
+          rw [List.filterMap_cons_some found, List.eraseDups_cons,
+            List.eraseDups_cons, List.filterMap_cons_some found]
+          have filterEq :
+              (tail.filterMap map).filter (fun value => !value == mapped) =
+                (tail.filter fun value => !value == head).filterMap map := by
+            induction tail with
+            | nil => rfl
+            | cons value rest ih =>
+                cases valueFound : map value with
+                | none =>
+                    have equality : value ≠ head := by
+                      intro same
+                      subst value
+                      rw [found] at valueFound
+                      contradiction
+                    simp [valueFound, beq_false_of_ne equality, ih]
+                | some target =>
+                    by_cases equality : value = head
+                    · subst value
+                      have targetEq : target = mapped :=
+                        Option.some.inj (valueFound.symm.trans found)
+                      subst target
+                      simp [found, ih]
+                    · have targetNe : target ≠ mapped := by
+                        intro targetEq
+                        exact equality (injective valueFound
+                          (targetEq ▸ found))
+                      simp [valueFound, beq_false_of_ne equality,
+                        beq_false_of_ne targetNe, ih]
+          rw [filterEq,
+            eraseDups_filterMap_injective map injective
+              (tail.filter fun value => !value == head)]
+termination_by values.length
+decreasing_by
+  all_goals simpa using Nat.lt_succ_of_le (List.length_filter_le _ tail)
+
+theorem frameOpen_exposedWires
+    (source : OpenDiagram) (selection : CheckedSelection source.diagram)
+    (domains : FrameDomains source.diagram selection) :
+    (domains.frameOpen source selection).exposedWires =
+      domains.mapWireContext source.exposedWires := by
+  exact eraseDups_filterMap_injective domains.wires.index?
+    (fun {_ _ _} leftEq rightEq =>
+      survivor_index?_injective domains.wires leftEq rightEq)
+    source.boundary
+
+private theorem filter_filterMap_not_mem
+    [BEq α] [LawfulBEq α] [BEq β] [LawfulBEq β]
+    (map : α → Option β)
+    (injective : ∀ {left right value}, map left = some value →
+      map right = some value → left = right)
+    (values excluded : List α) :
+    (values.filterMap map).filter
+        (fun value => decide (value ∉ excluded.filterMap map)) =
+      (values.filter fun value => decide (value ∉ excluded)).filterMap map := by
+  induction values with
+  | nil => rfl
+  | cons head tail ih =>
+      have tailEq :
+          (tail.filterMap map).filter
+              (fun value => !decide (value ∈ excluded.filterMap map)) =
+            (tail.filter fun value => !decide (value ∈ excluded)
+              ).filterMap map := by
+        simpa only [decide_not] using ih
+      cases found : map head with
+      | none =>
+          by_cases member : head ∈ excluded <;>
+            simp [found, member, tailEq]
+      | some mapped =>
+          have memberEq : mapped ∈ excluded.filterMap map ↔ head ∈ excluded := by
+            constructor
+            · intro member
+              obtain ⟨value, valueMember, valueEq⟩ :=
+                List.mem_filterMap.mp member
+              have same := injective found valueEq
+              simpa [same] using valueMember
+            · intro member
+              exact List.mem_filterMap.mpr ⟨head, member, found⟩
+          by_cases member : head ∈ excluded
+          · have mappedMember := memberEq.mpr member
+            simp [found, member, mappedMember, tailEq]
+          · have mappedNotMember : mapped ∉ excluded.filterMap map :=
+              fun mappedMember => member (memberEq.mp mappedMember)
+            simp [found, member, mappedNotMember, tailEq]
 /-- Mapping a compacted wire context back to source identities gives exactly
 the stable source sublist of surviving wires. -/
 theorem map_mapWireContext_origin
@@ -958,6 +1216,40 @@ theorem mapWireContext_exactScope
   apply (List.map_inj_right domains.wires.origin_injective).mp
   rw [domains.map_mapWireContext_origin,
     domains.map_exactScopeWires_removeRaw host selection]
+
+theorem frameOpen_hiddenWires
+    (source : State arity)
+    (selection : CheckedSelection source.checked.val.diagram)
+    (domains : FrameDomains source.checked.val.diagram selection) :
+    (domains.frameOpen source.checked.val selection).hiddenWires =
+      domains.mapWireContext source.checked.val.hiddenWires := by
+  have rootScope := domains.mapWireContext_exactScope source.diagram selection
+    domains.root
+  have rootScope' : domains.mapWireContext
+        (exactScopeWires source.checked.val.diagram
+          source.checked.val.diagram.root) =
+      exactScopeWires (source.checked.val.diagram.removeRaw selection domains)
+        domains.root := by
+    have rootOrigin : domains.regions.origin domains.root =
+        source.checked.val.diagram.root := domains.root_origin
+    change domains.mapWireContext (exactScopeWires
+        source.checked.val.diagram (domains.regions.origin domains.root)) =
+      exactScopeWires (source.checked.val.diagram.removeRaw selection domains)
+        domains.root at rootScope
+    rw [rootOrigin] at rootScope
+    exact rootScope
+  unfold OpenDiagram.hiddenWires
+  change (exactScopeWires
+      (source.checked.val.diagram.removeRaw selection domains)
+      (source.checked.val.diagram.removeRaw selection domains).root).filter
+        (fun wire => decide (wire ∉
+          (domains.frameOpen source.checked.val selection).exposedWires)) = _
+  rw [Diagram.removeRaw_root, ← rootScope', frameOpen_exposedWires]
+  exact filter_filterMap_not_mem domains.wires.index?
+    (fun {_ _ _} leftEq rightEq =>
+      survivor_index?_injective domains.wires leftEq rightEq)
+    (exactScopeWires source.checked.val.diagram
+      source.checked.val.diagram.root) source.checked.val.exposedWires
 
 /-- Route-context extension commutes with exact frame compaction. -/
 theorem mapWireContext_extend

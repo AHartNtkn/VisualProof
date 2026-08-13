@@ -635,6 +635,33 @@ theorem prepareSelectionReplacement_spliceInput_bodyContainer
       replacement.binderSpine.bodyContainer :=
   (prepareSelectionReplacement_pattern_spine success).2.2
 
+/-- Preparation reindexes the selected anchor into the dense survivor frame;
+no independent target-site choice is made. -/
+theorem prepareSelectionReplacement_spliceInput_site_origin
+    {input : Checked} {selection : CheckedSelection input.val}
+    {replacement : SelectionReplacement input selection}
+    {prepared : PreparedSelectionReplacement input selection replacement}
+    (success : prepareSelectionReplacement input selection replacement =
+      .ok prepared) :
+    prepared.domains.regions.origin
+        (Fin.cast (congrArg (fun checked : Checked => checked.val.regionCount)
+          prepared.spliceFrameEq) prepared.spliceInput.site) =
+      selection.val.anchor := by
+  unfold prepareSelectionReplacement at success
+  dsimp only at success
+  split at success <;> try contradiction
+  rename_i preparedInput preparedInputSuccess
+  cases success
+  unfold replacementSpliceInput? at preparedInputSuccess
+  split at preparedInputSuccess <;> try contradiction
+  rename_i site siteFound
+  split at preparedInputSuccess <;> try contradiction
+  split at preparedInputSuccess <;> try contradiction
+  cases preparedInputSuccess
+  simpa [selectionReplacementFrame] using
+    (SurvivorDomain.index?_eq_some_iff _ selection.val.anchor site).mp
+      siteFound
+
 /-- Exact graph provenance from the replacement source to its prepared dense
 frame. -/
 def PreparedSelectionReplacement.frameProvenance
