@@ -210,7 +210,7 @@ private theorem mappedFullWire_get
           layout.mappedLocalWire_get sourceCall targetLocal localEq
             localIndex) split
 
-private noncomputable def endpointAfter
+noncomputable def spliceEndpointAfter
     (input : Splice.Input)
     (sourceCall : CompilerCall input.frame.val)
     (sourceBody : CompiledRegion input.frame.val sourceCall)
@@ -221,14 +221,31 @@ private noncomputable def endpointAfter
       (CompiledSite.endpointCall (State.ofOpen input.pattern)
         input.binderSpine.bodyContainer).rels sourceCall.rels) :
     Region sourceCall.outerContext.length sourceCall.rels :=
-  match sourceBody with
-  | .mk items =>
+  Region.spliceAt sourceCall.localContext.length
+    (sourceCall.castFullItems sourceBody.items.erase)
+    (CompiledSite.body (State.ofOpen input.pattern)
+      input.binderSpine.bodyContainer)
+    (fun wire => Fin.cast sourceCall.fullContext_length
+      (materialWireMap wire)) relationMap
+
+theorem spliceEndpointAfter_eq
+    (input : Splice.Input)
+    (sourceCall : CompilerCall input.frame.val)
+    (sourceBody : CompiledRegion input.frame.val sourceCall)
+    (materialWireMap : Fin (CompiledSite.endpointCall
+      (State.ofOpen input.pattern) input.binderSpine.bodyContainer
+        ).outerContext.length → Fin sourceCall.fullContext.length)
+    (relationMap : RelationRenaming
+      (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels sourceCall.rels) :
+    spliceEndpointAfter input sourceCall sourceBody materialWireMap relationMap =
       Region.spliceAt sourceCall.localContext.length
-        (items.erase.castWiresEq sourceCall.fullContext_length)
+        (sourceCall.castFullItems sourceBody.items.erase)
         (CompiledSite.body (State.ofOpen input.pattern)
           input.binderSpine.bodyContainer)
         (fun wire => Fin.cast sourceCall.fullContext_length
-          (materialWireMap wire)) relationMap
+          (materialWireMap wire)) relationMap := by
+  rfl
 
 /-- One result for every compiler call. The target body is indexed by the
 actual target call, while the aligned context keeps the endpoint unfilled.
@@ -314,7 +331,7 @@ private structure EndpointGraftInput
         (Fin.cast (congrArg List.length (patternTerminal_outerContext input
           admissible.terminal_body)) index))
   after : Region endpointCall.outerContext.length endpointCall.rels
-  afterEq : after = endpointAfter input endpointCall endpoint materialWireMap
+  afterEq : after = spliceEndpointAfter input endpointCall endpoint materialWireMap
     relationMap
 
 private structure AwayBlockResult
@@ -458,7 +475,7 @@ private noncomputable def compileHere
     (sourceCompiled : sourceCall.compile? input.frame.val
       input.frame.property = some sourceBody)
     (after : Region sourceCall.outerContext.length sourceCall.rels)
-    (afterEq : after = endpointAfter input sourceCall sourceBody
+    (afterEq : after = spliceEndpointAfter input sourceCall sourceBody
       materialWireMap relationMap) :
     GraftResult layout targetWf targetOuter targetLocal targetBinders outerEq
       sourceCall.origin (CompiledZipper.here sourceBody) after := by
@@ -506,7 +523,7 @@ private noncomputable def compileHere
         endpointIso := ?_
       }
       rw [afterEq]
-      simpa [endpointAfter, CompilerCall.localContext] using endpointIso
+      simpa [spliceEndpointAfter, CompilerCall.localContext] using endpointIso
 
   | nested origin sourceOuter sourceRels sourceBinders =>
       change origin = input.site at atSite
@@ -548,7 +565,7 @@ private noncomputable def compileHere
         endpointIso := ?_
       }
       rw [afterEq]
-      simpa [endpointAfter, CompilerCall.localContext] using endpointIso
+      simpa [spliceEndpointAfter, CompilerCall.localContext] using endpointIso
 
 /-- Compile one focused parent sequence after its two sibling blocks have been
 transported. The distinguished item is deliberately absent from `frame`;
@@ -1639,11 +1656,10 @@ noncomputable def splice
     materialGet := by
       intro index
       simpa using spliceWireMap_get input rfl admissible layout index
-    after := Splice.Input.PlugLayout.endpointAfter input
-      (endpointCall source input.site) (endpoint source input.site)
-      (spliceWireMap input rfl admissible layout)
-      (spliceRelationMap input rfl admissible)
-    afterEq := rfl
+    after := spliceAfter input rfl admissible layout
+    afterEq := by
+      unfold spliceAfter Splice.Input.PlugLayout.spliceEndpointAfter
+      rfl
   }
   let result := layout.compileAlongZipper consistent admissible targetWf
     sourceFocus rfl endpointInput targetOuter targetLocal BinderContext.empty
@@ -1825,10 +1841,7 @@ noncomputable def spliceAfterBody
   }
   let layout : input.PlugLayout := {}
   let admissible : input.Admissible := spliceRaw_admissible success
-  exact Splice.Input.PlugLayout.endpointAfter input
-    (endpointCall source input.site) (endpoint source input.site)
-    (spliceWireMap input rfl admissible layout)
-    (spliceRelationMap input rfl admissible)
+  exact spliceAfter input rfl admissible layout
 
 @[simp] theorem splice_context
     {arity : Nat} {source : State arity} (input : Splice.Input)
@@ -1846,6 +1859,24 @@ noncomputable def spliceAfterBody
   cases frameEq
   simp [spliceContext, splice, ContextReplacement.iso, spliceSite]
   exact (cast_eq _ _).symm
+
+theorem splice_context_cutDepth
+    {arity : Nat} {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    {operation : OperationReceipt input.frame}
+    (success : spliceRaw input = .ok operation)
+    {receipt : Receipt source}
+    (packed : (operation.castInput frameEq).toReceipt source = some receipt)
+    (consistent : input.AttachmentConsistent) :
+    (splice input frameEq success packed consistent).context.cutDepth =
+      concreteCutDepth source.checked.val.diagram
+        (spliceSite input frameEq) := by
+  rcases input with ⟨frame, pattern, site, attachment, binderSpine,
+    binderTarget⟩
+  dsimp only at frameEq
+  cases frameEq
+  simpa [splice_context, spliceContext, spliceSite] using
+    context_cutDepth source site
 
 @[simp] theorem splice_before
     {arity : Nat} {source : State arity} (input : Splice.Input)

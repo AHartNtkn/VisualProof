@@ -151,6 +151,11 @@ def items : (region : CompiledRegion d call) →
     CompiledItems d call.fullContext call.rels call.binders
   | .mk items => items
 
+theorem erase_eq_finish (region : CompiledRegion d call) :
+    region.erase = call.finish region.items.erase := by
+  cases region
+  rfl
+
 @[simp] theorem erase_localCount (region : CompiledRegion d call) :
     region.erase.localCount = region.localCount := by
   cases region

@@ -32,6 +32,13 @@ def cutDepth : DiagramContext  outerWires holeWires outerRels holeRels ->
   | .cut _ _ _ child => child.cutDepth + 1
   | .bubble _ _ _ _ child => child.cutDepth
 
+@[simp] theorem cutDepth_castOuterWires
+    (equality : sourceWires = targetWires)
+    (context : DiagramContext sourceWires holeWires outerRels holeRels) :
+    (equality ▸ context).cutDepth = context.cutDepth := by
+  subst targetWires
+  rfl
+
 def polarity
     (context : DiagramContext outerWires holeWires outerRels holeRels) :
     Polarity :=

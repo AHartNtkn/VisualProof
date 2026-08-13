@@ -1,4 +1,5 @@
 import VisualProof.Concrete.Elaboration.Compile
+import VisualProof.Concrete.Elaboration.CutDepth
 import VisualProof.Concrete.State
 import VisualProof.Concrete.Subgraph.Selection
 
@@ -379,6 +380,56 @@ def CompiledZipper.context {d : Diagram}
       endpointCall.outerContext.length sourceCall.rels endpointCall.rels :=
   focus.intrinsic.context
 
+mutual
+  /-- Number of cut frames traversed by one compiled zipper. -/
+  def CompiledZipper.relativeCutDepth
+      {d : Diagram} {sourceCall endpointCall : CompilerCall d}
+      {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
+      {endpoint : CompiledRegion d endpointCall} :
+      CompiledZipper d source site endpointCall endpoint → Nat
+    | .here _ => 0
+    | .child nested => nested.relativeCutDepth
+
+  /-- Number of cut frames traversed by an item zipper. -/
+  def CompiledItemsZipper.relativeCutDepth
+      {d : Diagram} {sourceCall : CompilerCall d}
+      {items : CompiledItems d sourceCall.fullContext sourceCall.rels
+        sourceCall.binders}
+      {site : Fin d.regionCount} {endpointCall : CompilerCall d}
+      {endpoint : CompiledRegion d endpointCall} :
+      CompiledItemsZipper d items site endpointCall endpoint → Nat
+    | .cut _ _ nested _ => nested.relativeCutDepth + 1
+    | .bubble _ _ nested _ => nested.relativeCutDepth
+end
+
+theorem CompiledZipper.relativeCutDepth_eq_context
+    {d : Diagram} {sourceCall endpointCall : CompilerCall d}
+    {source : CompiledRegion d sourceCall} {site : Fin d.regionCount}
+    {endpoint : CompiledRegion d endpointCall}
+    (focus : CompiledZipper d source site endpointCall endpoint) :
+    focus.relativeCutDepth = focus.context.cutDepth := by
+  apply CompiledZipper.rec
+    (motive_1 := fun _ _ _ _ focus =>
+      focus.relativeCutDepth = focus.context.cutDepth)
+    (motive_2 := fun _ _ _ _ focus =>
+      focus.relativeCutDepth = focus.intrinsic.context.cutDepth)
+  · intro _ _
+    rfl
+  · intro _ _ _ _ _ nested induction
+    exact induction
+  · intro _ _ _ _ _ _ _ _ _ nested rebuild induction
+    cases rebuild
+    simp only [CompiledItemsZipper.relativeCutDepth,
+      CompiledItemsZipper.intrinsic, DiagramContext.cutDepth,
+      DiagramContext.cutDepth_castOuterWires]
+    exact congrArg (fun depth => depth + 1) induction
+  · intro _ _ _ _ _ _ _ _ _ _ nested rebuild induction
+    cases rebuild
+    simp only [CompiledItemsZipper.relativeCutDepth,
+      CompiledItemsZipper.intrinsic, DiagramContext.cutDepth,
+      DiagramContext.cutDepth_castOuterWires]
+    exact induction
+
 /-- Ordinary intrinsic focus projected from the compiler zipper. -/
 def CompiledZipper.toContextFocus
     {d : Diagram} {sourceCall endpointCall : CompilerCall d}
@@ -416,7 +467,7 @@ def CompiledZipper.toContextFocus
 private structure CompiledEndpointValidity (d : Diagram)
     (wellFormed : d.WellFormed)
     (sourceSite site : Fin d.regionCount) (call : CompilerCall d)
-    (endpoint : CompiledRegion d call) where
+    (endpoint : CompiledRegion d call) (contextCutDepth : Nat) where
   computation : call.compile? d wellFormed = some endpoint
   origin : call.origin = site
   fullContext_exact : call.fullContext.Exact site
@@ -424,6 +475,8 @@ private structure CompiledEndpointValidity (d : Diagram)
   binders_enumeration : BinderContext.Enumeration d call.binders site
   origins : endpoint.items.origins = localOccurrences d site
   encloses : d.Encloses sourceSite site
+  cutDepth : concreteCutDepth d site =
+    concreteCutDepth d sourceSite + contextCutDepth
 
 private structure CompiledItemsEndpointValidity (d : Diagram)
     (wellFormed : d.WellFormed) (parent : Fin d.regionCount)
@@ -431,8 +484,9 @@ private structure CompiledItemsEndpointValidity (d : Diagram)
     {binders : BinderContext d rels}
     (items : CompiledItems d context rels binders)
     (site : Fin d.regionCount) (call : CompilerCall d)
-    (endpoint : CompiledRegion d call)
-    extends CompiledEndpointValidity d wellFormed parent site call endpoint where
+    (endpoint : CompiledRegion d call) (contextCutDepth : Nat)
+    extends CompiledEndpointValidity d wellFormed parent site call endpoint
+      contextCutDepth where
   selectedChild : Fin d.regionCount
   selectedChild_mem : LocalOccurrence.child selectedChild ∈ items.origins
   selectedChild_parent : (d.regions selectedChild).parent? = some parent
@@ -450,6 +504,7 @@ mutual
       sourceCall.binders.Covers sourceCall.origin →
       BinderContext.Enumeration d sourceCall.binders sourceCall.origin →
       CompiledEndpointValidity d hwf sourceCall.origin site endpointCall endpoint
+        focus.relativeCutDepth
     | .here source, compiled, wires, binders, enumeration => by
         cases source with
         | mk items =>
@@ -457,7 +512,7 @@ mutual
             have origins := compileItems?_origins hwf sourceCall.origin
               sourceCall.fullContext sourceCall.binders hitems
             exact ⟨compiled, rfl, wires, binders, enumeration, origins,
-              Diagram.Encloses.refl d sourceCall.origin⟩
+              Diagram.Encloses.refl d sourceCall.origin, rfl⟩
     | .child nested, compiled, wires, binders, enumeration => by
         have hitems := sourceCall.compile?_items_of_success hwf compiled
         have origins := compileItems?_origins hwf sourceCall.origin
@@ -514,11 +569,11 @@ mutual
         sourceCall.binders items.origins
         localOccurrencesValid = some items →
       CompiledItemsEndpointValidity d hwf sourceCall.origin items site
-        endpointCall endpoint
+        endpointCall endpoint focus.relativeCutDepth
     | .cut (origin := origin) (body := body) before suffix nested rebuild,
         wires, bindersCover, enumeration, localOccurrencesValid,
         compiled => by
-        subst items
+        cases rebuild
         let headDirect :
             LocalOccurrence.child origin ∈
               localOccurrences d sourceCall.origin :=
@@ -568,7 +623,14 @@ mutual
                 | none => none | some directParent => d.climb 0 directParent) =
                   some sourceCall.origin
               rw [hparent]
-              rfl) childValidity.encloses }
+              rfl) childValidity.encloses
+            cutDepth := by
+              have childDepth := concreteCutDepth_cut_child hwf hregion
+              have endpointDepth := childValidity.cutDepth
+              change concreteCutDepth d site = concreteCutDepth d origin +
+                nested.relativeCutDepth at endpointDepth
+              simp only [CompiledItemsZipper.relativeCutDepth]
+              omega }
           selectedChild := origin
           selectedChild_mem := by simp [CompiledItems.origins_append,
             CompiledItems.origins, CompiledItem.origin]
@@ -578,7 +640,7 @@ mutual
         nested rebuild,
         wires, bindersCover, enumeration, localOccurrencesValid,
         compiled => by
-        subst items
+        cases rebuild
         let headDirect :
             LocalOccurrence.child origin ∈
               localOccurrences d sourceCall.origin :=
@@ -636,7 +698,14 @@ mutual
                 | none => none | some directParent => d.climb 0 directParent) =
                   some sourceCall.origin
               rw [hparent]
-              rfl) childValidity.encloses }
+              rfl) childValidity.encloses
+            cutDepth := by
+              have childDepth := concreteCutDepth_bubble_child hwf hregion
+              have endpointDepth := childValidity.cutDepth
+              change concreteCutDepth d site = concreteCutDepth d origin +
+                nested.relativeCutDepth at endpointDepth
+              simp only [CompiledItemsZipper.relativeCutDepth]
+              omega }
           selectedChild := origin
           selectedChild_mem := by simp [CompiledItems.origins_append,
             CompiledItems.origins, CompiledItem.origin]
@@ -896,7 +965,8 @@ private def endpoint_validity (source : State arity)
     CompiledEndpointValidity source.checked.val.diagram
       source.checked.property.diagram_well_formed
       source.checked.val.diagram.root site
-      (endpointCall source site) (endpoint source site) :=
+      (endpointCall source site) (endpoint source site)
+      (zipper source site).relativeCutDepth :=
   (zipper source site).endpoint_validity
     source.checked.property.diagram_well_formed
     (by simpa using source.checked.compilation_computation)
@@ -969,9 +1039,34 @@ def body (source : State arity)
       (endpointCall source site).rels :=
   (endpoint source site).erase
 
+theorem body_eq_finish (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    body source site =
+      .mk (endpointCall source site).localContext.length
+        ((endpointCall source site).castFullItems
+          (directItems source site).erase) := by
+  exact CompiledRegion.erase_eq_finish (endpoint source site)
+
 def cutDepth (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) : Nat :=
   (context source site).cutDepth
+
+/-- The intrinsic focus context counts exactly the concrete cut ancestors of
+its selected region. -/
+theorem context_cutDepth (source : State arity)
+    (site : Fin source.checked.val.diagram.regionCount) :
+    (context source site).cutDepth =
+      concreteCutDepth source.checked.val.diagram site := by
+  have relative := (endpoint_validity source site).cutDepth
+  have rootDepth := concreteCutDepth_root
+    source.checked.property.diagram_well_formed
+  have projected := (zipper source site).relativeCutDepth_eq_context
+  change concreteCutDepth source.checked.val.diagram site =
+      concreteCutDepth source.checked.val.diagram
+          source.checked.val.diagram.root +
+        (zipper source site).relativeCutDepth at relative
+  rw [rootDepth, Nat.zero_add, projected] at relative
+  exact relative.symm
 
 def sourceOccurrence (source : State arity)
     (site : Fin source.checked.val.diagram.regionCount) :
