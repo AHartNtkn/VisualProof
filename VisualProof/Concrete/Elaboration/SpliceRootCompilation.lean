@@ -1700,20 +1700,6 @@ noncomputable def spliceFromFocus
         simpa [targetChecked, targetOuter, targetLocal, targetOpen] using
           canonicalCompiled)
     exact congrArg CompiledRegion.erase same
-  have targetBodyIso : RegionIso
-      (layout.canonicalOuterWire sourceCall targetOuter outerEq) []
-      targetChecked.compilation.erase
-      (sourceFocus.zipper.context.fill endpointInput.after) := by
-    have filled := result.alignment.fill result.endpointIso
-    rw [result.targetRebuild] at filled
-    have rootFilled : RegionIso
-        (layout.canonicalOuterWire sourceCall targetOuter outerEq) []
-        result.targetBody.erase
-        (sourceFocus.zipper.context.fill endpointInput.after) := by
-      simpa [sourceCall, Splice.Input.PlugLayout.frameTargetErase,
-        CompiledZipper.context] using filled
-    rw [← targetBodyEq]
-    exact rootFilled
   let interface := source.checked.elaborate.castArity source.boundary_length
   let replacementContext : DiagramContext interface.externalClasses
       sourceFocus.endpointCall.outerContext.length []
@@ -1721,79 +1707,62 @@ noncomputable def spliceFromFocus
     sourceFocus.zipper.context
   let interfaceWire :=
     layout.canonicalOuterWire sourceCall targetOuter outerEq
-  have targetBodyIso' : RegionIso interfaceWire []
-      targetChecked.compilation.erase
-      (replacementContext.fill endpointInput.after) := by
-    exact targetBodyIso
   have sourceBodyEq : sourceBody.erase = source.checked.compilation.erase := by
     have same : sourceBody = source.checked.compilation := by
       apply Option.some.inj
       exact sourceCompiled.symm.trans (by
         simpa using source.checked.compilation_computation)
     exact congrArg CompiledRegion.erase same
-  let sourceIso : OpenDiagramIso
-      (source.checked.elaborate.castArity source.boundary_length)
-      (interface.withBody (replacementContext.fill
-        sourceFocus.endpoint.erase)) := {
-    external := FiniteEquiv.refl _
-    boundary := by intro position; rfl
-    body := by
-      have sourceRebuild :
-          sourceFocus.zipper.context.fill sourceFocus.endpoint.erase =
-            source.checked.compilation.erase :=
-        sourceFocus.zipper.intrinsic.rebuild.trans sourceBodyEq
-      change RegionIso (FiniteEquiv.refl _) []
-        source.checked.elaborate.body
-        (sourceFocus.zipper.context.fill sourceFocus.endpoint.erase)
-      rw [sourceRebuild]
-      exact RegionIso.refl _
-  }
-  let targetExternal := interfaceWire
-  let targetIso : OpenDiagramIso
-      (targetChecked.elaborate.castArity targetBoundaryLength)
-      (interface.withBody (replacementContext.fill
-        endpointInput.after)) := {
-    external := targetExternal
-    boundary := by
-      intro position
+  have sourceRebuild : replacementContext.fill sourceFocus.endpoint.erase =
+      interface.body := by
+    simpa [replacementContext, interface] using
+      sourceFocus.zipper.intrinsic.rebuild.trans sourceBodyEq
+  let targetInterface :=
+    targetChecked.elaborate.castArity targetBoundaryLength
+  have frameTargetErase_eq :
+      layout.frameTargetErase sourceCall targetOuter targetLocal
+          BinderContext.empty result.targetBody = result.targetBody.erase := by
+    rfl
+  have targetRebuild : result.targetContext.fill result.targetSite =
+      targetInterface.body := by
+    exact result.targetRebuild.trans <|
+      frameTargetErase_eq.trans <| targetBodyEq.trans rfl
+  have boundaryAligned : forall position,
+      interfaceWire (targetInterface.boundary position) =
+        interface.boundary position := by
+    intro position
+    apply Fin.ext
+    let sourcePosition := Fin.cast source.boundary_length.symm position
+    have boundaryEq := layout.canonicalOuterWire_boundaryClass
+      source.checked.val.boundary source.checked.val.hiddenWires
+      outerEq sourcePosition
+    have targetPositionEq :
+        Fin.cast (List.length_map
+          (layout.frameWire ∘ input.quotientWire)).symm
+            sourcePosition = Fin.cast targetBoundaryLength.symm position := by
       apply Fin.ext
-      let sourcePosition := Fin.cast source.boundary_length.symm position
-      have boundaryEq := layout.canonicalOuterWire_boundaryClass
-        source.checked.val.boundary source.checked.val.hiddenWires
-        outerEq sourcePosition
-      have targetPositionEq :
-          Fin.cast (List.length_map
-            (layout.frameWire ∘ input.quotientWire)).symm
-              sourcePosition = Fin.cast targetBoundaryLength.symm position := by
-        apply Fin.ext
-        rfl
-      have boundaryEq' :
-          layout.canonicalOuterWire sourceCall targetOuter outerEq
-              (targetOpen.boundaryClass
-                (Fin.cast targetBoundaryLength.symm position)) =
-            source.checked.val.boundaryClass sourcePosition := by
-        rw [← targetPositionEq]
-        exact boundaryEq
-      simpa [targetExternal, interfaceWire, targetChecked,
-          targetOuter, targetOpen, interface, FiniteEquiv.finCast,
-          FiniteEquiv.trans, sourcePosition] using congrArg Fin.val boundaryEq'
-    body := by
-      simpa [targetExternal, targetChecked, targetOuter, targetOpen,
-        interface] using targetBodyIso'
-  }
+      rfl
+    have boundaryEq' :
+        layout.canonicalOuterWire sourceCall targetOuter outerEq
+            (targetOpen.boundaryClass
+              (Fin.cast targetBoundaryLength.symm position)) =
+          source.checked.val.boundaryClass sourcePosition := by
+      rw [← targetPositionEq]
+      exact boundaryEq
+    simpa [targetInterface, targetChecked, targetOuter, targetOpen,
+        interface, FiniteEquiv.finCast, FiniteEquiv.trans,
+        sourcePosition] using congrArg Fin.val boundaryEq'
   let rawReplacement : ContextReplacement
       (source.checked.elaborate.castArity source.boundary_length)
       (targetState.checked.elaborate.castArity
         targetState.boundary_length)
       sourceFocus.endpointCall.outerContext.length
-      sourceFocus.endpointCall.rels := {
-    interface := interface
-    context := replacementContext
-    before := sourceFocus.endpoint.erase
-    after := endpointInput.after
-    source_iso := sourceIso
-    target_iso := targetIso
-  }
+      sourceFocus.endpointCall.rels :=
+    ContextReplacement.ofContextAlignment interface targetInterface
+      replacementContext result.targetContext sourceFocus.endpoint.erase
+      endpointInput.after result.targetSite interfaceWire result.holeWire
+      sourceRebuild targetRebuild result.alignment result.endpointIso
+      boundaryAligned
   let targetRebase : OpenDiagramIso
       (targetState.checked.elaborate.castArity targetState.boundary_length)
       (receipt.target.checked.elaborate.castArity
@@ -1848,7 +1817,8 @@ noncomputable def splice
     binderTarget⟩
   dsimp only at frameEq
   cases frameEq
-  simp [splice, spliceFromFocus, ContextReplacement.iso]
+  simp [splice, spliceFromFocus, ContextReplacement.iso,
+    ContextReplacement.ofContextAlignment]
 
 /-- The source focus context, transported only across the existential indices
 of `ContextReplacement`. -/

@@ -21,6 +21,46 @@ structure ContextReplacement
   target_iso : OpenDiagramIso target
     (interface.withBody (context.fill after))
 
+/-- Lift one endpoint isomorphism through one aligned enclosing context and
+package the resulting whole-diagram replacement.  Compiler folds supply only
+the target reconstruction and `DiagramContextIso`; root/interface packaging
+happens once here. -/
+noncomputable def ContextReplacement.ofContextAlignment
+    (source target : OpenDiagram arity)
+    (sourceContext : DiagramContext source.externalClasses sourceHole [] rels)
+    (targetContext : DiagramContext target.externalClasses targetHole [] rels)
+    (before after : Region sourceHole rels)
+    (targetSite : Region targetHole rels)
+    (external : FiniteEquiv (Fin target.externalClasses)
+      (Fin source.externalClasses))
+    (hole : FiniteEquiv (Fin targetHole) (Fin sourceHole))
+    (sourceRebuild : sourceContext.fill before = source.body)
+    (targetRebuild : targetContext.fill targetSite = target.body)
+    (alignment : DiagramContextIso external hole [] rels
+      targetContext sourceContext)
+    (endpoint : RegionIso hole rels targetSite after)
+    (boundary : forall position,
+      external (target.boundary position) = source.boundary position) :
+    ContextReplacement source target sourceHole rels where
+  interface := source
+  context := sourceContext
+  before := before
+  after := after
+  source_iso := {
+    external := FiniteEquiv.refl _
+    boundary := fun _ => rfl
+    body := by
+      rw [sourceRebuild]
+      exact RegionIso.refl source.body
+  }
+  target_iso := {
+    external := external
+    boundary := boundary
+    body := by
+      rw [← targetRebuild]
+      exact alignment.fill endpoint
+  }
+
 noncomputable def ContextReplacement.castArity
     {source target : OpenDiagram sourceArity}
     (replacement : ContextReplacement source target holeWires holeRels)
