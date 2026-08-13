@@ -101,7 +101,7 @@ export function associativityCarrierBase(
   context: ProofContext,
 ): Theorem {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
-  const forward = new PrimitiveStepRecorder(lhs.diagram, context)
+  const forward = new PrimitiveStepRecorder(lhs, context)
   let before = forward.diagram
   forward.record('open base-support primitive scope', {
     rule: 'doubleCutIntro',
@@ -322,7 +322,7 @@ export function associativityCarrierBase(
   )
 
     const rhs = statements.associativityCarrierBase
-  const backward = new PrimitiveStepRecorder(rhs.diagram, context, 'backward')
+  const backward = new PrimitiveStepRecorder(rhs, context, 'backward')
   const primitiveScope = exactOne(
     directCuts(backward.diagram, backward.diagram.root),
     'backward primitive scope',

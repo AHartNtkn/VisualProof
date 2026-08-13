@@ -126,7 +126,7 @@ function plusAssoc(
 ): Theorem {
   const publicLhs = finishDiagramWithBoundary(emptyGraph(), [])
   const publicForward = new PrimitiveStepRecorder(
-    publicLhs.diagram,
+    publicLhs,
     context,
   )
   publicForward.record('seed public shell from hereditary support', {
@@ -567,7 +567,7 @@ function plusAssoc(
       parameters: [publicForwardRight!, publicPlus],
   })
   const publicBackward = new PrimitiveStepRecorder(
-    statements.plusAssoc.diagram,
+    statements.plusAssoc,
     context,
     'backward',
   )

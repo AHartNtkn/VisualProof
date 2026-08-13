@@ -64,7 +64,7 @@ function plusComm(
   context: ProofContext,
 ): Theorem {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
-  const forward = new PrimitiveStepRecorder(lhs.diagram, context)
+  const forward = new PrimitiveStepRecorder(lhs, context)
   forward.record('seed commutativity shell from carrier support', {
     rule: 'theorem',
     name: 'commutativityCarrierInductive',
@@ -291,7 +291,7 @@ function plusComm(
 
   const rhs = statements.plusComm
   const backward = new PrimitiveStepRecorder(
-    rhs.diagram,
+    rhs,
     context,
     'backward',
   )

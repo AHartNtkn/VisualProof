@@ -15,8 +15,8 @@ import { applyStep, type ProofStep } from '../../../src/kernel/proof/step'
 function negativeStart() {
   const builder = new DiagramBuilder()
   const cut = builder.cut(builder.root)
-  const first = builder.relWire(builder.root, relSig([]))
-  const second = builder.relWire(builder.root, relSig([]))
+  const first = builder.relWire( relSig([]))
+  const second = builder.relWire( relSig([]))
   return { diagram: builder.build(), cut, first, second }
 }
 
@@ -74,7 +74,7 @@ describe('proof actions', () => {
 
   it('excludes action-reserved node and wire ids', () => {
     const bodyBuilder = new DiagramBuilder()
-    const boundary = bodyBuilder.wire(bodyBuilder.root, [], IOTA)
+    const boundary = bodyBuilder.wire( [], IOTA)
     const context = verifyTheory({
       relations: [[
         'Unary',

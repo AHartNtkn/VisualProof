@@ -223,7 +223,7 @@ export function commutativityCarrierInductive(
   context: ProofContext,
 ): Theorem {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
-  const forward = new PrimitiveStepRecorder(lhs.diagram, context)
+  const forward = new PrimitiveStepRecorder(lhs, context)
   forward.record('seed exact commutativity shell from successor shift', {
     rule: 'theorem',
     name: 'succShiftS',
@@ -857,7 +857,7 @@ export function commutativityCarrierInductive(
   )
 
   const rhs = statements.commutativityCarrierInductive
-  const backward = new PrimitiveStepRecorder(rhs.diagram, context, 'backward')
+  const backward = new PrimitiveStepRecorder(rhs, context, 'backward')
   const primitiveScope = exactOne(directCuts(backward.diagram, backward.diagram.root), 'support reviewed primitive scope')
   const primitiveBody = exactOne(directCuts(backward.diagram, primitiveScope), 'support reviewed primitive body')
   const hypotheses = exactOne(directCuts(backward.diagram, primitiveBody), 'support reviewed hypotheses')

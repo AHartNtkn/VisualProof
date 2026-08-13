@@ -78,7 +78,7 @@ function ordinaryEqualityContradiction(
   )
   const context = verifyTheory({ relations, theorems: [] })
   const recorder = new PrimitiveStepRecorder(
-    lhs.diagram,
+    lhs,
     context,
   )
   let before = recorder.diagram
@@ -149,7 +149,7 @@ function existsProp(
   const blankGraph = emptyGraph()
   const lhs = finishDiagramWithBoundary(blankGraph, [])
   const context = verifyTheory({ relations, theorems: prior })
-  const recorder = new PrimitiveStepRecorder(lhs.diagram, context)
+  const recorder = new PrimitiveStepRecorder(lhs, context)
 
   let before = recorder.diagram
   recorder.record('cite truth reification at the blank sheet', {

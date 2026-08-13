@@ -467,7 +467,7 @@ function recordedUnaryReification(
 ): Theorem {
   const start = captureOnly(captureSignatures)
   const recorder = new PrimitiveStepRecorder(
-    start.boundary.diagram,
+    start.boundary,
     verifyTheory({ relations: [], theorems: [] }),
   )
   return recordExplicitReification({
@@ -532,7 +532,7 @@ export function relationIdentityReification(): Theorem {
   const blank = emptyGraph()
   const lhs = finishDiagramWithBoundary(blank, [])
   const recorder = new PrimitiveStepRecorder(
-    lhs.diagram,
+    lhs,
     verifyTheory({ relations: [], theorems: [] }),
   )
   const relationUniversal = openUniversal(
@@ -583,7 +583,7 @@ export function truthReification(): Theorem {
   const blank = emptyGraph()
   const lhs = finishDiagramWithBoundary(blank, [])
   const recorder = new PrimitiveStepRecorder(
-    lhs.diagram,
+    lhs,
     verifyTheory({ relations: [], theorems: [] }),
   )
   return recordExplicitReification({

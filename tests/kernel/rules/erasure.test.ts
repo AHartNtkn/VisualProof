@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { applyWireSever } from '../../../src/kernel/rules/wire-quantifier'
+import { contentEndpoints } from '../../fixtures/pins'
 
 describe('applyErasure', () => {
   it('removes a selection from a positive region', () => {
@@ -92,7 +94,7 @@ describe('applyWireSever', () => {
     const builder = new DiagramBuilder()
     const first = builder.ref(builder.root, 'P', relSig([IOTA]))
     const second = builder.ref(builder.root, 'Q', relSig([IOTA]))
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: first, port: { kind: 'arg', index: 0 } },
       { node: second, port: { kind: 'arg', index: 0 } },
     ])
@@ -103,12 +105,12 @@ describe('applyWireSever', () => {
       keep: [{ node: first, port: { kind: 'arg', index: 0 } }],
     })
 
-    expect(severed.wires[wire]!.endpoints).toEqual([
+    expect(contentEndpoints(severed, wire)).toEqual([
       { node: first, port: { kind: 'arg', index: 0 } },
     ])
     const fresh = Object.keys(severed.wires).filter((id) => diagram.wires[id] === undefined)
     expect(fresh).toHaveLength(1)
-    expect(severed.wires[fresh[0]!]!.endpoints).toEqual([
+    expect(contentEndpoints(severed, fresh[0]!)).toEqual([
       { node: second, port: { kind: 'arg', index: 0 } },
     ])
   })
@@ -119,7 +121,7 @@ describe('applyWireSever', () => {
     const positive = builder.cut(firstCut)
     const first = builder.ref(positive, 'P', relSig([IOTA]))
     const second = builder.ref(positive, 'Q', relSig([IOTA]))
-    const wire = builder.wire(positive, [
+    const wire = builder.wire([
       { node: first, port: { kind: 'arg', index: 0 } },
       { node: second, port: { kind: 'arg', index: 0 } },
     ])
@@ -131,15 +133,15 @@ describe('applyWireSever', () => {
     })
     const fresh = Object.keys(severed.wires).find((id) => diagram.wires[id] === undefined)!
 
-    expect(severed.wires[fresh]!.scope).toBe(positive)
-    expect(severed.wires[wire]!.scope).toBe(positive)
+    expect(derivedScope(severed, fresh)).toBe(positive)
+    expect(derivedScope(severed, wire)).toBe(positive)
   })
 
   it('rejects severing at a negative scope', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const node = builder.ref(cut, 'P', relSig([IOTA]))
-    const wire = builder.wire(cut, [
+    const wire = builder.wire([
       { node, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = builder.build()
@@ -154,7 +156,7 @@ describe('applyWireSever', () => {
   it('rejects keep entries that are not endpoints of the wire', () => {
     const builder = new DiagramBuilder()
     const node = builder.ref(builder.root, 'P', relSig([IOTA]))
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = builder.build()
@@ -172,12 +174,12 @@ describe('generalized wire sever', () => {
     const sig = relSig([IOTA])
     const headA = builder.atom(builder.root, sig)
     const headB = builder.atom(builder.root, sig)
-    const rel = builder.wire(builder.root, [
+    const rel = builder.wire([
       { node: headA, port: { kind: 'head' } },
       { node: headB, port: { kind: 'head' } },
     ], sig)
-    builder.wire(builder.root, [{ node: headA, port: { kind: 'arg', index: 0 } }])
-    builder.wire(builder.root, [{ node: headB, port: { kind: 'arg', index: 0 } }])
+    builder.wire([{ node: headA, port: { kind: 'arg', index: 0 } }])
+    builder.wire([{ node: headB, port: { kind: 'arg', index: 0 } }])
     const diagram = builder.build()
 
     const severed = applyWireSever(diagram, {
@@ -186,11 +188,11 @@ describe('generalized wire sever', () => {
     })
 
     const fresh = Object.keys(severed.wires).find((id) => diagram.wires[id] === undefined)!
-    expect(severed.wires[rel]!.endpoints).toEqual([
+    expect(contentEndpoints(severed, rel)).toEqual([
       { node: headA, port: { kind: 'head' } },
     ])
     expect(severed.wires[fresh]!.sig).toEqual(sig)
-    expect(severed.wires[fresh]!.endpoints).toEqual([
+    expect(contentEndpoints(severed, fresh)).toEqual([
       { node: headB, port: { kind: 'head' } },
     ])
   })
@@ -201,7 +203,7 @@ describe('generalized wire sever', () => {
     const cut2 = builder.cut(cut1)
     const keepNode = builder.ref(builder.root, 'K', relSig([IOTA]))
     const movedNode = builder.ref(cut2, 'M', relSig([IOTA]))
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: keepNode, port: { kind: 'arg', index: 0 } },
       { node: movedNode, port: { kind: 'arg', index: 0 } },
     ])
@@ -213,8 +215,8 @@ describe('generalized wire sever', () => {
       scope: cut2,
     })
     const fresh = Object.keys(severed.wires).find((id) => diagram.wires[id] === undefined)!
-    expect(severed.wires[fresh]!.scope).toBe(cut2)
-    expect(severed.wires[wire]!.scope).toBe(builder.root)
+    expect(derivedScope(severed, fresh)).toBe(cut2)
+    expect(derivedScope(severed, wire)).toBe(builder.root)
 
     expect(() => applyWireSever(diagram, {
       wire,
@@ -234,7 +236,7 @@ describe('generalized wire sever', () => {
     const cut2 = builder.cut(cut1)
     const keepNode = builder.ref(cut2, 'K', relSig([IOTA]))
     const movedNode = builder.ref(builder.root, 'M', relSig([IOTA]))
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: keepNode, port: { kind: 'arg', index: 0 } },
       { node: movedNode, port: { kind: 'arg', index: 0 } },
     ])

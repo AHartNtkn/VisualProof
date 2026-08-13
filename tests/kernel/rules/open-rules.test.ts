@@ -13,7 +13,7 @@ function host() {
   const builder = new DiagramBuilder()
   const outer = builder.cut(builder.root)
   const atom = builder.atom(outer, relSig([IOTA]))
-  const argument = builder.wire(outer, [
+  const argument = builder.wire( [
     { node: atom, port: { kind: 'arg', index: 0 } },
   ])
   const target = builder.cut(outer)
@@ -69,7 +69,7 @@ describe('open relational iteration and deiteration', () => {
     const builder = new DiagramBuilder()
     const first = builder.atom(builder.root, relSig([IOTA]))
     const second = builder.atom(builder.root, relSig([IOTA]))
-    builder.wire(builder.root, [
+    builder.wire( [
       { node: first, port: { kind: 'arg', index: 0 } },
       { node: second, port: { kind: 'arg', index: 0 } },
     ])

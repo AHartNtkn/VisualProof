@@ -11,7 +11,7 @@ describe('existential stubs honor wire scope after settling', () => {
     const c1 = b.cut(b.root)
     const c2 = b.cut(c1)
     const n = b.ref(c2, 'Buried', UNARY)
-    const w = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
+    const w = b.wire( [{ node: n, port: { kind: 'arg', index: 0 } }])
     return { d: b.build(), w, c1 }
   }
 
@@ -33,7 +33,7 @@ describe('existential stubs honor wire scope after settling', () => {
     const c2 = b.cut(c1)
     const pn = b.ref(c2, 'P', UNARY)
     const qn = b.ref(c2, 'Q', UNARY)
-    const w = b.wire(c1, [
+    const w = b.wire( [
       { node: pn, port: { kind: 'arg', index: 0 } },
       { node: qn, port: { kind: 'arg', index: 0 } },
     ])

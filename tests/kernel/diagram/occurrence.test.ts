@@ -13,7 +13,7 @@ import { occurrenceToSelection } from '../../../src/kernel/diagram/subgraph/occu
 function fixture() {
   const patternBuilder = new DiagramBuilder()
   const patternNode = patternBuilder.ref(patternBuilder.root, 'P', relSig([IOTA]))
-  const patternWire = patternBuilder.wire(patternBuilder.root, [
+  const patternWire = patternBuilder.wire( [
     { node: patternNode, port: { kind: 'arg', index: 0 } },
   ])
   const pattern = mkDiagramWithBoundary(patternBuilder.build(), [patternWire])
@@ -21,7 +21,7 @@ function fixture() {
   const hostBuilder = new DiagramBuilder()
   const hostNode = hostBuilder.ref(hostBuilder.root, 'P', relSig([IOTA]))
   const extra = hostBuilder.ref(hostBuilder.root, 'Q', relSig([IOTA]))
-  const hostWire = hostBuilder.wire(hostBuilder.root, [
+  const hostWire = hostBuilder.wire( [
     { node: hostNode, port: { kind: 'arg', index: 0 } },
     { node: extra, port: { kind: 'arg', index: 0 } },
   ])

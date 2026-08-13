@@ -288,6 +288,32 @@ export function deletePins(
   for (const pin of pins) delete nodes[pin.endpoint.node]
 }
 
+/**
+ * Replace a dying wire's pins on a successor of a DIFFERENT sig: the
+ * quantifier positions carry over, the sort follows the wire, so fresh
+ * pins of the successor's sig are minted at the old pins' regions and the
+ * old pin nodes die.
+ */
+export function replacePins(
+  parts: PartsInProgress,
+  pins: readonly { endpoint: Endpoint; region: RegionId }[],
+  onto: WireId,
+  reservation?: IdNamespaceReservation,
+): void {
+  if (pins.length === 0) return
+  const wire = parts.wires[onto]!
+  const taken = new Set(Object.keys(parts.nodes))
+  const added: Endpoint[] = []
+  for (const pin of pins) {
+    delete parts.nodes[pin.endpoint.node]
+    const node = freshId(taken, 'pin', reservation)
+    taken.add(node)
+    parts.nodes[node] = { kind: 'identity', region: pin.region, sig: wire.sig, arity: 1 }
+    added.push({ node, port: { kind: 'identity', index: 0 } })
+  }
+  parts.wires[onto] = { sig: wire.sig, endpoints: [...wire.endpoints, ...added] }
+}
+
 /** Pin sigs and regions to re-home onto a successor wire (`transfer` half of the completion clause). */
 export function transferPins(
   parts: PartsInProgress,

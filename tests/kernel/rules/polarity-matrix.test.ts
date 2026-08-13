@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
@@ -21,6 +20,7 @@ import {
   compileRelationJoin,
   compileRelationSever,
 } from '../../../src/kernel/proof/compile-content'
+import { bareWire } from '../../fixtures/pins'
 import { EMPTY_PROOF_CONTEXT } from '../../../src/kernel/proof/context'
 
 function nested(depth: number) {
@@ -28,8 +28,8 @@ function nested(depth: number) {
   let region = builder.root
   for (let index = 0; index < depth; index++) region = builder.cut(region)
   const node = builder.ref(region, 'closed', relSig([]))
-  const left = builder.wire(builder.root, [])
-  const right = builder.wire(builder.root, [])
+  const left = bareWire(builder, builder.root)
+  const right = bareWire(builder, builder.root)
   return { diagram: builder.build(), region, node, left, right }
 }
 
@@ -92,7 +92,7 @@ describe('polarity matrix across depths 0–3', () => {
       const builder = new DiagramBuilder()
       let region = builder.root
       for (let index = 0; index < depth; index++) region = builder.cut(region)
-      const wire = builder.relWire(region, relSig([]))
+      const wire = bareWire(builder, region, relSig([]))
       const diagram = builder.build()
       const del = () => applyEndsDelete(diagram, wire)
       const delBackward = () => applyEndsDelete(diagram, wire, 'backward')
@@ -115,14 +115,17 @@ describe('polarity matrix across depths 0–3', () => {
 
     it(`depth ${depth}: sever scope parameter gates on the chosen region`, () => {
       const { diagram, region, left } = nested(depth)
+      // The bare wire's pins stay where they are, so nothing moves into the
+      // chosen region and only its polarity is under test.
+      const keep = diagram.wires[left]!.endpoints
       const scoped = () => applyWireSever(diagram, {
         wire: left,
-        keep: [],
+        keep,
         scope: region,
       })
       const scopedBackward = () => applyWireSever(diagram, {
         wire: left,
-        keep: [],
+        keep,
         scope: region,
       }, 'backward')
 
@@ -139,9 +142,9 @@ describe('polarity matrix across depths 0–3', () => {
       const builder = new DiagramBuilder()
       let region = builder.root
       for (let index = 0; index < depth; index++) region = builder.cut(region)
-      const relation = builder.relWire(region, relSig([]))
+      const relation = bareWire(builder, region, relSig([]))
       const diagram = builder.build()
-      const content = mkDiagramWithBoundary(new DiagramBuilder().build(), [])
+      const content = new DiagramBuilder().buildOpen([])
       const severInput = {
         scope: region,
         occurrences: [{
@@ -212,7 +215,7 @@ describe('structural round trips', () => {
     const builder = new DiagramBuilder()
     const target = builder.cut(builder.root)
     const node = builder.ref(builder.root, 'P', relSig([IOTA]))
-    builder.wire(builder.root, [
+    builder.wire([
       { node, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = builder.build()

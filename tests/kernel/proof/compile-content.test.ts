@@ -39,7 +39,7 @@ function host(dyingSig = UNARY) {
   const cut = builder.cut(builder.root)
   const atomA = builder.atom(cut, dyingSig)
   const atomB = builder.atom(cut, dyingSig)
-  const dying = builder.wire(cut, [
+  const dying = builder.wire( [
     { node: atomA, port: { kind: 'head' } },
     { node: atomB, port: { kind: 'head' } },
   ], dyingSig)
@@ -47,14 +47,14 @@ function host(dyingSig = UNARY) {
   dyingSig.args.forEach((argSig, index) => {
     for (const [atomAt, bucket] of [[atomA, 0], [atomB, 1]] as const) {
       bucket
-      const wire = builder.wire(cut, [
+      const wire = builder.wire( [
         { node: atomAt, port: { kind: 'arg', index } },
       ], argSig)
       argWires[bucket]!.push(wire)
     }
   })
-  const paramP = builder.relWire(builder.root, BINARY)
-  const paramQ = builder.relWire(builder.root, UNARY)
+  const paramP = builder.relWire( BINARY)
+  const paramQ = builder.relWire( UNARY)
   return { builder, cut, paramP, paramQ, dying, argWires }
 }
 
@@ -78,11 +78,11 @@ function expectedHost(
   const siteArgs: WireId[][] = [[], []]
   for (const bucket of [0, 1]) {
     for (const argSig of dyingSig.args) {
-      siteArgs[bucket]!.push(builder.wire(cut, [], argSig))
+      siteArgs[bucket]!.push(builder.wire( [], argSig))
     }
   }
-  const paramP = builder.relWire(builder.root, BINARY)
-  const paramQ = builder.relWire(builder.root, UNARY)
+  const paramP = builder.relWire( BINARY)
+  const paramQ = builder.relWire( UNARY)
   for (const bucket of [0, 1]) {
     drawSite(builder, cut, siteArgs[bucket]!, { paramP, paramQ })
   }
@@ -113,16 +113,16 @@ describe('compileRelationJoin against hand-built expectations', () => {
     const contentCut = content.cut(content.root)
     const atomP = content.atom(content.root, BINARY)
     const atomQ = content.atom(contentCut, UNARY)
-    const formal = content.wire(content.root, [
+    const formal = content.wire( [
       { node: atomP, port: { kind: 'arg', index: 0 } },
     ])
-    const stubP = content.wire(content.root, [
+    const stubP = content.wire( [
       { node: atomP, port: { kind: 'head' } },
     ], BINARY)
-    const stubQ = content.wire(content.root, [
+    const stubQ = content.wire( [
       { node: atomQ, port: { kind: 'head' } },
     ], UNARY)
-    content.wire(content.root, [
+    content.wire( [
       { node: atomP, port: { kind: 'arg', index: 1 } },
       { node: atomQ, port: { kind: 'arg', index: 0 } },
     ])
@@ -143,7 +143,7 @@ describe('compileRelationJoin against hand-built expectations', () => {
     const compiled = replay(diagram, steps, EMPTY_PROOF_CONTEXT)
 
     const expected = expectedHost(UNARY, (builder, cut, [x], params) => {
-      const y = builder.wire(cut, [])
+      const y = builder.wire( [])
       const siteP = builder.atom(cut, BINARY)
       attach(builder, params.paramP, siteP, { kind: 'head' })
       attach(builder, x!, siteP, { kind: 'arg', index: 0 })
@@ -159,10 +159,10 @@ describe('compileRelationJoin against hand-built expectations', () => {
   it('compiles an applied formal', () => {
     const content = new DiagramBuilder()
     const atom = content.atom(content.root, UNARY)
-    const argFormal = content.wire(content.root, [
+    const argFormal = content.wire( [
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])
-    const relFormal = content.wire(content.root, [
+    const relFormal = content.wire( [
       { node: atom, port: { kind: 'head' } },
     ], UNARY)
     const pattern = mkDiagramWithBoundary(content.build(), [argFormal, relFormal])
@@ -191,10 +191,10 @@ describe('compileRelationJoin against hand-built expectations', () => {
     const content = new DiagramBuilder()
     const contentCut = content.cut(content.root)
     const eq = content.identity(contentCut, IOTA, 2)
-    const left = content.wire(content.root, [
+    const left = content.wire( [
       { node: eq, port: { kind: 'identity', index: 0 } },
     ])
-    const right = content.wire(content.root, [
+    const right = content.wire( [
       { node: eq, port: { kind: 'identity', index: 1 } },
     ])
     const pattern = mkDiagramWithBoundary(content.build(), [left, right])
@@ -221,7 +221,7 @@ describe('compileRelationJoin against hand-built expectations', () => {
 
   it('compiles ref content against a loaded definition', () => {
     const body = new DiagramBuilder()
-    const bodyFormal = body.wire(body.root, [])
+    const bodyFormal = body.wire( [])
     const definition = mkDiagramWithBoundary(body.build(), [bodyFormal])
     const context = verifyTheory({
       relations: [['D', definition]],
@@ -230,7 +230,7 @@ describe('compileRelationJoin against hand-built expectations', () => {
 
     const content = new DiagramBuilder()
     const ref = content.ref(content.root, 'D', UNARY)
-    const formal = content.wire(content.root, [
+    const formal = content.wire( [
       { node: ref, port: { kind: 'arg', index: 0 } },
     ])
     const pattern = mkDiagramWithBoundary(content.build(), [formal])
@@ -255,7 +255,7 @@ describe('compileRelationJoin against hand-built expectations', () => {
 
   it('compiles empty content', () => {
     const content = new DiagramBuilder()
-    const formal = content.wire(content.root, [])
+    const formal = content.wire( [])
     const pattern = mkDiagramWithBoundary(content.build(), [formal])
 
     const fixture = host()
@@ -277,14 +277,14 @@ describe('compileRelationJoin against hand-built expectations', () => {
     const builder = new DiagramBuilder()
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    builder.wire(builder.root, [
+    builder.wire( [
       { node: atomA, port: { kind: 'head' } },
       { node: atomB, port: { kind: 'head' } },
     ], UNARY)
-    const argA = builder.wire(builder.root, [
+    const argA = builder.wire( [
       { node: atomA, port: { kind: 'arg', index: 0 } },
     ])
-    const argB = builder.wire(builder.root, [
+    const argB = builder.wire( [
       { node: atomB, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = builder.build()
@@ -311,28 +311,28 @@ describe('compileRelationJoin against hand-built expectations', () => {
     const expected = new DiagramBuilder()
     const expectedAtomA = expected.atom(expected.root, UNARY)
     const expectedAtomB = expected.atom(expected.root, UNARY)
-    expected.wire(expected.root, [
+    expected.wire( [
       { node: expectedAtomA, port: { kind: 'head' } },
       { node: expectedAtomB, port: { kind: 'head' } },
     ], UNARY)
-    expected.wire(expected.root, [
+    expected.wire( [
       { node: expectedAtomA, port: { kind: 'arg', index: 0 } },
     ])
-    expected.wire(expected.root, [
+    expected.wire( [
       { node: expectedAtomB, port: { kind: 'arg', index: 0 } },
     ])
-    expected.relWire(expected.root, UNARY)
+    expected.relWire( UNARY)
     expect(exploreForm(compiled)).toEqual(exploreForm(expected.build()))
   })
 
   it('compiles repeated formals through duplication', () => {
     const content = new DiagramBuilder()
     const atom = content.atom(content.root, BINARY)
-    const formal = content.wire(content.root, [
+    const formal = content.wire( [
       { node: atom, port: { kind: 'arg', index: 0 } },
       { node: atom, port: { kind: 'arg', index: 1 } },
     ])
-    const stubP = content.wire(content.root, [
+    const stubP = content.wire( [
       { node: atom, port: { kind: 'head' } },
     ], BINARY)
     const pattern = mkDiagramWithBoundary(content.build(), [formal, stubP])

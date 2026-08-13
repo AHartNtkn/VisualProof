@@ -118,7 +118,7 @@ function plusRightUnit(
   context: ProofContext,
 ): Theorem {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
-  const forward = new PrimitiveStepRecorder(lhs.diagram, context)
+  const forward = new PrimitiveStepRecorder(lhs, context)
 
   forward.record('seed right-unit shell from direct carrier support', {
     rule: 'theorem',
@@ -353,7 +353,7 @@ function plusRightUnit(
 
   const rhs = statements.plusRightUnit
   const backward = new PrimitiveStepRecorder(
-    rhs.diagram,
+    rhs,
     context,
     'backward',
   )

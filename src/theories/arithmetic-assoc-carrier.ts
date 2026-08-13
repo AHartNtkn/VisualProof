@@ -140,7 +140,7 @@ export function associativityCarrierHereditary(
   context: ProofContext,
 ): Theorem {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
-  const forward = new PrimitiveStepRecorder(lhs.diagram, context)
+  const forward = new PrimitiveStepRecorder(lhs, context)
 
   let before = forward.diagram
   forward.record('open primitive universal scope', {
@@ -536,7 +536,7 @@ export function associativityCarrierHereditary(
 
   const rhs = statements.associativityCarrierHereditary
   const backward = new PrimitiveStepRecorder(
-    rhs.diagram,
+    rhs,
     context,
     'backward',
   )

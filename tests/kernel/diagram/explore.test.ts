@@ -102,7 +102,7 @@ describe('canonical graph exploration', () => {
       const builder = new DiagramBuilder()
       const cut = builder.cut(builder.root)
       const node = builder.ref(cut, 'P', relSig([IOTA]))
-      builder.wire(outer ? builder.root : cut, [
+      builder.wire( [
         { node, port: { kind: 'arg', index: 0 } },
       ])
       return builder.build()
@@ -113,10 +113,10 @@ describe('canonical graph exploration', () => {
   it('makes ordered boundary pins semantically visible', () => {
     const builder = new DiagramBuilder()
     const ref = builder.ref(builder.root, 'Pair', relSig([IOTA, IOTA]))
-    const left = builder.wire(builder.root, [
+    const left = builder.wire( [
       { node: ref, port: { kind: 'arg', index: 0 } },
     ])
-    const right = builder.wire(builder.root, [
+    const right = builder.wire( [
       { node: ref, port: { kind: 'arg', index: 1 } },
     ])
     const diagram = builder.build()

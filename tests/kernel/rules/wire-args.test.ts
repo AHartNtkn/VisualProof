@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
-import { mkDiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import {
   applyAbstractFormal,
@@ -27,15 +27,18 @@ function binaryFixture() {
   const builder = new DiagramBuilder()
   const cut = builder.cut(builder.root)
   const atom = builder.atom(cut, BINARY)
-  const wire = builder.wire(builder.root, [
+  const wire = builder.wire([
     { node: atom, port: { kind: 'head' } },
   ], BINARY)
-  const first = builder.wire(builder.root, [
+  builder.pin(wire, builder.root)
+  const first = builder.wire([
     { node: atom, port: { kind: 'arg', index: 0 } },
   ])
-  const second = builder.wire(builder.root, [
+  builder.pin(first, builder.root)
+  const second = builder.wire([
     { node: atom, port: { kind: 'arg', index: 1 } },
   ])
+  builder.pin(second, builder.root)
   return { builder, cut, atom, wire, first, second }
 }
 
@@ -53,7 +56,7 @@ describe('arity shift / unshift', () => {
     const locals = Object.keys(shifted.wires).filter((id) =>
       diagram.wires[id] === undefined && id !== fresh)
     expect(locals).toHaveLength(1)
-    expect(shifted.wires[locals[0]!]!.scope).toBe(cut)
+    expect(derivedScope(shifted, locals[0]!)).toBe(cut)
     expect(shifted.wires[locals[0]!]!.endpoints).toHaveLength(1)
 
     const restored = applyArityUnshift(shifted, fresh, 2)
@@ -63,7 +66,7 @@ describe('arity shift / unshift', () => {
   it('refuses unshift when the position wire is shared or outer-scoped', () => {
     const { builder, wire, second } = binaryFixture()
     const extraAtom = builder.atom(builder.root, UNARY)
-    builder.wire(builder.root, [
+    builder.wire([
       { node: extraAtom, port: { kind: 'head' } },
     ], UNARY)
     const secondUse = { node: extraAtom, port: { kind: 'arg', index: 0 } } as const
@@ -133,22 +136,27 @@ describe('argument drop / extend', () => {
     const builder = new DiagramBuilder()
     const scope = builder.cut(builder.root)
     const atom = builder.atom(scope, BINARY)
-    const wire = builder.wire(scope, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], BINARY)
-    builder.wire(scope, [
+    builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])
-    const dropped_ = builder.wire(scope, [
+    const dropped_ = builder.wire([
       { node: atom, port: { kind: 'arg', index: 1 } },
     ])
+    // Two pins: the position wire survives the drop as a bare wire, and the
+    // two-end floor forbids leaving it under one end.
+    builder.pin(dropped_, scope)
+    builder.pin(dropped_, scope)
     const diagram = builder.build()
 
     const dropped = applyArgDrop(diagram, wire, 1)
     const fresh = Object.keys(dropped.wires).find((id) =>
       diagram.wires[id] === undefined)!
     expect(dropped.wires[fresh]!.sig).toEqual(UNARY)
-    expect(dropped.wires[dropped_]!.endpoints).toEqual([])
+    expect(dropped.wires[dropped_]!.endpoints.map((endpoint) =>
+      dropped.nodes[endpoint.node]!.kind)).toEqual(['identity', 'identity'])
 
     const end = dropped.wires[fresh]!.endpoints[0]!
     const extended = applyArgExtend(
@@ -166,12 +174,18 @@ describe('argument drop / extend', () => {
     const builder = new DiagramBuilder()
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: atomA, port: { kind: 'head' } },
       { node: atomB, port: { kind: 'head' } },
     ], UNARY)
-    builder.wire(builder.root, [{ node: atomA, port: { kind: 'arg', index: 0 } }])
-    builder.wire(builder.root, [{ node: atomB, port: { kind: 'arg', index: 0 } }])
+    // The dropped-position wires survive the drop as bare wires, so each
+    // needs the two pins the floor requires once its atom end goes.
+    const argA = builder.wire([{ node: atomA, port: { kind: 'arg', index: 0 } }])
+    builder.pin(argA, builder.root)
+    builder.pin(argA, builder.root)
+    const argB = builder.wire([{ node: atomB, port: { kind: 'arg', index: 0 } }])
+    builder.pin(argB, builder.root)
+    builder.pin(argB, builder.root)
     const diagram = builder.build()
 
     expect(() => applyArgDrop(diagram, wire, 0))
@@ -181,17 +195,21 @@ describe('argument drop / extend', () => {
 
   it('drops and extends ungated when the attachment is uniform and scope-visible', () => {
     const builder = new DiagramBuilder()
-    const shared = builder.wire(builder.root, [])
+    const shared = builder.wire([])
+    builder.pin(shared, builder.root)
+    builder.pin(shared, builder.root)
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: atomA, port: { kind: 'head' } },
       { node: atomB, port: { kind: 'head' } },
     ], UNARY)
-    builder.wire(builder.root, [
+    const argument = builder.wire([
       { node: atomA, port: { kind: 'arg', index: 0 } },
       { node: atomB, port: { kind: 'arg', index: 0 } },
     ])
+    builder.pin(argument, builder.root)
+    builder.pin(argument, builder.root)
     void shared
     const diagram = builder.build()
 
@@ -201,8 +219,12 @@ describe('argument drop / extend', () => {
   it('refuses an extend map that does not cover every end', () => {
     const builder = new DiagramBuilder()
     const scope = builder.cut(builder.root)
-    const wire = builder.relWire(scope, relSig([]))
-    const spawnArg = builder.wire(scope, [])
+    const wire = builder.relWire(relSig([]))
+    builder.pin(wire, scope)
+    builder.pin(wire, scope)
+    const spawnArg = builder.wire([])
+    builder.pin(spawnArg, scope)
+    builder.pin(spawnArg, scope)
     void spawnArg
     const diagram = builder.build()
 
@@ -212,11 +234,11 @@ describe('argument drop / extend', () => {
     const full = new DiagramBuilder()
     const negative = full.cut(full.root)
     const atom = full.atom(negative, BINARY)
-    const fullWire = full.wire(negative, [
+    const fullWire = full.wire([
       { node: atom, port: { kind: 'head' } },
     ], BINARY)
-    full.wire(negative, [{ node: atom, port: { kind: 'arg', index: 0 } }])
-    full.wire(negative, [{ node: atom, port: { kind: 'arg', index: 1 } }])
+    full.wire([{ node: atom, port: { kind: 'arg', index: 0 } }])
+    full.wire([{ node: atom, port: { kind: 'arg', index: 1 } }])
     const fullDiagram = full.build()
     expect(() => applyArgExtend(
       fullDiagram,
@@ -235,13 +257,13 @@ describe('apply-formal / abstract-formal', () => {
     const scope = builder.cut(builder.root)
     const higher = relSig([UNARY, IOTA])
     const atom = builder.atom(scope, higher)
-    const wire = builder.wire(scope, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], higher)
-    const target = builder.wire(scope, [
+    const target = builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
     ], UNARY)
-    builder.wire(scope, [
+    builder.wire([
       { node: atom, port: { kind: 'arg', index: 1 } },
     ])
     const diagram = builder.build()
@@ -275,21 +297,23 @@ describe('identity leaf / abstract', () => {
     const builder = new DiagramBuilder()
     const scope = builder.cut(builder.root)
     const atom = builder.atom(scope, BINARY)
-    const wire = builder.wire(scope, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], BINARY)
-    builder.wire(builder.root, [
+    const firstArg = builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])
-    builder.wire(builder.root, [
+    builder.pin(firstArg, builder.root)
+    const secondArg = builder.wire([
       { node: atom, port: { kind: 'arg', index: 1 } },
     ])
+    builder.pin(secondArg, builder.root)
     const diagram = builder.build()
 
     const leafed = applyIdentityLeaf(diagram, wire)
     expect(leafed.wires[wire]).toBeUndefined()
     const identities = Object.entries(leafed.nodes)
-      .filter(([, node]) => node.kind === 'identity')
+      .filter(([id, node]) => node.kind === 'identity' && diagram.nodes[id] === undefined)
     expect(identities).toHaveLength(1)
 
     const restored = applyIdentityAbstract(
@@ -305,23 +329,23 @@ describe('identity leaf / abstract', () => {
     const builder = new DiagramBuilder()
     const higher = relSig([UNARY, IOTA])
     const higherAtom = builder.atom(builder.root, higher)
-    const higherWire = builder.wire(builder.root, [
+    const higherWire = builder.wire([
       { node: higherAtom, port: { kind: 'head' } },
     ], higher)
-    builder.wire(builder.root, [
+    builder.wire([
       { node: higherAtom, port: { kind: 'arg', index: 0 } },
     ], UNARY)
-    builder.wire(builder.root, [
+    builder.wire([
       { node: higherAtom, port: { kind: 'arg', index: 1 } },
     ])
     const pairAtom = builder.atom(builder.root, BINARY)
-    const pairWire = builder.wire(builder.root, [
+    const pairWire = builder.wire([
       { node: pairAtom, port: { kind: 'head' } },
     ], BINARY)
-    builder.wire(builder.root, [
+    builder.wire([
       { node: pairAtom, port: { kind: 'arg', index: 0 } },
     ])
-    builder.wire(builder.root, [
+    builder.wire([
       { node: pairAtom, port: { kind: 'arg', index: 1 } },
     ])
     const diagram = builder.build()
@@ -335,12 +359,14 @@ describe('identity leaf / abstract', () => {
     const withIdentity = new DiagramBuilder()
     const cut = withIdentity.cut(withIdentity.root)
     const eq = withIdentity.identity(cut, IOTA, 2)
-    withIdentity.wire(withIdentity.root, [
+    const eqLeft = withIdentity.wire([
       { node: eq, port: { kind: 'identity', index: 0 } },
     ])
-    withIdentity.wire(withIdentity.root, [
+    withIdentity.pin(eqLeft, withIdentity.root)
+    const eqRight = withIdentity.wire([
       { node: eq, port: { kind: 'identity', index: 1 } },
     ])
+    withIdentity.pin(eqRight, withIdentity.root)
     const identityDiagram = withIdentity.build()
     expect(() => applyIdentityAbstract(
       identityDiagram,
@@ -355,13 +381,13 @@ describe('identity leaf / abstract', () => {
     const scope = builder.cut(builder.root)
     const mixed = relSig([IOTA, UNARY])
     const atom = builder.atom(scope, mixed)
-    const wire = builder.wire(scope, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], mixed)
-    builder.wire(scope, [
+    builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])
-    builder.wire(scope, [
+    builder.wire([
       { node: atom, port: { kind: 'arg', index: 1 } },
     ], UNARY)
     const diagram = builder.build()
@@ -374,8 +400,8 @@ describe('identity leaf / abstract', () => {
 describe('ref leaf / abstract', () => {
   const unaryDefinition = () => {
     const definitionBuilder = new DiagramBuilder()
-    const formal = definitionBuilder.wire(definitionBuilder.root, [])
-    return mkDiagramWithBoundary(definitionBuilder.build(), [formal])
+    const formal = definitionBuilder.wire([])
+    return definitionBuilder.buildOpen([formal])
   }
   const definitions = () => new Map([['D', unaryDefinition()]])
 
@@ -384,12 +410,13 @@ describe('ref leaf / abstract', () => {
     const builder = new DiagramBuilder()
     const scope = builder.cut(builder.root)
     const atom = builder.atom(scope, UNARY)
-    const wire = builder.wire(scope, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], UNARY)
-    const argument = builder.wire(builder.root, [
+    const argument = builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])
+    builder.pin(argument, builder.root)
     return { builder, scope, atom, wire, argument }
   }
 
@@ -407,7 +434,8 @@ describe('ref leaf / abstract', () => {
     if (reference.kind !== 'ref') throw new Error('unreachable')
     expect(reference.defId).toBe('D')
     expect(reference.sig).toEqual(UNARY)
-    expect(leafed.wires[argument]!.endpoints).toEqual([
+    expect(leafed.wires[argument]!.endpoints.filter((endpoint) =>
+      leafed.nodes[endpoint.node]!.kind === 'ref')).toEqual([
       { node: referenceId, port: { kind: 'arg', index: 0 } },
     ])
 
@@ -418,10 +446,10 @@ describe('ref leaf / abstract', () => {
   it('gates both directions on the governing scope polarity', () => {
     const positiveBuilder = new DiagramBuilder()
     const positiveAtom = positiveBuilder.atom(positiveBuilder.root, UNARY)
-    const positiveWire = positiveBuilder.wire(positiveBuilder.root, [
+    const positiveWire = positiveBuilder.wire([
       { node: positiveAtom, port: { kind: 'head' } },
     ], UNARY)
-    positiveBuilder.wire(positiveBuilder.root, [
+    positiveBuilder.wire([
       { node: positiveAtom, port: { kind: 'arg', index: 0 } },
     ])
     const positive = positiveBuilder.build()
@@ -452,13 +480,10 @@ describe('ref leaf / abstract', () => {
 
     const binaryBuilder = new DiagramBuilder()
     const binaryFormals = [
-      binaryBuilder.wire(binaryBuilder.root, []),
-      binaryBuilder.wire(binaryBuilder.root, []),
+      binaryBuilder.wire([]),
+      binaryBuilder.wire([]),
     ]
-    const binaryDefinition = mkDiagramWithBoundary(
-      binaryBuilder.build(),
-      binaryFormals,
-    )
+    const binaryDefinition = binaryBuilder.buildOpen(binaryFormals)
     expect(() => applyRefLeaf(diagram, wire, 'D', new Map([['D', binaryDefinition]])))
       .toThrowError(/does not match/)
 
@@ -466,10 +491,10 @@ describe('ref leaf / abstract', () => {
     const mixedScope = mixedBuilder.cut(mixedBuilder.root)
     const mixedAtom = mixedBuilder.atom(mixedScope, UNARY)
     const consumer = mixedBuilder.atom(mixedScope, relSig([UNARY]))
-    mixedBuilder.wire(mixedScope, [
+    mixedBuilder.wire([
       { node: consumer, port: { kind: 'head' } },
     ], relSig([UNARY]))
-    const mixedWire = mixedBuilder.wire(mixedScope, [
+    const mixedWire = mixedBuilder.wire([
       { node: mixedAtom, port: { kind: 'head' } },
       { node: consumer, port: { kind: 'arg', index: 0 } },
     ], UNARY)
@@ -484,9 +509,10 @@ describe('ref leaf / abstract', () => {
     const first = builder.ref(scope, 'D', UNARY)
     const second = builder.ref(scope, 'E', UNARY)
     for (const node of [first, second]) {
-      builder.wire(builder.root, [
+      const argument = builder.wire([
         { node, port: { kind: 'arg', index: 0 } },
       ])
+      builder.pin(argument, builder.root)
     }
     const diagram = builder.build()
 

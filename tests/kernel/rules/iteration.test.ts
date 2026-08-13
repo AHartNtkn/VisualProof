@@ -2,17 +2,19 @@ import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import {
   applyDeiteration,
   applyIteration,
   findDeiterationEvidence,
 } from '../../../src/kernel/rules/iteration'
+import { contentEndpoints } from '../../fixtures/pins'
 
 function host() {
   const builder = new DiagramBuilder()
   const node = builder.ref(builder.root, 'P', relSig([IOTA]))
-  const wire = builder.wire(builder.root, [
+  const wire = builder.wire([
     { node, port: { kind: 'arg', index: 0 } },
   ])
   const cut = builder.cut(builder.root)
@@ -22,7 +24,7 @@ function host() {
 function rootAtomWithWire() {
   const builder = new DiagramBuilder()
   const node = builder.atom(builder.root, relSig([IOTA]))
-  const wire = builder.wire(builder.root, [
+  const wire = builder.wire([
     { node, port: { kind: 'arg', index: 0 } },
   ])
   return { diagram: builder.build(), node, wire }
@@ -54,8 +56,8 @@ describe('applyIteration', () => {
 
     const iterated = applyIteration(diagram, selection, diagram.root)
 
-    expect(iterated.wires[wire]!.scope).toBe(diagram.root)
-    expect(iterated.wires[wire]!.endpoints).toEqual([
+    expect(derivedScope(iterated, wire)).toBe(diagram.root)
+    expect(contentEndpoints(iterated, wire)).toEqual([
       { node, port: { kind: 'arg', index: 0 } },
     ])
 
@@ -69,7 +71,7 @@ describe('applyIteration', () => {
     const copiedWire = Object.entries(iterated.wires).find(
       ([id, candidate]) =>
         id !== wire
-        && candidate.scope === diagram.root
+        && derivedScope(iterated, id) === diagram.root
         && candidate.endpoints.some(
           (endpoint) =>
             endpoint.node === copiedNode![0]
@@ -92,7 +94,7 @@ describe('applyIteration', () => {
 
     const iterated = applyIteration(diagram, selection, cut)
 
-    expect(iterated.wires[wire]!.endpoints).toHaveLength(2)
+    expect(contentEndpoints(iterated, wire)).toHaveLength(2)
     expect(Object.values(iterated.nodes).filter((candidate) => candidate.region === cut))
       .toHaveLength(1)
   })
@@ -108,7 +110,7 @@ describe('applyIteration', () => {
 
     const iterated = applyIteration(diagram, selection, diagram.root)
 
-    expect(iterated.wires[wire]!.endpoints).toHaveLength(2)
+    expect(contentEndpoints(iterated, wire)).toHaveLength(2)
   })
 
   it('threads reservations into the splice allocator after retarget evidence', () => {
@@ -190,7 +192,7 @@ describe('exact applyDeiteration evidence', () => {
     const outer = builder.ref(builder.root, 'P', relSig([IOTA]))
     const cut = builder.cut(builder.root)
     const inner = builder.ref(cut, 'P', relSig([IOTA]))
-    builder.wire(builder.root, [
+    builder.wire([
       { node: outer, port: { kind: 'arg', index: 0 } },
       { node: inner, port: { kind: 'arg', index: 0 } },
     ])
@@ -222,10 +224,10 @@ describe('exact applyDeiteration evidence', () => {
     const separateBuilder = new DiagramBuilder()
     const first = separateBuilder.ref(separateBuilder.root, 'P', relSig([IOTA]))
     const second = separateBuilder.ref(separateBuilder.root, 'P', relSig([IOTA]))
-    separateBuilder.wire(separateBuilder.root, [
+    separateBuilder.wire([
       { node: first, port: { kind: 'arg', index: 0 } },
     ])
-    separateBuilder.wire(separateBuilder.root, [
+    separateBuilder.wire([
       { node: second, port: { kind: 'arg', index: 0 } },
     ])
     const separateDiagram = separateBuilder.build()
@@ -243,7 +245,7 @@ describe('exact applyDeiteration evidence', () => {
     const builder = new DiagramBuilder()
     const first = builder.ref(builder.root, 'P', relSig([IOTA]))
     const second = builder.ref(builder.root, 'P', relSig([IOTA]))
-    builder.wire(builder.root, [
+    builder.wire([
       { node: first, port: { kind: 'arg', index: 0 } },
       { node: second, port: { kind: 'arg', index: 0 } },
     ])
@@ -257,14 +259,16 @@ describe('exact applyDeiteration evidence', () => {
 
     const result = deiterate(diagram, selection)
 
-    expect(Object.keys(result.nodes)).toEqual([first])
+    expect(Object.entries(result.nodes)
+      .filter(([, node]) => !(node.kind === 'identity' && node.arity === 1))
+      .map(([id]) => id)).toEqual([first])
   })
 
   it('requires exact reference identity, not signature-only isomorphism', () => {
     const builder = new DiagramBuilder()
     const first = builder.ref(builder.root, 'P', relSig([IOTA]))
     const second = builder.ref(builder.root, 'Q', relSig([IOTA]))
-    builder.wire(builder.root, [
+    builder.wire([
       { node: first, port: { kind: 'arg', index: 0 } },
       { node: second, port: { kind: 'arg', index: 0 } },
     ])

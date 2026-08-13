@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import {
   applyCutAbsorb,
@@ -10,6 +11,7 @@ import {
   applyParallelFuse,
   applyParallelSplit,
 } from '../../../src/kernel/rules/wire-content'
+import { bareWire, contentEndpoints } from '../../fixtures/pins'
 
 const UNARY = relSig([IOTA])
 
@@ -19,16 +21,17 @@ function appliedFixture() {
   const cut = builder.cut(builder.root)
   const rootAtom = builder.atom(builder.root, UNARY)
   const cutAtom = builder.atom(cut, UNARY)
-  const wire = builder.wire(builder.root, [
+  const wire = builder.wire([
     { node: rootAtom, port: { kind: 'head' } },
     { node: cutAtom, port: { kind: 'head' } },
   ], UNARY)
-  const rootArg = builder.wire(builder.root, [
+  const rootArg = builder.wire([
     { node: rootAtom, port: { kind: 'arg', index: 0 } },
   ])
-  const cutArg = builder.wire(builder.root, [
+  const cutArg = builder.wire([
     { node: cutAtom, port: { kind: 'arg', index: 0 } },
   ])
+  builder.pin(cutArg, builder.root)
   return { builder, cut, wire, rootAtom, cutAtom, rootArg, cutArg }
 }
 
@@ -44,7 +47,7 @@ describe('cut wrap / cut absorb', () => {
       .filter((id) => diagram.wires[id] === undefined)
     expect(freshWires).toHaveLength(1)
     const fresh = freshWires[0]!
-    expect(wrapped.wires[fresh]!.scope).toBe(diagram.wires[wire]!.scope)
+    expect(derivedScope(wrapped, fresh)).toBe(derivedScope(diagram, wire))
     expect(wrapped.wires[fresh]!.endpoints).toHaveLength(2)
     const freshRegions = Object.keys(wrapped.regions)
       .filter((id) => diagram.regions[id] === undefined)
@@ -54,8 +57,8 @@ describe('cut wrap / cut absorb', () => {
       expect(node.kind).toBe('atom')
       expect(freshRegions).toContain(node.region)
     }
-    expect(wrapped.wires[rootArg]!.endpoints).toHaveLength(1)
-    expect(wrapped.wires[cutArg]!.endpoints).toHaveLength(1)
+    expect(contentEndpoints(wrapped, rootArg)).toHaveLength(1)
+    expect(contentEndpoints(wrapped, cutArg)).toHaveLength(1)
 
     const restored = applyCutAbsorb(wrapped, fresh)
     expect(exploreForm(restored)).toEqual(exploreForm(diagram))
@@ -65,14 +68,14 @@ describe('cut wrap / cut absorb', () => {
     const builder = new DiagramBuilder()
     const outer = builder.atom(builder.root, relSig([UNARY]))
     const applied = builder.atom(builder.root, UNARY)
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: applied, port: { kind: 'head' } },
       { node: outer, port: { kind: 'arg', index: 0 } },
     ], UNARY)
-    builder.wire(builder.root, [
+    builder.wire([
       { node: applied, port: { kind: 'arg', index: 0 } },
     ])
-    builder.wire(builder.root, [
+    builder.wire([
       { node: outer, port: { kind: 'head' } },
     ], relSig([UNARY]))
     const diagram = builder.build()
@@ -87,10 +90,10 @@ describe('cut wrap / cut absorb', () => {
     const atom = builder.atom(cut, UNARY)
     const extra = builder.ref(cut, 'Noise', relSig([]))
     void extra
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], UNARY)
-    builder.wire(builder.root, [
+    builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = builder.build()
@@ -112,7 +115,7 @@ describe('parallel split / parallel fuse', () => {
       .filter((id) => diagram.wires[id] === undefined)
     expect(freshWires).toHaveLength(2)
     for (const fresh of freshWires) {
-      expect(split.wires[fresh]!.scope).toBe(diagram.wires[wire]!.scope)
+      expect(derivedScope(split, fresh)).toBe(derivedScope(diagram, wire))
       expect(split.wires[fresh]!.endpoints).toHaveLength(2)
     }
 
@@ -124,16 +127,16 @@ describe('parallel split / parallel fuse', () => {
     const builder = new DiagramBuilder()
     const atomA = builder.atom(builder.root, UNARY)
     const atomB = builder.atom(builder.root, UNARY)
-    const a = builder.wire(builder.root, [
+    const a = builder.wire([
       { node: atomA, port: { kind: 'head' } },
     ], UNARY)
-    const b = builder.wire(builder.root, [
+    const b = builder.wire([
       { node: atomB, port: { kind: 'head' } },
     ], UNARY)
-    builder.wire(builder.root, [
+    builder.wire([
       { node: atomA, port: { kind: 'arg', index: 0 } },
     ])
-    builder.wire(builder.root, [
+    builder.wire([
       { node: atomB, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = builder.build()
@@ -145,9 +148,9 @@ describe('parallel split / parallel fuse', () => {
   it('refuses fusing wires of different signatures or scopes', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const unary = builder.relWire(builder.root, UNARY)
-    const binary = builder.relWire(builder.root, relSig([IOTA, IOTA]))
-    const nested = builder.relWire(cut, UNARY)
+    const unary = bareWire(builder, builder.root, UNARY)
+    const binary = bareWire(builder, builder.root, relSig([IOTA, IOTA]))
+    const nested = bareWire(builder, cut, UNARY)
     const diagram = builder.build()
 
     expect(() => applyParallelFuse(diagram, unary, binary))
@@ -162,18 +165,28 @@ describe('ends delete / ends spawn', () => {
     const builder = new DiagramBuilder()
     const scope = builder.cut(builder.root)
     const atom = builder.atom(scope, UNARY)
-    const wire = builder.wire(scope, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], UNARY)
-    const arg = builder.wire(scope, [
+    // Both wires survive the delete as bare wires, so each carries the two
+    // pins the floor requires once its attachment goes.
+    builder.pin(wire, scope)
+    builder.pin(wire, scope)
+    const arg = builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])
+    builder.pin(arg, scope)
+    builder.pin(arg, scope)
     const diagram = builder.build()
 
     const deleted = applyEndsDelete(diagram, wire)
-    expect(deleted.wires[wire]!.endpoints).toEqual([])
-    expect(deleted.wires[arg]!.endpoints).toEqual([])
-    expect(Object.keys(deleted.nodes)).toEqual([])
+    // The ends go; both wires survive as bare wires held by their pins.
+    const surviving = Object.values(deleted.nodes)
+    expect(surviving.map((node) =>
+      node.kind === 'identity' && node.arity === 1 ? 'pin' : node.kind))
+      .toEqual(surviving.map(() => 'pin'))
+    expect(deleted.wires[wire]!.endpoints).toHaveLength(2)
+    expect(deleted.wires[arg]!.endpoints).toHaveLength(2)
 
     const respawned = applyEndsSpawn(deleted, wire, [
       { region: scope, args: [arg] },
@@ -184,12 +197,14 @@ describe('ends delete / ends spawn', () => {
   it('gates delete on the wire scope polarity in both orientations', () => {
     const builder = new DiagramBuilder()
     const atom = builder.atom(builder.root, UNARY)
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire([
       { node: atom, port: { kind: 'head' } },
     ], UNARY)
-    builder.wire(builder.root, [
+    const arg = builder.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])
+    builder.pin(arg, builder.root)
+    builder.pin(arg, builder.root)
     const diagram = builder.build()
 
     expect(() => applyEndsDelete(diagram, wire))
@@ -200,8 +215,8 @@ describe('ends delete / ends spawn', () => {
   it('gates spawn on the wire scope polarity and requires an endpoint-free wire', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
-    const rootWire = builder.relWire(builder.root, relSig([]))
-    const negativeWire = builder.relWire(negative, relSig([]))
+    const rootWire = bareWire(builder, builder.root, relSig([]))
+    const negativeWire = bareWire(builder, negative, relSig([]))
     const diagram = builder.build()
 
     expect(() => applyEndsSpawn(diagram, rootWire, [
@@ -219,14 +234,14 @@ describe('ends delete / ends spawn', () => {
     ])
     expect(() => applyEndsSpawn(spawned, rootWire, [
       { region: builder.root, args: [] },
-    ])).toThrowError(/endpoint-free/)
+    ])).toThrowError(/bare wire \(pin ends only\)/)
   })
 
   it('refuses spawn sites outside the wire scope or with mismatched arguments', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const wire = builder.relWire(cut, UNARY)
-    const outerArg = builder.wire(builder.root, [])
+    const wire = bareWire(builder, cut, UNARY)
+    const outerArg = bareWire(builder, builder.root)
     const diagram = builder.build()
 
     expect(() => applyEndsSpawn(diagram, wire, [

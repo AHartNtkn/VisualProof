@@ -29,7 +29,7 @@ function facingAwayPair(): { e: ReturnType<typeof mkEngine>; a: string; b: strin
   const db = new DiagramBuilder()
   const a = db.ref(db.root, 'A', relSig([IOTA]))
   const b = db.ref(db.root, 'B', relSig([IOTA]))
-  db.wire(db.root, [{ node: a, port: { kind: 'arg', index: 0 } }, { node: b, port: { kind: 'arg', index: 0 } }], IOTA)
+  db.wire( [{ node: a, port: { kind: 'arg', index: 0 } }, { node: b, port: { kind: 'arg', index: 0 } }], IOTA)
   const e = mkEngine(db.build(), [])
   e.bodies.get(a)!.pos = { x: -12, y: 0 }
   e.bodies.get(b)!.pos = { x: 12, y: 0 }

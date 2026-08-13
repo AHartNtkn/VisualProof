@@ -12,7 +12,6 @@ describe('exploreForm adversarial graph battery', () => {
       const inner = builder.cut(outer)
       const atom = builder.atom(inner, sig)
       builder.wire(
-        headAtOuter ? outer : inner,
         [{ node: atom, port: { kind: 'head' } }],
         sig,
       )
@@ -30,7 +29,7 @@ describe('exploreForm adversarial graph battery', () => {
       const first = builder.ref(firstCut, 'Leaf', relSig([IOTA]))
       const second = builder.ref(secondCut, 'Leaf', relSig([IOTA]))
       const hub = builder.ref(builder.root, 'Hub', relSig([IOTA]))
-      builder.wire(builder.root, [
+      builder.wire( [
         { node: hub, port: { kind: 'arg', index: 0 } },
         ...(side === 'second'
           ? [{ node: second, port: { kind: 'arg' as const, index: 0 } }]
@@ -52,11 +51,11 @@ describe('exploreForm adversarial graph battery', () => {
       const target = builder.atom(builder.root, relSig([IOTA, IOTA]))
       const left = builder.ref(builder.root, 'Left', relSig([IOTA]))
       const right = builder.ref(builder.root, 'Right', relSig([IOTA]))
-      builder.wire(builder.root, [
+      builder.wire( [
         { node: left, port: { kind: 'arg', index: 0 } },
         { node: target, port: { kind: 'arg', index: swapped ? 1 : 0 } },
       ])
-      builder.wire(builder.root, [
+      builder.wire( [
         { node: right, port: { kind: 'arg', index: 0 } },
         { node: target, port: { kind: 'arg', index: swapped ? 0 : 1 } },
       ])
@@ -93,7 +92,7 @@ describe('exploreForm adversarial graph battery', () => {
       const builder = new DiagramBuilder()
       const cut = builder.cut(builder.root)
       for (let index = 0; index < count; index++) {
-        builder.wire(atRoot ? builder.root : cut, [])
+        builder.wire( [])
       }
       return builder.build()
     }

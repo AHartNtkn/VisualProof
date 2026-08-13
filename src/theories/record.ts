@@ -17,6 +17,7 @@ import {
   compileRelationSeverAction,
 } from '../kernel/proof/compile-content'
 import { mapStepIds } from '../kernel/proof/compose'
+import { pinnedForReplay } from '../kernel/proof/theorem'
 import type { ProofContext } from '../kernel/proof/context'
 import type { ProofStep } from '../kernel/proof/step'
 
@@ -41,10 +42,15 @@ export function onlyNewNode(
   after: Diagram,
   region?: RegionId,
 ): NodeId {
+  // Completion pins ride along with many rules; the script's referent is
+  // the primary node, so pins (arity-1 identities) don't count here.
   const ids = Object.keys(after.nodes)
-    .filter((id) =>
-      before.nodes[id] === undefined
-      && (region === undefined || after.nodes[id]!.region === region))
+    .filter((id) => {
+      if (before.nodes[id] !== undefined) return false
+      const node = after.nodes[id]!
+      if (node.kind === 'identity' && node.arity <= 1) return false
+      return region === undefined || node.region === region
+    })
     .sort()
   return exactOne('node', ids, region === undefined ? '' : ` in '${region}'`)
 }
@@ -86,11 +92,13 @@ export class PrimitiveStepRecorder {
   readonly #wireRename = new ResolvingView()
 
   constructor(
-    diagram: Diagram,
+    side: DiagramWithBoundary,
     context: ProofContext,
     orientation: Orientation = 'forward',
   ) {
-    this.#diagram = diagram
+    // Record against the same closed stand-in checkTheorem replays: each
+    // boundary entry materialized as its frame pin.
+    this.#diagram = pinnedForReplay(side)
     this.#context = context
     this.#orientation = orientation
   }

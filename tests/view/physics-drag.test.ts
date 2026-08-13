@@ -17,7 +17,7 @@ function connectedPair(): { engine: ReturnType<typeof mkEngine>; moving: string;
   const b = new DiagramBuilder()
   const moving = b.ref(b.root, 'moving', rel(1))
   const neighbour = b.ref(b.root, 'neighbour', rel(1))
-  b.wire(b.root, [
+  b.wire( [
     { node: moving, port: { kind: 'arg', index: 0 } },
     { node: neighbour, port: { kind: 'arg', index: 0 } },
   ])

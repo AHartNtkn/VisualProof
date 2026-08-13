@@ -13,6 +13,9 @@ export function buildSelection(d: Diagram, items: readonly Hit[]): SubgraphSelec
   const regions: RegionId[] = []
   const wires: WireId[] = []
   const anchors = new Set<RegionId>()
+  // A wire's pins at its own scope are the ends it is drawn with, so picking
+  // the wire picks them: a bare segment is then a complete selection alone.
+  const pins = new Set<NodeId>()
   for (const item of items) {
     if (item.kind === 'node') {
       const node = d.nodes[item.id]
@@ -29,9 +32,17 @@ export function buildSelection(d: Diagram, items: readonly Hit[]): SubgraphSelec
       const wire = d.wires[item.id]
       if (wire === undefined) throw new Error(`unknown wire '${item.id}'`)
       wires.push(item.id)
-      anchors.add(derivedScope(d, item.id))
+      const scope = derivedScope(d, item.id)
+      anchors.add(scope)
+      for (const endpoint of wire.endpoints) {
+        const end = d.nodes[endpoint.node]!
+        if (end.kind === 'identity' && end.arity === 1 && end.region === scope) {
+          pins.add(endpoint.node)
+        }
+      }
     }
   }
+  for (const pin of pins) if (!nodes.includes(pin)) nodes.push(pin)
   if (anchors.size === 0) throw new Error('nothing selected')
   if (anchors.size > 1) {
     throw new Error(

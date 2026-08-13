@@ -237,13 +237,13 @@ describe('verified ProofContext authority', () => {
 
   it('owns immutable relation snapshots and preserves valid incremental order', () => {
     const baseBuilder = new DiagramBuilder()
-    const baseWire = baseBuilder.wire(baseBuilder.root, [])
+    const baseWire = baseBuilder.wire( [])
     const baseSource = mkDiagramWithBoundary(baseBuilder.build(), [baseWire])
     const first = extendRelations(EMPTY_PROOF_CONTEXT, [['Base', baseSource]])
 
     const aliasBuilder = new DiagramBuilder()
     const aliasNode = aliasBuilder.ref(aliasBuilder.root, 'Base', relSig([IOTA]))
-    const aliasWire = aliasBuilder.wire(aliasBuilder.root, [{ node: aliasNode, port: { kind: 'arg', index: 0 } }])
+    const aliasWire = aliasBuilder.wire( [{ node: aliasNode, port: { kind: 'arg', index: 0 } }])
     const second = extendRelations(first, [['Alias', mkDiagramWithBoundary(aliasBuilder.build(), [aliasWire])]])
     expect([...second.relations.keys()]).toEqual(['Base', 'Alias'])
 
@@ -257,13 +257,13 @@ describe('verified ProofContext authority', () => {
   it('rejects a reference whose arity matches but nested signature differs', () => {
     const baseBuilder = new DiagramBuilder()
     const nested = relSig([IOTA])
-    const baseWire = baseBuilder.wire(baseBuilder.root, [], nested)
+    const baseWire = baseBuilder.wire( [], nested)
     const base = mkDiagramWithBoundary(baseBuilder.build(), [baseWire])
     const first = extendRelations(EMPTY_PROOF_CONTEXT, [['Base', base]])
 
     const aliasBuilder = new DiagramBuilder()
     const alias = aliasBuilder.ref(aliasBuilder.root, 'Base', relSig([IOTA]))
-    const aliasWire = aliasBuilder.wire(aliasBuilder.root, [
+    const aliasWire = aliasBuilder.wire( [
       { node: alias, port: { kind: 'arg', index: 0 } },
     ], IOTA)
 
@@ -279,14 +279,14 @@ describe('verified ProofContext authority', () => {
   it('rejects a relation boundary below the root while preserving repeated root positions', () => {
     const nestedBuilder = new DiagramBuilder()
     const cut = nestedBuilder.cut(nestedBuilder.root)
-    const nested = nestedBuilder.wire(cut, [])
+    const nested = nestedBuilder.wire( [])
     expect(() => verifyTheory({
       relations: [['Bad', mkDiagramWithBoundary(nestedBuilder.build(), [nested])]],
       theorems: [],
     })).toThrowError(/boundary wire .* (?:is not|must be) scoped at the diagram root/)
 
     const rootBuilder = new DiagramBuilder()
-    const rootWire = rootBuilder.wire(rootBuilder.root, [])
+    const rootWire = rootBuilder.wire( [])
     const ctx = verifyTheory({
       relations: [['Alias', mkDiagramWithBoundary(rootBuilder.build(), [rootWire, rootWire])]],
       theorems: [],

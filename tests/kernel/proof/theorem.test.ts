@@ -30,7 +30,7 @@ function dropQ(): Theorem {
   const left = new DiagramBuilder()
   const p = left.atom(left.root, PROPOSITION)
   const q = left.atom(left.root, PROPOSITION)
-  const boundary = left.wire(left.root, [
+  const boundary = left.wire( [
     { node: p, port: { kind: 'head' } },
     { node: q, port: { kind: 'head' } },
   ], PROPOSITION)
@@ -38,7 +38,7 @@ function dropQ(): Theorem {
 
   const right = new DiagramBuilder()
   const rightP = right.atom(right.root, PROPOSITION)
-  const rightBoundary = right.wire(right.root, [{
+  const rightBoundary = right.wire( [{
     node: rightP,
     port: { kind: 'head' },
   }], PROPOSITION)
@@ -62,8 +62,8 @@ function dropQ(): Theorem {
 
 function introduceCapturedApplication(): Theorem {
   const builder = new DiagramBuilder()
-  const relation = builder.relWire(builder.root, relSig([IOTA]))
-  const argument = builder.wire(builder.root, [])
+  const relation = builder.relWire( relSig([IOTA]))
+  const argument = builder.wire( [])
   const lhsDiagram = builder.build()
   const lhs = mkDiagramWithBoundary(lhsDiagram, [relation, argument])
 
@@ -142,7 +142,7 @@ describe('checkTheorem', () => {
   it('persists and honors action allocation during replay', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const relationWire = builder.relWire(builder.root, PROPOSITION)
+    const relationWire = builder.relWire( PROPOSITION)
     const lhsDiagram = builder.build()
     const reserved: ProofAction = {
       label: 'reserved atom',
@@ -184,11 +184,11 @@ describe('checkTheorem', () => {
       'G',
       relSig([IOTA, IOTA]),
     )
-    const formalStub = contentBuilder.wire(contentBuilder.root, [{
+    const formalStub = contentBuilder.wire( [{
       node: body,
       port: { kind: 'arg', index: 0 },
     }])
-    const parameterStub = contentBuilder.wire(contentBuilder.root, [{
+    const parameterStub = contentBuilder.wire( [{
       node: body,
       port: { kind: 'arg', index: 1 },
     }])
@@ -198,8 +198,8 @@ describe('checkTheorem', () => {
     )
     const definitionBuilder = new DiagramBuilder()
     const definitionFormals = [
-      definitionBuilder.wire(definitionBuilder.root, []),
-      definitionBuilder.wire(definitionBuilder.root, []),
+      definitionBuilder.wire( []),
+      definitionBuilder.wire( []),
     ]
     const context = verifyTheory({
       relations: [['G', mkDiagramWithBoundary(
@@ -211,15 +211,15 @@ describe('checkTheorem', () => {
     const builder = new DiagramBuilder()
     const negative = builder.cut(builder.root)
     const application = builder.atom(negative, relSig([IOTA]))
-    const argument = builder.wire(builder.root, [{
+    const argument = builder.wire( [{
       node: application,
       port: { kind: 'arg', index: 0 },
     }])
-    const relation = builder.wire(negative, [{
+    const relation = builder.wire( [{
       node: application,
       port: { kind: 'head' },
     }], relSig([IOTA]))
-    const parameter = builder.wire(builder.root, [])
+    const parameter = builder.wire( [])
     const lhsDiagram = builder.build()
     const grounding: ProofAction = compileRelationJoinAction(
       'ground relation',
@@ -248,12 +248,12 @@ describe('checkTheorem', () => {
     const side = (swap: boolean) => {
       const builder = new DiagramBuilder()
       const unary = builder.atom(builder.root, relSig([IOTA]))
-      const unaryArgument = builder.wire(builder.root, [{
+      const unaryArgument = builder.wire( [{
         node: unary,
         port: { kind: 'arg', index: 0 },
       }])
       const binary = builder.atom(builder.root, relSig([IOTA, IOTA]))
-      const binaryArgument = builder.wire(builder.root, [{
+      const binaryArgument = builder.wire( [{
         node: binary,
         port: { kind: 'arg', index: 0 },
       }])
@@ -287,7 +287,7 @@ describe('checkTheorem', () => {
 
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const nested = builder.wire(cut, [], IOTA)
+    const nested = builder.wire( [], IOTA)
     expect(() => mkDiagramWithBoundary(builder.build(), [nested]))
       .toThrowError(/must be scoped at the diagram root/)
   })
@@ -315,7 +315,7 @@ describe('checkTheorem', () => {
     const lhs = mkDiagramWithBoundary(new DiagramBuilder().build(), [])
     const rhsBuilder = new DiagramBuilder()
     const atom = rhsBuilder.atom(rhsBuilder.root, PROPOSITION)
-    const wire = rhsBuilder.wire(rhsBuilder.root, [{
+    const wire = rhsBuilder.wire( [{
       node: atom,
       port: { kind: 'head' },
     }], PROPOSITION)
@@ -353,10 +353,10 @@ describe('checkTheorem', () => {
       const identity = withIdentity
         ? builder.identity(cut, IOTA, 2)
         : undefined
-      const left = builder.wire(builder.root, identity === undefined
+      const left = builder.wire( identity === undefined
         ? []
         : [{ node: identity, port: { kind: 'identity', index: 0 } }])
-      const right = builder.wire(builder.root, identity === undefined
+      const right = builder.wire( identity === undefined
         ? []
         : [{ node: identity, port: { kind: 'identity', index: 1 } }])
       return {
@@ -390,12 +390,12 @@ describe('applyTheorem', () => {
     const builder = new DiagramBuilder()
     const p = builder.atom(builder.root, PROPOSITION)
     const q = builder.atom(builder.root, PROPOSITION)
-    const boundary = builder.wire(builder.root, [
+    const boundary = builder.wire( [
       { node: p, port: { kind: 'head' } },
       { node: q, port: { kind: 'head' } },
     ], PROPOSITION)
     const marker = builder.atom(builder.root, relSig([IOTA]))
-    builder.wire(builder.root, [{
+    builder.wire( [{
       node: marker,
       port: { kind: 'arg', index: 0 },
     }])
@@ -427,7 +427,7 @@ describe('applyTheorem', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const p = builder.atom(cut, PROPOSITION)
-    const boundary = builder.wire(cut, [{
+    const boundary = builder.wire( [{
       node: p,
       port: { kind: 'head' },
     }], PROPOSITION)
@@ -511,8 +511,8 @@ describe('applyTheorem', () => {
     expect(() => checkTheorem(theorem, EMPTY_PROOF_CONTEXT)).not.toThrow()
 
     const host = new DiagramBuilder()
-    const relation = host.relWire(host.root, relSig([IOTA]))
-    const argument = host.wire(host.root, [])
+    const relation = host.relWire( relSig([IOTA]))
+    const argument = host.wire( [])
     const diagram = host.build()
     const result = applyCertified(
       diagram,
@@ -541,9 +541,9 @@ describe('applyTheorem', () => {
   it('refuses invalid capture-only theorem arguments without diagonalizing', () => {
     const theorem = introduceCapturedApplication()
     const host = new DiagramBuilder()
-    const relation = host.relWire(host.root, relSig([IOTA]))
-    const argument = host.wire(host.root, [])
-    const otherArgument = host.wire(host.root, [])
+    const relation = host.relWire( relSig([IOTA]))
+    const argument = host.wire( [])
+    const otherArgument = host.wire( [])
     const diagram = host.build()
     const emptySelection = {
       region: diagram.root,
@@ -567,8 +567,8 @@ describe('applyTheorem', () => {
     )).toThrowError(/not an occurrence|cannot land/)
 
     const aliases = new DiagramBuilder()
-    const first = aliases.wire(aliases.root, [])
-    const second = aliases.wire(aliases.root, [])
+    const first = aliases.wire( [])
+    const second = aliases.wire( [])
     const aliasSide = mkDiagramWithBoundary(aliases.build(), [first, second])
     const aliasTheorem: Theorem = {
       name: 'distinct-captures',
@@ -584,7 +584,7 @@ describe('applyTheorem', () => {
     )).toThrowError(/not an occurrence/)
 
     const repeated = new DiagramBuilder()
-    const repeatedCapture = repeated.wire(repeated.root, [])
+    const repeatedCapture = repeated.wire( [])
     const repeatedSide = mkDiagramWithBoundary(
       repeated.build(),
       [repeatedCapture, repeatedCapture],
@@ -609,8 +609,8 @@ describe('applyTheorem', () => {
     const left = host.cut(host.root)
     const outer = host.cut(host.root)
     const right = host.cut(outer)
-    const relation = host.relWire(left, relSig([IOTA]))
-    const argument = host.wire(host.root, [])
+    const relation = host.relWire( relSig([IOTA]))
+    const argument = host.wire( [])
     const diagram = host.build()
 
     expect(() => applyCertified(
@@ -637,7 +637,7 @@ describe('theorem proof steps', () => {
     const builder = new DiagramBuilder()
     const p = builder.atom(builder.root, PROPOSITION)
     const q = builder.atom(builder.root, PROPOSITION)
-    const boundary = builder.wire(builder.root, [
+    const boundary = builder.wire( [
       { node: p, port: { kind: 'head' } },
       { node: q, port: { kind: 'head' } },
     ], PROPOSITION)

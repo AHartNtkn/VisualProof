@@ -12,7 +12,7 @@ import type {
 } from '../diagram/diagram'
 import { exploreForm, exploreIso } from '../diagram/canonical/explore'
 import { mkDiagram } from '../diagram/diagram'
-import { derivedScope, derivedScopes, isAncestorOrEqual } from '../diagram/regions'
+import { deepestCommonAncestor, derivedScope, derivedScopes, isAncestorOrEqual } from '../diagram/regions'
 import type { RelSig, Sig } from '../diagram/sig'
 import { relSig, sigEquals, sigKey } from '../diagram/sig'
 import { extractSubgraph } from '../diagram/subgraph/extract'
@@ -94,8 +94,22 @@ function rootCuts(content: DiagramWithBoundary): RegionId[] {
 }
 
 function rootNodes(content: DiagramWithBoundary): NodeId[] {
+  // A pin riding a boundary stub is interface apparatus (the drawn form of
+  // a detached formal), not a content item to instantiate.
+  const stubs = new Set(content.boundary)
+  const stubPins = new Set<NodeId>()
+  for (const [wireId, wire] of Object.entries(content.diagram.wires)) {
+    if (!stubs.has(wireId)) continue
+    for (const endpoint of wire.endpoints) {
+      const node = content.diagram.nodes[endpoint.node]
+      if (node !== undefined && node.kind === 'identity' && node.arity === 1) {
+        stubPins.add(endpoint.node)
+      }
+    }
+  }
   return Object.entries(content.diagram.nodes)
-    .filter(([, node]) => node.region === content.diagram.root)
+    .filter(([nodeId, node]) =>
+      node.region === content.diagram.root && !stubPins.has(nodeId))
     .map(([nodeId]) => nodeId)
     .sort()
 }
@@ -175,6 +189,7 @@ function restrictContent(
       wires[wireId] = wire
     }
   }
+  pinDeficientStubs(content.boundary, nodes, wires, diagram.root)
   return mkDiagramWithBoundary(
     {
       root: diagram.root,
@@ -184,6 +199,36 @@ function restrictContent(
     },
     content.boundary,
   )
+}
+
+/**
+ * A formal detached on one side of a restriction keeps only its boundary
+ * entry; its drawn form is the wire from the frame exit to a root pin, so
+ * the pin is minted here (deterministically) to satisfy the two-end floor.
+ */
+function pinDeficientStubs(
+  boundary: readonly WireId[],
+  nodes: Record<NodeId, DiagramNode>,
+  wires: Record<WireId, Wire>,
+  root: RegionId,
+): void {
+  const entries = new Map<WireId, number>()
+  for (const wireId of boundary) {
+    entries.set(wireId, (entries.get(wireId) ?? 0) + 1)
+  }
+  const taken = new Set(Object.keys(nodes))
+  for (const [wireId, count] of entries) {
+    const wire = wires[wireId]
+    if (wire === undefined) continue
+    if (wire.endpoints.length + count >= 2) continue
+    const pin = freshId(taken, 'stubpin')
+    taken.add(pin)
+    nodes[pin] = { kind: 'identity', region: root, sig: wire.sig, arity: 1 }
+    wires[wireId] = {
+      sig: wire.sig,
+      endpoints: [...wire.endpoints, { node: pin, port: { kind: 'identity', index: 0 } }],
+    }
+  }
 }
 
 /** Re-root the content into its single root cut (for cut wrap). */
@@ -203,11 +248,16 @@ function rerootContent(content: DiagramWithBoundary, cut: RegionId): DiagramWith
   const wires: Record<WireId, Wire> = {}
   for (const [wireId, wire] of Object.entries(diagram.wires)) {
     if (new Set(content.boundary).has(wireId)) {
-      wires[wireId] = { sig: wire.sig, endpoints: wire.endpoints }
+      wires[wireId] = {
+        sig: wire.sig,
+        endpoints: wire.endpoints.filter((endpoint) =>
+          nodes[endpoint.node] !== undefined),
+      }
     } else if (subtree.has(scopes.get(wireId)!)) {
       wires[wireId] = wire
     }
   }
+  pinDeficientStubs(content.boundary, nodes, wires, cut)
   return mkDiagramWithBoundary(
     { root: cut, regions, nodes, wires },
     content.boundary,
@@ -641,21 +691,65 @@ export function compileRelationJoin(
   const steps: ProofStep[] = []
   let current = diagram
   let reservation = options.reservation
+  const apply = (step: ProofStep): Diagram => {
+    const before = current
+    const receipt = applyStepWithReceipt(
+      current,
+      step,
+      context,
+      orientation,
+      reservation,
+    )
+    current = receipt.result
+    reservation = extendIdReservation(reservation, receipt.allocation)
+    steps.push(step)
+    options.onStep?.(step, before, current)
+    return current
+  }
+  // Completion pins are per-step scaffolding; a pin whose removal changes
+  // neither a scope nor a floor holds nothing, and sweeping it keeps the
+  // compiled shape pin-minimal (the shape the target diagrams state).
+  const sweepScaffoldPins = (): void => {
+    for (;;) {
+      let swept = false
+      for (const wireId of Object.keys(current.wires).sort()) {
+        const wire = current.wires[wireId]!
+        if (wire.endpoints.length <= 2) continue
+        const scope = derivedScope(current, wireId)
+        for (const endpoint of [...wire.endpoints].sort((a, b) =>
+          a.node < b.node ? -1 : a.node > b.node ? 1 : 0)) {
+          const node = current.nodes[endpoint.node]
+          if (node === undefined || node.kind !== 'identity' || node.arity !== 1) continue
+          const rest = wire.endpoints.filter((candidate) => candidate.node !== endpoint.node)
+          if (rest.length < 2) continue
+          let dca: RegionId | null = null
+          for (const other of rest) {
+            const region = current.nodes[other.node]!.region
+            dca = dca === null ? region : deepestCommonAncestor(current, dca, region)
+          }
+          if (dca !== scope) continue
+          apply({
+            rule: 'vacuity',
+            direction: 'delete',
+            assembly: {
+              nodes: { [endpoint.node]: { region: node.region, sig: node.sig, arity: 1 } },
+              wires: {},
+              attachments: { [wireId]: [endpoint] },
+            },
+          })
+          swept = true
+          break
+        }
+        if (swept) break
+      }
+      if (!swept) return
+    }
+  }
   const emitter: Emitter = {
     current: () => current,
     emit: (step) => {
-      const before = current
-      const receipt = applyStepWithReceipt(
-        current,
-        step,
-        context,
-        orientation,
-        reservation,
-      )
-      current = receipt.result
-      reservation = extendIdReservation(reservation, receipt.allocation)
-      steps.push(step)
-      options.onStep?.(step, before, current)
+      apply(step)
+      sweepScaffoldPins()
       return current
     },
   }
@@ -982,7 +1076,8 @@ export function compileRelationSever(
     const finalIso = exploreIso(finalState, diagram)
     if (finalIso === null) {
       throw new RuleError(
-        'sever compilation failed: the planned join does not reproduce the diagram',
+        'sever compilation failed: the planned join does not reproduce the diagram\n'
+        + `-- planned:\n${exploreForm(finalState)}\n-- actual:\n${exploreForm(diagram)}`,
       )
     }
   }
@@ -996,7 +1091,8 @@ export function compileRelationSever(
     const iso = exploreIso(post, real)
     if (iso === null) {
       throw new RuleError(
-        `sever compilation lost the isomorphism before inverting step ${index}`,
+        `sever compilation lost the isomorphism before inverting step ${index} `
+        + `(${step.rule})\n-- planned post:\n${exploreForm(post)}\n-- real:\n${exploreForm(real)}`,
       )
     }
     const inverse = invertStep(step, pre, post)
@@ -1027,8 +1123,13 @@ function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
     }
     return wire
   }
+  // Completion pins minted alongside a step are scaffolding, not ends.
   const newNodes = (): NodeId[] =>
-    Object.keys(post.nodes).filter((nodeId) => pre.nodes[nodeId] === undefined)
+    Object.keys(post.nodes).filter((nodeId) => {
+      if (pre.nodes[nodeId] !== undefined) return false
+      const node = post.nodes[nodeId]!
+      return !(node.kind === 'identity' && node.arity <= 1)
+    })
 
   switch (step.rule) {
     case 'arityShift': {
@@ -1089,8 +1190,15 @@ function invertStep(step: ProofStep, pre: Diagram, post: Diagram): ProofStep {
       const oldSig = old.sig as RelSig
       const args = oldSig.args.filter((_, index) => index !== step.position)
       const fresh = newWireOfSig(pre, post, relSig(args))
-      const preEnds = old.endpoints.map((endpoint) => endpoint.node)
-      const postEnds = post.wires[fresh]!.endpoints.map((endpoint) => endpoint.node)
+      const applied = (diagram: Diagram, endpoints: readonly Endpoint[]): NodeId[] =>
+        endpoints
+          .filter((endpoint) => {
+            const node = diagram.nodes[endpoint.node]!
+            return !(node.kind === 'identity' && node.arity === 1)
+          })
+          .map((endpoint) => endpoint.node)
+      const preEnds = applied(pre, old.endpoints)
+      const postEnds = applied(post, post.wires[fresh]!.endpoints)
       const attachments = Object.fromEntries(postEnds.map((node, index) => [
         node,
         endArgs(pre, preEnds[index]!, oldSig.args.length)[step.position]!,

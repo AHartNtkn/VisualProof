@@ -13,7 +13,7 @@ import { applyUnfold } from '../../../src/kernel/rules/fold'
 function bodyR() {
   const builder = new DiagramBuilder()
   const predicate = builder.atom(builder.root, relSig([IOTA]))
-  const argument = builder.wire(builder.root, [{
+  const argument = builder.wire( [{
     node: predicate,
     port: { kind: 'arg', index: 0 },
   }])
@@ -30,7 +30,7 @@ describe('folded-guard integration proof', () => {
     })
     const left = new DiagramBuilder()
     const ambient = left.ref(left.root, 'R', relSig([IOTA]))
-    const argument = left.wire(left.root, [{
+    const argument = left.wire( [{
       node: ambient,
       port: { kind: 'arg', index: 0 },
     }])

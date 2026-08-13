@@ -12,7 +12,6 @@ describe('extraction with open signature-indexed lines', () => {
     const cut = builder.cut(builder.root)
     const atom = builder.atom(cut, relation)
     const head = builder.wire(
-      builder.root,
       [{ node: atom, port: { kind: 'head' } }],
       relation,
     )
@@ -43,7 +42,7 @@ describe('extraction with open signature-indexed lines', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const atom = builder.atom(cut, relation)
-    builder.wire(cut, [{ node: atom, port: { kind: 'head' } }], relation)
+    builder.wire( [{ node: atom, port: { kind: 'head' } }], relation)
     const diagram = builder.build()
     const extraction = extractSubgraph(diagram, mkSelection(diagram, {
       region: diagram.root,
@@ -64,12 +63,10 @@ describe('extraction with open signature-indexed lines', () => {
     const unaryAtom = builder.atom(cut, unary)
     const nullaryAtom = builder.atom(cut, nullary)
     builder.wire(
-      builder.root,
       [{ node: unaryAtom, port: { kind: 'head' } }],
       unary,
     )
     builder.wire(
-      builder.root,
       [{ node: nullaryAtom, port: { kind: 'head' } }],
       nullary,
     )
@@ -96,8 +93,8 @@ describe('extraction with open signature-indexed lines', () => {
     const outside = builder.ref(builder.root, 'Outside', relSig([IOTA]))
     const cut = builder.cut(builder.root)
     const atom = builder.atom(cut, relation)
-    builder.wire(cut, [{ node: atom, port: { kind: 'head' } }], relation)
-    const crossing = builder.wire(builder.root, [
+    builder.wire( [{ node: atom, port: { kind: 'head' } }], relation)
+    const crossing = builder.wire( [
       { node: outside, port: { kind: 'arg', index: 0 } },
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])

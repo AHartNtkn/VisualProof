@@ -41,7 +41,7 @@ describe('exploration matcher exhaustive assignment and footprint quotient', () 
       const ref = builder.ref(builder.root, 'P', relSig([IOTA]))
       endpoints.push({ node: ref, port: { kind: 'arg', index: 0 } })
     }
-    builder.wire(builder.root, endpoints)
+    builder.wire( endpoints)
     return builder.build()
   }
 
@@ -141,7 +141,7 @@ describe('exploration matcher symmetry completeness', () => {
       'P',
       relSig([IOTA]),
     )
-    const stub = patternBuilder.wire(patternBuilder.root, [
+    const stub = patternBuilder.wire( [
       { node: patternRef, port: { kind: 'arg', index: 0 } },
     ])
     const pattern = mkDiagramWithBoundary(patternBuilder.build(), [stub])
@@ -159,11 +159,11 @@ describe('exploration matcher symmetry completeness', () => {
       'SecondHub',
       relSig([IOTA]),
     )
-    const firstWire = hostBuilder.wire(hostBuilder.root, [
+    const firstWire = hostBuilder.wire( [
       { node: first, port: { kind: 'arg', index: 0 } },
       { node: firstHub, port: { kind: 'arg', index: 0 } },
     ])
-    const secondWire = hostBuilder.wire(hostBuilder.root, [
+    const secondWire = hostBuilder.wire( [
       { node: second, port: { kind: 'arg', index: 0 } },
       { node: secondHub, port: { kind: 'arg', index: 0 } },
     ])
@@ -185,7 +185,7 @@ describe('exploration matcher symmetry completeness', () => {
       'P',
       relSig([IOTA]),
     )
-    const stub = patternBuilder.wire(patternBuilder.root, [
+    const stub = patternBuilder.wire( [
       { node: patternRef, port: { kind: 'arg', index: 0 } },
     ])
     const pattern = mkDiagramWithBoundary(patternBuilder.build(), [stub])
@@ -193,10 +193,10 @@ describe('exploration matcher symmetry completeness', () => {
     const hostBuilder = new DiagramBuilder()
     const first = hostBuilder.ref(hostBuilder.root, 'P', relSig([IOTA]))
     const second = hostBuilder.ref(hostBuilder.root, 'P', relSig([IOTA]))
-    const firstWire = hostBuilder.wire(hostBuilder.root, [
+    const firstWire = hostBuilder.wire( [
       { node: first, port: { kind: 'arg', index: 0 } },
     ])
-    hostBuilder.wire(hostBuilder.root, [
+    hostBuilder.wire( [
       { node: second, port: { kind: 'arg', index: 0 } },
     ])
     const host = hostBuilder.build()

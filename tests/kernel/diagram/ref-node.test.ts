@@ -35,7 +35,7 @@ describe('ref and atom spawning vocabulary', () => {
   it('spawnAtomNode binds a fresh atom head to an existing relational wire', () => {
     const builder = new DiagramBuilder()
     const sig = relSig([IOTA])
-    const target = builder.relWire(builder.root, sig)
+    const target = builder.relWire( sig)
     const spawned = spawnAtomNode(builder.build(), builder.root, target)
 
     expect(spawned.diagram.nodes[spawned.node]).toMatchObject({ kind: 'atom', sig })
@@ -47,7 +47,7 @@ describe('ref and atom spawning vocabulary', () => {
   it('applyRefSpawn uses the definition store and checks the full recursive signature', () => {
     const definitionBuilder = new DiagramBuilder()
     const nested = relSig([IOTA])
-    const boundary = definitionBuilder.wire(definitionBuilder.root, [], nested)
+    const boundary = definitionBuilder.wire( [], nested)
     const relation = mkDiagramWithBoundary(definitionBuilder.build(), [boundary])
     const store = new Map([['P', relation]])
 
@@ -62,7 +62,7 @@ describe('ref and atom spawning vocabulary', () => {
   it('applyAtomSpawn creates an atom through the atom-named rule entry', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const target = builder.relWire(builder.root, relSig([]))
+    const target = builder.relWire( relSig([]))
     const spawned = applyAtomSpawn(builder.build(), cut, target)
     expect(Object.values(spawned.nodes).some((node) => node.kind === 'atom')).toBe(true)
   })

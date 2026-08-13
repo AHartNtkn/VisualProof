@@ -23,7 +23,7 @@ function dropQ(): Theorem {
   const left = new DiagramBuilder()
   const p = left.atom(left.root, PROPOSITION)
   const q = left.atom(left.root, PROPOSITION)
-  const boundary = left.wire(left.root, [
+  const boundary = left.wire( [
     { node: p, port: { kind: 'head' } },
     { node: q, port: { kind: 'head' } },
   ], PROPOSITION)
@@ -31,7 +31,7 @@ function dropQ(): Theorem {
 
   const right = new DiagramBuilder()
   const rightP = right.atom(right.root, PROPOSITION)
-  const rightBoundary = right.wire(right.root, [{
+  const rightBoundary = right.wire( [{
     node: rightP,
     port: { kind: 'head' },
   }], PROPOSITION)
@@ -97,12 +97,12 @@ describe('stored derived rule pipeline', () => {
     const host = new DiagramBuilder()
     const p = host.atom(host.root, PROPOSITION)
     const q = host.atom(host.root, PROPOSITION)
-    const boundary = host.wire(host.root, [
+    const boundary = host.wire( [
       { node: p, port: { kind: 'head' } },
       { node: q, port: { kind: 'head' } },
     ], PROPOSITION)
     const marker = host.atom(host.root, relSig([IOTA]))
-    const markerArgument = host.wire(host.root, [{
+    const markerArgument = host.wire( [{
       node: marker,
       port: { kind: 'arg', index: 0 },
     }])
@@ -145,7 +145,7 @@ describe('stored derived rule pipeline', () => {
     const host = new DiagramBuilder()
     const p = host.atom(host.root, PROPOSITION)
     const q = host.atom(host.root, PROPOSITION)
-    const boundary = host.wire(host.root, [
+    const boundary = host.wire( [
       { node: p, port: { kind: 'head' } },
       { node: q, port: { kind: 'head' } },
     ], PROPOSITION)

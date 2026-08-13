@@ -10,7 +10,7 @@ describe('settled hit targets', () => {
   it('a point on an ∃ dot grabs its homed body (clicks resolve it to the wire, drags do not)', () => {
     const h = new DiagramBuilder()
     const a = h.ref(h.root, 'Unary', UNARY)
-    const w = h.wire(h.root, [{ node: a, port: { kind: 'arg', index: 0 } }])
+    const w = h.wire( [{ node: a, port: { kind: 'arg', index: 0 } }])
     const e = mkEngine(h.build(), [])
     settle(e, 2600)
     const j = e.bodies.get(e.wires.get(w)!.end!.body)!
@@ -23,7 +23,7 @@ describe('settled hit targets', () => {
     const a = h.ref(h.root, 'A', UNARY)
     const b = h.ref(h.root, 'B', UNARY)
     const c = h.ref(h.root, 'C', UNARY)
-    const w = h.wire(h.root, [
+    const w = h.wire( [
       { node: a, port: { kind: 'arg', index: 0 } },
       { node: b, port: { kind: 'arg', index: 0 } },
       { node: c, port: { kind: 'arg', index: 0 } },

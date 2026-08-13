@@ -42,10 +42,10 @@ function boundedIdentity(swap: boolean) {
   const builder = new DiagramBuilder()
   const cut = builder.cut(builder.root)
   const identity = builder.identity(cut, IOTA, 2)
-  builder.wire(builder.root, [
+  builder.wire( [
     { node: identity, port: { kind: 'identity', index: swap ? 1 : 0 } },
   ])
-  builder.wire(builder.root, [
+  builder.wire( [
     { node: identity, port: { kind: 'identity', index: swap ? 0 : 1 } },
   ])
   const diagram = builder.build()
@@ -101,7 +101,7 @@ describe('step JSON', () => {
   it('round-trips the durable iteration payload with its selected root wire', () => {
     const builder = new DiagramBuilder()
     const node = builder.atom(builder.root, relSig([IOTA]))
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire( [
       { node, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = builder.build()
@@ -365,7 +365,7 @@ describe('diagram-with-boundary JSON', () => {
 
   it('round-trips repeated boundary positions without collapsing arity', () => {
     const builder = new DiagramBuilder()
-    const wire = builder.wire(builder.root, [], IOTA)
+    const wire = builder.wire( [], IOTA)
     const aliased = mkDiagramWithBoundary(builder.build(), [wire, wire])
     const decoded = dwbFromJson(JSON.parse(JSON.stringify(dwbToJson(aliased))))
 
@@ -374,7 +374,7 @@ describe('diagram-with-boundary JSON', () => {
 
   it('round-trips and re-enforces the root-scoped-boundary invariant', () => {
     const builder = new DiagramBuilder()
-    const bare = builder.wire(builder.root, [], IOTA)
+    const bare = builder.wire( [], IOTA)
     const dwb = mkDiagramWithBoundary(builder.build(), [bare])
     const decoded = dwbFromJson(JSON.parse(JSON.stringify(dwbToJson(dwb))))
 
@@ -414,7 +414,7 @@ describe('theorem JSON', () => {
   it('persists gesture actions and ordered ref boundaries', () => {
     const builder = new DiagramBuilder()
     const ref = builder.ref(builder.root, 'R', relSig([IOTA]))
-    const boundary = builder.wire(builder.root, [{
+    const boundary = builder.wire( [{
       node: ref,
       port: { kind: 'arg', index: 0 },
     }])

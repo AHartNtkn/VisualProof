@@ -42,12 +42,12 @@ function buildTrap(k: number, pairs: number): { d: Diagram; cut: string; left: s
   const cut = b.cut(b.root)
   const inner: string[] = []
   for (let i = 0; i < k; i++) inner.push(b.ref(cut, `C${i}`, relSig([IOTA])))
-  if (k >= 2) b.wire(cut, inner.map((n) => ({ node: n, port: { kind: 'arg' as const, index: 0 } })), IOTA)
+  if (k >= 2) b.wire( IOTA)
   const left: string[] = [], right: string[] = []
   for (let p = 0; p < pairs; p++) {
     const n0 = b.ref(b.root, `L${p}`, relSig([IOTA]))
     const n1 = b.ref(b.root, `R${p}`, relSig([IOTA]))
-    b.wire(b.root, [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], IOTA)
+    b.wire( [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], IOTA)
     left.push(n0); right.push(n1)
   }
   return { d: b.build(), cut, left, right }
@@ -132,7 +132,7 @@ describe('the chain is deterministic in its seed (plan Task 6)', () => {
       const b0 = new DiagramBuilder()
       const n0 = b0.ref(b0.root, 'R', relSig([IOTA]))
       const n1 = b0.ref(b0.root, 'S', relSig([IOTA]))
-      b0.wire(b0.root, [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], IOTA)
+      b0.wire( [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], IOTA)
       const e = mkEngine(b0.build(), [])
       e.bodies.get(n0)!.pos = { x: -20, y: 5 }
       e.bodies.get(n1)!.pos = { x: 20, y: -5 }
@@ -161,7 +161,7 @@ describe('every movable unit has a covering move (plan Task 6 coverage)', () => 
     const r0 = b.ref(b.root, 'R', relSig([IOTA]))
     const r1 = b.ref(b.root, 'S', relSig([IOTA]))
     const r2 = b.ref(b.root, 'T', relSig([IOTA]))
-    b.wire(b.root, [
+    b.wire( [
       { node: r0, port: { kind: 'arg', index: 0 } },
       { node: r1, port: { kind: 'arg', index: 0 } },
       { node: r2, port: { kind: 'arg', index: 0 } },
@@ -192,7 +192,7 @@ describe('the seed relaxation streams incrementally (plan Task 6 Phase 0)', () =
     const b = new DiagramBuilder()
     const r = [0, 1, 2, 3, 4, 5].map((i) => b.ref(b.root, `R${i}`, relSig([IOTA, IOTA])))
     for (let i = 0; i < 6; i++) {
-      b.wire(b.root, [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 6]!, port: { kind: 'arg', index: 0 } }], IOTA)
+      b.wire( [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 6]!, port: { kind: 'arg', index: 0 } }], IOTA)
     }
     const e = mkEngine(b.build(), [])
     // a WIDE hard seed (ports facing wrong ways across long spans): the
@@ -237,7 +237,7 @@ describe('the published best-store is monotone (USER law: only the best yet foun
     const b = new DiagramBuilder()
     const r = [0, 1, 2, 3].map((i) => b.ref(b.root, `R${i}`, relSig([IOTA, IOTA])))
     for (let i = 0; i < 4; i++) {
-      b.wire(b.root, [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 4]!, port: { kind: 'arg', index: 0 } }], IOTA)
+      b.wire( [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 4]!, port: { kind: 'arg', index: 0 } }], IOTA)
     }
     const e = mkEngine(b.build(), [])
     let i = 0

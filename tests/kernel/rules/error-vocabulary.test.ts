@@ -8,6 +8,7 @@ import { applyErasure } from '../../../src/kernel/rules/erasure'
 import { RuleError } from '../../../src/kernel/rules/error'
 import { applyIteration } from '../../../src/kernel/rules/iteration'
 import { applyAtomSpawn } from '../../../src/kernel/rules/spawn'
+import { bareWire } from '../../fixtures/pins'
 import {
   applyCutWrap,
   applyEndsDelete,
@@ -32,7 +33,7 @@ describe('unknown ids are DiagramError; rule-gate refusals are RuleError', () =>
   it('atom spawning with an unknown region is structural', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const wire = builder.relWire(cut, relSig([]))
+    const wire = bareWire(builder, cut, relSig([]))
     const diagram = builder.build()
 
     expect(caughtBy(() => applyAtomSpawn(diagram, 'ghost', wire)))
@@ -42,7 +43,7 @@ describe('unknown ids are DiagramError; rule-gate refusals are RuleError', () =>
   it('wire joining checks both referents before its rule gate', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const wire = builder.wire(cut, [])
+    const wire = bareWire(builder, cut)
     const diagram = builder.build()
 
     expect(caughtBy(() => applyWireJoin(diagram, {
@@ -107,7 +108,7 @@ describe('unknown ids are DiagramError; rule-gate refusals are RuleError', () =>
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const atom = builder.atom(cut, relSig([]))
-    const relationWire = builder.relWire(builder.root, relSig([]))
+    const relationWire = bareWire(builder, builder.root, relSig([]))
     const diagram = builder.build()
 
     expect(caughtBy(() => applyAtomSpawn(
@@ -127,7 +128,7 @@ describe('unknown ids are DiagramError; rule-gate refusals are RuleError', () =>
 
   it('content primitives follow the same vocabulary', () => {
     const builder = new DiagramBuilder()
-    const rootWire = builder.relWire(builder.root, relSig([]))
+    const rootWire = bareWire(builder, builder.root, relSig([]))
     const diagram = builder.build()
 
     expect(caughtBy(() => applyCutWrap(diagram, 'ghost')))

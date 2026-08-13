@@ -79,7 +79,7 @@ function succShiftS(
   context: ProofContext,
 ): Theorem {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
-  const forward = new PrimitiveStepRecorder(lhs.diagram, context)
+  const forward = new PrimitiveStepRecorder(lhs, context)
 
   forward.record('seed successor-shift shell from direct carrier support', {
     rule: 'theorem',
@@ -319,7 +319,7 @@ function succShiftS(
 
   const rhs = statements.succShiftS
   const backward = new PrimitiveStepRecorder(
-    rhs.diagram,
+    rhs,
     context,
     'backward',
   )

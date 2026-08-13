@@ -10,11 +10,11 @@ function host() {
   const outer = builder.ref(builder.root, 'Outer', relSig([IOTA]))
   const cut = builder.cut(builder.root)
   const inner = builder.ref(cut, 'Inner', relSig([IOTA, IOTA]))
-  const shared = builder.wire(builder.root, [
+  const shared = builder.wire( [
     { node: outer, port: { kind: 'arg', index: 0 } },
     { node: inner, port: { kind: 'arg', index: 0 } },
   ])
-  const inside = builder.wire(cut, [
+  const inside = builder.wire( [
     { node: inner, port: { kind: 'arg', index: 1 } },
   ])
   return {

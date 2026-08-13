@@ -33,10 +33,10 @@ describe('DiagramBuilder', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
     const identity = builder.identity(cut, IOTA, 2)
-    builder.wire(builder.root, [
+    builder.wire( [
       { node: identity, port: { kind: 'identity', index: 0 } },
     ])
-    builder.wire(builder.root, [
+    builder.wire( [
       { node: identity, port: { kind: 'identity', index: 1 } },
     ])
 

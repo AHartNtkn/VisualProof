@@ -32,7 +32,7 @@ describe('relation node spawning', () => {
   it('binds a fresh atom head to an existing relational wire', () => {
     const builder = new DiagramBuilder()
     const sig = relSig([IOTA])
-    const target = builder.relWire(builder.root, sig)
+    const target = builder.relWire( sig)
     const spawned = spawnAtomNode(
       builder.build(),
       builder.root,
@@ -54,7 +54,7 @@ describe('relation node spawning', () => {
       .toThrowError(/wire 'ghost' does not exist/)
 
     const builder = new DiagramBuilder()
-    const iota = builder.wire(builder.root, [])
+    const iota = builder.wire( [])
     const diagram = builder.build()
     expect(() => spawnAtomNode(diagram, diagram.root, iota))
       .toThrowError(/has sig 'iota'/)
@@ -62,7 +62,7 @@ describe('relation node spawning', () => {
 
   it('honors reserved node ids', () => {
     const builder = new DiagramBuilder()
-    const target = builder.relWire(builder.root, relSig([]))
+    const target = builder.relWire( relSig([]))
     const reservation: IdReservation = {
       regions: new Set(),
       nodes: new Set(['n']),

@@ -1,4 +1,5 @@
-import type { Diagram, WireId } from '../diagram/diagram'
+import type { Diagram, DiagramNode, NodeId, WireId } from '../diagram/diagram'
+import { mkDiagram } from '../diagram/diagram'
 import { polarity } from '../diagram/regions'
 import type { DiagramWithBoundary } from '../diagram/boundary'
 import { mkDiagramWithBoundary } from '../diagram/boundary'
@@ -48,6 +49,34 @@ export type TheoremApplication = {
  * identity with no semantic image cannot be replaced later by an unrelated
  * wire that happens to reuse its identifier.
  */
+/**
+ * Close an open side for replay: every ordered boundary entry becomes a
+ * frame pin — an arity-1 identity at the root standing in for the frame
+ * exit, which is exactly the end that entry contributes. Deterministic ids
+ * ('framepin', 'framepin_0', ...) so recording and checking mint alike.
+ */
+export function pinnedForReplay(side: DiagramWithBoundary): Diagram {
+  const nodes: Record<NodeId, DiagramNode> = { ...side.diagram.nodes }
+  const wires = { ...side.diagram.wires }
+  const taken = new Set(Object.keys(nodes))
+  side.boundary.forEach((wireId) => {
+    const pin = freshId(taken, 'framepin')
+    taken.add(pin)
+    const wire = wires[wireId]!
+    nodes[pin] = { kind: 'identity', region: side.diagram.root, sig: wire.sig, arity: 1 }
+    wires[wireId] = {
+      sig: wire.sig,
+      endpoints: [...wire.endpoints, { node: pin, port: { kind: 'identity', index: 0 } }],
+    }
+  })
+  return mkDiagram({
+    root: side.diagram.root,
+    regions: { ...side.diagram.regions },
+    nodes,
+    wires,
+  })
+}
+
 export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
   assertProofContext(ctx)
   if (thm.lhs.boundary.length !== thm.rhs.boundary.length) {
@@ -73,11 +102,11 @@ export function checkTheorem(thm: Theorem, ctx: ProofContext): void {
     }
   }
   const fwdInterface = carry(thm.lhs.boundary)
-  const fwd = replayActions(thm.lhs.diagram, thm.actions, ctx, fwdInterface.afterStep)
+  const fwd = replayActions(pinnedForReplay(thm.lhs), thm.actions, ctx, fwdInterface.afterStep)
   // the backward half replays from the RHS with flipped gates — each step
   // asserts its result entails its input, so the chain runs rhs-ward
   const bwdInterface = carry(thm.rhs.boundary)
-  const bwd = replayActions(thm.rhs.diagram, backActions, ctx, bwdInterface.afterStep, 'backward')
+  const bwd = replayActions(pinnedForReplay(thm.rhs), backActions, ctx, bwdInterface.afterStep, 'backward')
   if (exploreForm(fwd, fwdInterface.boundary()) !== exploreForm(bwd, bwdInterface.boundary())) {
     throw new ProofError(backActions.length === 0
       ? `theorem '${thm.name}': the proof does not arrive at the stated right-hand side`

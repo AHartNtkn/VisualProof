@@ -17,7 +17,7 @@ const commutedSides = (): {
     const builder = new DiagramBuilder()
     const plus = builder.ref(builder.root, 'plus', rel(3))
     const boundary = argumentAtBoundary.map((index) =>
-      builder.wire(builder.root, [
+      builder.wire( [
         { node: plus, port: { kind: 'arg', index } },
       ]))
     return { diagram: builder.build(), boundary }
@@ -32,7 +32,7 @@ describe('worldBindAnchor — wires attach to the DRAWN node rim, not the padded
   it('a ref binds on its DISC_R rim, strictly inside the padded clearance disc', () => {
     const h = new DiagramBuilder()
     const r = h.ref(h.root, 'plus', rel(3))
-    for (let i = 0; i < 3; i++) h.wire(h.root, [{ node: r, port: { kind: 'arg', index: i } }])
+    for (let i = 0; i < 3; i++) h.wire( [{ node: r, port: { kind: 'arg', index: i } }])
     const e = mkEngine(h.build(), [])
     const b = e.bodies.get(r)!
     for (const key of b.localAnchor.keys()) {
@@ -54,16 +54,16 @@ describe('worldBindAnchor — wires attach to the DRAWN node rim, not the padded
     const identity = h.identity(cut, IOTA, 2)
     const left = h.ref(h.root, 'Left', UNARY)
     const right = h.ref(h.root, 'Right', UNARY)
-    h.wire(h.root, [
+    h.wire( [
       { node: identity, port: { kind: 'identity', index: 0 } },
       { node: left, port: { kind: 'arg', index: 0 } },
     ])
-    h.wire(h.root, [
+    h.wire( [
       { node: identity, port: { kind: 'identity', index: 1 } },
       { node: right, port: { kind: 'arg', index: 0 } },
     ])
     const at = h.atom(h.root, rel(2))
-    for (let i = 0; i < 2; i++) h.wire(h.root, [{ node: at, port: { kind: 'arg', index: i } }])
+    for (let i = 0; i < 2; i++) h.wire( [{ node: at, port: { kind: 'arg', index: i } }])
     const e = mkEngine(h.build(), [])
     e.scale = 1.75
     for (const id of [identity, at]) {

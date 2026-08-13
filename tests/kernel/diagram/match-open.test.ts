@@ -9,12 +9,12 @@ describe('open signature-indexed matching', () => {
     const unary = relSig([IOTA])
     const nullary = relSig([])
     const patternBuilder = new DiagramBuilder()
-    const boundary = patternBuilder.relWire(patternBuilder.root, unary)
+    const boundary = patternBuilder.relWire( unary)
     const pattern = mkDiagramWithBoundary(patternBuilder.build(), [boundary])
 
     const hostBuilder = new DiagramBuilder()
-    const good = hostBuilder.relWire(hostBuilder.root, unary)
-    const bad = hostBuilder.relWire(hostBuilder.root, nullary)
+    const good = hostBuilder.relWire( unary)
+    const bad = hostBuilder.relWire( nullary)
     const host = hostBuilder.build()
 
     expect(findOccurrences(host, pattern, { attachments: [good] }).matches)
@@ -29,7 +29,6 @@ describe('open signature-indexed matching', () => {
     const patternBuilder = new DiagramBuilder()
     const patternAtom = patternBuilder.atom(patternBuilder.root, unary)
     const boundary = patternBuilder.wire(
-      patternBuilder.root,
       [{ node: patternAtom, port: { kind: 'head' } }],
       unary,
     )
@@ -38,13 +37,11 @@ describe('open signature-indexed matching', () => {
     const hostBuilder = new DiagramBuilder()
     const goodAtom = hostBuilder.atom(hostBuilder.root, unary)
     const good = hostBuilder.wire(
-      hostBuilder.root,
       [{ node: goodAtom, port: { kind: 'head' } }],
       unary,
     )
     const badAtom = hostBuilder.atom(hostBuilder.root, binary)
     const bad = hostBuilder.wire(
-      hostBuilder.root,
       [{ node: badAtom, port: { kind: 'head' } }],
       binary,
     )
@@ -61,7 +58,7 @@ describe('open signature-indexed matching', () => {
     const patternBuilder = new DiagramBuilder()
     const firstPatternAtom = patternBuilder.atom(patternBuilder.root, relation)
     const secondPatternAtom = patternBuilder.atom(patternBuilder.root, relation)
-    patternBuilder.wire(patternBuilder.root, [
+    patternBuilder.wire( [
       { node: firstPatternAtom, port: { kind: 'head' } },
       { node: secondPatternAtom, port: { kind: 'head' } },
     ], relation)
@@ -70,7 +67,7 @@ describe('open signature-indexed matching', () => {
     const sharedBuilder = new DiagramBuilder()
     const firstSharedAtom = sharedBuilder.atom(sharedBuilder.root, relation)
     const secondSharedAtom = sharedBuilder.atom(sharedBuilder.root, relation)
-    sharedBuilder.wire(sharedBuilder.root, [
+    sharedBuilder.wire( [
       { node: firstSharedAtom, port: { kind: 'head' } },
       { node: secondSharedAtom, port: { kind: 'head' } },
     ], relation)

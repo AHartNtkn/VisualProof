@@ -331,7 +331,7 @@ describe('content-fill scaling — a step is sized to the fixed border (plan 24,
     const a = h.ref(h.root, 'A', UNARY)
     const b = h.ref(h.root, 'B', UNARY)
     const c = h.ref(h.root, 'C', UNARY)
-    const wire = h.wire(h.root, [
+    const wire = h.wire( [
       { node: a, port: { kind: 'arg', index: 0 } },
       { node: b, port: { kind: 'arg', index: 0 } },
       { node: c, port: { kind: 'arg', index: 0 } },
@@ -448,7 +448,7 @@ describe('settleStep — live-loop safety (bounded, non-diverging energy)', () =
     const a = h.ref(h.root, 'A', UNARY)
     const b = h.ref(h.root, 'B', UNARY)
     const c = h.ref(h.root, 'C', UNARY)
-    h.wire(h.root, [
+    h.wire( [
       { node: a, port: { kind: 'arg', index: 0 } },
       { node: b, port: { kind: 'arg', index: 0 } },
     ])

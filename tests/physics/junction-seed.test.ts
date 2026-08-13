@@ -27,7 +27,7 @@ function threeRefs(withWire: boolean): { d: Diagram; refs: string[]; wid: string
   const b = new DiagramBuilder()
   const refs = ['A', 'B', 'C'].map((n) => b.ref(b.root, n, UNARY))
   const wid = withWire
-    ? b.wire(b.root, refs.map((node) => ({ node, port: { kind: 'arg' as const, index: 0 } })))
+    ? b.wire( refs.map((node) => ({ node, port: { kind: 'arg' as const, index: 0 } })))
     : null
   return { d: b.build(), refs, wid }
 }

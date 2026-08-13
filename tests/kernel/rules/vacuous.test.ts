@@ -14,14 +14,14 @@ function wiredWireOf(sig: Sig): { diagram: Diagram; wire: string } {
   const builder = new DiagramBuilder()
   if (sig.kind === 'iota') {
     const ref = builder.ref(builder.root, 'Unary', relSig([IOTA]))
-    const wire = builder.wire(builder.root, [{
+    const wire = builder.wire( [{
       node: ref,
       port: { kind: 'arg', index: 0 },
     }], IOTA)
     return { diagram: builder.build(), wire }
   }
   const atom = builder.atom(builder.root, sig)
-  const wire = builder.wire(builder.root, [{
+  const wire = builder.wire( [{
     node: atom,
     port: { kind: 'head' },
   }], sig)

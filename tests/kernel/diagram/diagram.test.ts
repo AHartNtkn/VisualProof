@@ -6,6 +6,7 @@ import {
   requiredPorts,
   type DiagramNode,
 } from '../../../src/kernel/diagram/diagram'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 
 describe('diagram node and port vocabulary', () => {
@@ -45,27 +46,31 @@ describe('diagram node and port vocabulary', () => {
       nodes: {
         atom: { kind: 'atom', region: 'r1', sig },
         ref: { kind: 'ref', region: 'r1', defId: 'P', sig },
+        headPin: { kind: 'identity', region: 'r0', sig, arity: 1 },
+        valuePin: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
       },
       wires: {
         relation: {
-          scope: 'r0',
           sig,
-          endpoints: [{ node: 'atom', port: { kind: 'head' } }],
+          endpoints: [
+            { node: 'atom', port: { kind: 'head' } },
+            { node: 'headPin', port: { kind: 'identity', index: 0 } },
+          ],
         },
         value: {
-          scope: 'r0',
           sig: IOTA,
           endpoints: [
             { node: 'atom', port: { kind: 'arg', index: 0 } },
             { node: 'ref', port: { kind: 'arg', index: 0 } },
+            { node: 'valuePin', port: { kind: 'identity', index: 0 } },
           ],
         },
       },
     })
 
     expect(Object.values(diagram.nodes).map((node) => node.kind).sort())
-      .toEqual(['atom', 'ref'])
-    expect(diagram.wires.value?.scope).toBe('r0')
+      .toEqual(['atom', 'identity', 'identity', 'ref'])
+    expect(derivedScope(diagram, 'value')).toBe('r0')
   })
 
   it('does not alias unconstrained node ids with port keys', () => {
@@ -75,17 +80,23 @@ describe('diagram node and port vocabulary', () => {
       nodes: {
         'n:a:0': { kind: 'ref', region: 'r0', defId: 'A', sig: relSig([IOTA]) },
         n: { kind: 'ref', region: 'r0', defId: 'B', sig: relSig([IOTA]) },
+        firstPin: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
+        secondPin: { kind: 'identity', region: 'r0', sig: IOTA, arity: 1 },
       },
       wires: {
         first: {
-          scope: 'r0',
           sig: IOTA,
-          endpoints: [{ node: 'n:a:0', port: { kind: 'arg', index: 0 } }],
+          endpoints: [
+            { node: 'n:a:0', port: { kind: 'arg', index: 0 } },
+            { node: 'firstPin', port: { kind: 'identity', index: 0 } },
+          ],
         },
         second: {
-          scope: 'r0',
           sig: IOTA,
-          endpoints: [{ node: 'n', port: { kind: 'arg', index: 0 } }],
+          endpoints: [
+            { node: 'n', port: { kind: 'arg', index: 0 } },
+            { node: 'secondPin', port: { kind: 'identity', index: 0 } },
+          ],
         },
       },
     })).not.toThrow()

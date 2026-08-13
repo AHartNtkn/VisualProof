@@ -41,7 +41,7 @@ describe('semantic placement preview', () => {
     const b = new DiagramBuilder()
     const held = b.ref(b.root, 'held', rel(1))
     const neighbour = b.ref(b.root, 'neighbour', rel(1))
-    b.wire(b.root, [
+    b.wire( [
       { node: held, port: { kind: 'arg', index: 0 } },
       { node: neighbour, port: { kind: 'arg', index: 0 } },
     ])

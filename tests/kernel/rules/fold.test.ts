@@ -7,9 +7,10 @@ import {
   type RegionId,
   type WireId,
 } from '../../../src/kernel/diagram/diagram'
-import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
+import type { DiagramWithBoundary } from '../../../src/kernel/diagram/boundary'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig, type RelSig, type Sig } from '../../../src/kernel/diagram/sig'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
 import { wireAt } from '../../../src/kernel/rules/access'
 import { applyFold, applyUnfold, definitionSig } from '../../../src/kernel/rules/fold'
@@ -21,21 +22,20 @@ function atomDefinition(args: readonly Sig[] = [IOTA], repeated = false): Diagra
   const builder = new DiagramBuilder()
   const sig = relSig(args)
   const atom = builder.atom(builder.root, sig)
-  builder.wire(builder.root, [{ node: atom, port: { kind: 'head' } }], sig)
+  builder.wire([{ node: atom, port: { kind: 'head' } }], sig)
   const boundary = args.map((arg, index) =>
-    builder.wire(builder.root, [{ node: atom, port: { kind: 'arg', index } }], arg))
-  return mkDiagramWithBoundary(builder.build(), repeated ? [boundary[0]!, boundary[0]!] : boundary)
+    builder.wire([{ node: atom, port: { kind: 'arg', index } }], arg))
+  return builder.buildOpen(repeated ? [boundary[0]!, boundary[0]!] : boundary)
 }
 
 function refDefinition(leaf: string): DiagramWithBoundary {
   const builder = new DiagramBuilder()
   const ref = builder.ref(builder.root, leaf, R1)
   const boundary = builder.wire(
-    builder.root,
     [{ node: ref, port: { kind: 'arg', index: 0 } }],
     IOTA,
   )
-  return mkDiagramWithBoundary(builder.build(), [boundary])
+  return builder.buildOpen([boundary])
 }
 
 function definitions(...entries: readonly (readonly [string, DiagramWithBoundary])[]) {
@@ -58,10 +58,14 @@ function refHost(defId: string, sig: RelSig, negative = false): RefHost {
   const args = sig.args.map((argSig, index) => {
     const carrier = builder.ref(region, `Carrier${index}`, relSig([argSig]))
     carriers.push(carrier)
-    return builder.wire(region, [
+    const argument = builder.wire([
       { node: ref, port: { kind: 'arg', index } },
       { node: carrier, port: { kind: 'arg', index: 0 } },
     ], argSig)
+    // Folding removes the occurrence's end of this wire; the pin keeps it
+    // above the two-end floor at its own scope while that happens.
+    builder.pin(argument, region)
+    return argument
   })
   return { diagram: builder.build(), ref, region, args, carriers }
 }
@@ -75,10 +79,12 @@ function outerScopedRefHost(defId: string, sig: RelSig, negative: boolean): RefH
   const args = sig.args.map((argSig, index) => {
     const carrier = builder.ref(builder.root, `OuterCarrier${index}`, relSig([argSig]))
     carriers.push(carrier)
-    return builder.wire(builder.root, [
+    const argument = builder.wire([
       { node: ref, port: { kind: 'arg', index } },
       { node: carrier, port: { kind: 'arg', index: 0 } },
     ], argSig)
+    builder.pin(argument, builder.root)
+    return argument
   })
   return { diagram: builder.build(), ref, region, args, carriers }
 }
@@ -100,7 +106,6 @@ function reverseIdentityIncidences(diagram: Diagram, identity: NodeId): Diagram 
       Object.entries(diagram.wires).map(([wireId, wire]) => [
         wireId,
         {
-          scope: wire.scope,
           sig: wire.sig,
           endpoints: wire.endpoints.map((endpoint) =>
             endpoint.node === identity && endpoint.port.kind === 'identity'
@@ -121,8 +126,8 @@ function reverseIdentityIncidences(diagram: Diagram, identity: NodeId): Diagram 
 function selectionOf(diagram: Diagram, region: RegionId, nodes: readonly NodeId[]) {
   const selected = new Set(nodes)
   const wires = Object.entries(diagram.wires)
-    .filter(([, wire]) =>
-      wire.scope === region
+    .filter(([id, wire]) =>
+      derivedScope(diagram, id) === region
       && wire.endpoints.length > 0
       && wire.endpoints.every((endpoint) => selected.has(endpoint.node)))
     .map(([id]) => id)
@@ -139,12 +144,14 @@ describe('definition-store unfolding', () => {
 
     expect(unfolded.nodes[host.ref]).toBeUndefined()
     expect(host.carriers.every((id) => unfolded.nodes[id] === host.diagram.nodes[id])).toBe(true)
-    expect(fresh).toHaveLength(1)
-    expect(fresh[0]).not.toBe(Object.keys(definition.diagram.nodes)[0])
-    expect(unfolded.nodes[fresh[0]!]!.kind).toBe('atom')
-    expect(wireAt(unfolded, fresh[0]!, { kind: 'arg', index: 0 })).toBe(host.args[0])
-    expect(wireAt(unfolded, fresh[0]!, { kind: 'arg', index: 1 })).toBe(host.args[1])
-    expect(Object.keys(definition.diagram.nodes)).toEqual(['n0'])
+    const freshAtoms = fresh.filter((id) => unfolded.nodes[id]!.kind === 'atom')
+    expect(freshAtoms).toHaveLength(1)
+    expect(freshAtoms[0]).not.toBe(Object.keys(definition.diagram.nodes)[0])
+    expect(wireAt(unfolded, freshAtoms[0]!, { kind: 'arg', index: 0 })).toBe(host.args[0])
+    expect(wireAt(unfolded, freshAtoms[0]!, { kind: 'arg', index: 1 })).toBe(host.args[1])
+    // The stored definition is untouched: its atom and the pin holding its
+    // head wire above the two-end floor.
+    expect(Object.keys(definition.diagram.nodes)).toEqual(['n0', 'n1'])
   })
 
   for (const negative of [false, true]) {
@@ -167,6 +174,10 @@ describe('definition-store unfolding', () => {
     })
   }
 
+  // NEEDS-ADJUDICATION: this asserts that no identity node survives a
+  // repeated boundary incidence — eager-normalizer behavior. Splice now
+  // creates one identity node at the application region and it persists
+  // until an identification step absorbs it.
   it('uses identity normalization for repeated stored boundary incidences', () => {
     const definition = atomDefinition([IOTA], true)
     const store = definitions(['Repeated', definition])

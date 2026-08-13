@@ -60,7 +60,7 @@ describe('canonical positional and unordered ports', () => {
       const builder = new DiagramBuilder()
       const target = builder.ref(builder.root, 'P', relSig([IOTA, IOTA]))
       const marker = builder.ref(builder.root, 'Marker', relSig([IOTA]))
-      builder.wire(builder.root, [
+      builder.wire( [
         { node: marker, port: { kind: 'arg', index: 0 } },
         { node: target, port: { kind: 'arg', index: swapped ? 1 : 0 } },
       ])

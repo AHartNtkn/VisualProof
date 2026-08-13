@@ -57,8 +57,8 @@ describe('primitive replay', () => {
   it('routes identity insertion through the orientation-aware polarity gate', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const left = builder.wire(builder.root, [])
-    const right = builder.wire(builder.root, [])
+    const left = builder.wire( [])
+    const right = builder.wire( [])
     const diagram = builder.build()
     const step: ProofStep = {
       rule: 'identityInsert',
@@ -107,7 +107,7 @@ describe('primitive replay', () => {
     })
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const relationWire = builder.relWire(builder.root, relSig([]))
+    const relationWire = builder.relWire( relSig([]))
     const diagram = builder.build()
     const steps: ProofStep[] = [
       {
@@ -130,7 +130,7 @@ describe('normalized step receipts', () => {
   it('maps an overlapped iteration boundary position to the surviving original wire', () => {
     const builder = new DiagramBuilder()
     const node = builder.atom(builder.root, relSig([IOTA]))
-    const wire = builder.wire(builder.root, [
+    const wire = builder.wire( [
       { node, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = builder.build()
@@ -182,11 +182,11 @@ describe('normalized step receipts', () => {
     const cut = builder.cut(builder.root)
     const deep = builder.cut(cut)
     const identity = builder.identity(deep, IOTA, 2)
-    const outer = builder.wire(builder.root, [{
+    const outer = builder.wire( [{
       node: identity,
       port: { kind: 'identity', index: 0 },
     }])
-    const inner = builder.wire(cut, [{
+    const inner = builder.wire( [{
       node: identity,
       port: { kind: 'identity', index: 1 },
     }])
@@ -215,11 +215,11 @@ describe('normalized step receipts', () => {
     const outerCut = builder.cut(builder.root)
     const innerCut = builder.cut(outerCut)
     const identity = builder.identity(innerCut, IOTA, 2)
-    const first = builder.wire(builder.root, [{
+    const first = builder.wire( [{
       node: identity,
       port: { kind: 'identity', index: 0 },
     }])
-    const second = builder.wire(builder.root, [{
+    const second = builder.wire( [{
       node: identity,
       port: { kind: 'identity', index: 1 },
     }])
@@ -244,7 +244,7 @@ describe('normalized step receipts', () => {
 
   it('keeps an intentionally erased root wire undefined', () => {
     const builder = new DiagramBuilder()
-    const erased = builder.wire(builder.root, [], IOTA)
+    const erased = builder.wire( [], IOTA)
     const diagram = builder.build()
     const receipt = applyStepWithReceipt(
       diagram,

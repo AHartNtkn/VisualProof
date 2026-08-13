@@ -112,7 +112,7 @@ function plusLeftUnit(
   context: ProofContext,
 ): Theorem {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
-  const forward = new PrimitiveStepRecorder(lhs.diagram, context)
+  const forward = new PrimitiveStepRecorder(lhs, context)
   let before = forward.diagram
 
   forward.record('open zero/plus primitive universal scope', {
@@ -288,7 +288,7 @@ function plusLeftUnit(
 
   const rhs = statements.plusLeftUnit
   const backward = new PrimitiveStepRecorder(
-    rhs.diagram,
+    rhs,
     context,
     'backward',
   )

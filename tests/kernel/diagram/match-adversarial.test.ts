@@ -12,10 +12,10 @@ describe('exact occurrence matching adversarial battery', () => {
       'P',
       relSig([IOTA, IOTA]),
     )
-    const firstStub = patternBuilder.wire(patternBuilder.root, [
+    const firstStub = patternBuilder.wire( [
       { node: patternRef, port: { kind: 'arg', index: 0 } },
     ])
-    const secondStub = patternBuilder.wire(patternBuilder.root, [
+    const secondStub = patternBuilder.wire( [
       { node: patternRef, port: { kind: 'arg', index: 1 } },
     ])
     const pattern = mkDiagramWithBoundary(
@@ -29,10 +29,10 @@ describe('exact occurrence matching adversarial battery', () => {
       'P',
       relSig([IOTA, IOTA]),
     )
-    const firstWire = hostBuilder.wire(hostBuilder.root, [
+    const firstWire = hostBuilder.wire( [
       { node: hostRef, port: { kind: 'arg', index: 0 } },
     ])
-    const secondWire = hostBuilder.wire(hostBuilder.root, [
+    const secondWire = hostBuilder.wire( [
       { node: hostRef, port: { kind: 'arg', index: 1 } },
     ])
     const host = hostBuilder.build()
@@ -87,7 +87,7 @@ describe('exact occurrence matching adversarial battery', () => {
   it('uses exact wire sets below the root and subset semantics at the root', () => {
     const nestedPatternBuilder = new DiagramBuilder()
     const patternCut = nestedPatternBuilder.cut(nestedPatternBuilder.root)
-    nestedPatternBuilder.wire(patternCut, [])
+    nestedPatternBuilder.wire( [])
     const nestedPattern = mkDiagramWithBoundary(
       nestedPatternBuilder.build(),
       [],
@@ -95,17 +95,17 @@ describe('exact occurrence matching adversarial battery', () => {
 
     const nestedHostBuilder = new DiagramBuilder()
     const hostCut = nestedHostBuilder.cut(nestedHostBuilder.root)
-    nestedHostBuilder.wire(hostCut, [])
-    nestedHostBuilder.wire(hostCut, [])
+    nestedHostBuilder.wire( [])
+    nestedHostBuilder.wire( [])
     expect(findOccurrences(nestedHostBuilder.build(), nestedPattern).matches)
       .toHaveLength(0)
 
     const rootPatternBuilder = new DiagramBuilder()
-    rootPatternBuilder.wire(rootPatternBuilder.root, [])
+    rootPatternBuilder.wire( [])
     const rootPattern = mkDiagramWithBoundary(rootPatternBuilder.build(), [])
     const rootHostBuilder = new DiagramBuilder()
-    rootHostBuilder.wire(rootHostBuilder.root, [])
-    rootHostBuilder.wire(rootHostBuilder.root, [])
+    rootHostBuilder.wire( [])
+    rootHostBuilder.wire( [])
     expect(findOccurrences(
       rootHostBuilder.build(),
       rootPattern,
@@ -121,7 +121,7 @@ describe('exact occurrence matching adversarial battery', () => {
       'P',
       relSig([IOTA]),
     )
-    patternBuilder.wire(patternCut, [
+    patternBuilder.wire( [
       { node: patternRef, port: { kind: 'arg', index: 0 } },
     ])
     const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
@@ -129,7 +129,7 @@ describe('exact occurrence matching adversarial battery', () => {
     const hostBuilder = new DiagramBuilder()
     const hostCut = hostBuilder.cut(hostBuilder.root)
     const hostRef = hostBuilder.ref(hostCut, 'P', relSig([IOTA]))
-    hostBuilder.wire(hostBuilder.root, [
+    hostBuilder.wire( [
       { node: hostRef, port: { kind: 'arg', index: 0 } },
     ])
 
@@ -141,10 +141,10 @@ describe('exact occurrence matching adversarial battery', () => {
     const patternCut = patternBuilder.cut(patternBuilder.root)
     const patternA = patternBuilder.ref(patternCut, 'A', relSig([IOTA]))
     const patternB = patternBuilder.ref(patternCut, 'B', relSig([IOTA]))
-    patternBuilder.wire(patternCut, [
+    patternBuilder.wire( [
       { node: patternA, port: { kind: 'arg', index: 0 } },
     ])
-    patternBuilder.wire(patternBuilder.root, [
+    patternBuilder.wire( [
       { node: patternB, port: { kind: 'arg', index: 0 } },
     ])
     const pattern = mkDiagramWithBoundary(patternBuilder.build(), [])
@@ -153,10 +153,10 @@ describe('exact occurrence matching adversarial battery', () => {
     const hostCut = hostBuilder.cut(hostBuilder.root)
     const hostA = hostBuilder.ref(hostCut, 'A', relSig([IOTA]))
     const hostB = hostBuilder.ref(hostCut, 'B', relSig([IOTA]))
-    hostBuilder.wire(hostBuilder.root, [
+    hostBuilder.wire( [
       { node: hostA, port: { kind: 'arg', index: 0 } },
     ])
-    hostBuilder.wire(hostCut, [
+    hostBuilder.wire( [
       { node: hostB, port: { kind: 'arg', index: 0 } },
     ])
 
@@ -175,7 +175,7 @@ describe('exact occurrence matching adversarial battery', () => {
       'P',
       relSig([IOTA]),
     )
-    const stub = patternBuilder.wire(patternBuilder.root, [
+    const stub = patternBuilder.wire( [
       { node: first, port: { kind: 'arg', index: 0 } },
       { node: second, port: { kind: 'arg', index: 0 } },
     ])
@@ -192,7 +192,7 @@ describe('exact occurrence matching adversarial battery', () => {
       'P',
       relSig([IOTA]),
     )
-    sharedBuilder.wire(sharedBuilder.root, [
+    sharedBuilder.wire( [
       { node: sharedFirst, port: { kind: 'arg', index: 0 } },
       { node: sharedSecond, port: { kind: 'arg', index: 0 } },
     ])

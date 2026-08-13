@@ -104,7 +104,7 @@ export function successorShiftCarrierInductive(
   context: ProofContext,
 ): Theorem {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
-  const forward = new PrimitiveStepRecorder(lhs.diagram, context)
+  const forward = new PrimitiveStepRecorder(lhs, context)
 
   forward.record('seed exact shift-support shell from associativity', {
     rule: 'theorem',
@@ -721,7 +721,7 @@ export function successorShiftCarrierInductive(
   })
 
   const rhs = statements.successorShiftCarrierInductive
-  const backward = new PrimitiveStepRecorder(rhs.diagram, context, 'backward')
+  const backward = new PrimitiveStepRecorder(rhs, context, 'backward')
   const primitiveScope = exactOne(
     directCuts(backward.diagram, backward.diagram.root),
     'reviewed carrier-support primitive scope',

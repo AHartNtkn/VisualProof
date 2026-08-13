@@ -107,7 +107,7 @@ function hereditaryConditionsContent() {
 
 function buildZeroForward(context: ProofContext) {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
-  const forward = new PrimitiveStepRecorder(lhs.diagram, context)
+  const forward = new PrimitiveStepRecorder(lhs, context)
 
   let before = forward.diagram
   forward.record('open primitive universal scope', {
@@ -246,7 +246,7 @@ function buildZeroBackward(
   rhs: ReturnType<typeof finishDiagramWithBoundary>,
   context: ProofContext,
 ) {
-  const backward = new PrimitiveStepRecorder(rhs.diagram, context, 'backward')
+  const backward = new PrimitiveStepRecorder(rhs, context, 'backward')
   const primitiveScope = exactOne(
     directCuts(backward.diagram, backward.diagram.root),
     'reviewed primitive scope',
@@ -418,7 +418,7 @@ function meetingParts(
 
 function buildSuccForward(context: ProofContext): ForwardResult {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
-  const forward = new PrimitiveStepRecorder(lhs.diagram, context)
+  const forward = new PrimitiveStepRecorder(lhs, context)
 
   let before = forward.diagram
   forward.record('open primitive universal scope', {
@@ -755,7 +755,7 @@ function buildSuccBackward(
   context: ProofContext,
 ): BackwardResult {
   const backward = new PrimitiveStepRecorder(
-    rhs.diagram,
+    rhs,
     context,
     'backward',
   )

@@ -14,14 +14,14 @@ function twoApplications() {
   const builder = new DiagramBuilder()
   const atomA = builder.atom(builder.root, UNARY)
   const atomB = builder.atom(builder.root, UNARY)
-  builder.wire(builder.root, [
+  builder.wire( [
     { node: atomA, port: { kind: 'head' } },
     { node: atomB, port: { kind: 'head' } },
   ], UNARY)
-  const argA = builder.wire(builder.root, [
+  const argA = builder.wire( [
     { node: atomA, port: { kind: 'arg', index: 0 } },
   ])
-  const argB = builder.wire(builder.root, [
+  const argB = builder.wire( [
     { node: atomB, port: { kind: 'arg', index: 0 } },
   ])
   return { builder, atomA, atomB, argA, argB }
@@ -57,8 +57,8 @@ describe('relation abstraction refusals', () => {
     const cut = builder.cut(builder.root)
     const inner = builder.cut(cut)
     const atom = builder.atom(inner, UNARY)
-    builder.wire(inner, [{ node: atom, port: { kind: 'head' } }], UNARY)
-    const arg = builder.wire(inner, [
+    builder.wire( [{ node: atom, port: { kind: 'head' } }], UNARY)
+    const arg = builder.wire( [
       { node: atom, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = builder.build()
@@ -101,7 +101,7 @@ describe('relation abstraction refusals', () => {
 
   it('rejects a formal argument that does not touch the selected content', () => {
     const { builder, atomA } = twoApplications()
-    const stray = builder.wire(builder.root, [])
+    const stray = builder.wire( [])
     const diagram = builder.build()
 
     expect(() => compileRelationSever(diagram, {

@@ -34,13 +34,13 @@ describe('identity paint ownership', () => {
     const identity = builder.identity(cut, IOTA, 3)
     for (let index = 0; index < 3; index++) {
       const ref = builder.ref(builder.root, `R${index}`, rel(1))
-      builder.wire(builder.root, [
+      builder.wire( [
         { node: ref, port: { kind: 'arg', index: 0 } },
         { node: identity, port: { kind: 'identity', index } },
       ])
     }
     const danglingRef = builder.ref(builder.root, 'D', rel(1))
-    const danglingWire = builder.wire(builder.root, [
+    const danglingWire = builder.wire( [
       { node: danglingRef, port: { kind: 'arg', index: 0 } },
     ])
     const engine = mkEngine(builder.build(), [])
@@ -122,7 +122,7 @@ describe('endpointless frame ports', () => {
 
   it('renders endpointless boundary wires at ordered slots with only port 0 prominent', () => {
     const h = new DiagramBuilder()
-    const wires = [h.wire(h.root, []), h.wire(h.root, []), h.wire(h.root, [])]
+    const wires = [h.wire( []), h.wire( []), h.wire( [])]
     const engine = mkEngine(h.build(), wires)
     settle(engine, 20)
     engine.slotShift = 1
@@ -144,7 +144,7 @@ describe('endpointless frame ports', () => {
 
   it('paints both frame ports and the connecting line for a repeated boundary wire', () => {
     const h = new DiagramBuilder()
-    const shared = h.wire(h.root, [])
+    const shared = h.wire( [])
     const engine = mkEngine(h.build(), [shared, shared])
     settle(engine, 20)
     engine.slotShift = 1

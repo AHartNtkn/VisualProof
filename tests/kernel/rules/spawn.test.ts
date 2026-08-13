@@ -10,7 +10,7 @@ function host() {
   const builder = new DiagramBuilder()
   const cut = builder.cut(builder.root)
   const sibling = builder.cut(builder.root)
-  const relationWire = builder.relWire(cut, ARITY_TWO)
+  const relationWire = builder.relWire( ARITY_TWO)
   const inner = builder.cut(cut)
   const deep = builder.cut(inner)
   return {
@@ -26,8 +26,8 @@ function host() {
 
 function definitions() {
   const body = new DiagramBuilder()
-  const left = body.wire(body.root, [], IOTA)
-  const right = body.wire(body.root, [], IOTA)
+  const left = body.wire( [], IOTA)
+  const right = body.wire( [], IOTA)
   return new Map([[
     'logic/R',
     mkDiagramWithBoundary(body.build(), [left, right]),
@@ -44,7 +44,7 @@ function reificationShapedDefinition(complete: boolean) {
   const reverseWitness = complete
     ? body.atom(reverseConsequent, relSig([]))
     : undefined
-  const witness = body.wire(body.root, [
+  const witness = body.wire( [
     { node: forwardWitness, port: { kind: 'head' } },
     ...(reverseWitness === undefined
       ? []

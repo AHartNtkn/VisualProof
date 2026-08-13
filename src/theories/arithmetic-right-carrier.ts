@@ -179,7 +179,7 @@ export function rightIdentityCarrierInductive(
   context: ProofContext,
 ): Theorem {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
-  const forward = new PrimitiveStepRecorder(lhs.diagram, context)
+  const forward = new PrimitiveStepRecorder(lhs, context)
 
   let before = forward.diagram
   forward.record('open carrier-support primitive scope', {
@@ -496,7 +496,7 @@ export function rightIdentityCarrierInductive(
   })
 
   const rhs = statements.rightIdentityCarrierInductive
-  const backward = new PrimitiveStepRecorder(rhs.diagram, context, 'backward')
+  const backward = new PrimitiveStepRecorder(rhs, context, 'backward')
   const primitiveScope = exactOne(
     directCuts(backward.diagram, backward.diagram.root),
     'reviewed carrier-support primitive scope',

@@ -86,7 +86,7 @@ describe('atom and vacuous proof steps', () => {
   it('maps a bare vacuous elimination wire across an isomorphism', () => {
     const build = () => {
       const builder = new DiagramBuilder()
-      const wire = builder.relWire(builder.root, relSig([]))
+      const wire = builder.relWire( relSig([]))
       return { diagram: builder.build(), wire }
     }
     const target = build()

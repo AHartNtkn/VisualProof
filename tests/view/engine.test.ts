@@ -20,11 +20,11 @@ const threeNodeDiagram = () => {
   const ref = builder.ref(builder.root, 'Unary', UNARY)
   const cut = builder.cut(builder.root)
   const identity = builder.identity(cut, IOTA, 2)
-  builder.wire(builder.root, [
+  builder.wire( [
     { node: atom, port: { kind: 'arg', index: 0 } },
     { node: identity, port: { kind: 'identity', index: 0 } },
   ])
-  builder.wire(builder.root, [
+  builder.wire( [
     { node: ref, port: { kind: 'arg', index: 0 } },
     { node: identity, port: { kind: 'identity', index: 1 } },
   ])
@@ -71,7 +71,7 @@ describe('mkEngine', () => {
     const identity = h.identity(cut, IOTA, 3)
     const wires = Array.from({ length: 3 }, (_, index) => {
       const ref = h.ref(h.root, `R${index}`, rel(1))
-      return h.wire(h.root, [
+      return h.wire( [
         { node: ref, port: { kind: 'arg', index: 0 } },
         { node: identity, port: { kind: 'identity', index } },
       ])
@@ -115,19 +115,19 @@ describe('mkEngine', () => {
     const identity = h.identity(cut, IOTA, 2)
     const left = h.ref(h.root, 'Left', UNARY)
     const right = h.ref(h.root, 'Right', UNARY)
-    h.wire(h.root, [
+    h.wire( [
       { node: identity, port: { kind: 'identity', index: 0 } },
       { node: left, port: { kind: 'arg', index: 0 } },
     ])
-    h.wire(h.root, [
+    h.wire( [
       { node: identity, port: { kind: 'identity', index: 1 } },
       { node: right, port: { kind: 'arg', index: 0 } },
     ])
     const danglingRef = h.ref(h.root, 'Dangling', UNARY)
-    const danglingWire = h.wire(h.root, [
+    const danglingWire = h.wire( [
       { node: danglingRef, port: { kind: 'arg', index: 0 } },
     ])
-    const bareWire = h.wire(h.root, [])
+    const bareWire = h.wire( [])
     const e = mkEngine(h.build(), [])
     e.scale = 1.75
 
@@ -154,8 +154,8 @@ describe('mkEngine', () => {
 
   it('classifies an endpointless boundary as a bodyless fixed-slot wire before bare existential handling', () => {
     const h = new DiagramBuilder()
-    const external = h.wire(h.root, [])
-    const internal = h.wire(h.root, [])
+    const external = h.wire( [])
+    const internal = h.wire( [])
     const e = mkEngine(h.build(), [external])
 
     expect(e.bodies.has(`j:${external}`), 'a formal port must not float as an existential body').toBe(false)
@@ -167,8 +167,8 @@ describe('mkEngine', () => {
 
   it('keeps every repeated boundary incidence and connects two slots as one bodyless wire', () => {
     const h = new DiagramBuilder()
-    const shared = h.wire(h.root, [])
-    const other = h.wire(h.root, [])
+    const shared = h.wire( [])
+    const other = h.wire( [])
     const e = mkEngine(h.build(), [shared, other, shared])
     const w = e.wires.get(shared)!
 
@@ -182,7 +182,7 @@ describe('mkEngine', () => {
   it('builds one junction topology over an attached port and every repeated boundary incidence', () => {
     const h = new DiagramBuilder()
     const n = h.ref(h.root, 'Unary', UNARY)
-    const shared = h.wire(h.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
+    const shared = h.wire( [{ node: n, port: { kind: 'arg', index: 0 } }])
     const e = mkEngine(h.build(), [shared, shared])
     const w = e.wires.get(shared)!
     expect(w.slots).toEqual([0, 1])

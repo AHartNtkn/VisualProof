@@ -3,14 +3,16 @@ import { DiagramBuilder } from '../../../src/kernel/diagram/builder'
 import { exploreForm } from '../../../src/kernel/diagram/canonical/explore'
 import { IOTA, relSig } from '../../../src/kernel/diagram/sig'
 import { mkSelection } from '../../../src/kernel/diagram/subgraph/selection'
+import { derivedScope } from '../../../src/kernel/diagram/regions'
 import { applyDoubleCutElim, applyDoubleCutIntro } from '../../../src/kernel/rules/doublecut'
+import { bareWire } from '../../fixtures/pins'
 
 describe('double cut', () => {
   it('wraps a selection in two cuts and eliminates them as a fingerprint identity', () => {
     const builder = new DiagramBuilder()
     const selected = builder.ref(builder.root, 'P', relSig([IOTA]))
     const outside = builder.ref(builder.root, 'Q', relSig([IOTA]))
-    builder.wire(builder.root, [
+    builder.wire([
       { node: selected, port: { kind: 'arg', index: 0 } },
       { node: outside, port: { kind: 'arg', index: 0 } },
     ])
@@ -34,8 +36,9 @@ describe('double cut', () => {
     )![0]
 
     expect(wrapped.nodes[selected]!.region).toBe(inner)
-    expect(Object.values(wrapped.wires).find((wire) => wire.endpoints.length === 2)!.scope)
-      .toBe(diagram.root)
+    const spanning = Object.entries(wrapped.wires)
+      .find(([, wire]) => wire.endpoints.length >= 2)![0]
+    expect(derivedScope(wrapped, spanning)).toBe(diagram.root)
     expect(exploreForm(applyDoubleCutElim(wrapped, outer))).toBe(exploreForm(diagram))
   })
 
@@ -64,7 +67,7 @@ describe('double cut', () => {
     builder.cut(withChildren)
     const withWire = builder.cut(builder.root)
     builder.cut(withWire)
-    builder.wire(withWire, [])
+    bareWire(builder, withWire)
     const clean = builder.cut(builder.root)
     builder.cut(clean)
     const diagram = builder.build()
@@ -85,14 +88,14 @@ describe('double cut', () => {
     const outer = builder.cut(builder.root)
     const inner = builder.cut(outer)
     const node = builder.ref(inner, 'P', relSig([IOTA]))
-    const wire = builder.wire(inner, [
+    const wire = builder.wire([
       { node, port: { kind: 'arg', index: 0 } },
     ])
     const diagram = builder.build()
 
     const eliminated = applyDoubleCutElim(diagram, outer)
 
-    expect(eliminated.wires[wire]!.scope).toBe(diagram.root)
+    expect(derivedScope(eliminated, wire)).toBe(diagram.root)
     expect(eliminated.nodes[node]!.region).toBe(diagram.root)
     expect(eliminated.regions[outer]).toBeUndefined()
     expect(eliminated.regions[inner]).toBeUndefined()
@@ -138,12 +141,14 @@ describe('double cut', () => {
     const builder = new DiagramBuilder()
     const enclosing = builder.cut(builder.root)
     const identity = builder.identity(enclosing, IOTA, 2)
-    builder.wire(builder.root, [
+    const left = builder.wire([
       { node: identity, port: { kind: 'identity', index: 0 } },
     ])
-    builder.wire(builder.root, [
+    builder.pin(left, builder.root)
+    const right = builder.wire([
       { node: identity, port: { kind: 'identity', index: 1 } },
     ])
+    builder.pin(right, builder.root)
     const diagram = builder.build()
     const selection = mkSelection(diagram, {
       region: enclosing,

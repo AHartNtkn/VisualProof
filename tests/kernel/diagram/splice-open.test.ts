@@ -18,11 +18,11 @@ describe('splice signature gate', () => {
     const S = relSig([IOTA])
     const pb = new DiagramBuilder()
     const a = pb.atom(pb.root, S)
-    const stub = pb.wire(pb.root, [{ node: a, port: head }], S)
+    const stub = pb.wire( [{ node: a, port: head }], S)
     const pattern = mkDiagramWithBoundary(pb.build(), [stub])
 
     const hb = new DiagramBuilder()
-    const hostRel = hb.relWire(hb.root, S) // an existential relation line of sig S
+    const hostRel = hb.relWire( S) // an existential relation line of sig S
     const host = hb.build()
 
     const out = spliceSubgraph(host, host.root, pattern, [hostRel])
@@ -36,11 +36,11 @@ describe('splice signature gate', () => {
     const T = relSig([])
     const pb = new DiagramBuilder()
     const a = pb.atom(pb.root, S)
-    const stub = pb.wire(pb.root, [{ node: a, port: head }], S)
+    const stub = pb.wire( [{ node: a, port: head }], S)
     const pattern = mkDiagramWithBoundary(pb.build(), [stub])
 
     const hb = new DiagramBuilder()
-    const hostBad = hb.relWire(hb.root, T)
+    const hostBad = hb.relWire( T)
     const host = hb.build()
 
     expect(() => spliceSubgraph(host, host.root, pattern, [hostBad]))
@@ -63,7 +63,7 @@ describe('splice signature gate', () => {
     const b = new DiagramBuilder()
     const cut = b.cut(b.root)
     const a = b.atom(cut, S)
-    const headWire = b.wire(b.root, [{ node: a, port: head }], S)
+    const headWire = b.wire( [{ node: a, port: head }], S)
     const d = b.build()
     const sel = mkSelection(d, { region: d.root, regions: [cut], nodes: [], wires: [] })
     const ex = extractSubgraph(d, sel)

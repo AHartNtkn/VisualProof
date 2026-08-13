@@ -158,7 +158,7 @@ function spawnAttached(
 
 function buildForward(context: ProofContext) {
   const lhs = finishDiagramWithBoundary(emptyGraph(), [])
-  const forward = new PrimitiveStepRecorder(lhs.diagram, context)
+  const forward = new PrimitiveStepRecorder(lhs, context)
   let before = forward.diagram
 
   forward.record('open zero/successor primitive universal scope', {
@@ -387,7 +387,7 @@ function buildBackward(
   context: ProofContext,
 ) {
   const backward = new PrimitiveStepRecorder(
-    rhs.diagram,
+    rhs,
     context,
     'backward',
   )

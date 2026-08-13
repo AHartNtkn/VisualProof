@@ -16,11 +16,11 @@ function host() {
   const outer = builder.ref(builder.root, 'Outer', relSig([IOTA]))
   const cut = builder.cut(builder.root)
   const inner = builder.ref(cut, 'Inner', relSig([IOTA, IOTA]))
-  const shared = builder.wire(builder.root, [
+  const shared = builder.wire( [
     { node: outer, port: { kind: 'arg', index: 0 } },
     { node: inner, port: { kind: 'arg', index: 0 } },
   ])
-  const inside = builder.wire(cut, [
+  const inside = builder.wire( [
     { node: inner, port: { kind: 'arg', index: 1 } },
   ])
   return {
@@ -112,11 +112,11 @@ describe('subgraph removal and splice', () => {
       patternCut,
       relSig([IOTA]),
     )
-    const boundary = patternBuilder.wire(patternBuilder.root, [{
+    const boundary = patternBuilder.wire( [{
       node: body,
       port: { kind: 'arg', index: 0 },
     }])
-    patternBuilder.wire(patternCut, [{
+    patternBuilder.wire( [{
       node: body,
       port: { kind: 'head' },
     }], relSig([IOTA]))
@@ -185,8 +185,8 @@ describe('subgraph removal and splice', () => {
   it('rejects arity, visibility, and signature mismatches', () => {
     const builder = new DiagramBuilder()
     const cut = builder.cut(builder.root)
-    const innerWire = builder.wire(cut, [])
-    const relational = builder.relWire(builder.root, relSig([]))
+    const innerWire = builder.wire( [])
+    const relational = builder.relWire( relSig([]))
     const diagram = builder.build()
     const pattern = repeatedBareBoundary()
 

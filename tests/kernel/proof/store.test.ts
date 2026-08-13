@@ -18,7 +18,7 @@ function dropQ(): Theorem {
   const left = new DiagramBuilder()
   const p = left.atom(left.root, PROPOSITION)
   const q = left.atom(left.root, PROPOSITION)
-  const boundary = left.wire(left.root, [
+  const boundary = left.wire( [
     { node: p, port: { kind: 'head' } },
     { node: q, port: { kind: 'head' } },
   ], PROPOSITION)
@@ -26,7 +26,7 @@ function dropQ(): Theorem {
 
   const right = new DiagramBuilder()
   const rightP = right.atom(right.root, PROPOSITION)
-  const rightBoundary = right.wire(right.root, [
+  const rightBoundary = right.wire( [
     { node: rightP, port: { kind: 'head' } },
   ], PROPOSITION)
   const rhs = mkDiagramWithBoundary(right.build(), [rightBoundary])
@@ -45,7 +45,7 @@ function dropQ(): Theorem {
 function oneArgumentBody() {
   const builder = new DiagramBuilder()
   const atom = builder.atom(builder.root, relSig([IOTA]))
-  const argument = builder.wire(builder.root, [{
+  const argument = builder.wire( [{
     node: atom,
     port: { kind: 'arg', index: 0 },
   }])
@@ -55,7 +55,7 @@ function oneArgumentBody() {
 function relationRefBody(defId: string) {
   const builder = new DiagramBuilder()
   const ref = builder.ref(builder.root, defId, relSig([IOTA]))
-  const argument = builder.wire(builder.root, [{
+  const argument = builder.wire( [{
     node: ref,
     port: { kind: 'arg', index: 0 },
   }])
@@ -69,7 +69,7 @@ function refTheorem(defId: string, arity = 1): Theorem {
     defId,
     relSig(Array.from({ length: arity }, () => IOTA)),
   )
-  const boundary = builder.wire(builder.root, [{
+  const boundary = builder.wire( [{
     node: ref,
     port: { kind: 'arg', index: 0 },
   }])
@@ -79,7 +79,7 @@ function refTheorem(defId: string, arity = 1): Theorem {
 
 function aliasedBody() {
   const builder = new DiagramBuilder()
-  const shared = builder.wire(builder.root, [], IOTA)
+  const shared = builder.wire( [], IOTA)
   return mkDiagramWithBoundary(builder.build(), [shared, shared])
 }
 
@@ -166,7 +166,7 @@ describe('relation references', () => {
   it('accepts a root-level unwitnessed relational wire in a body', () => {
     const builder = new DiagramBuilder()
     const atom = builder.atom(builder.root, relSig([IOTA]))
-    const bound = builder.wire(builder.root, [{
+    const bound = builder.wire( [{
       node: atom,
       port: { kind: 'arg', index: 0 },
     }])

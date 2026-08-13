@@ -1,4 +1,4 @@
-import { mkDiagramWithBoundary, type DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
+import type { DiagramWithBoundary } from '../../src/kernel/diagram/boundary'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import type { Diagram } from '../../src/kernel/diagram/diagram'
 import type { Theory } from '../../src/kernel/proof/context'
@@ -10,10 +10,10 @@ export const BINARY = relSig([IOTA, IOTA])
 export function unaryDefinition(): DiagramWithBoundary {
   const builder = new DiagramBuilder()
   const atom = builder.atom(builder.root, UNARY)
-  const argument = builder.wire(builder.root, [
+  const argument = builder.wire([
     { node: atom, port: { kind: 'arg', index: 0 } },
   ])
-  return mkDiagramWithBoundary(builder.build(), [argument])
+  return builder.buildOpen([argument])
 }
 
 export function identityInCut(): Diagram {
@@ -22,11 +22,11 @@ export function identityInCut(): Diagram {
   const negated = builder.cut(enclosing)
   const equality = builder.identity(enclosing, IOTA, 2)
   const disequality = builder.identity(negated, IOTA, 2)
-  builder.wire(builder.root, [
+  builder.wire([
     { node: equality, port: { kind: 'identity', index: 0 } },
     { node: disequality, port: { kind: 'identity', index: 0 } },
   ])
-  builder.wire(builder.root, [
+  builder.wire([
     { node: equality, port: { kind: 'identity', index: 1 } },
     { node: disequality, port: { kind: 'identity', index: 1 } },
   ])
@@ -42,7 +42,7 @@ export function identityRefScene(): Diagram {
   const identity = builder.identity(cut, IOTA, 4)
   for (let index = 0; index < 4; index++) {
     const ref = builder.ref(builder.root, `R${index}`, UNARY)
-    builder.wire(builder.root, [
+    builder.wire([
       { node: ref, port: { kind: 'arg', index: 0 } },
       { node: identity, port: { kind: 'identity', index } },
     ])
@@ -60,7 +60,7 @@ export function identityJunctionScene(): Diagram {
     { length: 6 },
     (_, index) => builder.ref(builder.root, `J${index}`, UNARY),
   )
-  builder.wire(builder.root, [
+  builder.wire([
     ...refs.slice(0, 3).map((node) => ({
       node,
       port: { kind: 'arg' as const, index: 0 },
@@ -68,7 +68,7 @@ export function identityJunctionScene(): Diagram {
     { node: identity, port: { kind: 'identity', index: 0 } },
   ])
   for (let index = 1; index < 4; index++) {
-    builder.wire(builder.root, [
+    builder.wire([
       { node: refs[index + 2]!, port: { kind: 'arg', index: 0 } },
       { node: identity, port: { kind: 'identity', index } },
     ])
@@ -85,10 +85,10 @@ export function commutedBoundaryRefs(): {
     const builder = new DiagramBuilder()
     const ref = builder.ref(builder.root, 'Ternary', ternary)
     const boundary = argumentAtBoundary.map((index) =>
-      builder.wire(builder.root, [
+      builder.wire([
         { node: ref, port: { kind: 'arg', index } },
       ]))
-    return mkDiagramWithBoundary(builder.build(), boundary)
+    return builder.buildOpen(boundary)
   }
   return {
     lhs: side([1, 0, 2]),
@@ -98,7 +98,7 @@ export function commutedBoundaryRefs(): {
 
 export function tinyTheory(): Theory {
   const relation = unaryDefinition()
-  const empty = mkDiagramWithBoundary(new DiagramBuilder().build(), [])
+  const empty = new DiagramBuilder().buildOpen([])
   return {
     relations: [['UnaryWitness', relation]],
     theorems: [{

@@ -23,8 +23,8 @@ import {
   isPinEndpoint,
   pinEndpointsOf,
   relSigOf,
+  replacePins,
   requireRemovalScopePreserved,
-  transferPins,
   wireAt,
   withoutEndpointsOf,
   type AppliedEnd,
@@ -102,10 +102,11 @@ function replaceEnds(
   void old
   wires[fresh] = { sig, endpoints }
 
-  // Successor completion (spec §5): the acted wire's pins carry over, and
+  // Successor completion (spec §5): the acted wire's pins carry over — as
+  // fresh pins of the successor's sig, since these rules change it — and
   // the successor is pinned at the old derived scope until it stands.
   const parts: PartsInProgress = { regions: { ...diagram.regions }, nodes, wires }
-  transferPins(parts, pins, fresh)
+  replacePins(parts, pins, fresh, reservation?.nodes)
   completeWireEnds(parts, fresh, oldScope, freshSuffix, reservation?.nodes)
   return mkDiagram({ root: diagram.root, ...parts })
 }

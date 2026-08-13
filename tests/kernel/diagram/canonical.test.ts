@@ -10,7 +10,7 @@ describe('exploreForm', () => {
     const firstCut = first.cut(first.root)
     const firstInner = first.ref(firstCut, 'Inner', relSig([IOTA]))
     const firstOuter = first.ref(first.root, 'Outer', relSig([IOTA]))
-    first.wire(first.root, [
+    first.wire( [
       { node: firstOuter, port: { kind: 'arg', index: 0 } },
       { node: firstInner, port: { kind: 'arg', index: 0 } },
     ])
@@ -19,7 +19,7 @@ describe('exploreForm', () => {
     const secondOuter = second.ref(second.root, 'Outer', relSig([IOTA]))
     const secondCut = second.cut(second.root)
     const secondInner = second.ref(secondCut, 'Inner', relSig([IOTA]))
-    second.wire(second.root, [
+    second.wire( [
       { node: secondInner, port: { kind: 'arg', index: 0 } },
       { node: secondOuter, port: { kind: 'arg', index: 0 } },
     ])
@@ -32,7 +32,7 @@ describe('exploreForm', () => {
       const builder = new DiagramBuilder()
       const ref = builder.ref(builder.root, 'P', relSig([IOTA, IOTA]))
       if (shared) {
-        builder.wire(builder.root, [
+        builder.wire( [
           { node: ref, port: { kind: 'arg', index: 0 } },
           { node: ref, port: { kind: 'arg', index: 1 } },
         ])
@@ -62,7 +62,7 @@ describe('exploreForm', () => {
       const builder = new DiagramBuilder()
       const cut = builder.cut(builder.root)
       const ref = builder.ref(cut, 'P', relSig([IOTA]))
-      builder.wire(atRoot ? builder.root : cut, [
+      builder.wire( [
         { node: ref, port: { kind: 'arg', index: 0 } },
       ])
       return builder.build()
@@ -74,10 +74,10 @@ describe('exploreForm', () => {
   it('pins boundary wires by order', () => {
     const builder = new DiagramBuilder()
     const ref = builder.ref(builder.root, 'P', relSig([IOTA, IOTA]))
-    const first = builder.wire(builder.root, [
+    const first = builder.wire( [
       { node: ref, port: { kind: 'arg', index: 0 } },
     ])
-    const second = builder.wire(builder.root, [
+    const second = builder.wire( [
       { node: ref, port: { kind: 'arg', index: 1 } },
     ])
     const diagram = builder.build()
@@ -96,10 +96,10 @@ describe('exploreForm', () => {
   it('records the complete ordered incidence vector of an aliased boundary', () => {
     const builder = new DiagramBuilder()
     const ref = builder.ref(builder.root, 'P', relSig([IOTA]))
-    const exposed = builder.wire(builder.root, [
+    const exposed = builder.wire( [
       { node: ref, port: { kind: 'arg', index: 0 } },
     ])
-    const bare = builder.wire(builder.root, [])
+    const bare = builder.wire( [])
     const diagram = builder.build()
 
     expect(exploreForm(diagram, [exposed, exposed, bare]))
@@ -152,8 +152,6 @@ describe('exploreForm signature-indexed content', () => {
     const make = (arity: number) => {
       const builder = new DiagramBuilder()
       builder.relWire(
-        builder.root,
-        relSig(Array.from({ length: arity }, () => IOTA)),
       )
       return builder.build()
     }

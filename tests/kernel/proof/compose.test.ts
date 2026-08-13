@@ -136,12 +136,12 @@ describe('composeActions', () => {
     const build = () => {
       const builder = new DiagramBuilder()
       const first = builder.ref(builder.root, 'R', relSig([IOTA]))
-      const firstWire = builder.wire(builder.root, [{
+      const firstWire = builder.wire( [{
         node: first,
         port: { kind: 'arg', index: 0 },
       }])
       const second = builder.ref(builder.root, 'R', relSig([IOTA]))
-      const secondWire = builder.wire(builder.root, [{
+      const secondWire = builder.wire( [{
         node: second,
         port: { kind: 'arg', index: 0 },
       }])
@@ -187,7 +187,7 @@ describe('composeActions', () => {
   it('reports boundary erasure on both sides', () => {
     const build = () => {
       const builder = new DiagramBuilder()
-      const wire = builder.wire(builder.root, [], IOTA)
+      const wire = builder.wire( [], IOTA)
       return { diagram: builder.build(), wire }
     }
     const target = build()

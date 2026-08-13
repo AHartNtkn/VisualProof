@@ -15,7 +15,7 @@ describe('a single boundary wire is ONE bodyless leg to the fixed frame slot (pl
   it('one interior port → one leg whose far end sits on the inner frame edge, no body', () => {
     const h = new DiagramBuilder()
     const n = h.ref(h.root, 'Unary', UNARY)
-    const w = h.wire(h.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
+    const w = h.wire( [{ node: n, port: { kind: 'arg', index: 0 } }])
     const e = mkEngine(h.build(), [w])
     settle(e, 400) // establishes the fixed frame; the boundary leg closes on its slot
     // no exit body anywhere (the reset's "there's an edge node for some reason") —

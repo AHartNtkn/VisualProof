@@ -9,7 +9,7 @@ import { checkOccurrenceCertificate } from '../../../src/kernel/diagram/subgraph
 function unaryPattern(defId = 'P') {
   const builder = new DiagramBuilder()
   const node = builder.ref(builder.root, defId, relSig([IOTA]))
-  const boundary = builder.wire(builder.root, [
+  const boundary = builder.wire( [
     { node, port: { kind: 'arg', index: 0 } },
   ])
   return mkDiagramWithBoundary(builder.build(), [boundary])
@@ -18,7 +18,7 @@ function unaryPattern(defId = 'P') {
 function unaryHost(defId = 'P') {
   const builder = new DiagramBuilder()
   const node = builder.ref(builder.root, defId, relSig([IOTA]))
-  const wire = builder.wire(builder.root, [
+  const wire = builder.wire( [
     { node, port: { kind: 'arg', index: 0 } },
   ])
   return { diagram: builder.build(), node, wire }
@@ -58,7 +58,7 @@ describe('exact occurrence matching', () => {
     const builder = new DiagramBuilder()
     const target = builder.ref(builder.root, 'P', relSig([IOTA]))
     const extra = builder.ref(builder.root, 'Q', relSig([IOTA]))
-    builder.wire(builder.root, [
+    builder.wire( [
       { node: target, port: { kind: 'arg', index: 0 } },
       { node: extra, port: { kind: 'arg', index: 0 } },
     ])

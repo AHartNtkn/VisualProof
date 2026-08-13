@@ -17,7 +17,7 @@ describe('existential stubs honor wire scope', () => {
     const c1 = b.cut(b.root)
     const c2 = b.cut(c1)
     const n = b.ref(c2, 'Buried', UNARY)
-    const w = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
+    const w = b.wire( [{ node: n, port: { kind: 'arg', index: 0 } }])
     return { d: b.build(), n, w, c1, c2 }
   }
 
@@ -37,7 +37,7 @@ describe('existential stubs honor wire scope', () => {
     const b = new DiagramBuilder()
     const pn = b.ref(b.root, 'P', UNARY)
     const qn = b.ref(b.root, 'Q', UNARY)
-    const w = b.wire(b.root, [
+    const w = b.wire( [
       { node: pn, port: { kind: 'arg', index: 0 } },
       { node: qn, port: { kind: 'arg', index: 0 } },
     ])
@@ -56,15 +56,15 @@ describe('existential stubs honor wire scope', () => {
     const identity = b.identity(identityRegion, IOTA, 2)
     const lhs = b.ref(b.root, 'Lhs', UNARY)
     const rhs = b.ref(b.root, 'Rhs', UNARY)
-    b.wire(b.root, [
+    b.wire( [
       { node: identity, port: { kind: 'identity', index: 0 } },
       { node: lhs, port: { kind: 'arg', index: 0 } },
     ])
-    b.wire(b.root, [
+    b.wire( [
       { node: identity, port: { kind: 'identity', index: 1 } },
       { node: rhs, port: { kind: 'arg', index: 0 } },
     ])
-    const w = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
+    const w = b.wire( [{ node: n, port: { kind: 'arg', index: 0 } }])
     const d = b.build()
     const e = mkEngine(d, [])
     const loose = e.bodies.get(`j:${w}`)
@@ -82,7 +82,7 @@ describe('existential stubs honor wire scope', () => {
   it('clamps a rotated singleton end on its rim, then routes farther out on its radial normal', () => {
     const b = new DiagramBuilder()
     const n = b.ref(b.root, 'Unary', UNARY)
-    const w = b.wire(b.root, [{ node: n, port: { kind: 'arg', index: 0 } }])
+    const w = b.wire( [{ node: n, port: { kind: 'arg', index: 0 } }])
     const e = mkEngine(b.build(), [])
     const wire = e.wires.get(w)!
     const end = wire.end!
@@ -117,7 +117,7 @@ describe('zero-endpoint wires (a bare ∃) retain their scope-homed circular bod
     // assertion that an individual exists — it must render, not crash
     const b = new DiagramBuilder()
     b.ref(b.root, 'Unary', UNARY)
-    const w = b.wire(b.root, [])
+    const w = b.wire( [])
     const d = b.build()
     const e = mkEngine(d, [])
     const body = e.bodies.get(`j:${w}`)

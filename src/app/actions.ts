@@ -81,10 +81,15 @@ export function applicableActions(d: Diagram, sel: SubgraphSelection, ctx: Proof
   }
 
   // A single bare wire — every end a pin — is ⊤-shaped whatever its
-  // signature, so vacuity deletes it along with its pins.
-  if (sel.wires.length === 1 && sel.regions.length === 0 && sel.nodes.length === 0) {
+  // signature, so vacuity deletes it along with its pins. Those pins are the
+  // wire's drawn ends and come with it into the selection.
+  if (sel.wires.length === 1 && sel.regions.length === 0) {
     const wid = sel.wires[0]!
-    if (d.wires[wid]!.endpoints.every((endpoint) => isPinEndpoint(d, endpoint))) {
+    const ends = d.wires[wid]!.endpoints
+    if (
+      ends.every((endpoint) => isPinEndpoint(d, endpoint))
+      && sel.nodes.every((node) => ends.some((endpoint) => endpoint.node === node))
+    ) {
       out.push({ kind: 'vacuityDelete', label: 'Delete the bare wire' })
     }
   }
@@ -102,9 +107,13 @@ function identityInsertionWires(
   backward: boolean,
 ): readonly WireId[] | null {
   const need = backward ? 'positive' : 'negative'
+  // The selected wires' own pins ride along with them; anything else in the
+  // selection means the gesture is not "identify these lines".
+  const ownPin = (node: string): boolean => selection.wires.some((wireId) =>
+    diagram.wires[wireId]?.endpoints.some((endpoint) => endpoint.node === node) === true)
   if (
     polarity(diagram, selection.region) !== need
-    || selection.nodes.length !== 0
+    || !selection.nodes.every(ownPin)
     || selection.regions.length !== 0
     || selection.wires.length < 2
     || new Set(selection.wires).size !== selection.wires.length
