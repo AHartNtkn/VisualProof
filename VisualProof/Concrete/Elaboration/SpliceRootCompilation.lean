@@ -1539,23 +1539,52 @@ private noncomputable def state_elaboration_iso
   subst right
   exact OpenDiagramIso.refl _
 
-/-- A successful concrete splice is one canonical contextual replacement.
-The target compiler result and its enclosing context are derived exclusively
-from the source focus and the successful input layout. -/
-noncomputable def splice
+/-- Compile one successful splice from an already-derived source root result
+and its sole structural focus.  This is the neutral composition boundary used
+by larger flat primitives: it never searches the splice target, and it does
+not require the source focus to have been selected by `CompiledSite.focus`. -/
+noncomputable def spliceFromFocus
     {arity : Nat} {source : State arity} (input : Splice.Input)
     (frameEq : input.frame = source.diagram)
     {operation : OperationReceipt input.frame}
     (success : spliceRaw input = .ok operation)
     {receipt : Receipt source}
     (packed : (operation.castInput frameEq).toReceipt source = some receipt)
-    (consistent : input.AttachmentConsistent) :
+    (consistent : input.AttachmentConsistent)
+    (sourceBody : CompiledRegion source.checked.val.diagram
+      (.root source.checked.val.exposedWires source.checked.val.hiddenWires))
+    (sourceCompiled :
+      (CompilerCall.root source.checked.val.exposedWires
+          source.checked.val.hiddenWires).compile?
+        source.checked.val.diagram source.checked.property.diagram_well_formed =
+          some sourceBody)
+    (sourceFocus : CompiledFocus sourceBody (spliceSite input frameEq))
+    (materialWireMap : Fin (endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).outerContext.length →
+      Fin sourceFocus.endpointCall.fullContext.length)
+    (materialGet : ∀ index,
+      sourceFocus.endpointCall.fullContext.get (materialWireMap index) =
+        Fin.cast (congrArg (fun checked : Checked => checked.val.wireCount)
+          frameEq) (input.attachment (({} : input.PlugLayout).exposedPosition
+            (Fin.cast (congrArg List.length (patternTerminal_outerContext input
+              (spliceRaw_admissible success).terminal_body)) index))))
+    (relationMap : RelationRenaming
+      (endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels sourceFocus.endpointCall.rels)
+    (relationLookup : ∀ {relationArity}
+      (relation : RelVar (endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels relationArity),
+      sourceFocus.endpointCall.binders
+          (Fin.cast (congrArg (fun checked : Checked =>
+            checked.val.regionCount) frameEq) (input.binderTarget
+              (terminalRelationProxyEquiv input relation.index))) =
+        some ⟨relationArity, relationMap relation⟩) :
     ContextReplacement
       (source.checked.elaborate.castArity source.boundary_length)
       (receipt.target.checked.elaborate.castArity
         receipt.target.boundary_length)
-      (endpointCall source (spliceSite input frameEq)).outerContext.length
-      (endpointCall source (spliceSite input frameEq)).rels := by
+      sourceFocus.endpointCall.outerContext.length
+      sourceFocus.endpointCall.rels := by
   rcases input with ⟨frame, pattern, site, attachment, binderSpine,
     binderTarget⟩
   dsimp only at frameEq
@@ -1575,8 +1604,6 @@ noncomputable def splice
     exact operation.result.property
   let sourceCall : CompilerCall source.checked.val.diagram :=
     .root source.checked.val.exposedWires source.checked.val.hiddenWires
-  let sourceBody : CompiledRegion source.checked.val.diagram sourceCall :=
-    source.checked.compilation
   have sourceBoundaryEq : spliceSourceBoundary source input rfl =
       source.checked.val.boundary := by
     simp [spliceSourceBoundary, input]
@@ -1643,26 +1670,22 @@ noncomputable def splice
         openRootWires_exact targetOpenWf
     frameBindersMapped := by intro binder; rfl
     sourceCompiled := by
-      simpa [sourceCall, sourceBody] using source.checked.compilation_computation
+      simpa [sourceCall] using sourceCompiled
   }
-  let sourceFocus := zipper source input.site
+  let after := Splice.Input.PlugLayout.spliceEndpointAfter input
+    sourceFocus.endpointCall
+    sourceFocus.endpoint materialWireMap relationMap
   let endpointInput : layout.EndpointGraftInput admissible
-      (endpointCall source input.site) (endpoint source input.site) := {
-    relationMap := spliceRelationMap input rfl admissible
-    hostLookup := by
-      intro relationArity relation
-      simpa using spliceRelationMap_lookup input rfl admissible relation
-    materialWireMap := spliceWireMap input rfl admissible layout
-    materialGet := by
-      intro index
-      simpa using spliceWireMap_get input rfl admissible layout index
-    after := spliceAfter input rfl admissible layout
-    afterEq := by
-      unfold spliceAfter Splice.Input.PlugLayout.spliceEndpointAfter
-      rfl
+      sourceFocus.endpointCall sourceFocus.endpoint := {
+    relationMap := relationMap
+    hostLookup := relationLookup
+    materialWireMap := materialWireMap
+    materialGet := materialGet
+    after := after
+    afterEq := rfl
   }
   let result := layout.compileAlongZipper consistent admissible targetWf
-    sourceFocus rfl endpointInput targetOuter targetLocal BinderContext.empty
+    sourceFocus.zipper rfl endpointInput targetOuter targetLocal BinderContext.empty
       frame
   have targetBodyEq : result.targetBody.erase =
       targetChecked.compilation.erase := by
@@ -1680,39 +1703,49 @@ noncomputable def splice
   have targetBodyIso : RegionIso
       (layout.canonicalOuterWire sourceCall targetOuter outerEq) []
       targetChecked.compilation.erase
-      ((context source input.site).fill endpointInput.after) := by
+      (sourceFocus.zipper.context.fill endpointInput.after) := by
     have filled := result.alignment.fill result.endpointIso
     rw [result.targetRebuild] at filled
     have rootFilled : RegionIso
         (layout.canonicalOuterWire sourceCall targetOuter outerEq) []
         result.targetBody.erase
-        ((context source input.site).fill endpointInput.after) := by
+        (sourceFocus.zipper.context.fill endpointInput.after) := by
       simpa [sourceCall, Splice.Input.PlugLayout.frameTargetErase,
-        sourceFocus] using filled
+        CompiledZipper.context] using filled
     rw [← targetBodyEq]
     exact rootFilled
   let interface := source.checked.elaborate.castArity source.boundary_length
   let replacementContext : DiagramContext interface.externalClasses
-      (endpointCall source input.site).outerContext.length []
-      (endpointCall source input.site).rels :=
-    context source input.site
+      sourceFocus.endpointCall.outerContext.length []
+      sourceFocus.endpointCall.rels :=
+    sourceFocus.zipper.context
   let interfaceWire :=
     layout.canonicalOuterWire sourceCall targetOuter outerEq
   have targetBodyIso' : RegionIso interfaceWire []
       targetChecked.compilation.erase
       (replacementContext.fill endpointInput.after) := by
     exact targetBodyIso
+  have sourceBodyEq : sourceBody.erase = source.checked.compilation.erase := by
+    have same : sourceBody = source.checked.compilation := by
+      apply Option.some.inj
+      exact sourceCompiled.symm.trans (by
+        simpa using source.checked.compilation_computation)
+    exact congrArg CompiledRegion.erase same
   let sourceIso : OpenDiagramIso
       (source.checked.elaborate.castArity source.boundary_length)
       (interface.withBody (replacementContext.fill
-        (body source input.site))) := {
+        sourceFocus.endpoint.erase)) := {
     external := FiniteEquiv.refl _
     boundary := by intro position; rfl
     body := by
+      have sourceRebuild :
+          sourceFocus.zipper.context.fill sourceFocus.endpoint.erase =
+            source.checked.compilation.erase :=
+        sourceFocus.zipper.intrinsic.rebuild.trans sourceBodyEq
       change RegionIso (FiniteEquiv.refl _) []
         source.checked.elaborate.body
-        ((context source input.site).fill (body source input.site))
-      rw [rebuild]
+        (sourceFocus.zipper.context.fill sourceFocus.endpoint.erase)
+      rw [sourceRebuild]
       exact RegionIso.refl _
   }
   let targetExternal := interfaceWire
@@ -1752,11 +1785,11 @@ noncomputable def splice
       (source.checked.elaborate.castArity source.boundary_length)
       (targetState.checked.elaborate.castArity
         targetState.boundary_length)
-      (endpointCall source input.site).outerContext.length
-      (endpointCall source input.site).rels := {
+      sourceFocus.endpointCall.outerContext.length
+      sourceFocus.endpointCall.rels := {
     interface := interface
     context := replacementContext
-    before := body source input.site
+    before := sourceFocus.endpoint.erase
     after := endpointInput.after
     source_iso := sourceIso
     target_iso := targetIso
@@ -1768,6 +1801,38 @@ noncomputable def splice
     state_elaboration_iso packedState.symm
   exact ContextReplacement.iso
     (OpenDiagramIso.refl _) rawReplacement targetRebase
+
+/-- A successful concrete splice is one canonical contextual replacement.
+The canonical source compiler result and focus are merely the ordinary
+instantiation of `spliceFromFocus`. -/
+noncomputable def splice
+    {arity : Nat} {source : State arity} (input : Splice.Input)
+    (frameEq : input.frame = source.diagram)
+    {operation : OperationReceipt input.frame}
+    (success : spliceRaw input = .ok operation)
+    {receipt : Receipt source}
+    (packed : (operation.castInput frameEq).toReceipt source = some receipt)
+    (consistent : input.AttachmentConsistent) :
+    ContextReplacement
+      (source.checked.elaborate.castArity source.boundary_length)
+      (receipt.target.checked.elaborate.castArity
+        receipt.target.boundary_length)
+      (endpointCall source (spliceSite input frameEq)).outerContext.length
+      (endpointCall source (spliceSite input frameEq)).rels :=
+  spliceFromFocus input frameEq success packed consistent
+    source.checked.compilation (by
+      simpa using source.checked.compilation_computation)
+    (focus source (spliceSite input frameEq))
+    (spliceWireMap input frameEq (spliceRaw_admissible success) {})
+    (by
+      intro index
+      exact spliceWireMap_get input frameEq (spliceRaw_admissible success) {}
+        index)
+    (spliceRelationMap input frameEq (spliceRaw_admissible success))
+    (by
+      intro relationArity relation
+      exact spliceRelationMap_lookup input frameEq
+        (spliceRaw_admissible success) relation)
 
 @[simp] theorem splice_interface_externalClasses
     {arity : Nat} {source : State arity} (input : Splice.Input)
@@ -1783,7 +1848,7 @@ noncomputable def splice
     binderTarget⟩
   dsimp only at frameEq
   cases frameEq
-  simp [splice, ContextReplacement.iso]
+  simp [splice, spliceFromFocus, ContextReplacement.iso]
 
 /-- The source focus context, transported only across the existential indices
 of `ContextReplacement`. -/
@@ -1857,7 +1922,7 @@ noncomputable def spliceAfterBody
     binderTarget⟩
   dsimp only at frameEq
   cases frameEq
-  simp [spliceContext, splice, ContextReplacement.iso, spliceSite]
+  simp [spliceContext, splice, spliceFromFocus, spliceSite]
   exact (cast_eq _ _).symm
 
 theorem splice_context_cutDepth
@@ -1892,7 +1957,7 @@ theorem splice_context_cutDepth
     binderTarget⟩
   dsimp only at frameEq
   cases frameEq
-  simp [spliceBefore, splice, ContextReplacement.iso, spliceSite]
+  simp [spliceBefore, splice, spliceFromFocus, spliceSite]
   congr 1
 
 @[simp] theorem splice_after
@@ -1909,7 +1974,11 @@ theorem splice_context_cutDepth
     binderTarget⟩
   dsimp only at frameEq
   cases frameEq
-  simp [spliceAfterBody, splice, ContextReplacement.iso, spliceSite]
+  simp [spliceAfterBody, splice, spliceFromFocus, spliceSite,
+    ContextReplacement.iso, spliceAfter,
+    Splice.Input.PlugLayout.spliceEndpointAfter, endpointCall, endpoint,
+    directItems]
+  congr 1
 
 end Elaboration.CompiledSite
 
