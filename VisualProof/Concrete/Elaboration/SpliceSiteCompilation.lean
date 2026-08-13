@@ -1493,7 +1493,7 @@ private theorem canonicalPatternMap_get
       rw [localGet]
       rfl) split
 
-private noncomputable def canonicalOuterWire
+noncomputable def canonicalOuterWire
     (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
     (targetOuter : WireContext layout.plugRaw)
     (outerEq : targetOuter =
@@ -1662,6 +1662,155 @@ noncomputable def frameTargetCall
       .root targetOuter targetLocal
   | .nested origin _ rels _, targetOuter, _, targetBinders =>
       .nested (layout.frameRegion origin) targetOuter rels targetBinders
+
+/-- Package the exact item result for the matching root or nested frame call. -/
+noncomputable def frameTargetBody
+    (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
+    (targetOuter targetLocal : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw sourceCall.rels)
+    (targetLocalCall : (layout.frameTargetCall sourceCall targetOuter
+      targetLocal targetBinders).localContext = targetLocal)
+    (targetItems : CompiledItems layout.plugRaw (targetOuter ++ targetLocal)
+      sourceCall.rels targetBinders) :
+    CompiledRegion layout.plugRaw
+      (layout.frameTargetCall sourceCall targetOuter targetLocal
+        targetBinders) := by
+  cases sourceCall with
+  | root =>
+      have targetBindersEq : targetBinders = BinderContext.empty := by
+        funext binder
+        cases lookup : targetBinders binder with
+        | none => rfl
+        | some value =>
+            obtain ⟨arity, relation⟩ := value
+            exact Fin.elim0 relation.index
+      subst targetBinders
+      exact .mk targetItems
+  | nested =>
+      change exactScopeWires layout.plugRaw _ = targetLocal at targetLocalCall
+      subst targetLocal
+      exact .mk targetItems
+
+/-- Expose the erasure of a frame target at the source call's outer and
+relation indices. This is elimination of the root/nested call constructor;
+the compiled target remains the only represented value. -/
+noncomputable def frameTargetErase
+    (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
+    (targetOuter targetLocal : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw sourceCall.rels)
+    (targetBody : CompiledRegion layout.plugRaw
+      (layout.frameTargetCall sourceCall targetOuter targetLocal
+        targetBinders)) :
+    Region targetOuter.length sourceCall.rels := by
+  cases sourceCall <;> exact targetBody.erase
+
+@[simp] theorem frameTargetErase_frameTargetBody
+    (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
+    (targetOuter targetLocal : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw sourceCall.rels)
+    (targetLocalCall : (layout.frameTargetCall sourceCall targetOuter
+      targetLocal targetBinders).localContext = targetLocal)
+    (targetItems : CompiledItems layout.plugRaw (targetOuter ++ targetLocal)
+      sourceCall.rels targetBinders) :
+    layout.frameTargetErase sourceCall targetOuter targetLocal targetBinders
+        (layout.frameTargetBody sourceCall targetOuter targetLocal targetBinders
+          targetLocalCall targetItems) =
+      Region.mk targetLocal.length
+        (targetItems.erase.castWiresEq (by exact List.length_append)) := by
+  cases sourceCall with
+  | root =>
+      have targetBindersEq : targetBinders = BinderContext.empty := by
+        funext binder
+        cases lookup : targetBinders binder with
+        | none => rfl
+        | some value =>
+            obtain ⟨arity, relation⟩ := value
+            exact Fin.elim0 relation.index
+      subst targetBinders
+      rfl
+  | nested =>
+      change exactScopeWires layout.plugRaw _ = targetLocal at targetLocalCall
+      subst targetLocal
+      rfl
+
+theorem frameTargetCall_compile_of_items
+    (layout : PlugLayout input) (targetWf : layout.plugRaw.WellFormed)
+    (sourceCall : CompilerCall input.frame.val)
+    (targetOuter targetLocal : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw sourceCall.rels)
+    (targetLocalCall : (layout.frameTargetCall sourceCall targetOuter
+      targetLocal targetBinders).localContext = targetLocal)
+    (targetItems : CompiledItems layout.plugRaw (targetOuter ++ targetLocal)
+      sourceCall.rels targetBinders)
+    (itemsCompiled : compileItems? layout.plugRaw targetWf
+      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+      targetBinders (localOccurrences layout.plugRaw
+        (layout.frameRegion sourceCall.origin)) (fun _ member => member) =
+        some targetItems) :
+    (layout.frameTargetCall sourceCall targetOuter targetLocal
+      targetBinders).compile? layout.plugRaw targetWf =
+      some (layout.frameTargetBody sourceCall targetOuter targetLocal
+        targetBinders targetLocalCall targetItems) := by
+  cases sourceCall with
+  | root ambient locals =>
+      have targetBindersEq : targetBinders = BinderContext.empty := by
+        funext binder
+        cases lookup : targetBinders binder with
+        | none => rfl
+        | some value =>
+            obtain ⟨arity, relation⟩ := value
+            exact Fin.elim0 relation.index
+      subst targetBinders
+      change (CompilerCall.root targetOuter targetLocal).compile?
+          layout.plugRaw targetWf = some (.mk targetItems)
+      rw [CompilerCall.compile?_eq_compileItems?]
+      change (do
+        let items ← compileItems? layout.plugRaw targetWf layout.plugRaw.root
+          (targetOuter ++ targetLocal) BinderContext.empty
+          (localOccurrences layout.plugRaw layout.plugRaw.root)
+          (fun _ member => member)
+        pure (CompiledRegion.mk items : CompiledRegion layout.plugRaw
+          (.root targetOuter targetLocal))) =
+          some (CompiledRegion.mk targetItems : CompiledRegion layout.plugRaw
+            (.root targetOuter targetLocal))
+      have rootEq : layout.frameRegion input.frame.val.root =
+          layout.plugRaw.root := rfl
+      have normalized : compileItems? layout.plugRaw targetWf
+          (layout.frameRegion input.frame.val.root)
+          (targetOuter ++ targetLocal) BinderContext.empty
+          (localOccurrences layout.plugRaw
+            (layout.frameRegion input.frame.val.root))
+          (fun _ member => member) = some targetItems := by
+        simpa using itemsCompiled
+      rw [← rootEq, normalized]
+      rfl
+  | nested origin context rels binders =>
+      change exactScopeWires layout.plugRaw (layout.frameRegion origin) =
+        targetLocal at targetLocalCall
+      subst targetLocal
+      change (CompilerCall.nested (layout.frameRegion origin) targetOuter rels
+          targetBinders).compile? layout.plugRaw targetWf =
+        some (.mk targetItems)
+      rw [CompilerCall.compile?_eq_compileItems?]
+      change (do
+        let items ← compileItems? layout.plugRaw targetWf
+          (layout.frameRegion origin)
+          (targetOuter ++ exactScopeWires layout.plugRaw
+            (layout.frameRegion origin)) targetBinders
+          (localOccurrences layout.plugRaw (layout.frameRegion origin))
+          (fun _ member => member)
+        pure (CompiledRegion.mk items : CompiledRegion layout.plugRaw
+          (.nested (layout.frameRegion origin) targetOuter rels
+            targetBinders))) = some (.mk targetItems)
+      have normalized : compileItems? layout.plugRaw targetWf
+          (layout.frameRegion origin)
+          (targetOuter ++ exactScopeWires layout.plugRaw
+            (layout.frameRegion origin)) targetBinders
+          (localOccurrences layout.plugRaw (layout.frameRegion origin))
+          (fun _ member => member) = some targetItems := by
+        simpa using itemsCompiled
+      rw [normalized]
+      rfl
 
 def SpliceSiteSemantic
     (layout : PlugLayout input) (targetWf : layout.plugRaw.WellFormed)

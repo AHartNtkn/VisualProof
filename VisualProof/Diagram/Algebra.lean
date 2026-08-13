@@ -1571,6 +1571,16 @@ noncomputable def ItemSeqIso.renameWiresEquiv
     · simpa [ItemSeq.get, ItemSeq.renameWiresPositionEquiv,
         ItemSeq.renameWires_length] using tailIH wire rest
 
+/-- A single isomorphic item forms an isomorphic singleton block. -/
+noncomputable def ItemSeqIso.singleton
+    {source : Item sourceWires rels} {target : Item targetWires rels}
+    {wire : FiniteEquiv (Fin sourceWires) (Fin targetWires)}
+    (item : ItemIso wire rels source target) :
+    ItemSeqIso wire rels (.cons source .nil) (.cons target .nil) := by
+  refine .permute (FiniteEquiv.refl (Fin 1)) ?_
+  intro index
+  exact Fin.cases item (fun rest => Fin.elim0 rest) index
+
 noncomputable def ItemIso.renameWiresEquiv
     (item : Item  source rels)
     (wire : FiniteEquiv (Fin source) (Fin target)) :

@@ -1,6 +1,6 @@
 import VisualProof.Concrete.Elaboration.SpliceSiteCompilation
 
-/-! Construct the target root by following the canonical source host zipper. -/
+/-! Lift the splice endpoint through the canonical source compiler zipper. -/
 
 namespace VisualProof.Concrete
 
@@ -33,154 +33,6 @@ private theorem sibling_not_encloses
     · exact Elaboration.checked_direct_child_not_encloses_parent hwf
         siblingParent siblingParentEncloses
 
-private def finSuccEquiv
-    (equiv : FiniteEquiv (Fin source) (Fin target)) :
-    FiniteEquiv (Fin source.succ) (Fin target.succ) where
-  toFun := Fin.cases 0 (fun index => (equiv index).succ)
-  invFun := Fin.cases 0 (fun index => (equiv.symm index).succ)
-  left_inv := by
-    intro index
-    induction index using Fin.cases with
-    | zero => rfl
-    | succ rest => exact congrArg Fin.succ (equiv.left_inv rest)
-  right_inv := by
-    intro index
-    induction index using Fin.cases with
-    | zero => rfl
-    | succ rest => exact congrArg Fin.succ (equiv.right_inv rest)
-
-/-- Add a distinguished head to a frame whose tails are already aligned. -/
-private noncomputable def ItemSeqIso.Frame.selectedCons
-    {sourceTail : ItemSeq sourceWires rels}
-    {targetTail : ItemSeq targetWires rels}
-    (tail : ItemSeqIso wire rels sourceTail targetTail)
-    (sourceHead : Item sourceWires rels)
-    (targetHead : Item targetWires rels) :
-    ItemSeqIso.Frame
-      (source := .cons sourceHead sourceTail)
-      (target := .cons targetHead targetTail) wire
-      ⟨0, Nat.zero_lt_succ _⟩ ⟨0, Nat.zero_lt_succ _⟩ := by
-  cases tail with
-  | permute positions items =>
-      refine {
-        positions := finSuccEquiv positions
-        mapped := rfl
-        siblings := ?_
-      }
-      intro index different
-      induction index using Fin.cases with
-      | zero => exact False.elim (different rfl)
-      | succ rest =>
-          simpa [ItemSeq.get, finSuccEquiv] using items rest
-
-/-- Add one aligned nonfocused head before an existing focused frame. -/
-private noncomputable def ItemSeqIso.Frame.siblingCons
-    {sourceHead : Item sourceWires rels}
-    {targetHead : Item targetWires rels}
-    {sourceTail : ItemSeq sourceWires rels}
-    {targetTail : ItemSeq targetWires rels}
-    {sourceIndex : Fin sourceTail.length}
-    {targetIndex : Fin targetTail.length}
-    (head : ItemIso wire rels sourceHead targetHead)
-    (tail : ItemSeqIso.Frame wire sourceIndex targetIndex) :
-    ItemSeqIso.Frame
-      (source := .cons sourceHead sourceTail)
-      (target := .cons targetHead targetTail)
-      wire sourceIndex.succ targetIndex.succ := by
-  refine {
-    positions := finSuccEquiv tail.positions
-    mapped := congrArg Fin.succ tail.mapped
-    siblings := ?_
-  }
-  intro index different
-  induction index using Fin.cases with
-  | zero => simpa [ItemSeq.get, finSuccEquiv] using head
-  | succ rest =>
-      have restDifferent : rest ≠ sourceIndex := by
-        intro same
-        exact different (congrArg Fin.succ same)
-      simpa [ItemSeq.get, finSuccEquiv] using
-        tail.siblings rest restDifferent
-
-/-- The one recursive semantic result.  The compiler result and the aligned
-enclosing context remain separate; the endpoint isomorphism is filled only by
-the root caller. -/
-private structure NestedGraftResult
-    (layout : PlugLayout input) (targetWf : layout.plugRaw.WellFormed)
-    {endpointCall : CompilerCall input.frame.val}
-    {endpoint : CompiledRegion input.frame.val endpointCall}
-    {sourceOuter : WireContext input.frame.val}
-    {sourceBinders : BinderContext input.frame.val sourceRels}
-    {sourceBody : CompiledRegion input.frame.val
-      (.nested sourceParent sourceOuter sourceRels sourceBinders)}
-    {targetOuter : WireContext layout.plugRaw}
-    {targetBinders : BinderContext layout.plugRaw sourceRels}
-    (outerWire : FiniteEquiv (Fin targetOuter.length)
-      (Fin sourceOuter.length))
-    (focus : CompiledZipper input.frame.val sourceBody input.site
-      endpointCall endpoint)
-    (after : Region endpointCall.outerContext.length endpointCall.rels) where
-  targetBody : CompiledRegion layout.plugRaw
-    (.nested (layout.frameRegion sourceParent) targetOuter sourceRels
-      targetBinders)
-  compiled : compileRegion? layout.plugRaw targetWf
-    (layout.frameRegion sourceParent) targetOuter targetBinders =
-      some targetBody
-  holeWires : Nat
-  holeWire : FiniteEquiv (Fin holeWires)
-    (Fin endpointCall.outerContext.length)
-  targetSite : Region holeWires endpointCall.rels
-  targetContext : DiagramContext targetOuter.length holeWires
-    sourceRels endpointCall.rels
-  alignment : DiagramContextIso outerWire holeWire sourceRels endpointCall.rels
-    targetContext focus.intrinsic.context
-  targetRebuild : targetContext.fill targetSite = targetBody.erase
-  endpointIso : RegionIso holeWire endpointCall.rels targetSite after
-
-/-- A distinguished item and all nonfocused sibling isomorphisms. -/
-private structure SelectedFrame
-    (wire : FiniteEquiv (Fin targetWires) (Fin sourceWires))
-    (targetItems : ItemSeq targetWires rels)
-    (sourceItems : ItemSeq sourceWires rels) where
-  targetIndex : Fin targetItems.length
-  sourceIndex : Fin sourceItems.length
-  targetFocus : ItemSeq.IndexedFocus targetItems targetIndex
-  sourceFocus : ItemSeq.IndexedFocus sourceItems sourceIndex
-  frame : ItemSeqIso.Frame wire targetIndex sourceIndex
-
-private noncomputable def SelectedFrame.selectedCons
-    {targetTail : ItemSeq targetWires rels}
-    {sourceTail : ItemSeq sourceWires rels}
-    (tail : ItemSeqIso wire rels targetTail sourceTail)
-    (targetHead : Item targetWires rels)
-    (sourceHead : Item sourceWires rels) :
-    SelectedFrame wire (.cons targetHead targetTail)
-      (.cons sourceHead sourceTail) where
-  targetIndex := ⟨0, Nat.zero_lt_succ _⟩
-  sourceIndex := ⟨0, Nat.zero_lt_succ _⟩
-  targetFocus := ItemSeq.focusAt (.cons targetHead targetTail)
-    ⟨0, Nat.zero_lt_succ _⟩
-  sourceFocus := ItemSeq.focusAt (.cons sourceHead sourceTail)
-    ⟨0, Nat.zero_lt_succ _⟩
-  frame := ItemSeqIso.Frame.selectedCons tail targetHead sourceHead
-
-private noncomputable def SelectedFrame.siblingCons
-    {targetHead : Item targetWires rels}
-    {sourceHead : Item sourceWires rels}
-    {targetTail : ItemSeq targetWires rels}
-    {sourceTail : ItemSeq sourceWires rels}
-    (head : ItemIso wire rels targetHead sourceHead)
-    (tail : SelectedFrame wire targetTail sourceTail) :
-    SelectedFrame wire (.cons targetHead targetTail)
-      (.cons sourceHead sourceTail) where
-  targetIndex := tail.targetIndex.succ
-  sourceIndex := tail.sourceIndex.succ
-  targetFocus := ItemSeq.focusAt (.cons targetHead targetTail)
-    tail.targetIndex.succ
-  sourceFocus := ItemSeq.focusAt (.cons sourceHead sourceTail)
-    tail.sourceIndex.succ
-  frame := ItemSeqIso.Frame.siblingCons head tail.frame
-
 private noncomputable def awayLocalWire
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
     (terminal : input.TerminalBody)
@@ -199,25 +51,6 @@ private noncomputable def awayLocalWire
   exact FiniteEquiv.finCast
     ((congrArg List.length localEq).trans
       (List.length_map layout.frameWireMap))
-
-private noncomputable def awayFullWire
-    (layout : PlugLayout input)
-    {sourceOuter : WireContext input.frame.val}
-    {targetOuter : WireContext layout.plugRaw}
-    (parent : Fin input.frame.val.regionCount)
-    (outerWire : FiniteEquiv (Fin targetOuter.length)
-      (Fin sourceOuter.length))
-    (localWire : FiniteEquiv
-      (Fin (exactScopeWires layout.plugRaw
-        (layout.frameRegion parent)).length)
-      (Fin (exactScopeWires input.frame.val parent).length)) :
-    FiniteEquiv
-      (Fin (targetOuter.extend (layout.frameRegion parent)).length)
-      (Fin (sourceOuter.extend parent).length) :=
-  castFinEquiv (WireContext.length_extend targetOuter
-      (layout.frameRegion parent))
-    (WireContext.length_extend sourceOuter parent)
-    (extendWireEquiv outerWire localWire)
 
 private theorem awayLocalWire_get
     (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
@@ -241,137 +74,375 @@ private theorem awayLocalWire_get
         (Fin.cast (List.length_map layout.frameWireMap).symm index) = _
   exact List.getElem_map layout.frameWireMap
 
-private theorem awayFullWire_get
-    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
-    (terminal : input.TerminalBody)
-    {sourceOuter : WireContext input.frame.val}
-    {targetOuter : WireContext layout.plugRaw}
-    (parent : Fin input.frame.val.regionCount)
-    (away : parent ≠ input.site)
-    (outerWire : FiniteEquiv (Fin targetOuter.length)
-      (Fin sourceOuter.length))
-    (outerGet : ∀ index, targetOuter.get (outerWire.symm index) =
-      layout.frameWireMap (sourceOuter.get index))
-    (index : Fin (sourceOuter.extend parent).length) :
-    (targetOuter.extend (layout.frameRegion parent)).get
-        ((layout.awayFullWire parent outerWire
-          (layout.awayLocalWire consistent terminal parent away)).symm index) =
-      layout.frameWireMap ((sourceOuter.extend parent).get index) := by
-  let split := Fin.cast (WireContext.length_extend sourceOuter parent) index
-  have indexEq : Fin.cast (WireContext.length_extend sourceOuter parent).symm
-      split = index := by
+private theorem canonicalOuterWire_get
+    (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
+    (targetOuter : WireContext layout.plugRaw)
+    (outerEq : targetOuter =
+      sourceCall.outerContext.map layout.frameWireMap)
+    (index : Fin sourceCall.outerContext.length) :
+    targetOuter.get
+        ((layout.canonicalOuterWire sourceCall targetOuter outerEq).symm index) =
+      layout.frameWireMap (sourceCall.outerContext.get index) := by
+  rw [List.get_of_eq outerEq]
+  exact List.getElem_map layout.frameWireMap
+
+private noncomputable def mappedLocalWire
+    (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
+    (targetLocal : WireContext layout.plugRaw)
+    (localEq : targetLocal =
+      sourceCall.localContext.map layout.frameWireMap) :
+    FiniteEquiv (Fin targetLocal.length)
+      (Fin sourceCall.localContext.length) :=
+  FiniteEquiv.finCast ((congrArg List.length localEq).trans
+    (List.length_map layout.frameWireMap))
+
+private noncomputable def mappedFullWire
+    (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
+    (targetOuter targetLocal : WireContext layout.plugRaw)
+    (outerEq : targetOuter =
+      sourceCall.outerContext.map layout.frameWireMap)
+    (localEq : targetLocal =
+      sourceCall.localContext.map layout.frameWireMap) :
+    FiniteEquiv (Fin (targetOuter ++ targetLocal).length)
+      (Fin sourceCall.fullContext.length) :=
+  castFinEquiv (by exact List.length_append)
+    sourceCall.fullContext_length
+    (extendWireEquiv
+      (layout.canonicalOuterWire sourceCall targetOuter outerEq)
+      (layout.mappedLocalWire sourceCall targetLocal localEq))
+
+private theorem mappedLocalWire_get
+    (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
+    (targetLocal : WireContext layout.plugRaw)
+    (localEq : targetLocal =
+      sourceCall.localContext.map layout.frameWireMap)
+    (index : Fin sourceCall.localContext.length) :
+    targetLocal.get
+        ((layout.mappedLocalWire sourceCall targetLocal localEq).symm index) =
+      layout.frameWireMap (sourceCall.localContext.get index) := by
+  rw [List.get_of_eq localEq]
+  exact List.getElem_map layout.frameWireMap
+
+private theorem mappedFullWire_get
+    (layout : PlugLayout input) (sourceCall : CompilerCall input.frame.val)
+    (targetOuter targetLocal : WireContext layout.plugRaw)
+    (outerEq : targetOuter =
+      sourceCall.outerContext.map layout.frameWireMap)
+    (localEq : targetLocal =
+      sourceCall.localContext.map layout.frameWireMap)
+    (index : Fin sourceCall.fullContext.length) :
+    (targetOuter ++ targetLocal).get
+        ((layout.mappedFullWire sourceCall targetOuter targetLocal outerEq
+          localEq).symm index) =
+      layout.frameWireMap (sourceCall.fullContext.get index) := by
+  let split := Fin.cast sourceCall.fullContext_length index
+  have indexEq : Fin.cast sourceCall.fullContext_length.symm split = index := by
     apply Fin.ext
     rfl
   rw [← indexEq]
   exact Fin.addCases (motive := fun position =>
-      (targetOuter.extend (layout.frameRegion parent)).get
-          ((layout.awayFullWire parent outerWire
-            (layout.awayLocalWire consistent terminal parent away)).symm
-            (Fin.cast (WireContext.length_extend sourceOuter parent).symm
-              position)) =
-        layout.frameWireMap ((sourceOuter.extend parent).get
-          (Fin.cast (WireContext.length_extend sourceOuter parent).symm
-            position)))
+      (targetOuter ++ targetLocal).get
+          ((layout.mappedFullWire sourceCall targetOuter targetLocal outerEq
+            localEq).symm
+            (Fin.cast sourceCall.fullContext_length.symm position)) =
+        layout.frameWireMap (sourceCall.fullContext.get
+          (Fin.cast sourceCall.fullContext_length.symm position)))
     (fun inherited => by
-      simpa [awayFullWire, castFinEquiv, extendWireEquiv,
-        WireContext.extend] using outerGet inherited)
+      simpa [mappedFullWire, mappedLocalWire, canonicalOuterWire,
+        castFinEquiv, extendWireEquiv, CompilerCall.fullContext] using
+          layout.canonicalOuterWire_get sourceCall targetOuter outerEq inherited)
     (fun localIndex => by
-      simpa [awayFullWire, castFinEquiv, extendWireEquiv,
-        WireContext.extend] using
-          layout.awayLocalWire_get consistent terminal parent away localIndex)
-    split
+      simpa [mappedFullWire, mappedLocalWire, canonicalOuterWire,
+        castFinEquiv, extendWireEquiv, CompilerCall.fullContext] using
+          layout.mappedLocalWire_get sourceCall targetLocal localEq
+            localIndex) split
 
-/-- The item fold returns one selected compiler frame and the recursive
-context graft below its distinguished cut or bubble. -/
-private inductive FocusedItemsGraft
+private noncomputable def endpointAfter
+    (input : Splice.Input)
+    (sourceCall : CompilerCall input.frame.val)
+    (sourceBody : CompiledRegion input.frame.val sourceCall)
+    (materialWireMap : Fin (CompiledSite.endpointCall
+      (State.ofOpen input.pattern) input.binderSpine.bodyContainer
+        ).outerContext.length → Fin sourceCall.fullContext.length)
+    (relationMap : RelationRenaming
+      (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels sourceCall.rels) :
+    Region sourceCall.outerContext.length sourceCall.rels :=
+  match sourceBody with
+  | .mk items =>
+      Region.spliceAt sourceCall.localContext.length
+        (items.erase.castWiresEq sourceCall.fullContext_length)
+        (CompiledSite.body (State.ofOpen input.pattern)
+          input.binderSpine.bodyContainer)
+        (fun wire => Fin.cast sourceCall.fullContext_length
+          (materialWireMap wire)) relationMap
+
+/-- One result for every compiler call. The target body is indexed by the
+actual target call, while the aligned context keeps the endpoint unfilled.
+The endpoint isomorphism is filled only once by the root theorem. -/
+private structure GraftResult
     (layout : PlugLayout input) (targetWf : layout.plugRaw.WellFormed)
-    {endpointCall : CompilerCall input.frame.val}
+    {sourceCall endpointCall : CompilerCall input.frame.val}
+    {sourceBody : CompiledRegion input.frame.val sourceCall}
     {endpoint : CompiledRegion input.frame.val endpointCall}
-    {sourceOuter : WireContext input.frame.val}
-    {sourceBinders : BinderContext input.frame.val sourceRels}
-    {targetOuter : WireContext layout.plugRaw}
-    {targetBinders : BinderContext layout.plugRaw sourceRels}
-    (outerWire : FiniteEquiv (Fin targetOuter.length)
-      (Fin sourceOuter.length))
-    (localWire : FiniteEquiv
-      (Fin (exactScopeWires layout.plugRaw
-        (layout.frameRegion sourceParent)).length)
-      (Fin (exactScopeWires input.frame.val sourceParent).length)) :
-    {sourceItems : CompiledItems input.frame.val
-      (sourceOuter.extend sourceParent) sourceRels sourceBinders} →
-    CompiledItemsZipper input.frame.val sourceItems input.site
-      endpointCall endpoint →
-    (after : Region endpointCall.outerContext.length endpointCall.rels) → Type
-  | cut
-      {origin : Fin input.frame.val.regionCount}
-      {sourceChild : CompiledRegion input.frame.val
-        (.nested origin (sourceOuter.extend sourceParent) sourceRels
-          sourceBinders)}
-      {sourceSuffix : CompiledItems input.frame.val
-        (sourceOuter.extend sourceParent) sourceRels sourceBinders}
-      {nested : CompiledZipper input.frame.val sourceChild input.site
-        endpointCall endpoint}
-      (targetItems : CompiledItems layout.plugRaw
-        (targetOuter.extend (layout.frameRegion sourceParent)) sourceRels
-        targetBinders)
-      (targetCompiled : compileItems? layout.plugRaw targetWf
-        (layout.frameRegion sourceParent)
-        (targetOuter.extend (layout.frameRegion sourceParent)) targetBinders
-        (localOccurrences layout.plugRaw (layout.frameRegion sourceParent))
-        (fun _ member => member) = some targetItems)
-      (selected : SelectedFrame
-        (castFinEquiv
-          (WireContext.length_extend targetOuter
-            (layout.frameRegion sourceParent))
-          (WireContext.length_extend sourceOuter sourceParent)
-          (extendWireEquiv outerWire localWire))
-        targetItems.erase (.cons (.cut sourceChild.erase) sourceSuffix.erase))
-      (child : NestedGraftResult layout targetWf
-        (targetBinders := targetBinders)
-        (outerWire := castFinEquiv
-          (WireContext.length_extend targetOuter
-            (layout.frameRegion sourceParent))
-          (WireContext.length_extend sourceOuter sourceParent)
-          (extendWireEquiv outerWire localWire)) nested after) :
-      FocusedItemsGraft layout targetWf outerWire localWire
-        (.cut nested) after
-  | bubble
-      {origin : Fin input.frame.val.regionCount} {arity : Nat}
-      {sourceChild : CompiledRegion input.frame.val
-        (.nested origin (sourceOuter.extend sourceParent) (arity :: sourceRels)
-          (sourceBinders.push origin arity))}
-      {sourceSuffix : CompiledItems input.frame.val
-        (sourceOuter.extend sourceParent) sourceRels sourceBinders}
-      {nested : CompiledZipper input.frame.val sourceChild input.site
-        endpointCall endpoint}
-      (targetItems : CompiledItems layout.plugRaw
-        (targetOuter.extend (layout.frameRegion sourceParent)) sourceRels
-        targetBinders)
-      (targetCompiled : compileItems? layout.plugRaw targetWf
-        (layout.frameRegion sourceParent)
-        (targetOuter.extend (layout.frameRegion sourceParent)) targetBinders
-        (localOccurrences layout.plugRaw (layout.frameRegion sourceParent))
-        (fun _ member => member) = some targetItems)
-      (selected : SelectedFrame
-        (castFinEquiv
-          (WireContext.length_extend targetOuter
-            (layout.frameRegion sourceParent))
-          (WireContext.length_extend sourceOuter sourceParent)
-          (extendWireEquiv outerWire localWire))
-        targetItems.erase
-        (.cons (.bubble arity sourceChild.erase) sourceSuffix.erase))
-      (child : NestedGraftResult layout targetWf
-        (targetBinders := targetBinders.push
-          (layout.frameRegion origin) arity)
-        (outerWire := castFinEquiv
-          (WireContext.length_extend targetOuter
-            (layout.frameRegion sourceParent))
-          (WireContext.length_extend sourceOuter sourceParent)
-          (extendWireEquiv outerWire localWire)) nested after) :
-      FocusedItemsGraft layout targetWf outerWire localWire
-        (.bubble nested) after
+    (targetOuter targetLocal : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw sourceCall.rels)
+    (outerEq : targetOuter =
+      sourceCall.outerContext.map layout.frameWireMap)
+    (site : Fin input.frame.val.regionCount)
+    (focus : CompiledZipper input.frame.val sourceBody site
+      endpointCall endpoint)
+    (after : Region endpointCall.outerContext.length endpointCall.rels) where
+  targetBody : CompiledRegion layout.plugRaw
+    (layout.frameTargetCall sourceCall targetOuter targetLocal targetBinders)
+  targetCompiled : (layout.frameTargetCall sourceCall targetOuter targetLocal
+    targetBinders).compile? layout.plugRaw targetWf = some targetBody
+  holeWires : Nat
+  holeWire : FiniteEquiv (Fin holeWires)
+    (Fin endpointCall.outerContext.length)
+  targetSite : Region holeWires endpointCall.rels
+  targetContext : DiagramContext targetOuter.length holeWires
+    sourceCall.rels endpointCall.rels
+  alignment : DiagramContextIso
+    (layout.canonicalOuterWire sourceCall targetOuter outerEq) holeWire
+    sourceCall.rels endpointCall.rels targetContext focus.intrinsic.context
+  targetRebuild : targetContext.fill targetSite =
+    layout.frameTargetErase sourceCall targetOuter targetLocal targetBinders
+      targetBody
+  endpointIso : RegionIso holeWire endpointCall.rels targetSite after
 
+private structure AwayBlockResult
+    (layout : PlugLayout input) (targetWf : layout.plugRaw.WellFormed)
+    {sourceCall : CompilerCall input.frame.val}
+    (targetOuter targetLocal : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw sourceCall.rels)
+    (outerEq : targetOuter =
+      sourceCall.outerContext.map layout.frameWireMap)
+    (localEq : targetLocal =
+      sourceCall.localContext.map layout.frameWireMap)
+    (parentAway : sourceCall.origin ≠ input.site)
+    (source : CompiledItems input.frame.val sourceCall.fullContext
+      sourceCall.rels sourceCall.binders) where
+  sourceDirect : ∀ occurrence, occurrence ∈ source.origins →
+    occurrence ∈ localOccurrences input.frame.val sourceCall.origin
+  target : CompiledItems layout.plugRaw (targetOuter ++ targetLocal)
+    sourceCall.rels targetBinders
+  compiled : compileItems? layout.plugRaw targetWf
+    (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+    targetBinders (source.origins.map layout.mapFrameOccurrence)
+    (fun occurrence member => by
+      rw [layout.localOccurrences_frameRegion_of_ne_site sourceCall.origin
+        parentAway]
+      obtain ⟨sourceOccurrence, sourceMember, rfl⟩ := List.mem_map.mp member
+      exact List.mem_map.mpr
+        ⟨sourceOccurrence, sourceDirect _ sourceMember, rfl⟩) = some target
+  iso : ItemSeqIso
+    (layout.mappedFullWire sourceCall targetOuter targetLocal outerEq localEq)
+    sourceCall.rels target.erase source.erase
 
+private noncomputable def compileAwayBlock
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (terminal : input.TerminalBody) (targetWf : layout.plugRaw.WellFormed)
+    (sourceCall : CompilerCall input.frame.val)
+    (targetOuter targetLocal : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw sourceCall.rels)
+    (outerEq : targetOuter =
+      sourceCall.outerContext.map layout.frameWireMap)
+    (localEq : targetLocal =
+      sourceCall.localContext.map layout.frameWireMap)
+    (parentAway : sourceCall.origin ≠ input.site)
+    (sourceExact : sourceCall.fullContext.Exact sourceCall.origin)
+    (targetExact : (targetOuter ++ targetLocal).Exact
+      (layout.frameRegion sourceCall.origin))
+    (frameBindersMapped : ∀ binder,
+      targetBinders (layout.frameRegion binder) = sourceCall.binders binder)
+    (selected : Fin input.frame.val.regionCount)
+    (selectedParent : (input.frame.val.regions selected).parent? =
+      some sourceCall.origin)
+    (selectedEncloses : input.frame.val.Encloses selected input.site)
+    (source : CompiledItems input.frame.val sourceCall.fullContext
+      sourceCall.rels sourceCall.binders)
+    (sourceDirect : ∀ occurrence, occurrence ∈ source.origins →
+      occurrence ∈ localOccurrences input.frame.val sourceCall.origin)
+    (different : ∀ child,
+      LocalOccurrence.child child ∈ source.origins → child ≠ selected)
+    (sourceCompiled : compileItems? input.frame.val input.frame.property
+      sourceCall.origin sourceCall.fullContext sourceCall.binders
+      source.origins sourceDirect = some source) :
+    AwayBlockResult layout targetWf targetOuter targetLocal targetBinders
+      outerEq localEq parentAway source := by
+  let fullWire := layout.mappedFullWire sourceCall targetOuter targetLocal
+    outerEq localEq
+  have binderMapped : ∀ binder,
+      targetBinders (layout.frameRegion binder) =
+        (sourceCall.binders binder).map fun relation =>
+          ⟨relation.1, relation.2⟩ := by
+    intro binder
+    rw [frameBindersMapped]
+    cases sourceCall.binders binder <;> rfl
+  let childrenAway : ∀ child,
+      LocalOccurrence.child child ∈ source.origins →
+        ¬ input.frame.val.Encloses child input.site := by
+    intro child member
+    have childParent := (mem_localOccurrences_child input.frame.val
+      sourceCall.origin child).mp (sourceDirect _ member)
+    exact sibling_not_encloses input.frame.property selectedParent childParent
+      (different child member) selectedEncloses
+  have existsTarget := layout.compileFrameItemsAway consistent terminal targetWf
+      sourceCall.origin parentAway sourceCall.fullContext
+      (targetOuter ++ targetLocal) sourceCall.binders targetBinders
+      fullWire.symm (fun relation => relation) sourceExact targetExact
+      (layout.mappedFullWire_get sourceCall targetOuter targetLocal outerEq
+        localEq) binderMapped sourceDirect childrenAway sourceCompiled
+  let target := Classical.choose existsTarget
+  have targetSpec := Classical.choose_spec existsTarget
+  refine {
+    sourceDirect := sourceDirect
+    target := target
+    compiled := ?_
+    iso := ?_
+  }
+  · exact targetSpec.1
+  · have erased' : target.erase = source.erase.renameWires fullWire.symm := by
+      simpa only [target, ItemSeq.renameRelations_id] using targetSpec.2
+    rw [erased']
+    exact (ItemSeqIso.renameWiresEquiv source.erase fullWire.symm).symm
+
+private noncomputable def compileHere
+    (layout : PlugLayout input) (consistent : input.AttachmentConsistent)
+    (admissible : input.Admissible)
+    (targetWf : layout.plugRaw.WellFormed)
+    (sourceCall : CompilerCall input.frame.val)
+    (sourceBody : CompiledRegion input.frame.val sourceCall)
+    (targetOuter targetLocal : WireContext layout.plugRaw)
+    (targetBinders : BinderContext layout.plugRaw sourceCall.rels)
+    (atSite : sourceCall.origin = input.site)
+    (outerEq : targetOuter =
+      sourceCall.outerContext.map layout.frameWireMap)
+    (targetLocalCall :
+      (layout.frameTargetCall sourceCall targetOuter targetLocal
+        targetBinders).localContext = targetLocal)
+    (targetFullEq : targetOuter ++ targetLocal =
+      sourceCall.fullContext.map layout.frameWireMap ++
+        (CompiledSite.endpointCall (State.ofOpen input.pattern)
+          input.binderSpine.bodyContainer).localContext.map
+            layout.patternWireMap)
+    (sourceExact : sourceCall.fullContext.Exact input.site)
+    (targetExact : (targetOuter ++ targetLocal).Exact
+      (layout.frameRegion input.site))
+    (frameBindersMapped : ∀ binder,
+      targetBinders (layout.frameRegion binder) = sourceCall.binders binder)
+    (relationMap : RelationRenaming
+      (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels sourceCall.rels)
+    (hostLookup : ∀ {arity} (relation : RelVar
+      (CompiledSite.endpointCall (State.ofOpen input.pattern)
+        input.binderSpine.bodyContainer).rels arity),
+      sourceCall.binders (input.binderTarget
+        (terminalRelationProxyEquiv input relation.index)) =
+          some ⟨arity, relationMap relation⟩)
+    (materialWireMap : Fin (CompiledSite.endpointCall
+      (State.ofOpen input.pattern) input.binderSpine.bodyContainer
+        ).outerContext.length → Fin sourceCall.fullContext.length)
+    (materialGet : ∀ index,
+      sourceCall.fullContext.get (materialWireMap index) =
+        input.attachment (layout.exposedPosition
+          (Fin.cast (congrArg List.length (patternTerminal_outerContext input
+            admissible.terminal_body)) index)))
+    (sourceCompiled : sourceCall.compile? input.frame.val
+      input.frame.property = some sourceBody)
+    (after : Region sourceCall.outerContext.length sourceCall.rels)
+    (afterEq : after = endpointAfter input sourceCall sourceBody
+      materialWireMap relationMap) :
+    GraftResult layout targetWf targetOuter targetLocal targetBinders outerEq
+      sourceCall.origin (CompiledZipper.here sourceBody) after := by
+  cases sourceCall with
+  | root sourceOuter sourceLocal =>
+      change input.frame.val.root = input.site at atSite
+      have targetBindersEq : targetBinders = BinderContext.empty := by
+        funext binder
+        cases lookup : targetBinders binder with
+        | none => rfl
+        | some value =>
+            obtain ⟨arity, relation⟩ := value
+            exact Fin.elim0 relation.index
+      subst targetBinders
+      change targetLocal = targetLocal at targetLocalCall
+      have targetEq : (layout.frameTargetCall
+          (.root sourceOuter sourceLocal) targetOuter targetLocal
+            BinderContext.empty).fullContext =
+          (sourceOuter ++ sourceLocal).map layout.frameWireMap ++
+            (CompiledSite.endpointCall (State.ofOpen input.pattern)
+              input.binderSpine.bodyContainer).localContext.map
+                layout.patternWireMap := by
+        simpa [frameTargetCall, CompilerCall.fullContext] using targetFullEq
+      cases sourceBody
+      rename_i sourceItems
+      have semantic := layout.compileSpliceSite
+          (terminal := admissible.terminal_body) consistent admissible targetWf
+          (.root sourceOuter sourceLocal) targetOuter targetLocal
+          BinderContext.empty
+          atSite outerEq targetEq sourceExact frameBindersMapped relationMap
+          hostLookup materialWireMap materialGet sourceCompiled
+      dsimp only [SpliceSiteSemantic] at semantic
+      obtain ⟨targetBody, targetCompiled, endpointIso⟩ :=
+        Classical.choice semantic
+      refine {
+        targetBody := targetBody
+        targetCompiled := targetCompiled
+        holeWires := targetOuter.length
+        holeWire := layout.canonicalOuterWire
+          (.root sourceOuter sourceLocal) targetOuter outerEq
+        targetSite := targetBody.erase
+        targetContext := .hole
+        alignment := .hole _
+        targetRebuild := rfl
+        endpointIso := ?_
+      }
+      rw [afterEq]
+      simpa [endpointAfter, CompilerCall.localContext] using endpointIso
+
+  | nested origin sourceOuter sourceRels sourceBinders =>
+      change origin = input.site at atSite
+      change exactScopeWires layout.plugRaw (layout.frameRegion origin) =
+        targetLocal at targetLocalCall
+      subst targetLocal
+      have targetEq : (layout.frameTargetCall
+          (.nested origin sourceOuter sourceRels sourceBinders) targetOuter
+            (exactScopeWires layout.plugRaw (layout.frameRegion origin))
+              targetBinders).fullContext =
+          (sourceOuter ++ exactScopeWires input.frame.val origin).map
+              layout.frameWireMap ++
+            (CompiledSite.endpointCall (State.ofOpen input.pattern)
+              input.binderSpine.bodyContainer).localContext.map
+                layout.patternWireMap := by
+        simpa [frameTargetCall, CompilerCall.fullContext] using targetFullEq
+      cases sourceBody
+      rename_i sourceItems
+      have semantic := layout.compileSpliceSite
+          (terminal := admissible.terminal_body) consistent admissible targetWf
+          (.nested origin sourceOuter sourceRels sourceBinders) targetOuter
+          (exactScopeWires layout.plugRaw (layout.frameRegion origin))
+          targetBinders atSite outerEq targetEq sourceExact frameBindersMapped
+          relationMap hostLookup materialWireMap materialGet sourceCompiled
+      dsimp only [SpliceSiteSemantic] at semantic
+      obtain ⟨targetBody, targetCompiled, endpointIso⟩ :=
+        Classical.choice semantic
+      refine {
+        targetBody := targetBody
+        targetCompiled := targetCompiled
+        holeWires := targetOuter.length
+        holeWire := layout.canonicalOuterWire
+          (.nested origin sourceOuter sourceRels sourceBinders)
+            targetOuter outerEq
+        targetSite := targetBody.erase
+        targetContext := .hole
+        alignment := .hole _
+        targetRebuild := rfl
+        endpointIso := ?_
+      }
+      rw [afterEq]
+      simpa [endpointAfter, CompilerCall.localContext] using endpointIso
 
 end Splice.Input.PlugLayout
 
