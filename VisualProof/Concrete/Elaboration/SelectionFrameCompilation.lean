@@ -441,23 +441,26 @@ theorem compileAlongFocus
       (FiniteEquiv.finCast (congrArg List.length frame.localEq)).trans
         (domains.mapWireContextEquiv sourceCall.localContext localSurvives)
     let childTargetOuter := targetOuter ++ targetLocal
-    let childTargetLocal := domains.mapWireContext
-      (exactScopeWires host.val origin)
+    have childSurvives : domains.regions.survives origin = true :=
+      domains.localOccurrence_survives_above host selection sourceCall.origin
+        above parentAway (.child origin) selectedDirect
+    let childTargetLocal := exactScopeWires
+      (host.val.removeRaw selection domains)
+        (domains.regions.index origin childSurvives)
     have childOuterEq : childTargetOuter =
         domains.mapWireContext sourceCall.fullContext := by
       dsimp only [childTargetOuter]
       rw [CompilerCall.fullContext, domains.mapWireContext_append,
         ← frame.outerEq, ← frame.localEq]
-    have childSurvives : domains.regions.survives origin = true :=
-      domains.localOccurrence_survives_above host selection sourceCall.origin
-        above parentAway (.child origin) selectedDirect
-    have childLocalCall : exactScopeWires
-        (host.val.removeRaw selection domains)
-          (domains.regions.index origin childSurvives) = childTargetLocal := by
+    have childLocalEq : childTargetLocal = domains.mapWireContext
+        (exactScopeWires host.val origin) := by
       dsimp only [childTargetLocal]
       rw [← domains.mapWireContext_exactScope host selection
         (domains.regions.index origin childSurvives),
         domains.regions.origin_index]
+    have childLocalCall : exactScopeWires
+        (host.val.removeRaw selection domains)
+          (domains.regions.index origin childSurvives) = childTargetLocal := rfl
     have childOuterSurvives : ∀ wire, wire ∈ sourceCall.fullContext →
         domains.wires.survives wire = true := by
       intro wire member
@@ -469,7 +472,7 @@ theorem compileAlongFocus
           targetBinders := {
       originSurvives := childSurvives
       outerEq := childOuterEq
-      localEq := rfl
+      localEq := childLocalEq
       outerSurvives := childOuterSurvives
       targetLocalCall := childLocalCall
       bindersEq := frame.bindersEq
@@ -903,15 +906,14 @@ theorem compileAlongFocus
         (Fin sourceCall.localContext.length) :=
       (FiniteEquiv.finCast (congrArg List.length frame.localEq)).trans
         (domains.mapWireContextEquiv sourceCall.localContext localSurvives)
-    let childTargetOuter := targetOuter ++ targetLocal
-    let childTargetLocal := domains.mapWireContext
-      (exactScopeWires host.val origin)
-    let targetChild := domains.regions.index origin (by
-      exact domains.localOccurrence_survives_above host selection
-        sourceCall.origin above parentAway (.child origin) selectedDirect)
     have childSurvives : domains.regions.survives origin = true :=
       domains.localOccurrence_survives_above host selection sourceCall.origin
         above parentAway (.child origin) selectedDirect
+    let childTargetOuter := targetOuter ++ targetLocal
+    let childTargetLocal := exactScopeWires
+      (host.val.removeRaw selection domains)
+        (domains.regions.index origin childSurvives)
+    let targetChild := domains.regions.index origin childSurvives
     let childTargetBinders := targetBinders.push
       (domains.regions.index origin childSurvives) arity
     have childOuterEq : childTargetOuter =
@@ -919,13 +921,15 @@ theorem compileAlongFocus
       dsimp only [childTargetOuter]
       rw [CompilerCall.fullContext, domains.mapWireContext_append,
         ← frame.outerEq, ← frame.localEq]
-    have childLocalCall : exactScopeWires
-        (host.val.removeRaw selection domains)
-          (domains.regions.index origin childSurvives) = childTargetLocal := by
+    have childLocalEq : childTargetLocal = domains.mapWireContext
+        (exactScopeWires host.val origin) := by
       dsimp only [childTargetLocal]
       rw [← domains.mapWireContext_exactScope host selection
         (domains.regions.index origin childSurvives),
         domains.regions.origin_index]
+    have childLocalCall : exactScopeWires
+        (host.val.removeRaw selection domains)
+          (domains.regions.index origin childSurvives) = childTargetLocal := rfl
     have childOuterSurvives : ∀ wire, wire ∈ sourceCall.fullContext →
         domains.wires.survives wire = true := by
       intro wire member
@@ -943,7 +947,7 @@ theorem compileAlongFocus
           childTargetLocal childTargetBinders := {
       originSurvives := childSurvives
       outerEq := childOuterEq
-      localEq := rfl
+      localEq := childLocalEq
       outerSurvives := childOuterSurvives
       targetLocalCall := childLocalCall
       bindersEq := childBindersEq
