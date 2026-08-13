@@ -567,176 +567,6 @@ private noncomputable def compileHere
       rw [afterEq]
       simpa [spliceEndpointAfter, CompilerCall.localContext] using endpointIso
 
-/-- Compile one focused parent sequence after its two sibling blocks have been
-transported. The distinguished item is deliberately absent from `frame`;
-cut/bubble callers supply its replacement isomorphism only when they build the
-enclosing `DiagramContextIso`. -/
-private structure FocusedBlocksResult
-    (layout : PlugLayout input) (targetWf : layout.plugRaw.WellFormed)
-    {sourceCall : CompilerCall input.frame.val}
-    (targetOuter targetLocal : WireContext layout.plugRaw)
-    (targetBinders : BinderContext layout.plugRaw sourceCall.rels)
-    (outerEq : targetOuter =
-      sourceCall.outerContext.map layout.frameWireMap)
-    (localEq : targetLocal =
-      sourceCall.localContext.map layout.frameWireMap)
-    (sourceBefore sourceSuffix : CompiledItems input.frame.val
-      sourceCall.fullContext sourceCall.rels sourceCall.binders)
-    (sourceSelected : Item sourceCall.fullContext.length sourceCall.rels)
-    (targetSelected : CompiledItem layout.plugRaw (targetOuter ++ targetLocal)
-      sourceCall.rels targetBinders) where
-  targetBefore : CompiledItems layout.plugRaw (targetOuter ++ targetLocal)
-    sourceCall.rels targetBinders
-  targetSuffix : CompiledItems layout.plugRaw (targetOuter ++ targetLocal)
-    sourceCall.rels targetBinders
-  compiled : compileItems? layout.plugRaw targetWf
-    (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
-    targetBinders (localOccurrences layout.plugRaw
-      (layout.frameRegion sourceCall.origin)) (fun _ member => member) =
-      some (targetBefore.append (.cons targetSelected targetSuffix))
-  frame : ∀ {targetReplacement : Item (targetOuter ++ targetLocal).length
-      sourceCall.rels}
-      {sourceReplacement : Item sourceCall.fullContext.length sourceCall.rels},
-    ItemIso (layout.mappedFullWire sourceCall targetOuter targetLocal outerEq
-      localEq) sourceCall.rels targetReplacement sourceReplacement →
-      ItemSeqIso (layout.mappedFullWire sourceCall targetOuter targetLocal
-        outerEq localEq) sourceCall.rels
-        (targetBefore.erase.append (.cons targetReplacement targetSuffix.erase))
-        (sourceBefore.erase.append (.cons sourceReplacement sourceSuffix.erase))
-
-private noncomputable def assembleFocusedBlocks
-    (layout : PlugLayout input) (targetWf : layout.plugRaw.WellFormed)
-    (sourceCall : CompilerCall input.frame.val)
-    (targetOuter targetLocal : WireContext layout.plugRaw)
-    (targetBinders : BinderContext layout.plugRaw sourceCall.rels)
-    (outerEq : targetOuter =
-      sourceCall.outerContext.map layout.frameWireMap)
-    (localEq : targetLocal =
-      sourceCall.localContext.map layout.frameWireMap)
-    (parentAway : sourceCall.origin ≠ input.site)
-    (sourceBefore sourceSuffix : CompiledItems input.frame.val
-      sourceCall.fullContext sourceCall.rels sourceCall.binders)
-    (sourceSelected : CompiledItem input.frame.val sourceCall.fullContext
-      sourceCall.rels sourceCall.binders)
-    (targetSelected : CompiledItem layout.plugRaw (targetOuter ++ targetLocal)
-      sourceCall.rels targetBinders)
-    (sourceOrigins :
-      (sourceBefore.append (.cons sourceSelected sourceSuffix)).origins =
-        localOccurrences input.frame.val sourceCall.origin)
-    (beforeResult : AwayBlockResult layout targetWf targetOuter targetLocal
-      targetBinders outerEq localEq parentAway sourceBefore)
-    (suffixResult : AwayBlockResult layout targetWf targetOuter targetLocal
-      targetBinders outerEq localEq parentAway sourceSuffix)
-    (selectedCompiled : compileOccurrence? layout.plugRaw targetWf
-      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
-      targetBinders (layout.mapFrameOccurrence sourceSelected.origin)
-      (by
-        rw [layout.localOccurrences_frameRegion_of_ne_site sourceCall.origin
-          parentAway]
-        exact List.mem_map.mpr ⟨sourceSelected.origin, by
-          rw [← sourceOrigins]
-          simp [CompiledItems.origins_append, CompiledItems.origins], rfl⟩) =
-        some targetSelected) :
-    FocusedBlocksResult layout targetWf targetOuter targetLocal targetBinders
-      outerEq localEq sourceBefore sourceSuffix sourceSelected.erase
-      targetSelected := by
-  let targetItems := beforeResult.target.append
-    (.cons targetSelected suffixResult.target)
-  have beforeOrigins := compileItems?_origins targetWf
-    (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
-    targetBinders beforeResult.compiled
-  have suffixOrigins := compileItems?_origins targetWf
-    (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
-    targetBinders suffixResult.compiled
-  have selectedOrigin := compileOccurrence?_origin targetWf
-    (layout.frameRegion sourceCall.origin)
-    (layout.mapFrameOccurrence sourceSelected.origin) _ selectedCompiled
-  have targetOrigins : targetItems.origins =
-      localOccurrences layout.plugRaw (layout.frameRegion sourceCall.origin) := by
-    rw [layout.localOccurrences_frameRegion_of_ne_site sourceCall.origin
-      parentAway]
-    dsimp only [targetItems]
-    rw [CompiledItems.origins_append, CompiledItems.origins,
-      beforeOrigins, suffixOrigins, selectedOrigin, ← sourceOrigins]
-    simp [CompiledItems.origins_append, CompiledItems.origins,
-      List.map_append]
-    rfl
-  let targetDirect : ∀ occurrence, occurrence ∈ targetItems.origins →
-      occurrence ∈ localOccurrences layout.plugRaw
-        (layout.frameRegion sourceCall.origin) := by
-    intro occurrence member
-    simpa only [targetOrigins] using member
-  have beforeCompiled : compileItems? layout.plugRaw targetWf
-      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
-      targetBinders beforeResult.target.origins
-      (fun occurrence member => targetDirect occurrence (by
-        dsimp only [targetItems]
-        rw [CompiledItems.origins_append]
-        exact List.mem_append_left _ member)) = some beforeResult.target := by
-    simpa only [beforeOrigins] using beforeResult.compiled
-  have suffixCompiled : compileItems? layout.plugRaw targetWf
-      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
-      targetBinders suffixResult.target.origins
-      (fun occurrence member => targetDirect occurrence (by
-        dsimp only [targetItems]
-        rw [CompiledItems.origins_append]
-        exact List.mem_append_right _ (by
-          simp [CompiledItems.origins, member]))) = some suffixResult.target := by
-    simpa only [suffixOrigins] using suffixResult.compiled
-  have selectedCompiled' : compileOccurrence? layout.plugRaw targetWf
-      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
-      targetBinders targetSelected.origin
-      (targetDirect targetSelected.origin (by
-        dsimp only [targetItems]
-        rw [CompiledItems.origins_append]
-        exact List.mem_append_right _ (by simp [CompiledItems.origins]))) =
-        some targetSelected := by
-    simpa only [selectedOrigin] using selectedCompiled
-  have tailCompiled : compileItems? layout.plugRaw targetWf
-      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
-      targetBinders (CompiledItems.cons targetSelected suffixResult.target).origins
-      (fun occurrence member => targetDirect occurrence (by
-        dsimp only [targetItems]
-        rw [CompiledItems.origins_append]
-        exact List.mem_append_right _ member)) =
-        some (CompiledItems.cons targetSelected suffixResult.target) := by
-    change compileItems? layout.plugRaw targetWf
-      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
-      targetBinders (targetSelected.origin :: suffixResult.target.origins) _ =
-        some (CompiledItems.cons targetSelected suffixResult.target)
-    rw [compileItems?_cons, selectedCompiled', suffixCompiled]
-    rfl
-  let combinedDirect : ∀ occurrence,
-      occurrence ∈ beforeResult.target.origins ++
-          (CompiledItems.cons targetSelected suffixResult.target).origins →
-        occurrence ∈ localOccurrences layout.plugRaw
-          (layout.frameRegion sourceCall.origin) := by
-    intro occurrence member
-    exact targetDirect occurrence (by
-      dsimp only [targetItems]
-      simpa only [CompiledItems.origins_append] using member)
-  have combinedCompiled : compileItems? layout.plugRaw targetWf
-      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
-      targetBinders targetItems.origins targetDirect = some targetItems := by
-    simpa only [targetItems, CompiledItems.origins_append] using
-      compileItems?_append targetWf (layout.frameRegion sourceCall.origin)
-        (targetOuter ++ targetLocal) targetBinders beforeResult.target.origins
-        (CompiledItems.cons targetSelected suffixResult.target).origins
-        combinedDirect beforeCompiled tailCompiled
-  refine {
-    targetBefore := beforeResult.target
-    targetSuffix := suffixResult.target
-    compiled := ?_
-    frame := ?_
-  }
-  · exact (compileItems?_congr_occurrences targetWf
-      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
-      targetBinders targetOrigins targetDirect (fun _ member => member)).symm.trans
-        combinedCompiled
-  · intro targetReplacement sourceReplacement replacement
-    exact beforeResult.iso.append
-      ((ItemSeqIso.singleton replacement).append suffixResult.iso)
-
 private abbrev GraftRegionFold
     (layout : PlugLayout input) (admissible : input.Admissible)
     (targetWf : layout.plugRaw.WellFormed)
@@ -1022,12 +852,58 @@ private noncomputable def compileAlongZipper
         (targetOuter ++ targetLocal) targetBinders selectedTargetDirect
         targetRegion, childTargetCompiled]
       rfl
-    let blocks := layout.assembleFocusedBlocks targetWf sourceCall
-      targetOuter targetLocal targetBinders frame.outerEq localEq parentAway
-      before suffix (.cut body) targetSelected sourceOrigins beforeResult
-      suffixResult targetSelectedCompiled
-    let targetItems := blocks.targetBefore.append
-      (.cons targetSelected blocks.targetSuffix)
+    have beforeOrigins := compileItems?_origins targetWf
+      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+      targetBinders beforeResult.compiled
+    have suffixOrigins := compileItems?_origins targetWf
+      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+      targetBinders suffixResult.compiled
+    have selectedOrigin := compileOccurrence?_origin targetWf
+      (layout.frameRegion sourceCall.origin)
+      (layout.mapFrameOccurrence (.child origin)) _ targetSelectedCompiled
+    have targetOrigins : (beforeResult.target.append
+        (.cons targetSelected suffixResult.target)).origins =
+        localOccurrences layout.plugRaw
+          (layout.frameRegion sourceCall.origin) := by
+      rw [layout.localOccurrences_frameRegion_of_ne_site sourceCall.origin
+        parentAway, CompiledItems.origins_append, CompiledItems.origins,
+        beforeOrigins, suffixOrigins, selectedOrigin, ← sourceOrigins]
+      simp [CompiledItems.origins_append, CompiledItems.origins,
+        List.map_append]
+      rfl
+    have beforeCanonical : compileItems? layout.plugRaw targetWf
+        (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+        targetBinders beforeResult.target.origins (fun occurrence member => by
+          rw [← targetOrigins, CompiledItems.origins_append]
+          exact List.mem_append_left _ member) =
+          some beforeResult.target := by
+      simpa only [beforeOrigins] using beforeResult.compiled
+    have suffixCanonical : compileItems? layout.plugRaw targetWf
+        (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+        targetBinders suffixResult.target.origins (fun occurrence member => by
+          rw [← targetOrigins, CompiledItems.origins_append,
+            CompiledItems.origins]
+          exact List.mem_append_right _ (List.mem_cons_of_mem _ member)) =
+          some suffixResult.target := by
+      simpa only [suffixOrigins] using suffixResult.compiled
+    have selectedCanonical : compileOccurrence? layout.plugRaw targetWf
+        (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+        targetBinders targetSelected.origin (by
+          rw [← targetOrigins, CompiledItems.origins_append,
+            CompiledItems.origins]
+          exact List.mem_append_right _ List.mem_cons_self) =
+          some targetSelected := by
+      simpa only [selectedOrigin] using targetSelectedCompiled
+    let fullWire := layout.mappedFullWire sourceCall targetOuter targetLocal
+      frame.outerEq localEq
+    let blocks := compileFocusedItems layout.plugRaw targetWf
+      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+      targetBinders fullWire before.erase suffix.erase (Item.cut body.erase)
+      beforeResult.target suffixResult.target targetSelected targetOrigins
+      beforeCanonical suffixCanonical selectedCanonical beforeResult.iso
+      suffixResult.iso
+    let targetItems := beforeResult.target.append
+      (.cons targetSelected suffixResult.target)
     let targetBody := layout.frameTargetBody sourceCall targetOuter targetLocal
       targetBinders frame.targetLocalCall targetItems
     have targetCompiled : (layout.frameTargetCall sourceCall targetOuter
@@ -1044,8 +920,8 @@ private noncomputable def compileAlongZipper
     let targetContext : DiagramContext targetOuter.length
         childResult.holeWires sourceCall.rels endpointCall.rels :=
       .cut targetLocal.length
-        (blocks.targetBefore.erase.castWiresEq targetSplit)
-        (blocks.targetSuffix.erase.castWiresEq targetSplit)
+        (beforeResult.target.erase.castWiresEq targetSplit)
+        (suffixResult.target.erase.castWiresEq targetSplit)
         (targetSplit ▸ childResult.targetContext)
     have alignment : DiagramContextIso
         (layout.canonicalOuterWire sourceCall targetOuter frame.outerEq)
@@ -1092,7 +968,7 @@ private noncomputable def compileAlongZipper
       have childAlignment := childResult.alignment
       rw [childOuterWireEq] at childAlignment
       exact DiagramContextIso.cutCompilerFrame localWire targetSplit
-        sourceSplit blocks.targetBefore.erase blocks.targetSuffix.erase
+        sourceSplit beforeResult.target.erase suffixResult.target.erase
         before.erase suffix.erase childResult.targetContext
         nested.intrinsic.context
         (layout.mappedFullWire sourceCall targetOuter targetLocal
@@ -1121,14 +997,14 @@ private noncomputable def compileAlongZipper
       simp only [DiagramContext.fill]
       calc
         _ = .mk targetLocal.length
-            ((blocks.targetBefore.erase.castWiresEq targetSplit).append
+            ((beforeResult.target.erase.castWiresEq targetSplit).append
               (.cons (.cut
                 (childResult.targetBody.erase.castWiresEq targetSplit))
-                (blocks.targetSuffix.erase.castWiresEq targetSplit))) := by
+                (suffixResult.target.erase.castWiresEq targetSplit))) := by
           exact congrArg (fun sequence => Region.mk targetLocal.length
-            ((blocks.targetBefore.erase.castWiresEq targetSplit).append
+            ((beforeResult.target.erase.castWiresEq targetSplit).append
               (.cons (.cut sequence)
-                (blocks.targetSuffix.erase.castWiresEq targetSplit)))) nestedEq
+                (suffixResult.target.erase.castWiresEq targetSplit)))) nestedEq
         _ = _ := by
           rw [frameTargetErase_frameTargetBody]
           dsimp only [targetItems, targetSelected]
@@ -1137,9 +1013,9 @@ private noncomputable def compileAlongZipper
             ItemSeq.castWiresEq_append, ItemSeq.castWiresEq_cons]
           apply congrArg (Region.mk targetLocal.length)
           rw [ItemSeq.castWiresEq_proof_irrel targetSplit _
-            blocks.targetBefore.erase]
+            beforeResult.target.erase]
           rw [ItemSeq.castWiresEq_proof_irrel targetSplit _
-            blocks.targetSuffix.erase]
+            suffixResult.target.erase]
           change _ = _
           simp only [CompiledItem.erase, Item.castWiresEq_cut]
           congr 1
@@ -1380,12 +1256,58 @@ private noncomputable def compileAlongZipper
         (targetOuter ++ targetLocal) targetBinders arity selectedTargetDirect
         targetRegion, childTargetCompiled]
       rfl
-    let blocks := layout.assembleFocusedBlocks targetWf sourceCall
-      targetOuter targetLocal targetBinders frame.outerEq localEq parentAway
-      before suffix (.bubble arity body) targetSelected sourceOrigins
-      beforeResult suffixResult targetSelectedCompiled
-    let targetItems := blocks.targetBefore.append
-      (.cons targetSelected blocks.targetSuffix)
+    have beforeOrigins := compileItems?_origins targetWf
+      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+      targetBinders beforeResult.compiled
+    have suffixOrigins := compileItems?_origins targetWf
+      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+      targetBinders suffixResult.compiled
+    have selectedOrigin := compileOccurrence?_origin targetWf
+      (layout.frameRegion sourceCall.origin)
+      (layout.mapFrameOccurrence (.child origin)) _ targetSelectedCompiled
+    have targetOrigins : (beforeResult.target.append
+        (.cons targetSelected suffixResult.target)).origins =
+        localOccurrences layout.plugRaw
+          (layout.frameRegion sourceCall.origin) := by
+      rw [layout.localOccurrences_frameRegion_of_ne_site sourceCall.origin
+        parentAway, CompiledItems.origins_append, CompiledItems.origins,
+        beforeOrigins, suffixOrigins, selectedOrigin, ← sourceOrigins]
+      simp [CompiledItems.origins_append, CompiledItems.origins,
+        List.map_append]
+      rfl
+    have beforeCanonical : compileItems? layout.plugRaw targetWf
+        (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+        targetBinders beforeResult.target.origins (fun occurrence member => by
+          rw [← targetOrigins, CompiledItems.origins_append]
+          exact List.mem_append_left _ member) =
+          some beforeResult.target := by
+      simpa only [beforeOrigins] using beforeResult.compiled
+    have suffixCanonical : compileItems? layout.plugRaw targetWf
+        (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+        targetBinders suffixResult.target.origins (fun occurrence member => by
+          rw [← targetOrigins, CompiledItems.origins_append,
+            CompiledItems.origins]
+          exact List.mem_append_right _ (List.mem_cons_of_mem _ member)) =
+          some suffixResult.target := by
+      simpa only [suffixOrigins] using suffixResult.compiled
+    have selectedCanonical : compileOccurrence? layout.plugRaw targetWf
+        (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+        targetBinders targetSelected.origin (by
+          rw [← targetOrigins, CompiledItems.origins_append,
+            CompiledItems.origins]
+          exact List.mem_append_right _ List.mem_cons_self) =
+          some targetSelected := by
+      simpa only [selectedOrigin] using targetSelectedCompiled
+    let fullWire := layout.mappedFullWire sourceCall targetOuter targetLocal
+      frame.outerEq localEq
+    let blocks := compileFocusedItems layout.plugRaw targetWf
+      (layout.frameRegion sourceCall.origin) (targetOuter ++ targetLocal)
+      targetBinders fullWire before.erase suffix.erase
+      (Item.bubble arity body.erase) beforeResult.target suffixResult.target
+      targetSelected targetOrigins beforeCanonical suffixCanonical
+      selectedCanonical beforeResult.iso suffixResult.iso
+    let targetItems := beforeResult.target.append
+      (.cons targetSelected suffixResult.target)
     let targetBody := layout.frameTargetBody sourceCall targetOuter targetLocal
       targetBinders frame.targetLocalCall targetItems
     have targetCompiled : (layout.frameTargetCall sourceCall targetOuter
@@ -1402,8 +1324,8 @@ private noncomputable def compileAlongZipper
     let targetContext : DiagramContext targetOuter.length
         childResult.holeWires sourceCall.rels endpointCall.rels :=
       .bubble targetLocal.length
-        (blocks.targetBefore.erase.castWiresEq targetSplit)
-        (blocks.targetSuffix.erase.castWiresEq targetSplit) arity
+        (beforeResult.target.erase.castWiresEq targetSplit)
+        (suffixResult.target.erase.castWiresEq targetSplit) arity
         (targetSplit ▸ childResult.targetContext)
     have alignment : DiagramContextIso
         (layout.canonicalOuterWire sourceCall targetOuter frame.outerEq)
@@ -1450,7 +1372,7 @@ private noncomputable def compileAlongZipper
       rw [childOuterWireEq] at childAlignment
       exact DiagramContextIso.bubbleCompilerFrame
         (layout.mappedLocalWire sourceCall targetLocal localEq) targetSplit
-        sourceSplit blocks.targetBefore.erase blocks.targetSuffix.erase
+        sourceSplit beforeResult.target.erase suffixResult.target.erase
         before.erase suffix.erase childResult.targetContext
         nested.intrinsic.context
         (layout.mappedFullWire sourceCall targetOuter targetLocal
@@ -1479,14 +1401,14 @@ private noncomputable def compileAlongZipper
       simp only [DiagramContext.fill]
       calc
         _ = .mk targetLocal.length
-            ((blocks.targetBefore.erase.castWiresEq targetSplit).append
+            ((beforeResult.target.erase.castWiresEq targetSplit).append
               (.cons (.bubble arity
                 (childResult.targetBody.erase.castWiresEq targetSplit))
-                (blocks.targetSuffix.erase.castWiresEq targetSplit))) := by
+                (suffixResult.target.erase.castWiresEq targetSplit))) := by
           exact congrArg (fun sequence => Region.mk targetLocal.length
-            ((blocks.targetBefore.erase.castWiresEq targetSplit).append
+            ((beforeResult.target.erase.castWiresEq targetSplit).append
               (.cons (.bubble arity sequence)
-                (blocks.targetSuffix.erase.castWiresEq targetSplit)))) nestedEq
+                (suffixResult.target.erase.castWiresEq targetSplit)))) nestedEq
         _ = _ := by
           rw [frameTargetErase_frameTargetBody]
           dsimp only [targetItems, targetSelected]
@@ -1495,9 +1417,9 @@ private noncomputable def compileAlongZipper
             ItemSeq.castWiresEq_append, ItemSeq.castWiresEq_cons]
           apply congrArg (Region.mk targetLocal.length)
           rw [ItemSeq.castWiresEq_proof_irrel targetSplit _
-            blocks.targetBefore.erase]
+            beforeResult.target.erase]
           rw [ItemSeq.castWiresEq_proof_irrel targetSplit _
-            blocks.targetSuffix.erase]
+            suffixResult.target.erase]
           change _ = _
           simp only [CompiledItem.erase, Item.castWiresEq_bubble]
           congr 1

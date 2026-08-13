@@ -1278,4 +1278,129 @@ theorem compileRoot?_complete
   exact CompilerCall.compile?_complete hwf (.root ambient locals) hwires
     (BinderContext.empty_covers_root hwf)
 
+/-- The compiler grammar for one focused item sequence. Callers compile the
+two sibling blocks and the distinguished replacement independently; this
+packages their concatenation at the canonical local-occurrence stream. -/
+structure FocusedItemsCompilation
+    (d : Diagram) (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (targetContext : WireContext d) (targetBinders : BinderContext d rels)
+    {sourceWires : Nat} (wire : FiniteEquiv (Fin targetContext.length)
+      (Fin sourceWires))
+    (sourceBefore sourceSuffix : ItemSeq sourceWires rels)
+    (sourceSelected : Item sourceWires rels)
+    (targetBefore targetSuffix : CompiledItems d targetContext rels
+      targetBinders)
+    (targetSelected : CompiledItem d targetContext rels targetBinders) where
+  compiled : compileItems? d hwf parent targetContext targetBinders
+    (localOccurrences d parent) (fun _ member => member) =
+      some (targetBefore.append (.cons targetSelected targetSuffix))
+  frame : ∀ {targetReplacement : Item targetContext.length rels}
+      {sourceReplacement : Item sourceWires rels},
+    ItemIso wire rels targetReplacement sourceReplacement →
+      ItemSeqIso wire rels
+        (targetBefore.erase.append (.cons targetReplacement targetSuffix.erase))
+        (sourceBefore.append (.cons sourceReplacement sourceSuffix))
+
+/-- Assemble one focused compiler frame without exposing prefix/split state to
+the surrounding zipper fold. -/
+noncomputable def compileFocusedItems
+    (d : Diagram) (hwf : d.WellFormed) (parent : Fin d.regionCount)
+    (targetContext : WireContext d) (targetBinders : BinderContext d rels)
+    {sourceWires : Nat} (wire : FiniteEquiv (Fin targetContext.length)
+      (Fin sourceWires))
+    (sourceBefore sourceSuffix : ItemSeq sourceWires rels)
+    (sourceSelected : Item sourceWires rels)
+    (targetBefore targetSuffix : CompiledItems d targetContext rels
+      targetBinders)
+    (targetSelected : CompiledItem d targetContext rels targetBinders)
+    (targetOrigins :
+      (targetBefore.append (.cons targetSelected targetSuffix)).origins =
+        localOccurrences d parent)
+    (beforeCompiled : compileItems? d hwf parent targetContext targetBinders
+      targetBefore.origins (fun occurrence member => by
+        rw [← targetOrigins]
+        rw [CompiledItems.origins_append]
+        exact List.mem_append_left _ member) = some targetBefore)
+    (suffixCompiled : compileItems? d hwf parent targetContext targetBinders
+      targetSuffix.origins (fun occurrence member => by
+        rw [← targetOrigins]
+        rw [CompiledItems.origins_append, CompiledItems.origins]
+        exact List.mem_append_right _ (List.mem_cons_of_mem _ member)) =
+      some targetSuffix)
+    (selectedCompiled : compileOccurrence? d hwf parent targetContext
+      targetBinders targetSelected.origin (by
+        rw [← targetOrigins]
+        rw [CompiledItems.origins_append, CompiledItems.origins]
+        exact List.mem_append_right _ (List.mem_cons_self)) =
+      some targetSelected)
+    (beforeIso : ItemSeqIso wire rels targetBefore.erase sourceBefore)
+    (suffixIso : ItemSeqIso wire rels targetSuffix.erase sourceSuffix) :
+    FocusedItemsCompilation d hwf parent targetContext targetBinders wire
+      sourceBefore sourceSuffix sourceSelected targetBefore targetSuffix
+      targetSelected := by
+  let targetItems := targetBefore.append (.cons targetSelected targetSuffix)
+  let targetDirect : ∀ occurrence, occurrence ∈ targetItems.origins →
+      occurrence ∈ localOccurrences d parent := by
+    intro occurrence member
+    simpa only [targetItems, targetOrigins] using member
+  have beforeCompiled' : compileItems? d hwf parent targetContext
+      targetBinders targetBefore.origins
+      (fun occurrence member => targetDirect occurrence (by
+        dsimp only [targetItems]
+        rw [CompiledItems.origins_append]
+        exact List.mem_append_left _ member)) = some targetBefore := by
+    simpa using beforeCompiled
+  have suffixCompiled' : compileItems? d hwf parent targetContext
+      targetBinders targetSuffix.origins
+      (fun occurrence member => targetDirect occurrence (by
+        dsimp only [targetItems]
+        rw [CompiledItems.origins_append]
+        exact List.mem_append_right _ (by
+          simp [CompiledItems.origins, member]))) = some targetSuffix := by
+    simpa using suffixCompiled
+  have selectedCompiled' : compileOccurrence? d hwf parent targetContext
+      targetBinders targetSelected.origin
+      (targetDirect targetSelected.origin (by
+        dsimp only [targetItems]
+        rw [CompiledItems.origins_append]
+        exact List.mem_append_right _ (by simp [CompiledItems.origins]))) =
+      some targetSelected := by
+    simpa using selectedCompiled
+  have tailCompiled : compileItems? d hwf parent targetContext targetBinders
+      (CompiledItems.cons targetSelected targetSuffix).origins
+      (fun occurrence member => targetDirect occurrence (by
+        dsimp only [targetItems]
+        rw [CompiledItems.origins_append]
+        exact List.mem_append_right _ member)) =
+      some (CompiledItems.cons targetSelected targetSuffix) := by
+    change compileItems? d hwf parent targetContext targetBinders
+      (targetSelected.origin :: targetSuffix.origins) _ =
+        some (CompiledItems.cons targetSelected targetSuffix)
+    rw [compileItems?_cons, selectedCompiled', suffixCompiled']
+    rfl
+  let combinedDirect : ∀ occurrence,
+      occurrence ∈ targetBefore.origins ++
+          (CompiledItems.cons targetSelected targetSuffix).origins →
+        occurrence ∈ localOccurrences d parent := by
+    intro occurrence member
+    exact targetDirect occurrence (by
+      dsimp only [targetItems]
+      simpa only [CompiledItems.origins_append] using member)
+  have combinedCompiled : compileItems? d hwf parent targetContext
+      targetBinders targetItems.origins targetDirect = some targetItems := by
+    simpa only [targetItems, CompiledItems.origins_append] using
+      compileItems?_append hwf parent targetContext targetBinders
+        targetBefore.origins (CompiledItems.cons targetSelected
+          targetSuffix).origins combinedDirect beforeCompiled' tailCompiled
+  refine {
+    compiled := ?_
+    frame := ?_
+  }
+  · exact (compileItems?_congr_occurrences hwf parent targetContext
+      targetBinders targetOrigins targetDirect (fun _ member => member)).symm.trans
+        combinedCompiled
+  · intro targetReplacement sourceReplacement replacement
+    exact beforeIso.append
+      ((ItemSeqIso.singleton replacement).append suffixIso)
+
 end VisualProof.Concrete.Elaboration
