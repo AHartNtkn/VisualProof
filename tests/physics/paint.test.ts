@@ -21,7 +21,7 @@ describe('labels belong only to ref-node discs', () => {
     const h = new DiagramBuilder()
     const atom = h.atom(h.root, UNARY)
     const ref = h.ref(h.root, 'Nat', UNARY)
-    h.wire( [
+    h.wire([
       { node: atom, port: { kind: 'arg', index: 0 } },
       { node: ref, port: { kind: 'arg', index: 0 } },
     ])
@@ -94,7 +94,9 @@ describe('boundary honesty: boundary wires connect inside the frame and internal
     const e = mkEngine(d, [])
     settle(e, 400)
     const wire = [...e.wires.values()][0]!
-    const body = e.bodies.get(wire.end!.body)!
+    // the loose end is the pin build() attached at the argument's own region
+    const body = e.bodies.get(wire.binds.find((bind) =>
+      e.bodies.get(bind.body)!.kind === 'identity')!.body)!
     const shapes = paint(e, LIGHT, () => [])
     expect(shapes.filter((s) => s.kind === 'arc'
       && s.center.x === body.pos.x && s.center.y === body.pos.y)).toHaveLength(1)
@@ -143,9 +145,10 @@ describe('frame ports — a prominent origin marks port 0 and unattached ports s
     const h = new DiagramBuilder()
     const a = h.ref(h.root, 'A', UNARY)
     const b = h.ref(h.root, 'B', UNARY)
-    const w1 = h.wire( [{ node: a, port: { kind: 'arg', index: 0 } }])
-    const w2 = h.wire( [{ node: b, port: { kind: 'arg', index: 0 } }])
-    const e = mkEngine(h.build(), [w1, w2])
+    const w1 = h.wire([{ node: a, port: { kind: 'arg', index: 0 } }])
+    const w2 = h.wire([{ node: b, port: { kind: 'arg', index: 0 } }])
+    const { diagram, boundary } = h.buildOpen([w1, w2])
+    const e = mkEngine(diagram, boundary)
     settle(e, 800)
     const shapes = paint(e, LIGHT)
     const s0 = frameSlots(frameBounds(e)!, e.boundary.length)[0]!.point
@@ -160,8 +163,9 @@ describe('frame ports — a prominent origin marks port 0 and unattached ports s
   it('one boundary wire: port 0 still carries the prominent origin', () => {
     const h = new DiagramBuilder()
     const a = h.ref(h.root, 'A', UNARY)
-    const w1 = h.wire( [{ node: a, port: { kind: 'arg', index: 0 } }])
-    const e = mkEngine(h.build(), [w1])
+    const w1 = h.wire([{ node: a, port: { kind: 'arg', index: 0 } }])
+    const { diagram, boundary } = h.buildOpen([w1])
+    const e = mkEngine(diagram, boundary)
     settle(e, 800)
     const shapes = paint(e, LIGHT)
     const s0 = frameSlots(frameBounds(e)!, e.boundary.length)[0]!.point
@@ -213,7 +217,7 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
   const wireAtom = (order1Sig = rel(1)) => {
     const h = new DiagramBuilder()
     const a = h.atom(h.root, order1Sig)
-    const head = h.wire( [{ node: a, port: { kind: 'head' } }], order1Sig)
+    const head = h.wire([{ node: a, port: { kind: 'head' } }], order1Sig)
     const d = h.build()
     const e = mkEngine(d, [])
     settle(e, 400)
@@ -236,11 +240,11 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
     // wire (a relation taking a relation argument): three distinct rungs.
     const h = new DiagramBuilder()
     const individual = h.ref(h.root, 'Individual', UNARY)
-    const w0 = h.wire( [{ node: individual, port: { kind: 'arg', index: 0 } }])
+    const w0 = h.wire([{ node: individual, port: { kind: 'arg', index: 0 } }])
     const a1 = h.atom(h.root, rel(1))
-    const w1 = h.wire( [{ node: a1, port: { kind: 'head' } }], rel(1)) // order 1
+    const w1 = h.wire([{ node: a1, port: { kind: 'head' } }], rel(1)) // order 1
     const a2 = h.atom(h.root, relSig([rel(1)]))
-    const w2 = h.wire( [{ node: a2, port: { kind: 'head' } }], relSig([rel(1)])) // order 2
+    const w2 = h.wire([{ node: a2, port: { kind: 'head' } }], relSig([rel(1)])) // order 2
     const d = h.build()
     const hues = relationWireHues(d, LIGHT.relationHueLightness)
     // Individual wire is not in the ladder map: it keeps the base colour.
@@ -258,7 +262,10 @@ describe('law 6 — colour codes signature ORDER (the order ladder), and Dark gl
     // (USER 2026-07-30).
     const { d, e, head } = wireAtom()
     const hue = relationWireHues(d, LIGHT.relationHueLightness).get(head)!
-    const at = e.bodies.get(e.wires.get(head)!.end!.body)!.pos
+    const headWire = e.wires.get(head)!
+    // the wire's ∃ point is its pin node — the only identity body on the wire
+    const at = e.bodies.get(headWire.binds.find((bind) =>
+      e.bodies.get(bind.body)!.kind === 'identity')!.body)!.pos
     const shapes = paint(e, LIGHT)
     const rail = shapes.find((s) =>
       s.kind === 'arc' && s.center.x === at.x && s.center.y === at.y)
@@ -290,7 +297,7 @@ describe('theme toggle', () => {
     const h = new DiagramBuilder()
     const a = h.ref(h.root, 'A', UNARY)
     const b = h.ref(h.root, 'B', UNARY)
-    h.wire( [
+    h.wire([
       { node: a, port: { kind: 'arg', index: 0 } },
       { node: b, port: { kind: 'arg', index: 0 } },
     ])
@@ -313,7 +320,7 @@ describe('hover-group highlight', () => {
     const h = new DiagramBuilder()
     const a1 = h.atom(h.root, rel(1))
     const a2 = h.atom(h.root, rel(1))
-    const head = h.wire( [
+    const head = h.wire([
       { node: a1, port: { kind: 'head' } },
       { node: a2, port: { kind: 'head' } },
     ], rel(1))
@@ -357,7 +364,7 @@ describe('port-order pip — a rim dot marks port a0 on nodes with ordered ports
   const build = (arity: number) => {
     const h = new DiagramBuilder()
     const ref = h.ref(h.root, 'rel', rel(arity))
-    for (let i = 0; i < arity; i++) h.wire( [{ node: ref, port: { kind: 'arg', index: i } }])
+    for (let i = 0; i < arity; i++) h.wire([{ node: ref, port: { kind: 'arg', index: i } }])
     const e = mkEngine(h.build(), [])
     settle(e, 200)
     return { e, ref }
@@ -375,8 +382,8 @@ describe('port-order pip — a rim dot marks port a0 on nodes with ordered ports
     const { e, ref } = build(1)
     const b = e.bodies.get(ref)!
     const shapes = paint(e, LIGHT)
-    // ∃ dots (junction bodies) are wire geometry, not pips — exclude them
-    const jpos = [...e.bodies.values()].filter((x) => x.kind === 'end').map((x) => x.pos)
+    // pin identity discs are wire apparatus, not pips — exclude them
+    const jpos = [...e.bodies.values()].filter((x) => x.kind === 'identity').map((x) => x.pos)
     const near = shapes.filter((s) =>
       s.kind === 'dot'
       && Math.hypot(s.center.x - b.pos.x, s.center.y - b.pos.y) < 8

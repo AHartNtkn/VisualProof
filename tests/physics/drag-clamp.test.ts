@@ -35,7 +35,7 @@ describe('clampDragToFeasible — HARD SEMANTIC CONTAINMENT (USER LAW: a drag ca
     const a = h.ref(cut, 'A', UNARY)
     const b2 = h.ref(cut, 'B', UNARY)
     h.ref(h.root, 'Outer', UNARY)
-    h.wire( [
+    h.wire([
       { node: a, port: { kind: 'arg', index: 0 } },
       { node: b2, port: { kind: 'arg', index: 0 } },
     ])

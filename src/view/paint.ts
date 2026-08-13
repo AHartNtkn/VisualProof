@@ -4,7 +4,7 @@ import type { Vec2 } from './vec'
 import type { NodeGeometry } from './bend'
 import type { Body, Engine } from './engine'
 import { ascaleOf, DISC_R, FRAME_CORNER_W, frameBounds, resolvedFrameSlot } from './engine'
-import { computeLegs, legPaths, wireOwnedEnds } from './wires'
+import { computeLegs, legPaths } from './wires'
 import type { Leg } from './engine'
 
 /**
@@ -206,7 +206,6 @@ export function paint(e: Engine, st: Theme, wires: (e: Engine, st: Theme) => Sha
   const hues = relationWireHues(e.d, st.relationHueLightness)
   const headWireOf = atomHeadWires(e.d)
   const ownerWireOf = new Map<string, WireId>()
-  for (const { wid, body } of wireOwnedEnds(e)) ownerWireOf.set(body.id, wid)
   for (const [wid, wire] of e.wires) {
     for (const bind of wire.binds) {
       if (e.bodies.get(bind.body)?.kind === 'identity' && !ownerWireOf.has(bind.body)) {

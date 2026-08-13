@@ -95,18 +95,16 @@ export function mkRng(seed: number): Rng {
 export type MovableUnit =
   | { readonly kind: 'carrier'; readonly carrierKind: BodyKind; readonly id: string }
   | { readonly kind: 'region'; readonly id: RegionId }
-  | { readonly kind: 'endDot'; readonly id: string }
   | { readonly kind: 'junction'; readonly wid: WireId; readonly j: number }
 
 /** Every movable unit of an engine: each body (by kind), each region subtree
-    (via childrenOf), each wire-owned end dot (via end), and each wire
-    junction (a routed Steiner point — a positional DOF the local walk can only
-    settle within its basin, so crossing a junction cusp is a search-layer move). */
+    (via childrenOf), and each wire junction (a routed Steiner point — a
+    positional DOF the local walk can only settle within its basin, so
+    crossing a junction cusp is a search-layer move). */
 export function movableUnits(e: Engine): MovableUnit[] {
   const units: MovableUnit[] = []
   for (const [id, b] of e.bodies) units.push({ kind: 'carrier', carrierKind: b.kind, id })
   for (const rid of e.childrenOf.keys()) units.push({ kind: 'region', id: rid })
-  for (const [, w] of e.wires) if (w.end !== null) units.push({ kind: 'endDot', id: w.end.body })
   for (const [wid, w] of e.wires) for (let j = 0; j < w.net.junctions.length; j++) units.push({ kind: 'junction', wid, j })
   return units
 }
@@ -200,13 +198,13 @@ const siblingGroups = (e: Engine, pinned: ReadonlySet<string>): RegionId[][] => 
   return groups
 }
 /** The move registry — DATA the search proposes from and the coverage test
-    checks. Displacement covers every body and end dot; subtree moves cover
-    every region; rotation covers port-bearing bodies; body/subtree swaps add
-    coordinated exchanges no single-body move can express. */
+    checks. Displacement covers every body; subtree moves cover every region;
+    rotation covers port-bearing bodies; body/subtree swaps add coordinated
+    exchanges no single-body move can express. */
 export const MOVE_REGISTRY: readonly MoveKind[] = [
   {
     name: 'displaceBody',
-    covers: (u) => u.kind === 'carrier' || u.kind === 'endDot',
+    covers: (u) => u.kind === 'carrier',
     applicable: (e, pinned) => nonPinnedIds(e, pinned).length >= 1,
     propose: (e, pinned, rng, D) => {
       const ids = nonPinnedIds(e, pinned)
@@ -237,7 +235,7 @@ export const MOVE_REGISTRY: readonly MoveKind[] = [
   },
   {
     name: 'swapBodies',
-    covers: (u) => u.kind === 'carrier' || u.kind === 'endDot',
+    covers: (u) => u.kind === 'carrier',
     applicable: (e, pinned) => nonPinnedIds(e, pinned).length >= 2,
     propose: (e, pinned, rng, D) => {
       const ids = nonPinnedIds(e, pinned)

@@ -1,6 +1,6 @@
 import type { Diagram, Endpoint, RegionId, WireId } from '../kernel/diagram/diagram'
 import { pkey, resolvedFrameSlot, type Engine, type LegEnd } from '../view/engine'
-import { computeLegs, legPaths, wireOwnedEnds } from '../view/wires'
+import { computeLegs, legPaths } from '../view/wires'
 import type { Vec2 } from '../view/vec'
 import { length, sub } from '../view/vec'
 import type { Hit } from './hit-selection'
@@ -64,21 +64,16 @@ function nearestWire(candidates: readonly WireCandidate[], radius: number): Wire
   return best === null ? null : { kind: 'wire', id: best.id }
 }
 
-function boundaryOrDotCandidates(e: Engine, point: Vec2): WireCandidate[] {
+function boundaryCandidates(e: Engine, point: Vec2): WireCandidate[] {
   const out: WireCandidate[] = []
   // Boundary incidences are interaction targets at the frame. Use the same
   // resolved geometry as painting and leg solving; port 0's larger origin marker
-  // gets a correspondingly larger target while ordinary slots match ∃ dots.
+  // gets a correspondingly larger target while ordinary slots match node dots.
   for (const [position, wid] of e.boundary.entries()) {
     if (!e.wires.has(wid)) continue
     const slot = resolvedFrameSlot(e, position)
     if (slot === null) continue
     out.push({ id: wid, distance: length(sub(point, slot.point)) })
-  }
-  // Wire-owned bodies resolve to their semantic wire over their rendered disc.
-  for (const { wid, body } of wireOwnedEnds(e)) {
-    const centerDistance = length(sub(point, body.pos))
-    out.push({ id: wid, distance: Math.max(0, centerDistance - body.discR * e.scale) })
   }
   return out
 }
@@ -97,7 +92,7 @@ function wireStrokeCandidates(e: Engine, point: Vec2): WireCandidate[] {
     this deliberately gives a wire endpoint priority over the node rim it meets. */
 export function wireHitTest(e: Engine, point: Vec2, viewport: HitViewport): WireHit | null {
   const radius = wireHitRadius(viewport)
-  return nearestWire(boundaryOrDotCandidates(e, point), radius)
+  return nearestWire(boundaryCandidates(e, point), radius)
     ?? nearestWire(wireStrokeCandidates(e, point), radius)
 }
 
@@ -105,11 +100,6 @@ export type WireManipulationHit = {
   readonly kind: 'endpoint'
   readonly wire: WireId
   readonly endpoint: Endpoint
-} | {
-  readonly kind: 'looseEnd' | 'via'
-  readonly wire: WireId
-  readonly body: string
-  readonly region: RegionId
 } | {
   readonly kind: 'wireBody'
   readonly wire: WireId
@@ -156,8 +146,8 @@ function endpointForLegEnd(e: Engine, wire: WireId, end: LegEnd): Endpoint | nul
 }
 
 /** A wire hit enriched only when the pointer is on the terminal halo of a
-    concrete node port. Trunks, branch junctions, existential dots, and frame
-    slots remain wire hits but deliberately carry no guessed endpoint. */
+    concrete node port. Trunks, branch junctions, and frame slots remain wire
+    hits but deliberately carry no guessed endpoint. */
 export function wireManipulationHitTest(
   e: Engine,
   point: Vec2,
@@ -166,45 +156,18 @@ export function wireManipulationHitTest(
   const hit = wireHitTest(e, point, viewport)
   if (hit === null) return null
   const radius = wireHitRadius(viewport)
-  let marker: {
-    readonly kind: 'looseEnd' | 'via' | 'frame'
-    readonly body?: string
-    readonly region?: RegionId
-    readonly position?: number
-    readonly distance: number
-  } | null = null
+  let marker: { readonly position: number; readonly distance: number } | null = null
   for (const [position, wire] of e.boundary.entries()) {
     if (wire !== hit.id) continue
     const slot = resolvedFrameSlot(e, position)
     if (slot === null) continue
     const distance = length(sub(point, slot.point))
     if (distance <= radius && (marker === null || distance < marker.distance)) {
-      marker = { kind: 'frame', position, distance }
+      marker = { position, distance }
     }
-  }
-  for (const prefix of ['j:', 'x:'] as const) {
-    const body = e.bodies.get(`${prefix}${hit.id}`)
-    if (body === undefined) continue
-    const distance = length(sub(point, body.pos))
-    if (distance <= radius && (marker === null || distance < marker.distance)) {
-      marker = {
-        kind: prefix === 'j:' ? 'looseEnd' : 'via',
-        body: body.id,
-        region: body.region,
-        distance,
-      }
-    }
-  }
-  if (marker?.kind === 'frame') {
-    return { kind: 'frame', wire: hit.id, position: marker.position! }
   }
   if (marker !== null) {
-    return {
-      kind: marker.kind,
-      wire: hit.id,
-      body: marker.body!,
-      region: marker.region!,
-    }
+    return { kind: 'frame', wire: hit.id, position: marker.position }
   }
   let best: { readonly endpoint: Endpoint; readonly distance: number } | null = null
   for (const geometry of computeLegs(e)) {
@@ -226,10 +189,10 @@ export function wireManipulationHitTest(
 
 export function hitTest(e: Engine, point: Vec2, viewport: HitViewport): Hit | null {
   const radius = wireHitRadius(viewport)
-  const topWire = nearestWire(boundaryOrDotCandidates(e, point), radius)
+  const topWire = nearestWire(boundaryCandidates(e, point), radius)
   if (topWire !== null) return topWire
   for (const b of e.bodies.values()) {
-    if (b.kind === 'end' || b.kind === 'anchor') continue
+    if (b.kind === 'anchor') continue
     // the drawn disc is scaled by e.scale (paint) — the hit radius must match, or
     // a content-scaled node is clicked at a different size than it is drawn
     if (length(sub(point, b.pos)) <= b.discR * e.scale) return { kind: 'node', id: b.id }

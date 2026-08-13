@@ -69,10 +69,3 @@ export function identityGeometry(arity: number): NodeGeometry {
   return circularGeometry(Array.from({ length: arity }, (_, index) => `i:${index}`))
 }
 
-/** Private view key for a wire-owned terminal body. */
-export const END_PORT_KEY = 'end'
-
-/** A wire-owned terminal uses the same circular geometry as equality. */
-export function endGeometry(): NodeGeometry {
-  return circularGeometry([END_PORT_KEY])
-}

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { exploreForm, IOTA, relSig } from '../../src/kernel/diagram'
+import { derivedScope } from '../../src/kernel/diagram/regions'
 import { identityGeometry } from '../../src/view/bend'
 import { mkEngine, pkey, worldBindAnchor } from '../../src/view/engine'
 import {
@@ -41,21 +42,14 @@ describe('formulaToDiagram', () => {
     expect(diagram.wires.w1!.endpoints.filter((endpoint) => endpoint.port.kind === 'head')).toHaveLength(1)
     expect(diagram.wires.w4!.endpoints.filter((endpoint) => endpoint.port.kind === 'head')).toHaveLength(4)
 
-    expect(diagram.wires.w2!.scope).toBe('r5')
+    expect(derivedScope(diagram, 'w2')).toBe('r5')
     expect(diagram.regions.r5).toEqual({ kind: 'cut', parent: 'r4' })
 
-    for (const wire of [
-      diagram.wires.w0!,
-      diagram.wires.w1!,
-      diagram.wires.w3!,
-      diagram.wires.w4!,
-      diagram.wires.w5!,
-      diagram.wires.w6!,
-      diagram.wires.w7!,
-    ]) {
-      expect(diagram.regions[wire.scope]!.kind).toBe('cut')
+    for (const wireId of ['w0', 'w1', 'w3', 'w4', 'w5', 'w6', 'w7']) {
+      const scope = derivedScope(diagram, wireId)
+      expect(diagram.regions[scope]!.kind).toBe('cut')
       expect(Object.values(diagram.regions).filter((region) =>
-        region.kind === 'cut' && region.parent === wire.scope,
+        region.kind === 'cut' && region.parent === scope,
       )).toHaveLength(1)
     }
 
@@ -132,9 +126,14 @@ describe('formulaToDiagram', () => {
 
   it('draws an equality chain as one multi-port dangling-existential-style identity node', () => {
     const diagram = formulaToDiagram('∀ x y z. x = y = z')
+    // the three binder pins are arity-1 identities too; the chain itself is the
+    // single multi-port one
+    const pins = Object.entries(diagram.nodes)
+      .filter(([, node]) => node.kind === 'identity' && node.arity === 1)
     const entries = Object.entries(diagram.nodes)
-      .filter(([, node]) => node.kind === 'identity')
+      .filter(([, node]) => node.kind === 'identity' && node.arity !== 1)
 
+    expect(pins.map(([, node]) => node.kind === 'identity' && node.region)).toEqual(['r1', 'r1', 'r1'])
     expect(entries).toHaveLength(1)
     expect(entries[0]![1]).toEqual({
       kind: 'identity',
@@ -185,7 +184,8 @@ describe('formulaToDiagram', () => {
     expect(diagram.regions.r3).toEqual({ kind: 'cut', parent: 'r2' })
     expect(diagram.regions.r4).toEqual({ kind: 'cut', parent: 'r3' })
     expect(diagram.regions.r5).toEqual({ kind: 'cut', parent: 'r3' })
-    expect(Object.values(diagram.nodes).map((node) => node.region)).toEqual(['r4', 'r5'])
+    // one atom per branch, plus the r1 pin each head wire's quantifier sits on
+    expect(Object.values(diagram.nodes).map((node) => node.region)).toEqual(['r4', 'r5', 'r1', 'r1'])
   })
 
   it('draws biconditional as both directed implications', () => {

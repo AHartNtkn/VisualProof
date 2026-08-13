@@ -3,7 +3,7 @@ import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { relSig, IOTA } from '../../src/kernel/diagram/sig'
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
 const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
-import { mkEngine, DISC_R, frameBounds, frameSlots } from '../../src/view/engine'
+import { mkEngine, DISC_R, frameBounds, frameSlots, resolvedFrameSlot } from '../../src/view/engine'
 import { settle } from '../../src/view/relax'
 import { paint, nextTheme, LIGHT, DARK, THEMES } from '../../src/view/paint'
 import { drawShapes } from '../../src/view/canvas'
@@ -34,19 +34,20 @@ describe('identity paint ownership', () => {
     const identity = builder.identity(cut, IOTA, 3)
     for (let index = 0; index < 3; index++) {
       const ref = builder.ref(builder.root, `R${index}`, rel(1))
-      builder.wire( [
+      builder.wire([
         { node: ref, port: { kind: 'arg', index: 0 } },
         { node: identity, port: { kind: 'identity', index } },
       ])
     }
     const danglingRef = builder.ref(builder.root, 'D', rel(1))
-    const danglingWire = builder.wire( [
+    const danglingWire = builder.wire([
       { node: danglingRef, port: { kind: 'arg', index: 0 } },
     ])
     const engine = mkEngine(builder.build(), [])
     settle(engine, 200)
     const identityBody = engine.bodies.get(identity)!
-    const endBody = engine.bodies.get(engine.wires.get(danglingWire)!.end!.body)!
+    // the dangling wire's free tip is the pin build() attached at its region
+    const endBody = engine.bodies.get(engine.wires.get(danglingWire)!.binds[1]!.body)!
     const bodiesOnly = paint(engine, LIGHT, () => [])
     const arcsAt = (center: { readonly x: number; readonly y: number }) => bodiesOnly
       .filter((shape): shape is Extract<(typeof bodiesOnly)[number], { kind: 'arc' }> => shape.kind === 'arc'
@@ -120,32 +121,41 @@ describe('endpointless frame ports', () => {
   const dotsAt = (shapes: ReturnType<typeof paint>, point: { x: number; y: number }) =>
     shapes.filter((shape) => shape.kind === 'dot' && Math.hypot(shape.center.x - point.x, shape.center.y - point.y) < 1e-6)
 
+  // An endpoint-free boundary wire is legal only when it is exposed at two or
+  // more boundary positions (two-end floor). Each of its slots paints a bare
+  // slot dot; the logical port 0 slot carries only the larger origin marker.
   it('renders endpointless boundary wires at ordered slots with only port 0 prominent', () => {
     const h = new DiagramBuilder()
-    const wires = [h.wire( []), h.wire( []), h.wire( [])]
-    const engine = mkEngine(h.build(), wires)
+    const wires = [h.wire([]), h.wire([]), h.wire([])]
+    const { diagram, boundary } = h.buildOpen([...wires, ...wires])
+    const engine = mkEngine(diagram, boundary)
     settle(engine, 20)
     engine.slotShift = 1
     const shapes = paint(engine, LIGHT)
-    const slots = frameSlots(frameBounds(engine)!, 3)
+    const slots = frameSlots(frameBounds(engine)!, boundary.length)
     const dots = slots.map((slot) => dotsAt(shapes, slot.point))
-
-    expect(dots[0]).toHaveLength(1)
-    expect(dots[1]).toHaveLength(1)
-    expect(dots[2]).toHaveLength(1)
-    const at0 = dots[0]![0]!
-    const at1 = dots[1]![0]!
-    const at2 = dots[2]![0]!
-    if (at0.kind !== 'dot' || at1.kind !== 'dot' || at2.kind !== 'dot') throw new Error('frame ports must paint as dots')
-    expect(at1.rPx).toBeGreaterThan(at0.rPx)
-    expect(at0.rPx).toBe(at2.rPx)
-    expect(wires.some((wire) => engine.bodies.has(`j:${wire}`))).toBe(false)
+    const origin = resolvedFrameSlot(engine, 0)!
+    const radii = slots.map((slot, index) => {
+      expect(dots[index], `exactly one dot at slot ${index}`).toHaveLength(1)
+      const dot = dots[index]![0]!
+      if (dot.kind !== 'dot') throw new Error('frame ports must paint as dots')
+      const atOrigin = Math.hypot(slot.point.x - origin.point.x, slot.point.y - origin.point.y) < 1e-6
+      return { atOrigin, rPx: dot.rPx }
+    })
+    const originDots = radii.filter((r) => r.atOrigin)
+    const portDots = radii.filter((r) => !r.atOrigin)
+    expect(originDots, 'exactly one slot carries the origin marker').toHaveLength(1)
+    for (const port of portDots) {
+      expect(originDots[0]!.rPx, 'origin marker is the one prominent dot').toBeGreaterThan(port.rPx)
+      expect(port.rPx).toBe(portDots[0]!.rPx)
+    }
   })
 
   it('paints both frame ports and the connecting line for a repeated boundary wire', () => {
     const h = new DiagramBuilder()
-    const shared = h.wire( [])
-    const engine = mkEngine(h.build(), [shared, shared])
+    const shared = h.wire([])
+    const { diagram, boundary } = h.buildOpen([shared, shared])
+    const engine = mkEngine(diagram, boundary)
     settle(engine, 20)
     engine.slotShift = 1
     const shapes = paint(engine, LIGHT)

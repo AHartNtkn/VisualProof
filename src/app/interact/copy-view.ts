@@ -2,7 +2,7 @@ import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
 import type { SubgraphSelection } from '../../kernel/diagram/subgraph/selection'
 import type { Engine } from '../../view/engine'
 import type { Shape, Theme } from '../../view/paint'
-import { legPaths, wireOwnedEnds } from '../../view/wires'
+import { legPaths } from '../../view/wires'
 
 export function copyRegionAt(
   engine: Engine,
@@ -65,11 +65,6 @@ export function copySelectionPreview(
   for (const path of legPaths(engine)) {
     if (wires.has(path.wid)) {
       for (const point of path.pts) discs.push({ center: point, r: 2 })
-    }
-  }
-  for (const { wid, body } of wireOwnedEnds(engine)) {
-    if (wires.has(wid)) {
-      discs.push({ center: body.pos, r: body.discR * engine.scale + 2 })
     }
   }
   if (discs.length === 0) return []

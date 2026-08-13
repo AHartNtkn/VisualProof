@@ -15,13 +15,13 @@ describe('a single boundary wire is ONE bodyless leg to the fixed frame slot (pl
   it('one interior port → one leg whose far end sits on the inner frame edge, no body', () => {
     const h = new DiagramBuilder()
     const n = h.ref(h.root, 'Unary', UNARY)
-    const w = h.wire( [{ node: n, port: { kind: 'arg', index: 0 } }])
-    const e = mkEngine(h.build(), [w])
+    const w = h.wire([{ node: n, port: { kind: 'arg', index: 0 } }])
+    const { diagram, boundary } = h.buildOpen([w])
+    const e = mkEngine(diagram, boundary)
     settle(e, 400) // establishes the fixed frame; the boundary leg closes on its slot
     // no exit body anywhere (the reset's "there's an edge node for some reason") —
     // e:<wid> exit hubs are abolished; the boundary wire has no hub of its own
     expect([...e.bodies.keys()].some((id) => id.startsWith('e:')), 'no exit body exists').toBe(false)
-    expect(e.wires.get(w)!.end, 'a 1-port boundary wire has no end body').toBeNull()
     const legs = computeLegs(e).filter((g) => g.leg.wid === w)
     expect(legs, 'exactly one leg').toHaveLength(1)
     const pts = legs[0]!.pts
@@ -47,7 +47,7 @@ describe('boundary slots are order-faithful: leg i ends at slot i, and cannot sw
     const e = mkEngine(diagram, boundary)
     settle(e, 1200) // establishes the fixed frame + slots
     const slots = frameSlots(frameBounds(e)!, boundary.length)
-    const nodeIds = [...e.bodies.keys()].filter((id) => e.bodies.get(id)!.kind !== 'end' && e.bodies.get(id)!.kind !== 'anchor')
+    const nodeIds = [...e.bodies.keys()].filter((id) => e.bodies.get(id)!.kind !== 'anchor')
     const layouts: { x: number; y: number }[][] = [
       [{ x: -20, y: -20 }, { x: 20, y: -20 }, { x: 0, y: 20 }],
       [{ x: 18, y: 5 }, { x: 20, y: -3 }, { x: 16, y: 9 }], // crammed east

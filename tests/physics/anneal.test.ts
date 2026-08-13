@@ -49,7 +49,7 @@ function buildTrap(k: number, pairs: number): { d: Diagram; cut: string; left: s
   for (let p = 0; p < pairs; p++) {
     const n0 = b.ref(b.root, `L${p}`, relSig([IOTA]))
     const n1 = b.ref(b.root, `R${p}`, relSig([IOTA]))
-    b.wire( [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], IOTA)
+    b.wire([{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], IOTA)
     left.push(n0); right.push(n1)
   }
   return { d: b.build(), cut, left, right }
@@ -134,7 +134,7 @@ describe('the chain is deterministic in its seed (plan Task 6)', () => {
       const b0 = new DiagramBuilder()
       const n0 = b0.ref(b0.root, 'R', relSig([IOTA]))
       const n1 = b0.ref(b0.root, 'S', relSig([IOTA]))
-      b0.wire( [{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], IOTA)
+      b0.wire([{ node: n0, port: { kind: 'arg', index: 0 } }, { node: n1, port: { kind: 'arg', index: 0 } }], IOTA)
       const e = mkEngine(b0.build(), [])
       e.bodies.get(n0)!.pos = { x: -20, y: 5 }
       e.bodies.get(n1)!.pos = { x: 20, y: -5 }
@@ -153,21 +153,17 @@ describe('the chain is deterministic in its seed (plan Task 6)', () => {
 })
 
 describe('every movable unit has a covering move (plan Task 6 coverage)', () => {
-  // NEEDS-ADJUDICATION: this asserts a scene exercises the `endDot` movable-unit
-  // taxon, which mkEngine can no longer produce — the engine synthesizes no
-  // wire-owned end bodies (`WireView.end` is always null now that every wire end
-  // is a real pin node), so `movableUnits` never emits an endDot for any diagram.
-  it('the move registry covers each body, region subtree, end dot, and wire junction', () => {
-    // a nested scene: a cut holding an atom (its dangling ports become wire-owned
-    // end dots), a root ref, and a THREE-terminal wire (whose routed Steiner point
-    // is a junction) — every unit taxon is present, junctions included.
+  it('the move registry covers each body, region subtree, and wire junction', () => {
+    // a nested scene: a cut holding an atom (its arg wires end in pin bodies),
+    // a root ref, and a THREE-terminal wire (whose routed Steiner point is a
+    // junction) — every unit taxon is present, junctions included.
     const b = new DiagramBuilder()
     const inner = b.cut(b.root)
     b.atom(inner, relSig([IOTA]))
     const r0 = b.ref(b.root, 'R', relSig([IOTA]))
     const r1 = b.ref(b.root, 'S', relSig([IOTA]))
     const r2 = b.ref(b.root, 'T', relSig([IOTA]))
-    b.wire( [
+    b.wire([
       { node: r0, port: { kind: 'arg', index: 0 } },
       { node: r1, port: { kind: 'arg', index: 0 } },
       { node: r2, port: { kind: 'arg', index: 0 } },
@@ -176,10 +172,9 @@ describe('every movable unit has a covering move (plan Task 6 coverage)', () => 
     recomputeRegions(e)
 
     const units = movableUnits(e)
-    // the fixture must actually exercise all four taxa, or the test is vacuous
+    // the fixture must actually exercise all three taxa, or the test is vacuous
     expect(units.some((u) => u.kind === 'carrier'), 'fixture has carrier units').toBe(true)
     expect(units.some((u) => u.kind === 'region'), 'fixture has region units').toBe(true)
-    expect(units.some((u) => u.kind === 'endDot'), 'fixture has wire-owned end-dot units').toBe(true)
     expect(units.some((u) => u.kind === 'junction'), 'fixture has wire junction units').toBe(true)
 
     for (const u of units) {
@@ -198,7 +193,7 @@ describe('the seed relaxation streams incrementally (plan Task 6 Phase 0)', () =
     const b = new DiagramBuilder()
     const r = [0, 1, 2, 3, 4, 5].map((i) => b.ref(b.root, `R${i}`, relSig([IOTA, IOTA])))
     for (let i = 0; i < 6; i++) {
-      b.wire( [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 6]!, port: { kind: 'arg', index: 0 } }], IOTA)
+      b.wire([{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 6]!, port: { kind: 'arg', index: 0 } }], IOTA)
     }
     const e = mkEngine(b.build(), [])
     // a WIDE hard seed (ports facing wrong ways across long spans): the
@@ -243,7 +238,7 @@ describe('the published best-store is monotone (USER law: only the best yet foun
     const b = new DiagramBuilder()
     const r = [0, 1, 2, 3].map((i) => b.ref(b.root, `R${i}`, relSig([IOTA, IOTA])))
     for (let i = 0; i < 4; i++) {
-      b.wire( [{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 4]!, port: { kind: 'arg', index: 0 } }], IOTA)
+      b.wire([{ node: r[i]!, port: { kind: 'arg', index: 1 } }, { node: r[(i + 1) % 4]!, port: { kind: 'arg', index: 0 } }], IOTA)
     }
     const e = mkEngine(b.build(), [])
     let i = 0

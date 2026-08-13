@@ -71,9 +71,6 @@ export const PACE = {
   rep: 900,
   /** sibling gap (spacing between discs/regions) */
   sibGap: 5,
-  /** scope-ring containment on ∃ tips: slope must exceed wire pull (1–2) */
-  ringSlope: 8,
-  ringBand: 4,
   /** rotation responsiveness divisor (higher = slower turning) */
   rotDrag: 1,
 }
@@ -384,7 +381,6 @@ function clampToFrame(e: Engine, b: Body, p: Vec2): Vec2 {
 export function clampContentToFrame(e: Engine): void {
   if (e.frame === null) return
   for (const b of e.bodies.values()) {
-    if (b.kind === 'end') continue
     b.pos = clampToFrame(e, b, b.pos)
   }
   recomputeRegions(e)
@@ -501,14 +497,6 @@ export function resolveOverlaps(e: Engine): boolean {
   // centroid every contact and walk the drawing off the sheet), region geometry
   // is recomputed, and the sweep repeats until legal or the pass budget is spent.
   let any = false
-  // Wire-owned bodies (homed ∃ ends / ∀ tips): hard legality is SEMANTIC
-  // for REGIONS — a root-scoped ∃ inside a cut circle reads as the wrong
-  // quantifier scope, so region pairs keep projecting them. Disc-vs-disc
-  // spacing is NOT semantic for a wire-end dot: the wire's own barrier
-  // handles disc clearance, and a hard PACE.sibGap projection against soft
-  // wire tension parks the dot 15 wu out and cycles forever (measured).
-  const wireOwnedP = new Set<string>()
-  for (const b of e.bodies.values()) if (b.kind === 'end') wireOwnedP.add(b.id)
   for (let pass = 0; pass < PROJECTION_PASSES; pass++) {
     let moved = false
     const dirty = new Set<RegionId>()
@@ -524,24 +512,10 @@ export function resolveOverlaps(e: Engine): boolean {
         it.sub === null ? e.bodies.get(it.id)!.pos : e.regions.get(it.sub)!.center
       for (let i = 0; i < items.length; i++) for (let j = i + 1; j < items.length; j++) {
         const A = items[i]!, B = items[j]!
-        // wire-owned dots skip DISC pairs (wire barrier's job); region
-        // pairs still project them (scope legality)
-        const aOwned = A.sub === null && wireOwnedP.has(A.id)
-        const bOwned = B.sub === null && wireOwnedP.has(B.id)
-        if ((aOwned && B.sub === null) || (bOwned && A.sub === null)) continue
         const ca = centerOf(A), cb = centerOf(B)
         const dx = cb.x - ca.x, dy = cb.y - ca.y
         const dist = Math.hypot(dx, dy)
-        // a wire-owned dot vs a REGION: legality is center-outside-circle
-        // only — the ∀ tip LIVES in the ring annulus (loose-ends law), and
-        // demanding content spacing (disc + sibGap) put the projection wall
-        // inside the territory the ring energy owns: tension pressed the
-        // tip into the wall every tick and the reaction walked the whole
-        // assembly across the sheet forever (measured 0.05 wu/tick, E
-        // oscillating, never resting)
-        const need = aOwned && B.sub !== null ? B.r
-          : bOwned && A.sub !== null ? A.r
-          : A.r + B.r + PACE.sibGap * e.scale
+        const need = A.r + B.r + PACE.sibGap * e.scale
         if (dist >= need) continue
 
         // coincident centers have no separation direction; any fixed unit
@@ -932,7 +906,6 @@ export function mkFrozenState(e: Engine): FrozenState {
     wires.push({ wid, edges, segStart: start, segEnd: segs.length, rod })
     rodTotal += rod
     for (const bd of w.binds) push(termWires, bd.body, wi)
-    if (w.end !== null) push(termWires, w.end.body, wi)
   }
   const obstacle = new Map<string, RouteDisc>()
   for (const b of e.bodies.values()) {
@@ -1158,26 +1131,6 @@ export function frozenProbe(fst: FrozenState, e: Engine, bodyId: string): number
   return dRod + dSep
 }
 
-/** Scope containment (soft): a finite-depth ring barrier keeping a wire-owned
-    dot (∃ tip, ∀ hub) OUTSIDE each child region circle of its home region — it
-    lives in its scope, never sunk into a nested cut. The hard legality is the
-    projection; this is the field that parks the dot in the annulus without a
-    standing contact cycle. */
-function homedScopeE(e: Engine, body: Body): number {
-  const band = PACE.ringBand * e.scale
-  let E = 0
-  for (const child of e.childrenOf.get(body.region) ?? []) {
-    const g = e.regions.get(child)
-    if (g === undefined) continue
-    const rr = g.radius + body.discR * e.scale
-    const dd = Math.hypot(body.pos.x - g.center.x, body.pos.y - g.center.y)
-    if (dd >= rr + band) continue
-    const pen = rr + band - dd
-    E += (PACE.ringSlope / 2) * Math.min(pen, band) * pen
-  }
-  return E
-}
-
 // ---- content energy (plan 23): the sibling-spacing preference and the
 // scope-ring containment become ENERGY TERMS in the SAME functional the wires
 // descend, so ONE strict per-DOF gate moves everything. The former sibling
@@ -1266,8 +1219,6 @@ export function contentEnergy(e: Engine): number {
       E += sibU(dist - A.r - B.r, sc)
     }
   }
-  // scope-ring confines ∃ tips / ∀ via-body hubs to their scope
-  for (const b of e.bodies.values()) if (b.kind === 'end') E += homedScopeE(e, b)
   return E
 }
 
@@ -1286,7 +1237,6 @@ export function totalEnergy(e: Engine): number {
     if lower); moving just the proposed body keeps the single-DOF gate monotone.
     Global legality across all bodies is the discrete-event `resolveOverlaps`. */
 function projectBodyPos(e: Engine, b: Body, p: Vec2): Vec2 {
-  const owned = b.kind === 'end'
   let x = p.x, y = p.y
   const push = (cx: number, cy: number, need: number): void => {
     const dx = x - cx, dy = y - cy, d = Math.hypot(dx, dy)
@@ -1303,7 +1253,7 @@ function projectBodyPos(e: Engine, b: Body, p: Vec2): Vec2 {
   }
   for (const cId of e.childrenOf.get(b.region)!) {
     const g = e.regions.get(cId)!
-    push(g.center.x, g.center.y, owned ? g.radius : b.discR * sc + g.radius + PACE.sibGap * sc)
+    push(g.center.x, g.center.y, b.discR * sc + g.radius + PACE.sibGap * sc)
   }
   // the fixed frame is a hard wall (plan 24): a trial past the inner edge is
   // projected back in, so no content disc is ever accepted outside the frame
@@ -1320,8 +1270,7 @@ function projectBodyPos(e: Engine, b: Body, p: Vec2): Vec2 {
     unguarded cursor target; every non-ancestor cut circle pushes the body's
     disc fully clear with the sibling gap (the same bound the settling projection
     uses, so releasing the drag adds no jump). Ancestors of the body's region (the
-    cuts it IS inside) are exempt, as is a wire-owned dot's disc clearance (the wire
-    barrier owns that) — a dot only clears the circle itself. */
+    cuts it IS inside) are exempt. */
 export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
   const ancestors = new Set<RegionId>()
   for (let r = b.region; ;) {
@@ -1330,8 +1279,7 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
     if (reg.kind === 'sheet') break
     r = reg.parent
   }
-  const owned = b.kind === 'end'
-  const wall = b.kind !== 'end' ? e.frame : null
+  const wall = e.frame
   const saved = b.pos
   const dirty = new Set<RegionId>([b.region])
   let x = p.x, y = p.y
@@ -1359,7 +1307,7 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
     const px = x, py = y
     for (const [rid, g] of e.regions) {
       if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
-      const need = owned ? g.radius : b.discR * e.scale + g.radius
+      const need = b.discR * e.scale + g.radius
       const dx = x - g.center.x, dy = y - g.center.y, d = Math.hypot(dx, dy)
       if (d >= need) continue
       const ux = d < 1e-9 ? 1 : dx / d, uy = d < 1e-9 ? 0 : dy / d
@@ -1405,7 +1353,7 @@ export function clampDragToFeasible(e: Engine, b: Body, p: Vec2): Vec2 {
         // head-on pull (measured 3.7 wu penetration left after 16 rounds).
         for (const [rid, g] of e.regions) {
           if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
-          const need = owned ? g.radius : b.discR * e.scale + g.radius
+          const need = b.discR * e.scale + g.radius
           if (Math.hypot(x - g.center.x, y - g.center.y) >= need) continue
           if (dx !== 0 && Math.abs(x - g.center.x) < need) {
             const h = Math.sqrt(need * need - (x - g.center.x) * (x - g.center.x))
@@ -1442,7 +1390,6 @@ function operatorStep(e: Engine, pinned: ReadonlySet<string> | null): boolean {
   const wiredBodies = new Set<string>()
   for (const [, w] of e.wires) {
     for (const bd of w.binds) wiredBodies.add(bd.body)
-    if (w.end !== null) wiredBodies.add(w.end.body)
   }
 
   // ONE exact routed eval captures the frozen state (paths + per-wire/segment
@@ -1752,11 +1699,10 @@ export function containedPath(e: Engine, b: Body, target: Vec2): readonly Vec2[]
     if (reg.kind === 'sheet') break
     r = reg.parent
   }
-  const owned = b.kind === 'end'
   const discs: RouteDisc[] = []
   for (const [rid, g] of e.regions) {
     if (ancestors.has(rid) || e.d.regions[rid]!.kind === 'sheet') continue
-    const need = owned ? g.radius : b.discR * e.scale + g.radius + PACE.sibGap * e.scale
+    const need = b.discR * e.scale + g.radius + PACE.sibGap * e.scale
     discs.push({ c: g.center, r: need - 1e-3 })
   }
   return route(mkFreeSpace(discs, routeBounds(e)), b.pos, target).pts

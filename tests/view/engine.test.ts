@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import { DiagramBuilder } from '../../src/kernel/diagram/builder'
 import { requiredPorts } from '../../src/kernel/diagram/diagram'
 import { relSig, IOTA } from '../../src/kernel/diagram/sig'
+import { bareWire } from '../fixtures/pins'
 
 /** An n-ary relation signature over individuals (ref/atom arity, new sig API). */
 const rel = (n: number) => relSig(Array.from({ length: n }, () => IOTA))
@@ -20,11 +21,11 @@ const threeNodeDiagram = () => {
   const ref = builder.ref(builder.root, 'Unary', UNARY)
   const cut = builder.cut(builder.root)
   const identity = builder.identity(cut, IOTA, 2)
-  builder.wire( [
+  builder.wire([
     { node: atom, port: { kind: 'arg', index: 0 } },
     { node: identity, port: { kind: 'identity', index: 0 } },
   ])
-  builder.wire( [
+  builder.wire([
     { node: ref, port: { kind: 'arg', index: 0 } },
     { node: identity, port: { kind: 'identity', index: 1 } },
   ])
@@ -36,7 +37,8 @@ describe('mkEngine', () => {
     const d = threeNodeDiagram()
     const e = mkEngine(d, [])
     const nodeBodies = [...e.bodies.values()].filter((b) => b.node !== null)
-    expect(nodeBodies).toHaveLength(3)
+    // the three authored nodes plus the pin completing the atom's head wire
+    expect(nodeBodies).toHaveLength(4)
     expect(new Set(nodeBodies.map((b) => b.id))).toEqual(new Set(Object.keys(d.nodes)))
   })
 
@@ -71,7 +73,7 @@ describe('mkEngine', () => {
     const identity = h.identity(cut, IOTA, 3)
     const wires = Array.from({ length: 3 }, (_, index) => {
       const ref = h.ref(h.root, `R${index}`, rel(1))
-      return h.wire( [
+      return h.wire([
         { node: ref, port: { kind: 'arg', index: 0 } },
         { node: identity, port: { kind: 'identity', index } },
       ])
@@ -115,26 +117,27 @@ describe('mkEngine', () => {
     const identity = h.identity(cut, IOTA, 2)
     const left = h.ref(h.root, 'Left', UNARY)
     const right = h.ref(h.root, 'Right', UNARY)
-    h.wire( [
+    h.wire([
       { node: identity, port: { kind: 'identity', index: 0 } },
       { node: left, port: { kind: 'arg', index: 0 } },
     ])
-    h.wire( [
+    h.wire([
       { node: identity, port: { kind: 'identity', index: 1 } },
       { node: right, port: { kind: 'arg', index: 0 } },
     ])
     const danglingRef = h.ref(h.root, 'Dangling', UNARY)
-    const danglingWire = h.wire( [
+    const danglingWire = h.wire([
       { node: danglingRef, port: { kind: 'arg', index: 0 } },
     ])
-    const bareWire = h.wire( [])
+    const bare = bareWire(h, h.root)
     const e = mkEngine(h.build(), [])
     e.scale = 1.75
 
     const smallBodies = [
       e.bodies.get(identity)!,
-      e.bodies.get(e.wires.get(danglingWire)!.end!.body)!,
-      e.bodies.get(`j:${bareWire}`)!,
+      // the dangling wire's completing pin, and the two pins holding the bare ∃
+      e.bodies.get(e.wires.get(danglingWire)!.binds[1]!.body)!,
+      ...e.wires.get(bare)!.binds.map((bind) => e.bodies.get(bind.body)!),
     ]
     const routed = routeObstacles(e)
     const drawn = drawnObstacles(e)
@@ -152,38 +155,58 @@ describe('mkEngine', () => {
     }
   })
 
-  it('classifies an endpointless boundary as a bodyless fixed-slot wire before bare existential handling', () => {
+  it('synthesizes no wire-owned bodies and gives every wire a network view', () => {
     const h = new DiagramBuilder()
-    const external = h.wire( [])
-    const internal = h.wire( [])
-    const e = mkEngine(h.build(), [external])
+    const external = h.wire([])
+    const internal = bareWire(h, h.root)
+    const { diagram, boundary } = h.buildOpen([external, external])
+    const e = mkEngine(diagram, boundary)
 
-    expect(e.bodies.has(`j:${external}`), 'a formal port must not float as an existential body').toBe(false)
-    expect(e.wires.get(external)).toMatchObject({ binds: [], slots: [0], end: null })
-    expect(e.wires.get(external)!.net.edges).toEqual([])
-    expect(e.bodies.has(`j:${internal}`), 'an internal bare wire remains a semantic existential body').toBe(true)
-    expect(e.wires.has(internal)).toBe(false)
+    // every body is a diagram node or a region anchor — no `j:`/`x:` synthetics
+    for (const id of e.bodies.keys()) {
+      expect(
+        diagram.nodes[id] !== undefined || id.startsWith('anchor:'),
+        `body '${id}' must be a diagram node or a region anchor`,
+      ).toBe(true)
+    }
+    // a doubly-exposed endpoint-free boundary wire is a bodyless view over
+    // its two fixed slots, joined by one edge
+    expect(e.wires.get(external)).toMatchObject({ binds: [], slots: [0, 1] })
+    expect(e.wires.get(external)!.net.edges).toEqual([[0, 1]])
+    // an internal bare wire is two pin nodes with an ordinary two-bind view
+    const bareView = e.wires.get(internal)!
+    expect(bareView.binds).toHaveLength(2)
+    for (const bind of bareView.binds) {
+      expect(e.bodies.get(bind.body)!.kind).toBe('identity')
+    }
+    expect(bareView.net.edges).toEqual([[0, 1]])
   })
 
   it('keeps every repeated boundary incidence and connects two slots as one bodyless wire', () => {
     const h = new DiagramBuilder()
-    const shared = h.wire( [])
-    const other = h.wire( [])
-    const e = mkEngine(h.build(), [shared, other, shared])
+    const shared = h.wire([])
+    const other = h.wire([])
+    const { diagram, boundary } = h.buildOpen([shared, other, shared])
+    const e = mkEngine(diagram, boundary)
     const w = e.wires.get(shared)!
 
     expect(w.slots).toEqual([0, 2])
     expect(w.binds).toEqual([])
     expect(w.net.edges, 'two slot terminals joined by one edge').toEqual([[0, 1]])
     expect(e.bodies.has(`j:${shared}`), 'a multi-slot boundary identity must not gain an existential body').toBe(false)
-    expect(e.wires.get(other)!.net.edges).toEqual([])
+    // `other` is exposed once, so buildOpen gave it the root pin its second end
+    // requires: its slot and that pin are joined by the wire's one edge
+    expect(e.wires.get(other)!.slots).toEqual([1])
+    expect(e.wires.get(other)!.binds).toHaveLength(1)
+    expect(e.wires.get(other)!.net.edges).toEqual([[0, 1]])
   })
 
   it('builds one junction topology over an attached port and every repeated boundary incidence', () => {
     const h = new DiagramBuilder()
     const n = h.ref(h.root, 'Unary', UNARY)
-    const shared = h.wire( [{ node: n, port: { kind: 'arg', index: 0 } }])
-    const e = mkEngine(h.build(), [shared, shared])
+    const shared = h.wire([{ node: n, port: { kind: 'arg', index: 0 } }])
+    const { diagram, boundary } = h.buildOpen([shared, shared])
+    const e = mkEngine(diagram, boundary)
     const w = e.wires.get(shared)!
     expect(w.slots).toEqual([0, 1])
     expect(w.binds).toHaveLength(1)

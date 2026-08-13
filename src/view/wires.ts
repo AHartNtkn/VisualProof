@@ -1,6 +1,6 @@
 import type { WireId } from '../kernel/diagram/diagram'
 import type { Vec2 } from './vec'
-import type { Body, Engine, Leg, LegEnd, WireView } from './engine'
+import type { Engine, Leg, LegEnd, WireView } from './engine'
 import { wireRouteSpaces, wireTerminalBCs, wireTerminalPoints } from './engine'
 import { route, type FreeSpace } from './route/freespace'
 import { rodBeta, wireNearSpaces } from './relax'
@@ -17,18 +17,16 @@ import type { Cubic } from './route/curve'
  */
 
 export type LegGeom = { leg: Leg; pts: Vec2[]; cubics: Cubic[] }
-export type WireOwnedEnd = { readonly wid: WireId; readonly body: Body }
 
 /** The rendering identity of a network vertex: real (body, key) at a port
-    bind and the wire-owned END body; a wire-local id for a boundary slot or a
-    junction vertex. Endpoint-level gestures (drag-join) read these. */
+    bind; a wire-local id for a boundary slot or a junction vertex.
+    Endpoint-level gestures (drag-join) read these. */
 function endId(wid: WireId, w: WireView, v: number): LegEnd {
   const nB = w.binds.length
   const nS = w.slots.length
   if (v < nB) return { body: w.binds[v]!.body, key: w.binds[v]!.key }
   if (v < nB + nS) return { body: `w:${wid}:slot:${w.slots[v - nB]!}`, key: null }
-  if (w.end !== null && v === nB + nS) return w.end
-  return { body: `w:${wid}:j${v - nB - nS - (w.end !== null ? 1 : 0)}`, key: null }
+  return { body: `w:${wid}:j${v - nB - nS}`, key: null }
 }
 
 /** Exact rendering-state key: legs depend on body poses (obstacles +
@@ -88,18 +86,3 @@ export function legPaths(e: Engine): { wid: WireId; pts: Vec2[]; cubics: Cubic[]
   return computeLegs(e).map((g) => ({ wid: g.leg.wid, pts: g.pts, cubics: g.cubics }))
 }
 
-/** Wire-owned terminal bodies, including body-only bare existential wires. */
-export function wireOwnedEnds(e: Engine): WireOwnedEnd[] {
-  const out: WireOwnedEnd[] = []
-  for (const [wid, w] of e.wires) {
-    if (w.end === null) continue
-    out.push({ wid, body: e.bodies.get(w.end.body)! })
-  }
-  // Bare internal existentials have no WireView because they carry no network.
-  for (const [wid, w] of Object.entries(e.d.wires)) {
-    if (w.endpoints.length !== 0) continue
-    const body = e.bodies.get(`j:${wid}`)
-    if (body !== undefined) out.push({ wid, body })
-  }
-  return out
-}

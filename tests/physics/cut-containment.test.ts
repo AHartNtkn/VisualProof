@@ -56,7 +56,7 @@ describe('a wire never runs through a cut it is not inside', () => {
     const cut = b.cut(b.root)
     const left = b.ref(b.root, 'L', UNARY)
     const right = b.ref(b.root, 'R', UNARY)
-    const w = b.wire( [
+    const w = b.wire([
       { node: left, port: { kind: 'arg', index: 0 } },
       { node: right, port: { kind: 'arg', index: 0 } },
     ])

@@ -62,13 +62,13 @@ function renderSvg(e: Engine): string {
 function symTriple(): Diagram {
   const b = new DiagramBuilder()
   const r = [b.ref(b.root, 'p', rel(1)), b.ref(b.root, 'q', rel(1)), b.ref(b.root, 's', rel(1))]
-  b.wire(b.root, r.map((n) => ({ node: n, port: { kind: 'arg' as const, index: 0 } })))
+  b.wire(r.map((n) => ({ node: n, port: { kind: 'arg' as const, index: 0 } })))
   return b.build()
 }
 function fourWaySym(): Diagram {
   const b = new DiagramBuilder()
   const r = [b.ref(b.root, 'a', rel(2)), b.ref(b.root, 'bb', rel(2)), b.ref(b.root, 'cc', rel(2)), b.ref(b.root, 'dd', rel(2))]
-  b.wire(b.root, r.map((n) => ({ node: n, port: { kind: 'arg' as const, index: 0 } })))
+  b.wire(r.map((n) => ({ node: n, port: { kind: 'arg' as const, index: 0 } })))
   return b.build()
 }
 

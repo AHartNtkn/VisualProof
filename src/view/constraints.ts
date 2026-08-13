@@ -81,9 +81,7 @@ export function semanticConflicts(e: Engine): SemanticConflict[] {
       for (const rid of childIds) {
         const region = e.regions.get(rid)
         if (region === undefined) continue
-        const need = body.kind === 'end'
-          ? region.radius
-          : region.radius + body.discR * e.scale
+        const need = region.radius + body.discR * e.scale
         const distance = Math.hypot(body.pos.x - region.center.x, body.pos.y - region.center.y)
         if (distance + EPS >= need) continue
         out.push({ kind: 'body-region', body: mid, region: rid, depth: need - distance })

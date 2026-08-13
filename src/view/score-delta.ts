@@ -186,13 +186,13 @@ const discReaches = (ed: EdgeReach, D: MovedDisc, M: number): boolean =>
 export function applyMove(e: Engine, st: ScoreState, moved: ReadonlySet<string>, movedWires: ReadonlySet<WireId> | null = null): MoveResult {
   const sc = e.scale
 
-  // (a) terminal-affected: a wire with a bind body or end body among the moved,
-  // plus wires whose OWN state the caller changed (junction proposals).
+  // (a) terminal-affected: a wire with a bind body among the moved, plus
+  // wires whose OWN state the caller changed (junction proposals).
   const affected = new Set<WireId>()
   if (movedWires !== null) for (const wid of movedWires) affected.add(wid)
   for (const [wid, w] of e.wires) {
-    let hit = w.end !== null && moved.has(w.end.body)
-    if (!hit) for (const bd of w.binds) { if (moved.has(bd.body)) { hit = true; break } }
+    let hit = false
+    for (const bd of w.binds) { if (moved.has(bd.body)) { hit = true; break } }
     if (hit) affected.add(wid)
   }
 

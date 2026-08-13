@@ -5,7 +5,6 @@ import type { Vec2 } from './vec'
 import { add } from './vec'
 import type { NodeGeometry } from './bend'
 import { atomGeometry, identityGeometry, refGeometry } from './bend'
-export { END_PORT_KEY } from './bend'
 import type { Disc, FreeSpace } from './route/freespace'
 import { mkFreeSpace } from './route/freespace'
 import type { CurveBC } from './route/curve'
@@ -40,7 +39,7 @@ export const FRAME_MARGIN = 6
     visible frame line exactly. */
 export const FRAME_CORNER_W = 8
 
-export type BodyKind = 'ref' | 'atom' | 'identity' | 'end' | 'anchor'
+export type BodyKind = 'ref' | 'atom' | 'identity' | 'anchor'
 
 export type Body = {
   readonly id: string
@@ -69,14 +68,12 @@ export type Leg = { readonly wid: WireId; readonly from: LegEnd; readonly to: Le
 export type WireBind = { readonly body: string; readonly key: string }
 
 /** A wire's complete view-state: node-port binds, zero or more ordered
-    boundary incidences, an optional wire-owned END body, and the routed
-    NETWORK `net` — junction positions plus graph edges over the vertex
-    indexing [binds..., slots..., end?][then junctions]. The router owns
-    `net`; nothing else writes it. */
+    boundary incidences, and the routed NETWORK `net` — junction positions
+    plus graph edges over the vertex indexing [binds..., slots...][then
+    junctions]. Every wire end is a node (two-end floor), so terminals are
+    exactly binds plus slots. The router owns `net`; nothing else writes it. */
 export type WireView = {
   readonly binds: WireBind[]
-  /** The wire's single wire-owned END bind (the ∃ tip or ∀ via), or null. */
-  readonly end: WireBind | null
   readonly slots: readonly number[]
   readonly net: WireNet
 }
@@ -90,13 +87,13 @@ export type Engine = {
   readonly d: Diagram
   readonly bodies: Map<string, Body>
   readonly childrenOf: Map<RegionId, RegionId[]>
-  /** node / wire-owned END-body / anchor ids per region. */
+  /** node / anchor ids per region. */
   readonly membersOf: Map<RegionId, string[]>
-  /** Every boundary wire and each >= 1-endpoint internal wire is a routed
-      NETWORK view (binds + optional wire-owned END body [∃ tip / ∀ via] +
-      the wire's graph) — see src/view/route/. A bare boundary wire is a
-      bodyless, zero-edge view at its fixed slot; only a bare internal wire
-      is a homed body with no entry. */
+  /** Every wire is a routed NETWORK view (binds + slots + the wire's
+      graph) — see src/view/route/. Every wire end is a real node body
+      (two-end floor), so the engine synthesizes no wire-owned bodies; a
+      multiply-exposed endpoint-free boundary wire is a bodyless view over
+      its fixed slots. */
   readonly wires: Map<WireId, WireView>
   readonly boundary: readonly WireId[]
   regions: Map<RegionId, RegionCircle>
@@ -280,7 +277,6 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     // identity bodies, so the engine synthesizes nothing — no free-tip
     // bodies, no scope dangles. Terminals are port binds plus boundary
     // incidences, always at least two.
-    const end: WireBind | null = null
     const anchorPos = binds.map((bd) => worldBindAnchor(engine, bodies.get(bd.body)!, bd.key))
     const centroid = (): Vec2 => binds.length === 0
       ? { x: 0, y: 0 }
@@ -293,7 +289,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
     // tangent-cone derivative of routed length) refines the star into the
     // proper Steiner topology on the first advanceNetwork frames — no
     // topology seeder exists.
-    const nT = binds.length + slots.length + (end !== null ? 1 : 0)
+    const nT = binds.length + slots.length
     const net: WireNet = { junctions: [], edges: [] }
     if (nT === 2) net.edges = [[0, 1]]
     else if (nT >= 3) {
@@ -301,7 +297,7 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
       net.junctions = [{ x: c.x, y: c.y }]
       net.edges = Array.from({ length: nT }, (_, t) => [t, nT] as const)
     }
-    wires.set(wid, { binds, end, slots, net })
+    wires.set(wid, { binds, slots, net })
   }
 
   return engine
@@ -311,8 +307,8 @@ export function mkEngine(d: Diagram, boundary: readonly WireId[]): Engine {
  * Transplant the layout state of every corresponding body between two engines.
  * Raw IDs are the default correspondence; replay may supply canonical view
  * identity for an exact endpoint whose graph IDs differ from the computed proof
- * form. Nodes, region anchors, and wire-owned `j:`/`x:` END bodies keep their
- * pos/theta so the layout glides rather than re-seeding from the spiral.
+ * form. Nodes and region anchors keep their pos/theta so the layout glides
+ * rather than re-seeding from the spiral.
  * Bodies present only in `next` keep their deterministic mkEngine seeds. Vec2 is
  * treated as an immutable value here, matching relax.ts's replace-not-mutate
  * discipline, so copying the reference cannot alias `prev` into `next`'s motion.
@@ -345,12 +341,6 @@ export function carryOver(
   const mappedBodyId = (id: string): string | undefined => {
     if (identity === undefined) return id
     if (prev.d.nodes[id] !== undefined) return identity.nodes.get(id)
-    for (const prefix of ['j:', 'x:'] as const) {
-      if (id.startsWith(prefix)) {
-        const wire = identity.wires.get(id.slice(prefix.length))
-        return wire === undefined ? undefined : `${prefix}${wire}`
-      }
-    }
     if (id.startsWith('anchor:')) {
       const region = identity.regions.get(id.slice('anchor:'.length))
       return region === undefined ? undefined : `anchor:${region}`
@@ -369,16 +359,13 @@ export function carryOver(
   // keyed on wire IDENTITY (the terminal set), exactly as node positions are
   // carried. The router re-solves from the carried state; nothing re-derives.
   const sig = (v: WireView): string =>
-    [...v.binds.map((b) => `${b.body}:${b.key}`), v.end === null ? '-' : `end:${v.end.key}`, `slots:${v.slots.join(',')}`].join('|')
+    [...v.binds.map((b) => `${b.body}:${b.key}`), `slots:${v.slots.join(',')}`].join('|')
   const terminalImage = (
     from: WireView,
     to: WireView,
   ): readonly number[] | null => {
-    const fromHasEnd = from.end !== null
-    const toHasEnd = to.end !== null
     if (
-      fromHasEnd !== toHasEnd
-      || from.slots.length !== to.slots.length
+      from.slots.length !== to.slots.length
       || from.slots.some((slot, index) => slot !== to.slots[index])
     ) {
       return null
@@ -406,9 +393,6 @@ export function carryOver(
     for (let index = 0; index < from.slots.length; index++) {
       image.push(to.binds.length + index)
     }
-    if (fromHasEnd) {
-      image.push(to.binds.length + to.slots.length)
-    }
     return image
   }
   for (const [wid, pv] of prev.wires) {
@@ -427,7 +411,6 @@ export function carryOver(
     if (terminalMap === null) continue
     const fromTerminalCount = terminalMap.length
     const toTerminalCount = nv.binds.length + nv.slots.length
-      + (nv.end === null ? 0 : 1)
     const vertexImage = (vertex: number): number =>
       vertex < fromTerminalCount
         ? terminalMap[vertex]!
@@ -647,7 +630,6 @@ export function wireRouteSpaces(e: Engine): WireSpaces {
     const allowed = new Set<RegionId>()
     chainInto(derivedScope(e.d, wid, e.boundary), allowed)
     for (const bd of w.binds) chainInto(e.bodies.get(bd.body)!.region, allowed)
-    if (w.end !== null) chainInto(e.bodies.get(w.end.body)!.region, allowed)
     const forb = nonSheet.filter((rid) => !allowed.has(rid))
     const key = JSON.stringify(forb)
     let entry = bySig.get(key)
@@ -739,14 +721,10 @@ export function wireTerminalBCs(e: Engine, w: WireView): CurveBC[] {
     const s = resolvedFrameSlot(e, position)
     out.push(s === null ? null : { p: s.point, n: { x: -Math.cos(s.normal), y: -Math.sin(s.normal) } })
   }
-  if (w.end !== null) {
-    const body = e.bodies.get(w.end.body)!
-    out.push(bindBC(e, body, w.end.key))
-  }
   return out
 }
 
-/** The wire's terminal POINTS in network vertex order (binds, slots, end).
+/** The wire's terminal POINTS in network vertex order (binds, slots).
     Pure read of the live geometry; the router treats these as fixed. */
 export function wireTerminalPoints(e: Engine, w: WireView): Vec2[] {
   const pts: Vec2[] = w.binds.map((bd) => escapePoint(e, bd).escape)
@@ -761,6 +739,5 @@ export function wireTerminalPoints(e: Engine, w: WireView): Vec2[] {
       pts.push({ x: c.x + 30 * Math.cos(angle), y: c.y + 30 * Math.sin(angle) })
     }
   }
-  if (w.end !== null) pts.push(escapePoint(e, w.end).escape)
   return pts
 }

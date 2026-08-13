@@ -16,7 +16,7 @@ import { mkEngine, carryOver, wireRouteSpaces, wireTerminalPoints } from '../vie
 import { route } from '../view/route/freespace'
 import { settleStep, establishProofFrame, establishProofSlotShift, seedProject, attachLayoutSearch } from '../view/relax'
 import { mkWorkerSearch } from '../view/optimize-client'
-import { computeLegs, legPaths, wireOwnedEnds } from '../view/wires'
+import { computeLegs, legPaths } from '../view/wires'
 import type { Shape, Theme } from '../view/paint'
 import { paint, highlightGroup, wireOverlayShapes, LIGHT, THEMES } from '../view/paint'
 import { adaptCanvas } from '../view/canvas'
@@ -1933,9 +1933,6 @@ export async function mountShell(opts: ShellOptions): Promise<{ dispose(): void 
           }
         }
         for (const l of legPaths(engine)) take(l.wid, mids(l.pts))
-        for (const { wid, body } of wireOwnedEnds(engine)) {
-          take(wid, [{ point: body.pos, direction: { x: 0, y: 0 } }])
-        }
         return out
       },
       wireBinds(): { id: string; node: string; x: number; y: number }[] {

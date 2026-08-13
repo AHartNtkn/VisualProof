@@ -68,7 +68,7 @@ describe('wire energy is the rod energy of the DRAWN curve', () => {
   it('needle at a port: energy identity holds with the dot on the stub', () => {
     const b = new DiagramBuilder()
     const n = b.ref(b.root, 'A', relSig([IOTA]))
-    b.wire( [{ node: n, port: { kind: 'arg' as const, index: 0 } }])
+    b.wire([{ node: n, port: { kind: 'arg' as const, index: 0 } }])
     const e = mkEngine(b.build(), [])
     const A = [...e.bodies.values()].find((x) => x.kind === 'ref')!
     A.pos = { x: 0, y: 0 }
@@ -77,7 +77,9 @@ describe('wire energy is the rod energy of the DRAWN curve', () => {
     recomputeRegions(e)
     const w = [...e.wires.values()][0]!
     const { anchor, escape } = escapePoint(e, w.binds[0]!)
-    const dot = e.bodies.get(w.end!.body)!
+    // the stub's free tip is the pin node build() attached to the argument wire
+    const dot = e.bodies.get(w.binds.find((bind) =>
+      e.bodies.get(bind.body)!.kind === 'identity')!.body)!
     dot.pos = { x: (anchor.x + escape.x) / 2, y: (anchor.y + escape.y) / 2 }
     recomputeRegions(e)
     const drawn = drawnWireCost(e)
@@ -89,7 +91,7 @@ describe('wire energy is the rod energy of the DRAWN curve', () => {
     const b = new DiagramBuilder()
     const n0 = b.ref(b.root, 'A', relSig([IOTA]))
     const n1 = b.ref(b.root, 'B', relSig([IOTA]))
-    b.wire( [
+    b.wire([
       { node: n0, port: { kind: 'arg' as const, index: 0 } },
       { node: n1, port: { kind: 'arg' as const, index: 0 } },
     ])
@@ -117,7 +119,7 @@ describe('wire energy is the rod energy of the DRAWN curve', () => {
     // not a rod-physics derivation. Kink bound: no adjacent-sample turn > π/4.
     const b = new DiagramBuilder()
     const n = b.ref(b.root, 'A', relSig([IOTA, IOTA]))
-    b.wire( [
+    b.wire([
       { node: n, port: { kind: 'arg' as const, index: 0 } },
       { node: n, port: { kind: 'arg' as const, index: 1 } },
     ])
@@ -191,7 +193,7 @@ describe('family conformance (coverage artifact): the drawn legs ARE Hobby cubic
     const b = new DiagramBuilder()
     const n0 = b.ref(b.root, 'A', relSig([IOTA]))
     const n1 = b.ref(b.root, 'B', relSig([IOTA]))
-    b.wire( [
+    b.wire([
       { node: n0, port: { kind: 'arg' as const, index: 0 } },
       { node: n1, port: { kind: 'arg' as const, index: 0 } },
     ])
