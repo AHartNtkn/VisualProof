@@ -18,7 +18,18 @@ export {
 export { applyIdentityInsertion } from './identity'
 export { applyDoubleCutIntro, applyDoubleCutElim } from './doublecut'
 export { applyUnfold, applyFold } from './fold'
-export { applyVacuousIntro, applyVacuousElim } from './vacuous'
+export {
+  applyIdentification,
+  applyPresentation,
+  applyVacuityDelete,
+  applyVacuityInsert,
+} from './identity-rules'
+export type {
+  IdentificationInput,
+  PresentationInput,
+  VacuityInput,
+  VacuityNode,
+} from './identity-rules'
 export {
   applyCutAbsorb,
   applyCutWrap,

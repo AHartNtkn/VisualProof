@@ -1,12 +1,10 @@
 import type {
   Diagram,
-  DiagramNormalization,
   NodeId,
   RegionId,
   WireId,
 } from '../diagram/diagram'
-import { captureDiagramNormalizations } from '../diagram/diagram'
-import { isAncestorOrEqual } from '../diagram/regions'
+import { derivedScope, isAncestorOrEqual } from '../diagram/regions'
 import type { RelSig, Sig } from '../diagram/sig'
 import {
   createIdMintRecorder,
@@ -26,7 +24,15 @@ import {
   applyIteration,
 } from '../rules/iteration'
 import { applyRefSpawn, applyAtomSpawn } from '../rules/spawn'
-import { applyVacuousElim, applyVacuousIntro } from '../rules/vacuous'
+import {
+  applyIdentification,
+  applyPresentation,
+  applyVacuityDelete,
+  applyVacuityInsert,
+  type IdentificationInput,
+  type PresentationInput,
+  type VacuityInput,
+} from '../rules/identity-rules'
 import {
   applyCutAbsorb,
   applyCutWrap,
@@ -74,8 +80,9 @@ export type ProofStep =
   | { readonly rule: 'doubleCutIntro'; readonly sel: SubgraphSelection }
   | { readonly rule: 'doubleCutElim'; readonly region: RegionId }
   | { readonly rule: 'theorem'; readonly name: string; readonly at: TheoremApplication; readonly direction: 'forward' | 'reverse' }
-  | { readonly rule: 'vacuousIntro'; readonly scope: RegionId; readonly sig: Sig }
-  | { readonly rule: 'vacuousElim'; readonly wireId: WireId }
+  | { readonly rule: 'vacuity'; readonly direction: 'insert' | 'delete'; readonly assembly: VacuityInput }
+  | { readonly rule: 'presentation'; readonly input: PresentationInput }
+  | { readonly rule: 'identification'; readonly input: IdentificationInput }
   | { readonly rule: 'unfold'; readonly nodeId: NodeId }
   | { readonly rule: 'fold'; readonly occurrence: SubgraphSelection; readonly args: readonly WireId[]; readonly defId: string }
   | { readonly rule: 'cutWrap'; readonly wire: WireId }
@@ -110,7 +117,7 @@ export type WireProvenance = {
 
 export type StepReceipt = {
   readonly result: Diagram
-  /** Every graph ID minted by this step, before normalization. */
+  /** Every graph ID minted by this step. */
   readonly allocation: IdMintLog
   readonly provenance: WireProvenance
   readonly interface: WireInterfaceTransport
@@ -139,8 +146,8 @@ function rootImage(
   target: Diagram,
   candidate: WireId | undefined,
 ): WireId | undefined {
-  if (candidate === undefined) return undefined
-  return target.wires[candidate]?.scope === target.root ? candidate : undefined
+  if (candidate === undefined || target.wires[candidate] === undefined) return undefined
+  return derivedScope(target, candidate) === target.root ? candidate : undefined
 }
 
 function applyStepRaw(
@@ -216,15 +223,14 @@ function applyStepRaw(
         orientation,
         reservation,
       )
-    case 'vacuousIntro':
-      return applyVacuousIntro(
-        diagram,
-        step.scope,
-        step.sig,
-        reservation,
-      )
-    case 'vacuousElim':
-      return applyVacuousElim(diagram, step.wireId)
+    case 'vacuity':
+      return step.direction === 'insert'
+        ? applyVacuityInsert(diagram, step.assembly, reservation)
+        : applyVacuityDelete(diagram, step.assembly)
+    case 'presentation':
+      return applyPresentation(diagram, step.input, reservation)
+    case 'identification':
+      return applyIdentification(diagram, step.input, reservation)
     case 'unfold':
       return applyUnfold(
         diagram,
@@ -342,29 +348,20 @@ function joinedRepresentative(
   const a = diagram.wires[step.input.a]
   const b = diagram.wires[step.input.b]
   if (a === undefined || b === undefined) return wire
-  const retained = isAncestorOrEqual(diagram, a.scope, b.scope)
+  const retained = isAncestorOrEqual(
+    diagram,
+    derivedScope(diagram, step.input.a),
+    derivedScope(diagram, step.input.b),
+  )
     ? step.input.a
     : step.input.b
   return wire === step.input.a || wire === step.input.b ? retained : wire
 }
 
-function composeNormalizationWireImage(
-  source: WireId,
-  normalizations: readonly DiagramNormalization[],
-): WireId | undefined {
-  let current: WireId | undefined = source
-  for (const normalization of normalizations) {
-    if (current === undefined || !normalization.wireImage.has(current)) {
-      return undefined
-    }
-    current = normalization.wireImage.get(current)
-  }
-  return current
-}
-
 /**
- * Execute one primitive and compose its wire receipt in the required order:
- * rule-intent, identity canonicalization, then root visibility.
+ * Execute one primitive and compose its wire receipt: rule-intent, then
+ * root visibility. Wire ids are stable — no rule renames a wire it does not
+ * delete — so no further image composition exists.
  */
 export function applyStepWithReceipt(
   diagram: Diagram,
@@ -376,38 +373,26 @@ export function applyStepWithReceipt(
   assertProofContext(context)
   const allocation = createIdMintRecorder()
   const capturedReservation = withIdMintCapture(reservation, allocation)
-  const captured = captureDiagramNormalizations(
-    () => applyStepRaw(
-      diagram,
-      step,
-      context,
-      orientation,
-      capturedReservation,
-    ),
+  const result = applyStepRaw(
+    diagram,
+    step,
+    context,
+    orientation,
+    capturedReservation,
   )
-  const result = captured.result
   const interfaceImage = (source: WireId): WireId | undefined => {
     if (diagram.wires[source] === undefined) return undefined
-    const intentional = joinedRepresentative(diagram, step, source)
-    return rootImage(
-      result,
-      composeNormalizationWireImage(intentional, captured.normalizations),
-    )
+    return rootImage(result, joinedRepresentative(diagram, step, source))
   }
   const provenanceImage = (source: WireId): WireId | undefined =>
     diagram.wires[source] !== undefined
     && result.wires[source] !== undefined
-    && result.wires[source]!.scope === result.root
+    && derivedScope(result, source) === result.root
       ? source
       : undefined
   const transportImage = (source: WireId): WireId | undefined => {
-    const image = composeNormalizationWireImage(
-      joinedRepresentative(diagram, step, source),
-      captured.normalizations,
-    )
-    return image !== undefined && result.wires[image] !== undefined
-      ? image
-      : undefined
+    const image = joinedRepresentative(diagram, step, source)
+    return result.wires[image] !== undefined ? image : undefined
   }
 
   return {

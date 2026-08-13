@@ -9,6 +9,11 @@ import {
   sigToJson,
 } from '../diagram/json'
 import type { OccurrenceCertificate } from '../diagram/subgraph/occurrence-certificate'
+import type {
+  IdentificationInput,
+  PresentationInput,
+  VacuityInput,
+} from '../rules/identity-rules'
 import type { SubgraphSelection } from '../diagram/subgraph/selection'
 import type {
   WireJoinInput,
@@ -130,6 +135,131 @@ function wireJoinInputFromJson(value: unknown): WireJoinInput {
     a: str(value.a, 'wireJoin input.a'),
     b: str(value.b, 'wireJoin input.b'),
   }
+}
+
+function vacuityInputToJson(input: VacuityInput): unknown {
+  return {
+    nodes: Object.fromEntries(Object.entries(input.nodes).map(([id, node]) => [
+      id,
+      { region: node.region, sig: sigToJson(node.sig), arity: node.arity },
+    ])),
+    wires: Object.fromEntries(Object.entries(input.wires).map(([id, wire]) => [
+      id,
+      { sig: sigToJson(wire.sig), endpoints: wire.endpoints.map(endpointToJson) },
+    ])),
+    attachments: Object.fromEntries(Object.entries(input.attachments).map(([id, endpoints]) => [
+      id,
+      endpoints.map(endpointToJson),
+    ])),
+  }
+}
+
+function vacuityInputFromJson(value: unknown): VacuityInput {
+  if (!isRecord(value)) fail('vacuity assembly must be an object')
+  assertOnlyKeys(value, ['nodes', 'wires', 'attachments'], 'vacuity assembly')
+  const { nodes, wires, attachments } = value
+  if (!isRecord(nodes) || !isRecord(wires) || !isRecord(attachments)) {
+    fail('vacuity assembly parts must be objects')
+  }
+  return {
+    nodes: Object.fromEntries(Object.entries(nodes).map(([id, node]) => {
+      if (!isRecord(node)) fail(`vacuity node '${id}' must be an object`)
+      assertOnlyKeys(node, ['region', 'sig', 'arity'], `vacuity node '${id}'`)
+      if (typeof node.arity !== 'number') fail(`vacuity node '${id}' arity must be a number`)
+      return [id, {
+        region: str(node.region, `vacuity node '${id}' region`),
+        sig: sigFromJson(node.sig, `vacuity node '${id}'`),
+        arity: node.arity,
+      }]
+    })),
+    wires: Object.fromEntries(Object.entries(wires).map(([id, wire]) => {
+      if (!isRecord(wire) || !Array.isArray(wire.endpoints)) {
+        fail(`vacuity wire '${id}' has unrecognized shape`)
+      }
+      assertOnlyKeys(wire, ['sig', 'endpoints'], `vacuity wire '${id}'`)
+      return [id, {
+        sig: sigFromJson(wire.sig, `vacuity wire '${id}'`),
+        endpoints: wire.endpoints.map((endpoint, index) =>
+          endpointFromJson(endpoint, `vacuity wire '${id}' endpoint ${index}`)),
+      }]
+    })),
+    attachments: Object.fromEntries(Object.entries(attachments).map(([id, endpoints]) => {
+      if (!Array.isArray(endpoints)) fail(`vacuity attachments on '${id}' must be an array`)
+      return [id, endpoints.map((endpoint, index) =>
+        endpointFromJson(endpoint, `vacuity attachment on '${id}' ${index}`))]
+    })),
+  }
+}
+
+function presentationInputToJson(input: PresentationInput): unknown {
+  return {
+    region: input.region,
+    removeNodes: [...input.removeNodes],
+    addNodes: Object.fromEntries(
+      Object.entries(input.addNodes).map(([id, ports]) => [id, [...ports]]),
+    ),
+  }
+}
+
+function presentationInputFromJson(value: unknown): PresentationInput {
+  if (!isRecord(value)) fail('presentation input must be an object')
+  assertOnlyKeys(value, ['region', 'removeNodes', 'addNodes'], 'presentation input')
+  if (!isRecord(value.addNodes)) fail('presentation input.addNodes must be an object')
+  return {
+    region: str(value.region, 'presentation input.region'),
+    removeNodes: strArray(value.removeNodes, 'presentation input.removeNodes'),
+    addNodes: Object.fromEntries(
+      Object.entries(value.addNodes).map(([id, ports]) =>
+        [id, strArray(ports, `presentation input.addNodes['${id}']`)]),
+    ),
+  }
+}
+
+function identificationInputToJson(input: IdentificationInput): unknown {
+  return input.kind === 'collapse'
+    ? {
+        kind: input.kind,
+        node: input.node,
+        survivor: input.survivor,
+        absorbed: [...input.absorbed],
+      }
+    : {
+        kind: input.kind,
+        node: input.node,
+        survivor: input.survivor,
+        freshWire: input.freshWire,
+        transfer: input.transfer.map(endpointToJson),
+      }
+}
+
+function identificationInputFromJson(value: unknown): IdentificationInput {
+  if (!isRecord(value)) fail('identification input must be an object')
+  if (value.kind === 'collapse') {
+    assertOnlyKeys(value, ['kind', 'node', 'survivor', 'absorbed'], 'identification input')
+    return {
+      kind: 'collapse',
+      node: str(value.node, 'identification input.node'),
+      survivor: str(value.survivor, 'identification input.survivor'),
+      absorbed: strArray(value.absorbed, 'identification input.absorbed'),
+    }
+  }
+  if (value.kind === 'expose') {
+    assertOnlyKeys(
+      value,
+      ['kind', 'node', 'survivor', 'freshWire', 'transfer'],
+      'identification input',
+    )
+    if (!Array.isArray(value.transfer)) fail('identification input.transfer must be an array')
+    return {
+      kind: 'expose',
+      node: str(value.node, 'identification input.node'),
+      survivor: str(value.survivor, 'identification input.survivor'),
+      freshWire: str(value.freshWire, 'identification input.freshWire'),
+      transfer: value.transfer.map((endpoint, index) =>
+        endpointFromJson(endpoint, `identification input.transfer[${index}]`)),
+    }
+  }
+  return fail("identification input.kind must be 'collapse'|'expose'")
 }
 
 function idMapToJson(map: ReadonlyMap<string, string>): unknown {
@@ -256,14 +386,16 @@ export function stepToJson(step: ProofStep): unknown {
         at: applicationToJson(step.at),
         direction: step.direction,
       }
-    case 'vacuousIntro':
+    case 'vacuity':
       return {
         rule: step.rule,
-        scope: step.scope,
-        sig: sigToJson(step.sig),
+        direction: step.direction,
+        assembly: vacuityInputToJson(step.assembly),
       }
-    case 'vacuousElim':
-      return { rule: step.rule, wireId: step.wireId }
+    case 'presentation':
+      return { rule: step.rule, input: presentationInputToJson(step.input) }
+    case 'identification':
+      return { rule: step.rule, input: identificationInputToJson(step.input) }
     case 'unfold':
       return { rule: step.rule, nodeId: step.nodeId }
     case 'fold':
@@ -408,16 +540,20 @@ export function stepFromJson(value: unknown): ProofStep {
         direction,
       }
     }
-    case 'vacuousIntro':
-      assertOnlyKeys(value, ['rule', 'scope', 'sig'], 'vacuousIntro step')
-      return {
-        rule,
-        scope: str(value.scope, 'scope'),
-        sig: sigFromJson(value.sig, 'sig'),
+    case 'vacuity': {
+      assertOnlyKeys(value, ['rule', 'direction', 'assembly'], 'vacuity step')
+      const direction = str(value.direction, 'direction')
+      if (direction !== 'insert' && direction !== 'delete') {
+        fail("vacuity direction must be 'insert'|'delete'")
       }
-    case 'vacuousElim':
-      assertOnlyKeys(value, ['rule', 'wireId'], 'vacuousElim step')
-      return { rule, wireId: str(value.wireId, 'wireId') }
+      return { rule, direction, assembly: vacuityInputFromJson(value.assembly) }
+    }
+    case 'presentation':
+      assertOnlyKeys(value, ['rule', 'input'], 'presentation step')
+      return { rule, input: presentationInputFromJson(value.input) }
+    case 'identification':
+      assertOnlyKeys(value, ['rule', 'input'], 'identification step')
+      return { rule, input: identificationInputFromJson(value.input) }
     case 'unfold':
       assertOnlyKeys(value, ['rule', 'nodeId'], 'unfold step')
       return { rule, nodeId: str(value.nodeId, 'nodeId') }

@@ -154,15 +154,75 @@ export function mapStepIds(step: ProofStep, iso: DiagramIso): ProofStep {
             mapId(iso.wires, wire, 'wire')),
         },
       }
-    case 'vacuousIntro':
+    case 'vacuity': {
+      // Insert-direction node/wire ids are mint labels (absent at the meet)
+      // and pass through; delete-direction ids are real and must map.
+      const maybeNode = (id: string): string =>
+        step.direction === 'delete' ? mapId(iso.nodes, id, 'node') : id
+      const maybeWire = (id: string): string =>
+        step.direction === 'delete' ? mapId(iso.wires, id, 'wire') : id
+      const endpoint = (ep: { node: string; port: Endpoint['port'] }): Endpoint =>
+        step.assembly.nodes[ep.node] !== undefined
+          ? { node: maybeNode(ep.node), port: ep.port }
+          : { node: mapId(iso.nodes, ep.node, 'node'), port: ep.port }
       return {
         ...step,
-        scope: mapId(iso.regions, step.scope, 'region'),
+        assembly: {
+          nodes: Object.fromEntries(
+            Object.entries(step.assembly.nodes).map(([id, node]) => [
+              maybeNode(id),
+              { ...node, region: mapId(iso.regions, node.region, 'region') },
+            ]),
+          ),
+          wires: Object.fromEntries(
+            Object.entries(step.assembly.wires).map(([id, wire]) => [
+              maybeWire(id),
+              { sig: wire.sig, endpoints: wire.endpoints.map(endpoint) },
+            ]),
+          ),
+          attachments: Object.fromEntries(
+            Object.entries(step.assembly.attachments).map(([id, endpoints]) => [
+              mapId(iso.wires, id, 'wire'),
+              endpoints.map(endpoint),
+            ]),
+          ),
+        },
       }
-    case 'vacuousElim':
+    }
+    case 'presentation':
       return {
         ...step,
-        wireId: mapId(iso.wires, step.wireId, 'wire'),
+        input: {
+          region: mapId(iso.regions, step.input.region, 'region'),
+          removeNodes: step.input.removeNodes.map((node) =>
+            mapId(iso.nodes, node, 'node')),
+          addNodes: Object.fromEntries(
+            Object.entries(step.input.addNodes).map(([label, ports]) => [
+              label,
+              ports.map((wire) => mapId(iso.wires, wire, 'wire')),
+            ]),
+          ),
+        },
+      }
+    case 'identification':
+      return {
+        ...step,
+        input: step.input.kind === 'collapse'
+          ? {
+              kind: 'collapse',
+              node: mapId(iso.nodes, step.input.node, 'node'),
+              survivor: mapId(iso.wires, step.input.survivor, 'wire'),
+              absorbed: step.input.absorbed.map((wire) =>
+                mapId(iso.wires, wire, 'wire')),
+            }
+          : {
+              kind: 'expose',
+              node: mapId(iso.nodes, step.input.node, 'node'),
+              survivor: mapId(iso.wires, step.input.survivor, 'wire'),
+              freshWire: step.input.freshWire,
+              transfer: step.input.transfer.map((endpoint) =>
+                mapEndpoint(iso, endpoint)),
+            },
       }
     case 'unfold':
       return {
