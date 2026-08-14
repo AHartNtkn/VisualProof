@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { seededRng } from '../../src/generate/rng'
-import { isTautology, type PropFormula } from '../../src/generate/prop/formula'
+import { containsDoubleNegation, isTautology, type PropFormula } from '../../src/generate/prop/formula'
 import { samplePropFormula } from '../../src/generate/prop/sample'
 import { isMinimalTautology, shrinkToCore, simplify, weakenings } from '../../src/generate/prop/shrink'
 
@@ -22,6 +22,16 @@ describe('simplify', () => {
   })
   it('leaves constant-free formulas untouched', () => {
     expect(simplify(NONCONTRADICTION)).toEqual(NONCONTRADICTION)
+  })
+  it('collapses doubled negation at every depth', () => {
+    expect(simplify(not(not(P)))).toEqual(P)
+    expect(simplify(not(not(not(not(P)))))).toEqual(P)
+    expect(simplify(not(not(not(P))))).toEqual(not(P))
+  })
+  it('collapses doubled negation created by constant elimination', () => {
+    // ¬(⊤ ∧ ¬P) simplifies its body to ¬P (⊤∧¬P≡¬P), leaving ¬¬P, which
+    // must then collapse to P rather than surviving as a doubled negation.
+    expect(simplify(not(and(TOP, not(P))))).toEqual(P)
   })
 })
 
@@ -58,6 +68,7 @@ describe('shrinkToCore', () => {
       tautologies += 1
       const core = shrinkToCore(sampled, 3)
       expect(isMinimalTautology(core, 3), `core of sample ${round} not minimal`).toBe(true)
+      expect(containsDoubleNegation(core), `core of sample ${round} contains ¬¬`).toBe(false)
     }
     expect(tautologies, 'sampler produced too few tautologies for the property test').toBeGreaterThan(10)
   })

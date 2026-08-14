@@ -3,7 +3,13 @@ import { isTautology, type PropFormula } from './formula'
 const TOP: PropFormula = { kind: 'top' }
 const BOT: PropFormula = { kind: 'bot' }
 
-/** Constant elimination: ⊤∧φ≡φ, ⊥∧φ≡⊥, ¬⊤≡⊥, ¬⊥≡⊤, bottom-up. */
+/**
+ * Constant elimination (⊤∧φ≡φ, ⊥∧φ≡⊥, ¬⊤≡⊥, ¬⊥≡⊤) plus doubled-negation
+ * collapse (¬¬ψ≡ψ), bottom-up. The collapse must live here rather than in
+ * the caller because constant elimination can itself create a doubled
+ * negation (¬(⊤∧¬P) → ¬¬P), so by induction this function's output is
+ * always ¬¬-free.
+ */
 export function simplify(formula: PropFormula): PropFormula {
   switch (formula.kind) {
     case 'atom':
@@ -14,6 +20,7 @@ export function simplify(formula: PropFormula): PropFormula {
       const body = simplify(formula.body)
       if (body.kind === 'top') return BOT
       if (body.kind === 'bot') return TOP
+      if (body.kind === 'not') return body.body
       return body === formula.body ? formula : { kind: 'not', body }
     }
     case 'and': {

@@ -1,10 +1,11 @@
 import { EMPTY_PROOF_CONTEXT, checkTheorem } from '../../kernel/proof'
-import { mkDiagramWithBoundary } from '../../kernel/diagram'
+import { isAncestorOrEqual, mkDiagramWithBoundary } from '../../kernel/diagram'
+import type { Diagram, RegionId } from '../../kernel/diagram/diagram'
 import { relSig } from '../../kernel/diagram/sig'
 import { bareWireAssembly, bareWireDescription, RuleError } from '../../kernel/rules'
 import { emptyGraph, finishDiagramWithBoundary } from '../../theories/graph'
 import { PrimitiveStepRecorder, onlyNewCut } from '../../theories/record'
-import { bareWires } from '../diagram-scan'
+import { bareWires, childCuts, nodesIn } from '../diagram-scan'
 import { readKnobs, type GeneratedProblem, type GeneratorFamily } from '../index'
 import { atomName, containsDoubleNegation, printTheorem, usedAtoms } from '../prop/formula'
 import { isMinimalTautology } from '../prop/shrink'
@@ -101,6 +102,18 @@ function tryWalk(atoms: number, length: number, rng: () => number): GeneratedPro
       assembly: bareWireDescription(recorder.diagram, wireId),
     })
   }
+  // ¬¬ repair: eliminate every empty-annulus double-cut pair strictly
+  // inside the body (the shell's own intrinsic pair, at 'inner' itself, is
+  // excluded — unwrapping it is not part of this cleanup). doubleCutElim is
+  // an ungated equivalence, so this never changes what the derivation
+  // certifies, only its presentation.
+  for (
+    let target = findDoubleCutToNormalize(recorder.diagram, inner);
+    target !== null;
+    target = findDoubleCutToNormalize(recorder.diagram, inner)
+  ) {
+    recorder.record('normalize double cut', { rule: 'doubleCutElim', region: target })
+  }
   const diagram = recorder.diagram
   // Certification: replay the recorded derivation from the blank sheet.
   checkTheorem(
@@ -127,8 +140,31 @@ function tryWalk(atoms: number, length: number, rng: () => number): GeneratedPro
     )
   }
   if (!isMinimalTautology(reading.formula, reading.wires.length)) return null
+  // The normalization above eliminates every empty-annulus double-cut pair,
+  // so a ¬¬ surviving here is possible only when a pin sits inside the
+  // pair's annulus (the applier rightly refuses to eliminate such a pair,
+  // since erasing it would strand the pin below the two-end floor) — a
+  // rare legitimate rejection of this walk, not a bug.
   if (containsDoubleNegation(reading.formula)) return null
   return { diagram, statement: printTheorem(reading.formula), walkUpperBound: recorder.actions.length }
+}
+
+/**
+ * Find a cut region strictly inside `inner` (the body) whose annulus is
+ * empty (exactly one child cut, no nodes) — the shape doubleCutElim
+ * removes. `inner` itself is excluded: it and its ¬-headed body are the
+ * shell's own intrinsic double-cut pair, not walk-introduced junk.
+ */
+function findDoubleCutToNormalize(diagram: Diagram, inner: RegionId): RegionId | null {
+  for (const id of Object.keys(diagram.regions).sort()) {
+    if (diagram.regions[id]!.kind !== 'cut') continue
+    if (id === inner) continue
+    if (!isAncestorOrEqual(diagram, inner, id)) continue
+    if (childCuts(diagram, id).length !== 1) continue
+    if (nodesIn(diagram, id).length !== 0) continue
+    return id
+  }
+  return null
 }
 
 /**

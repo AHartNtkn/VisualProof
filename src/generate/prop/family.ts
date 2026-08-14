@@ -55,7 +55,11 @@ export const propShrinkFamily: GeneratorFamily = {
       if (!isTautology(sampled, knobs.atoms!)) continue
       const core = shrinkToCore(sampled, knobs.atoms!)
       if (connectiveCount(core) < knobs.minSize!) continue
-      if (containsDoubleNegation(core)) continue
+      if (containsDoubleNegation(core)) {
+        throw new Error(
+          'prop-shrink: shrinker emitted a doubled negation — the ¬¬ collapse in simplify is broken',
+        )
+      }
       const normalized = normalizeAtoms(core)
       const statement = printTheorem(normalized)
       return { diagram: formulaToDiagram(statement), statement }
