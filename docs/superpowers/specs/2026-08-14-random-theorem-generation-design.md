@@ -240,13 +240,18 @@ acyclic at file level.
 
 **Auto-pin bundling.** Deleting a quantified wire's last atom occurrence
 would strand the wire below the kernel's two-end floor
-(`ScopePreservationError`); the app's erase gesture resolves this by
-inserting a pin step within the same action, and the search models the same
-gesture: an erasure/deiteration candidate that raises the error gets the
-recorder-style pin step applied first and is retried, with pin + delete
-counted as **one move** (both steps appear in the reported step trail).
-Without this, no deletion-only proof can ever reach the blank sheet — the
-declaration pin is otherwise unremovable.
+(`ScopePreservationError`). `PrimitiveStepRecorder` and the kernel content
+compiler resolve this by inserting pin steps automatically (the interactive
+erase gesture currently refuses instead and asks the user to pin first);
+the search adopts the recorder convention: an erasure/deiteration candidate
+that raises the error gets the recorder-style pin step(s) applied first —
+looping until the candidate applies, under a loud bound mirroring the
+kernel compiler's — and pin(s) + delete count as **one move** (all steps
+appear in the reported step trail). The enumerator therefore still emits
+candidates that would raise `ScopePreservationError`; consumers auto-pin
+(the search bundles, the walk's recorder pins itself). Without this, no
+deletion-only proof can ever reach the blank sheet — the declaration pin
+is otherwise unremovable.
 
 **Algorithm: two phases.** The insertion-flavored moves (`atomSpawn`,
 `doubleCutIntro`, iteration-copy, vacuity-insert) give the full alphabet a
@@ -287,20 +292,23 @@ infeasible computation above.
 - Phase 1 solves at depth k → **minimal deletion-only proof length = k**
   (labeled as such — an upper bound on the full-system minimum), plus the
   proven fact that insertion is NOT required.
-- Phase 1 proves unsolvable → **"requires insertion"**, proven. If phase 2
-  then solves at depth k with all shallower depths fully exhausted →
-  **minimal proof length = k** over the full atomic alphabet.
+- Phase 1 proves unsolvable → **"no deletion-only proof exists"**, proven —
+  every proof uses at least one growing move (spawn, double-cut intro,
+  iteration copy, or vacuity insert); phase-1 exhaustion does NOT by itself
+  prove the spawn class specifically is required. If phase 2 then solves at
+  depth k with all shallower depths fully exhausted → **minimal proof
+  length = k** over the full atomic alphabet.
 - **"Requires rule class C"** is computed by definition, not inspection:
   rerun the solving phase at the found depth with class C removed; if no
   proof exists, every minimal proof uses C. Classes checked: insertion
-  (`atomSpawn`; free — it is phase 1's verdict), iteration/deiteration,
-  double-cut. In phase 2 a probe that exhausts its fuel leaves the
-  requirement unproven and it is omitted — `requires` only ever lists
-  proven requirements.
+  (`atomSpawn`), iteration/deiteration, double-cut — all three probed the
+  same way (spawn in phase 2 like the others). A probe that exhausts its
+  fuel leaves the requirement unproven and it is omitted — `requires` only
+  ever lists proven requirements.
 - Phase 2 fuel exhausted → report only the bound actually established ("no
   proof within d moves" for the deepest fully-exhausted depth d) together
-  with the proven "requires insertion", plus `walkUpperBound` when the
-  problem came from family B. Never a fabricated number.
+  with the proven "no deletion-only proof", plus `walkUpperBound` (in walk
+  actions) when the problem came from family B. Never a fabricated number.
 
 The search returns a plain result object; the UI renders it as the
 difficulty line.
@@ -359,9 +367,9 @@ Tests land as each piece is built. All generator tests use fixed seeds.
   vacuity-delete the bare wire, double-cut-elim the shell) and its inner
   cut can only be emptied by deiteration, so phase 1 must report length 5
   requiring the iteration class, insertion proven unnecessary. Peirce's law
-  in ¬/∧ form (∀P Q:o. ¬(¬(¬(P∧¬Q)∧¬P)∧¬P)) is the classic
-  insertion-requiring case: phase 1 must prove it unsolvable and phase 2
-  takes over, returning a solve or an honest fuel bound. Integration
+  in ¬/∧ form (∀P Q:o. ¬(¬(¬(P∧¬Q)∧¬P)∧¬P)) is the classic case with no
+  deletion-only proof: phase 1 must prove that and phase 2 takes over,
+  returning a solve or an honest fuel bound. Integration
   property: for default knobs, both families' outputs run through the
   search without error, returning either a solve or an honest bound —
   exact-solve assertions are reserved for small hand-chosen cases that
