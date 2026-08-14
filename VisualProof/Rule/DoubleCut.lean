@@ -41,6 +41,20 @@ theorem DoubleCut.iso
     DoubleCut source' target' :=
   Contextual.iso sourceIso step targetIso
 
+theorem DoubleCut.respectsTargetIso
+    (step : DoubleCut source target)
+    (isomorphic : OpenDiagram.Isomorphic target target') :
+    DoubleCut source target' := by
+  rcases isomorphic with ⟨targetIso⟩
+  exact DoubleCut.iso (OpenDiagramIso.refl source) step targetIso
+
+theorem DoubleCut.backward_respectsTargetIso
+    (step : DoubleCut target source)
+    (isomorphic : OpenDiagram.Isomorphic target target') :
+    DoubleCut target' source := by
+  rcases isomorphic with ⟨targetIso⟩
+  exact DoubleCut.iso targetIso step (OpenDiagramIso.refl source)
+
 theorem DoubleCut.symm
     {arity : Nat}
     {source target : OpenDiagram arity}
